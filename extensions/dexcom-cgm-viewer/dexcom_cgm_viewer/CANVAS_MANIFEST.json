@@ -1,0 +1,51 @@
+{
+    "sdk_version": "0.35.0",
+    "plugin_version": "0.1.0",
+    "name": "dexcom_cgm_viewer",
+    "description": "Pulls Dexcom CGM data into the patient chart via a patient-scoped Application. Magic-link OAuth onboarding, on-demand sync over 7/14/30/90 day windows, glucose chart, time-in-range, and latest reading.",
+    "components": {
+        "applications": [
+            {
+                "class": "dexcom_cgm_viewer.applications.dexcom_chart_app:DexcomChartApp",
+                "name": "Dexcom CGM",
+                "description": "View patient CGM data in the chart.",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "dexcom_cgm_viewer.protocols.chart_api:DexcomChartAPI",
+                "description": "Staff-authenticated SimpleAPI: chart shell, /data, sync, send-link, disconnect.",
+                "data_access": {"event": "", "read": [], "write": []}
+            },
+            {
+                "class": "dexcom_cgm_viewer.protocols.oauth_api:DexcomOAuthAPI",
+                "description": "Patient-facing OAuth bridge (JWT-authenticated): /connect and /callback handlers for the Dexcom hosted login.",
+                "data_access": {"event": "", "read": [], "write": []}
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "DEXCOM_CLIENT_ID", "sensitive": false},
+        {"name": "DEXCOM_CLIENT_SECRET", "sensitive": true},
+        {"name": "DEXCOM_REDIRECT_URI", "sensitive": false},
+        {"name": "DEXCOM_ENVIRONMENT", "sensitive": false},
+        {"name": "DEXCOM_MAGIC_LINK_SECRET", "sensitive": true},
+        {"name": "SENDGRID_API_KEY", "sensitive": true},
+        {"name": "SENDGRID_FROM_EMAIL", "sensitive": false}
+    ],
+    "custom_data": {
+        "namespace": "canvas__dexcom_cgm_viewer",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
