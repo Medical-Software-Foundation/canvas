@@ -21,6 +21,21 @@ from patient_panel.services.formatting import (
 )
 from patient_panel.services.observations import format_weight_lb_oz
 
+DEFAULT_AVATAR = "https://d3hn0m4rbsz438.cloudfront.net/avatar1.png"
+
+
+def _patient_photo_url(patient: Any) -> str:
+    """Presigned avatar URL, read from the prefetched `photos` relation.
+
+    `Patient.photo_url` reads the DB directly (no per-row FHIR/token round-trip)
+    and presigns the S3 key; it raises only when S3 signing is unconfigured, so
+    fall back to the default avatar rather than failing the whole table render.
+    """
+    try:
+        return patient.photo_url
+    except Exception:
+        return DEFAULT_AVATAR
+
 
 def resolve_metadata_value(raw: str, path: str) -> str:
     """Resolve a metadata value, optionally traversing a dotted path.
@@ -94,14 +109,8 @@ def get_builtin_column(
     format_local (tz-bound callable), get_care_team.
     """
     if key == "patient":
-        # Include the module-load cache-bust so a redeploy invalidates the
-        # browser's cached 302→default-avatar response (Cache-Control:
-        # public, max-age=3600). Without this, a browser that cached the
-        # fallback continues to render it for up to an hour after the
-        # server-side cache has been corrected.
-        photo_url = f"{ctx['base_path']}{ctx['prefix']}/{patient.id}/photo?v={ctx['cache_bust']}"
         return {
-            "photo_url": photo_url,
+            "photo_url": _patient_photo_url(patient),
             "name": f"{patient.first_name} {patient.last_name}"
             + (f" ({patient.nickname})" if patient.nickname else ""),
             "age": int(patient.age_at(arrow.now())),

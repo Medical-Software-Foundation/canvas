@@ -5,7 +5,6 @@ from http import HTTPStatus
 from typing import Any
 
 import arrow
-import requests
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.patient import Patient as PatientEffect
@@ -15,7 +14,6 @@ from canvas_sdk.effects.task import AddTaskComment
 from canvas_sdk.handlers.simple_api import SimpleAPI, api
 from canvas_sdk.handlers.simple_api.security import StaffSessionAuthMixin
 from canvas_sdk.templates import render_to_string
-from canvas_sdk.utils import Http
 from canvas_sdk.v1.data import Patient
 from canvas_sdk.v1.data.care_team import CareTeamMembership, CareTeamMembershipStatus
 from canvas_sdk.v1.data.patient import (
@@ -50,11 +48,6 @@ from patient_panel.services.details import (
     get_open_tasks,
     get_referrals_details,
     get_task_comments,
-)
-from patient_panel.services.fhir_photo import (
-    build_patient_fhir_url,
-    build_token_url,
-    parse_photo_response,
 )
 from patient_panel.services.formatting import format_local
 from patient_panel.services.lookups import (
@@ -91,25 +84,6 @@ from patient_panel.services.stats_recompute import reconcile_all_stats
 # referenced by the dashboard's HTML shell. Changes on every deploy/restart
 # so browsers fetch fresh CSS/JS.
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
-
-# Patient photos are fetched one outbound FHIR call PER patient. The SDK Http
-# client uses a 30s timeout; on a 100-row page that's ~100 concurrent requests,
-# and if the FHIR host is slow/unreachable each one pins a plugin-runner worker
-# for 30s — exhausting the worker pool and 502-ing the whole panel (incl /table).
-# Photos are non-critical decoration, so fetch them with a short timeout and
-# fail fast to the default avatar instead of blocking a worker.
-_PHOTO_FETCH_TIMEOUT_SECONDS = 4
-
-
-class _ShortTimeoutHttp:
-    """Minimal requests wrapper with a bounded timeout, for the photo path only.
-
-    Mirrors the `.get(url, headers=...)` surface that fhir_photo.parse_photo_response
-    expects, but caps every call at `_PHOTO_FETCH_TIMEOUT_SECONDS` (the SDK Http
-    hardcodes 30s and offers no override)."""
-
-    def get(self, url: str, headers: dict[str, str] | None = None) -> requests.Response:
-        return requests.get(url, headers=headers, timeout=_PHOTO_FETCH_TIMEOUT_SECONDS)
 
 
 def _is_uuid(value: str) -> bool:
@@ -150,12 +124,9 @@ class PatientPanelAPI(StaffSessionAuthMixin, SimpleAPI):
     # (messages, letters, C-CDA/data imports).
     LAST_VISIT_EXCLUDED_NOTE_TYPES = ("message", "letter", "data", "ccda")
 
-    _fhir_token_cache: dict = {}
-    _FHIR_TOKEN_TTL_MINUTES = 55
-
     # staff_id → resolved display timezone. Sandbox forbids instance-dict
-    # mutation, so we cache at class level via whole-dict replacement (same
-    # pattern as `_fhir_token_cache`). Bounded by staff count per instance.
+    # mutation, so we cache at class level via whole-dict replacement.
+    # Bounded by staff count per instance.
     _display_tz_cache: dict[str, str] = {}
 
 
@@ -684,78 +655,8 @@ class PatientPanelAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         ]
 
-    # ── Photos ────────────────────────────────────────────────────────
-
-    _PHOTO_CACHE_TTL_SECONDS = 4 * 3600  # 4 hours — for successful fetches
-    _PHOTO_MISSING_CACHE_TTL_SECONDS = 60  # short TTL so uploads show within a minute
-
-    @api.get("/<patient_id>/photo")
-    def get_patient_photo(self) -> list[Response | Effect]:
-        """Serve patient photo from FHIR API.
-
-        Photo bytes are cached per patient for `_PHOTO_CACHE_TTL_SECONDS`.
-        A sentinel `{"missing": True}` is cached briefly (60s) when FHIR
-        returns no photo so repeated cold renders don't hammer FHIR, while
-        still letting fresh uploads appear quickly.
-
-        Pass `?nocache=1` to bypass the cache entirely and delete the
-        existing key — useful after uploading a new photo or fixing a bug
-        that previously cached a missing sentinel.
-        """
-        patient_id = self.request.path_params["patient_id"]
-        cache = get_cache()
-        cache_key = f"patient_photo_{patient_id}"
-
-        bypass = self.request.query_params.get("nocache") == "1"
-        if bypass:
-            cache.delete(cache_key)
-            log.info(f"[photo] {patient_id}: cache bypassed via ?nocache=1")
-        else:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                if cached.get("missing"):
-                    log.info(f"[photo] {patient_id}: serving default (missing cached)")
-                    # Cache the default-avatar fallback in the BROWSER for the
-                    # same short window as the server-side "missing" sentinel.
-                    # Without this the browser revalidates every render, so a
-                    # 100-row page with no FHIR photos re-fires 100 requests on
-                    # every sort/re-render. A short TTL still lets a freshly
-                    # uploaded photo appear within ~a minute.
-                    return [Response(status_code=302, headers={"Location": self.DEFAULT_AVATAR, "Cache-Control": f"public, max-age={self._PHOTO_MISSING_CACHE_TTL_SECONDS}"})]
-                return [
-                    Response(
-                        content=cached["data"],
-                        status_code=200,
-                        content_type=cached["content_type"],
-                        headers={"Cache-Control": "public, max-age=3600"},
-                    )
-                ]
-
-        token = self._get_fhir_token()
-        if not token:
-            # Short browser cache so a transient token-missing render doesn't
-            # re-fire every patient's photo request on the next re-render.
-            return [Response(status_code=302, headers={"Location": self.DEFAULT_AVATAR, "Cache-Control": f"public, max-age={self._PHOTO_MISSING_CACHE_TTL_SECONDS}"})]
-
-        photo_data = self._fetch_patient_photo_data(patient_id, token)
-        if photo_data:
-            content_type, data = photo_data
-            cache.set(
-                cache_key,
-                {"content_type": content_type, "data": data},
-                timeout_seconds=self._PHOTO_CACHE_TTL_SECONDS,
-            )
-            return [
-                Response(
-                    content=data,
-                    status_code=200,
-                    content_type=content_type,
-                    headers={"Cache-Control": "public, max-age=3600"},
-                )
-            ]
-
-        cache.set(cache_key, {"missing": True}, timeout_seconds=self._PHOTO_MISSING_CACHE_TTL_SECONDS)
-        return [Response(status_code=302, headers={"Location": self.DEFAULT_AVATAR, "Cache-Control": f"public, max-age={self._PHOTO_MISSING_CACHE_TTL_SECONDS}"})]
+    # Patient photos are read directly from the DB via `patient.photo_url`
+    # (see services.serialization) — no per-row endpoint or FHIR round-trip.
 
     # ── Flags ────────────────────────────────────────────────────────
 
@@ -1036,88 +937,6 @@ class PatientPanelAPI(StaffSessionAuthMixin, SimpleAPI):
             ),
             "insurances_logos": insurances_logos,
         }
-
-    def _get_fhir_token(self) -> str | None:
-        """Get OAuth token for FHIR API calls. Cached with 55-minute TTL."""
-        cache = PatientPanelAPI._fhir_token_cache
-        if cache.get("token") and cache.get("expires") and arrow.now() < cache["expires"]:
-            return str(cache["token"])
-
-        client_id = self.secrets.get("FHIR_CLIENT_ID")
-        client_secret = self.secrets.get("FHIR_CLIENT_SECRET")
-        instance_url = self.secrets.get("CANVAS_INSTANCE_URL")
-
-        if not client_id or not client_secret or not instance_url:
-            return None
-
-        token_url = build_token_url(instance_url)
-
-        try:
-            http = Http()
-            response = http.post(
-                token_url,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "scope": "system/Patient.read system/Practitioner.read",
-                },
-            )
-            if response.status_code == 200:
-                token: str | None = response.json().get("access_token")
-                if token:
-                    PatientPanelAPI._fhir_token_cache = {
-                        "token": token,
-                        "expires": arrow.now().shift(minutes=self._FHIR_TOKEN_TTL_MINUTES),
-                    }
-                return token
-            else:
-                log.error(f"FHIR token error: status {response.status_code}")
-        except Exception:
-            log.exception("FHIR token fetch failed")
-
-        return None
-
-    def _fetch_patient_photo_data(
-        self, patient_id: str, token: str
-    ) -> tuple[str, bytes] | None:
-        """Fetch patient photo data from FHIR API.
-
-        Logs the decision branch so production traces show *why* the default
-        avatar fell through — empty photo array vs HTTP error vs missing
-        data/url field.
-        """
-        instance_url = self.secrets.get("CANVAS_INSTANCE_URL")
-        if not instance_url:
-            log.info(f"[photo] {patient_id}: CANVAS_INSTANCE_URL secret missing")
-            return None
-
-        fhir_url = build_patient_fhir_url(instance_url, patient_id)
-
-        try:
-            # Short-timeout client (not SDK Http's 30s): a per-row photo must
-            # fail fast to the default avatar rather than pin a worker — see
-            # _ShortTimeoutHttp. Bounds both this read and the presigned-URL hop
-            # inside parse_photo_response.
-            http = _ShortTimeoutHttp()
-            response = http.get(
-                fhir_url,
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            if response.status_code != 200:
-                body_snippet = (response.text or "")[:200]
-                log.error(
-                    f"[photo] {patient_id}: FHIR GET {response.status_code} — {body_snippet}"
-                )
-                return None
-
-            return parse_photo_response(
-                response.json(), token, http, patient_id
-            )
-        except Exception:
-            log.exception(f"[photo] {patient_id}: fetch failed")
-
-        return None
 
     def _display_tz(self) -> str:
         """Resolve the display timezone for date formatting.
