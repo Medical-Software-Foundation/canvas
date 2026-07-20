@@ -145,12 +145,19 @@ def _ensure_provider_calendars() -> list[Effect]:
     effects: list[Effect] = []
     try:
         active_providers = get_schedulable_staff()
+        staff_keys = [str(s.id) for s in active_providers]
+
+        # One query for all existing calendars instead of one per provider.
+        existing_keys = set(
+            CalendarModel.objects.filter(description__in=staff_keys).values_list(
+                "description", flat=True
+            )
+        )
 
         created = 0
         for staff in active_providers:
             staff_key = str(staff.id)
-            existing = CalendarModel.objects.filter(description=staff_key).first()
-            if existing:
+            if staff_key in existing_keys:
                 continue
 
             calendar_id = str(uuid4())

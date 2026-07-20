@@ -101,14 +101,29 @@ class TestAuthenticate:
 # ── Run provisioning ─────────────────────────────────────────────────────
 
 
+def _mock_calendar(description: str, cal_id: str = "cal-id"):
+    """A Calendar mock with .description and .id for the bulk-fetch map."""
+    cal = MagicMock()
+    cal.description = description
+    cal.id = cal_id
+    return cal
+
+
+def _setup_provision(mock_cal_model, mock_event_model, calendars, active_keys):
+    """Configure the up-front bulk fetches used by run_provisioning."""
+    mock_cal_model.objects.filter.return_value = calendars
+    mock_event_model.objects.filter.return_value.values_list.return_value = active_keys
+
+
 class TestRunProvisioning:
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff")
-    def test_creates_calendars_for_schedulable_staff(self, mock_sched, mock_cal_model):
+    def test_creates_calendars_for_schedulable_staff(self, mock_sched, mock_cal_model, mock_event_model):
         """Each schedulable staff member gets a calendar + event created."""
         provider = _make_staff("staff-uuid-md", "Jane", "Doe")
         mock_sched.return_value = [provider]
-        mock_cal_model.objects.filter.return_value.first.return_value = None
+        _setup_provision(mock_cal_model, mock_event_model, calendars=[], active_keys=[])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -123,15 +138,17 @@ class TestRunProvisioning:
         assert len(result) == 3
 
         assert mock_sched.mock_calls == [call()]
-        assert mock_cal_model.mock_calls == [
-            call.objects.filter(description=str(provider.id)),
-            call.objects.filter().first(),
-        ]
+        # One bulk calendar lookup for the whole batch, not one per staff.
+        mock_cal_model.objects.filter.assert_called_once_with(
+            description__in=["staff-uuid-md"]
+        )
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff", return_value=[])
-    def test_no_schedulable_staff(self, mock_sched, mock_cal_model):
-        """When no staff are schedulable, nothing is created and calendars aren't queried."""
+    def test_no_schedulable_staff(self, mock_sched, mock_cal_model, mock_event_model):
+        """When no staff are schedulable, nothing is created."""
+        _setup_provision(mock_cal_model, mock_event_model, calendars=[], active_keys=[])
         handler = _make_provision_handler()
         result = handler.run_provisioning()
 
@@ -143,21 +160,19 @@ class TestRunProvisioning:
         assert data["errored"] == 0
         # Only JSONResponse, no effects
         assert len(result) == 1
-        # CalendarModel should never be queried
-        assert mock_cal_model.mock_calls == []
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff")
-    def test_skips_existing_calendar_with_active_event(self, mock_sched, mock_cal_model):
+    def test_skips_existing_calendar_with_active_event(self, mock_sched, mock_cal_model, mock_event_model):
         """Provider with existing calendar AND active event is skipped."""
         provider = _make_staff("staff-uuid-np", "Bob", "Smith")
         mock_sched.return_value = [provider]
-
-        existing_cal = MagicMock()
-        existing_cal.id = "cal-uuid-1"
-        active_event = MagicMock()
-        existing_cal.events.filter.return_value.first.return_value = active_event
-        mock_cal_model.objects.filter.return_value.first.return_value = existing_cal
+        _setup_provision(
+            mock_cal_model, mock_event_model,
+            calendars=[_mock_calendar("staff-uuid-np", "cal-uuid-1")],
+            active_keys=["staff-uuid-np"],
+        )
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -170,17 +185,18 @@ class TestRunProvisioning:
         # Only JSONResponse, no effects
         assert len(result) == 1
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff")
-    def test_reuses_existing_calendar_without_active_event(self, mock_sched, mock_cal_model):
+    def test_reuses_existing_calendar_without_active_event(self, mock_sched, mock_cal_model, mock_event_model):
         """Provider with existing calendar but no active event gets a new event only."""
         provider = _make_staff("staff-uuid-do", "Alice", "Jones")
         mock_sched.return_value = [provider]
-
-        existing_cal = MagicMock()
-        existing_cal.id = "cal-uuid-existing"
-        existing_cal.events.filter.return_value.first.return_value = None
-        mock_cal_model.objects.filter.return_value.first.return_value = existing_cal
+        _setup_provision(
+            mock_cal_model, mock_event_model,
+            calendars=[_mock_calendar("staff-uuid-do", "cal-uuid-existing")],
+            active_keys=[],  # calendar exists but no active Available event
+        )
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -192,13 +208,15 @@ class TestRunProvisioning:
         # Only EventEffect + JSONResponse (no CalendarEffect)
         assert len(result) == 2
 
+    @patch(f"{PROV_MODULE}.EventEffect", side_effect=Exception("DB error"))
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff")
-    def test_handles_exception_per_staff(self, mock_sched, mock_cal_model):
-        """Exception during provisioning of one staff increments errored count."""
+    def test_handles_exception_per_staff(self, mock_sched, mock_cal_model, mock_event_model, mock_event_effect):
+        """Exception while building a staff member's events increments errored count."""
         provider = _make_staff("staff-uuid-pa", "Error", "Provider")
         mock_sched.return_value = [provider]
-        mock_cal_model.objects.filter.side_effect = Exception("DB error")
+        _setup_provision(mock_cal_model, mock_event_model, calendars=[], active_keys=[])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -210,13 +228,14 @@ class TestRunProvisioning:
         assert data["skipped"] == 0
 
     @patch(f"{PROV_MODULE}.datetime")
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff")
-    def test_leap_year_fallback(self, mock_sched, mock_cal_model, mock_datetime):
+    def test_leap_year_fallback(self, mock_sched, mock_cal_model, mock_event_model, mock_datetime):
         """When current date is Feb 29, recurrence_end falls back to Feb 28 if needed."""
         provider = _make_staff("staff-uuid-leap", "Leap", "Doc")
         mock_sched.return_value = [provider]
-        mock_cal_model.objects.filter.return_value.first.return_value = None
+        _setup_provision(mock_cal_model, mock_event_model, calendars=[], active_keys=[])
 
         # Simulate Feb 29 of a leap year
         from datetime import datetime as real_datetime
@@ -237,14 +256,15 @@ class TestRunProvisioning:
         # Should succeed - either creates normally or uses fallback
         assert data["created"] == 1 or data["errored"] == 0
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.get_schedulable_staff")
-    def test_multiple_schedulable_staff(self, mock_sched, mock_cal_model):
+    def test_multiple_schedulable_staff(self, mock_sched, mock_cal_model, mock_event_model):
         """Every schedulable staff member in the batch is processed."""
         md_provider = _make_staff("staff-md", "Dr", "One")
         np_provider = _make_staff("staff-np", "Nurse", "Pract")
         mock_sched.return_value = [md_provider, np_provider]
-        mock_cal_model.objects.filter.return_value.first.return_value = None
+        _setup_provision(mock_cal_model, mock_event_model, calendars=[], active_keys=[])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()

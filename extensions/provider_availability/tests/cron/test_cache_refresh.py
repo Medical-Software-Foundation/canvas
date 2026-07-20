@@ -296,6 +296,10 @@ class TestRefreshLeadTimeBlocks:
 class TestEnsureProviderCalendars:
     """Test _ensure_provider_calendars."""
 
+    def _mock_existing(self, mock_cal, existing_keys):
+        """Configure CalendarModel.objects.filter(...).values_list(...) to return keys."""
+        mock_cal.filter.return_value.values_list.return_value = existing_keys
+
     def test_creates_calendar_for_provider_missing_one(self):
         staff = MagicMock()
         staff.id = "staff-uuid-1"
@@ -305,14 +309,15 @@ class TestEnsureProviderCalendars:
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]) as mock_sched, \
              patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{CR_MODULE}.uuid4", return_value="new-cal-uuid"):
-            mock_cal.filter.return_value.first.return_value = None
+            self._mock_existing(mock_cal, [])  # no existing calendars
 
             result = _ensure_provider_calendars()
 
             assert mock_sched.mock_calls == [call()]
+            # single bulk lookup, not one query per provider
             assert mock_cal.mock_calls == [
-                call.filter(description="staff-uuid-1"),
-                call.filter().first(),
+                call.filter(description__in=["staff-uuid-1"]),
+                call.filter().values_list("description", flat=True),
             ]
             assert len(result) == 1
 
@@ -322,7 +327,7 @@ class TestEnsureProviderCalendars:
 
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]), \
              patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal:
-            mock_cal.filter.return_value.first.return_value = MagicMock()
+            self._mock_existing(mock_cal, ["staff-uuid-2"])  # already has one
 
             result = _ensure_provider_calendars()
 
@@ -343,7 +348,7 @@ class TestEnsureProviderCalendars:
              patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{CR_MODULE}.uuid4", return_value="cal-uuid"):
             # staff_a has no calendar, staff_b has one
-            mock_cal.filter.return_value.first.side_effect = [None, MagicMock()]
+            self._mock_existing(mock_cal, ["staff-b"])
 
             result = _ensure_provider_calendars()
 
@@ -352,7 +357,8 @@ class TestEnsureProviderCalendars:
 
     def test_no_active_providers(self):
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{CR_MODULE}.CalendarModel.objects"):
+             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal:
+            self._mock_existing(mock_cal, [])
             result = _ensure_provider_calendars()
 
             assert result == []

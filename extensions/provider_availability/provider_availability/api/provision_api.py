@@ -15,6 +15,7 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPI
 from canvas_sdk.handlers.simple_api.api import delete, get, post, put
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
+from canvas_sdk.v1.data.calendar import Event as EventModel
 from logger import log
 
 from provider_availability.engine.roles import get_available_roles, get_schedulable_staff
@@ -59,20 +60,29 @@ class ProvisionAPI(SimpleAPI):
         active_staff = get_schedulable_staff()
         log.info("provision: checking %d schedulable staff", len(active_staff))
 
+        # Bulk-fetch existing calendars and their active Available events up front,
+        # so the per-staff loop does no DB queries (was 2 queries per staff).
+        staff_keys = [str(s.id) for s in active_staff]
+        now = datetime.now(UTC).replace(tzinfo=None)
+        cal_by_key = {
+            c.description: c
+            for c in CalendarModel.objects.filter(description__in=staff_keys)
+        }
+        keys_with_active_event = set(
+            EventModel.objects.filter(
+                calendar__description__in=staff_keys,
+                title="Available",
+                recurrence_ends_at__gt=now,
+            ).values_list("calendar__description", flat=True)
+        )
+
         for staff in active_staff:
             try:
                 staff_key = str(staff.id)
-                existing_cal = CalendarModel.objects.filter(
-                    description=staff_key
-                ).first()
+                existing_cal = cal_by_key.get(staff_key)
 
                 if existing_cal:
-                    now = datetime.now(UTC).replace(tzinfo=None)
-                    active_event = existing_cal.events.filter(
-                        title="Available",
-                        recurrence_ends_at__gt=now,
-                    ).first()
-                    if active_event:
+                    if staff_key in keys_with_active_event:
                         skipped += 1
                         continue
                     calendar_id = str(existing_cal.id)
