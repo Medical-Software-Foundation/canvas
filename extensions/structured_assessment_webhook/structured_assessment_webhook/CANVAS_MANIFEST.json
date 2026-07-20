@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "structured_assessment_webhook",
+    "description": "Watches for a committed structured assessment carrying a specific answer and POSTs the note id and patient id to an external endpoint.",
+    "components": {
+        "protocols": [
+            {
+                "class": "structured_assessment_webhook.protocols.structured_assessment_webhook:StructuredAssessmentWebhookProtocol",
+                "description": "On structured assessment commit, sends the note id and patient id to a webhook when a configured answer matches",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["WEBHOOK_URL", "AUTH_TOKEN"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
