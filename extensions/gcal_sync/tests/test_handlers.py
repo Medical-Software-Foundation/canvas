@@ -12,6 +12,7 @@ from gcal_sync.google.client import GoogleApiError
 from gcal_sync.handlers.block_sweep import BlockSweepCron
 from gcal_sync.handlers.channel_renewal import ChannelRenewalCron
 from gcal_sync.handlers.reconciliation import ReconciliationCron
+from gcal_sync.handlers.reimport_drain import ReimportDrainCron
 
 
 def _cron(cls, secrets=None):
@@ -21,6 +22,7 @@ def _cron(cls, secrets=None):
 
 
 # --- BlockSweepCron -----------------------------------------------------------------------------
+
 
 def test_block_sweep_noop_without_mappings(mocker):
     mocker.patch(
@@ -34,15 +36,19 @@ def test_block_sweep_noop_without_mappings(mocker):
 def test_block_sweep_delegates_when_mappings_exist(mocker):
     mocker.patch(
         "gcal_sync.handlers.block_sweep.StaffCalendarMapping"
-    ).objects.filter.return_value = [SimpleNamespace(canvas_staff_id="14", google_calendar_id="c")]
+    ).objects.filter.return_value = [
+        SimpleNamespace(canvas_staff_id="14", google_calendar_id="c")
+    ]
     swept = mocker.patch(
-        "gcal_sync.handlers.block_sweep.sync_all_blocks", return_value={"pushed": 2, "deleted": 1}
+        "gcal_sync.handlers.block_sweep.sync_all_blocks",
+        return_value={"pushed": 2, "deleted": 1},
     )
     assert _cron(BlockSweepCron, {"k": "v"}).execute() == []
     swept.assert_called_once()
 
 
 # --- ReconciliationCron -------------------------------------------------------------------------
+
 
 def test_reconciliation_returns_inbound_effects(mocker):
     mocker.patch(
@@ -52,7 +58,20 @@ def test_reconciliation_returns_inbound_effects(mocker):
     assert _cron(ReconciliationCron).execute() == ["HOLD_EFFECT"]
 
 
+# --- ReimportDrainCron --------------------------------------------------------------------------
+
+
+def test_reimport_drain_returns_batch_effects(mocker):
+    mocker.patch(
+        "gcal_sync.handlers.reimport_drain.drain_reimport_queue",
+        return_value=({"processed": 2, "remaining": 3}, ["H1", "H2"]),
+    )
+    # The cron returns exactly the drained batch's effects for Canvas to apply this tick.
+    assert _cron(ReimportDrainCron, {"k": "v"}).execute() == ["H1", "H2"]
+
+
 # --- ChannelRenewalCron -------------------------------------------------------------------------
+
 
 def test_channel_renewal_noop_without_config(mocker):
     mocker.patch(
@@ -63,18 +82,25 @@ def test_channel_renewal_noop_without_config(mocker):
 
 
 def test_channel_renewal_renews_each_active_calendar(mocker):
-    manager = mocker.patch("gcal_sync.handlers.channel_renewal.ChannelManager").return_value
+    manager = mocker.patch(
+        "gcal_sync.handlers.channel_renewal.ChannelManager"
+    ).return_value
     manager.renew_if_needed.return_value = True
     mocker.patch(
-        "gcal_sync.handlers.channel_renewal._active_calendar_ids", return_value=["c1", "c2"]
+        "gcal_sync.handlers.channel_renewal._active_calendar_ids",
+        return_value=["c1", "c2"],
     )
     assert _cron(ChannelRenewalCron).execute() == []
     assert manager.renew_if_needed.call_count == 2
 
 
 def test_channel_renewal_swallows_per_calendar_errors(mocker):
-    manager = mocker.patch("gcal_sync.handlers.channel_renewal.ChannelManager").return_value
+    manager = mocker.patch(
+        "gcal_sync.handlers.channel_renewal.ChannelManager"
+    ).return_value
     manager.renew_if_needed.side_effect = GoogleApiError(500, "boom")
-    mocker.patch("gcal_sync.handlers.channel_renewal._active_calendar_ids", return_value=["c1"])
+    mocker.patch(
+        "gcal_sync.handlers.channel_renewal._active_calendar_ids", return_value=["c1"]
+    )
     # One calendar failing must not raise — it's logged and the run completes.
     assert _cron(ChannelRenewalCron).execute() == []

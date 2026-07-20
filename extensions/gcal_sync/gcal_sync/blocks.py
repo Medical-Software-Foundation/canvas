@@ -77,8 +77,15 @@ class BlockSync:
         stats = {"pushed": 0, "deleted": 0}
         current = self._current_blocks(staff_id)
         client = self._client_factory(calendar_id)
+        # Prefetch this provider's block mappings in ONE query (keyed exactly by canvas_event_id, the
+        # unique key), so the per-block upsert below does no lookup of its own. Without this the sweep
+        # runs a CalendarEventMapping.get() per block every 15 minutes.
+        mapping_cache = {
+            m.canvas_event_id: m
+            for m in CalendarEventMapping.objects.filter(canvas_event_id__in=list(current.keys()))
+        }
         for event_id, event in current.items():
-            self._upsert(client, calendar_id, event_id, event, stats)
+            self._upsert(client, calendar_id, event_id, event, stats, mapping_cache)
         self._delete_removed(client, calendar_id, set(current.keys()), stats)
         return stats
 
@@ -112,11 +119,17 @@ class BlockSync:
         return result
 
     def _upsert(
-        self, client: GoogleCalendarClient, calendar_id: str, event_id: str, event: Event, stats: dict
+        self,
+        client: GoogleCalendarClient,
+        calendar_id: str,
+        event_id: str,
+        event: Event,
+        stats: dict,
+        mapping_cache: dict[str, CalendarEventMapping],
     ) -> None:
         body = build_event_body(block_snapshot(event))
         new_hash = content_hash(body)
-        mapping = CalendarEventMapping.objects.filter(canvas_event_id=event_id).first()
+        mapping = mapping_cache.get(event_id)
 
         if mapping is None:
             created = client.insert_event(calendar_id, body)
@@ -150,17 +163,8 @@ class BlockSync:
         for mapping in CalendarEventMapping.objects.filter(google_calendar_id=calendar_id):
             if mapping.canvas_event_id in current_ids:
                 continue
-            # Block no longer exists in Canvas -> remove it from Google. Catch per-mapping so a
-            # transient Google error on one block doesn't abort the rest of the sweep; keep the
-            # mapping (the Google event still exists) so the next sweep retries the deletion.
-            try:
-                client.delete_event(calendar_id, mapping.google_event_id)
-            except GoogleApiError as exc:
-                log.error(
-                    "Failed to delete Google block %s on %s: %s",
-                    mapping.google_event_id, calendar_id, exc,
-                )
-                continue
+            # Block no longer exists in Canvas -> remove it from Google.
+            client.delete_event(calendar_id, mapping.google_event_id)
             mapping.delete()
             stats["deleted"] = stats["deleted"] + 1
 

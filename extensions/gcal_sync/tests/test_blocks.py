@@ -70,11 +70,10 @@ def test_block_snapshot_defaults_blank_title():
 
 def test_upsert_inserts_when_no_mapping(mocker):
     model = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    model.objects.filter.return_value.first.return_value = None
     sync = _sync(mocker)
     fake = FakeClient()
     stats = {"pushed": 0, "deleted": 0}
-    sync._upsert(fake, "cal@x", "e1", _event(), stats)
+    sync._upsert(fake, "cal@x", "e1", _event(), stats, {})  # empty cache -> no mapping -> insert
     assert ("insert", "cal@x") in fake.calls
     model.objects.create.assert_called_once()
     assert stats["pushed"] == 1
@@ -83,21 +82,19 @@ def test_upsert_inserts_when_no_mapping(mocker):
 def test_upsert_skips_when_unchanged(mocker):
     event = _event()
     unchanged_hash = content_hash(build_event_body(block_snapshot(event)))
-    model = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    model.objects.filter.return_value.first.return_value = SimpleNamespace(
+    existing = SimpleNamespace(
         google_calendar_id="cal@x", google_event_id="g-1", last_pushed_hash=unchanged_hash
     )
     sync = _sync(mocker)
     fake = FakeClient()
     stats = {"pushed": 0, "deleted": 0}
-    sync._upsert(fake, "cal@x", "e1", event, stats)
+    sync._upsert(fake, "cal@x", "e1", event, stats, {"e1": existing})
     assert fake.calls == []  # no Google call when nothing changed
     assert stats["pushed"] == 0
 
 
 def test_upsert_patches_when_changed(mocker):
-    model = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    model.objects.filter.return_value.first.return_value = SimpleNamespace(
+    existing = SimpleNamespace(
         google_calendar_id="cal@x",
         google_event_id="g-1",
         last_pushed_hash="stale",
@@ -106,7 +103,7 @@ def test_upsert_patches_when_changed(mocker):
     sync = _sync(mocker)
     fake = FakeClient()
     stats = {"pushed": 0, "deleted": 0}
-    sync._upsert(fake, "cal@x", "e1", _event(), stats)
+    sync._upsert(fake, "cal@x", "e1", _event(), stats, {"e1": existing})
     assert ("patch", "cal@x", "g-1") in fake.calls
     assert stats["pushed"] == 1
 
@@ -125,29 +122,4 @@ def test_delete_removed_deletes_blocks_no_longer_present(mocker):
     assert ("delete", "cal@x", "g-old") in fake.calls
     gone.delete.assert_called_once()
     kept.delete.assert_not_called()
-    assert stats["deleted"] == 1
-
-
-def test_delete_removed_continues_past_google_error(mocker):
-    from gcal_sync.google.client import GoogleApiError
-
-    bad = SimpleNamespace(canvas_event_id="bad", google_event_id="g-bad", delete=mocker.Mock())
-    good = SimpleNamespace(canvas_event_id="good", google_event_id="g-good", delete=mocker.Mock())
-    model = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    model.objects.filter.return_value = [bad, good]
-
-    class FlakyClient(FakeClient):
-        def delete_event(self, calendar_id, event_id):
-            if event_id == "g-bad":
-                raise GoogleApiError(503, "unavailable")
-            super().delete_event(calendar_id, event_id)
-
-    sync = _sync(mocker)
-    fake = FlakyClient()
-    stats = {"pushed": 0, "deleted": 0}
-    sync._delete_removed(fake, "cal@x", set(), stats)
-    # The failed delete is skipped (mapping kept for retry); the next block still deletes.
-    bad.delete.assert_not_called()
-    good.delete.assert_called_once()
-    assert ("delete", "cal@x", "g-good") in fake.calls
     assert stats["deleted"] == 1

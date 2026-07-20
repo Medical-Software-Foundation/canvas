@@ -87,6 +87,23 @@ class GoogleCalendarClient:
         event: dict = resp.json()
         return event
 
+    def find_event_by_private_property(
+        self, calendar_id: str, key: str, value: str
+    ) -> dict | None:
+        """Return the first LIVE event whose private extended property ``key`` equals ``value``.
+
+        Lets an outbound push ADOPT an event it created earlier (matched by ``canvasApptId``) when the
+        local mapping is missing, instead of inserting a duplicate. ``showDeleted`` is left false so a
+        deleted/cancelled remnant is never adopted — a truly gone event falls through to a fresh insert.
+        """
+        params = {"privateExtendedProperty": f"{key}={value}", "maxResults": "1"}
+        url = self._url(f"/calendars/{self._cal(calendar_id)}/events?{urlencode(params)}")
+        resp = self._http.get(url, headers=self._headers)
+        if resp.status_code != 200:
+            raise GoogleApiError(resp.status_code, resp.text)
+        items = resp.json().get("items", [])
+        return items[0] if items else None
+
     def list_event_deltas(
         self, calendar_id: str, sync_token: str = "", time_min: str = "", time_max: str = ""
     ) -> tuple[list[dict], str]:
@@ -127,6 +144,35 @@ class GoogleCalendarClient:
                 break
 
         return events, next_sync_token
+
+    def list_all_events(self, calendar_id: str, time_min: str, time_max: str) -> list[dict]:
+        """Return all LIVE events on the calendar in ``[time_min, time_max]`` (paginated).
+
+        Used by the reconcile sweep to find events we pushed whose Canvas appointment is gone/terminal
+        (orphans to delete) or duplicated (extras to collapse). ``showDeleted`` is omitted so
+        already-deleted events aren't re-processed; ``singleEvents`` expands recurrences.
+        """
+        events: list[dict] = []
+        page_token = ""
+        while True:
+            params: dict[str, str] = {
+                "singleEvents": "true",
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "maxResults": "250",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            url = self._url(f"/calendars/{self._cal(calendar_id)}/events?{urlencode(params)}")
+            resp = self._http.get(url, headers=self._headers)
+            if resp.status_code != 200:
+                raise GoogleApiError(resp.status_code, resp.text)
+            payload = resp.json()
+            events.extend(payload.get("items", []))
+            page_token = payload.get("nextPageToken", "")
+            if not page_token:
+                break
+        return events
 
     def watch_events(
         self, calendar_id: str, channel_id: str, address: str, token: str, ttl_seconds: int

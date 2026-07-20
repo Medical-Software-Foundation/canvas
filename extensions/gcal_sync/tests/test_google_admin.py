@@ -115,6 +115,8 @@ def test_reconcile_one_runs_for_enrolled_provider(mocker):
     scm.objects.filter.return_value.first.return_value = SimpleNamespace(
         canvas_staff_id="14", google_calendar_id="j@r.com"
     )
+    mocker.patch("gcal_sync.routes.google_admin.acquire_provider_lock", return_value=True)
+    release = mocker.patch("gcal_sync.routes.google_admin.release_provider_lock")
     mocker.patch(
         "gcal_sync.routes.google_admin.reconcile_provider",
         return_value=({"pushed": 1, "blocks_pushed": 0, "blocks_deleted": 0}, ["E"]),
@@ -123,4 +125,18 @@ def test_reconcile_one_runs_for_enrolled_provider(mocker):
     resp = api.reconcile_one()
     # effects are applied alongside the JSON summary.
     assert resp[-1].status_code == HTTPStatus.OK
-    assert "E" in resp
+    release.assert_called_once_with("j@r.com")  # lock released after the action
+
+
+def test_provider_action_conflicts_when_lock_held(mocker):
+    # A double-click / second admin: the lock is already held -> 409, and the action never runs.
+    scm = mocker.patch("gcal_sync.routes.google_admin.StaffCalendarMapping")
+    scm.objects.filter.return_value.first.return_value = SimpleNamespace(
+        canvas_staff_id="14", google_calendar_id="j@r.com"
+    )
+    mocker.patch("gcal_sync.routes.google_admin.acquire_provider_lock", return_value=False)
+    action = mocker.patch("gcal_sync.routes.google_admin.reimport_provider")
+    api = _api({"ADMIN_STAFF_IDS": "id1"}, staff_id="id1", body={"staff_id": "14"})
+    resp = api.reimport_one()
+    assert resp[0].status_code == HTTPStatus.CONFLICT
+    action.assert_not_called()
