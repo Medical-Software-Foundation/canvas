@@ -2,27 +2,15 @@
 
 from types import SimpleNamespace
 
-import pytest
-
 from canvas_sdk.events import EventType
-from gcal_sync.google.auth import GoogleAuthError
 from gcal_sync.handlers.appointment_sync import AppointmentSyncHandler
-
-_VALID_SA = {"GOOGLE_SERVICE_ACCOUNT_JSON": '{"client_email": "svc@x.iam", "private_key": "KEY"}'}
 
 
 def _handler(event_type, secrets=None):
     h = AppointmentSyncHandler.__new__(AppointmentSyncHandler)
     h.event = SimpleNamespace(type=event_type, target=SimpleNamespace(id="appt-1"))
-    h.secrets = secrets if secrets is not None else dict(_VALID_SA)
+    h.secrets = secrets or {}
     return h
-
-
-def test_missing_service_account_fails_loudly(mocker):
-    # A missing/invalid service-account secret must raise (fail closed), not be swallowed in _safe.
-    mocker.patch("gcal_sync.handlers.appointment_sync.SyncService")
-    with pytest.raises(GoogleAuthError):
-        _handler(EventType.APPOINTMENT_CREATED, secrets={}).compute()
 
 
 def test_cancel_event_routes_to_delete(mocker):

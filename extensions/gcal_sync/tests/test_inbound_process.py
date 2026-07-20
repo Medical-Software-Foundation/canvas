@@ -5,11 +5,15 @@ from types import SimpleNamespace
 from gcal_sync.google.client import GoogleApiError
 from gcal_sync.inbound import InboundSync
 
-SECRETS = {"GOOGLE_SERVICE_ACCOUNT_JSON": '{"client_email": "svc@x.iam", "private_key": "KEY"}'}
+SECRETS = {
+    "GOOGLE_SERVICE_ACCOUNT_JSON": '{"client_email": "svc@x.iam", "private_key": "KEY"}'
+}
 
 
 def _state(mocker, sync_token="", needs=True):
-    state = SimpleNamespace(sync_token=sync_token, needs_full_resync=needs, save=mocker.Mock())
+    state = SimpleNamespace(
+        sync_token=sync_token, needs_full_resync=needs, save=mocker.Mock()
+    )
     css = mocker.patch("gcal_sync.inbound.CalendarSyncState")
     css.objects.get_or_create.return_value = (state, False)
     return state
@@ -20,8 +24,12 @@ def _inbound(client):
 
 
 def test_import_context_caches_per_calendar_and_reresolves_on_change(mocker):
-    nt = mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
-    pl = mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
+    nt = mocker.patch(
+        "gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1"
+    )
+    pl = mocker.patch(
+        "gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1")
+    )
     inbound = InboundSync(SECRETS, client_factory=lambda c: object())
     # Repeated calls for the SAME calendar resolve only once (the per-event N+1 we removed).
     assert inbound._import_context("calA") == ("nt-1", "14", "loc-1")
@@ -43,6 +51,22 @@ def test_full_pull_advances_sync_token(mocker):
     assert state.sync_token == "newtok"
     assert state.needs_full_resync is False
     state.save.assert_called()
+
+
+def test_dry_run_forces_full_pull_and_persists_nothing(mocker):
+    # Even with a live sync token, a dry run must pull the FULL window (no delta) so it previews the
+    # same thing a real re-import does — and it must not advance/save the token.
+    state = _state(mocker, sync_token="livetoken", needs=False)
+    deltas = mocker.Mock(return_value=([{"id": "g1"}], "newtok"))
+    client = SimpleNamespace(list_event_deltas=deltas)
+    inbound = _inbound(client)
+    mocker.patch.object(inbound, "_apply", return_value=[])
+    inbound.process_calendar("c1", force_rebuild=True, dry_run=True)
+    _args, kwargs = deltas.call_args
+    assert kwargs["sync_token"] == ""  # ignored the stored token -> full pull
+    assert kwargs["time_min"] and kwargs["time_max"]  # bounded full-window pull
+    assert state.sync_token == "livetoken"  # unchanged
+    state.save.assert_not_called()  # no persistence in a dry run
 
 
 def test_410_clears_token_and_schedules_resync(mocker):
@@ -70,11 +94,15 @@ def test_non_410_error_propagates(mocker):
 def test_safety_cap_aborts_without_advancing_cursor(mocker):
     state = _state(mocker)  # sync_token starts ""
     client = SimpleNamespace(
-        list_event_deltas=mocker.Mock(return_value=([{"id": "g1"}, {"id": "g2"}], "newtok"))
+        list_event_deltas=mocker.Mock(
+            return_value=([{"id": "g1"}, {"id": "g2"}], "newtok")
+        )
     )
     inbound = _inbound(client)
 
-    def over_cap(_cal, _event, stats):
+    def over_cap(
+        _cal, _event, stats, _force_rebuild=False, _dry_run=False, _verbose=False
+    ):
         stats["holds_created"] = inbound._MAX_HOLDS_PER_RUN
         return []
 

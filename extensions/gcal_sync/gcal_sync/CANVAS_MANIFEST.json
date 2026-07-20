@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.164.0",
-    "plugin_version": "0.4.5",
+    "plugin_version": "0.5.0",
     "name": "gcal_sync",
     "description": "Two-way Google Calendar sync for Canvas: pushes appointments and admin blocks (lunch/PTO) into providers' Workspace calendars in near-real-time, and imports provider-created Google events back into Canvas as admin holds. Canvas remains the system of record. Service-account + domain-wide delegation; no PHI in event fields.",
     "components": {
@@ -81,6 +81,20 @@
                     ],
                     "write": []
                 }
+            },
+            {
+                "class": "gcal_sync.handlers.reimport_drain:ReimportDrainCron",
+                "description": "Drains the fleet re-import queue a few providers per tick so 'Re-import all' rebuilds apply across many short runs",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Appointment",
+                        "v1.Staff",
+                        "v1.NoteType",
+                        "v1.PracticeLocation"
+                    ],
+                    "write": []
+                }
             }
         ],
         "applications": [
@@ -98,7 +112,7 @@
         "views": []
     },
     "custom_data": {
-        "namespace": "gcal_sync",
+        "namespace": "gcalsync__core",
         "access": "read_write"
     },
     "tags": {},

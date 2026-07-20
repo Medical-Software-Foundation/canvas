@@ -56,7 +56,6 @@ def test_current_blocks_empty_without_admin_calendar(mocker):
 def test_upsert_inserts_new_block(mocker):
     bs = _bs()
     cem = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    cem.objects.filter.return_value.first.return_value = None
     mocker.patch("gcal_sync.blocks.build_event_body", return_value={})
     mocker.patch("gcal_sync.blocks.content_hash", return_value="h1")
     client = SimpleNamespace(insert_event=mocker.Mock(return_value={"id": "g1"}))
@@ -66,7 +65,8 @@ def test_upsert_inserts_new_block(mocker):
         ends_at=datetime(2026, 6, 22, 12, 30, tzinfo=timezone.utc),
     )
     stats = {"pushed": 0, "deleted": 0}
-    bs._upsert(client, "cal", "ev1", event, stats)
+    # Empty cache = "no mapping for this block yet" -> insert path.
+    bs._upsert(client, "cal", "ev1", event, stats, {})
     client.insert_event.assert_called_once()
     cem.objects.create.assert_called_once()
     assert stats["pushed"] == 1
@@ -74,10 +74,6 @@ def test_upsert_inserts_new_block(mocker):
 
 def test_upsert_skips_unchanged(mocker):
     bs = _bs()
-    cem = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    cem.objects.filter.return_value.first.return_value = SimpleNamespace(
-        last_pushed_hash="h1", google_calendar_id="cal", google_event_id="g1"
-    )
     mocker.patch("gcal_sync.blocks.build_event_body", return_value={})
     mocker.patch("gcal_sync.blocks.content_hash", return_value="h1")  # same hash
     client = SimpleNamespace(patch_event=mocker.Mock())
@@ -86,8 +82,12 @@ def test_upsert_skips_unchanged(mocker):
         starts_at=datetime(2026, 6, 22, 12, 0, tzinfo=timezone.utc),
         ends_at=datetime(2026, 6, 22, 12, 30, tzinfo=timezone.utc),
     )
+    existing = SimpleNamespace(
+        last_pushed_hash="h1", google_calendar_id="cal", google_event_id="g1"
+    )
     stats = {"pushed": 0, "deleted": 0}
-    bs._upsert(client, "cal", "ev1", event, stats)
+    # Prefetched mapping with matching hash -> no Google call.
+    bs._upsert(client, "cal", "ev1", event, stats, {"ev1": existing})
     client.patch_event.assert_not_called()  # unchanged -> no Google call
     assert stats["pushed"] == 0
 
@@ -108,11 +108,36 @@ def test_delete_removed_drops_orphans(mocker):
 def test_sync_provider_upserts_then_deletes(mocker):
     bs = _bs()
     mocker.patch.object(bs, "_current_blocks", return_value={"ev1": SimpleNamespace(id="ev1")})
+    cem = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
+    cem.objects.filter.return_value = []
     up = mocker.patch.object(bs, "_upsert")
     rm = mocker.patch.object(bs, "_delete_removed")
     bs.sync_provider("14", "cal")
     up.assert_called_once()
     rm.assert_called_once()
+
+
+def test_sync_provider_prefetches_mappings_in_one_query(mocker):
+    # N+1 fix: sync_provider loads all block mappings up front (one query keyed by canvas_event_id)
+    # and hands each _upsert the shared cache, instead of each _upsert querying per block.
+    bs = _bs()
+    mocker.patch.object(
+        bs,
+        "_current_blocks",
+        return_value={"ev1": SimpleNamespace(id="ev1"), "ev2": SimpleNamespace(id="ev2")},
+    )
+    existing = SimpleNamespace(canvas_event_id="ev1")
+    cem = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
+    cem.objects.filter.return_value = [existing]
+    upsert = mocker.patch.object(bs, "_upsert")
+    mocker.patch.object(bs, "_delete_removed")
+
+    bs.sync_provider("14", "cal")
+
+    cem.objects.filter.assert_called_once_with(canvas_event_id__in=["ev1", "ev2"])
+    # Every _upsert call receives the same prefetched cache; no per-block query.
+    for call in upsert.call_args_list:
+        assert call.args[-1] == {"ev1": existing}
 
 
 def test_sync_all_blocks_aggregates(mocker):

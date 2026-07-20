@@ -138,6 +138,15 @@
         button.danger { background: var(--surface); color: var(--danger); border-color: #f1c9c7; }
         button.danger:hover:not(:disabled) { background: var(--danger-wash); border-color: var(--danger); transform: translateY(-1px); }
 
+        /* dry-run per-event preview: read-only, scrollable, monospace */
+        .dryrun-log {
+            display: block; width: 100%; margin: 8px 0 0; padding: 8px 10px;
+            max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+            background: #0f1729; color: #d5deec; border-radius: 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 11px; line-height: 1.5;
+        }
+
         /* ---------- bulk import ---------- */
         details {
             background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
@@ -157,6 +166,10 @@
         details[open] summary::before { content: "−"; transform: rotate(0deg); }
         .import-body { padding: 0 0 14px; }
         .import-note { color: var(--muted); font-size: 12.5px; margin: 2px 0 10px; }
+        .action-defs { margin: 2px 0 0; }
+        .action-defs dt { font-weight: 600; color: var(--navy); font-size: 13px; margin-top: 12px; }
+        .action-defs dt:first-child { margin-top: 0; }
+        .action-defs dd { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
         .import-note code, code {
             font-family: var(--mono); font-size: 11.5px; background: var(--line-soft);
             padding: 1px 6px; border-radius: 5px; color: var(--navy);
@@ -238,6 +251,7 @@
 
         /* ---------- status messages ---------- */
         .row-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+        .sync-detail { font-size: 11px; color: var(--muted); margin-top: 4px; }
         .status-msg { font-size: 12px; color: var(--muted); font-weight: 600; }
         .status-msg.ok { color: var(--success); }
         .status-msg.err { color: var(--danger); }
@@ -263,11 +277,33 @@
         </header>
 
         <div class="controls">
-            <button id="automap-btn" class="btn-primary">Auto-map schedulable providers</button>
-            <button id="reconcile-btn" class="secondary">Reconcile now</button>
+            <button id="automap-btn" class="btn-primary" title="Turn on sync for every provider by matching them to their own Google Workspace calendar (their staff email) and starting a live connection. Safe to run again; it updates, it never creates duplicates.">Auto-map schedulable providers</button>
+            <button id="reconcile-btn" class="secondary" title="Run a full two-way catch-up for all enabled providers: pull in changes from Google and re-push Canvas's current schedule. Safe to click repeatedly; it will not create duplicates.">Reconcile now</button>
+            <button id="reimport-all-btn" class="secondary" title="Queue EVERY enabled provider to have their holds rebuilt from their Google calendars. A background job rebuilds a few providers at a time over the next several minutes. Adopts existing holds and recreates missing/cancelled ones without duplicates. Safe to repeat.">Re-import all</button>
+            <button id="cancel-reimport-btn" class="secondary" title="Stop an in-progress 'Re-import all' by clearing its queue. No new providers are rebuilt after this (a batch already mid-run finishes). Holds already rebuilt are kept. Use if the re-import is straining the instance.">Cancel re-import</button>
             <span class="spacer"></span>
             <span id="reconcile-msg" class="status-msg msg-line"></span>
         </div>
+
+        <details class="actions-help">
+            <summary>What do these buttons do?</summary>
+            <div class="import-body">
+                <dl class="action-defs">
+                    <dt>Auto-map schedulable providers</dt>
+                    <dd>Turns on sync for every provider by matching them to their own Google Workspace calendar (their staff email) and starting a live connection. Safe to run again anytime; it updates existing entries and does not create duplicates. Use it at setup and whenever new providers join.</dd>
+                    <dt>Reconcile now</dt>
+                    <dd>Runs a full two-way catch-up for all enabled providers: pulls in changes from Google and re-pushes Canvas's current schedule. Safe to click repeatedly; it will not create duplicates. Use it after setup, after changes, or if something looks out of sync. (First-time imports bring in up to five providers' existing events per run and continue on later runs.)</dd>
+                    <dt>Reconcile (one provider)</dt>
+                    <dd>The same two-way catch-up, just for that one provider. Faster than the full run.</dd>
+                    <dt>Re-import (one provider)</dt>
+                    <dd>Rebuilds a provider from scratch: removes the holds we previously imported from their Google calendar, then pulls everything in fresh. Use it if a provider's imported events look wrong, or to bring in events that existed before sync was set up.</dd>
+                    <dt>Purge (one provider)</dt>
+                    <dd>Removes the holds we imported into Canvas for that provider and clears our sync bookkeeping. It does not rebuild, and it does not change anything on the provider's Google calendar. Use it to stop and clean up a provider's imported holds.</dd>
+                    <dt>Save</dt>
+                    <dd>Saves a provider's calendar address and their sync on/off switch.</dd>
+                </dl>
+            </div>
+        </details>
 
         <details>
             <summary>Bulk import from CSV</summary>
@@ -316,15 +352,18 @@
                                 {% else %}
                                     <span class="badge off">Off</span>
                                 {% endif %}
+                                <div class="sync-detail">{{ p.synced_count }} synced · last {{ p.last_synced_display }}</div>
                             </div>
                         </td>
                         <td>
                             <div class="row-actions">
-                                <button class="save-btn">Save</button>
-                                <button class="reconcile-row-btn secondary">Reconcile</button>
-                                <button class="reimport-row-btn secondary">Re-import</button>
-                                <button class="purge-row-btn danger" title="Cancel this provider's imported holds and clear their sync mappings (no rebuild)">Purge</button>
+                                <button class="save-btn" title="Save this provider's calendar address and sync on/off switch">Save</button>
+                                <button class="reconcile-row-btn secondary" title="Two-way catch-up for this provider only (safe to repeat; no duplicates)">Reconcile</button>
+                                <button class="dryrun-row-btn secondary" title="Preview what a Re-import WOULD do for this provider — per-event, without changing anything. Shows the outcome for each Google event below (also written to the plugin logs).">Dry-run</button>
+                                <button class="reimport-row-btn secondary" title="Rebuild this provider's holds from what's on their Google calendar now: adopts existing holds and recreates missing/cancelled ones. Does not remove holds up front; safe to repeat. Use Purge to actually remove holds.">Re-import</button>
+                                <button class="purge-row-btn danger" title="Remove the holds we imported into Canvas for this provider and clear our sync bookkeeping. Does not rebuild, and does not change the provider's Google calendar.">Purge</button>
                                 <span class="status-msg"></span>
+                                <pre class="dryrun-log" hidden></pre>
                             </div>
                         </td>
                     </tr>
@@ -393,8 +432,12 @@
                         if (res.ok) {
                             var b = res.body;
                             var parts = [];
-                            if (b.pushed !== undefined) parts.push(b.pushed + " appt");
+                            if (b.pushed !== undefined) parts.push(b.pushed + " appt(s) pushed");
                             if (b.holds_created) parts.push(b.holds_created + " hold(s) imported");
+                            if (b.holds_updated) parts.push(b.holds_updated + " updated");
+                            if (b.holds_unchanged) parts.push(b.holds_unchanged + " already current");
+                            if (b.holds_removed) parts.push(b.holds_removed + " removed");
+                            if (b.swept) parts.push(b.swept + " stale cleaned");
                             if (b.blocks_pushed) parts.push(b.blocks_pushed + " block(s)");
                             if (b.purged) parts.push(b.purged + " hold(s) purged");
                             msg.textContent = verb + " done" + (parts.length ? ": " + parts.join(", ") : ".")
@@ -419,6 +462,55 @@
         }
         rowAction(".reconcile-row-btn", "/plugin-io/api/gcal_sync/google/admin/reconcile-provider", "Reconcile");
         rowAction(".reimport-row-btn", "/plugin-io/api/gcal_sync/google/admin/reimport-provider", "Re-import");
+
+        // Dry-run: read-only preview. Shows would-import/update counts inline and does NOT reload
+        // (nothing changed); full per-event detail is written to the plugin logs by the SDK logger.
+        document.querySelectorAll(".dryrun-row-btn").forEach(function (button) {
+            button.addEventListener("click", function () {
+                var row = button.closest("tr");
+                var msg = row.querySelector(".status-msg");
+                var out = row.querySelector(".dryrun-log");
+                var rowButtons = row.querySelectorAll("button");
+                rowButtons.forEach(function (b) { b.disabled = true; });
+                var originalLabel = button.textContent;
+                button.textContent = "Dry-run…";
+                msg.textContent = "Dry-run in progress… (read-only; nothing will change).";
+                msg.className = "status-msg";
+                out.hidden = true;
+                out.textContent = "";
+                postJSON("/plugin-io/api/gcal_sync/google/admin/dryrun-provider", { staff_id: row.getAttribute("data-staff-id") }).then(function (res) {
+                    rowButtons.forEach(function (b) { b.disabled = false; });
+                    button.textContent = originalLabel;
+                    if (res.ok) {
+                        var b = res.body;
+                        var parts = [
+                            (b.holds_created || 0) + " would import",
+                            (b.holds_updated || 0) + " would update"
+                        ];
+                        if (b.holds_unchanged) parts.push(b.holds_unchanged + " already current");
+                        if (b.holds_removed) parts.push(b.holds_removed + " would remove");
+                        msg.textContent = "Dry-run (no changes): " + parts.join(", ") + ".";
+                        msg.className = "status-msg ok";
+                        var trace = b.trace || [];
+                        if (trace.length) {
+                            out.textContent = trace.join("\n");
+                            out.hidden = false;
+                        } else {
+                            out.textContent = "No events on this calendar in the import window.";
+                            out.hidden = false;
+                        }
+                    } else {
+                        msg.textContent = res.body.error || "Error";
+                        msg.className = "status-msg err";
+                    }
+                }).catch(function () {
+                    rowButtons.forEach(function (b) { b.disabled = false; });
+                    button.textContent = originalLabel;
+                    msg.textContent = "Network error";
+                    msg.className = "status-msg err";
+                });
+            });
+        });
         rowAction(".purge-row-btn", "/plugin-io/api/gcal_sync/google/admin/purge-provider", "Purge",
             "Purge ALL imported holds for this provider? This cancels their gcal-sync holds and clears their sync mappings. It does NOT rebuild (use Re-import for that), and cannot be undone.");
 
@@ -475,6 +567,84 @@
             }).catch(function () {
                 msg.textContent = "Network error";
                 msg.className = "status-msg err";
+            });
+        });
+
+        // Re-import all: queue every enabled provider for a rebuild. This request only enqueues (fast,
+        // synchronous DB writes), so it returns right away; a background cron then rebuilds a few
+        // providers every couple of minutes until the queue drains. Idempotent — clicking again while
+        // a drain is in flight won't double any provider's work.
+        document.getElementById("reimport-all-btn").addEventListener("click", function () {
+            if (!window.confirm(
+                "Queue ALL enabled providers for re-import from their Google calendars?\n\n"
+                + "Providers rebuild a few at a time over the next several minutes. It adopts existing "
+                + "holds and recreates missing/cancelled ones (no duplicates), and does not remove "
+                + "anything. Refresh this page as it progresses to see updated counts."
+            )) return;
+            var msg = document.getElementById("reconcile-msg");
+            var btn = this;
+            btn.disabled = true;
+            msg.textContent = "Queuing…";
+            msg.className = "status-msg";
+            fetch("/plugin-io/api/gcal_sync/google/admin/reimport-all", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: "{}"
+            }).then(function (r) {
+                return r.json().then(function (j) {
+                    if (r.ok) {
+                        msg.textContent = "Queued " + j.queued + " provider(s) for re-import ("
+                            + j.pending + " pending). They rebuild a few at a time over the next several "
+                            + "minutes — refresh to watch counts update. Safe to click again.";
+                        msg.className = "status-msg ok";
+                    } else {
+                        msg.textContent = (j && j.error) || "Could not queue re-import all";
+                        msg.className = "status-msg err";
+                        btn.disabled = false;
+                    }
+                });
+            }).catch(function () {
+                msg.textContent = "Network error queuing re-import all";
+                msg.className = "status-msg err";
+                btn.disabled = false;
+            });
+        });
+
+        // Cancel re-import: empty the queue so the drain cron stops. A batch already mid-run finishes
+        // (a few providers), but nothing new is picked up. Holds already rebuilt are kept.
+        document.getElementById("cancel-reimport-btn").addEventListener("click", function () {
+            if (!window.confirm(
+                "Cancel the in-progress re-import?\n\n"
+                + "This clears the queue so no further providers are rebuilt (a batch already running "
+                + "finishes). Holds already rebuilt are kept. You can start 'Re-import all' again later."
+            )) return;
+            var msg = document.getElementById("reconcile-msg");
+            var btn = this;
+            btn.disabled = true;
+            msg.textContent = "Cancelling…";
+            msg.className = "status-msg";
+            fetch("/plugin-io/api/gcal_sync/google/admin/cancel-reimport-all", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: "{}"
+            }).then(function (r) {
+                return r.json().then(function (j) {
+                    if (r.ok) {
+                        msg.textContent = "Re-import cancelled — cleared " + j.cleared + " queued "
+                            + "provider(s). A batch already running will finish; nothing new starts.";
+                        msg.className = "status-msg ok";
+                    } else {
+                        msg.textContent = (j && j.error) || "Could not cancel re-import";
+                        msg.className = "status-msg err";
+                    }
+                    btn.disabled = false;
+                });
+            }).catch(function () {
+                msg.textContent = "Network error cancelling re-import";
+                msg.className = "status-msg err";
+                btn.disabled = false;
             });
         });
     </script>
