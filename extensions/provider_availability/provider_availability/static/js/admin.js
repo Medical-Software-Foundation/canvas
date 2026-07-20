@@ -285,7 +285,7 @@ function _firstWindowFromSchedule(schedule) {
   return [];
 }
 
-/* ---------- Time field (15-min dropdown + custom) ---------- */
+/* ---------- Time field (typed, e.g. "9:07 AM") ---------- */
 
 function _pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
 
@@ -299,21 +299,6 @@ function _fmt12(v) {
   if (h12 === 0) h12 = 12;
   return h12 + ':' + min + ' ' + ap;
 }
-
-var TIME_OPTIONS = (function () {
-  var out = [];
-  for (var h = 0; h < 24; h++) {
-    for (var m = 0; m < 60; m += 15) {
-      var v = _pad2(h) + ':' + _pad2(m);
-      out.push({ v: v, label: _fmt12(v) });
-    }
-  }
-  return out;
-})();
-var TIME_OPTION_SET = {};
-TIME_OPTIONS.forEach(function (o) { TIME_OPTION_SET[o.v] = true; });
-
-function _isStdTime(v) { return !!TIME_OPTION_SET[v]; }
 
 // Parse "9:07 AM", "9 am", "21:07", "9:07" -> canonical "HH:MM" (or "" if invalid).
 function parseTimeTo24(str) {
@@ -334,45 +319,55 @@ function parseTimeTo24(str) {
   return _pad2(h) + ':' + _pad2(min);
 }
 
-// A time field: a 15-min dropdown + a "Custom…" option that reveals a text
-// input. The canonical HH:MM value lives on the hidden `.time-input` so all
-// existing read sites keep working unchanged.
-function timeFieldHtml(val) {
+// A plain typed time field. The user types any time (e.g. "9:07 AM"); it is
+// parsed and normalized on blur. The canonical HH:MM value lives on the hidden
+// `.time-input` so existing read sites keep working unchanged.
+function timeFieldHtml(val, id) {
   val = val || '';
-  var isCustom = val !== '' && !_isStdTime(val);
-  var selVal = isCustom ? '__custom__' : val;
-  var opts = '<option value="">--:--</option>';
-  TIME_OPTIONS.forEach(function (o) {
-    opts += '<option value="' + o.v + '"' + (o.v === selVal ? ' selected' : '') + '>' + o.label + '</option>';
-  });
-  opts += '<option value="__custom__"' + (isCustom ? ' selected' : '') + '>Custom…</option>';
-  var customStyle = 'width:100px;' + (isCustom ? '' : 'display:none;');
-  return '<span class="time-picker">' +
-    '<select class="time-select" onchange="tpOnSelect(this)">' + opts + '</select>' +
-    '<input type="text" class="time-custom" placeholder="e.g. 9:07 AM" style="' + customStyle + '" value="' + (isCustom ? _fmt12(val) : '') + '" oninput="tpOnCustom(this)">' +
-    '<input type="hidden" class="time-input" value="' + val + '">' +
+  var idAttr = id ? ' id="' + id + '"' : '';
+  var display = val ? _fmt12(val) : '';
+  return '<span class="time-combo">' +
+    '<input type="text" class="time-combo-input" autocomplete="off" placeholder="e.g. 9:00 AM" value="' + display + '">' +
+    '<input type="hidden" class="time-input"' + idAttr + ' value="' + val + '">' +
     '</span>';
 }
 
-function tpOnSelect(sel) {
-  var span = sel.closest('.time-picker');
-  var custom = span.querySelector('.time-custom');
-  var hidden = span.querySelector('.time-input');
-  if (sel.value === '__custom__') {
-    custom.style.display = '';
-    hidden.value = parseTimeTo24(custom.value) || '';
-    custom.focus();
-  } else {
-    custom.style.display = 'none';
-    hidden.value = sel.value;
-  }
+// Render a time field into a container span (used for the template-defined
+// Single Event / Blocked start & end fields). The hidden input keeps `id` so
+// existing `getElementById(id).value` reads keep working.
+function initTimeField(wrapId, fieldId) {
+  var wrap = document.getElementById(wrapId);
+  if (wrap) wrap.innerHTML = timeFieldHtml('', fieldId);
 }
 
-function tpOnCustom(inp) {
-  var span = inp.closest('.time-picker');
-  var hidden = span.querySelector('.time-input');
-  hidden.value = parseTimeTo24(inp.value) || '';
+// Set a time field's value programmatically, syncing the visible input.
+function setTimeField(fieldId, val) {
+  var hidden = document.getElementById(fieldId);
+  if (!hidden) return;
+  var span = hidden.closest('.time-combo');
+  val = val || '';
+  hidden.value = val;
+  if (span) span.querySelector('.time-combo-input').value = val ? _fmt12(val) : '';
 }
+
+/* ----- typed-field behavior via event delegation (covers dynamic rows) ----- */
+
+// Keep the hidden canonical value in sync as the user types.
+document.addEventListener('input', function (e) {
+  var input = e.target.closest && e.target.closest('.time-combo-input');
+  if (!input) return;
+  input.closest('.time-combo').querySelector('.time-input').value = parseTimeTo24(input.value) || '';
+});
+
+// Normalize the typed text to a clean value when the field loses focus.
+document.addEventListener('focusout', function (e) {
+  var input = e.target.closest && e.target.closest('.time-combo-input');
+  if (!input) return;
+  var span = input.closest('.time-combo');
+  var canon = parseTimeTo24(input.value);
+  span.querySelector('.time-input').value = canon || '';
+  input.value = canon ? _fmt12(canon) : '';
+});
 
 /* ---------- Daily mode flat time-windows editor ---------- */
 
@@ -1623,9 +1618,9 @@ function addWindow(day, startVal, endVal) {
   group.style.flex = '1';
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -1680,9 +1675,9 @@ function addRecurringBlockWindow(day, startVal, endVal) {
   group.style.flex = '1';
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -1783,9 +1778,9 @@ function addOverrideWindow(startVal, endVal) {
   group.style.marginBottom = '4px';
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -1949,14 +1944,14 @@ function resetForm() {
   syncDateFacade('rb_effective_start');
   syncDateFacade('rb_effective_end');
   document.getElementById('block_date').value = '';
-  document.getElementById('block_start_time').value = '';
-  document.getElementById('block_end_time').value = '';
+  setTimeField('block_start_time', '');
+  setTimeField('block_end_time', '');
   syncDateFacade('block_date');
 
   // Reset single event fields
   document.getElementById('single_date').value = '';
-  document.getElementById('single_start_time').value = '';
-  document.getElementById('single_end_time').value = '';
+  setTimeField('single_start_time', '');
+  setTimeField('single_end_time', '');
   syncDateFacade('single_date');
 
   // Reset the All-day checkbox and the multi-date chip queue
@@ -2049,8 +2044,8 @@ function editRule(ruleJson) {
     document.getElementById('single_date').value = r.effective_start;
     syncDateFacade('single_date');
     var win = schedule[activeDays[0]][0];
-    document.getElementById('single_start_time').value = win.start;
-    document.getElementById('single_end_time').value = win.end;
+    setTimeField('single_start_time', win.start);
+    setTimeField('single_end_time', win.end);
   } else {
     setScheduleMode('recurring');
     document.getElementById('effective_start').value = r.effective_start || '';
@@ -2169,8 +2164,8 @@ function editBlock(blockJson) {
 
   // Populate date/time from block start/end ISO strings
   document.getElementById('block_date').value = (b.start || '').slice(0, 10);
-  document.getElementById('block_start_time').value = (b.start || '').slice(11, 16);
-  document.getElementById('block_end_time').value = (b.end || '').slice(11, 16);
+  setTimeField('block_start_time', (b.start || '').slice(11, 16));
+  setTimeField('block_end_time', (b.end || '').slice(11, 16));
   syncDateFacade('block_date');
 
   // Restore the all-day checkbox from the saved block
@@ -3049,7 +3044,7 @@ async function renderSettingsPanel() {
     html += '<tr>';
     html += '<td><strong>' + (p.name || p.id) + '</strong></td>';
     html += '<td><select class="input provider-tz-dropdown" data-provider-id="' + p.id + '" onchange="saveProviderTz(this)">';
-    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>— Select timezone —</option>';
+    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice default (' + _practiceTz + ')</option>';
     COMMON_TZS.forEach(function(tz) {
       html += '<option value="' + tz + '"' + (tz === currentTz ? ' selected' : '') + '>' + tz + '</option>';
     });
@@ -3058,7 +3053,7 @@ async function renderSettingsPanel() {
     if (isExplicit) {
       html += '<span class="badge badge-active">Set</span>';
     } else {
-      html += '<span class="badge badge-expired">Not Set</span>';
+      html += '<span class="badge badge-expired" title="No override — using the practice default (' + _practiceTz + ')">Default</span>';
     }
     html += '</td>';
     html += '</tr>';
@@ -3070,17 +3065,26 @@ async function renderSettingsPanel() {
 async function saveProviderTz(selectEl) {
   var pid = selectEl.getAttribute('data-provider-id');
   var tz = selectEl.value;
-  if (!tz) return;
-  var data = await apiCall('/provider-timezone', {
-    method: 'PUT',
-    body: JSON.stringify({ provider_id: pid, timezone: tz }),
-  });
+  var data;
+  if (!tz) {
+    // "Practice default" selected — clear the explicit override.
+    data = await apiCall('/provider-timezone/' + pid, { method: 'DELETE' });
+  } else {
+    data = await apiCall('/provider-timezone', {
+      method: 'PUT',
+      body: JSON.stringify({ provider_id: pid, timezone: tz }),
+    });
+  }
   if (data.error) {
     showMsg(data.error, 'error');
   } else {
     showMsg(data.message || 'Timezone updated', 'success');
     // Update local TZ map directly — no overview dependency
-    _providerTzMap[pid] = { timezone: tz, explicit: true };
+    if (tz) {
+      _providerTzMap[pid] = { timezone: tz, explicit: true };
+    } else {
+      delete _providerTzMap[pid];
+    }
     // Also refresh overview for accordion display
     try {
       var ovData = await apiCall('/overview');
@@ -3277,9 +3281,9 @@ function addHoldWindow(day, startVal, endVal) {
   group.style.flex = '1';
   var wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   var rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -3336,6 +3340,12 @@ msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search loca
 msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
 msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
 // msSettingsStaff removed — access control now via plugin secret
+
+// Template-defined time fields (Single Event / Blocked start & end)
+initTimeField('single_start_time_wrap', 'single_start_time');
+initTimeField('single_end_time_wrap', 'single_end_time');
+initTimeField('block_start_time_wrap', 'block_start_time');
+initTimeField('block_end_time_wrap', 'block_end_time');
 
 // Re-render accordion whenever filter MultiSelect changes
 const _origUpdateChips = msFilterProvider.updateChips.bind(msFilterProvider);

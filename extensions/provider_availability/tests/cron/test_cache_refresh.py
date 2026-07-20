@@ -29,9 +29,11 @@ class TestCacheRefreshTaskExecute:
 
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=True) as mock_should, \
              patch(f"{CR_MODULE}.refresh_all_ttls", return_value=5) as mock_refresh, \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
              patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]) as mock_cal, \
              patch(f"{CR_MODULE}._daily_resync", return_value=[]) as mock_resync, \
-             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead:
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead, \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]) as mock_hold:
 
             result = handler.execute()
 
@@ -40,6 +42,8 @@ class TestCacheRefreshTaskExecute:
             assert mock_cal.mock_calls == [call()]
             assert mock_resync.mock_calls == [call()]
             assert mock_lead.mock_calls == [call()]
+            # Same day → hold refresh is NOT run
+            assert mock_hold.mock_calls == []
             assert result == []
 
     def test_execute_skips_refresh_when_not_due(self):
@@ -47,14 +51,47 @@ class TestCacheRefreshTaskExecute:
 
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False) as mock_should, \
              patch(f"{CR_MODULE}.refresh_all_ttls") as mock_refresh, \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
              patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]) as mock_cal, \
              patch(f"{CR_MODULE}._daily_resync", return_value=[]) as mock_resync, \
-             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead:
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead, \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]):
 
             result = handler.execute()
 
             assert mock_should.mock_calls == [call()]
             assert mock_refresh.mock_calls == []
+            assert result == []
+
+    def test_execute_refreshes_holds_only_on_day_change(self):
+        """Hold refresh runs when the day rolled over, and is skipped otherwise."""
+        handler = CacheRefreshTask(MagicMock())
+        hold_effect = MagicMock()
+
+        common = {
+            "should_refresh_ttls": patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False),
+            "cal": patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]),
+            "resync": patch(f"{CR_MODULE}._daily_resync", return_value=[]),
+            "lead": patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]),
+        }
+
+        # Day changed (last sync was yesterday) → hold refresh runs
+        with common["should_refresh_ttls"], common["cal"], common["resync"], common["lead"], \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value="2000-01-01"), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[hold_effect]) as mock_hold:
+            result = handler.execute()
+            assert mock_hold.mock_calls == [call()]
+            assert result == [hold_effect]
+
+        # Same day → hold refresh skipped
+        with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
+             patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]), \
+             patch(f"{CR_MODULE}._daily_resync", return_value=[]), \
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]), \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[hold_effect]) as mock_hold2:
+            result = handler.execute()
+            assert mock_hold2.mock_calls == []
             assert result == []
 
     def test_execute_aggregates_effects(self):
@@ -65,9 +102,11 @@ class TestCacheRefreshTaskExecute:
         lead_effect = MagicMock()
 
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
              patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[cal_effect]), \
              patch(f"{CR_MODULE}._daily_resync", return_value=[resync_effect]), \
-             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[lead_effect]):
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[lead_effect]), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]):
 
             result = handler.execute()
 

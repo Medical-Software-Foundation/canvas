@@ -20,6 +20,7 @@ PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
 INSTALL_SENTINEL_KEY = "pa:installed"
+SYNCED_VERSION_KEY = "pa:synced_version"
 LAST_TTL_REFRESH_KEY = "pa:last_ttl_refresh"
 CACHE_TTL_SECONDS = 14 * 24 * 60 * 60 - 3600  # 14 days minus 1 hour buffer
 TTL_REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours between full TTL refreshes
@@ -667,3 +668,16 @@ def mark_installed() -> None:
     """Record that the plugin has been installed."""
     cache = _get_cache()
     cache.set(INSTALL_SENTINEL_KEY, "1", timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def get_synced_version() -> str:
+    """Return the plugin version whose events were last fully synced, or ''."""
+    cache = _get_cache()
+    val = cache.get(SYNCED_VERSION_KEY)
+    return str(val) if val else ""
+
+
+def set_synced_version(version: str) -> None:
+    """Record the plugin version that a full event sync was last run for."""
+    cache = _get_cache()
+    cache.set(SYNCED_VERSION_KEY, version, timeout_seconds=CACHE_TTL_SECONDS)

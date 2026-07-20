@@ -694,6 +694,51 @@ class TestSetProviderTz:
         assert code == HTTPStatus.FORBIDDEN
 
 
+# ── clear_provider_tz ──────────────────────────────────────────────────────
+
+
+class TestClearProviderTz:
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.get_practice_timezone", return_value="US/Pacific")
+    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"])
+    @patch(f"{MODULE}.get_all_recurring_blocks")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"])
+    @patch(f"{MODULE}.clear_provider_timezone")
+    def test_clears_override_and_resyncs(
+        self, mock_clear, mock_sync, mock_get_rb, mock_rb_sync, mock_default_tz, mock_access
+    ):
+        matching = RecurringBlock(id="rb1", provider_id=PROVIDER_ID)
+        other = RecurringBlock(id="rb2", provider_id=PROVIDER_ID_2)
+        mock_get_rb.return_value = [matching, other]
+
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID})
+        result = handler.clear_provider_tz()
+
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert data["explicit"] is False
+        assert data["timezone"] == "US/Pacific"
+        assert data["provider_id"] == PROVIDER_ID
+        assert "sync-fx" in result
+        assert "rb-fx" in result
+        assert mock_clear.mock_calls == [call(PROVIDER_ID)]
+        assert mock_sync.mock_calls == [call(PROVIDER_ID)]
+        # Only the matching provider's recurring block is re-synced
+        assert mock_rb_sync.mock_calls == [call(matching)]
+
+    @patch(f"{MODULE}._check_write_access")
+    def test_write_access_denied(self, mock_access):
+        from canvas_sdk.effects.simple_api import JSONResponse
+
+        mock_access.return_value = [
+            JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)
+        ]
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID})
+        result = handler.clear_provider_tz()
+        _, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+
+
 # ── set_provider_tz_bulk ───────────────────────────────────────────────────
 
 

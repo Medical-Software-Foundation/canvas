@@ -13,21 +13,33 @@ from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
 
+def resolve_provider_name(provider_id: str) -> str:
+    """Return a provider's full name, or '' if the staff record is missing.
+
+    Callers that loop over locations should resolve this ONCE and pass it into
+    get_admin_calendar_id / get_admin_calendars to avoid refetching the same
+    Staff row per iteration.
+    """
+    try:
+        return Staff.objects.get(id=provider_id).full_name or ""
+    except Staff.DoesNotExist:
+        return ""
+
+
 def get_admin_calendar_id(
-    provider_id: str, location_id: str | None = None
+    provider_id: str, location_id: str | None = None, provider_name: str | None = None
 ) -> tuple[str, list[Effect]]:
     """Find or create the provider's Administrative calendar.
 
     When location_id is provided, returns a location-specific Admin calendar
     (mirroring how _get_calendar_id works for Clinic calendars).
 
+    Pass provider_name to skip the Staff lookup (resolve once before a loop).
+
     Returns (calendar_id, effects_needed_to_create).
     """
-    try:
-        staff = Staff.objects.get(id=provider_id)
-        provider_name = staff.full_name
-    except Staff.DoesNotExist:
-        return "", []
+    if provider_name is None:
+        provider_name = resolve_provider_name(provider_id)
 
     if not provider_name:
         return "", []
@@ -63,13 +75,15 @@ def get_admin_calendar_id(
     return new_id, [cal_effect]
 
 
-def get_admin_calendars(provider_id: str) -> list[CalendarModel]:
-    """Find all Administrative calendars for a provider."""
-    try:
-        staff = Staff.objects.get(id=provider_id)
-        provider_name = staff.full_name
-    except Staff.DoesNotExist:
-        return []
+def get_admin_calendars(
+    provider_id: str, provider_name: str | None = None
+) -> list[CalendarModel]:
+    """Find all Administrative calendars for a provider.
+
+    Pass provider_name to skip the Staff lookup (resolve once before a loop).
+    """
+    if provider_name is None:
+        provider_name = resolve_provider_name(provider_id)
 
     if not provider_name:
         return []

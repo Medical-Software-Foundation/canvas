@@ -48,17 +48,23 @@ class CacheRefreshTask(CronTask):
         else:
             refreshed = 0
 
+        # Detect day rollover BEFORE _daily_resync (which updates the sync date).
+        day_changed = get_last_sync_date() != date.today().isoformat()
+
         effects = _ensure_provider_calendars()
 
         # Daily re-sync: when the date changes, re-sync all rules
         # so recurrence_ends_at advances for effective_end enforcement
         effects.extend(_daily_resync())
 
-        # Refresh lead-time blocks every cron tick
+        # Refresh lead-time blocks every cron tick (the lead window slides continuously)
         effects.extend(_refresh_lead_time_blocks())
 
-        # Refresh hold-type blocks daily (same schedule as daily resync)
-        effects.extend(_refresh_hold_blocks())
+        # Refresh hold-type blocks once per day. The hold window advances by whole
+        # days, so rebuilding every tick only re-emits identical events (and runs
+        # delete/create DB work) 287 extra times a day.
+        if day_changed:
+            effects.extend(_refresh_hold_blocks())
 
         return effects
 

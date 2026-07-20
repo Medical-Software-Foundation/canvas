@@ -18,7 +18,11 @@ from logger import log
 
 from zoneinfo import ZoneInfo
 
-from provider_availability.engine.admin_calendar import get_admin_calendar_id, get_admin_calendars
+from provider_availability.engine.admin_calendar import (
+    get_admin_calendar_id,
+    get_admin_calendars,
+    resolve_provider_name,
+)
 from provider_availability.engine.models import (
     AdminBlock,
     DateOverride,
@@ -171,9 +175,10 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
     tz = ZoneInfo(rule.timezone) if rule.timezone else provider_tz(rule.provider_id)
     interval = max(1, rule.recurrence_interval)
     event_count = 0
+    provider_name = resolve_provider_name(rule.provider_id)  # resolve once, reuse per location
 
     for location_id in location_ids:
-        calendar_id, cal_effects = _get_calendar_id(rule.provider_id, location_id)
+        calendar_id, cal_effects = _get_calendar_id(rule.provider_id, location_id, provider_name)
         effects.extend(cal_effects)
 
         if is_daily:
@@ -417,17 +422,16 @@ def _next_weekday(from_date: date, weekday_int: int) -> date:
 
 
 def _get_calendar_id(
-    provider_id: str, location_id: str | None
+    provider_id: str, location_id: str | None, provider_name: str | None = None
 ) -> tuple[str, list[Effect]]:
     """Get or create a Clinic calendar for a provider+location.
 
+    Pass provider_name to skip the Staff lookup (resolve once before a loop).
+
     Returns (calendar_id, effects_needed_to_create).
     """
-    try:
-        staff = Staff.objects.get(id=provider_id)
-        provider_name = staff.full_name
-    except Staff.DoesNotExist:
-        provider_name = ""
+    if provider_name is None:
+        provider_name = resolve_provider_name(provider_id)
 
     location_name = ""
     if location_id:
@@ -490,8 +494,9 @@ def build_block_event_effects(block: AdminBlock) -> list[Effect]:
     else:
         location_ids = [None]  # provider-level (no location)
 
+    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
         if not calendar_id:
             log.warning("build_block_event_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
@@ -644,7 +649,8 @@ def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect
     if min_lead <= 0:
         return []
 
-    calendar_id, cal_effects = get_admin_calendar_id(rule.provider_id)
+    provider_name = resolve_provider_name(rule.provider_id)  # resolve once for both calendar lookups
+    calendar_id, cal_effects = get_admin_calendar_id(rule.provider_id, provider_name=provider_name)
     if not calendar_id:
         return []
 
@@ -698,7 +704,7 @@ def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect
         pass
 
     # Check if existing lead-time events are still close enough to skip rebuild
-    admin_cals = get_admin_calendars(rule.provider_id)
+    admin_cals = get_admin_calendars(rule.provider_id, provider_name)
     existing_events = []
     for cal in admin_cals:
         existing_events.extend(
@@ -833,8 +839,9 @@ def build_recurring_block_sync_effects(block: RecurringBlock) -> list[Effect]:
     override_map = _get_provider_override_map(block.provider_id)
 
     event_count = 0
+    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
         if not calendar_id:
             log.warning("build_recurring_block_sync_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
@@ -975,8 +982,9 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
         location_ids = [None]  # provider-level (no location)
 
     event_count = 0
+    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
         if not calendar_id:
             log.warning("_build_hold_block_events: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue

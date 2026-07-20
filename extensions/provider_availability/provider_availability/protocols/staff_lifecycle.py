@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 from canvas_sdk.effects import Effect
@@ -9,6 +10,7 @@ from canvas_sdk.effects.calendar import Calendar as CalendarEffect
 from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
+from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
@@ -32,9 +34,20 @@ from provider_availability.engine.storage import (
     get_all_recurring_blocks,
     get_all_rules,
     get_rules_for_provider,
+    get_synced_version,
     is_first_install,
     mark_installed,
+    set_synced_version,
 )
+
+
+def _current_plugin_version() -> str:
+    """Read plugin_version from the packaged manifest (sandbox-safe file read)."""
+    try:
+        return str(json.loads(render_to_string("CANVAS_MANIFEST.json")).get("plugin_version", ""))
+    except Exception:
+        log.exception("OnPluginInstalled: could not read plugin version from manifest")
+        return ""
 
 
 class OnStaffActivated(BaseProtocol):
@@ -187,11 +200,29 @@ class OnPluginInstalled(BaseProtocol):
             cal_skipped,
         )
 
-        # Step 2: Read cached data
+        # Step 2: Decide whether a full event resync is warranted.
+        # A full resync deletes and recreates every plugin event across all
+        # calendars — expensive at scale. It's only needed when the plugin is
+        # first installed or when the code that generates events changed
+        # (i.e. a new plugin version). A config-only redeploy at the same
+        # version leaves the existing events correct, so we skip the batch.
+        first_install = is_first_install()
+        current_version = _current_plugin_version()
+        synced_version = get_synced_version()
+        should_full_sync = first_install or synced_version != current_version
+
+        if not should_full_sync:
+            log.info(
+                "OnPluginInstalled: redeploy at unchanged version %s — skipping full "
+                "resync (existing events already reflect this version)",
+                current_version,
+            )
+            return effects
+
+        # Step 3: Read cached data for the full sync.
         rules = get_all_rules()
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
-        first_install = is_first_install()
 
         if not (rules or blocks or recurring_blocks):
             log.warning(
@@ -199,6 +230,7 @@ class OnPluginInstalled(BaseProtocol):
             )
             if first_install:
                 mark_installed()
+            set_synced_version(current_version)
             return effects
 
         rules_synced = 0
@@ -206,13 +238,13 @@ class OnPluginInstalled(BaseProtocol):
         blocks_synced = 0
         recurring_synced = 0
 
+        log.info(
+            "OnPluginInstalled: %s — performing full sync",
+            "first install" if first_install else f"version change to {current_version}",
+        )
+        effects.extend(delete_all_plugin_events())
         if first_install:
-            log.info("OnPluginInstalled: first install, performing full sync")
-            effects.extend(delete_all_plugin_events())
             mark_installed()
-        else:
-            log.info("OnPluginInstalled: redeploy detected, performing full sync")
-            effects.extend(delete_all_plugin_events())
 
         # Step 3: Full sync of all rules, blocks, and recurring blocks
         provider_ids_synced: set[str] = set()
@@ -254,9 +286,12 @@ class OnPluginInstalled(BaseProtocol):
                     rb.provider_id,
                 )
 
+        set_synced_version(current_version)
+
         log.info(
-            "OnPluginInstalled: first_install=%s, synced %d rules, %d lead-time, %d blocks, %d recurring blocks, %d total effects",
+            "OnPluginInstalled: first_install=%s, version=%s, synced %d rules, %d lead-time, %d blocks, %d recurring blocks, %d total effects",
             first_install,
+            current_version,
             rules_synced,
             lead_time_count,
             blocks_synced,

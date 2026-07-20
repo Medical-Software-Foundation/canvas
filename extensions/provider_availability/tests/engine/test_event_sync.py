@@ -719,12 +719,13 @@ class TestBuildRuleEvents:
         # = 2 event effects
         assert len(result) == 2
 
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}._get_calendar_id")
     def test_no_locations_uses_all_active(
-        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve
     ):
         from zoneinfo import ZoneInfo
 
@@ -755,10 +756,12 @@ class TestBuildRuleEvents:
 
         # 1 day x 2 locations = 2 event effects
         assert len(result) == 2
+        # provider_name resolved once and passed into each per-location call
         assert mock_get_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-1"),
-            call(PROVIDER_ID, "loc-2"),
+            call(PROVIDER_ID, "loc-1", "Dr X"),
+            call(PROVIDER_ID, "loc-2", "Dr X"),
         ]
+        assert mock_resolve.mock_calls == [call(PROVIDER_ID)]
 
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
@@ -1101,12 +1104,13 @@ class TestBuildRuleEvents:
 
 
 class TestBuildBlockEventEffects:
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
     def test_creates_block_event(
-        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, sample_block
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve, sample_block
     ):
         from zoneinfo import ZoneInfo
 
@@ -1115,7 +1119,7 @@ class TestBuildBlockEventEffects:
 
         result = build_block_event_effects(sample_block)
 
-        assert mock_get_admin_cal.mock_calls == [call(sample_block.provider_id, None)]
+        assert mock_get_admin_cal.mock_calls == [call(sample_block.provider_id, None, "Dr X")]
         assert len(result) == 1  # 1 event effect (no cal effects)
 
     @patch(f"{MODULE}.provider_tz")

@@ -45,6 +45,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.overlap import check_rule_overlap
 from provider_availability.engine.storage import (
+    clear_provider_timezone,
     delete_block,
     delete_recurring_block,
     delete_rule_by_id,
@@ -1442,6 +1443,28 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "timezone": tz_name,
         })]
 
+    @api.delete("/provider-timezone/<provider_id>")
+    def clear_provider_tz(self) -> list[Response | Effect]:
+        """Clear a provider's explicit timezone, reverting to the practice default."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        provider_id = self.request.path_params["provider_id"]
+        clear_provider_timezone(provider_id)
+        # Re-sync so the provider's events move to the practice-default timezone.
+        effects: list[Effect] = list(sync_provider_availability(provider_id))
+        for rb in get_all_recurring_blocks():
+            if rb.provider_id == provider_id:
+                effects.extend(build_recurring_block_sync_effects(rb))
+        default_tz = get_practice_timezone()
+        log.info("clear_provider_tz: provider %s → default (%s), %d sync effects", provider_id, default_tz, len(effects))
+        return [*effects, JSONResponse({
+            "message": f"Provider now uses the practice default ({default_tz})",
+            "provider_id": provider_id,
+            "timezone": default_tz,
+            "explicit": False,
+        })]
+
     @api.put("/provider-timezones/bulk")
     def set_provider_tz_bulk(self) -> list[Response | Effect]:
         """Set the same timezone for multiple providers at once."""
@@ -1653,6 +1676,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return self._form_set_timezone(body)
         if method == "PUT" and p == "provider-timezone":
             return self._form_set_provider_timezone(body)
+        if method == "DELETE" and p.startswith("provider-timezone/"):
+            parts = p.split("/")
+            if len(parts) == 2:
+                return self._form_clear_provider_timezone(parts[1])
         if method == "PUT" and p == "provider-timezones/bulk":
             return self._form_set_provider_tz_bulk(body)
         return [JSONResponse({"error": f"Unknown: {method} /{p}"}, status_code=HTTPStatus.BAD_REQUEST)]
@@ -1988,6 +2015,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 all_fx.extend(build_recurring_block_sync_effects(rb))
         log.info("form_set_provider_tz: provider %s → %s", provider_id, tz_name)
         return [*all_fx, JSONResponse({"message": f"Provider timezone set to {tz_name}"})]
+
+    def _form_clear_provider_timezone(self, provider_id: str) -> list[Response | Effect]:
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        if not provider_id:
+            return [JSONResponse({"error": "provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        clear_provider_timezone(provider_id)
+        all_fx: list[Effect] = list(sync_provider_availability(provider_id))
+        for rb in get_all_recurring_blocks():
+            if rb.provider_id == provider_id:
+                all_fx.extend(build_recurring_block_sync_effects(rb))
+        default_tz = get_practice_timezone()
+        log.info("form_clear_provider_tz: provider %s → default (%s)", provider_id, default_tz)
+        return [*all_fx, JSONResponse({"message": f"Provider now uses the practice default ({default_tz})"})]
 
     def _form_set_provider_tz_bulk(self, body: dict) -> list[Response | Effect]:
         denied = _check_write_access(self.request, self.secrets)

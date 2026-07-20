@@ -290,12 +290,13 @@ class TestComputeRecurringSegmentsOffPattern:
 
 
 class TestBuildBlockEventEffectsLocations:
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
     def test_per_location_events(
-        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve
     ):
         """Block with location_ids creates one event per location (line 479)."""
         from provider_availability.engine.models import AdminBlock
@@ -325,8 +326,8 @@ class TestBuildBlockEventEffectsLocations:
             assert all(c.kwargs["title"] == "Offsite" for c in mock_event_effect.call_args_list)
 
         assert mock_get_admin_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-A"),
-            call(PROVIDER_ID, "loc-B"),
+            call(PROVIDER_ID, "loc-A", "Dr X"),
+            call(PROVIDER_ID, "loc-B", "Dr X"),
         ]
         assert len(result) == 2
 
@@ -587,13 +588,14 @@ class TestBuildRecurringBlockSyncDailyAndLocations:
         with patch(f"{MODULE}.get_rules_for_provider", return_value=[]):
             yield
 
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
     @patch(f"{MODULE}.build_delete_recurring_block_effects")
     def test_per_location_calendars(
-        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc
+        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve
     ):
         """Recurring block with location_ids creates events per location (line 818)."""
         mock_delete.return_value = []
@@ -626,8 +628,8 @@ class TestBuildRecurringBlockSyncDailyAndLocations:
             assert cal_ids == ["admin-cal-A", "admin-cal-B"]
 
         assert mock_get_admin_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-A"),
-            call(PROVIDER_ID, "loc-B"),
+            call(PROVIDER_ID, "loc-A", "Dr X"),
+            call(PROVIDER_ID, "loc-B", "Dr X"),
         ]
         # 1 weekly event per location = 2
         assert len(result) == 2

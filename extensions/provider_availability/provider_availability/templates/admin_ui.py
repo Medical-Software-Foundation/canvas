@@ -155,11 +155,11 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <div class="field">
                 <label>Start Time <span class="req">*</span></label>
-                <canvas-input type="time" id="single_start_time"></canvas-input>
+                <span id="single_start_time_wrap"></span>
               </div>
               <div class="field">
                 <label>End Time <span class="req">*</span></label>
-                <canvas-input type="time" id="single_end_time"></canvas-input>
+                <span id="single_end_time_wrap"></span>
               </div>
             </div>
           </div>
@@ -337,11 +337,11 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <div class="field" id="block-start-time-field">
                 <label>Start Time <span class="req">*</span></label>
-                <canvas-input type="time" id="block_start_time"></canvas-input>
+                <span id="block_start_time_wrap"></span>
               </div>
               <div class="field" id="block-end-time-field">
                 <label>End Time <span class="req">*</span></label>
-                <canvas-input type="time" id="block_end_time"></canvas-input>
+                <span id="block_end_time_wrap"></span>
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr auto;align-items:end;margin-top:6px;">

@@ -158,6 +158,9 @@ class TestOnStaffDeactivated:
 
 
 class TestOnPluginInstalled:
+    # Version patches: full sync is gated on first_install OR a version change.
+    # First-install tests force sync via is_first_install=True; redeploy tests
+    # force it via a version mismatch (synced "0.0.1" vs current "0.0.2").
     def test_empty_cache_preserves_events(self):
         """When cache is empty, plugin should only create calendars, not delete events."""
         mock_event = MagicMock()
@@ -169,11 +172,15 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
+             patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark:
 
             result = handler.compute()
 
             assert mock_mark.mock_calls == [call()]
+            assert mock_set_ver.mock_calls == [call("1.0")]
             assert result == []
 
     def test_creates_calendars_for_active_providers(self):
@@ -193,6 +200,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
+             patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"), \
              patch(f"{SL_MODULE}.uuid4", return_value="new-cal-id"):
             mock_cal.for_calendar_name.return_value.first.return_value = None
@@ -216,6 +226,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
+             patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
             mock_cal.for_calendar_name.return_value.first.return_value = MagicMock()
 
@@ -238,6 +251,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
+             patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
             mock_cal.for_calendar_name.side_effect = Exception("DB error")
 
@@ -268,6 +284,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[mock_rb]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
+             patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark, \
              patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]) as mock_delete_all, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=["sync-fx"]) as mock_sync, \
@@ -279,6 +298,7 @@ class TestOnPluginInstalled:
 
             assert mock_delete_all.mock_calls == [call()]
             assert mock_mark.mock_calls == [call()]
+            assert mock_set_ver.mock_calls == [call("1.0")]
             assert mock_sync.mock_calls == [call("p1")]
             assert mock_lead.mock_calls == [call(mock_rule)]
             assert mock_block_fx.mock_calls == [call(mock_block)]
@@ -304,6 +324,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
+             patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"), \
              patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]), \
              patch(f"{SL_MODULE}.sync_provider_availability", side_effect=Exception("sync error")):
@@ -313,30 +336,8 @@ class TestOnPluginInstalled:
             # Should not crash — exception caught per-rule
             assert result == []
 
-    def test_redeploy_lead_time_exception_handling(self):
-        """Exceptions during lead-time refresh on redeploy should be caught."""
-        mock_event = MagicMock()
-        handler = OnPluginInstalled(mock_event)
-
-        mock_rule = MagicMock()
-        mock_rule.is_active = True
-        mock_rule.booking_interval.min_lead_hours = 24
-
-        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
-             patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
-             patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
-             patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
-             patch(f"{SL_MODULE}.is_first_install", return_value=False), \
-             patch(f"{SL_MODULE}.build_lead_time_block_effects", side_effect=Exception("lead error")):
-
-            result = handler.compute()
-
-            # Should not crash — exception caught per-rule
-            assert result == []
-
-    def test_redeploy_performs_full_sync(self):
-        """On redeploy (not first install), should do a full sync of all rules/blocks."""
+    def test_redeploy_version_change_performs_full_sync(self):
+        """On redeploy with a new version, should do a full sync of all rules/blocks."""
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
@@ -359,6 +360,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[mock_rb]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=False), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="0.0.2"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
+             patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]) as mock_delete, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
              patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=[]) as mock_lead, \
@@ -368,7 +372,59 @@ class TestOnPluginInstalled:
             handler.compute()
 
             mock_delete.assert_called_once()
+            mock_set_ver.assert_called_once_with("0.0.2")
             mock_sync.assert_called_once_with("p1")
             mock_lead.assert_called_once_with(mock_rule)
             mock_block_fx.assert_called_once_with(mock_block)
             mock_rb_fx.assert_called_once_with(mock_rb)
+
+    def test_redeploy_same_version_skips_full_sync(self):
+        """A config-only redeploy at the same version must NOT wipe/rebuild events."""
+        mock_event = MagicMock()
+        handler = OnPluginInstalled(mock_event)
+
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
+             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch(f"{SL_MODULE}.is_first_install", return_value=False), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.2.3"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value="1.2.3"), \
+             patch(f"{SL_MODULE}.get_all_rules") as mock_rules, \
+             patch(f"{SL_MODULE}.delete_all_plugin_events") as mock_delete, \
+             patch(f"{SL_MODULE}.sync_provider_availability") as mock_sync, \
+             patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver:
+
+            result = handler.compute()
+
+            # No destructive resync: rules aren't even read, nothing deleted/synced.
+            assert mock_rules.mock_calls == []
+            assert mock_delete.mock_calls == []
+            assert mock_sync.mock_calls == []
+            assert mock_set_ver.mock_calls == []
+            assert result == []
+
+    def test_redeploy_lead_time_exception_handling(self):
+        """Exceptions during lead-time refresh on a version-change redeploy should be caught."""
+        mock_event = MagicMock()
+        handler = OnPluginInstalled(mock_event)
+
+        mock_rule = MagicMock()
+        mock_rule.is_active = True
+        mock_rule.booking_interval.min_lead_hours = 24
+
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
+             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
+             patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
+             patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
+             patch(f"{SL_MODULE}.is_first_install", return_value=False), \
+             patch(f"{SL_MODULE}._current_plugin_version", return_value="0.0.2"), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
+             patch(f"{SL_MODULE}.set_synced_version"), \
+             patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]), \
+             patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]), \
+             patch(f"{SL_MODULE}.build_lead_time_block_effects", side_effect=Exception("lead error")):
+
+            result = handler.compute()
+
+            # Should not crash — exception caught per-rule
+            assert result == []
