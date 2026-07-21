@@ -1,0 +1,26 @@
+[project]
+name = "sleep-screening"
+version = "0.0.1"
+description = "Sleep Screening note tab: administers STOP-BANG, Epworth, and ISI in-app, commits scored questionnaires, and stages a diagnosis and sleep-study task for review."
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "canvas[test-utils]",
+    "pytest-canvas",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.uv.sources]
+canvas = { editable = true, path = "../../repos/canvas-plugins" }
+pytest-canvas = { editable = true, path = "../../repos/canvas-plugins/pytest-canvas" }
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]

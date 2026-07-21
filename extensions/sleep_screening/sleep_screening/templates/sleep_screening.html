@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sleep Screening</title>
+  <style>
+    :root { --line: #d9dee3; --ink: #1f2933; --muted: #66707a; --brand: #2d6cdf; --ok: #1f8a4c; --warn: #b45309; --bad: #b91c1c; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; padding: 16px; font-size: 14px; min-height: 100vh; }
+    #app { min-height: calc(100vh - 32px); }
+    h2 { font-size: 16px; margin: 0 0 4px; }
+    h3 { font-size: 14px; margin: 0; }
+    .muted { color: var(--muted); }
+    .card { border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .demographics { background: #f5f7fa; border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 13px; }
+    .q { padding: 8px 0; border-top: 1px solid var(--line); }
+    .q:first-of-type { border-top: none; }
+    .q-text { margin-bottom: 6px; }
+    .opts label { display: inline-flex; align-items: center; gap: 4px; margin-right: 14px; white-space: nowrap; }
+    .score-pill { font-weight: 600; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .band-low, .band-none, .band-normal { background: #e6f4ea; color: var(--ok); }
+    .band-intermediate, .band-subthreshold { background: #fef3c7; color: var(--warn); }
+    .band-high, .band-moderate, .band-severe, .band-excessive { background: #fee2e2; color: var(--bad); }
+    button { font: inherit; border: 1px solid var(--brand); background: var(--brand); color: #fff; border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+    button.secondary { background: #fff; color: var(--brand); }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .committed-note { color: var(--ok); font-size: 12px; font-weight: 600; }
+    .dx-list label, .modality label { display: block; padding: 3px 0; }
+    fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 12px; }
+    legend { font-weight: 600; padding: 0 6px; }
+    textarea { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="app"><p class="muted">Loading sleep screening...</p></div>
+
+<script>
+  const NOTE_ID = {{ note_id_json|safe }};
+  const PATIENT_ID = {{ patient_id_json|safe }};
+  const BASE = "/plugin-io/api/sleep_screening/screening";
+
+  let messagePort = null;
+  window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+      messagePort = event.ports[0];
+      messagePort.start();
+      notifyHeight();
+    }
+  });
+
+  // Ask the host to size the tab iframe to our content. The host measures the
+  // iframe before our async content loads, so it can lock a short height; posting
+  // the real height after each render corrects that.
+  function notifyHeight() {
+    const height = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
+    const msg = { type: "RESIZE", height: height };
+    if (messagePort) {
+      try { messagePort.postMessage(msg); } catch (e) {}
+    }
+    // Also post to the parent directly, in case the host listens there.
+    try { window.parent.postMessage(msg, "*"); } catch (e) {}
+  }
+
+  const state = { instruments: [], diagnosisCodes: [], demographics: null, committed: {} };
+
+  function bandClass(band) {
+    if (!band) return "";
+    const b = band.toLowerCase();
+    if (b.indexOf("high") > -1) return "band-high";
+    if (b.indexOf("moderate") > -1) return "band-moderate";
+    if (b.indexOf("severe") > -1) return "band-severe";
+    if (b.indexOf("excessive") > -1) return "band-excessive";
+    if (b.indexOf("intermediate") > -1) return "band-intermediate";
+    if (b.indexOf("subthreshold") > -1) return "band-subthreshold";
+    return "band-low";
+  }
+
+  // Client-side score preview mirrors the server scorers for immediate feedback.
+  function previewScore(inst) {
+    let total = 0, answered = 0;
+    inst.questions.forEach((q) => {
+      const chosen = state[inst.code] && state[inst.code][q.code];
+      if (chosen !== undefined) {
+        answered += 1;
+        const opt = q.options.find((o) => o.code === chosen);
+        if (opt) total += parseInt(opt.value, 10) || 0;
+      }
+    });
+    let band = "";
+    if (inst.code === "SLEEP_STOPBANG") {
+      // Note: full STOP-BANG band (with age/sex/BMI) is computed server-side.
+      band = total >= 5 ? "High" : total >= 3 ? "Intermediate" : "Low";
+    } else if (inst.code === "SLEEP_ESS") {
+      band = total >= 11 ? "Excessive" : "Normal";
+    } else if (inst.code === "SLEEP_ISI") {
+      band = total >= 22 ? "Severe" : total >= 15 ? "Moderate" : total >= 8 ? "Subthreshold" : "None";
+    }
+    return { total: total, answered: answered, count: inst.questions.length, band: band };
+  }
+
+  function render() {
+    const app = document.getElementById("app");
+    app.innerHTML = "";
+
+    const title = document.createElement("h2");
+    title.textContent = "Sleep Screening";
+    app.appendChild(title);
+
+    state.instruments.forEach((inst) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      const committed = state.committed[inst.code];
+
+      const head = document.createElement("div");
+      head.className = "card-head";
+      const h = document.createElement("h3");
+      h.textContent = inst.name;
+      head.appendChild(h);
+      const preview = previewScore(inst);
+      const pill = document.createElement("span");
+      pill.className = "score-pill " + bandClass(preview.band);
+      pill.textContent = preview.band ? (preview.band + " (" + preview.total + ")") : "";
+      head.appendChild(pill);
+      card.appendChild(head);
+
+      if (inst.code === "SLEEP_STOPBANG" && state.demographics) {
+        const d = state.demographics;
+        const dem = document.createElement("div");
+        dem.className = "demographics";
+        const bmiText = d.bmi_available ? ("BMI " + d.bmi) : "BMI unavailable (point omitted)";
+        dem.textContent = "From chart: Age " + (d.age === null ? "?" : d.age) +
+          " | Sex " + (d.sex || "?") + " | " + bmiText;
+        card.appendChild(dem);
+      }
+
+      if (committed) {
+        const done = document.createElement("p");
+        done.className = "committed-note";
+        done.textContent = "Committed to note: " + committed.narrative;
+        card.appendChild(done);
+      } else {
+        inst.questions.forEach((q) => {
+          const qDiv = document.createElement("div");
+          qDiv.className = "q";
+          const qt = document.createElement("div");
+          qt.className = "q-text";
+          qt.textContent = q.content;
+          qDiv.appendChild(qt);
+          const opts = document.createElement("div");
+          opts.className = "opts";
+          q.options.forEach((o) => {
+            const label = document.createElement("label");
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = inst.code + "__" + q.code;
+            radio.value = o.code;
+            radio.checked = state[inst.code] && state[inst.code][q.code] === o.code;
+            radio.addEventListener("change", () => {
+              if (!state[inst.code]) state[inst.code] = {};
+              state[inst.code][q.code] = o.code;
+              render();
+            });
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(" " + o.name));
+            opts.appendChild(label);
+          });
+          qDiv.appendChild(opts);
+          card.appendChild(qDiv);
+        });
+
+        const saveBtn = document.createElement("button");
+        saveBtn.textContent = "Save / commit " + inst.name;
+        saveBtn.addEventListener("click", () => commitInstrument(inst, saveBtn));
+        card.appendChild(saveBtn);
+      }
+
+      app.appendChild(card);
+    });
+
+    renderNextSteps(app);
+    notifyHeight();
+  }
+
+  function renderNextSteps(app) {
+    const allCommitted = state.instruments.length > 0 &&
+      state.instruments.every((i) => state.committed[i.code]);
+
+    const card = document.createElement("div");
+    card.className = "card";
+    const h = document.createElement("h3");
+    h.textContent = "Next steps";
+    card.appendChild(h);
+
+    if (!allCommitted) {
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = "Commit all three screenings above to stage next steps.";
+      card.appendChild(note);
+      app.appendChild(card);
+      return;
+    }
+
+    // Pre-check provisional codes for positive screens.
+    const preselected = new Set();
+    state.instruments.forEach((inst) => {
+      const c = state.committed[inst.code];
+      if (c && c.abnormal) (inst.preselect_dx || []).forEach((code) => preselected.add(code));
+    });
+
+    const dxFs = document.createElement("fieldset");
+    dxFs.className = "dx-list";
+    const dxLeg = document.createElement("legend");
+    dxLeg.textContent = "Diagnoses to stage (provider reviews and commits in the note)";
+    dxFs.appendChild(dxLeg);
+    state.diagnosisCodes.forEach((dx) => {
+      const label = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = dx.code;
+      cb.className = "dx-cb";
+      cb.checked = preselected.has(dx.code);
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(" " + dx.code + " - " + dx.display));
+      dxFs.appendChild(label);
+    });
+    card.appendChild(dxFs);
+
+    const modFs = document.createElement("fieldset");
+    modFs.className = "modality";
+    const modLeg = document.createElement("legend");
+    modLeg.textContent = "Sleep study";
+    modFs.appendChild(modLeg);
+    [["PSG", "In-clinic (PSG)"], ["HSAT", "At-home (HSAT)"]].forEach((m, idx) => {
+      const label = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "modality";
+      radio.value = m[0];
+      radio.className = "modality-radio";
+      if (idx === 0) radio.checked = true;
+      label.appendChild(radio);
+      label.appendChild(document.createTextNode(" " + m[1]));
+      modFs.appendChild(label);
+    });
+    const comment = document.createElement("textarea");
+    comment.id = "study-comment";
+    comment.rows = 2;
+    comment.placeholder = "Optional note for the sleep-study task";
+    modFs.appendChild(comment);
+    card.appendChild(modFs);
+
+    const stageBtn = document.createElement("button");
+    stageBtn.textContent = "Stage next steps";
+    stageBtn.addEventListener("click", () => stageNextSteps(stageBtn));
+    card.appendChild(stageBtn);
+
+    app.appendChild(card);
+  }
+
+  function commitInstrument(inst, btn) {
+    btn.disabled = true;
+    const responses = state[inst.code] || {};
+    fetch(BASE + "/commit-instrument", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_id: NOTE_ID, instrument: inst.code, responses: responses }),
+    }).then((r) => {
+      if (!r.ok) return r.json().then((e) => { throw new Error(e.error || "commit failed"); });
+      const preview = previewScore(inst);
+      state.committed[inst.code] = {
+        narrative: inst.name + " total " + preview.total + " (" + preview.band + ")",
+        abnormal: ["High", "Moderate", "Severe", "Excessive"].indexOf(preview.band) > -1,
+      };
+      render();
+    }).catch((err) => {
+      btn.disabled = false;
+      alert(err.message);
+    });
+  }
+
+  function stageNextSteps(btn) {
+    btn.disabled = true;
+    const dx = Array.from(document.querySelectorAll(".dx-cb"))
+      .filter((c) => c.checked).map((c) => c.value);
+    const modEl = document.querySelector(".modality-radio:checked");
+    const modality = modEl ? modEl.value : "";
+    const comment = (document.getElementById("study-comment") || {}).value || "";
+    fetch(BASE + "/stage-next-steps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        note_id: NOTE_ID, selected_diagnoses: dx, study_modality: modality, comment: comment,
+      }),
+    }).then((r) => {
+      if (!r.ok) return r.json().then((e) => { throw new Error(e.error || "stage failed"); });
+      showDone();
+    }).catch((err) => {
+      btn.disabled = false;
+      alert(err.message);
+    });
+  }
+
+  function showDone() {
+    const app = document.getElementById("app");
+    app.innerHTML = "<h2>Sleep Screening complete</h2>" +
+      "<p class='muted'>Screenings committed and next steps staged in the note. " +
+      "Review and commit the staged diagnosis and task in the note.</p>";
+    // Return focus to the note by closing the tab modal.
+    if (messagePort) messagePort.postMessage({ type: "CLOSE_MODAL" });
+  }
+
+  function boot() {
+    Promise.all([
+      fetch(BASE + "/instruments?note_id=" + encodeURIComponent(NOTE_ID)).then((r) => r.json()),
+      fetch(BASE + "/context?patient_id=" + encodeURIComponent(PATIENT_ID)).then((r) => r.json()),
+    ]).then((results) => {
+      state.instruments = results[0].instruments || [];
+      state.diagnosisCodes = results[0].diagnosis_codes || [];
+      state.demographics = results[1] || null;
+      // Seed committed state from the server so already-committed instruments
+      // render read-only on reopen (persists across tab sessions).
+      state.instruments.forEach((inst) => {
+        if (inst.committed) {
+          state.committed[inst.code] = {
+            narrative: inst.committed.narrative,
+            abnormal: inst.committed.abnormal,
+          };
+        }
+      });
+      render();
+    }).catch(() => {
+      document.getElementById("app").innerHTML =
+        "<p>Could not load sleep screening. Please reopen the tab.</p>";
+    });
+  }
+
+  boot();
+</script>
+</body>
+</html>

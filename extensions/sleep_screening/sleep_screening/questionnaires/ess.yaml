@@ -1,0 +1,86 @@
+name: "Epworth Sleepiness Scale"
+form_type: "QUES"
+code_system: "INTERNAL"
+code: "SLEEP_ESS"
+can_originate_in_charting: true
+questions:
+  - content: "Chance of dozing: Sitting and reading"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q1"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q1_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q1_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q1_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q1_3", value: "3"}
+  - content: "Chance of dozing: Watching TV"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q2"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q2_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q2_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q2_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q2_3", value: "3"}
+  - content: "Chance of dozing: Sitting inactive in a public place (e.g. a theater or a meeting)"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q3"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q3_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q3_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q3_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q3_3", value: "3"}
+  - content: "Chance of dozing: As a passenger in a car for an hour without a break"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q4"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q4_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q4_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q4_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q4_3", value: "3"}
+  - content: "Chance of dozing: Lying down to rest in the afternoon when circumstances permit"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q5"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q5_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q5_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q5_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q5_3", value: "3"}
+  - content: "Chance of dozing: Sitting and talking to someone"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q6"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q6_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q6_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q6_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q6_3", value: "3"}
+  - content: "Chance of dozing: Sitting quietly after a lunch without alcohol"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q7"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q7_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q7_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q7_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q7_3", value: "3"}
+  - content: "Chance of dozing: In a car, while stopped for a few minutes in traffic"
+    code_system: "INTERNAL"
+    code: "SLEEP_ESS_Q8"
+    responses_type: "SING"
+    responses_code_system: "INTERNAL"
+    responses:
+      - {name: "Would never doze", code: "SLEEP_ESS_Q8_0", value: "0"}
+      - {name: "Slight chance of dozing", code: "SLEEP_ESS_Q8_1", value: "1"}
+      - {name: "Moderate chance of dozing", code: "SLEEP_ESS_Q8_2", value: "2"}
+      - {name: "High chance of dozing", code: "SLEEP_ESS_Q8_3", value: "3"}
