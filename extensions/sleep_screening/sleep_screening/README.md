@@ -35,7 +35,8 @@ The three questionnaires install with the plugin, so they exist even if the inst
 
 ## Screenshots or screen recordings
 
-_Screenshots to be added._
+<img width="3058" height="1716" alt="screenshot-CleanShot07212026018015@2x" src="https://github.com/user-attachments/assets/1ed415b9-6968-4b63-9da1-edf3cfc1efe1" />
+
 
 ## Scope
 
