@@ -38,16 +38,6 @@ The three questionnaires install with the plugin, so they exist even if the inst
 <img width="3058" height="1716" alt="screenshot-CleanShot07212026018015@2x" src="https://github.com/user-attachments/assets/1ed415b9-6968-4b63-9da1-edf3cfc1efe1" />
 
 
-## Scope
-
-- No Patient Portal surface. Instruments are administered in-app during the visit.
-- No visualizations and no custom commands.
-- No auto-committed diagnoses. Every staged diagnosis is clinician-reviewed.
-
-## Codings
-
-STOP-BANG, Epworth, and ISI have no LOINC codes published (all three are copyrighted instruments). Questionnaire, question, response, and scoring-result codes are therefore INTERNAL with meaningful unique codes. Staged diagnoses use ICD-10 (the diagnose command accepts ICD-10 only). Screen-positive results suggest provisional or unspecified codes (e.g. R06.83 snoring, G47.30 sleep apnea unspecified, R40.0 somnolence, G47.00 insomnia unspecified), not confirmed-disorder codes, per ICD-10-CM outpatient coding rules.
-
 ## Configuration (secrets)
 
 | Secret | Default | Purpose |
