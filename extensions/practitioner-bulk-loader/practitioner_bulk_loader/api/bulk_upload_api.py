@@ -17,7 +17,6 @@ import requests
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.v1.data.staff import Staff
-from django.db import DatabaseError
 from logger import log
 
 from practitioner_bulk_loader.utils.csv_parser import (
@@ -1286,14 +1285,14 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
                 f"{len(directory['by_name_dob'])} with name+DOB, "
                 f"{sum(len(v) for v in directory['by_name'].values())} total names indexed"
             )
-        except DatabaseError as exc:
-            # Narrowed to django.db.DatabaseError per the repo rule that
-            # error-handling must surface non-expected exceptions to
-            # Sentry. The expected failure here is a database-level error
-            # (connection loss, query timeout) — the Staff ORM call is
-            # the external dependency. Other exception types (programming
-            # bugs, KeyError, etc.) propagate.
-            #
+        except Exception as exc:
+            # Re-raise non-database errors so genuine programming bugs still
+            # reach Sentry (repo rule); only real Staff ORM/database failures
+            # degrade gracefully below. django.db.DatabaseError can't be
+            # imported in the plugin sandbox (it unregisters the handler ->
+            # 404), so match on the exception's module name instead.
+            if "django.db" not in type(exc).__module__:
+                raise
             # Without the directory every existing practitioner would be
             # classified "new" and the admin could create duplicates of
             # every Staff record. Surface a top-level warning (row=0 — the
