@@ -1,0 +1,151 @@
+/* ============================================================================
+ * Note Protocol Automation — Design Tokens
+ * ----------------------------------------------------------------------------
+ * The single source of truth for this plugin's admin-UI styling. These tokens
+ * are referenced by the Preact UI component modules under static/ui/ and by the
+ * inline styles in static/app.js. The iframe entry document (index.html) links
+ * this file from the plugin's own same-origin static URL.
+ *
+ * A neutral, generic palette and a system font stack — no external font fetch,
+ * so the UI renders identically offline and never blocks on the network.
+ * ============================================================================ */
+
+:root {
+  /* ---- Color anchors ---------------------------------------------------- */
+  --npa-blue: #2563EB;            /* primary action blue */
+  --npa-ink: #1F2937;             /* neutral dark slate (primary text) */
+
+  /* ---- Blue scale (derived around #2563EB) ------------------------------ *
+   * Tints lighten toward white; shades darken for hover/active/contrast.    */
+  --npa-blue-50:  #EFF6FF;        /* soft tinted background */
+  --npa-blue-100: #DBEAFE;
+  --npa-blue-200: #BFDBFE;
+  --npa-blue-300: #93C5FD;
+  --npa-blue-400: #60A5FA;
+  --npa-blue-500: #2563EB;        /* == --npa-blue (primary) */
+  --npa-blue-600: #1D4ED8;        /* hover */
+  --npa-blue-700: #1E40AF;        /* active / pressed */
+  --npa-blue-800: #1E3A8A;
+  --npa-blue-900: #172554;
+
+  /* Convenience aliases for interactive states */
+  --npa-blue-hover: var(--npa-blue-600);
+  --npa-blue-active: var(--npa-blue-700);
+
+  /* ---- Gray / neutral scale (derived around #414141) -------------------- */
+  --npa-gray-50:  #F7F8F9;        /* soft background gray (page) */
+  --npa-gray-100: #EDEFF1;        /* subtle surface / row stripe */
+  --npa-gray-200: #DDE1E5;        /* borders, dividers */
+  --npa-gray-300: #C2C8CF;
+  --npa-gray-400: #9AA1A9;        /* muted text, placeholders */
+  --npa-gray-500: #6B7178;        /* secondary text */
+  --npa-gray-600: #545A60;
+  --npa-gray-700: #414141;        /* dark gray */
+  --npa-gray-800: #2C2C2C;
+  --npa-gray-900: #1A1A1A;
+
+  /* ---- Supporting green accent (positive emphasis) ---------------------- */
+  --npa-green-50:  #E6F6EF;
+  --npa-green-500: #1F9D6B;       /* accent / positive emphasis */
+  --npa-green-600: #178055;       /* green hover */
+  --npa-green-700: #115F40;
+
+  /* ---- Semantic tokens (use THESE in components, not raw scale values) --- */
+  --npa-color-surface: #FFFFFF;            /* card / panel background */
+  --npa-color-surface-muted: var(--npa-gray-50);   /* page background */
+  --npa-color-surface-subtle: var(--npa-gray-100); /* nested surface */
+
+  --npa-color-text: var(--npa-ink);                /* primary text */
+  --npa-color-text-secondary: var(--npa-gray-500); /* secondary text */
+  --npa-color-text-muted: var(--npa-gray-400);     /* hints */
+  --npa-color-text-inverse: #FFFFFF;                  /* on dark/brand */
+  --npa-color-text-link: var(--npa-blue);
+
+  --npa-color-primary: var(--npa-blue);
+  --npa-color-primary-hover: var(--npa-blue-hover);
+  --npa-color-primary-active: var(--npa-blue-active);
+  --npa-color-primary-subtle: var(--npa-blue-50);  /* tinted primary bg (e.g. secondary/ghost hover) */
+  --npa-color-accent: var(--npa-green-500);
+  --npa-color-accent-hover: var(--npa-green-600);
+
+  --npa-color-border: var(--npa-gray-200);
+  --npa-color-border-strong: var(--npa-gray-300);
+  --npa-color-focus-ring: var(--npa-blue-300);
+
+  /* State / status semantics */
+  --npa-color-danger: #D14343;
+  --npa-color-danger-bg: #FBE9E9;
+  --npa-color-success: var(--npa-green-500);
+  --npa-color-success-bg: var(--npa-green-50);
+  --npa-color-warning: #C9831F;
+  --npa-color-warning-bg: #FBF1E3;
+  --npa-color-info: var(--npa-blue);
+  --npa-color-info-bg: var(--npa-blue-50);
+
+  /* ---- Spacing scale (4px base) ----------------------------------------- */
+  --npa-space-0: 0;
+  --npa-space-1: 4px;
+  --npa-space-2: 8px;
+  --npa-space-3: 12px;
+  --npa-space-4: 16px;
+  --npa-space-5: 20px;
+  --npa-space-6: 24px;
+  --npa-space-8: 32px;
+  --npa-space-10: 40px;
+  --npa-space-12: 48px;
+
+  /* ---- Radius scale ----------------------------------------------------- */
+  --npa-radius-sm: 4px;
+  --npa-radius-md: 8px;
+  --npa-radius-lg: 12px;
+  --npa-radius-pill: 999px;
+
+  /* ---- Elevation / shadow ----------------------------------------------- */
+  --npa-shadow-sm: 0 1px 2px rgba(1, 31, 61, 0.06);
+  --npa-shadow-md: 0 2px 8px rgba(1, 31, 61, 0.10);
+  --npa-shadow-lg: 0 8px 24px rgba(1, 31, 61, 0.14);
+
+  /* ---- Typography ------------------------------------------------------- *
+   * System font stack — NO external @import, so widgets never block on a    *
+   * network font fetch and render identically offline. Graceful fallbacks   *
+   * cover Apple, Windows, Android, and generic sans.                        */
+  --npa-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --npa-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  /* Type scale (1.20 minor-third-ish, tuned for portal density) */
+  --npa-font-size-xs: 12px;
+  --npa-font-size-sm: 14px;
+  --npa-font-size-md: 16px;     /* body default */
+  --npa-font-size-lg: 18px;
+  --npa-font-size-xl: 22px;
+  --npa-font-size-2xl: 28px;
+  --npa-font-size-3xl: 34px;
+
+  --npa-line-tight: 1.25;
+  --npa-line-normal: 1.5;
+  --npa-line-relaxed: 1.65;
+
+  --npa-font-weight-regular: 400;
+  --npa-font-weight-medium: 500;
+  --npa-font-weight-semibold: 600;
+  --npa-font-weight-bold: 700;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --npa-transition-fast: 120ms ease;
+  --npa-transition-base: 200ms ease;
+}
+
+/* Optional reset helper consumers may opt into. Scoped under a class so it is
+ * inert unless explicitly applied — tokens.css must stay safe to inline into
+ * any document without clobbering host layout. */
+.npa-root {
+  font-family: var(--npa-font-sans);
+  font-size: var(--npa-font-size-md);
+  line-height: var(--npa-line-normal);
+  color: var(--npa-color-text);
+  background: var(--npa-color-surface-muted);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
