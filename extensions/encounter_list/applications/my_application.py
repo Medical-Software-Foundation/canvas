@@ -123,7 +123,8 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         # Convert queryset to encounter data
         encounters = []
         for note in paginated_notes:
-            claim_queue = note.get_claim().current_queue.name if note.get_claim() else None
+            claim = note.get_claim()
+            claim_queue = claim.current_queue.name if claim else None
 
             delegated_commands = self._calculate_delegated_orders_count(note)
 
