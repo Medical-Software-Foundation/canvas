@@ -1,0 +1,171 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    color: #1a1a1a;
+    background-color: #f8f9fa;
+    line-height: 1.5;
+}
+
+.card-container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+}
+
+/* Header */
+.card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #111;
+    margin: 0;
+}
+
+.patient-name {
+    font-size: 1rem;
+    color: #555;
+    margin: 4px 0 0;
+}
+
+.print-button {
+    flex-shrink: 0;
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.print-button:hover {
+    background: #1666cc;
+}
+
+/* Vaccine list */
+.vaccine-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.vaccine-item {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px 20px;
+}
+
+.vaccine-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.vaccine-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #111;
+}
+
+.vaccine-source {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 3px 8px;
+    border-radius: 999px;
+}
+
+.source-administered {
+    background: #e6f4ea;
+    color: #1e7e34;
+}
+
+.source-reported {
+    background: #eef2f7;
+    color: #4a5568;
+}
+
+.vaccine-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.vaccine-date {
+    font-weight: 600;
+    color: #333;
+}
+
+.vaccine-date--unknown {
+    font-weight: 400;
+    font-style: italic;
+    color: #888;
+}
+
+.empty-state {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 32px 20px;
+    text-align: center;
+    color: #666;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .card-header {
+        flex-direction: column;
+    }
+
+    .print-button {
+        width: 100%;
+    }
+}
+
+/* Print: clean one-page vaccine card, no button, no shadows */
+@media print {
+    body {
+        background: #fff;
+    }
+
+    .card-container {
+        max-width: none;
+        padding: 0;
+    }
+
+    .print-button {
+        display: none;
+    }
+
+    .vaccine-item {
+        border: 1px solid #ccc;
+        page-break-inside: avoid;
+    }
+}
