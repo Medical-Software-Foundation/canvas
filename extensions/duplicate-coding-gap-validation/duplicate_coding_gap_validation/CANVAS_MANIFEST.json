@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "duplicate_coding_gap_validation",
+    "description": "Blocks a Create Coding Gap command when its ICD-10 code is already documented as a condition on the patient's chart",
+    "components": {
+        "handlers": [
+            {
+                "class": "duplicate_coding_gap_validation.handlers.duplicate_coding_gap_validation:BlockDuplicateCodingGapHandler",
+                "description": "Prevents committing a coding gap that duplicates a condition already on the chart"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
