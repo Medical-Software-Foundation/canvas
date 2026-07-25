@@ -1,0 +1,224 @@
+"""Template rendering for notification messages."""
+import json
+import zoneinfo
+from datetime import datetime
+from typing import Any
+
+from canvas_sdk.caching.plugins import get_cache
+from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.organization import Organization
+from canvas_sdk.v1.data.patient import Patient
+
+from appointment_reminders.services.business_line import (
+    get_business_line_name,
+    resolve_attribution,
+)
+
+_ORG_VARS_CACHE_KEY = "appointment_reminders:org_vars"
+_ORG_VARS_CACHE_TTL = 300  # 5 minutes — matches cron interval
+
+
+def _business_line_vars(patient: Patient, config: Any = None) -> dict[str, str]:
+    """Business-line placeholders, shared across all campaign variable sets.
+
+    ``{{business_line}}`` is the raw name (read straight off the patient);
+    ``{{business_line_attribution}}`` is the resolved patient-facing phrase and
+    needs ``config`` for its per-business-line override / default fallback. When
+    ``config`` is omitted, attribution renders empty.
+    """
+    name = get_business_line_name(patient)
+    attribution = resolve_attribution(config, name) if config is not None else ""
+    return {"business_line": name, "business_line_attribution": attribution}
+
+
+def render_template(template: str, variables: dict[str, Any]) -> str:
+    """Render a template string by replacing {{variable}} placeholders."""
+    result = template
+    for key, value in variables.items():
+        placeholder = f"{{{{{key}}}}}"
+        result = result.replace(placeholder, str(value))
+    return result
+
+
+def _resolve_timezone(patient: Patient, clinic_timezone: str = "") -> zoneinfo.ZoneInfo:
+    """Resolve display timezone: patient → clinic config → Eastern."""
+    for tz_str in (
+        getattr(patient, "last_known_timezone", None),
+        clinic_timezone,
+        "America/New_York",
+    ):
+        if tz_str:
+            try:
+                return zoneinfo.ZoneInfo(tz_str)
+            except (KeyError, ValueError):
+                continue
+    return zoneinfo.ZoneInfo("America/New_York")
+
+
+def _tz_abbrev(dt: datetime) -> str:
+    """Return a short timezone abbreviation like 'ET', 'CT', 'PT'."""
+    abbrev = dt.strftime("%Z")  # e.g. "EST", "EDT", "CST", "CDT"
+    # Shorten standard US abbreviations: EST/EDT→ET, CST/CDT→CT, etc.
+    _SHORT = {
+        "EST": "ET", "EDT": "ET",
+        "CST": "CT", "CDT": "CT",
+        "MST": "MT", "MDT": "MT",
+        "PST": "PT", "PDT": "PT",
+        "AKST": "AKT", "AKDT": "AKT",
+        "HST": "HT",
+    }
+    return _SHORT.get(abbrev, abbrev)
+
+
+def get_template_variables(
+    patient: Patient,
+    appointment: Appointment,
+    clinic_timezone: str = "",
+    config: Any = None,
+) -> dict[str, str]:
+    """Extract template variables from patient and appointment.
+
+    Pass ``config`` to resolve ``{{business_line_attribution}}`` (per-business-line
+    override → default). ``{{business_line}}`` resolves without it.
+    """
+    tz = _resolve_timezone(patient, clinic_timezone)
+    local_start = appointment.start_time.astimezone(tz)
+    tz_label = _tz_abbrev(local_start)
+
+    appointment_date = local_start.strftime("%B %d, %Y")
+    appointment_time = f"{local_start.strftime('%I:%M %p')} {tz_label}"
+
+    provider_name = "your provider"
+    credentials = ""
+    if appointment.provider:
+        provider_name = f"{appointment.provider.first_name} {appointment.provider.last_name}"
+        # Build credentials: role public abbreviations (matches home app name_and_roles pattern)
+        try:
+            abbrevs = [
+                r.public_abbreviation
+                for r in appointment.provider.roles.all()
+                if r.public_abbreviation
+            ]
+            credentials = ", ".join(abbrevs)
+        except Exception:
+            pass
+
+    location_name = "our clinic"
+    if appointment.location:
+        location_name = appointment.location.full_name
+
+    # Resolve telehealth link: appointment meeting_link → provider meeting room
+    telehealth_link = ""
+    if hasattr(appointment, "meeting_link") and appointment.meeting_link:
+        telehealth_link = appointment.meeting_link
+    elif appointment.provider and hasattr(appointment.provider, "personal_meeting_room_link"):
+        telehealth_link = appointment.provider.personal_meeting_room_link or ""
+
+    # --- Practice location variables (from appointment location) ---
+    loc_full_name = location_name
+    loc_short_name = ""
+    loc_address = ""
+    loc_phone = ""
+    if appointment.location:
+        loc = appointment.location
+        loc_full_name = loc.full_name or location_name
+        loc_short_name = loc.short_name or ""
+        # Filter the prefetched `addresses` in Python so the reminder-cron
+        # prefetch actually pays off (a .filter() here would re-query per send).
+        _addrs = list(loc.addresses.all())
+        loc_addr = next((a for a in _addrs if a.use == "work" and a.state == "active"), None)
+        if not loc_addr:
+            loc_addr = next((a for a in _addrs if a.state == "active"), None)
+        if loc_addr:
+            parts = [loc_addr.line1]
+            if loc_addr.line2:
+                parts.append(loc_addr.line2)
+            parts.append(f"{loc_addr.city}, {loc_addr.state_code} {loc_addr.postal_code}")
+            loc_address = ", ".join(parts)
+        _tels = sorted(loc.telecom.all(), key=lambda t: t.rank or 0)
+        loc_cp = next(
+            (t for t in _tels if t.system == "phone" and t.use == "work" and t.state == "active"),
+            None,
+        )
+        if not loc_cp:
+            loc_cp = next((t for t in _tels if t.system == "phone" and t.state == "active"), None)
+        if loc_cp:
+            loc_phone = loc_cp.value or ""
+
+    variables = {
+        "patient_first_name": patient.first_name,
+        "patient_last_name": patient.last_name,
+        "patient_preferred_name": patient.preferred_first_name,
+        "patient_name": patient.first_name,
+        "patient_full_name": f"{patient.first_name} {patient.last_name}".strip(),
+        "provider_name": provider_name,
+        "credentials": credentials,
+        "appointment_date": appointment_date,
+        "appointment_time": appointment_time,
+        "location_name": location_name,
+        "appointment_type": appointment.description or "",
+        "telehealth_link": telehealth_link,
+        "location_full_name": loc_full_name,
+        "location_short_name": loc_short_name,
+        "location_address": loc_address,
+        "location_phone": loc_phone,
+    }
+    variables.update(_get_org_variables())
+    variables.update(_business_line_vars(patient, config))
+    return variables
+
+
+def _get_org_variables() -> dict[str, str]:
+    """Fetch organization-level template variables.
+
+    Cached for 5 minutes — org name/address/phone change rarely, and the cron
+    schedulers call this once per appointment. Without the cache a 100-appointment
+    cron iteration fires 300 redundant queries.
+    """
+    cache = get_cache()
+    cached = cache.get(_ORG_VARS_CACHE_KEY)
+    if cached:
+        try:
+            parsed: dict[str, str] = json.loads(cached)
+            return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    org_full_name = ""
+    org_short_name = ""
+    org_address = ""
+    org_phone = ""
+    try:
+        org = Organization.objects.first()
+        if org:
+            org_full_name = org.full_name or ""
+            org_short_name = org.short_name or ""
+            org_addr = org.addresses.filter(use="work", state="active").first()
+            if org_addr:
+                parts = [org_addr.line1]
+                if org_addr.line2:
+                    parts.append(org_addr.line2)
+                parts.append(f"{org_addr.city}, {org_addr.state_code} {org_addr.postal_code}")
+                org_address = ", ".join(parts)
+            org_cp = (
+                org.telecom.filter(system="phone", use="work", state="active")
+                .order_by("rank")
+                .first()
+            )
+            if org_cp:
+                org_phone = org_cp.value or ""
+    except Exception:
+        pass
+    result = {
+        "organization_full_name": org_full_name,
+        "organization_short_name": org_short_name,
+        "organization_address": org_address,
+        "organization_phone": org_phone,
+    }
+    try:
+        cache.set(_ORG_VARS_CACHE_KEY, json.dumps(result), timeout_seconds=_ORG_VARS_CACHE_TTL)
+    except Exception:
+        pass
+    return result
+
+
