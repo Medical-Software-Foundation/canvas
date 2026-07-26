@@ -27,11 +27,11 @@ def _serialize_collection(pc):
     patient_name = ""
     try:
         bulk = pc.bulkpatientposting
-        if bulk and bulk.payer:
-            patient_name = f"{bulk.payer.first_name} {bulk.payer.last_name}".strip()
-    except Exception:
-        # No BulkPatientPosting linked (e.g. insurance-only remittance)
-        pass
+    except PaymentCollection.bulkpatientposting.RelatedObjectDoesNotExist:
+        bulk = None
+
+    if bulk and bulk.payer:
+        patient_name = f"{bulk.payer.first_name} {bulk.payer.last_name}".strip()
 
     return {
         "id": str(pc.id),
