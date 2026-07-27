@@ -1,0 +1,46 @@
+{
+    "sdk_version": "0.179.0",
+    "plugin_version": "0.1.0",
+    "name": "collections_report",
+    "description": "Daily collections reporting — view payments collected by date, method, and patient.",
+    "components": {
+        "applications": [
+            {
+                "class": "collections_report.applications.collections_app:CollectionsApp",
+                "name": "Collections",
+                "description": "Daily collections reporting view.",
+                "scope": "provider_menu_item",
+                "icon": "assets/collections-icon.png",
+                "menu_position": "bottom",
+                "menu_order": 90
+            }
+        ],
+        "handlers": [
+            {
+                "class": "collections_report.handlers.api:CollectionsAPI",
+                "description": "REST API for collections data and report UI.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "PaymentCollection",
+                        "BulkPatientPosting",
+                        "BasePosting",
+                        "Claim",
+                        "Patient"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": ""
+}

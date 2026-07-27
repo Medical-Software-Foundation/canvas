@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collections Report</title>
+    <link rel="stylesheet" href="/plugin-io/api/collections_report/collections/report.css?v={{ cache_bust }}">
+</head>
+<body>
+    <div class="page-container">
+        <header class="page-header">
+            <div class="header-left">
+                <h1>Collections Report</h1>
+                <span class="subtitle" id="dateRangeLabel">Today</span>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-secondary" id="downloadCsvBtn" title="Download CSV">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 1v10M8 11L4.5 7.5M8 11l3.5-3.5M2 13h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Download CSV
+                </button>
+            </div>
+        </header>
+
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label for="startDate">From</label>
+                <input type="date" id="startDate" class="date-input">
+            </div>
+            <div class="filter-group">
+                <label for="endDate">To</label>
+                <input type="date" id="endDate" class="date-input">
+            </div>
+            <div class="filter-group">
+                <label for="methodFilter">Method</label>
+                <select id="methodFilter" class="select-input">
+                    <option value="">All Methods</option>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="card">Card</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="filter-group filter-actions">
+                <button class="btn btn-primary" id="todayBtn">Today</button>
+                <button class="btn btn-secondary" id="weekBtn">This Week</button>
+                <button class="btn btn-secondary" id="monthBtn">This Month</button>
+            </div>
+        </div>
+
+        <div class="summary-cards" id="summaryCards">
+            <div class="summary-card summary-total">
+                <div class="summary-label">Total Collected</div>
+                <div class="summary-value" id="summaryTotal">$0.00</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Cash</div>
+                <div class="summary-value" id="summaryCash">$0.00</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Card</div>
+                <div class="summary-value" id="summaryCard">$0.00</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Check</div>
+                <div class="summary-value" id="summaryCheck">$0.00</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Other</div>
+                <div class="summary-value" id="summaryOther">$0.00</div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header-row">
+                <span class="record-count" id="recordCount">0 records</span>
+            </div>
+            <table class="collections-table" id="collectionsTable">
+                <thead>
+                    <tr>
+                        <th>Date / Time</th>
+                        <th>Patient</th>
+                        <th class="col-amount">Amount</th>
+                        <th>Method</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody id="collectionsBody">
+                </tbody>
+            </table>
+
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="24" cy="24" r="22" stroke="#d1d5db" stroke-width="2"/>
+                    <path d="M16 24h16M24 16v16" stroke="#d1d5db" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <p>No collections found for the selected date range.</p>
+            </div>
+
+            <div class="loading-state" id="loadingState" style="display: none;">
+                <div class="spinner"></div>
+                <p>Loading collections...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/plugin-io/api/collections_report/collections/report.js?v={{ cache_bust }}"></script>
+</body>
+</html>
