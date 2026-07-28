@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2328;
+    -webkit-font-smoothing: antialiased;
+  }
+  .modal { display: flex; flex-direction: column; min-height: 100vh; }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 24px 0;
+  }
+  header h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  header .subtitle { margin: 6px 0 0; font-size: 14px; color: #57606a; }
+  .close-x {
+    flex: 0 0 auto;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; border-radius: 6px;
+    font-size: 22px; line-height: 1; color: #57606a; cursor: pointer;
+  }
+  .close-x:hover { background: #f2f4f6; color: #1f2328; }
+
+  .content { padding: 18px 24px 20px; flex: 1 1 auto; }
+
+  .current-card {
+    background: #f6f8fa;
+    border: 1px solid #dfe3e8;
+    border-radius: 9px;
+    padding: 13px 14px;
+    margin-bottom: 22px;
+  }
+  .current-name { font-size: 16px; font-weight: 600; color: #1f2328; }
+
+  .field-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: #6a737d; text-transform: uppercase; margin-bottom: 8px; }
+
+  /* Searchable combobox */
+  .dropdown { position: relative; }
+  .dd-trigger {
+    width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 42px 12px 14px;
+    font-size: 15px; text-align: left; color: #1f2328;
+    background: #fff; border: 1px solid #c7ccd1; border-radius: 9px;
+    cursor: pointer; position: relative; line-height: 1.3;
+  }
+  .dd-trigger:hover { border-color: #9aa0a6; }
+  .dd-trigger:focus-visible, .dd-trigger.open { outline: none; border-color: #1264a3; box-shadow: 0 0 0 3px rgba(18,100,163,0.18); }
+  .dd-trigger .dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-trigger .dd-label.placeholder { color: #8a929b; }
+  .dd-trigger::after {
+    content: ""; position: absolute; right: 16px; top: 50%;
+    width: 9px; height: 9px;
+    border-right: 2px solid #57606a; border-bottom: 2px solid #57606a;
+    transform: translateY(-70%) rotate(45deg);
+    pointer-events: none; transition: transform 0.15s ease;
+  }
+  .dd-trigger.open::after { transform: translateY(-30%) rotate(225deg); }
+
+  .dd-panel {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+    background: #fff; border: 1px solid #d0d7de; border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(31,35,40,0.20);
+    z-index: 30; overflow: hidden; display: none;
+  }
+  .dd-panel.open { display: block; }
+  .dd-search-wrap { padding: 10px; border-bottom: 1px solid #eef1f4; }
+  .dd-search {
+    width: 100%; padding: 9px 12px; font-size: 14px;
+    border: 1px solid #c7ccd1; border-radius: 7px; outline: none;
+  }
+  .dd-search:focus { border-color: #1264a3; box-shadow: 0 0 0 3px rgba(18,100,163,0.15); }
+  .dd-list { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; }
+  .dd-option {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 9px 10px; border-radius: 7px; cursor: pointer;
+  }
+  .dd-option:hover, .dd-option.active { background: #eef4fb; }
+  .dd-option[aria-selected="true"] { background: #e3edf7; }
+  .dd-option .check { width: 15px; flex: 0 0 15px; color: #1264a3; visibility: hidden; padding-top: 2px; font-size: 13px; }
+  .dd-option[aria-selected="true"] .check { visibility: visible; }
+  .dd-text { min-width: 0; }
+  .opt-name { font-size: 14px; line-height: 1.35; color: #1f2328; white-space: normal; word-break: break-word; }
+  .dd-option[aria-selected="true"] .opt-name { font-weight: 600; }
+  .opt-sub { font-size: 12px; color: #6a737d; margin-top: 1px; white-space: normal; word-break: break-word; }
+  .opt-current { font-size: 11px; font-weight: 600; color: #6a737d; background: #eef1f4; border-radius: 4px; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
+  .dd-empty { padding: 16px; text-align: center; font-size: 13px; color: #6a737d; display: none; }
+
+  .dd-list::-webkit-scrollbar { width: 10px; }
+  .dd-list::-webkit-scrollbar-thumb { background: #c7ccd1; border-radius: 6px; border: 3px solid #fff; }
+  .dd-list::-webkit-scrollbar-thumb:hover { background: #9aa0a6; }
+
+  .audit-note { margin: 14px 2px 0; font-size: 12.5px; color: #6a737d; line-height: 1.45; }
+  .message { margin: 10px 2px 0; font-size: 13px; min-height: 18px; line-height: 1.4; }
+  .message.error { color: #b3261e; }
+  .message.success { color: #1a7f37; }
+
+  footer {
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    padding: 16px 24px; border-top: 1px solid #e6e9ec; background: #fbfcfd;
+  }
+  button.btn {
+    padding: 10px 18px; font-size: 14px; font-weight: 600;
+    border-radius: 9px; border: 1px solid transparent; cursor: pointer;
+  }
+  button.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(18,100,163,0.30); }
+  button.btn:disabled { opacity: 0.5; cursor: default; }
+  .btn-cancel { background: #e9edf1; border-color: #b7bec6; color: #24292f; }
+  .btn-cancel:hover:not(:disabled) { background: #dde3e9; border-color: #a4acb5; }
+  .btn-confirm { background: #1264a3; color: #fff; }
+  .btn-confirm:hover:not(:disabled) { background: #0f5386; }
+</style>
+</head>
+<body>
+  <script>
+    // Register the Canvas message-channel listener at module scope so we never
+    // miss the port (it can arrive before the DOM is ready).
+    var messagePort = null;
+    var MODAL_WIDTH = 520;
+    var desiredHeight = 460;
+
+    function sendResize() {
+      if (messagePort) {
+        messagePort.postMessage({ type: "RESIZE", width: MODAL_WIDTH, height: desiredHeight });
+      }
+    }
+    window.addEventListener("message", function (event) {
+      if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+        messagePort = event.ports[0];
+        messagePort.start();
+        sendResize();
+      }
+    });
+    function closeModal() {
+      if (messagePort) {
+        messagePort.postMessage({ type: "CLOSE_MODAL" });
+      } else {
+        try { window.close(); } catch (e) {}
+      }
+    }
+  </script>
+
+  <div class="modal">
+    <header>
+      <div>
+        <h2>Change providers</h2>
+        <p class="subtitle">Update the author of this note</p>
+      </div>
+    </header>
+
+    <div class="content">
+      <label class="field-label">Current author</label>
+      <div class="current-card">
+        <div class="current-name">{{ current_provider_name }}</div>
+      </div>
+
+      <label class="field-label" id="dd-label-text">New author</label>
+      <div class="dropdown">
+        <button type="button" class="dd-trigger" id="dd-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="dd-label-text">
+          <span class="dd-label placeholder" id="dd-current-label">Search and select a provider…</span>
+        </button>
+        <div class="dd-panel" id="dd-panel">
+          <div class="dd-search-wrap">
+            <input type="text" class="dd-search" id="dd-search" placeholder="Search providers…" autocomplete="off" />
+          </div>
+          <div class="dd-list" id="dd-list" role="listbox" aria-labelledby="dd-label-text">
+            {% for option in staff_options %}
+              <div class="dd-option" role="option" data-id="{{ option.id }}" data-name="{{ option.name }}" data-search="{{ option.search }}" aria-selected="false">
+                <span class="check">✓</span>
+                <span class="dd-text">
+                  <span class="opt-name">{{ option.name }}{% if option.is_current %} <span class="opt-current">Current</span>{% endif %}</span>
+                  {% if option.subtitle %}<span class="opt-sub">{{ option.subtitle }}</span>{% endif %}
+                </span>
+              </div>
+            {% endfor %}
+          </div>
+          <div class="dd-empty" id="dd-empty">No matching providers</div>
+        </div>
+      </div>
+
+      <input type="hidden" id="selected-provider" value="" />
+
+      <div class="message" id="message"></div>
+    </div>
+
+    <footer>
+      <button type="button" class="btn btn-cancel" id="cancel-btn">Cancel</button>
+      <button type="button" class="btn btn-confirm" id="confirm-btn" disabled>Change author</button>
+    </footer>
+  </div>
+
+  <script>
+    var NOTE_ID = "{{ note_id }}";
+    var ORIGINAL_PROVIDER_ID = "{{ current_provider_id }}";
+    var ENDPOINT = "/plugin-io/api/change_note_author/change-provider";
+
+    var trigger = document.getElementById("dd-trigger");
+    var panel = document.getElementById("dd-panel");
+    var searchInput = document.getElementById("dd-search");
+    var listEl = document.getElementById("dd-list");
+    var emptyEl = document.getElementById("dd-empty");
+    var currentLabel = document.getElementById("dd-current-label");
+    var hiddenInput = document.getElementById("selected-provider");
+    var options = Array.prototype.slice.call(listEl.querySelectorAll(".dd-option"));
+    var confirmBtn = document.getElementById("confirm-btn");
+    var cancelBtn = document.getElementById("cancel-btn");
+    var messageEl = document.getElementById("message");
+    var activeIndex = -1;
+
+    // The picker starts in an empty state — no provider is pre-selected.
+
+    function setMessage(text, kind) {
+      messageEl.textContent = text || "";
+      messageEl.className = "message" + (kind ? " " + kind : "");
+    }
+
+    function updateConfirmState() {
+      var val = hiddenInput.value;
+      // Enabled only when a real, different provider is chosen.
+      confirmBtn.disabled = !val || val === ORIGINAL_PROVIDER_ID;
+    }
+
+    function visibleOptions() {
+      return options.filter(function (o) { return o.style.display !== "none"; });
+    }
+    function clearActive() {
+      options.forEach(function (o) { o.classList.remove("active"); });
+      activeIndex = -1;
+    }
+    function setActive(idx) {
+      var vis = visibleOptions();
+      if (!vis.length) { return; }
+      if (idx < 0) { idx = 0; }
+      if (idx > vis.length - 1) { idx = vis.length - 1; }
+      options.forEach(function (o) { o.classList.remove("active"); });
+      vis[idx].classList.add("active");
+      vis[idx].scrollIntoView({ block: "nearest" });
+      activeIndex = idx;
+    }
+
+    function openPanel() {
+      panel.classList.add("open");
+      trigger.classList.add("open");
+      trigger.setAttribute("aria-expanded", "true");
+      searchInput.value = "";
+      filterList("");
+      clearActive();
+      setTimeout(function () { searchInput.focus(); }, 0);
+      var selected = listEl.querySelector('.dd-option[aria-selected="true"]');
+      if (selected && selected.style.display !== "none") { selected.scrollIntoView({ block: "nearest" }); }
+    }
+    function closePanel() {
+      panel.classList.remove("open");
+      trigger.classList.remove("open");
+      trigger.setAttribute("aria-expanded", "false");
+      clearActive();
+    }
+    function togglePanel() {
+      if (panel.classList.contains("open")) { closePanel(); } else { openPanel(); }
+    }
+
+    function filterList(query) {
+      var q = (query || "").trim().toLowerCase();
+      var anyVisible = false;
+      options.forEach(function (o) {
+        var hay = o.getAttribute("data-search") || "";
+        var match = q === "" || hay.indexOf(q) !== -1;
+        o.style.display = match ? "" : "none";
+        if (match) { anyVisible = true; }
+      });
+      emptyEl.style.display = anyVisible ? "none" : "block";
+    }
+
+    function selectOption(option) {
+      options.forEach(function (o) { o.setAttribute("aria-selected", "false"); });
+      option.setAttribute("aria-selected", "true");
+      hiddenInput.value = option.getAttribute("data-id");
+      currentLabel.textContent = option.getAttribute("data-name");
+      currentLabel.classList.remove("placeholder");
+      updateConfirmState();
+      closePanel();
+      trigger.focus();
+    }
+
+    trigger.addEventListener("click", function (e) { e.stopPropagation(); togglePanel(); });
+
+    options.forEach(function (option) {
+      option.addEventListener("click", function (e) { e.stopPropagation(); selectOption(option); });
+    });
+
+    searchInput.addEventListener("input", function () { filterList(searchInput.value); clearActive(); });
+    searchInput.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setActive(activeIndex - 1); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        var vis = visibleOptions();
+        if (activeIndex >= 0 && vis[activeIndex]) { selectOption(vis[activeIndex]); }
+        else if (vis.length === 1) { selectOption(vis[0]); }
+      } else if (e.key === "Escape") { e.preventDefault(); closePanel(); trigger.focus(); }
+    });
+
+    // Close when clicking outside or pressing Escape.
+    document.addEventListener("click", function () { closePanel(); });
+    panel.addEventListener("click", function (e) { e.stopPropagation(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (panel.classList.contains("open")) { closePanel(); }
+        else { closeModal(); }
+      }
+    });
+
+    cancelBtn.addEventListener("click", function () { closeModal(); });
+
+    confirmBtn.addEventListener("click", function () {
+      var newProviderId = hiddenInput.value;
+      if (!newProviderId || newProviderId === ORIGINAL_PROVIDER_ID) { return; }
+
+      confirmBtn.disabled = true;
+      cancelBtn.disabled = true;
+      setMessage("Saving…", null);
+
+      fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ note_id: NOTE_ID, new_provider_id: newProviderId })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+        })
+        .then(function (result) {
+          if (result.ok && result.data && result.data.ok) {
+            setMessage(result.data.message || "The note’s author has been updated.", "success");
+            setTimeout(function () { closeModal(); }, 1000);
+          } else {
+            var msg = (result.data && result.data.error) || "Something went wrong. Please try again.";
+            setMessage(msg, "error");
+            cancelBtn.disabled = false;
+            updateConfirmState();
+          }
+        })
+        .catch(function () {
+          setMessage("Could not reach the server. Please try again.", "error");
+          cancelBtn.disabled = false;
+          updateConfirmState();
+        });
+    });
+
+    // Size the modal to its content once rendered.
+    window.addEventListener("load", function () {
+      desiredHeight = Math.min(640, Math.max(360, document.querySelector(".modal").offsetHeight));
+      sendResize();
+    });
+  </script>
+</body>
+</html>

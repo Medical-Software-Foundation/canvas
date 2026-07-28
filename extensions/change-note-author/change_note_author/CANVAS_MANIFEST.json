@@ -1,0 +1,40 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.5",
+    "name": "change_note_author",
+    "description": "Adds a 'Change providers' item to the note header dropdown on Chart Review notes, letting staff reassign the note's author.",
+    "components": {
+        "commands": [],
+        "handlers": [
+            {
+                "class": "change_note_author.handlers.change_providers_button:ChangeProvidersButton",
+                "description": "Note header dropdown button that opens the change-author modal on Chart Review notes.",
+                "data_access": {
+                    "event": "SHOW_NOTE_HEADER_DROPDOWN_BUTTON",
+                    "read": ["Note", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "change_note_author.handlers.change_provider_api:ChangeProviderAPI",
+                "description": "HTTP route that applies the note author change (staff-session authenticated).",
+                "data_access": {
+                    "event": "",
+                    "read": ["Note", "Staff"],
+                    "write": ["Note"]
+                }
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "CHART_REVIEW_NOTE_TYPE_NAME", "default": "Chart Review"}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
