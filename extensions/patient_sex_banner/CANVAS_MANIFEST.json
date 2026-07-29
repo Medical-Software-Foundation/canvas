@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_sex_banner",
+    "description": "Displays a banner to let user know the patient sex is not male or female",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_sex_banner.protocols.my_protocol:Protocol",
+                "description": "Displays a banner to let user know the patient sex is not male or female",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
