@@ -5,10 +5,11 @@ on file, recommending that the patient be contacted. Patients without an active
 diabetes condition receive a satisfied card.
 """
 
-from functools import cached_property
+from typing import Any
 
 import arrow
 
+from canvas_sdk.commands import FollowUpCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -40,7 +41,20 @@ class Ccp004v1(ClinicalQualityMeasure):
         EventType.Name(EventType.CONDITION_RESOLVED),
     ]
 
-    @cached_property
+    def __init__(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        # Condition events carry the patient in the event context; use it so
+        # patient_id_from_target() can skip the target -> patient SQL lookup.
+        # When it is absent, leave _patient_id unset and let the base class
+        # resolve it from the event target.
+        if patient := self.event.context.get("patient"):
+            self._patient_id = patient["id"]
+
+    @property
     def active_diabetes_conditions(self) -> list[Condition]:
         """Active diabetes conditions for the patient, oldest first by onset."""
         return list(
@@ -50,7 +64,7 @@ class Ccp004v1(ClinicalQualityMeasure):
             .order_by("onset_date")
         )
 
-    @cached_property
+    @property
     def date_of_diagnosis(self) -> str:
         """The earliest onset date among the patient's active diabetes conditions, or ''."""
         for condition in self.active_diabetes_conditions:
@@ -85,16 +99,16 @@ class Ccp004v1(ClinicalQualityMeasure):
         )
 
         if self.in_numerator():
-            formatted_date = arrow.get(self.date_of_diagnosis).format("ddd, MMM Do YYYY")
-            card.narrative = (
-                f"{patient.first_name} has been diagnosed of diabetes on {formatted_date}."
+            formatted_date = arrow.get(self.date_of_diagnosis).format(
+                "ddd, MMM Do YYYY"
             )
+            card.narrative = f"{patient.first_name} has been diagnosed of diabetes on {formatted_date}."
             card.status = ProtocolCard.Status.DUE
             card.due_in = 0
             card.add_recommendation(
                 title="Contact the patient",
                 button="Schedule",
-                command="schedule",
+                commands=[FollowUpCommand()],
             )
         else:
             card.narrative = f"{patient.first_name} has not been diagnosed of diabetes."
