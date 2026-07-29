@@ -8,44 +8,45 @@ from logger import log
 
 
 class Protocol(BaseProtocol):
-    """
-    Displays a banner to let user know the patient sex is not male or female
+    """Banner-alert a patient whose sex at birth is not Male or Female.
+
+    Subscribes only to per-patient events, so each event reconciles a single
+    patient. Plugin lifecycle events are deliberately not subscribed: iterating
+    every patient on install/update produces an unbounded, instance-wide effect
+    batch. Backfilling existing patients belongs in a deliberate, paged job.
     """
 
     RESPONDS_TO = [
-        EventType.Name(EventType.PLUGIN_CREATED), # for plugin install
-        EventType.Name(EventType.PLUGIN_UPDATED),
-
-        EventType.Name(EventType.PATIENT_CREATED), # for patient created or updated
+        EventType.Name(EventType.PATIENT_CREATED),
         EventType.Name(EventType.PATIENT_UPDATED),
     ]
 
     banner_key = "sex-banner"
 
     def compute(self) -> list[Effect]:
+        try:
+            patient = Patient.objects.get(id=self.target)
+        except Patient.DoesNotExist:
+            return []
 
-        if self.event.type in (EventType.PLUGIN_UPDATED, EventType.PLUGIN_CREATED):
-            patients = Patient.objects.all()
+        log.info(f"Patient {patient.id} sex is {patient.sex_at_birth}")
+
+        if patient.sex_at_birth not in (SexAtBirth.FEMALE.value, SexAtBirth.MALE.value):
+            banner = AddBannerAlert(
+                patient_id=patient.id,
+                key=self.banner_key,
+                narrative=f"WARNING: Patient sex is {patient.sex_at_birth}. EPCS Rx requires a sex of F or M for successful transmission",
+                placement=[
+                    AddBannerAlert.Placement.TIMELINE,
+                    AddBannerAlert.Placement.CHART,
+                    AddBannerAlert.Placement.PROFILE,
+                ],
+                intent=AddBannerAlert.Intent.ALERT,
+            )
         else:
-            patients = Patient.objects.filter(id=self.target)
+            banner = RemoveBannerAlert(
+                key=self.banner_key,
+                patient_id=patient.id,
+            )
 
-        effects = []
-        for patient in patients:
-            log.info(f'Patient {patient.id} sex is {patient.sex_at_birth}')
-            if patient.sex_at_birth not in [SexAtBirth.FEMALE.value, SexAtBirth.MALE.value]:
-                banner = AddBannerAlert(
-                    patient_id=patient.id,
-                    key=self.banner_key,
-                    narrative=f"WARNING: Patient sex is {patient.sex_at_birth}. EPCS Rx requires a sex of F or M for successful transmission",
-                    placement=[AddBannerAlert.Placement.TIMELINE, AddBannerAlert.Placement.CHART, AddBannerAlert.Placement.PROFILE],
-                    intent=AddBannerAlert.Intent.ALERT
-                )
-            else:
-                banner = RemoveBannerAlert(
-                    key=self.banner_key,
-                    patient_id=patient.id,
-                )
-
-            effects.append(banner.apply())
-
-        return effects
+        return [banner.apply()]

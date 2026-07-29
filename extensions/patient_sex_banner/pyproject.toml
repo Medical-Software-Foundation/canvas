@@ -11,3 +11,15 @@ requires-python = ">=3.11"
 dependencies = [
     "canvas",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+pythonpath = [".."]
