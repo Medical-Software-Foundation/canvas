@@ -10,7 +10,7 @@ It appears in three places — the chart **timeline**, the **chart**, and the pa
 
 <img width="880" height="318" alt="screenshot-primary07292026018526@2x" src="https://github.com/user-attachments/assets/f056665c-f6c2-463f-ad77-fcfe2ce9d96e" />
 
-The protocol runs whenever a patient is **created** or **updated**. On plugin **install or update** it also sweeps every existing patient, so charts are back-filled in one pass.
+The banner is reconciled per patient on **create** and **update**. Existing patients are backfilled by a separate background task that sweeps the active panel in bounded pages after install, then goes dormant — so installing the plugin never scans every patient at once.
 
 ## Problem it solves
 
