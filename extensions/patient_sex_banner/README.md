@@ -6,7 +6,9 @@ Adds a banner alert to a patient's chart whenever their **sex at birth** is reco
 
 > WARNING: Patient sex is `{value}`. EPCS Rx requires a sex of F or M for successful transmission.
 
-It appears in three places — the chart **timeline**, the **chart**, and the patient **profile**. As soon as the patient's sex at birth is corrected to Female or Male, the banner is removed automatically.
+It appears in three places — the chart **timeline**, the **chart**, and the patient **profile**. As soon as the patient's sex at birth is corrected to Female or Male, the banner is removed automatically. 
+
+<img width="880" height="318" alt="screenshot-primary07292026018526@2x" src="https://github.com/user-attachments/assets/f056665c-f6c2-463f-ad77-fcfe2ce9d96e" />
 
 The protocol runs whenever a patient is **created** or **updated**. On plugin **install or update** it also sweeps every existing patient, so charts are back-filled in one pass.
 
@@ -33,6 +35,3 @@ See the [Canvas plugin documentation](https://docs.canvasmedical.com/sdk/plugins
 
 None. The plugin has no secrets or settings. The banner text, its placements (timeline, chart, profile), and the alert intent are fixed in code.
 
-## Screenshots or screen recordings
-
-_Screenshot pending. The banner appears on the patient chart when the patient's sex at birth is not Female or Male._
