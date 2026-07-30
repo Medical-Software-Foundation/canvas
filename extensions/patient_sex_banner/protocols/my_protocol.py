@@ -23,7 +23,7 @@ class Protocol(BaseProtocol):
 
     def compute(self) -> list[Effect]:
         try:
-            patient = Patient.objects.get(id=self.target)
+            patient = Patient.objects.get(id=self.event.target.id)
         except Patient.DoesNotExist:
             return []
 

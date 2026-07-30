@@ -49,7 +49,8 @@ def protocol():
     from patient_sex_banner.protocols.my_protocol import Protocol
 
     handler = Protocol.__new__(Protocol)
-    handler.target = "patient-uuid-123"
+    handler.event = MagicMock()
+    handler.event.target.id = "patient-uuid-123"
     return handler
 
 
