@@ -128,6 +128,8 @@ Concretely, with the lock on:
 
 The server-side behavior is the actual boundary; the read-only textareas are a convenience on top of it, since anything holding a staff session could POST to the endpoint directly. Unset the secret to lift the lock. It deliberately can't be lifted from inside the app, so the people who control the wording are the ones with plugin-config access.
 
+**Independent of the lock**, a manual send is refused with **422** when the rendered body still contains a `{{placeholder}}` the renderer could not fill, so template syntax never reaches a patient verbatim. Only the channels actually selected are checked, so a typo in an unused template can't block a send.
+
 ## Consent (TCPA / opt-out)
 
 Enforced at send time in `services/delivery.py:_get_patient_contacts`:

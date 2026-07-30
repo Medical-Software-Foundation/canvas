@@ -460,7 +460,7 @@ def test_preview_template_appointment_path_renders_globals_when_per_type_empty()
 def test_preview_template_note_path() -> None:
     api = _api(
         path_params={"patient_id": "patient-1"},
-        json_body={"note_id": "note-1", "campaign_type": "custom"},
+        json_body={"note_id": "note-1", "campaign_type": "telehealth"},
     )
     patient = MagicMock()
     patient.first_name = "Jane"
@@ -483,11 +483,14 @@ def test_preview_template_note_path() -> None:
     ) as mock_note_cls, patch(
         "appointment_reminders.handlers.notification_api.load_config",
         return_value=CampaignConfig(),
+    ), patch(
+        "appointment_reminders.services.templates._get_org_variables",
+        return_value={},
     ):
         mock_patient_cls.DoesNotExist = DNE
         mock_note_cls.DoesNotExist = DNE
         mock_patient_cls.objects.get.return_value = patient
-        mock_note_cls.objects.select_related.return_value.get.return_value = note
+        mock_note_cls.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.get.return_value = note
         result = api.preview_template()
     assert result[0].status_code == HTTPStatus.OK
 
@@ -824,8 +827,88 @@ def test_preview_scopes_note_lookup_to_the_patient_in_the_path() -> None:
     ):
         mock_patient_cls.DoesNotExist = DNE
         mock_note_cls.DoesNotExist = DNE
-        mock_note_cls.objects.filter.return_value.select_related.return_value.get.side_effect = DNE
+        mock_note_cls.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.get.side_effect = DNE
         result = api.preview_template()
 
     assert result[0].status_code == HTTPStatus.NOT_FOUND
     assert mock_note_cls.objects.filter.call_args.kwargs == {"patient__id": "patient-1"}
+
+
+def test_manual_send_refuses_body_with_unresolved_placeholders() -> None:
+    """A rendered body that still carries {{...}} must not reach the patient.
+    This is the backstop for the standalone-note telehealth path, which used to
+    deliver a literal "{{telehealth_link}}".
+    """
+    api = _api(
+        path_params={"patient_id": "patient-1"},
+        json_body={
+            "channels": ["sms"],
+            "sms_content": "Join: {{telehealth_link}} now",
+            "appointment_id": "appt-1",
+            "campaign_type": "telehealth",
+        },
+    )
+    patient = MagicMock()
+
+    class DNE(Exception):
+        pass
+
+    with patch(
+        "canvas_sdk.v1.data.patient.Patient"
+    ) as mock_patient_cls, patch(
+        "appointment_reminders.services.delivery.deliver_to_patient"
+    ) as mock_deliver, patch(
+        "appointment_reminders.services.history.log_delivery"
+    ), patch(
+        "appointment_reminders.handlers.notification_api.load_config", return_value=MagicMock()
+    ):
+        mock_patient_cls.DoesNotExist = DNE
+        mock_patient_cls.objects.select_related.return_value.prefetch_related.return_value.get.return_value = patient
+        result = api.manual_send()
+
+    assert result[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert "telehealth_link" in json.loads(result[0].content)["error"]
+    mock_deliver.assert_not_called()
+
+
+def test_manual_send_ignores_placeholders_in_unselected_channel() -> None:
+    """Only the channels actually being sent are checked, so a typo in an unused
+    email template cannot block an SMS-only send.
+    """
+    api = _api(
+        path_params={"patient_id": "patient-1"},
+        json_body={
+            "channels": ["sms"],
+            "sms_content": "Your visit is August 5, 2026.",
+            "email_content": "<p>{{broken_field}}</p>",
+            "appointment_id": "appt-1",
+            "campaign_type": "reminder",
+        },
+    )
+    patient = MagicMock()
+
+    class DNE(Exception):
+        pass
+
+    with patch(
+        "canvas_sdk.v1.data.patient.Patient"
+    ) as mock_patient_cls, patch(
+        "appointment_reminders.services.delivery.deliver_to_patient",
+        return_value=([MagicMock()], [MagicMock(channel="sms", success=True, error=None)]),
+    ) as mock_deliver, patch(
+        "appointment_reminders.services.history.log_delivery"
+    ), patch(
+        "appointment_reminders.handlers.notification_api.load_config", return_value=MagicMock()
+    ), patch(
+        "appointment_reminders.handlers.notification_api.get_business_line_name",
+        return_value="Test-Line",
+    ), patch(
+        "appointment_reminders.handlers.notification_api.get_business_line_from_number",
+        return_value="+15551112222",
+    ):
+        mock_patient_cls.DoesNotExist = DNE
+        mock_patient_cls.objects.select_related.return_value.prefetch_related.return_value.get.return_value = patient
+        result = api.manual_send()
+
+    assert result[-1].status_code == HTTPStatus.OK
+    mock_deliver.assert_called_once()
