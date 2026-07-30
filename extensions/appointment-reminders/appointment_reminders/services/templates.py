@@ -40,6 +40,27 @@ def render_template(template: str, variables: dict[str, Any]) -> str:
     return result
 
 
+def unresolved_placeholders(text: str) -> list[str]:
+    """Return the ``{{placeholder}}`` names left unreplaced in rendered text.
+
+    A non-empty result means the message would reach the patient with literal
+    template syntax in it, so callers refuse the send rather than deliver it.
+    Parsed by hand instead of with a regex to keep the plugin sandbox's import
+    surface unchanged.
+    """
+    found: list[str] = []
+    rest = text
+    while "{{" in rest:
+        _, _, rest = rest.partition("{{")
+        name, closed, rest = rest.partition("}}")
+        if not closed:
+            break
+        name = name.strip()
+        if name and name not in found:
+            found.append(name)
+    return found
+
+
 def _resolve_timezone(patient: Patient, clinic_timezone: str = "") -> zoneinfo.ZoneInfo:
     """Resolve display timezone: patient → clinic config → Eastern."""
     for tz_str in (
@@ -70,6 +91,16 @@ def _tz_abbrev(dt: datetime) -> str:
     return _SHORT.get(abbrev, abbrev)
 
 
+def _format_date(local_dt: datetime) -> str:
+    """Format a date without a zero-padded day: 'August 5, 2026'."""
+    return f"{local_dt.strftime('%B')} {local_dt.day}, {local_dt.year}"
+
+
+def _format_time(local_dt: datetime) -> str:
+    """Format a time without a zero-padded hour: '3:40 PM'."""
+    return f"{local_dt.hour % 12 or 12}:{local_dt.strftime('%M %p')}"
+
+
 def get_template_variables(
     patient: Patient,
     appointment: Appointment,
@@ -81,22 +112,84 @@ def get_template_variables(
     Pass ``config`` to resolve ``{{business_line_attribution}}`` (per-business-line
     override → default). ``{{business_line}}`` resolves without it.
     """
-    tz = _resolve_timezone(patient, clinic_timezone)
-    local_start = appointment.start_time.astimezone(tz)
-    tz_label = _tz_abbrev(local_start)
+    meeting_link = ""
+    if getattr(appointment, "meeting_link", None):
+        meeting_link = appointment.meeting_link
+    return _build_variables(
+        patient,
+        appointment.start_time,
+        appointment.provider,
+        appointment.location,
+        meeting_link,
+        appointment.description or "",
+        clinic_timezone,
+        config,
+    )
 
-    appointment_date = local_start.strftime("%B %d, %Y")
-    appointment_time = f"{local_start.strftime('%I:%M %p')} {tz_label}"
+
+def get_note_template_variables(
+    patient: Patient,
+    note: Any,
+    clinic_timezone: str = "",
+    config: Any = None,
+) -> dict[str, str]:
+    """Extract template variables from patient and a standalone note.
+
+    A note has no appointment row and therefore no ``meeting_link``, so
+    ``{{telehealth_link}}`` resolves from the provider's personal meeting room,
+    the same fallback the appointment path already uses.
+
+    Routing notes through the shared builder is what stops the two manual-send
+    paths from drifting. Hand-building a shorter dict here previously left
+    ``{{telehealth_link}}`` and ``{{business_line_attribution}}`` unreplaced in
+    the delivered message, and rendered the time in UTC with no zone label.
+    """
+    return _build_variables(
+        patient,
+        note.datetime_of_service,
+        note.provider,
+        note.location,
+        "",
+        note.title or "",
+        clinic_timezone,
+        config,
+    )
+
+
+def _build_variables(
+    patient: Patient,
+    start_time: datetime | None,
+    provider: Any,
+    location: Any,
+    meeting_link: str,
+    description: str,
+    clinic_timezone: str = "",
+    config: Any = None,
+) -> dict[str, str]:
+    """Build the full placeholder set from already-resolved parts.
+
+    Shared by the appointment and standalone-note paths so both render the same
+    placeholders in the same timezone. ``start_time`` may be ``None`` (a note
+    without a service datetime), in which case date and time render empty rather
+    than raising.
+    """
+    appointment_date = ""
+    appointment_time = ""
+    if start_time is not None:
+        tz = _resolve_timezone(patient, clinic_timezone)
+        local_start = start_time.astimezone(tz)
+        appointment_date = _format_date(local_start)
+        appointment_time = f"{_format_time(local_start)} {_tz_abbrev(local_start)}"
 
     provider_name = "your provider"
     credentials = ""
-    if appointment.provider:
-        provider_name = f"{appointment.provider.first_name} {appointment.provider.last_name}"
+    if provider:
+        provider_name = f"{provider.first_name} {provider.last_name}"
         # Build credentials: role public abbreviations (matches home app name_and_roles pattern)
         try:
             abbrevs = [
                 r.public_abbreviation
-                for r in appointment.provider.roles.all()
+                for r in provider.roles.all()
                 if r.public_abbreviation
             ]
             credentials = ", ".join(abbrevs)
@@ -104,23 +197,23 @@ def get_template_variables(
             pass
 
     location_name = "our clinic"
-    if appointment.location:
-        location_name = appointment.location.full_name
+    if location:
+        location_name = location.full_name
 
     # Resolve telehealth link: appointment meeting_link → provider meeting room
     telehealth_link = ""
-    if hasattr(appointment, "meeting_link") and appointment.meeting_link:
-        telehealth_link = appointment.meeting_link
-    elif appointment.provider and hasattr(appointment.provider, "personal_meeting_room_link"):
-        telehealth_link = appointment.provider.personal_meeting_room_link or ""
+    if meeting_link:
+        telehealth_link = meeting_link
+    elif provider and hasattr(provider, "personal_meeting_room_link"):
+        telehealth_link = provider.personal_meeting_room_link or ""
 
-    # --- Practice location variables (from appointment location) ---
+    # --- Practice location variables (from the appointment or note location) ---
     loc_full_name = location_name
     loc_short_name = ""
     loc_address = ""
     loc_phone = ""
-    if appointment.location:
-        loc = appointment.location
+    if location:
+        loc = location
         loc_full_name = loc.full_name or location_name
         loc_short_name = loc.short_name or ""
         # Filter the prefetched `addresses` in Python so the reminder-cron
@@ -156,7 +249,7 @@ def get_template_variables(
         "appointment_date": appointment_date,
         "appointment_time": appointment_time,
         "location_name": location_name,
-        "appointment_type": appointment.description or "",
+        "appointment_type": description,
         "telehealth_link": telehealth_link,
         "location_full_name": loc_full_name,
         "location_short_name": loc_short_name,

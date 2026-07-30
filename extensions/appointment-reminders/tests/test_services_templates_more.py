@@ -13,7 +13,9 @@ from unittest.mock import MagicMock, patch
 from appointment_reminders.services.templates import (
     _ORG_VARS_CACHE_KEY,
     _get_org_variables,
+    get_note_template_variables,
     get_template_variables,
+    unresolved_placeholders,
 )
 
 
@@ -373,3 +375,179 @@ def test_get_org_variables_swallows_cache_set_exception() -> None:
     assert result["organization_full_name"] == "Real"
 
 
+
+
+# ---- date / time formatting ----
+
+def test_appointment_date_and_time_are_not_zero_padded(monkeypatch) -> None:
+    """Native Canvas copy reads '3:40 PM', so ours should too. `%I`/`%d` would
+    render '03:40 PM' and 'August 05, 2026'.
+    """
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.last_known_timezone = "America/New_York"
+
+    appointment = MagicMock()
+    # 19:40 UTC on Aug 5 == 3:40 PM EDT
+    appointment.start_time = datetime(2026, 8, 5, 19, 40, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    appointment.provider = None
+    appointment.location = None
+    appointment.description = ""
+    appointment.meeting_link = ""
+
+    result = get_template_variables(patient, appointment)
+
+    assert result["appointment_date"] == "August 5, 2026"
+    assert result["appointment_time"] == "3:40 PM ET"
+
+
+def test_appointment_time_renders_noon_and_midnight_as_twelve(monkeypatch) -> None:
+    """`hour % 12` alone would render noon as '0:00 PM'."""
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.last_known_timezone = "UTC"
+
+    appointment = MagicMock()
+    appointment.provider = None
+    appointment.location = None
+    appointment.description = ""
+    appointment.meeting_link = ""
+
+    appointment.start_time = datetime(2026, 8, 5, 12, 0, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    assert get_template_variables(patient, appointment)["appointment_time"].startswith("12:00 PM")
+
+    appointment.start_time = datetime(2026, 8, 5, 0, 0, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    assert get_template_variables(patient, appointment)["appointment_time"].startswith("12:00 AM")
+
+
+# ---- get_note_template_variables ----
+
+def test_note_variables_fill_telehealth_link_and_attribution(monkeypatch) -> None:
+    """The bug this guards: a standalone-note telehealth send used to build a
+    9-key dict, leaving {{telehealth_link}} and {{business_line_attribution}}
+    literal in the delivered SMS, and rendering the time in raw UTC.
+    """
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates.get_business_line_name",
+        lambda patient: "Heartbeat Health",
+    )
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates.resolve_attribution",
+        lambda config, name: "Heartbeat Health",
+    )
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.last_known_timezone = "America/New_York"
+
+    provider = MagicMock()
+    provider.first_name = "Sam"
+    provider.last_name = "Park"
+    provider.roles.all.return_value = []
+    provider.personal_meeting_room_link = "https://meet.example.com/sam"
+
+    note = MagicMock()
+    note.datetime_of_service = datetime(2026, 8, 5, 19, 40, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    note.provider = provider
+    note.location = None
+    note.title = "Telehealth Visit"
+
+    result = get_note_template_variables(patient, note, config=object())
+
+    # The two that used to render as literal template syntax
+    assert result["telehealth_link"] == "https://meet.example.com/sam"
+    assert result["business_line_attribution"] == "Heartbeat Health"
+    # Local time with a zone label, not raw UTC ("7:40 PM" with no label)
+    assert result["appointment_time"] == "3:40 PM ET"
+    assert result["appointment_date"] == "August 5, 2026"
+    assert result["appointment_type"] == "Telehealth Visit"
+    assert result["provider_name"] == "Sam Park"
+
+
+def test_note_variables_cover_every_appointment_placeholder(monkeypatch) -> None:
+    """Notes and appointments must expose the same key set, or a template that
+    renders correctly for one silently breaks for the other.
+    """
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.last_known_timezone = "UTC"
+
+    appointment = MagicMock()
+    appointment.start_time = datetime(2026, 8, 5, 19, 40, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    appointment.provider = None
+    appointment.location = None
+    appointment.description = ""
+    appointment.meeting_link = ""
+
+    note = MagicMock()
+    note.datetime_of_service = appointment.start_time
+    note.provider = None
+    note.location = None
+    note.title = ""
+
+    appt_keys = set(get_template_variables(patient, appointment).keys())
+    note_keys = set(get_note_template_variables(patient, note).keys())
+    assert note_keys == appt_keys
+
+
+def test_note_variables_tolerate_missing_service_datetime(monkeypatch) -> None:
+    """A note with no datetime_of_service must render empty date/time, not raise."""
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.last_known_timezone = "UTC"
+
+    note = MagicMock()
+    note.datetime_of_service = None
+    note.provider = None
+    note.location = None
+    note.title = "Phone call"
+
+    result = get_note_template_variables(patient, note)
+
+    assert result["appointment_date"] == ""
+    assert result["appointment_time"] == ""
+    assert result["appointment_type"] == "Phone call"
+
+
+# ---- unresolved_placeholders ----
+
+def test_unresolved_placeholders_finds_names_and_dedupes() -> None:
+    text = "Join {{telehealth_link}} for {{telehealth_link}} and {{business_line_attribution}}"
+    assert unresolved_placeholders(text) == [
+        "telehealth_link",
+        "business_line_attribution",
+    ]
+
+
+def test_unresolved_placeholders_empty_for_fully_rendered_text() -> None:
+    assert unresolved_placeholders("Hi Jane, your visit is August 5, 2026.") == []
+    assert unresolved_placeholders("") == []
+
+
+def test_unresolved_placeholders_ignores_unterminated_braces() -> None:
+    """An unclosed '{{' is not a placeholder and must not loop forever."""
+    assert unresolved_placeholders("literal {{ braces with no close") == []

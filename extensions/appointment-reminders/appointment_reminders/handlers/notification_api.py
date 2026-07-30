@@ -11,6 +11,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.v1.data.patient import Patient
+from logger import log
 
 from appointment_reminders.services.business_line import (
     get_business_line_from_number,
@@ -2623,7 +2624,11 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         from canvas_sdk.v1.data.note import Note
         from canvas_sdk.v1.data.patient import Patient
 
-        from appointment_reminders.services.templates import get_template_variables, render_template
+        from appointment_reminders.services.templates import (
+            get_note_template_variables,
+            get_template_variables,
+            render_template,
+        )
 
         if (not appointment_id and not note_id) or not campaign_type:
             return (JSONResponse({"error": "campaign_type and either appointment_id or note_id are required"}, status_code=HTTPStatus.BAD_REQUEST), {})
@@ -2660,32 +2665,21 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         else:
             try:
-                # Same patient scoping as the appointment branch above.
+                # Same patient scoping as the appointment branch above. The
+                # prefetches match that branch too, since the shared renderer
+                # reads provider roles and the location's address / telecom.
                 note = Note.objects.filter(patient__id=patient_id).select_related(
                     "provider", "location", "note_type_version"
+                ).prefetch_related(
+                    "provider__roles", "location__addresses", "location__telecom"
                 ).get(id=note_id)
             except Note.DoesNotExist:
                 return (JSONResponse({"error": "Note not found"}, status_code=HTTPStatus.NOT_FOUND), {})
 
             note_type_id = str(note.note_type_version.id) if note.note_type_version else None
-            provider_name = "your provider"
-            if note.provider:
-                provider_name = f"{note.provider.first_name} {note.provider.last_name}"
-            location_name = "our clinic"
-            if note.location:
-                location_name = note.location.full_name
-            dos = note.datetime_of_service
-            variables = {
-                "patient_first_name": patient.first_name,
-                "patient_last_name": patient.last_name,
-                "patient_name": patient.first_name,
-                "patient_full_name": f"{patient.first_name} {patient.last_name}".strip(),
-                "provider_name": provider_name,
-                "appointment_date": dos.strftime("%B %d, %Y") if dos else "",
-                "appointment_time": dos.strftime("%I:%M %p") if dos else "",
-                "location_name": location_name,
-                "appointment_type": note.title or "",
-            }
+            variables = get_note_template_variables(
+                patient, note, config.reminder_timezone, config=config
+            )
 
         enabled, channels, sms_template, email_template, *_ = (
             get_effective_campaign_config(config, note_type_id, campaign_type)
@@ -2736,6 +2730,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
 
         from appointment_reminders.services.delivery import deliver_to_patient
         from appointment_reminders.services.history import log_delivery
+        from appointment_reminders.services.templates import unresolved_placeholders
 
         patient_id = self.request.path_params["patient_id"]
         body = self.request.json()
@@ -2789,6 +2784,39 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 return [error]
             sms_content = rendered["sms_content"]
             email_content = rendered["email_content"]
+
+        # Refuse to deliver a message that still carries template syntax. A
+        # placeholder the renderer could not fill would otherwise reach the
+        # patient verbatim as "{{telehealth_link}}". Only the channels actually
+        # being sent are checked, so an unused template's typo cannot block a
+        # send. Applies to client-supplied copy too, since an unlocked panel
+        # posts the textarea contents straight through.
+        _to_check = []
+        if "sms" in channels:
+            _to_check.append(sms_content)
+        if "email" in channels:
+            _to_check.append(email_content)
+        _unresolved: list[str] = []
+        for _body in _to_check:
+            for _name in unresolved_placeholders(_body):
+                if _name not in _unresolved:
+                    _unresolved.append(_name)
+        if _unresolved:
+            log.error(
+                "Refusing manual send for patient %s: unresolved placeholders %s",
+                patient_id,
+                ", ".join(_unresolved),
+            )
+            return [JSONResponse(
+                {
+                    "error": (
+                        "Message still contains unfilled fields: "
+                        + ", ".join("{{" + n + "}}" for n in _unresolved)
+                        + ". Nothing was sent."
+                    )
+                },
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )]
 
         # Send from the patient's business-line number (same as the automated
         # reminder/confirmation paths) so the patient sees one consistent sender;
@@ -3380,17 +3408,19 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         return itemsData[idx];
     }
 
+    // Every option here must be backed by a stored template. The free-text
+    // "Custom" campaign was removed from the product, and the send endpoint
+    // rejects it while copy is locked, so offering it only produced a dead
+    // dropdown entry.
     const APPT_CAMPAIGNS = [
         {value: 'confirmation', label: 'Confirmation'},
         {value: 'reminder', label: 'Reminder'},
         {value: 'telehealth', label: 'Telehealth Join'},
         {value: 'noshow', label: 'No-Show'},
         {value: 'cancellation', label: 'Cancellation'},
-        {value: 'custom', label: 'Custom'},
     ];
     const NOTE_CAMPAIGNS = [
         {value: 'telehealth', label: 'Telehealth Join'},
-        {value: 'custom', label: 'Custom'},
     ];
 
     function onApptChange() {
