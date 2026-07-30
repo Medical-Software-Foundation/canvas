@@ -15,8 +15,11 @@ def _url_decode(token: bytes) -> str:
     Decodes at the byte level then UTF-8, so multi-byte characters (emoji,
     accents) in an SMS body survive. Hand-rolled because the Canvas sandbox
     disallows ``urllib.parse.parse_qsl`` / ``unquote``.
+
+    Accumulates into a ``list[int]`` rather than a ``bytearray`` because the
+    sandbox validator blocks ``bytearray``.
     """
-    out = bytearray()
+    out: list[int] = []
     i = 0
     n = len(token)
     while i < n:
@@ -34,7 +37,7 @@ def _url_decode(token: bytes) -> str:
         else:
             out.append(c)
             i += 1
-    return out.decode("utf-8", errors="replace")
+    return bytes(out).decode("utf-8", errors="replace")
 
 
 def parse_form_body(raw: bytes | str | None) -> dict[str, str]:
