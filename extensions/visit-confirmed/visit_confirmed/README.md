@@ -43,11 +43,14 @@ Set these on the plugin settings page after install
 
 | Variable | Required | Description |
 |---|---|---|
-| `VISIT_CONFIRMED_API_URL` | required | The events endpoint for your VisitConfirmed account, provided during onboarding. |
+| `VISIT_CONFIRMED_API_URL` | required | The events endpoint for your VisitConfirmed account, provided during onboarding. Must be `https`. |
 | `VISIT_CONFIRMED_API_KEY` | required | The API key for your VisitConfirmed account. Sent as a `Bearer` token on every request. |
 
-Both are marked sensitive and are write-only once saved. If either is unset the
-plugin fails closed: it logs an error and makes no outbound call.
+Both are marked sensitive and are write-only once saved. The plugin fails closed
+in two cases, logging an error and making no outbound call: if either value is
+unset, or if the URL is not `https`. The second check exists because the API key
+travels in an `Authorization` header, and the SDK's HTTP client does not
+validate the scheme itself.
 
 ## How it works
 

@@ -84,6 +84,39 @@ class AppointmentEventsTests(TestCase):
         self.assertEqual(result, [])
         http_cls.assert_not_called()  # no outbound call without configuration
 
+    def test_refuses_to_send_credentials_over_plaintext(self):
+        """An http:// endpoint would put the Bearer key on the wire in cleartext.
+
+        canvas_sdk's Http does not validate the scheme, so the handler must.
+        """
+        handler = make_handler(
+            {
+                "VISIT_CONFIRMED_API_URL": "http://api.example.test/canvas/events",
+                "VISIT_CONFIRMED_API_KEY": API_KEY,
+            },
+            "appt-7",
+            EventType.APPOINTMENT_CREATED,
+        )
+        with boundaries(make_appointment("appt-7")) as (http_cls, _):
+            result = handler.compute()
+        self.assertEqual(result, [])
+        http_cls.assert_not_called()
+
+    def test_refuses_a_scheme_less_endpoint(self):
+        """A bare host has no scheme, so it must be rejected rather than guessed at."""
+        handler = make_handler(
+            {
+                "VISIT_CONFIRMED_API_URL": "api.example.test/canvas/events",
+                "VISIT_CONFIRMED_API_KEY": API_KEY,
+            },
+            "appt-8",
+            EventType.APPOINTMENT_CREATED,
+        )
+        with boundaries(make_appointment("appt-8")) as (http_cls, _):
+            result = handler.compute()
+        self.assertEqual(result, [])
+        http_cls.assert_not_called()
+
     def test_posts_ids_only_payload_with_bearer_auth(self):
         handler = make_handler(CONFIGURED, "appt-1", EventType.APPOINTMENT_CREATED)
         with boundaries(make_appointment("appt-1")) as (http_cls, _):

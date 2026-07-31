@@ -53,8 +53,8 @@ class AppointmentEvents(BaseHandler):
 
     def compute(self) -> list[Effect]:
         """Build a minimal, PII-free event payload and POST it to VisitConfirmed."""
-        api_url = self.secrets.get("VISIT_CONFIRMED_API_URL")
-        api_key = self.secrets.get("VISIT_CONFIRMED_API_KEY")
+        api_url = (self.secrets.get("VISIT_CONFIRMED_API_URL") or "").strip()
+        api_key = (self.secrets.get("VISIT_CONFIRMED_API_KEY") or "").strip()
 
         # `self.event.target.id`, not the `self.target` shortcut: that property is
         # deprecated in SDK 0.11.0 and removed in 1.0.0.
@@ -67,6 +67,23 @@ class AppointmentEvents(BaseHandler):
                 "VisitConfirmed connector is not configured "
                 "(VISIT_CONFIRMED_API_URL / VISIT_CONFIRMED_API_KEY missing); "
                 "skipping appointment %s.",
+                appointment_id,
+            )
+            return []
+
+        # The API key travels in an Authorization header, so refuse any scheme that
+        # would put it on the wire in cleartext. canvas_sdk's Http does NOT check
+        # this: constructed with no base_url, its join_url containment check
+        # (`joined.startswith("")`) is always true, so an http:// value configured
+        # here would send the key unencrypted. Fail closed on anything but https.
+        #
+        # A prefix test rather than urllib.parse.urlparse, which the plugin sandbox
+        # refuses to import ("'urlparse' is not an allowed import from
+        # 'urllib.parse'"). Schemes are case-insensitive, hence the lower().
+        if not api_url.lower().startswith("https://"):
+            log.error(
+                "VisitConfirmed connector: VISIT_CONFIRMED_API_URL must use https; "
+                "refusing to send credentials for appointment %s.",
                 appointment_id,
             )
             return []
