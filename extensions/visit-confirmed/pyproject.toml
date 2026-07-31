@@ -2,9 +2,7 @@
 name = "visitconfirmed-canvas-medical"
 version = "0.1.0"
 description = "Visit Confirmed appointment-event connector for Canvas Medical"
-# Canvas plugins run on the Canvas runtime, which is Python 3.11/3.12 — NOT the
-# 3.14 the main Visit Confirmed Django app targets. Keep this pinned to the
-# Canvas-supported range.
+# Pinned to the Python range the Canvas plugin runtime supports.
 requires-python = ">=3.11,<3.13"
 dependencies = []
 

@@ -29,7 +29,7 @@ from canvas_sdk.utils import Http
 from canvas_sdk.v1.data.appointment import Appointment
 from logger import log
 
-# Canvas event -> the event_type string Visit Confirmed expects in the payload.
+# Canvas event -> the event_type string VisitConfirmed expects in the payload.
 EVENT_NAMES = {
     EventType.APPOINTMENT_CREATED: "appointment_created",
     EventType.APPOINTMENT_CANCELED: "appointment_canceled",
@@ -38,7 +38,7 @@ EVENT_NAMES = {
 
 
 class AppointmentEvents(BaseHandler):
-    """Notify Visit Confirmed when an appointment is created, cancelled, or no-showed.
+    """Notify VisitConfirmed when an appointment is created, cancelled, or no-showed.
 
     A create that points back at a prior appointment (Canvas models a reschedule
     as a new appointment linked via ``appointment_rescheduled_from``) is reported
@@ -52,7 +52,7 @@ class AppointmentEvents(BaseHandler):
     ]
 
     def compute(self) -> list[Effect]:
-        """Build a minimal, PII-free event payload and POST it to Visit Confirmed."""
+        """Build a minimal, PII-free event payload and POST it to VisitConfirmed."""
         api_url = self.secrets.get("VISIT_CONFIRMED_API_URL")
         api_key = self.secrets.get("VISIT_CONFIRMED_API_KEY")
 
@@ -64,7 +64,7 @@ class AppointmentEvents(BaseHandler):
         # guess. A missing secret must never result in a half-formed outbound call.
         if not api_url or not api_key:
             log.error(
-                "Visit Confirmed connector is not configured "
+                "VisitConfirmed connector is not configured "
                 "(VISIT_CONFIRMED_API_URL / VISIT_CONFIRMED_API_KEY missing); "
                 "skipping appointment %s.",
                 appointment_id,
@@ -73,12 +73,31 @@ class AppointmentEvents(BaseHandler):
 
         event_name = EVENT_NAMES.get(self.event.type, "unknown")
 
+        # entered_in_error__isnull=True excludes retracted appointments, which must
+        # never trigger patient outreach. select_related avoids a separate query per
+        # related object when the payload reads patient.id and provider.id below.
         # Catch only the specific expected miss; anything else propagates to Sentry.
         try:
-            appointment = Appointment.objects.get(id=appointment_id)
+            appointment = Appointment.objects.select_related("patient", "provider").get(
+                id=appointment_id,
+                entered_in_error__isnull=True,
+            )
         except Appointment.DoesNotExist:
             log.error(
-                "Visit Confirmed connector: appointment %s not found for event %s.",
+                "VisitConfirmed connector: appointment %s not found, or entered in "
+                "error, for event %s.",
+                appointment_id,
+                event_name,
+            )
+            return []
+
+        # start_time is declared non-null on the SDK model, so this is a guard rather
+        # than an observed failure. It is here because arrow.get(None) raises
+        # TypeError, which would take down the handler for a malformed record.
+        if not appointment.start_time:
+            log.error(
+                "VisitConfirmed connector: appointment %s has no start time; "
+                "skipping event %s.",
                 appointment_id,
                 event_name,
             )
@@ -115,13 +134,13 @@ class AppointmentEvents(BaseHandler):
 
         if response.ok:
             log.info(
-                "Visit Confirmed connector: sent %s for appointment %s.",
+                "VisitConfirmed connector: sent %s for appointment %s.",
                 payload["event_type"],
                 appointment_id,
             )
         else:
             log.error(
-                "Visit Confirmed connector: %s for appointment %s failed "
+                "VisitConfirmed connector: %s for appointment %s failed "
                 "(status %s).",
                 payload["event_type"],
                 appointment_id,
