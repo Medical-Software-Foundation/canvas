@@ -913,8 +913,15 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                 "book: naive=%s, calendar_tz=%s, utc=%s",
                 parsed_start.isoformat(), calendar_tz_str, start_time.isoformat(),
             )
-        # Default reason for visit to the NoteType name.
-        note_type_obj = NoteType.objects.filter(id=note_type_id).values("name").first()
+        # Default reason for visit to the NoteType name. Filter on is_active:
+        # note types are version-controlled, so updating one deprecates the old
+        # row and many rows share an id. Without it, .first() returns an
+        # arbitrary version's name.
+        note_type_obj = (
+            NoteType.objects.filter(id=note_type_id, is_active=True)
+            .values("name")
+            .first()
+        )
         reason_for_visit = note_type_obj["name"] if note_type_obj else ""
 
         effects: list[Effect] = []

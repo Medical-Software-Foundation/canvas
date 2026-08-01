@@ -82,10 +82,13 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
         note_types = list(
             NoteType.objects.filter(is_active=True, is_scheduleable=True).values("id", "name")
         )
-        # All note types (including inactive / non-scheduleable) so existing
-        # events can render their `allowed_note_types` by name even when the
-        # underlying type has since been deactivated. Only id and name are read.
-        all_note_types = NoteType.objects.values("id", "name")
+        # Names for every note type an existing event might reference, including
+        # ones no longer scheduleable. Note types are version-controlled: an
+        # update deprecates the old row, so many rows share an id and only one
+        # is active. Ordering by is_active puts the active row last, so building
+        # the {id: name} dict below lets the current name win — while a fully
+        # retired type still resolves to some name rather than none.
+        all_note_types = NoteType.objects.order_by("is_active").values("id", "name")
         events = Event.objects.all().select_related("calendar").prefetch_related(
             "allowed_note_types"
         )

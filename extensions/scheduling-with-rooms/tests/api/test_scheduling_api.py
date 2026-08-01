@@ -1454,3 +1454,32 @@ def test_reschedule_room_events_missing_room_note_type_skips_create():
 
         assert h._reschedule_room_events(**_reschedule_room_events_kwargs()) == []
         mock_event.return_value.create.assert_not_called()
+
+
+# NoteType versioning ---------------------------------------------------
+
+def test_book_resolves_the_active_note_type_version():
+    """Note types are version-controlled: many rows share an id, one is active.
+
+    Without is_active, .first() returns an arbitrary version — and a renamed
+    note type would default the reason for visit to its old name.
+    """
+    h = _handler(_reschedule_body())
+    with patch.object(h.__class__, "_location_name", return_value="Office"), patch(
+        "scheduling_with_rooms.api.scheduling_api.get_location_timezone",
+        return_value="UTC",
+    ), patch(
+        "scheduling_with_rooms.api.scheduling_api.NoteType"
+    ) as mock_nt, patch(
+        "scheduling_with_rooms.api.scheduling_api.Appointment"
+    ) as mock_appt, patch.object(
+        h.__class__, "_reschedule_room_events", return_value=[]
+    ), patch.object(
+        h.__class__, "_reason_for_visit_effects", return_value=[]
+    ):
+        mock_nt.objects.filter.return_value.values.return_value.first.return_value = None
+        mock_appt.return_value.reschedule.return_value = MagicMock(name="effect")
+
+        h.book()
+
+        assert mock_nt.objects.filter.call_args.kwargs["is_active"] is True

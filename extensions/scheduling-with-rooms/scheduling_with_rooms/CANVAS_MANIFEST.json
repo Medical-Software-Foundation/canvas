@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.15.0",
+    "plugin_version": "0.15.1",
     "name": "scheduling_with_rooms",
     "description": "Custom scheduling modal with provider and resource (room) availability coordination",
     "url_permissions": [],

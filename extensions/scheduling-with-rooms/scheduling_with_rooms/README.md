@@ -136,6 +136,24 @@ one of its Available windows. The `SCHEDULABLE_STAFF_ROLES` variable
 controls who appears in the provider picker; `RR` is always unioned in
 for rooms.
 
+## Note types are version-controlled
+
+Updating a note type deprecates the old row rather than editing it, so existing
+notes stay bound to the version they were written against. That means **many
+rows share one `id`** — 24 across 5 codes on one instance — and only one is
+active.
+
+Every `NoteType` query here therefore filters `is_active=True`. Without it,
+`.filter(id=...).first()` returns an arbitrary version: a renamed type resolves
+to its old name, and a flag like `allow_custom_title` can read differently than
+the row you meant. The SDK's own `ScheduleEvent` validation re-resolves
+`note_type_id` without that filter, which is why room events carry no
+`description` — see `_reschedule_room_events`.
+
+The one place that intentionally looks beyond active rows is the availability
+manager's `noteTypeNames` map, so an event referencing a retired type still
+renders a name. It orders by `is_active` so the current name wins.
+
 ## Required variables
 
 | Variable                  | Purpose                                                            |

@@ -256,3 +256,38 @@ def test_index_prefetches_roles_to_avoid_a_query_per_provider():
         assert filtered.select_related.return_value.prefetch_related.call_args.args == ("roles",)
         # Staff is queried exactly once — room_ids no longer needs its own pass.
         assert mock_staff.objects.filter.call_count == 1
+
+
+def test_index_prefers_the_active_note_type_version_for_names():
+    """An id maps to many versions; the active one carries the current name.
+
+    Ordering by is_active puts it last so it wins when the {id: name} dict is
+    built, while a fully retired type still resolves to some name.
+    """
+    h = _handler()
+
+    with patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Staff"
+    ) as mock_staff, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.PracticeLocation"
+    ) as mock_loc, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.NoteType"
+    ) as mock_nt, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Event"
+    ) as mock_event_cls, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.render_to_string",
+        return_value="<html>",
+    ):
+        providers_qs = MagicMock()
+        providers_qs.__iter__ = lambda self: iter([])
+        mock_staff.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.distinct.return_value = (
+            providers_qs
+        )
+        mock_loc.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.order_by.return_value.values.return_value = []
+        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+
+        h.index()
+
+        mock_nt.objects.order_by.assert_called_once_with("is_active")
