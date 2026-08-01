@@ -1,12 +1,18 @@
-"""Tests for scheduling_logic.py."""
+"""Tests for scheduling_logic.py.
+
+The prefetch helpers are stubbed out module-wide so these tests exercise slot
+math without touching the database. They have their own coverage in
+``test_scheduling_prefetch.py``.
+"""
 
 import datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scheduling_with_rooms.utils.scheduling_logic import (
     SLOT_STEP_MINUTES,
     _count_overlaps,
-    _generate_time_slots,
     _generate_time_slots_from_windows,
     _get_blocking_appointments,
     _slot_in_windows,
@@ -15,8 +21,18 @@ from scheduling_with_rooms.utils.scheduling_logic import (
     build_all_room_slots,
     build_month_slot_counts,
     build_plain_slots,
-    build_slots_with_resource_availability,
 )
+
+MODULE = "scheduling_with_rooms.utils.scheduling_logic"
+
+
+@pytest.fixture(autouse=True)
+def stub_prefetch():
+    """Keep the bulk prefetches from hitting the DB in slot-math tests."""
+    with patch(f"{MODULE}.prefetch_concurrent_limits", return_value={}), patch(
+        f"{MODULE}.prefetch_blocking_appointments", return_value={}
+    ):
+        yield
 
 
 # _count_overlaps -------------------------------------------------------
@@ -60,20 +76,6 @@ def test_count_overlaps_multiple():
         (datetime.datetime(2026, 5, 7, 10, 0), datetime.datetime(2026, 5, 7, 10, 30)),
     ]
     assert _count_overlaps(s, e, booked) == 2
-
-
-# _generate_time_slots --------------------------------------------------
-
-def test_generate_time_slots_default():
-    slots = _generate_time_slots("2026-05-07", 60)
-    assert len(slots) == 9  # 8AM-5PM = 9 hours
-    assert slots[0][0].hour == 8
-    assert slots[-1][1].hour == 17
-
-
-def test_generate_time_slots_too_long():
-    slots = _generate_time_slots("2026-05-07", 600)  # 10 hours
-    assert slots == []
 
 
 # _subtract_blocks ------------------------------------------------------
@@ -348,6 +350,11 @@ def test_build_month_slot_counts_with_rooms_intersect():
     ), patch(
         "scheduling_with_rooms.utils.scheduling_logic.build_plain_slots",
         return_value=plain_slots,
+    ), patch(
+        # The month sweep resolves room staff once up front to seed the
+        # prefetches; build_all_room_slots is stubbed, so an empty list is fine.
+        "scheduling_with_rooms.utils.scheduling_logic.resolve_room_staff",
+        return_value=[],
     ):
         result = build_month_slot_counts(
             providers, 2026, 5, 30, allowed_room_keys={"r1"}
@@ -442,185 +449,3 @@ def test_build_all_room_slots_empty_after_subtract():
         result = build_all_room_slots("2026-05-07", 30)
         # Window fully blocked → empty slot list.
         assert result[0]["slots"] == []
-
-
-# build_slots_with_resource_availability ---------------------------------
-
-def test_build_slots_with_resource_availability_no_provider_windows():
-    with patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
-        return_value=[],
-    ):
-        result = build_slots_with_resource_availability(
-            "p1", "loc", "2026-05-07", 30
-        )
-        assert result == []
-
-
-def test_build_slots_with_resource_availability_no_rooms():
-    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 11, 0))]
-    with patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
-        return_value=win,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
-        return_value=1,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.Staff"
-    ) as mock_staff:
-        mock_staff.objects.filter.return_value.distinct.return_value = []
-        result = build_slots_with_resource_availability(
-            "p1", "loc", "2026-05-07", 30
-        )
-        assert result == []
-
-
-def test_build_slots_with_resource_availability_full():
-    rr = MagicMock()
-    rr.id = "r1"
-    rr.full_name = "Exam 1"
-
-    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 11, 0))]
-
-    with patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
-        return_value=win,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
-        return_value=1,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.Staff"
-    ) as mock_staff:
-        chained = MagicMock()
-        chained.filter.return_value = [rr]
-        mock_staff.objects.filter.return_value.distinct.return_value = chained
-        result = build_slots_with_resource_availability(
-            "p1", "loc", "2026-05-07", 30, allowed_room_keys={"r1"},
-        )
-        # All 4 slots eligible; each has rr available
-        assert len(result) == 4
-        assert result[0]["available_rr_staff"] == [{"id": "r1", "name": "Exam 1"}]
-
-
-def test_build_slots_with_resource_availability_provider_hard_block_excludes():
-    rr = MagicMock()
-    rr.id = "r1"
-    rr.full_name = "Exam 1"
-
-    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 10, 0))]
-    hard = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 10, 0))]
-
-    with patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
-        return_value=win,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
-        return_value=hard,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
-        return_value=1,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.Staff"
-    ) as mock_staff:
-        chained = MagicMock()
-        chained.filter.return_value = [rr]
-        mock_staff.objects.filter.return_value.distinct.return_value = chained
-        result = build_slots_with_resource_availability(
-            "p1", "loc", "2026-05-07", 30, allowed_room_keys={"r1"},
-        )
-        # Hard block on provider for that slot → excluded
-        assert result == []
-
-
-def test_build_slots_with_resource_availability_provider_capacity_exhausted():
-    rr = MagicMock()
-    rr.id = "r1"
-    rr.full_name = "Exam 1"
-
-    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 9, 30))]
-    booked = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 9, 30))]
-
-    with patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
-        return_value=win,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
-        return_value=booked,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
-        return_value=1,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.Staff"
-    ) as mock_staff:
-        chained = MagicMock()
-        chained.filter.return_value = [rr]
-        mock_staff.objects.filter.return_value.distinct.return_value = chained
-        result = build_slots_with_resource_availability(
-            "p1", "loc", "2026-05-07", 30, allowed_room_keys={"r1"},
-        )
-        # Capacity exhausted on provider.
-        assert result == []
-
-
-def test_build_slots_with_resource_availability_rr_no_window_skipped():
-    rr = MagicMock()
-    rr.id = "r1"
-    rr.full_name = "Exam 1"
-
-    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 9, 30))]
-
-    call_count = {"v": 0}
-
-    def windows_side_effect(staff_id, *args, **kwargs):
-        call_count["v"] += 1
-        if call_count["v"] == 1:
-            # First call: provider windows
-            return win
-        # Subsequent calls: RR windows (none)
-        return []
-
-    with patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
-        side_effect=windows_side_effect,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
-        return_value=[],
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
-        return_value=1,
-    ), patch(
-        "scheduling_with_rooms.utils.scheduling_logic.Staff"
-    ) as mock_staff:
-        chained = MagicMock()
-        chained.filter.return_value = [rr]
-        mock_staff.objects.filter.return_value.distinct.return_value = chained
-        result = build_slots_with_resource_availability(
-            "p1", "loc", "2026-05-07", 30, allowed_room_keys={"r1"},
-        )
-        # Provider has slots but no RR has overlapping windows → excluded.
-        assert result == []
-
-
-def test_slot_step_constant():
-    assert SLOT_STEP_MINUTES == 30

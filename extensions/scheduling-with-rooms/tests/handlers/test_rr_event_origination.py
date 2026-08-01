@@ -1,9 +1,9 @@
-"""Tests for protocols/rr_event_origination.py."""
+"""Tests for handlers/rr_event_origination.py."""
 
 import datetime
 from unittest.mock import MagicMock, patch
 
-from scheduling_with_rooms.protocols.rr_event_origination import RREventOrigination
+from scheduling_with_rooms.handlers.rr_event_origination import RREventOrigination
 
 
 def _handler(appt_id: str = "appt-1") -> RREventOrigination:
@@ -39,7 +39,7 @@ def _intent(**overrides) -> dict:
 def test_compute_appointment_not_found_returns_empty() -> None:
     h = _handler()
     with patch(
-        "scheduling_with_rooms.protocols.rr_event_origination.Appointment"
+        "scheduling_with_rooms.handlers.rr_event_origination.Appointment"
     ) as mock_appt:
         from canvas_sdk.v1.data.appointment import Appointment as Appt
 
@@ -51,9 +51,10 @@ def test_compute_appointment_not_found_returns_empty() -> None:
 def test_compute_no_intent_returns_empty() -> None:
     h = _handler()
     with patch(
-        "scheduling_with_rooms.protocols.rr_event_origination.Appointment"
+        "scheduling_with_rooms.handlers.rr_event_origination.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.rr_event_origination.pop_rr_event",
+        "scheduling_with_rooms.handlers.rr_event_origination.record_room"), patch(
+        "scheduling_with_rooms.handlers.rr_event_origination.pop_rr_event",
         return_value=None,
     ):
         mock_appt.objects.select_related.return_value.get.return_value = _appointment()
@@ -67,12 +68,13 @@ def test_compute_omits_description_even_when_cached() -> None:
     h = _handler()
     fake_effect = MagicMock(name="effect")
     with patch(
-        "scheduling_with_rooms.protocols.rr_event_origination.Appointment"
+        "scheduling_with_rooms.handlers.rr_event_origination.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.rr_event_origination.pop_rr_event",
+        "scheduling_with_rooms.handlers.rr_event_origination.record_room"), patch(
+        "scheduling_with_rooms.handlers.rr_event_origination.pop_rr_event",
         return_value=_intent(),
     ), patch(
-        "scheduling_with_rooms.protocols.rr_event_origination.ScheduleEvent"
+        "scheduling_with_rooms.handlers.rr_event_origination.ScheduleEvent"
     ) as mock_se:
         mock_appt.objects.select_related.return_value.get.return_value = _appointment()
         mock_se.return_value.create.return_value = fake_effect

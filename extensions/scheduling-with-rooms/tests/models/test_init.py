@@ -12,6 +12,7 @@ def test_models_exports():
         "get_concurrent_limit",
         "get_durations_for",
         "get_room_event_code_for",
+        "prefetch_concurrent_limits",
         "replace_concurrent_limits",
         "replace_durations",
         "replace_room_event_codes",

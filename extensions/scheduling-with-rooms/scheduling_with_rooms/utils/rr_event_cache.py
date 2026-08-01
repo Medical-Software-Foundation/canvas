@@ -37,7 +37,6 @@ def stash(
     note_type_id: str,
     duration_minutes: int,
     location_id: str,
-    description: str = "",
 ) -> None:
     key = make_key(patient_id, provider_id, start_time)
     get_cache().set(
@@ -47,7 +46,6 @@ def stash(
             "note_type_id": note_type_id,
             "duration_minutes": duration_minutes,
             "location_id": location_id,
-            "description": description,
         },
         timeout_seconds=_TTL_SECONDS,
     )

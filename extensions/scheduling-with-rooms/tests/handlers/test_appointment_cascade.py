@@ -1,4 +1,4 @@
-"""Tests for protocols/appointment_cascade.py.
+"""Tests for handlers/appointment_cascade.py.
 
 Local cascade walks ``appointment.children`` (RR room ScheduleEvents the
 booking flow created with ``parent_appointment_id`` pointing at the
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 from canvas_sdk.v1.data.note import NoteTypeCategories
 
-from scheduling_with_rooms.protocols.appointment_cascade import (
+from scheduling_with_rooms.handlers.appointment_cascade import (
     AppointmentCascadeHandler,
 )
 
@@ -58,7 +58,7 @@ def _appointment_with_children(children: list) -> MagicMock:
 def test_compute_appointment_not_found_returns_empty() -> None:
     h = _handler()
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt:
         from canvas_sdk.v1.data.appointment import Appointment as Appt
         mock_appt.DoesNotExist = Appt.DoesNotExist
@@ -72,7 +72,7 @@ def test_compute_no_children_returns_empty() -> None:
     h = _handler()
     appt = _appointment_with_children([])
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt:
         mock_appt.objects.prefetch_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -82,7 +82,7 @@ def test_compute_skips_children_without_note_type() -> None:
     h = _handler()
     appt = _appointment_with_children([_child("c1", note_type=None)])
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt:
         mock_appt.objects.prefetch_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -94,7 +94,7 @@ def test_compute_skips_non_schedule_event_children() -> None:
         _child("c1", category=NoteTypeCategories.ENCOUNTER),
     ])
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt:
         mock_appt.objects.prefetch_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -106,7 +106,7 @@ def test_compute_skips_already_cancelled_children() -> None:
         _child("c1", status=AppointmentProgressStatus.CANCELLED),
     ])
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt:
         mock_appt.objects.prefetch_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -117,9 +117,9 @@ def test_compute_deletes_active_schedule_event_child() -> None:
     appt = _appointment_with_children([_child("rr-1")])
     fake_effect = MagicMock()
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.ScheduleEvent"
+        "scheduling_with_rooms.handlers.appointment_cascade.ScheduleEvent"
     ) as mock_se:
         mock_appt.objects.prefetch_related.return_value.get.return_value = appt
         mock_se.return_value.delete.return_value = fake_effect
@@ -142,9 +142,9 @@ def test_compute_deletes_each_active_schedule_event_child() -> None:
     eff_a = MagicMock()
     eff_b = MagicMock()
     with patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.Appointment"
+        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.appointment_cascade.ScheduleEvent"
+        "scheduling_with_rooms.handlers.appointment_cascade.ScheduleEvent"
     ) as mock_se:
         mock_appt.objects.prefetch_related.return_value.get.return_value = appt
         mock_se.return_value.delete.side_effect = [eff_a, eff_b]

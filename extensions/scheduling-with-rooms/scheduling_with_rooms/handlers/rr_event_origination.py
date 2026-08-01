@@ -17,6 +17,7 @@ from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.v1.data.appointment import Appointment
 from logger import log
 
+from scheduling_with_rooms.utils.room_link import record_room
 from scheduling_with_rooms.utils.rr_event_cache import pop as pop_rr_event
 
 
@@ -30,7 +31,7 @@ class RREventOrigination(BaseProtocol):
         try:
             appointment = (
                 Appointment.objects
-                .select_related("patient", "provider")
+                .select_related("patient", "provider", "note")
                 .get(id=appointment_id)
             )
         except Appointment.DoesNotExist:
@@ -60,4 +61,18 @@ class RREventOrigination(BaseProtocol):
             "rr-event: creating ScheduleEvent for appointment %s on rr_staff=%s",
             appointment.id, intent["rr_staff_id"],
         )
-        return [ScheduleEvent(**kwargs).create()]
+        effects: list[Effect] = [ScheduleEvent(**kwargs).create()]
+
+        # Record the room on the note as well. parent_appointment_id links the
+        # event to *this* appointment, but doesn't survive a reschedule; the
+        # note does. See utils/room_link.
+        if appointment.note:
+            effects.extend(
+                record_room(str(appointment.note.id), intent["rr_staff_id"])
+            )
+        else:
+            log.warning(
+                "rr-event: appointment %s has no note; room link not recorded",
+                appointment.id,
+            )
+        return effects

@@ -7,7 +7,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from canvas_sdk.v1.data.calendar import Calendar, Event
-from canvas_sdk.v1.data.practicelocation import PracticeLocation
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
@@ -46,6 +45,33 @@ def _parse_rrule(rrule_str: str) -> dict[str, str]:
     return result
 
 
+def _parse_rrule_until(until_str: str) -> datetime.date | None:
+    """Parse an RRULE ``UNTIL`` value into the last date the rule may occur on.
+
+    RFC 5545 allows either a DATE (``YYYYMMDD``) or a DATE-TIME
+    (``YYYYMMDDTHHMMSS``, optionally suffixed ``Z`` for UTC). Only the
+    15-character DATE-TIME form used to parse; a plain ``YYYYMMDD`` raised
+    ValueError into a bare ``except: pass``, which silently discarded the end
+    date and let a bounded recurrence — an "Out of Office" that should stop —
+    repeat forever, zeroing out availability for every later date.
+
+    Returns ``None`` when there's no UNTIL or it can't be understood, meaning
+    "unbounded", which matches the previous behavior for unparseable values.
+    """
+    value = until_str.strip().removesuffix("Z")
+    if not value:
+        return None
+    # UNTIL is a whole-day boundary for our purposes: we only ever compare
+    # dates, so a UTC time-of-day is deliberately discarded.
+    for fmt in ("%Y%m%dT%H%M%S", "%Y%m%d"):
+        try:
+            return datetime.datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    log.warning("event_occurs_on_date: unparseable RRULE UNTIL %r", until_str)
+    return None
+
+
 def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
     """Check if a (possibly recurring) calendar event occurs on target_date."""
     if not event.starts_at:
@@ -70,14 +96,9 @@ def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
     freq = rule.get("FREQ", "")
 
     # UNTIL check (when the end date is embedded in the RRULE string instead).
-    until_str = rule.get("UNTIL")
-    if until_str:
-        try:
-            until_dt = datetime.datetime.strptime(until_str[:15], "%Y%m%dT%H%M%S")
-            if target_date > until_dt.date():
-                return False
-        except ValueError:
-            pass
+    until_date = _parse_rrule_until(rule.get("UNTIL", ""))
+    if until_date and target_date > until_date:
+        return False
 
     interval = int(rule.get("INTERVAL", "1"))
 

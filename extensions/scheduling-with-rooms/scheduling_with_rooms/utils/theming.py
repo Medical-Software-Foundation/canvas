@@ -21,19 +21,31 @@ _CANVAS_DEFAULTS: dict[str, str] = {
     # Neutral / status values: NOT overridable. Customer can't make them
     # look correct against any palette they pick, so we keep a coherent set.
     "text-strong": "#111827",
+    "text-emphasis": "#1f2937",
     "text-body": "#374151",
     "text-muted": "#4b5563",
     "text-subtle": "#6b7280",
     "text-soft": "#9ca3af",
+    # Text sitting on a brand-colored or inverse surface.
+    "text-on-brand": "#ffffff",
     "surface-page": "#f9fafb",
     "surface-card": "#ffffff",
     "surface-hover": "#f3f4f6",
+    # Dark surfaces — the primary action button and its hover.
+    "surface-inverse": "#111827",
+    "surface-inverse-hover": "#374151",
+    "surface-disabled": "#9ca3af",
     "border-default": "#e5e7eb",
     "border-strong": "#d1d5db",
+    "border-focus": "#111827",
     "danger-bg": "#fef2f2",
     "danger-fg": "#dc2626",
     "success-bg": "#d1fae5",
     "success-fg": "#065f46",
+    # Calendar availability heat states: plenty / limited / none.
+    "status-positive": "#16a34a",
+    "status-partial": "#f59e0b",
+    "status-empty": "#d1d5db",
     "font-stack": (
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, "
         "'Helvetica Neue', Arial, sans-serif"

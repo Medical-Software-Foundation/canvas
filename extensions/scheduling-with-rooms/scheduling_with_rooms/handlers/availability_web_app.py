@@ -59,37 +59,36 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
             self.secrets.get("SCHEDULABLE_STAFF_ROLES", "")
         )
         role_codes = list({*schedulable_roles, "RR"})
-        providers = (
+        providers = list(
             Staff.objects
             .filter(active=True, roles__internal_code__in=role_codes)
             .select_related("primary_practice_location")
+            # `credentialed_name` below walks Staff.roles (via
+            # top_clinical_role), which is one query per provider without this.
+            .prefetch_related("roles")
             .distinct()
         )
-        room_ids = set(
-            Staff.objects
-            .filter(active=True, roles__internal_code="RR")
-            .values_list("id", flat=True)
+        # Rooms come out of the roles already prefetched above rather than a
+        # second Staff query.
+        room_ids = {
+            provider.id
+            for provider in providers
+            if any(role.internal_code == "RR" for role in provider.roles.all())
+        }
+        locations = list(
+            PracticeLocation.objects.filter(active=True).values("id", "full_name")
         )
-        locations = PracticeLocation.objects.filter(active=True)
-        note_types = NoteType.objects.filter(is_active=True, is_scheduleable=True)
+        locations_by_name = {row["full_name"]: str(row["id"]) for row in locations}
+        note_types = list(
+            NoteType.objects.filter(is_active=True, is_scheduleable=True).values("id", "name")
+        )
         # All note types (including inactive / non-scheduleable) so existing
         # events can render their `allowed_note_types` by name even when the
-        # underlying type has since been deactivated.
-        all_note_types = NoteType.objects.all()
+        # underlying type has since been deactivated. Only id and name are read.
+        all_note_types = NoteType.objects.values("id", "name")
         events = Event.objects.all().select_related("calendar").prefetch_related(
             "allowed_note_types"
         )
-
-        # for event in events:
-        #     log.info("Event --------------------")
-        #     log.info(event.id)
-        #     log.info(event.title)
-        #     log.info(event.calendar.title)
-        #     log.info(event.starts_at)
-        #     log.info(event.ends_at)
-        #     log.info(event.recurrence)
-        #     log.info(event.recurrence_ends_at)
-        #     log.info(event.allowed_note_types)
 
         # Serialize structured data and escape characters that could break out
         # of a <script> block — the template inlines these via `|safe` (see
@@ -116,14 +115,14 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
                 for provider in providers
             ]),
             "locations": _safe_json_for_script([
-                {"id": str(location.id), "name": location.full_name, "address": ""}
-                for location in locations
+                {"id": str(row["id"]), "name": row["full_name"], "address": ""}
+                for row in locations
             ]),
             "noteTypes": _safe_json_for_script([
-                {"id": str(note_type.id), "name": note_type.name} for note_type in note_types
+                {"id": str(row["id"]), "name": row["name"]} for row in note_types
             ]),
             "noteTypeNames": _safe_json_for_script({
-                str(nt.id): nt.name for nt in all_note_types
+                str(row["id"]): row["name"] for row in all_note_types
             }),
             "calendarTypes": _safe_json_for_script([
                 {"value": CalendarType.Clinic.value, "label": "Available"},
@@ -134,8 +133,10 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
                 {"value": EventRecurrence.Weekly.value, "label": "Weekly"},
             ]),
             "loggedInUserId": logged_in_user_id,
+            # providers/locations_by_name are built once, not re-materialized
+            # per event as `list(providers)` used to do.
             "events": _safe_json_for_script([
-                _serialize_event(event, list(providers), list(locations))
+                _serialize_event(event, providers, locations_by_name)
                 for event in events
             ]),
             "cache_bust": _CACHE_BUST,

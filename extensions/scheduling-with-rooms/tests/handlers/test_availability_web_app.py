@@ -78,12 +78,11 @@ def test_index_returns_html_response():
         # Two filter chains with .distinct()
         providers_qs = MagicMock()
         providers_qs.__iter__ = lambda self: iter([provider])
-        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = providers_qs
-        mock_staff.objects.filter.return_value.values_list.return_value = ["prov-1"]
-        mock_loc.objects.filter.return_value = [location]
+        mock_staff.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.distinct.return_value = providers_qs
+        mock_loc.objects.filter.return_value.values.return_value = [{"id": "loc-1", "full_name": "Loc"}]
         # Two NoteType.objects calls: filter() and all().
-        mock_nt.objects.filter.return_value = [note_type]
-        mock_nt.objects.all.return_value = [note_type]
+        mock_nt.objects.filter.return_value.values.return_value = [{"id": "nt-1", "name": "Visit"}]
+        mock_nt.objects.values.return_value = [{"id": "nt-1", "name": "Visit"}]
         mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = [event]
 
         result = h.index()
@@ -102,6 +101,9 @@ def test_index_serializes_room_primary_practice_location():
     room.credentialed_name = "Room A"
     room.full_name = "Room A"
     room.primary_practice_location.id = "loc-1"
+    rr_role = MagicMock()
+    rr_role.internal_code = "RR"
+    room.roles.all.return_value = [rr_role]
 
     location = MagicMock()
     location.id = "loc-1"
@@ -130,11 +132,10 @@ def test_index_serializes_room_primary_practice_location():
     ):
         providers_qs = MagicMock()
         providers_qs.__iter__ = lambda self: iter([room])
-        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = providers_qs
-        mock_staff.objects.filter.return_value.values_list.return_value = ["room-1"]
-        mock_loc.objects.filter.return_value = [location]
-        mock_nt.objects.filter.return_value = []
-        mock_nt.objects.all.return_value = []
+        mock_staff.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.distinct.return_value = providers_qs
+        mock_loc.objects.filter.return_value.values.return_value = [{"id": "loc-1", "full_name": "Loc"}]
+        mock_nt.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.values.return_value = []
         mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
 
         h.index()
@@ -186,11 +187,10 @@ def test_index_serializes_null_primary_practice_location():
     ):
         providers_qs = MagicMock()
         providers_qs.__iter__ = lambda self: iter([provider])
-        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = providers_qs
-        mock_staff.objects.filter.return_value.values_list.return_value = []
-        mock_loc.objects.filter.return_value = []
-        mock_nt.objects.filter.return_value = []
-        mock_nt.objects.all.return_value = []
+        mock_staff.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.distinct.return_value = providers_qs
+        mock_loc.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.values.return_value = []
         mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
 
         h.index()
@@ -218,3 +218,41 @@ def test_get_css_returns_response():
     ):
         result = h.get_css()
         assert len(result) == 1
+
+
+def test_index_prefetches_roles_to_avoid_a_query_per_provider():
+    """`credentialed_name` walks Staff.roles via top_clinical_role.
+
+    Without prefetch_related("roles") that's one extra query per provider, and
+    room_ids would need a second Staff query on top.
+    """
+    h = _handler()
+
+    with patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Staff"
+    ) as mock_staff, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.PracticeLocation"
+    ) as mock_loc, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.NoteType"
+    ) as mock_nt, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Event"
+    ) as mock_event_cls, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.render_to_string",
+        return_value="<html>",
+    ):
+        providers_qs = MagicMock()
+        providers_qs.__iter__ = lambda self: iter([])
+        filtered = mock_staff.objects.filter.return_value
+        filtered.select_related.return_value.prefetch_related.return_value.distinct.return_value = (
+            providers_qs
+        )
+        mock_loc.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.filter.return_value.values.return_value = []
+        mock_nt.objects.values.return_value = []
+        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+
+        h.index()
+
+        assert filtered.select_related.return_value.prefetch_related.call_args.args == ("roles",)
+        # Staff is queried exactly once — room_ids no longer needs its own pass.
+        assert mock_staff.objects.filter.call_count == 1

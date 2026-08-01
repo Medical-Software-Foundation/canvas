@@ -3,7 +3,7 @@
 import datetime
 from unittest.mock import MagicMock, patch
 
-from scheduling_with_rooms.protocols.rfv_origination import ReasonForVisitOrigination
+from scheduling_with_rooms.handlers.rfv_origination import ReasonForVisitOrigination
 
 
 def _handler():
@@ -18,7 +18,7 @@ def _handler():
 def test_compute_appointment_not_found():
     h = _handler()
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt:
         from canvas_sdk.v1.data.appointment import Appointment as Appt
 
@@ -36,7 +36,7 @@ def test_compute_missing_patient():
     appt.note = MagicMock(id="note-1")
 
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt:
         mock_appt.objects.select_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -50,7 +50,7 @@ def test_compute_missing_provider():
     appt.start_time = datetime.datetime(2026, 5, 7, 10, 0)
 
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt:
         mock_appt.objects.select_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -64,7 +64,7 @@ def test_compute_missing_start_time():
     appt.start_time = None
 
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt:
         mock_appt.objects.select_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -79,9 +79,9 @@ def test_compute_no_cached_text():
     appt.note = MagicMock(id="note-1")
 
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.rfv_origination.pop_rfv", return_value=""
+        "scheduling_with_rooms.handlers.rfv_origination.pop_rfv", return_value=""
     ):
         mock_appt.objects.select_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -96,9 +96,9 @@ def test_compute_no_note():
     appt.note = None
 
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.rfv_origination.pop_rfv", return_value="fever"
+        "scheduling_with_rooms.handlers.rfv_origination.pop_rfv", return_value="fever"
     ):
         mock_appt.objects.select_related.return_value.get.return_value = appt
         assert h.compute() == []
@@ -115,11 +115,11 @@ def test_compute_originates_rfv_command():
     fake_effect = MagicMock(name="effect")
 
     with patch(
-        "scheduling_with_rooms.protocols.rfv_origination.Appointment"
+        "scheduling_with_rooms.handlers.rfv_origination.Appointment"
     ) as mock_appt, patch(
-        "scheduling_with_rooms.protocols.rfv_origination.pop_rfv", return_value="fever"
+        "scheduling_with_rooms.handlers.rfv_origination.pop_rfv", return_value="fever"
     ), patch(
-        "scheduling_with_rooms.protocols.rfv_origination.ReasonForVisitCommand"
+        "scheduling_with_rooms.handlers.rfv_origination.ReasonForVisitCommand"
     ) as mock_cmd:
         mock_appt.objects.select_related.return_value.get.return_value = appt
         mock_cmd.return_value.originate.return_value = fake_effect
