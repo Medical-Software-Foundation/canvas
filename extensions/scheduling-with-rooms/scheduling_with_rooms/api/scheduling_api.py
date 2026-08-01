@@ -27,10 +27,9 @@ from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.appointment import (
     Appointment as AppointmentModel,
-    AppointmentProgressStatus,
 )
 from canvas_sdk.v1.data.command import Command
-from canvas_sdk.v1.data.note import NoteType, NoteTypeCategories
+from canvas_sdk.v1.data.note import NoteType
 from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.practicelocation import PracticeLocation
 from canvas_sdk.v1.data.staff import Staff
@@ -51,7 +50,7 @@ from scheduling_with_rooms.utils.calendar_availability import (
     get_providers_for_location,
 )
 from scheduling_with_rooms.utils.patient_timezone import get_patient_timezone
-from scheduling_with_rooms.utils.room_link import record_room, room_staff_key_for_note
+from scheduling_with_rooms.utils.room_link import find_room_events, record_room
 from scheduling_with_rooms.utils.scheduling_context import (
     ASSET_VERSION,
     RFV_ACTIVE_STATE,
@@ -731,51 +730,6 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
             ).edit()
         ]
 
-    def _existing_room_events(self, appointment: AppointmentModel) -> list:
-        """Find the live room ScheduleEvent(s) held by an appointment.
-
-        Tries ``children`` first — that's the ``parent_appointment_id`` link the
-        create path sets, and it's correct for an appointment that has never
-        been rescheduled.
-
-        It is *not* correct afterwards: ``ScheduleEvent.reschedule()`` produces a
-        new row with ``parent_appointment_id`` NULL, so from the second
-        reschedule onward ``children`` is empty and the room event is invisible.
-        That's what orphaned Room 1 at 09:00 while a second event was created at
-        11:30. So fall back to the room recorded on the note (stable across the
-        whole reschedule chain) and match on the appointment's current time.
-        """
-        live = [
-            child
-            for child in appointment.children.all()
-            if child.note_type
-            and child.note_type.category == NoteTypeCategories.SCHEDULE_EVENT
-            and child.status != AppointmentProgressStatus.CANCELLED
-        ]
-        if live:
-            return live
-
-        note_id = str(appointment.note.id) if appointment.note else ""
-        room_staff_key = room_staff_key_for_note(note_id)
-        if not room_staff_key or not appointment.patient:
-            return []
-
-        recovered = list(
-            AppointmentModel.objects.filter(
-                patient__id=str(appointment.patient.id),
-                provider__id=room_staff_key,
-                start_time=appointment.start_time,
-                note_type__category=NoteTypeCategories.SCHEDULE_EVENT,
-            ).exclude(status=AppointmentProgressStatus.CANCELLED)
-        )
-        if recovered:
-            log.info(
-                "book: recovered %d orphaned room event(s) for appointment %s "
-                "via note %s (room=%s)",
-                len(recovered), appointment.id, note_id, room_staff_key,
-            )
-        return recovered
-
     def _reschedule_room_events(
         self,
         appointment_id: str,
@@ -810,7 +764,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
             log.warning("book: appointment %s not found for reschedule", appointment_id)
             return effects
 
-        existing = self._existing_room_events(appointment)
+        existing = find_room_events(appointment)
         note_id = str(appointment.note.id) if appointment.note else ""
 
         allowed_room_keys = _allowed_room_keys_for(note_type_code)

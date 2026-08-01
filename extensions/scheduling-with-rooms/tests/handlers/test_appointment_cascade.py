@@ -1,20 +1,24 @@
 """Tests for handlers/appointment_cascade.py.
 
-Local cascade walks ``appointment.children`` (RR room ScheduleEvents the
-booking flow created with ``parent_appointment_id`` pointing at the
-patient appointment) and deletes any non-cancelled schedule_event-typed
-child. Reschedules go through /book, which creates a fresh child for
-the new appointment, so this handler does not run on RESCHEDULED.
+The cascade releases the room when a patient appointment is cancelled. *Which*
+event that is comes from ``room_link.find_room_events`` — children first, then
+the room recorded on the note, since ``ScheduleEvent.reschedule()`` nulls
+``parent_appointment_id``. That lookup is covered in
+tests/utils/test_room_link.py and stubbed here, so these tests are about what
+the handler does with the result.
+
+No reschedule guard is needed: Canvas emits APPOINTMENT_UPDATED, not
+APPOINTMENT_CANCELED, for an appointment a reschedule supersedes (verified
+against bigleaphealth-dev logs).
 """
 
 from unittest.mock import MagicMock, patch
 
-from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
-from canvas_sdk.v1.data.note import NoteTypeCategories
-
 from scheduling_with_rooms.handlers.appointment_cascade import (
     AppointmentCascadeHandler,
 )
+
+MODULE = "scheduling_with_rooms.handlers.appointment_cascade"
 
 
 def _handler(appt_id: str = "appt-1") -> AppointmentCascadeHandler:
@@ -26,131 +30,94 @@ def _handler(appt_id: str = "appt-1") -> AppointmentCascadeHandler:
     return h
 
 
-def _child(
-    child_id: str,
-    category=NoteTypeCategories.SCHEDULE_EVENT,
-    status=AppointmentProgressStatus.UNCONFIRMED,
-    note_type: object | None = ...,
-) -> MagicMock:
-    """Build a child appointment mock. ``note_type=None`` simulates a
-    detached child (skipped). Default builds a non-cancelled SCHEDULE_EVENT
-    child that should be deleted."""
-    child = MagicMock()
-    child.id = child_id
-    child.status = status
-    if note_type is None:
-        child.note_type = None
-    elif note_type is ...:
-        nt = MagicMock()
-        nt.category = category
-        child.note_type = nt
-    else:
-        child.note_type = note_type
-    return child
+def _room_event(event_id: str) -> MagicMock:
+    event = MagicMock()
+    event.id = event_id
+    return event
 
 
-def _appointment_with_children(children: list) -> MagicMock:
-    appt = MagicMock()
-    appt.children.all.return_value = children
-    return appt
-
-
-def test_compute_appointment_not_found_returns_empty() -> None:
-    h = _handler()
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt:
+def _env(appointment, room_events=(), missing=False):
+    """Patch the appointment load and the shared room lookup."""
+    appt_patcher = patch(f"{MODULE}.Appointment")
+    find_patcher = patch(f"{MODULE}.find_room_events", return_value=list(room_events))
+    event_patcher = patch(f"{MODULE}.ScheduleEvent")
+    mock_appt, mock_find, mock_event = (
+        appt_patcher.start(),
+        find_patcher.start(),
+        event_patcher.start(),
+    )
+    chain = mock_appt.objects.select_related.return_value.prefetch_related.return_value
+    if missing:
         from canvas_sdk.v1.data.appointment import Appointment as Appt
+
         mock_appt.DoesNotExist = Appt.DoesNotExist
-        mock_appt.objects.prefetch_related.return_value.get.side_effect = (
-            Appt.DoesNotExist
-        )
+        chain.get.side_effect = Appt.DoesNotExist
+    else:
+        chain.get.return_value = appointment
+    return (appt_patcher, find_patcher, event_patcher), mock_find, mock_event
+
+
+def test_appointment_not_found_returns_empty():
+    h = _handler()
+    patchers, _, mock_event = _env(None, missing=True)
+    try:
         assert h.compute() == []
+        mock_event.return_value.delete.assert_not_called()
+    finally:
+        for p in patchers:
+            p.stop()
 
 
-def test_compute_no_children_returns_empty() -> None:
+def test_no_room_event_returns_empty():
     h = _handler()
-    appt = _appointment_with_children([])
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt:
-        mock_appt.objects.prefetch_related.return_value.get.return_value = appt
+    patchers, _, mock_event = _env(MagicMock(), room_events=[])
+    try:
         assert h.compute() == []
+        mock_event.return_value.delete.assert_not_called()
+    finally:
+        for p in patchers:
+            p.stop()
 
 
-def test_compute_skips_children_without_note_type() -> None:
+def test_deletes_the_room_event():
     h = _handler()
-    appt = _appointment_with_children([_child("c1", note_type=None)])
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt:
-        mock_appt.objects.prefetch_related.return_value.get.return_value = appt
-        assert h.compute() == []
+    patchers, _, mock_event = _env(MagicMock(), room_events=[_room_event("room-ev-1")])
+    try:
+        mock_event.return_value.delete.return_value = MagicMock(name="delete-effect")
+
+        effects = h.compute()
+
+        assert len(effects) == 1
+        assert mock_event.call_args.kwargs["instance_id"] == "room-ev-1"
+        mock_event.return_value.delete.assert_called_once()
+    finally:
+        for p in patchers:
+            p.stop()
 
 
-def test_compute_skips_non_schedule_event_children() -> None:
+def test_deletes_every_room_event_returned():
     h = _handler()
-    appt = _appointment_with_children([
-        _child("c1", category=NoteTypeCategories.ENCOUNTER),
-    ])
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt:
-        mock_appt.objects.prefetch_related.return_value.get.return_value = appt
-        assert h.compute() == []
+    events = [_room_event("room-ev-1"), _room_event("room-ev-2")]
+    patchers, _, mock_event = _env(MagicMock(), room_events=events)
+    try:
+        mock_event.return_value.delete.return_value = MagicMock(name="delete-effect")
+
+        assert len(h.compute()) == 2
+        assert mock_event.return_value.delete.call_count == 2
+    finally:
+        for p in patchers:
+            p.stop()
 
 
-def test_compute_skips_already_cancelled_children() -> None:
+def test_lookup_receives_the_loaded_appointment():
+    """The lookup needs the note and children, so it gets the model, not an id."""
     h = _handler()
-    appt = _appointment_with_children([
-        _child("c1", status=AppointmentProgressStatus.CANCELLED),
-    ])
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt:
-        mock_appt.objects.prefetch_related.return_value.get.return_value = appt
-        assert h.compute() == []
+    appointment = MagicMock()
+    patchers, mock_find, _ = _env(appointment, room_events=[])
+    try:
+        h.compute()
 
-
-def test_compute_deletes_active_schedule_event_child() -> None:
-    h = _handler()
-    appt = _appointment_with_children([_child("rr-1")])
-    fake_effect = MagicMock()
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt, patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.ScheduleEvent"
-    ) as mock_se:
-        mock_appt.objects.prefetch_related.return_value.get.return_value = appt
-        mock_se.return_value.delete.return_value = fake_effect
-        result = h.compute()
-
-    assert result == [fake_effect]
-    mock_se.assert_called_once_with(instance_id="rr-1")
-    mock_se.return_value.delete.assert_called_once_with()
-
-
-def test_compute_deletes_each_active_schedule_event_child() -> None:
-    h = _handler()
-    appt = _appointment_with_children([
-        _child("rr-1"),
-        _child("rr-2"),
-        _child("cancelled", status=AppointmentProgressStatus.CANCELLED),
-        _child("encounter", category=NoteTypeCategories.ENCOUNTER),
-        _child("detached", note_type=None),
-    ])
-    eff_a = MagicMock()
-    eff_b = MagicMock()
-    with patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.Appointment"
-    ) as mock_appt, patch(
-        "scheduling_with_rooms.handlers.appointment_cascade.ScheduleEvent"
-    ) as mock_se:
-        mock_appt.objects.prefetch_related.return_value.get.return_value = appt
-        mock_se.return_value.delete.side_effect = [eff_a, eff_b]
-        result = h.compute()
-
-    assert result == [eff_a, eff_b]
-    assert mock_se.call_count == 2
-    constructed_ids = [c.kwargs["instance_id"] for c in mock_se.call_args_list]
-    assert constructed_ids == ["rr-1", "rr-2"]
+        mock_find.assert_called_once_with(appointment)
+    finally:
+        for p in patchers:
+            p.stop()

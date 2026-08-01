@@ -990,8 +990,7 @@ def test_book_rr_room_no_event_code_skips():
         "scheduling_with_rooms.api.scheduling_api.get_room_event_code_for",
         return_value="",
     ), patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="",
+        "scheduling_with_rooms.api.scheduling_api.find_room_events", return_value=[]
     ), patch(
         "scheduling_with_rooms.api.scheduling_api.record_room", return_value=[]
     ):
@@ -1289,8 +1288,12 @@ def test_reschedule_room_events_missing_appointment_returns_empty():
         assert h._reschedule_room_events(**_reschedule_room_events_kwargs()) == []
 
 
-def _room_env(appointment, room_required=True):
-    """Patch everything _reschedule_room_events touches."""
+def _room_env(appointment, room_required=True, existing=None):
+    """Patch everything _reschedule_room_events touches.
+
+    `existing` is what the shared find_room_events lookup returns; it has its
+    own coverage in test_room_link.py.
+    """
     api = "scheduling_with_rooms.api.scheduling_api"
     patchers = [
         patch(f"{api}.AppointmentModel"),
@@ -1299,9 +1302,9 @@ def _room_env(appointment, room_required=True):
         patch(f"{api}.get_room_event_code_for", return_value="ROOM"),
         patch(f"{api}.NoteType"),
         patch(f"{api}.record_room", return_value=[]),
-        patch(f"{api}.room_staff_key_for_note", return_value=""),
+        patch(f"{api}.find_room_events", return_value=list(existing or [])),
     ]
-    mock_model, mock_event, _keys, _code, mock_nt, _rec, _lookup = [
+    mock_model, mock_event, _keys, _code, mock_nt, _rec, _find = [
         p.start() for p in patchers
     ]
     mock_model.objects.select_related.return_value.prefetch_related.return_value.filter.return_value.first.return_value = (
@@ -1322,8 +1325,7 @@ def test_reschedule_room_events_moves_the_existing_event():
     """
     h = _handler()
     appointment = MagicMock()
-    appointment.children.all.return_value = [_room_child()]
-    patchers, mock_event = _room_env(appointment)
+    patchers, mock_event = _room_env(appointment, existing=[_room_child()])
     try:
         effects = h._reschedule_room_events(**_reschedule_room_events_kwargs())
 
@@ -1347,8 +1349,7 @@ def test_reschedule_room_events_creates_one_when_none_exists():
     """The appointment predates rooms being required for its visit type."""
     h = _handler()
     appointment = MagicMock()
-    appointment.children.all.return_value = []
-    patchers, mock_event = _room_env(appointment)
+    patchers, mock_event = _room_env(appointment, existing=[])
     try:
         effects = h._reschedule_room_events(**_reschedule_room_events_kwargs())
 
@@ -1368,8 +1369,7 @@ def test_reschedule_room_events_deletes_extra_duplicates():
     second = _room_child()
     second.id = "child-2"
     appointment = MagicMock()
-    appointment.children.all.return_value = [_room_child(), second]
-    patchers, mock_event = _room_env(appointment)
+    patchers, mock_event = _room_env(appointment, existing=[_room_child(), second])
     try:
         effects = h._reschedule_room_events(**_reschedule_room_events_kwargs())
 
@@ -1394,8 +1394,7 @@ def test_reschedule_room_events_skips_non_schedule_event_children():
         "scheduling_with_rooms.api.scheduling_api._allowed_room_keys_for",
         return_value=None,
     ), patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="",
+        "scheduling_with_rooms.api.scheduling_api.find_room_events", return_value=[]
     ), patch(
         "scheduling_with_rooms.api.scheduling_api.record_room", return_value=[]
     ):
@@ -1411,29 +1410,23 @@ def test_reschedule_room_events_without_room_only_deletes():
     """Switching to a room-free visit type on reschedule strips the old room."""
     h = _handler()
     appointment = MagicMock()
-    appointment.children.all.return_value = [_room_child()]
-    with patch(
-        "scheduling_with_rooms.api.scheduling_api.AppointmentModel"
-    ) as mock_model, patch(
-        "scheduling_with_rooms.api.scheduling_api.ScheduleEvent"
-    ) as mock_event, patch(
-        "scheduling_with_rooms.api.scheduling_api._allowed_room_keys_for",
-        return_value=None,
-    ), patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="",
-    ), patch(
-        "scheduling_with_rooms.api.scheduling_api.record_room", return_value=[]
-    ):
-        mock_model.objects.select_related.return_value.prefetch_related.return_value.filter.return_value.first.return_value = (
-            appointment
-        )
+    patchers, mock_event = _room_env(
+        appointment, room_required=False, existing=[_room_child()]
+    )
+    try:
         mock_event.return_value.delete.return_value = MagicMock(name="delete-effect")
 
-        effects = h._reschedule_room_events(**_reschedule_room_events_kwargs(rr_staff_id=""))
+        effects = h._reschedule_room_events(
+            **_reschedule_room_events_kwargs(rr_staff_id="")
+        )
 
         assert len(effects) == 1
+        mock_event.return_value.delete.assert_called_once()
         mock_event.return_value.create.assert_not_called()
+        mock_event.return_value.reschedule.assert_not_called()
+    finally:
+        for p in patchers:
+            p.stop()
 
 
 def test_reschedule_room_events_missing_room_note_type_skips_create():
@@ -1451,8 +1444,7 @@ def test_reschedule_room_events_missing_room_note_type_skips_create():
         "scheduling_with_rooms.api.scheduling_api.get_room_event_code_for",
         return_value="",
     ), patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="",
+        "scheduling_with_rooms.api.scheduling_api.find_room_events", return_value=[]
     ), patch(
         "scheduling_with_rooms.api.scheduling_api.record_room", return_value=[]
     ):
@@ -1462,81 +1454,3 @@ def test_reschedule_room_events_missing_room_note_type_skips_create():
 
         assert h._reschedule_room_events(**_reschedule_room_events_kwargs()) == []
         mock_event.return_value.create.assert_not_called()
-
-
-
-
-# _existing_room_events — orphan recovery -------------------------------
-
-def _appt_for_recovery(children=(), note_id="note-1", patient_id="pt-1"):
-    appointment = MagicMock()
-    appointment.children.all.return_value = list(children)
-    appointment.note.id = note_id
-    appointment.patient.id = patient_id
-    appointment.start_time = datetime.datetime(
-        2026, 8, 4, 13, 0, tzinfo=datetime.timezone.utc
-    )
-    return appointment
-
-
-def test_existing_room_events_prefers_the_parent_link():
-    """An appointment never rescheduled still has working children."""
-    h = _handler()
-    child = _room_child()
-    appointment = _appt_for_recovery(children=[child])
-    with patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note"
-    ) as mock_lookup:
-        assert h._existing_room_events(appointment) == [child]
-        # No need to fall back to the note.
-        mock_lookup.assert_not_called()
-
-
-def test_existing_room_events_recovers_orphan_via_note():
-    """ScheduleEvent.reschedule() nulls parent_appointment_id.
-
-    From the second reschedule on, `children` is empty and the room event is
-    only findable through the room recorded on the note.
-    """
-    h = _handler()
-    appointment = _appt_for_recovery(children=[])
-    orphan = MagicMock()
-    with patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="rr-1",
-    ), patch(
-        "scheduling_with_rooms.api.scheduling_api.AppointmentModel"
-    ) as mock_model:
-        mock_model.objects.filter.return_value.exclude.return_value = [orphan]
-
-        assert h._existing_room_events(appointment) == [orphan]
-
-        kwargs = mock_model.objects.filter.call_args.kwargs
-        assert kwargs["patient__id"] == "pt-1"
-        assert kwargs["provider__id"] == "rr-1"
-        assert kwargs["start_time"] == appointment.start_time
-
-
-def test_existing_room_events_returns_empty_when_note_has_no_room():
-    h = _handler()
-    appointment = _appt_for_recovery(children=[])
-    with patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="",
-    ), patch(
-        "scheduling_with_rooms.api.scheduling_api.AppointmentModel"
-    ) as mock_model:
-        assert h._existing_room_events(appointment) == []
-        mock_model.objects.filter.assert_not_called()
-
-
-def test_existing_room_events_skips_cancelled_children_then_recovers():
-    """A cancelled child isn't live, so the note fallback still runs."""
-    h = _handler()
-    cancelled = _room_child(status="cancelled")
-    appointment = _appt_for_recovery(children=[cancelled])
-    with patch(
-        "scheduling_with_rooms.api.scheduling_api.room_staff_key_for_note",
-        return_value="",
-    ):
-        assert h._existing_room_events(appointment) == []

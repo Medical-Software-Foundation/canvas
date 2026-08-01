@@ -171,17 +171,19 @@ Two links, because neither is sufficient alone:
 | `parent_appointment_id` on the room event | Canvas, at create | **No** — `ScheduleEvent.reschedule()` nulls it |
 | `scheduling_with_rooms:room_staff_key` note metadata | this plugin | **Yes** — the note is stable across the whole chain |
 
-`AppointmentCascadeHandler` deletes `schedule_event`-typed children when
-`APPOINTMENT_CANCELED` fires, which releases the room on cancellation.
+Both the reschedule path and `AppointmentCascadeHandler` locate the room
+event through the same helper, `room_link.find_room_events()`, so they can't
+disagree about which room a visit holds. Cancelling an appointment releases its
+room whether or not it has ever been rescheduled.
 
-### Known limitation: cascade after a reschedule
+`parent_appointment_id` cannot be repaired after the fact — the SDK rejects it
+outside a create ("parent_appointment_id can only be set when creating an
+appointment") — which is why the note metadata exists rather than the link
+being restored.
 
-`AppointmentCascadeHandler` still finds the room event only through
-`appointment.children`. Because `ScheduleEvent.reschedule()` nulls
-`parent_appointment_id`, cancelling an appointment that has been rescheduled
-may leave its room event behind, holding the room against nothing. The
-reschedule path in `/book` already recovers the event through note metadata;
-the cascade handler does not yet do the same.
+No reschedule guard is needed in the cascade: Canvas emits
+`APPOINTMENT_UPDATED`, not `APPOINTMENT_CANCELED`, for the appointment a
+reschedule supersedes.
 
 ### Important Note!
 
