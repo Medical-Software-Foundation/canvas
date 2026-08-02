@@ -119,6 +119,8 @@ def test_reconcile_one_runs_for_enrolled_provider(mocker):
         "gcal_sync.routes.google_admin.reconcile_provider",
         return_value=({"pushed": 1, "blocks_pushed": 0, "blocks_deleted": 0}, ["E"]),
     )
+    mocker.patch("gcal_sync.routes.google_admin.acquire_provider_lock", return_value=True)
+    mocker.patch("gcal_sync.routes.google_admin.release_provider_lock")
     api = _api({"ADMIN_STAFF_IDS": "id1"}, staff_id="id1", body={"staff_id": "14"})
     resp = api.reconcile_one()
     # effects are applied alongside the JSON summary.
