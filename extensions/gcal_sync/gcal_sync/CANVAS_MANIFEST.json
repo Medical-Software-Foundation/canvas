@@ -126,7 +126,7 @@
         "views": []
     },
     "custom_data": {
-        "namespace": "msf__gcal_sync",
+        "namespace": "gcal_sync",
         "access": "read_write"
     },
     "tags": {},
