@@ -442,7 +442,8 @@ def _lookup_fdb_code(
     except requests.RequestException as e:
         log.warning("FDB text search failed for %s: %s" % (drug_description, e))
         return None
-    results = resp.json().get("results", [])
+    payload = resp.json()
+    results = payload.get("results", []) if isinstance(payload, dict) else []
     if results:
         log.info(
             "FDB text search hit for %s: %s"

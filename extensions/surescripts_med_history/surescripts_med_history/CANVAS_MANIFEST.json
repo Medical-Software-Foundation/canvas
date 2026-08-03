@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.142.0",
-    "plugin_version": "0.3.0",
+    "plugin_version": "0.4.0",
     "name": "surescripts_med_history",
     "description": "Automates Surescripts medication history requests for upcoming appointments and surfaces history in the chart",
     "components": {
@@ -42,15 +42,6 @@
                 }
             },
             {
-                "class": "surescripts_med_history.protocols.bulk_api:BulkRequestsApi",
-                "description": "Bulk Surescripts eligibility and med history request endpoints",
-                "data_access": {
-                    "event": "",
-                    "read": ["Appointment", "Patient", "Staff", "Note"],
-                    "write": ["NoteMetadata"]
-                }
-            },
-            {
                 "class": "surescripts_med_history.protocols.integration_api:DismissalsIntegrationApi",
                 "description": "API-key-authenticated GET/POST /integration/dismissals for other plugins to read or create medication dismissals",
                 "data_access": {
@@ -58,16 +49,6 @@
                     "read": ["Patient", "MedicationDismissal"],
                     "write": ["MedicationDismissal"]
                 }
-            }
-        ],
-        "applications": [
-            {
-                "class": "surescripts_med_history.applications.bulk_requests:BulkSurescriptsApp",
-                "name": "Surescripts Requests",
-                "description": "Bulk request Surescripts eligibility and medication history for upcoming appointments",
-                "scope": "provider_menu_item",
-                "icon": "assets/icon.png",
-                "show_in_panel": true
             }
         ]
     },

@@ -449,6 +449,19 @@ class TestLookupFdbCode:
         result = _lookup_fdb_code("Drug A")
         assert result is None
 
+    @patch("surescripts_med_history.protocols.view.ontologies_http")
+    def test_returns_none_when_text_search_body_is_not_json(self, mock_http):
+        # JsonOnlyResponse.json() returns None for a non-JSON body (e.g. a 5xx
+        # HTML error page) rather than raising.
+        text_resp = MagicMock()
+        text_resp.json.return_value = None
+        mock_http.get_json.return_value = text_resp
+
+        from surescripts_med_history.protocols.view import _lookup_fdb_code
+
+        result = _lookup_fdb_code("Drug A")
+        assert result is None
+
 
 class TestDismiss:
     @patch("surescripts_med_history.protocols.view.MedicationDismissal")

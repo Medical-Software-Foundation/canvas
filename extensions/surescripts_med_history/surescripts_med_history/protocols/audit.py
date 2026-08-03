@@ -2,8 +2,7 @@
 
 Surescripts requests run under a provider's SPI, and that provider is not
 always the person who clicked the button — the modal lets non-prescribers
-(care managers) pick a provider to request on behalf of, and the bulk app
-requests under whichever provider owns each appointment. Canvas persists the
+(care managers) pick a provider to request on behalf of. Canvas persists the
 provider the request ran under (`MedicationHistoryResponse.staff`) but nothing
 records who initiated it, so the log line is the only place the two are tied
 together. Keep the `Surescripts request:` prefix — it's what makes these

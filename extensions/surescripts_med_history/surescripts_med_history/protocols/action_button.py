@@ -297,8 +297,7 @@ def _spi_provider_choices() -> list[dict]:
     """SPI-registered active providers as ``[{"id", "name"}]`` sorted "Last, First".
 
     Only active providers with a non-empty ``spi_number`` can legally originate a
-    Surescripts request, so the modal's provider dropdown is limited to them
-    (mirrors the bulk requests app's provider filter).
+    Surescripts request, so the modal's provider dropdown is limited to them.
     """
     choices = []
     for staff in (
@@ -541,6 +540,10 @@ class MedHistoryActionButton(ActionButton):
     BUTTON_TITLE = "Rx History"
     BUTTON_KEY = "med_history_action"
     BUTTON_LOCATION = ActionButton.ButtonLocation.CHART_SUMMARY_MEDICATIONS_SECTION
+    # Surescripts brand navy, so the button reads as the Surescripts surface.
+    # White text on navy clears WCAG AA (~11:1).
+    BUTTON_BACKGROUND_COLOR = "#00597c"
+    BUTTON_TEXT_COLOR = "#ffffff"
 
     def handle(self) -> list[Effect]:
         patient_id = self.event.target.id

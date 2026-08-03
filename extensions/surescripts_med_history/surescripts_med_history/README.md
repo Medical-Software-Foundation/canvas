@@ -13,8 +13,7 @@ offsets. An **Rx History** action button on the chart's medications section
 opens a modal that compares the returned history against active medications,
 split into **New / Unresolved**, **Matched**, and **Dismissed**. Each unresolved
 row can be added to the note as a `MedicationStatement` (resolved through FDB)
-or dismissed. A **Surescripts Requests** provider menu item does the same in
-bulk for a date range and a set of providers.
+or dismissed.
 
 ## Problem it solves
 
@@ -80,9 +79,7 @@ Set these plugin secrets in the Canvas admin:
 | `MedHistoryCronTask` | Cron (11:00 UTC) | Medication history requests for upcoming appointments |
 | `MedHistoryActionButton` | Action button | **Rx History** in the chart medications section |
 | `MedHistoryRequestApi` | SimpleAPI | Modal's request / refresh / dismiss / add endpoints |
-| `BulkRequestsApi` | SimpleAPI | Bulk request endpoints and page |
 | `DismissalsIntegrationApi` | SimpleAPI | API-key surface for other plugins |
-| `BulkSurescriptsApp` | Application | **Surescripts Requests** provider menu item |
 
 ## Endpoints
 
@@ -92,13 +89,9 @@ Set these plugin secrets in the Canvas admin:
 | `/routes/history` | GET | Re-read the modal's data (manual refresh + polling) |
 | `/routes/dismiss` | POST | Dismiss a medication group for a patient |
 | `/routes/add-medication` | POST | Originate a `MedicationStatement` from a history row |
-| `/bulk/page` | GET | Bulk-requests app HTML |
-| `/bulk/appointments` | GET | List upcoming appointments by date range and providers |
-| `/bulk/eligibility` | POST | Bulk eligibility requests |
-| `/bulk/med-history` | POST | Bulk medication history requests |
 | `/integration/dismissals` | GET, POST | Read/create dismissals from another plugin |
 
-`/routes/*` and `/bulk/*` require an authenticated staff session.
+`/routes/*` requires an authenticated staff session.
 `/integration/dismissals` is API-key authenticated via the `simpleapi-api-key`
 secret, for server-to-server use.
 
@@ -133,4 +126,4 @@ namespace. No shared-namespace coupling and no schema-manager mirror required.
 uv run pytest
 ```
 
-178 tests, 94% coverage.
+165 tests, 96% coverage.
