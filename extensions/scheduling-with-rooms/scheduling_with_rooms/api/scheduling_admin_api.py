@@ -15,7 +15,6 @@ from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import NoteType
-from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
 from scheduling_with_rooms.models import (
@@ -28,10 +27,10 @@ from scheduling_with_rooms.models import (
     replace_room_event_codes,
 )
 from scheduling_with_rooms.utils.staff_lookup import (
-    get_room_staff,
-    get_schedulable_staff,
+    get_schedulable_staff_and_rooms,
     parse_schedulable_roles,
 )
+from scheduling_with_rooms.utils.scheduling_context import ASSET_VERSION
 from scheduling_with_rooms.utils.theming import theme_style_block
 
 
@@ -44,9 +43,23 @@ class SchedulingAdminAPI(StaffSessionAuthMixin, SimpleAPI):
     def admin_page(self) -> list[Response | Effect]:
         html = render_to_string(
             "templates/scheduling_admin.html",
-            {"theme_style": theme_style_block(self.secrets)},
+            {
+                "theme_style": theme_style_block(self.secrets),
+                "cache_bust": ASSET_VERSION,
+            },
         )
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
+
+    @api.get("/admin.css")
+    def admin_css(self) -> list[Response | Effect]:
+        """Serve the admin page stylesheet as a separately cacheable asset."""
+        return [
+            Response(
+                render_to_string("static/scheduling_admin.css").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/css",
+            )
+        ]
 
     @api.get("/admin/data")
     def admin_data(self) -> list[Response | Effect]:
@@ -62,12 +75,12 @@ class SchedulingAdminAPI(StaffSessionAuthMixin, SimpleAPI):
         # Drop any visit types missing a code — the matrix is keyed on code.
         visit_types = [v for v in visit_types if v["code"]]
 
-        rooms = [
-            {"id": str(s.id), "name": s.full_name}
-            for s in Staff.objects.filter(active=True, roles__internal_code="RR")
-            .distinct()
-            .order_by("first_name", "last_name")
-        ]
+        # Providers and rooms in one query. `rooms` doubles as the matrix's
+        # column list and as the room half of `schedulable_staff` below — it
+        # used to be fetched twice, the second time as whole Staff instances
+        # for two string fields.
+        provider_roles = parse_schedulable_roles(self.secrets.get("SCHEDULABLE_STAFF_ROLES", ""))
+        providers, rooms = get_schedulable_staff_and_rooms(provider_roles)
 
         mappings: dict[str, list[str]] = {}
         for row in VisitTypeRoomMapping.objects.values("note_type_code", "room_staff_key"):
@@ -98,17 +111,12 @@ class SchedulingAdminAPI(StaffSessionAuthMixin, SimpleAPI):
         for code in durations:
             durations[code].sort()
 
-        # Schedulable staff (providers + rooms) with their concurrent-slot limits.
-        provider_roles = parse_schedulable_roles(self.secrets.get("SCHEDULABLE_STAFF_ROLES", ""))
-        provider_list = [{**s, "role": "provider"} for s in get_schedulable_staff(provider_roles)]
-        room_list = [{**s, "role": "room"} for s in get_room_staff()]
-        seen: set[str] = set()
-        schedulable_staff: list[dict] = []
-        for entry in provider_list + room_list:
-            if entry["id"] in seen:
-                continue
-            seen.add(entry["id"])
-            schedulable_staff.append(entry)
+        # Tagged for the admin UI's grouping. The two lists are disjoint by
+        # construction (see get_schedulable_staff_and_rooms), so no dedupe.
+        schedulable_staff: list[dict] = [
+            *({**s, "role": "provider"} for s in providers),
+            *({**s, "role": "room"} for s in rooms),
+        ]
         concurrent_limits: dict[str, int] = {
             row["staff_key"]: row["concurrent_limit"]
             for row in StaffSlotConfig.objects.values("staff_key", "concurrent_limit")

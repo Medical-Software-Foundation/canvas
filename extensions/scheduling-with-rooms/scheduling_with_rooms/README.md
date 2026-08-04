@@ -6,9 +6,8 @@ scheduling-with-rooms
 Custom scheduling modal that coordinates provider and resource (room)
 availability. Patients are booked against a provider's calendar, and when
 the visit type requires a room, a corresponding `ScheduleEvent` is created
-on the room's calendar in lockstep. The room event is structurally linked
-to the patient appointment via `parent_appointment_id`, so cancelling the
-patient appointment cascades to the linked room event automatically.
+on the room's calendar in lockstep. Cancelling the patient appointment
+cascades to the room event, so a cancelled visit releases its room.
 
 The Scheduling Admin app exposes a visit-type configuration matrix
 (allowed durations, eligible rooms, room-event note types, per-staff
@@ -29,24 +28,85 @@ Front-desk and scheduling staff at clinics where visits consume a shared physica
 canvas install scheduling_with_rooms
 ```
 
-The `FHIR_BASE_URL`, `FHIR_CLIENT_ID`, `FHIR_CLIENT_SECRET`, `SCHEDULABLE_STAFF_ROLES`, and `SCHEDULE_DURATIONS` secrets must be set in plugin settings.
+The `SCHEDULABLE_STAFF_ROLES` and `SCHEDULE_DURATIONS` variables must be set in plugin settings.
 
 ## Components
 
 | Component                                            | Purpose                                                                |
 | ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| `applications/scheduling_with_rooms_app.py`          | Global menu app — opens the scheduling modal                           |
-| `applications/patient_chart_app.py`                  | Patient-chart app — opens the modal pre-filled with the chart patient  |
+| `applications/scheduling_with_rooms_app.py`          | `SchedulingApplication` — replaces the built-in scheduling modal        |
+| `applications/global_panel_app.py`                   | Global panel button — opens an empty scheduling modal                   |
 | `applications/scheduling_admin_app.py`               | Provider-menu admin app for the visit-type/room matrix                 |
 | `api/scheduling_api.py`                              | Patient/provider/slot/booking endpoints                                |
 | `api/scheduling_admin_api.py`                        | Admin endpoints for visit-type configuration                           |
 | `api/calendar.py`, `api/events.py`                   | Provider calendar + availability event endpoints                       |
-| `protocols/rfv_origination.py`                       | Originates the RFV command on `APPOINTMENT_CREATED`                    |
-| `protocols/rr_event_origination.py`                  | Creates the linked room `ScheduleEvent` on `APPOINTMENT_CREATED`       |
-| `protocols/appointment_cascade.py`                   | Deletes the linked room `ScheduleEvent` when its parent is cancelled   |
+| `handlers/rfv_origination.py`                        | Originates the RFV command on `APPOINTMENT_CREATED`                    |
+| `handlers/rr_event_origination.py`                   | Creates the linked room `ScheduleEvent` on `APPOINTMENT_CREATED`       |
+| `handlers/appointment_cascade.py`                    | Deletes the linked room `ScheduleEvent` when its parent is cancelled   |
 | `handlers/availability_web_app.py`                   | Serves the availability manager UI                                     |
 | `models/`                                            | CustomModels: visit-type durations, room mappings, concurrent limits   |
-| `utils/fhir_client.py`                               | Minimal FHIR client (uses `FHIR_*` plugin secrets)                     |
+| `utils/scheduling_context.py`                        | Turns the scheduling launch context into modal prefill data            |
+| `utils/patient_timezone.py`                          | Reads the `preferredSchedulingTimezone` PatientSetting                  |
+| `utils/room_link.py`                                 | Records which room a visit holds, as note metadata                      |
+| `utils/scheduling_logic.py`                          | Slot generation, plus the bulk prefetches the month view needs           |
+| `utils/calendar_availability.py`                     | Availability windows from Clinic/Administrative calendars                |
+| `utils/theming.py`                                   | Emits the CSS custom properties the stylesheets consume                 |
+| `utils/staff_lookup.py`                              | Resolves providers and rooms, and parses the roles variable             |
+| `utils/rfv_cache.py`, `utils/rr_event_cache.py`      | Hand booking intent from `/book` to the `APPOINTMENT_CREATED` handlers   |
+| `static/scheduling_modal.css`, `static/scheduling_admin.css` | Stylesheets, served as cacheable assets                        |
+
+## Scheduling entry points
+
+`SchedulingWithRoomsApp` subclasses
+[`SchedulingApplication`](https://docs.canvasmedical.com/sdk/handlers-embedded-applications/#scheduling-applications),
+so installing this plugin routes *every* scheduling action in Canvas through
+this modal — no separate launcher to click. Each surface hands over a
+different slice of context, which `utils/scheduling_context.py` resolves into
+the entity objects the modal pre-selects:
+
+| Origin                | Surface                                | Mode         | Pre-populated from context                  |
+| --------------------- | -------------------------------------- | ------------ | ------------------------------------------- |
+| `schedule_page`       | New appointment from the schedule page | `schedule`   | date                                        |
+| `patient_chart`       | New appointment from a patient chart   | `schedule`   | patient (locked), date                      |
+| `calendar`            | Drag-to-create on the calendar         | `schedule`   | provider, location, date + slot, duration   |
+| `calendar_reschedule` | Reschedule from the calendar           | `reschedule` | appointment, provider, visit type, duration |
+| `note_reschedule`     | Reschedule from within a note          | `reschedule` | appointment, note, patient, visit type      |
+
+One panel button sits alongside those Canvas-driven entry points:
+`applications/global_panel_app.py` (global scope, opens an empty modal), for
+customers who reach scheduling from their own landing page rather than
+Canvas's schedule page. It tags its launch with a non-SDK
+`origin=global_panel`, which is how the modal knows to close itself after a
+successful booking — there's no page underneath it expecting to be returned
+to. Canvas's own origins stay open and refresh their slots instead, so a
+scheduler can book again without relaunching; reschedules always close, since
+re-submitting would just move the appointment again.
+
+There's deliberately no patient-chart panel button — the `patient_chart`
+origin above already covers that surface, with the patient resolved and
+locked. Both launchers build their URL with `scheduling_context.modal_url()`,
+so they share one cache-bust value and one set of query-param names.
+
+Anything the surface didn't send is backfilled off the appointment being
+rescheduled — visit type, location, provider, patient and duration all come
+from there. A prefilled duration stays selectable even when it isn't one of
+the visit type's configured choices, so a reschedule keeps its length.
+
+In `reschedule` mode the modal moves the existing appointment: `/book` with an
+`appointment_id` issues `Appointment.reschedule()` (not an update, so Canvas
+records the move via `appointment_rescheduled_from`) and
+`ScheduleEvent.reschedule()` for the room. Because `APPOINTMENT_CREATED` doesn't
+fire for a move, those effects are emitted inline rather than going through
+`handlers/rr_event_origination.py`.
+
+`ScheduleEvent.reschedule()` nulls `parent_appointment_id`, so from the second
+reschedule onward the room event can't be found through `children`. The room a
+visit holds is therefore also recorded as note metadata (`utils/room_link.py`) —
+the note is the only identifier stable across a reschedule chain — and the event
+is recovered from that when the parent link is gone.
+
+Changing the visit type during a reschedule is not applied to the existing
+appointment.
 
 ## Availability manager
 
@@ -72,59 +132,78 @@ the Scheduling Admin page; events are managed via `api/events.py`
 **Rooms** are modeled as Staff with the `RR` (Room Resource) role and are
 managed in the same UI through a separate "Rooms" picker; the booking
 flow lands the room `ScheduleEvent` on the room's calendar and consumes
-one of its Available windows. The `SCHEDULABLE_STAFF_ROLES` secret
+one of its Available windows. The `SCHEDULABLE_STAFF_ROLES` variable
 controls who appears in the provider picker; `RR` is always unioned in
 for rooms.
 
-## Required secrets
+## Note types are version-controlled
 
-| Secret                    | Purpose                                                            |
+Updating a note type deprecates the old row rather than editing it, so existing
+notes stay bound to the version they were written against. That means **many
+rows share one `id`** — 24 across 5 codes on one instance — and only one is
+active.
+
+Every `NoteType` query here therefore filters `is_active=True`. Without it,
+`.filter(id=...).first()` returns an arbitrary version: a renamed type resolves
+to its old name, and a flag like `allow_custom_title` can read differently than
+the row you meant. The SDK's own `ScheduleEvent` validation re-resolves
+`note_type_id` without that filter, which is why room events carry no
+`description` — see `_reschedule_room_events`.
+
+The one place that intentionally looks beyond active rows is the availability
+manager's `noteTypeNames` map, so an event referencing a retired type still
+renders a name. It orders by `is_active` so the current name wins.
+
+## Required variables
+
+| Variable                  | Purpose                                                            |
 | ------------------------- | ------------------------------------------------------------------ |
-| `FHIR_BASE_URL`           | Base URL for the Canvas FHIR API                                   |
-| `FHIR_CLIENT_ID`          | OAuth2 client id for FHIR access                                   |
-| `FHIR_CLIENT_SECRET`      | OAuth2 client secret for FHIR access                               |
 | `SCHEDULABLE_STAFF_ROLES` | Comma-separated list of role codes treated as schedulable          |
 | `SCHEDULE_DURATIONS`      | Default appointment-duration list (minutes), comma-separated/JSON  |
 
-### FHIR OAuth scopes
+The `BRAND_*` variables are optional theming overrides (see
+`utils/theming.py`). No credentials are needed — the plugin reads everything
+through the SDK data models and makes no outbound HTTP calls.
 
-When registering the OAuth application that backs `FHIR_CLIENT_ID` /
-`FHIR_CLIENT_SECRET`, grant **read-only** access to the resources this plugin
-uses — nothing more:
+## Patient timezone
 
-- `Patient.read` — patient timezone lookup for the patient picker
-- `Appointment.read` — finding linked room ScheduleEvents during cascade
-- `Schedule.read`, `Slot.read` — slot resolution helpers
-- `Practitioner.read` — provider lookups for FHIR appointment participants
+The modal renders slot times in the patient's timezone. The authoritative
+value is the `preferredSchedulingTimezone` `PatientSetting` row, read via
+`utils/patient_timezone.py`. It's fetched once, by `/patient-timezone`, when a
+patient is actually selected — search results carry the cheaper
+`Patient.last_known_timezone` instead, and the browser's own timezone is the
+final fallback.
 
-The plugin does not write via FHIR; do not grant any `*.write` scopes.
+## How the room event is linked to the appointment
 
-## Cancel / reschedule cascade
+On booking, `/book` stashes the room intent in the plugin cache and
+`RREventOrigination` creates the room `ScheduleEvent` on
+`APPOINTMENT_CREATED`, setting `parent_appointment_id` to the patient
+appointment. The same handler records the chosen room as note metadata via
+`utils/room_link.py`.
 
-When `/book` creates a patient appointment that requires a room, the room
-`ScheduleEvent` is created moments later by `RREventOrigination` on the
-`APPOINTMENT_CREATED` event, with `parent_appointment_id` pointing at the
-patient appointment. Cancellation cascades use this link:
+Two links, because neither is sufficient alone:
 
-- **Cancel via this plugin or Canvas UI** — `APPOINTMENT_CANCELED` fires on
-  the patient appointment; `AppointmentCascadeHandler` walks
-  `appointment.children` and deletes any `schedule_event`-typed children.
-- **Reschedule via this plugin's `/book`** — the new appointment goes
-  through the standard booking flow, so a fresh room `ScheduleEvent` is
-  created and linked to the new appointment. The old room event is
-  deleted by the cascade when the original appointment is cancelled.
+| Link | Set by | Survives a reschedule? |
+| ---- | ------ | ---------------------- |
+| `parent_appointment_id` on the room event | Canvas, at create | **No** — `ScheduleEvent.reschedule()` nulls it |
+| `scheduling_with_rooms:room_staff_key` note metadata | this plugin | **Yes** — the note is stable across the whole chain |
 
-### Known limitation: native Canvas reschedule
+Both the reschedule path and `AppointmentCascadeHandler` locate the room
+event through the same helper, `room_link.find_room_events()`, so they can't
+disagree about which room a visit holds. Cancelling an appointment releases its
+room whether or not it has ever been rescheduled.
 
-If a user reschedules a patient appointment via Canvas's native
-reschedule UI (rather than re-booking through this plugin), the cascade
-will delete the old room `ScheduleEvent` but **a new one will not be
-created**, because the native flow does not pass through `/book` and
-therefore does not stash the room booking intent. The patient appointment
-will still be valid; the room calendar will simply not show it. To
-restore the room event, re-book the appointment via this plugin.
+`parent_appointment_id` cannot be repaired after the fact — the SDK rejects it
+outside a create ("parent_appointment_id can only be set when creating an
+appointment") — which is why the note metadata exists rather than the link
+being restored.
+
+No reschedule guard is needed in the cascade: Canvas emits
+`APPOINTMENT_UPDATED`, not `APPOINTMENT_CANCELED`, for the appointment a
+reschedule supersedes.
 
 ### Important Note!
 
 `CANVAS_MANIFEST.json` is used when installing your plugin. Update it if
-you add, remove, or rename protocols, applications, or secrets.
+you add, remove, or rename handlers, applications, or variables.

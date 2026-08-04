@@ -138,11 +138,9 @@ def test_serialize_event_basic():
     provider.full_name = "Bob"
     provider.primary_practice_location = None
 
-    location = MagicMock()
-    location.id = "loc-1"
-    location.full_name = "Loc"
+    locations_by_name = {"Loc": "loc-1"}
 
-    result = _serialize_event(event, [provider], [location])
+    result = _serialize_event(event, [provider], locations_by_name)
     assert result["id"] == "ev-1"
     assert result["provider"] == "prov-1"
     assert result["location"] == "loc-1"
@@ -159,11 +157,9 @@ def test_serialize_event_match_by_full_name():
     provider.full_name = "Bob"
     provider.primary_practice_location = None
 
-    location = MagicMock()
-    location.id = "loc-1"
-    location.full_name = "Loc"
+    locations_by_name = {"Loc": "loc-1"}
 
-    result = _serialize_event(event, [provider], [location])
+    result = _serialize_event(event, [provider], locations_by_name)
     assert result["provider"] == "prov-1"
 
 
@@ -181,7 +177,7 @@ def test_serialize_event_uses_primary_location_for_generic_calendar():
     provider.full_name = "Bob"
     provider.primary_practice_location = primary
 
-    result = _serialize_event(event, [provider], [])
+    result = _serialize_event(event, [provider], {})
     assert result["location"] == "loc-primary"
 
 
@@ -194,7 +190,7 @@ def test_serialize_event_with_recurrence():
         recurrence="RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE",
     )
 
-    result = _serialize_event(event, [], [])
+    result = _serialize_event(event, [], {})
     assert result["daysOfWeek"] == ["MO", "WE"]
     assert result["recurrence"]["type"] == "WEEKLY"
     assert result["recurrence"]["interval"] == 2
@@ -211,7 +207,7 @@ def test_serialize_event_no_calendar():
     event.recurrence_ends_at = None
     event.allowed_note_types.all.return_value = []
 
-    result = _serialize_event(event, [], [])
+    result = _serialize_event(event, [], {})
     assert result["calendarId"] == ""
 
 
@@ -233,7 +229,7 @@ def test_serialize_event_invalid_calendar_tz_falls_back_to_utc():
     event.recurrence_ends_at = None
     event.allowed_note_types.all.return_value = []
 
-    result = _serialize_event(event, [], [])
+    result = _serialize_event(event, [], {})
     assert result["calendarTimezone"] == "Bad/Zone"
 
 
@@ -241,7 +237,7 @@ def test_serialize_event_with_view_tz():
     starts = datetime.datetime(2026, 5, 7, 10, 0, tzinfo=datetime.timezone.utc)
     event = _make_event(starts_at=starts, ends_at=starts)
     view_tz = ZoneInfo("America/Chicago")
-    result = _serialize_event(event, [], [], view_tz=view_tz)
+    result = _serialize_event(event, [], {}, view_tz=view_tz)
     # Should produce a non-empty startTime
     assert result["startTime"]
 
@@ -271,7 +267,7 @@ def test_get_no_tz_param():
         return_value={"id": "ev-1"},
     ):
         mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
-        mock_loc.objects.filter.return_value = []
+        mock_loc.objects.filter.return_value.values.return_value = []
         mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = [MagicMock()]
         result = h.get()
         assert len(result) == 1
@@ -290,7 +286,7 @@ def test_get_invalid_tz_falls_back():
         return_value={"id": "ev-1"},
     ):
         mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
-        mock_loc.objects.filter.return_value = []
+        mock_loc.objects.filter.return_value.values.return_value = []
         mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
         result = h.get()
         assert len(result) == 1
@@ -309,7 +305,7 @@ def test_get_with_valid_tz():
         return_value={"id": "ev-1"},
     ):
         mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
-        mock_loc.objects.filter.return_value = []
+        mock_loc.objects.filter.return_value.values.return_value = []
         mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
         result = h.get()
         assert len(result) == 1
