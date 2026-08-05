@@ -47,7 +47,7 @@ Then complete the one-time setup below.
 
 | Secret | Notes |
 |---|---|
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Workspace service-account key (domain-wide delegation). |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Customer-provided service-account JSON key (from their GCP project, with domain-wide delegation). |
 | `GOOGLE_CALENDAR_WEBHOOK_TOKEN` | Shared token validated on each watch ping (fail-closed). |
 | `GOOGLE_WEBHOOK_BASE_URL` | Public origin Google posts to, e.g. `https://<your-instance>.canvasmedical.com`. |
 | `ADMIN_STAFF_IDS` | Comma-separated Canvas staff ids allowed to use the admin app. Empty = no access. |
@@ -59,11 +59,99 @@ Then complete the one-time setup below.
 
 ## One-time setup
 
-Create a Google Workspace service account with domain-wide delegation for scope
-`https://www.googleapis.com/auth/calendar`, confirm the Workspace BAA covers Calendar, set the secrets
-above, then in the admin app use **Auto-map schedulable providers** to enroll providers and open watch
-channels. The nightly reconciliation and channel-renewal crons handle the initial import and keep
-watch channels alive.
+The customer does the full setup — creates the GCP project, installs the plugin, and configures the
+secrets. No Canvas involvement is required.
+
+### Step 1: Create a GCP project and service account
+
+1. **Create a GCP project and enable the Calendar API.** Go to `console.cloud.google.com`, create a
+   new project (e.g. "Canvas Calendar Sync"). Enable the API: APIs & Services → Library → search
+   "Google Calendar API" → Enable. Without this, every API call returns 403.
+
+2. **Create a service account and generate a JSON key.** IAM & Admin → Service Accounts → Create
+   service account (e.g. `canvas-calendar-sync`). Generate a JSON key file and note the service
+   account's Unique ID (Client ID). The plugin requires the key to contain `client_email` and
+   `private_key` or it fails closed (`google/auth.py:parse_service_account`).
+
+### Step 2: Authorize domain-wide delegation
+
+The plugin uses
+[domain-wide delegation](https://developers.google.com/identity/protocols/oauth2/service-account#delegatingauthority)
+to impersonate each provider's calendar. No individual consent screens are needed — the Workspace
+admin authorizes the service account once and it covers all users in that org.
+
+1. Go to `admin.google.com` (must be Super Admin) → Security → Access and data control → API
+   controls → Manage Domain Wide Delegation → Add new.
+2. Enter the Client ID from Step 1 and set the OAuth scope to exactly:
+   ```
+   https://www.googleapis.com/auth/calendar
+   ```
+   This is the only scope the plugin requests (`auth.py:CALENDAR_SCOPE`).
+
+**Revoking access:** Remove the delegation entry in Google Admin at any time.
+
+### Step 3: Install the plugin and configure secrets
+
+Install the plugin on your Canvas instance and configure these secrets:
+
+| Secret | Value |
+|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | The full contents of the JSON key file from Step 1. Parsed by `auth.py:parse_service_account`. |
+| `GOOGLE_CALENDAR_WEBHOOK_TOKEN` | Any secret string you choose (e.g. a UUID). The webhook endpoint (`routes/webhook.py:GoogleWebhook.authenticate`) validates every Google push notification against this token using constant-time comparison. |
+| `GOOGLE_WEBHOOK_BASE_URL` | Your Canvas instance URL, e.g. `https://neuroglow.canvasmedical.com`. Google posts webhook pings to `{base_url}/plugin-io/api/gcal_sync/google/webhook`. |
+| `ADMIN_STAFF_IDS` | Comma-separated Canvas staff **keys** (the `id` field from `Staff.objects`, not integer database IDs). Controls who can access the admin app. **Fails closed** — empty or unset denies everyone (`routes/google_admin.py:_is_admin`). |
+
+### Step 4: Map providers to calendars
+
+Open the "Google Calendar Sync" app from the left sidebar. Three options:
+
+- **Auto-map** — maps every active staff member with a Provider role to their Canvas staff email
+  (`google_admin.py:auto_map`). Best when provider staff emails match their Workspace calendar
+  emails.
+- **Bulk CSV import** — paste a CSV with emails in the first column
+  (`google_admin.py:bulk_import`). The plugin matches each email to a Canvas staff profile. Use
+  this when providers use a different calendar email than their Canvas staff email.
+- **Individual mapping** — set each provider's calendar email one at a time.
+
+When a mapping is saved as active, the plugin opens a Google `events.watch` channel for that
+calendar (`google_admin.py:_open_channel_best_effort`), enabling near-real-time inbound sync.
+
+The admin UI shows sync health per provider: whether a watch channel is active, when the last
+outbound sync ran, and how many events are tracked. The nightly `ReconciliationCron` and
+`ChannelRenewalCron` handle catch-up and keep watch channels alive automatically.
+
+### Multi-domain note
+
+The service account and delegation are per Google Workspace domain. If different partners or
+locations use separate Workspace domains, each domain's admin must complete Steps 1–2 independently
+with their own GCP project and JSON key file.
+
+### How auth works under the hood
+
+The plugin holds one service-account key and, for each provider, mints a short-lived RS256 JWT
+that impersonates that provider (`sub = provider@example.com`) and exchanges it for an access token
+via the JWT-bearer grant (`auth.py:GoogleAuth.get_access_token`). Tokens are cached per provider
+for just under their 1-hour lifetime so bursts of appointment events don't mint a token per event.
+No per-user refresh tokens are stored or rotated.
+
+### What syncs and what doesn't
+
+**Outbound (Canvas → Google):**
+- Appointment create/update/cancel/reschedule (via `AppointmentSyncHandler`)
+- Admin schedule blocks like lunch/PTO (via `BlockSweepCron`, every 15 min)
+- Does NOT push Canvas `schedule_events` (availability/bookable windows) — those are Canvas-only
+
+**Inbound (Google → Canvas):**
+- Provider-created Google events become admin holds on the Canvas schedule
+- Near real-time via webhook push notifications + daily reconciliation
+- Private events imported with title masked to "Busy" (configurable via `INGEST_PRIVATE_EVENTS`)
+- Canvas-wins by default: edits to a Canvas appointment from Google are reverted
+
+### Troubleshooting
+
+If the sync returns 401 errors after deployment, delegation was not configured (or was configured on
+the wrong domain). The token exchange in `auth.py:_exchange()` surfaces Google's error body in the
+plugin logs to make this diagnosable.
 
 ## Custom data
 
