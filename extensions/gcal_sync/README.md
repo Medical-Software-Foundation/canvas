@@ -93,7 +93,7 @@ Configure these secrets in the plugin settings on your Canvas instance:
 |---|---|
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Paste the full JSON key file from step 1 above. |
 | `GOOGLE_CALENDAR_WEBHOOK_TOKEN` | A randomly generated string used to verify webhook pings from Google. |
-| `GOOGLE_WEBHOOK_BASE_URL` | Your Canvas instance URL, e.g. `https://neuroglow.canvasmedical.com`. |
+| `GOOGLE_WEBHOOK_BASE_URL` | Your Canvas instance URL, e.g. `https://<your-instance>.canvasmedical.com`. |
 | `ADMIN_STAFF_IDS` | Comma-separated Canvas staff keys for who can manage the sync admin app. |
 
 ### Map providers to calendars
