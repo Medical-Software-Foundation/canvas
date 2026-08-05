@@ -59,49 +59,44 @@ Then complete the one-time setup below.
 
 ## One-time setup
 
-The customer does the full setup — creates the GCP project, installs the plugin, and configures the
-secrets. No Canvas involvement is required.
+### Google Workspace admin setup
 
-### Step 1: Create a GCP project and service account
+Your Google Workspace Administrator will need to:
 
-1. **Create a GCP project and enable the Calendar API.** Go to `console.cloud.google.com`, create a
-   new project (e.g. "Canvas Calendar Sync"). Enable the API: APIs & Services → Library → search
-   "Google Calendar API" → Enable. Without this, every API call returns 403.
+1. **Create a service account in Google Cloud Console**
+   1. Go to [console.cloud.google.com](https://console.cloud.google.com) and
+      [create a new project](https://console.cloud.google.com/projectcreate?pli=1)
+      (e.g. "Canvas Calendar Sync").
+      - Enable the API: APIs & Services → Library → search
+        "[Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com)"
+        → click Enable.
+      - Create the identity: IAM & Admin → Service Accounts →
+        [Create service account](https://console.cloud.google.com/iam-admin/serviceaccounts/create).
+        1. Name it something clear (e.g. `canvas-calendar-sync`).
+        2. Generate associated key (should be a JSON file). This becomes the
+           `GOOGLE_SERVICE_ACCOUNT_JSON` plugin secret.
+        3. Note the associated Unique ID — this is the "Client ID" used in the next step.
 
-2. **Create a service account and generate a JSON key.** IAM & Admin → Service Accounts → Create
-   service account (e.g. `canvas-calendar-sync`). Generate a JSON key file and note the service
-   account's Unique ID (Client ID). The plugin requires the key to contain `client_email` and
-   `private_key` or it fails closed (`google/auth.py:parse_service_account`).
+2. **Authorize it for your Workspace (Google Admin Console)**
+   1. Go to [admin.google.com](https://admin.google.com) (must be signed in as a Super Admin).
+   2. Navigate to Security → Access and data control → API controls → Domain-wide delegation →
+      Manage Domain Wide Delegation.
+   3. Add new and enter:
+      - **Client ID:** the Unique ID from step 1 above.
+      - **OAuth scopes:** `https://www.googleapis.com/auth/calendar`
 
-### Step 2: Authorize domain-wide delegation
+### Plugin secrets
 
-The plugin uses
-[domain-wide delegation](https://developers.google.com/identity/protocols/oauth2/service-account#delegatingauthority)
-to impersonate each provider's calendar. No individual consent screens are needed — the Workspace
-admin authorizes the service account once and it covers all users in that org.
-
-1. Go to `admin.google.com` (must be Super Admin) → Security → Access and data control → API
-   controls → Manage Domain Wide Delegation → Add new.
-2. Enter the Client ID from Step 1 and set the OAuth scope to exactly:
-   ```
-   https://www.googleapis.com/auth/calendar
-   ```
-   This is the only scope the plugin requests (`auth.py:CALENDAR_SCOPE`).
-
-**Revoking access:** Remove the delegation entry in Google Admin at any time.
-
-### Step 3: Install the plugin and configure secrets
-
-Install the plugin on your Canvas instance and configure these secrets:
+Configure these secrets in the plugin settings on your Canvas instance:
 
 | Secret | Value |
 |---|---|
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | The full contents of the JSON key file from Step 1. Parsed by `auth.py:parse_service_account`. |
-| `GOOGLE_CALENDAR_WEBHOOK_TOKEN` | Any secret string you choose (e.g. a UUID). The webhook endpoint (`routes/webhook.py:GoogleWebhook.authenticate`) validates every Google push notification against this token using constant-time comparison. |
-| `GOOGLE_WEBHOOK_BASE_URL` | Your Canvas instance URL, e.g. `https://neuroglow.canvasmedical.com`. Google posts webhook pings to `{base_url}/plugin-io/api/gcal_sync/google/webhook`. |
-| `ADMIN_STAFF_IDS` | Comma-separated Canvas staff **keys** (the `id` field from `Staff.objects`, not integer database IDs). Controls who can access the admin app. **Fails closed** — empty or unset denies everyone (`routes/google_admin.py:_is_admin`). |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Paste the full JSON key file from step 1 above. |
+| `GOOGLE_CALENDAR_WEBHOOK_TOKEN` | A randomly generated string used to verify webhook pings from Google. |
+| `GOOGLE_WEBHOOK_BASE_URL` | Your Canvas instance URL, e.g. `https://neuroglow.canvasmedical.com`. |
+| `ADMIN_STAFF_IDS` | Comma-separated Canvas staff keys for who can manage the sync admin app. |
 
-### Step 4: Map providers to calendars
+### Map providers to calendars
 
 Open the "Google Calendar Sync" app from the left sidebar. Three options:
 
