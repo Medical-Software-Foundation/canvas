@@ -35,6 +35,7 @@ from canvas_sdk.v1.data.note import Note, NoteStates
 from canvas_sdk.v1.data.patient import (
     PatientFacilityAddress,
     PatientMetadata as PatientMetadataRecord,
+    PatientPhoto,
 )
 from canvas_sdk.v1.data.protocol_current import ProtocolCurrent
 from canvas_sdk.v1.data.protocol_result import ProtocolResultStatus
@@ -196,6 +197,9 @@ def build_base_queryset(
         "addresses",
         "telecom",
         "metadata",
+        # Ordered so `patient.photo_url` (→ photos.first()) reads the prefetch
+        # cache instead of issuing one query per row.
+        Prefetch("photos", queryset=PatientPhoto.objects.order_by("pk")),
         Prefetch(
             "coverages",
             queryset=Coverage.objects.filter(stack=CoverageStack.IN_USE).select_related("issuer"),
