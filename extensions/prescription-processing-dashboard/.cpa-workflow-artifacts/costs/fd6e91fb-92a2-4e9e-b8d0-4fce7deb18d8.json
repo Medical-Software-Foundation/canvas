@@ -1,0 +1,741 @@
+{
+  "session_id": "fd6e91fb-92a2-4e9e-b8d0-4fce7deb18d8",
+  "timestamp": "2026-01-28T01:15:42.987306+00:00",
+  "exit_reason": "prompt_input_exit",
+  "working_directory": "/Users/andrew/src/plugin-development/msf-canvas/extensions/prescription-processing-dashboard",
+  "transcript_path": "/Users/andrew/.claude/projects/-Users-andrew-src-plugin-development-msf-canvas-extensions-prescription-processing-dashboard/fd6e91fb-92a2-4e9e-b8d0-4fce7deb18d8.jsonl",
+  "cost_data": {
+    "message_count": 201,
+    "model": "claude-opus-4-5-20251101",
+    "duration_seconds": 1072.83,
+    "duration_formatted": "17m 52s",
+    "token_usage_details": [
+      {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 18652,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 18652,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 4,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 18652,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 18652,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 4,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 191,
+        "cache_read_input_tokens": 18652,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 191,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 191,
+        "cache_read_input_tokens": 18652,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 191,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 671,
+        "cache_read_input_tokens": 18843,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 671,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 671,
+        "cache_read_input_tokens": 18843,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 671,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4,
+        "cache_read_input_tokens": 19796,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 4,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 8,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4,
+        "cache_read_input_tokens": 19796,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 4,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 8,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2910,
+        "cache_read_input_tokens": 18133,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2910,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2910,
+        "cache_read_input_tokens": 18133,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2910,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2910,
+        "cache_read_input_tokens": 18133,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2910,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2910,
+        "cache_read_input_tokens": 18133,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2910,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2910,
+        "cache_read_input_tokens": 18133,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2910,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 2910,
+        "cache_read_input_tokens": 18133,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2910,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 12044,
+        "cache_read_input_tokens": 21043,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 12044,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 5,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 12044,
+        "cache_read_input_tokens": 21043,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 12044,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 5,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 12044,
+        "cache_read_input_tokens": 21043,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 12044,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 5,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1355,
+        "cache_read_input_tokens": 33087,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1355,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1195,
+        "cache_read_input_tokens": 34442,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1195,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1195,
+        "cache_read_input_tokens": 34442,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1195,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1195,
+        "cache_read_input_tokens": 34442,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1195,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1024,
+        "cache_read_input_tokens": 35637,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1024,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1024,
+        "cache_read_input_tokens": 35637,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1024,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1024,
+        "cache_read_input_tokens": 35637,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1024,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1087,
+        "cache_read_input_tokens": 36661,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1087,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 4199,
+        "cache_read_input_tokens": 37748,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 4199,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 4199,
+        "cache_read_input_tokens": 37748,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 4199,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 4199,
+        "cache_read_input_tokens": 37748,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 4199,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 42463,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 42463,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 42463,
+        "cache_read_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 42463,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 2987,
+        "cache_read_input_tokens": 42463,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2987,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 2,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 2987,
+        "cache_read_input_tokens": 42463,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2987,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 2,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 2987,
+        "cache_read_input_tokens": 42463,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2987,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 2,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 406,
+        "cache_read_input_tokens": 45450,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 406,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 26,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 288,
+        "cache_read_input_tokens": 45856,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 288,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1157,
+        "cache_read_input_tokens": 46144,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1157,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1157,
+        "cache_read_input_tokens": 46144,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1157,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 2071,
+        "cache_read_input_tokens": 47301,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2071,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 827,
+        "cache_read_input_tokens": 49372,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 827,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 827,
+        "cache_read_input_tokens": 49372,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 827,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 358,
+        "cache_read_input_tokens": 50199,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 358,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1559,
+        "cache_read_input_tokens": 50557,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1559,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 10214,
+        "cache_read_input_tokens": 52116,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10214,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 2,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 10214,
+        "cache_read_input_tokens": 52116,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10214,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 2,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 3185,
+        "cache_read_input_tokens": 62330,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 3185,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 3185,
+        "cache_read_input_tokens": 62330,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 3185,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1630,
+        "cache_read_input_tokens": 65515,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1630,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1630,
+        "cache_read_input_tokens": 65515,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1630,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 478,
+        "cache_read_input_tokens": 67145,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 478,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 478,
+        "cache_read_input_tokens": 67145,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 478,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 3,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 262,
+        "cache_read_input_tokens": 67623,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 262,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 26,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 3239,
+        "cache_read_input_tokens": 67885,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 3239,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 3239,
+        "cache_read_input_tokens": 67885,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 3239,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 906,
+        "cache_read_input_tokens": 71124,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 906,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 25,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 971,
+        "cache_read_input_tokens": 72030,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 971,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 6,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 971,
+        "cache_read_input_tokens": 72030,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 971,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 6,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1310,
+        "cache_read_input_tokens": 73001,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1310,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 955,
+        "cache_read_input_tokens": 74311,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 955,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 26,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 2597,
+        "cache_read_input_tokens": 75266,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2597,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 2597,
+        "cache_read_input_tokens": 75266,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 2597,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 561,
+        "cache_read_input_tokens": 77863,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 561,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1077,
+        "cache_read_input_tokens": 78424,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1077,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1077,
+        "cache_read_input_tokens": 78424,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1077,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 277,
+        "cache_read_input_tokens": 79501,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 277,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 24,
+        "service_tier": "standard"
+      },
+      {
+        "input_tokens": 0,
+        "cache_creation_input_tokens": 1778,
+        "cache_read_input_tokens": 79778,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1778,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      }
+    ],
+    "total_tokens": {
+      "input": 88,
+      "output": 558,
+      "total": 646
+    },
+    "cache_usage": {
+      "cache_read": 2842145,
+      "cache_write": 269692
+    },
+    "cost_usd": 3.121037,
+    "cost_formatted": "$3.1210"
+  }
+}
