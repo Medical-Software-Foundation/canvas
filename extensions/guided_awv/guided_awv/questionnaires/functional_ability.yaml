@@ -1,0 +1,25 @@
+name: "Functional Ability Assessment"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "AWV_FUNCTIONAL"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+questions:
+- content: "Basic ADL Status"
+  code_system: "INTERNAL"
+  code: "AWV_FUNC_ADL"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "ADL Status"
+    code: "AWV_FUNC_ADL_RESP"
+    value: ''
+- content: "Instrumental ADL Status"
+  code_system: "INTERNAL"
+  code: "AWV_FUNC_IADL"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "IADL Status"
+    code: "AWV_FUNC_IADL_RESP"
+    value: ''
