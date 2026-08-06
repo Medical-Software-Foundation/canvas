@@ -1,0 +1,141 @@
+{
+  "sdk_version": "0.95.0",
+  "plugin_version": "0.7.6",
+  "name": "appointment_reminders",
+  "description": "Appointment reminders and confirmations (SMS + email) with per-business-line customization, optional locked message copy, and two-way Y/N confirmation.",
+  "components": {
+    "protocols": [
+      {
+        "class": "appointment_reminders.handlers.event_handler:AppointmentEventHandler",
+        "description": "Sends instant notifications on appointment events",
+        "data_access": {
+          "event": "",
+          "read": [
+            "v1.Patient",
+            "v1.Appointment",
+            "v1.PracticeLocation",
+            "v1.NoteType",
+            "v1.Organization",
+            "v1.BusinessLine"
+          ],
+          "write": [
+            "v1.Appointment"
+          ]
+        }
+      },
+      {
+        "class": "appointment_reminders.handlers.reminder_scheduler:ReminderScheduler",
+        "description": "Cron task that checks for upcoming booked appointments needing reminders and telehealth join notifications",
+        "data_access": {
+          "event": "",
+          "read": [
+            "v1.Patient",
+            "v1.Appointment",
+            "v1.PracticeLocation",
+            "v1.NoteType",
+            "v1.Staff",
+            "v1.Organization",
+            "v1.BusinessLine"
+          ],
+          "write": [
+            "v1.Appointment"
+          ]
+        }
+      },
+      {
+        "class": "appointment_reminders.handlers.notification_api:NotificationAPI",
+        "description": "API endpoints for admin configuration and notification history",
+        "data_access": {
+          "event": "",
+          "read": [
+            "v1.NoteType",
+            "v1.Note",
+            "v1.Patient",
+            "v1.Appointment",
+            "v1.Staff",
+            "v1.Organization",
+            "v1.PracticeLocation",
+            "v1.BusinessLine"
+          ],
+          "write": [
+            "v1.Appointment"
+          ]
+        }
+      },
+      {
+        "class": "appointment_reminders.handlers.timeline_filter:TimelineMessageFilter",
+        "description": "Hides message notes from the patient timeline",
+        "data_access": {
+          "event": "",
+          "read": [
+            "v1.NoteType"
+          ],
+          "write": []
+        }
+      },
+      {
+        "class": "appointment_reminders.handlers.twilio_inbound_api:TwilioInboundAPI",
+        "description": "Twilio-signature-gated webhook for inbound patient SMS: structured Y/N confirms/declines an appointment and opens follow-up tasks",
+        "data_access": {
+          "event": "",
+          "read": [
+            "v1.Patient",
+            "v1.Appointment"
+          ],
+          "write": [
+            "v1.Appointment",
+            "v1.Task"
+          ]
+        }
+      }
+    ],
+    "applications": [
+      {
+        "class": "appointment_reminders.handlers.admin_app:NotifyAdminApp",
+        "name": "Appointment Reminders",
+        "description": "Configure appointment reminder campaigns and view message history",
+        "icon": "assets/admin-icon.png",
+        "scope": "provider_menu_item",
+        "menu_position": "top",
+        "menu_order": 100
+      },
+      {
+        "class": "appointment_reminders.handlers.patient_app:NotifyPatientApp",
+        "name": "Appointment Reminders",
+        "description": "Appointment reminder history for this patient",
+        "icon": "assets/patient-icon.png",
+        "scope": "patient_specific",
+        "show_in_panel": true,
+        "panel_priority": 1
+      }
+    ],
+    "commands": [],
+    "content": [],
+    "effects": [],
+    "views": []
+  },
+  "secrets": [
+    "namespace_read_write_access_key",
+    "twilio-account-sid",
+    "twilio-auth-token",
+    "twilio-api-key-sid",
+    "twilio-api-key-secret",
+    "twilio-phone-number",
+    "twilio-inbound-webhook-url",
+    "sendgrid-api-key",
+    "sendgrid-from-email",
+    "TESTING_MODE",
+    "TESTING_MODE_PATIENTS",
+    "TESTING_MODE_RECIPIENTS",
+    "LOCK_MESSAGE_TEMPLATES"
+  ],
+  "custom_data": {
+    "namespace": "canvas__appointment_reminders",
+    "access": "read_write"
+  },
+  "tags": {},
+  "references": [],
+  "license": "MIT",
+  "diagram": false,
+  "readme": "../README.md"
+}
