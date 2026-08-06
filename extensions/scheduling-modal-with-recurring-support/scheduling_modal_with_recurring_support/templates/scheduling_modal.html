@@ -1,0 +1,3640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+  <link rel="stylesheet" href="/plugin-io/api/scheduling_modal_with_recurring_support/scheduling/canvas-plugin-ui.css?v={{ cache_bust }}">
+  <script src="/plugin-io/api/scheduling_modal_with_recurring_support/scheduling/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--palette-white, #FFFFFF);
+      font-family: var(--font-family);
+      color: var(--color-text);
+    }
+
+    .modal-shell { padding: 0 var(--space-medium) var(--space-medium); }
+
+    canvas-modal-header.modal-header-pinned {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--palette-white, #FFFFFF);
+      margin-bottom: var(--space-medium);
+    }
+
+    /* Field width caps per type. */
+    .field-cap-search   { max-width: 280px; }
+    .field-cap-picker   { max-width: 360px; }
+    .field-cap-numeric  { max-width: 140px; }
+    .field-cap-textarea { max-width: 600px; }
+
+    .form-section { margin-bottom: var(--space-medium); }
+
+    /* Ranked provider cards get extra breathing room below before the next
+       section. Scoped to this section only, the rest stay at space-medium. */
+    #section-provider-ranked { margin-bottom: var(--space-huge); }
+
+    /*
+      Two column top block. The left column stacks the short controls,
+      Patient, Note type, Appointment Type, and Number of occurrences, the
+      right column holds the start date calendar. The four short controls
+      roughly match the calendar height, so the old gap beside a lone
+      calendar is gone. The calendar tracks its own min-content width, the
+      left column is capped so its inputs never stretch edge to edge. Under
+      the breakpoint the two columns collapse to one, left column first then
+      the calendar, matching the plan's stack order.
+    */
+    .top-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 420px) max-content;
+      gap: var(--space-large);
+      align-items: start;
+      margin-bottom: var(--space-medium);
+    }
+    .top-grid-left {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-medium);
+      min-width: 0;
+    }
+    .top-grid-left > .form-section {
+      margin-bottom: 0;
+    }
+    /*
+      Inside the left column the pickers fill the full column width instead of
+      the shared 360px cap, so dropdowns, comboboxes, and the helper paragraphs
+      below them all share one uniform width and the section never reads wider
+      than its contents.
+    */
+    .top-grid-left .field-cap-picker {
+      width: 100%;
+      max-width: none;
+    }
+    .top-grid-right {
+      min-width: 0;
+    }
+    @media (max-width: 860px) {
+      .top-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /*
+      Shared inline wait state. Left aligned on purpose, a spinner then a label
+      on one row, so a loading message reads as content filling in rather than a
+      page level wait. The provider fetch state was the first user, the slot
+      availability check, booking, and the times loading message now share it so
+      every inline wait looks the same.
+    */
+    .inline-loading {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: var(--space-small);
+      color: var(--color-text-muted, #767676);
+    }
+    .inline-loading .spinner {
+      width: 20px;
+      height: 20px;
+      border-width: 2px;
+    }
+    .inline-loading .spinner-label {
+      margin-top: 0;
+    }
+
+    .muted-meta {
+      margin: var(--space-tiny) 0 0;
+      font-size: 0.85rem;
+      color: var(--color-text-muted);
+    }
+
+    .card {
+      background: var(--color-surface, #FFFFFF);
+      border: 1px solid var(--color-border, #E9E9E9);
+      border-radius: var(--radius, .28571429rem);
+      padding: var(--space-medium);
+      margin-bottom: var(--space-medium);
+    }
+
+    .card-title {
+      font-weight: var(--font-weight-bold);
+      font-size: 0.95rem;
+      margin: 0 0 var(--space-small);
+      color: var(--color-text);
+    }
+
+    .state-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--palette-blue, #2185D0);
+      color: #fff;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      font-weight: var(--font-weight-bold);
+      margin-left: var(--space-tiny);
+    }
+
+    .field-group { margin-bottom: var(--space-medium); }
+
+    .field-label {
+      display: block;
+      font-weight: var(--font-weight-bold);
+      font-size: .92857143em;
+      line-height: 1em;
+      margin-bottom: .28571429rem;
+      color: var(--color-text);
+    }
+
+    .cadence-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: var(--space-small) var(--space-medium);
+      padding-top: 4px;
+    }
+
+    .cadence-options canvas-radio { width: max-content; }
+
+    .cadence-custom {
+      margin-top: var(--space-small);
+      padding: var(--space-small);
+      border: 1px solid var(--color-border, #E9E9E9);
+      border-radius: var(--radius);
+      background: var(--color-surface-muted, #F8F8F8);
+      display: grid;
+      gap: var(--space-small);
+    }
+
+    .cadence-custom-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-tiny);
+      flex-wrap: wrap;
+    }
+
+    .cadence-custom-row label {
+      font-size: 0.85rem;
+      color: var(--color-text);
+      min-width: 88px;
+    }
+
+    .cadence-custom-row .form-input {
+      max-width: 130px;
+    }
+
+    .weekday-picker {
+      display: flex;
+      gap: 4px;
+    }
+
+    .weekday-toggle {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--color-border, #E9E9E9);
+      background: var(--color-surface, #FFFFFF);
+      color: var(--color-text);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: var(--font-weight-bold);
+    }
+
+    .weekday-toggle.selected {
+      background: var(--palette-blue, #2185D0);
+      color: #FFFFFF;
+      border-color: var(--palette-blue, #2185D0);
+    }
+
+    .cadence-custom-summary {
+      font-size: 0.85rem;
+      color: var(--color-text);
+      padding: var(--space-tiny) 0;
+    }
+
+    .cadence-custom-banner {
+      font-size: 0.8rem;
+      color: var(--color-text-muted, #767676);
+      padding: var(--space-tiny) var(--space-small);
+      border-left: 3px solid var(--palette-blue, #2185D0);
+      background: rgba(33, 133, 208, 0.05);
+    }
+
+    .cal-footer {
+      display: flex;
+      align-items: center;
+      gap: var(--space-small);
+      padding-top: var(--space-tiny);
+    }
+    .cal-footer #cal-today {
+      margin-left: auto;
+    }
+    .cal-loading {
+      display: none;
+      align-items: center;
+      gap: var(--space-tiny);
+      /* Match the other inline loading labels (.spinner-label is 0.9rem) so
+         "Checking availability" reads at the same size as the provider fetch,
+         slot check, and time grid loading text. */
+      font-size: 0.9rem;
+      color: var(--color-text-muted, #767676);
+    }
+    canvas-calendar[data-loading] .cal-loading {
+      display: inline-flex;
+    }
+    .cal-loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--color-border-subtle, #e0e0e0);
+      border-top-color: var(--color-text, #1976d2);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .score {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: var(--font-weight-bold);
+      line-height: 1.4;
+    }
+    .score.score-open {
+      background: rgba(34, 134, 58, 0.12);
+      color: rgb(20, 90, 38);
+    }
+    .score.score-mostly {
+      background: rgba(33, 133, 208, 0.12);
+      color: rgb(33, 100, 160);
+    }
+    .score.score-mixed {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--color-text-muted, #767676);
+    }
+    .score.score-empty {
+      background: rgba(0, 0, 0, 0.05);
+      color: var(--color-text-muted, #767676);
+    }
+    .score.score-placeholder {
+      opacity: 0;
+    }
+
+    .cal-column {
+      min-width: 0;
+      width: min-content;
+    }
+
+    /* Number of occurrences sits in the left column under Appointment Type.
+       It fills the column to the same picker cap as Patient and Note type so
+       the left column reads consistent. */
+    .occurrences-field { max-width: 360px; }
+    .occurrences-input { width: 100%; }
+
+    .slot-pane-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-small);
+      margin-bottom: var(--space-tiny);
+    }
+
+    .time-pill-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: var(--space-tiny, 8px);
+    }
+
+    /*
+      Pills use the same selection language as the weekday chips above,
+      resting white with a gray border, selected solid blue with white text.
+      The native all blue grid relies on its tinted container and a book
+      and move on flow, neither of which applies here, so a persistent
+      selection needs stronger contrast than a darker shade of blue.
+    */
+    .time-pill {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--color-border, #E9E9E9);
+      border-radius: var(--canvas-button-radius, var(--radius, .28571429rem));
+      --canvas-button-bg: var(--color-surface, #FFFFFF);
+      --canvas-button-color: var(--color-text, rgba(0, 0, 0, 0.87));
+      --canvas-button-padding: 0.45em 0.6em;
+      --canvas-button-font-size: 0.85rem;
+      --canvas-button-gap: 6px;
+    }
+
+    .time-pill:not(.selected):hover {
+      --canvas-button-bg: #E9F3FA;
+    }
+
+    .time-pill.selected {
+      border-color: var(--palette-blue, #2185D0);
+      --canvas-button-bg: var(--palette-blue, #2185D0);
+      --canvas-button-color: #FFFFFF;
+    }
+
+    .time-pill .pill-ratio {
+      font-size: 0.7rem;
+      font-weight: var(--font-weight-normal, 400);
+      opacity: 0.85;
+    }
+    /* A fully covered time is present but quiet, a partial one pulls the eye. */
+    .time-pill .pill-ratio.pill-ratio-full {
+      color: var(--color-text-muted, #767676);
+    }
+    .time-pill .pill-ratio.pill-ratio-partial {
+      color: var(--color-functional-orange-dark, #b45309);
+      opacity: 1;
+    }
+    /* Keep the ratio legible on the solid blue selected fill. Last so it wins
+       on equal specificity over the two coverage colors above. */
+    .time-pill.selected .pill-ratio {
+      color: #FFFFFF;
+      opacity: 0.9;
+    }
+
+    .form-input {
+      padding: 6px 8px;
+      border: 1px solid var(--color-border, #E9E9E9);
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-family: var(--font-family);
+      color: var(--color-text);
+      background: var(--color-surface, #FFFFFF);
+    }
+
+    .form-input:focus {
+      outline: var(--focus-ring, 2px solid #2185D0);
+      outline-offset: var(--focus-ring-offset, 2px);
+    }
+
+    .slot-row {
+      padding: var(--space-small) 0;
+      border-bottom: 1px solid var(--color-border, #E9E9E9);
+    }
+
+    .slot-row:last-child { border-bottom: none; }
+
+    .slot-row-line {
+      display: flex;
+      align-items: center;
+      gap: var(--space-small);
+      flex-wrap: wrap;
+      padding: 0 var(--space-small);
+    }
+
+    .slot-row-num {
+      font-weight: var(--font-weight-bold);
+      font-size: .92857143em;
+      color: var(--color-text-muted, #767676);
+      min-width: 20px;
+      flex: 0 0 20px;
+    }
+
+    .slot-row-date {
+      flex: 0 0 260px;
+      max-width: 260px;
+    }
+
+    .slot-row-time {
+      flex: 0 0 140px;
+      max-width: 140px;
+    }
+
+    .slot-row-status {
+      margin-left: var(--space-tiny, 4px);
+    }
+
+    .slot-row-skip {
+      margin-left: auto;
+    }
+
+    .slot-row-skipped .slot-row-line {
+      align-items: center;
+    }
+
+    .slot-row-skipped-text {
+      font-size: 1rem;
+      opacity: 0.55;
+      flex: 0 0 auto;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: var(--space-tiny) 0;
+      border-bottom: 1px solid var(--color-border, #E9E9E9);
+      font-size: 0.9rem;
+    }
+
+    .summary-row:last-child { border-bottom: none; }
+
+    .summary-label { color: var(--color-text-muted, #767676); }
+    .summary-value { font-weight: var(--font-weight-bold); }
+
+    .summary-appt {
+      font-size: 0.85rem;
+      padding: var(--space-tiny) 0;
+      padding-left: var(--space-small);
+      color: var(--color-text);
+    }
+
+    .action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: var(--space-medium);
+      gap: var(--space-small);
+    }
+
+
+
+    .hidden { display: none !important; }
+
+    .form-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-small);
+      margin-bottom: var(--space-small);
+    }
+
+    .form-section-header .card-title {
+      margin: 0;
+    }
+
+    .form-section-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8rem;
+      color: var(--color-text-muted, #767676);
+    }
+
+    .form-section-status.committed {
+      color: var(--palette-green, #21BA45);
+    }
+
+    .form-section-status .status-icon {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 3;
+    }
+
+    .form-section-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-small);
+      padding: var(--space-small) var(--space-medium);
+      background: rgba(33, 133, 208, 0.06);
+      border: 1px solid rgba(33, 133, 208, 0.2);
+      border-radius: var(--radius);
+    }
+
+    .form-section-chip-value {
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text);
+      font-size: 0.9rem;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #error-banner { margin-bottom: var(--space-medium); }
+
+    .spinner {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border: 3px solid var(--color-border-subtle, #e0e0e0);
+      border-top-color: var(--color-text, #1976d2);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .spinner-label {
+      margin-top: var(--space-small);
+      font-size: 0.9rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .booking-progress-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-medium);
+      padding: var(--space-huge) var(--space-medium);
+      min-height: 240px;
+    }
+    .booking-progress-counter {
+      font-size: 1rem;
+      color: var(--color-text, #1f1f1f);
+    }
+    .booking-progress-summary {
+      text-align: center;
+      color: var(--color-text, #1f1f1f);
+      max-width: 32rem;
+      line-height: 1.4;
+    }
+    .booking-progress-actions {
+      display: flex;
+      gap: var(--space-small);
+      justify-content: center;
+    }
+
+    .avail-pct {
+      font-size: 0.85rem;
+      color: var(--color-text-muted, #767676);
+      margin-top: var(--space-tiny);
+    }
+
+    /*
+      Ranked provider cards, the only provider picker. Revealed once a note
+      type is chosen, ordered most available first, top three shown with a
+      Show more control. Each card is a real canvas-card, so no background,
+      border, radius, or shadow is set here, only the pointer affordance.
+      The selected card also carries the raised attribute.
+    */
+    /*
+      Grid with auto-fill rather than a wrapping flex row. auto-fill keeps
+      phantom tracks alive, so a lone card on the last row occupies exactly
+      one track and matches the column width above it, where flex would let
+      it grow into the whole row. The min() floor keeps single column flow
+      on narrow surfaces, and the track ceiling is the modal width itself.
+    */
+    .provider-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr));
+      gap: var(--space-tiny);
+    }
+    /*
+      The cards sit in a grid that stretches every cell to the tallest in the
+      row, but canvas-card's inner surface is width 100% with no height, so a
+      card with a Recommended badge looks taller than one without. Making the
+      host a grid turns that inner surface into a grid item, which stretches to
+      fill the cell, so every card in a row matches the tallest one. This outer
+      rule on the host wins over the component's own :host display:block.
+    */
+    .provider-card {
+      display: grid;
+      cursor: pointer;
+    }
+    /*
+      Selection is a fill, not a ring. The ring visual belongs to keyboard
+      focus in this design system, so the selected card tints to the native
+      LIGHT blue instead, the color home-app uses to mark the active visit
+      grouping. The card and its body both paint --color-surface, so one
+      custom property flips the whole card.
+    */
+    .provider-card:hover { --color-surface: #F7FBFD; }
+    .provider-card:focus-visible {
+      outline: var(--focus-ring, 2px solid #2185D0);
+      outline-offset: var(--focus-ring-offset, 2px);
+    }
+    .provider-card.selected { --color-surface: #E9F3FA; }
+    .provider-card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-small);
+    }
+    .provider-card-main {
+      display: flex;
+      align-items: center;
+      gap: var(--space-tiny);
+      min-width: 0;
+    }
+    /* The radio leads the card, kept to its own width so it never stretches
+       and never shrinks against the name beside it. */
+    .provider-card-radio {
+      flex: 0 0 auto;
+      width: max-content;
+      pointer-events: none;
+    }
+    .provider-card-name {
+      font-weight: var(--font-weight-bold);
+      color: var(--color-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .provider-card-avail {
+      flex: 0 0 auto;
+      font-size: 0.85rem;
+      color: var(--color-text-muted, #767676);
+    }
+    .provider-show-more { margin-top: var(--space-tiny); }
+  </style>
+</head>
+<body>
+  <canvas-modal-header dismissable id="modal-header" class="modal-header-pinned">Schedule Appointment</canvas-modal-header>
+  <div class="modal-shell">
+
+  <div id="error-banner" class="hidden">
+    <canvas-banner variant="error" id="error-text">Something went wrong. Try again.</canvas-banner>
+  </div>
+
+  <canvas-banner variant="success" id="booking-success-banner" class="hidden" style="margin-bottom:var(--space-medium);">
+    Appointments booked successfully.
+  </canvas-banner>
+
+  <div id="booking-success-actions" class="booking-progress-actions hidden" style="justify-content:flex-start;margin-bottom:var(--space-medium);">
+    <canvas-button id="btn-schedule-another">Schedule another</canvas-button>
+    <canvas-button id="btn-success-close" variant="ghost">Close</canvas-button>
+  </div>
+
+  <div class="top-grid">
+    <div class="top-grid-left">
+      <section class="form-section" id="section-patient">
+        <canvas-combobox
+          id="patient-search-input"
+          class="field-cap-picker"
+          label="Patient"
+          placeholder="Search by name"
+          empty-state="Type at least 2 letters."
+          {% if patient_id %}disabled value="{{ patient_id }}"{% endif %}>
+          {% if patient_id and patient_full_name %}
+          <canvas-option value="{{ patient_id }}" label="{{ patient_full_name }}">{{ patient_full_name }}</canvas-option>
+          {% endif %}
+        </canvas-combobox>
+      </section>
+
+      <section class="form-section hidden" id="section-state-recovery">
+        <canvas-combobox
+          id="state-recovery-select"
+          class="field-cap-picker"
+          label="State"
+          placeholder="Select a state">
+        </canvas-combobox>
+        <p class="muted-meta" id="state-recovery-hint">Prefilled from the patient's state. Change it to book in another state for a traveling patient.</p>
+      </section>
+
+      <section class="form-section{% if not patient_id %} hidden{% endif %}" id="section-config">
+        <canvas-dropdown
+          id="note-type-select"
+          class="field-cap-picker"
+          label="Note type"
+          placeholder="Loading note types..."
+          required>
+        </canvas-dropdown>
+        <p id="duration-info" class="muted-meta hidden" style="font-size:16px;">
+          Appointment duration: <span id="duration-info-value"></span> min
+        </p>
+      </section>
+
+      <section class="form-section hidden" id="section-visit-details">
+        <div class="field-group">
+          <label class="field-label">Appointment Type</label>
+          <div class="cadence-options" role="radiogroup" aria-label="Appointment Type">
+            <canvas-radio name="cadence" value="single" label="Single Visit" checked id="cadence-single" data-preset="single"></canvas-radio>
+            <canvas-radio name="cadence" value="weekly" label="Weekly" id="cadence-weekly" data-preset="weekly"></canvas-radio>
+            <canvas-radio name="cadence" value="biweekly" label="Biweekly" id="cadence-biweekly" data-preset="biweekly"></canvas-radio>
+            <canvas-radio name="cadence" value="monthly" label="Monthly" id="cadence-monthly" data-preset="monthly"></canvas-radio>
+            <canvas-radio name="cadence" value="custom" label="Custom" id="cadence-custom" data-preset="custom"></canvas-radio>
+          </div>
+          <div class="cadence-custom hidden" id="cadence-custom-panel">
+            <div class="cadence-custom-row">
+              <label for="custom-interval-value">Repeat every</label>
+              <canvas-input class="field-cap-numeric" type="number" id="custom-interval-value" value="1" min="1" max="52"></canvas-input>
+              <canvas-dropdown id="custom-interval-unit" class="field-cap-numeric">
+                <canvas-option value="day">days</canvas-option>
+                <canvas-option value="week" selected>weeks</canvas-option>
+                <canvas-option value="month">months</canvas-option>
+              </canvas-dropdown>
+            </div>
+            <div class="cadence-custom-row hidden" id="custom-weekdays-row">
+              <label>On</label>
+              <div class="weekday-picker" id="custom-weekday-picker">
+                <button type="button" class="weekday-toggle" data-wd="MO">M</button>
+                <button type="button" class="weekday-toggle" data-wd="TU">T</button>
+                <button type="button" class="weekday-toggle" data-wd="WE">W</button>
+                <button type="button" class="weekday-toggle" data-wd="TH">T</button>
+                <button type="button" class="weekday-toggle" data-wd="FR">F</button>
+                <button type="button" class="weekday-toggle" data-wd="SA">S</button>
+                <button type="button" class="weekday-toggle" data-wd="SU">S</button>
+              </div>
+            </div>
+            <div class="cadence-custom-row">
+              <label for="custom-end-kind">Ends</label>
+              <canvas-dropdown id="custom-end-kind" class="field-cap-numeric">
+                <canvas-option value="count" selected>after</canvas-option>
+                <canvas-option value="until">on</canvas-option>
+              </canvas-dropdown>
+              <canvas-input class="field-cap-numeric" type="number" id="custom-end-count" value="12" min="1" max="52"></canvas-input>
+              <span id="custom-end-suffix">occurrences</span>
+              <canvas-input class="field-cap-picker hidden" type="date" id="custom-end-until"></canvas-input>
+            </div>
+            <div class="cadence-custom-summary" id="custom-rule-summary">
+              Repeats every week. Ends after 12 occurrences.
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group hidden occurrences-field" id="occurrences-group" style="margin-bottom:0;">
+          <canvas-input
+            class="occurrences-input"
+            type="number"
+            id="occurrences"
+            label="Number of Occurrences"
+            value="12"
+            min="1"
+            max="52">
+          </canvas-input>
+          <p class="muted-meta" style="margin-top:var(--space-tiny);">Maximum 52</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="top-grid-right">
+      <section class="form-section hidden" id="section-calendar">
+        <div class="cal-column">
+          <label class="field-label" for="start-date-cal">Start Date</label>
+          <canvas-calendar
+            id="start-date-cal"
+            size="comfortable"
+            week-start="1"
+            selection-mode="single"
+            aria-label="Calendar of viable start dates">
+            <div slot="footer" class="cal-footer">
+              <span class="cal-loading" role="status" aria-live="polite">
+                <span class="cal-loading-spinner" aria-hidden="true"></span>
+                <span>Checking availability</span>
+              </span>
+              <canvas-button id="cal-today" variant="ghost" size="sm">Today</canvas-button>
+            </div>
+          </canvas-calendar>
+          <canvas-banner variant="warning" id="cal-soft-signal" class="hidden" style="margin-top:var(--space-tiny);max-width:100%;"></canvas-banner>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="form-section hidden" id="section-provider-ranked">
+    <p class="field-label" style="margin:0 0 var(--space-tiny);">Provider</p>
+    <p id="provider-state-explainer" class="muted-meta hidden" style="margin:0 0 var(--space-tiny);"></p>
+    <div id="provider-fetch-loading" class="inline-loading hidden">
+      <div class="spinner" aria-label="Loading"></div>
+      <div class="spinner-label">Fetching providers</div>
+    </div>
+    <p id="provider-empty-message" class="muted-meta hidden">No providers licensed in this state.</p>
+    <div id="provider-cards" class="provider-cards" role="radiogroup" aria-label="Providers ranked by availability"></div>
+    <canvas-button id="provider-show-more" variant="ghost" class="provider-show-more hidden">Show more</canvas-button>
+  </section>
+
+  <section class="form-section hidden" id="section-times">
+    <div class="slot-pane-header">
+      <span class="field-label" id="slot-pane-label" style="margin:0;">Available Times</span>
+    </div>
+    <div id="time-pill-grid" class="time-pill-grid" role="group" aria-labelledby="slot-pane-label"></div>
+    <p id="time-pill-status" class="muted-meta hidden" style="margin-top:var(--space-tiny);"></p>
+  </section>
+
+  <section class="form-section hidden" id="section-availability">
+    <div class="form-section-header">
+      <p class="field-label" style="margin:0;">Availability Check</p>
+    </div>
+    <p class="avail-pct" id="check-summary"></p>
+    <p class="avail-pct hidden" id="recovery-note" style="color:var(--color-functional-orange-dark, #b45309);"></p>
+
+    <div id="check-loading" class="inline-loading hidden">
+      <div class="spinner" aria-label="Loading"></div>
+      <div class="spinner-label">Checking slot availability</div>
+    </div>
+
+    <div id="check-results"></div>
+
+    <div id="booking-loading" class="inline-loading hidden">
+      <div class="spinner" aria-label="Booking"></div>
+      <div class="spinner-label">Booking appointments</div>
+    </div>
+  </section>
+
+  <section class="form-section hidden" id="section-book">
+    <div class="action-bar">
+      <span id="booking-count-copy"></span>
+      <canvas-button id="btn-book" disabled>Book Appointments</canvas-button>
+    </div>
+  </section>
+
+  <section id="section-booking-progress" class="form-section hidden">
+    <div class="booking-progress-block">
+      <div class="spinner" aria-label="Booking" id="booking-progress-spinner"></div>
+      <div class="booking-progress-counter" id="booking-progress-counter">Booking 1 of 1</div>
+      <div class="booking-progress-summary hidden" id="booking-progress-summary"></div>
+      <div class="booking-progress-actions hidden" id="booking-progress-actions">
+        <canvas-button id="btn-booking-retry" class="hidden" variant="ghost">Retry remaining</canvas-button>
+        <canvas-button id="btn-booking-close">Close</canvas-button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    let PATIENT_ID = "{{ patient_id }}";
+    const API_BASE = "/plugin-io/api/scheduling_modal_with_recurring_support/scheduling";
+    const CACHE_BUST = "{{ cache_bust }}";
+    const NEEDS_PATIENT_SELECTION = {{ needs_patient_selection|yesno:"true,false" }};
+    // The chart launch resolves the patient's state on the server and renders it
+    // here, so the state dropdown can prefill at load without an extra round trip.
+    // The global launcher path has no patient at load and prefills from the
+    // search result's state_code on patient commit instead.
+    const PATIENT_STATE = "{{ patient_state }}";
+
+    // ---- canvas-combobox / canvas-dropdown option sync helpers ----
+    // canvas-combobox and canvas-dropdown cache their option list at connect
+    // time and never observe child mutations. Any later appendChild on a
+    // <canvas-option> is invisible unless we call back into the component.
+    // The dropdown and combobox components need a manual sync after any
+    // async child mutation, so call back into the component here.
+    function syncDropdownOptions(dropdown, preserveValue) {
+      if (!dropdown || !dropdown.shadowRoot || typeof dropdown._readOptions !== "function") return;
+      const previousValue = preserveValue !== undefined ? preserveValue : dropdown._selectedValue;
+      dropdown._readOptions();
+      if (previousValue != null && dropdown._options.some(o => o.value === previousValue)) {
+        dropdown._selectByValue(previousValue);
+      } else {
+        dropdown._selectedValue = null;
+        dropdown._selectedText = "";
+      }
+      if (typeof dropdown._render === "function") dropdown._render();
+      if (typeof dropdown._bindEvents === "function") dropdown._bindEvents();
+    }
+
+    // Replace the built-in substring filter with a pass-through. Used on
+    // comboboxes whose options come from async server search, where every
+    // loaded option is already a match and built-in filtering would hide
+    // them and flash the "No results" state on each keystroke.
+    function useServerFilter(combobox) {
+      if (!combobox) return;
+      combobox._filter = function() {
+        const items = this.shadowRoot.querySelectorAll(".option");
+        for (let i = 0; i < items.length; i++) items[i].classList.remove("hidden");
+        const empty = this.shadowRoot.querySelector(".empty");
+        if (empty) {
+          if (items.length === 0) empty.classList.add("visible");
+          else empty.classList.remove("visible");
+        }
+      };
+    }
+
+    function syncComboboxOptions(combobox) {
+      if (!combobox || !combobox.shadowRoot || typeof combobox._readOptions !== "function") return;
+      combobox._readOptions();
+      // Decouple dropdown markup from trigger label. _selectByValue uses
+      // o.label for the input value and the menu rebuild below uses o.html
+      // for the li innerHTML. A canvas-option child can carry a data-html
+      // attribute to ship richer markup into the dropdown without polluting
+      // the textContent that becomes the trigger label.
+      (combobox._options || []).forEach(o => {
+        const child = combobox.querySelector(`canvas-option[value="${CSS.escape(String(o.value))}"]`);
+        if (child && child.dataset && child.dataset.html) {
+          o.html = child.dataset.html;
+        }
+      });
+      const menu = combobox.shadowRoot.querySelector(".menu");
+      if (!menu) return;
+      menu.querySelectorAll(".option").forEach(el => el.remove());
+      const empty = menu.querySelector(".empty");
+      (combobox._options || []).forEach((o, i) => {
+        const li = document.createElement("li");
+        let cls = "option";
+        if (o.value === combobox._selectedValue) cls += " selected";
+        li.className = cls;
+        li.setAttribute("role", "option");
+        li.dataset.value = o.value;
+        li.dataset.index = String(i);
+        if (o.disabled) li.setAttribute("aria-disabled", "true");
+        if (o.value === combobox._selectedValue) li.setAttribute("aria-selected", "true");
+        li.innerHTML = o.html;
+        if (empty) menu.insertBefore(li, empty); else menu.appendChild(li);
+      });
+      if (typeof combobox._showAll === "function") combobox._showAll();
+      if (typeof combobox._checkEmpty === "function") combobox._checkEmpty();
+    }
+
+    function syncAndSelect(combo, value) {
+      // _render rebuilds shadowRoot.innerHTML but does not rebind the input
+      // click handler, so calling it here breaks open on click. _selectByValue
+      // updates the input value and the option selected state directly, which
+      // is enough for an at mount selection on a combobox the component has
+      // already initialized.
+      syncComboboxOptions(combo);
+      if (typeof combo._selectByValue === "function") {
+        combo._selectByValue(value, true);
+      }
+    }
+
+    let rowStates = [];
+    let noteTypesLoaded = false;
+    let bookingInFlight = false;
+    // State the scheduler picked for a patient with no state on file. Applies to
+    // this booking session only, sent to the provider list as a filter, never
+    // saved to the patient. Cleared when the selected patient changes.
+    let sessionStateOverride = "";
+
+    const MAX_OCCURRENCES_JS = 52;
+
+    const PRESET_RULES = {
+      single:   { interval: { value: 1, unit: "day" },   end: { kind: "count", count: 1 } },
+      weekly:   { interval: { value: 1, unit: "week" },  end: { kind: "count", count: 12 } },
+      biweekly: { interval: { value: 2, unit: "week" },  end: { kind: "count", count: 12 } },
+      monthly:  { interval: { value: 1, unit: "month" }, end: { kind: "count", count: 12 } },
+    };
+
+    function clonePresetRule(preset) {
+      return JSON.parse(JSON.stringify(PRESET_RULES[preset]));
+    }
+
+    function buildPresetRule(preset, occurrences) {
+      if (preset === "single") return clonePresetRule("single");
+      const rule = clonePresetRule(preset);
+      rule.end.count = Math.max(1, Math.min(occurrences || 1, MAX_OCCURRENCES_JS));
+      return rule;
+    }
+
+    const formState = {
+      patient: { value: null, status: NEEDS_PATIENT_SELECTION ? "pending" : "committed" },
+      provider: { value: null, status: "pending" },
+      noteType: { value: null, status: "pending" },
+      cadence: { value: clonePresetRule("single"), preset: "single", status: "committed" },
+      startDate: { value: null, status: "pending" },
+      time: { value: null, status: "pending" },
+      occurrences: { value: 1, status: "committed" },
+      duration: { value: 60, status: "pending" },
+    };
+
+    // Mirror of services/recurrence.py project_dates. The Python and JS
+    // implementations agree against tests/fixtures/recurrence_fixtures.json.
+    const WEEKDAY_INDEX_JS = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
+
+    function _parseISODate(iso) {
+      const [y, m, d] = iso.split("-").map(n => parseInt(n, 10));
+      return new Date(y, m - 1, d);
+    }
+
+    function _isoLocal(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    }
+
+    function _resolveCountCap(rule) {
+      if (rule.end.kind === "count") return Math.min(rule.end.count, MAX_OCCURRENCES_JS);
+      return MAX_OCCURRENCES_JS;
+    }
+
+    function _withinUntil(d, rule) {
+      if (rule.end.kind !== "until") return true;
+      return d <= _parseISODate(rule.end.until);
+    }
+
+    function _addMonthsClamped(d, months) {
+      if (months === 0) return new Date(d);
+      const total = d.getMonth() + months;
+      const year = d.getFullYear() + Math.floor(total / 12);
+      const month = ((total % 12) + 12) % 12;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      return new Date(year, month, Math.min(d.getDate(), lastDay));
+    }
+
+    function projectDates(rule, isoStart) {
+      const start = _parseISODate(isoStart);
+      const cap = _resolveCountCap(rule);
+      let result = [];
+
+      if (rule.interval.unit === "day") {
+        const step = rule.interval.value;
+        let d = new Date(start);
+        while (result.length < cap) {
+          if (!_withinUntil(d, rule)) break;
+          result.push(_isoLocal(d));
+          d = new Date(d);
+          d.setDate(d.getDate() + step);
+        }
+      } else if (rule.interval.unit === "week") {
+        if (rule.weekdays && rule.weekdays.length > 0) {
+          const offsets = Array.from(new Set(rule.weekdays.map(w => WEEKDAY_INDEX_JS[w]))).sort((a, b) => a - b);
+          const intervalWeeks = rule.interval.value;
+          const startDow = (start.getDay() + 6) % 7;
+          const anchorZero = new Date(start);
+          anchorZero.setDate(anchorZero.getDate() - startDow);
+          let weekIdx = 0;
+          outer: while (result.length < cap) {
+            const weekStart = new Date(anchorZero);
+            weekStart.setDate(weekStart.getDate() + weekIdx * intervalWeeks * 7);
+            for (const offset of offsets) {
+              const candidate = new Date(weekStart);
+              candidate.setDate(candidate.getDate() + offset);
+              if (weekIdx === 0 && candidate < start) continue;
+              if (!_withinUntil(candidate, rule)) break outer;
+              result.push(_isoLocal(candidate));
+              if (result.length >= cap) break outer;
+            }
+            weekIdx += 1;
+          }
+        } else {
+          const step = rule.interval.value * 7;
+          let d = new Date(start);
+          while (result.length < cap) {
+            if (!_withinUntil(d, rule)) break;
+            result.push(_isoLocal(d));
+            d = new Date(d);
+            d.setDate(d.getDate() + step);
+          }
+        }
+      } else {
+        const stepMonths = rule.interval.value;
+        let i = 0;
+        while (result.length < cap) {
+          const d = _addMonthsClamped(start, i * stepMonths);
+          if (!_withinUntil(d, rule)) break;
+          result.push(_isoLocal(d));
+          i += 1;
+        }
+      }
+
+      if (rule.exclusions && rule.exclusions.length > 0) {
+        const excl = new Set(rule.exclusions);
+        result = result.filter(d => !excl.has(d));
+      }
+      return result;
+    }
+
+    function readCustomRule() {
+      const value = parseInt(document.getElementById("custom-interval-value").value, 10) || 1;
+      const unit = document.getElementById("custom-interval-unit").value;
+      const endKind = document.getElementById("custom-end-kind").value;
+      const rule = { interval: { value: Math.max(1, value), unit }, end: null };
+      if (endKind === "until") {
+        const untilValue = document.getElementById("custom-end-until").value;
+        rule.end = { kind: "until", until: untilValue || _isoLocal(new Date()) };
+      } else {
+        const count = parseInt(document.getElementById("custom-end-count").value, 10) || 1;
+        rule.end = { kind: "count", count: Math.max(1, Math.min(count, MAX_OCCURRENCES_JS)) };
+      }
+      if (unit === "week") {
+        const picked = Array.from(document.querySelectorAll("#custom-weekday-picker .weekday-toggle.selected"))
+          .map(b => b.dataset.wd);
+        if (picked.length > 0) rule.weekdays = picked;
+      }
+      return rule;
+    }
+
+    function summariseRule(rule) {
+      const parts = [];
+      const unit = rule.interval.unit;
+      const unitLabel = unit === "day" ? "day" : unit === "week" ? "week" : "month";
+      const value = rule.interval.value;
+      parts.push(`Repeats every ${value === 1 ? unitLabel : value + " " + unitLabel + "s"}`);
+      if (unit === "week" && rule.weekdays && rule.weekdays.length > 0) {
+        parts.push(`on ${rule.weekdays.join(", ")}`);
+      }
+      if (rule.end.kind === "count") {
+        parts.push(`ends after ${rule.end.count} occurrence${rule.end.count === 1 ? "" : "s"}`);
+      } else {
+        parts.push(`ends on ${rule.end.until}`);
+      }
+      return parts.join(", ") + ".";
+    }
+
+    let customRuleRefreshTimer = null;
+
+    function refreshCustomSummary() {
+      const rule = readCustomRule();
+      const el = document.getElementById("custom-rule-summary");
+      if (el) el.textContent = summariseRule(rule);
+      // Also update form state if user is on custom path.
+      if (formState.cadence.preset === "custom") {
+        formState.cadence.value = rule;
+        formState.cadence.status = "committed";
+        if (customRuleRefreshTimer) clearTimeout(customRuleRefreshTimer);
+        customRuleRefreshTimer = setTimeout(() => {
+          refreshCalendarScores();
+          maybeLoadProviders();
+          recomputeAvailability();
+          maybeRunAvailabilityCheck();
+          updateBookButton();
+        }, 200);
+      }
+    }
+
+    function isFormComplete() {
+      return Object.values(formState).every(s => s.status === "committed");
+    }
+
+    function isVisitDetailsComplete() {
+      return formState.noteType.status === "committed"
+        && formState.cadence.status === "committed"
+        && formState.startDate.status === "committed"
+        && formState.time.status === "committed"
+        && formState.occurrences.status === "committed";
+    }
+
+    const ICON_CHECK = '<svg class="status-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 13 10 18 19 7"></polyline></svg>';
+
+    const sectionEditing = {
+      patient: false,
+      provider: false,
+    };
+
+    function setStatus(id, committed, label) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (committed) {
+        el.classList.add("committed");
+        el.innerHTML = ICON_CHECK + (label ? `<span>${label}</span>` : "<span>Set</span>");
+      } else {
+        el.classList.remove("committed");
+        el.innerHTML = "";
+      }
+    }
+
+    function renderUI() {
+      // No-op: status indicators were removed alongside the section cards.
+    }
+
+    function commitPatient(p) {
+      formState.patient.value = p;
+      formState.patient.status = "committed";
+      sectionEditing.patient = false;
+      PATIENT_ID = p.id;
+      renderUI();
+      updateBookButton();
+    }
+
+    // Note type sits in the top row and appears the moment a patient is
+    // committed. It is the rightmost column, so revealing it shifts nothing
+    // beside it.
+    function showNoteTypeColumn() {
+      document.getElementById("section-config").classList.remove("hidden");
+    }
+
+    // When-before-who reveal. The Appointment Type controls and the start
+    // date calendar appear together the moment a note type is committed,
+    // before the provider is chosen. The provider list and the Available
+    // Times sit below and reveal later, keyed off the start date and the
+    // chosen provider respectively.
+    function revealVisitConfig() {
+      const show = formState.noteType.status === "committed";
+      const details = document.getElementById("section-visit-details");
+      if (details) details.classList.toggle("hidden", !show);
+      const cal = document.getElementById("section-calendar");
+      if (cal) cal.classList.toggle("hidden", !show);
+    }
+
+    function revealTimesSection() {
+      const show = formState.provider.status === "committed";
+      const times = document.getElementById("section-times");
+      if (times) times.classList.toggle("hidden", !show);
+    }
+
+    function commitProvider(p) {
+      formState.provider.value = p;
+      formState.provider.status = p ? "committed" : "pending";
+      sectionEditing.provider = false;
+      markSelectedProviderCard(p ? p.id : null);
+      revealTimesSection();
+      clearCommittedTime();
+      renderUI();
+      recomputeAvailability();
+      maybeRunAvailabilityCheck();
+      updateBookButton();
+    }
+
+    function commitNoteType(id) {
+      formState.noteType.value = id || null;
+      formState.noteType.status = id ? "committed" : "pending";
+      revealVisitConfig();
+      if (id) {
+        // Note type fixes the duration, which feeds both the calendar badge
+        // and the provider ranking. With the calendar now revealed, score its
+        // days provider agnostically, and rank the providers, the start date
+        // defaults to today so the when is already complete.
+        refreshCalendarScores();
+        maybeLoadProviders();
+      }
+      renderUI();
+      maybeRunAvailabilityCheck();
+      updateBookButton();
+    }
+
+    function commitCadence(preset) {
+      formState.cadence.preset = preset;
+      const occGroup = document.getElementById("occurrences-group");
+      const customPanel = document.getElementById("cadence-custom-panel");
+
+      if (preset === "single") {
+        formState.cadence.value = clonePresetRule("single");
+        formState.cadence.status = "committed";
+        formState.occurrences.value = 1;
+        formState.occurrences.status = "committed";
+        occGroup.classList.add("hidden");
+        if (customPanel) customPanel.classList.add("hidden");
+      } else if (preset === "custom") {
+        formState.cadence.value = readCustomRule();
+        formState.cadence.status = "committed";
+        formState.occurrences.status = "committed";
+        occGroup.classList.add("hidden");
+        if (customPanel) customPanel.classList.remove("hidden");
+        syncCustomWeekdaysUI();
+        syncCustomEndKindUI();
+        refreshCustomSummary();
+      } else {
+        const occInput = document.getElementById("occurrences");
+        const n = parseInt(occInput.value, 10) || 1;
+        formState.occurrences.value = n;
+        formState.occurrences.status = n >= 1 ? "committed" : "pending";
+        formState.cadence.value = buildPresetRule(preset, n);
+        formState.cadence.status = "committed";
+        occGroup.classList.remove("hidden");
+        if (customPanel) customPanel.classList.add("hidden");
+      }
+      renderUI();
+
+      refreshCalendarScores();
+      maybeLoadProviders();
+      recomputeAvailability();
+      maybeRunAvailabilityCheck();
+      updateBookButton();
+    }
+
+    function commitStartDate(iso) {
+      formState.startDate.value = iso || null;
+      formState.startDate.status = iso ? "committed" : "pending";
+      const cal = document.getElementById("start-date-cal");
+      if (iso && cal && cal.getAttribute("value") !== iso) {
+        cal.value = iso;
+      }
+      clearCommittedTime();
+      renderUI();
+      maybeLoadProviders();
+      recomputeAvailability();
+      maybeRunAvailabilityCheck();
+      updateBookButton();
+    }
+
+    function commitTime(hhmm) {
+      formState.time.value = hhmm || null;
+      formState.time.status = hhmm ? "committed" : "pending";
+      paintTimePillSelection();
+      renderUI();
+      maybeRunAvailabilityCheck();
+      updateBookButton();
+    }
+
+    // A committed time is only valid for the provider and day it was chosen
+    // against, so changing either must force a fresh choice. Without this the
+    // prior HH:MM survives in formState, paintTimePillSelection silently
+    // reselects it whenever the new day or provider happens to offer the same
+    // time, and the auto availability check fires against a time the scheduler
+    // never picked for this context. Callers clear before recomputeAvailability
+    // so the repainted grid renders with nothing selected.
+    function clearCommittedTime() {
+      formState.time.value = null;
+      formState.time.status = "pending";
+    }
+
+    function commitOccurrences(n) {
+      formState.occurrences.value = n;
+      formState.occurrences.status = n >= 1 ? "committed" : "pending";
+      const preset = formState.cadence.preset;
+      if (preset !== "single" && preset !== "custom" && n >= 1) {
+        formState.cadence.value = buildPresetRule(preset, n);
+      }
+      renderUI();
+      if (preset !== "single") {
+        refreshCalendarScores();
+        maybeLoadProviders();
+        recomputeAvailability();
+      }
+      maybeRunAvailabilityCheck();
+      updateBookButton();
+    }
+
+    const BANNER_COPY = {
+      loadProviders:     "Could not load providers. Refresh the modal or pick a different patient.",
+      saveState:         "Could not save the state. Try again, or pick another state from the list.",
+      loadNoteTypes:     "Could not load note types. Refresh the modal.",
+      availabilityCheck: "Could not check provider availability. Refresh the modal or try a different range.",
+      bookGeneric:       "Could not book the appointments. Try again, or contact your administrator if this keeps happening.",
+      patientSearch:     "Could not search patients right now. Try again.",
+    };
+
+    async function buildFetchError(resp) {
+      let serverMessage = null;
+      try {
+        const errData = await resp.json();
+        if (errData && typeof errData.error === "string" && errData.error.trim().length > 0) {
+          serverMessage = errData.error;
+        }
+        const err = new Error(serverMessage || "HTTP " + resp.status);
+        err.serverMessage = serverMessage;
+        err.status = resp.status;
+        if (errData && Array.isArray(errData.conflicts)) {
+          err.conflicts = errData.conflicts;
+        }
+        return err;
+      } catch (_) {
+        const err = new Error("HTTP " + resp.status);
+        err.serverMessage = null;
+        err.status = resp.status;
+        return err;
+      }
+    }
+
+    function showError(action, err) {
+      const banner = document.getElementById("error-banner");
+      const copy = BANNER_COPY[action] || "Something went wrong. Try again.";
+      const serverMsg = err && err.serverMessage;
+      document.getElementById("error-text").textContent = serverMsg || copy;
+      banner.classList.remove("hidden");
+      if (err) {
+        try { console.error("scheduling-modal", action, err); } catch (_) {}
+      }
+    }
+
+    function clearError() {
+      document.getElementById("error-banner").classList.add("hidden");
+    }
+
+    function onBtnClick(id, handler) {
+      document.getElementById(id).addEventListener("click", () => {
+        const el = document.getElementById(id);
+        if (el.hasAttribute("disabled")) return;
+        handler();
+      }, true);
+    }
+
+    // ---- State recovery panel ----
+    const US_STATES = [
+      ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],
+      ["CA","California"],["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],
+      ["DC","District of Columbia"],["FL","Florida"],["GA","Georgia"],["HI","Hawaii"],
+      ["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],
+      ["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],
+      ["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],
+      ["MS","Mississippi"],["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],
+      ["NV","Nevada"],["NH","New Hampshire"],["NJ","New Jersey"],["NM","New Mexico"],
+      ["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],
+      ["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],
+      ["SC","South Carolina"],["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],
+      ["UT","Utah"],["VT","Vermont"],["VA","Virginia"],["WA","Washington"],
+      ["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"]
+    ];
+
+    const STATE_NAME_MAP = new Map(US_STATES);
+
+    function populateStateSelect() {
+      const sel = document.getElementById("state-recovery-select");
+      if (sel.querySelectorAll("canvas-option").length > 0) return;
+      US_STATES.forEach(([code, name]) => {
+        const opt = document.createElement("canvas-option");
+        opt.setAttribute("value", code);
+        opt.textContent = `${name} (${code})`;
+        sel.appendChild(opt);
+      });
+      syncComboboxOptions(sel);
+    }
+
+    // True when the current patient has no state on file, regardless of whether
+    // a session state has since been picked. Keeps the state combobox visible so
+    // the scheduler can change the pick later. Reset on every patient change.
+    let patientStateMissing = false;
+
+    // Clears the provider selection and everything downstream. Used whenever the
+    // scheduler must pick or change the session state, since a provider chosen
+    // under the old state may not be licensed in the new one. The note type is
+    // independent of state, so it stays as it is.
+    function resetProviderAndBelow() {
+      formState.provider.value = null;
+      formState.provider.status = "pending";
+      clearProviderCards();
+      setProviderFetchLoading(false);
+      document.getElementById("section-times").classList.add("hidden");
+      document.getElementById("section-availability").classList.add("hidden");
+      document.getElementById("section-book").classList.add("hidden");
+      updateBookButton();
+    }
+
+    // Clears the state combobox back to its placeholder. The component's value
+    // setter does not repaint the visible input when set to empty, since there
+    // is no empty option to select, so the selection internals and the input are
+    // reset directly. Used when switching to a patient with no state on file so
+    // the dropdown does not keep showing the prior patient's state.
+    function clearStateSelect() {
+      const sel = document.getElementById("state-recovery-select");
+      if (!sel) return;
+      sel._selectedValue = null;
+      sel._selectedText = "";
+      sel.removeAttribute("value");
+      const input = sel.shadowRoot && sel.shadowRoot.querySelector(".input");
+      if (input) input.value = "";
+    }
+
+    // The state section is one always visible dropdown once a patient is in
+    // context. It is prefilled from the patient's state when one is on file and
+    // stays editable so the scheduler can pick the state of the appointment for a
+    // traveling patient. It is revealed as soon as the patient is known rather
+    // than after the note type. A prefilled value also seeds sessionStateOverride
+    // so the provider fetch and the calendar score send the state for every
+    // patient, not only the stateless recovery case. syncAndSelect selects
+    // silently, so the prefill does not trigger the change handler below.
+    function showStateSection(prefillCode) {
+      populateStateSelect();
+      const section = document.getElementById("section-state-recovery");
+      if (section) section.classList.remove("hidden");
+      const sel = document.getElementById("state-recovery-select");
+      const code = (prefillCode || "").toUpperCase();
+      if (code) {
+        sessionStateOverride = code;
+        if (sel) syncAndSelect(sel, code);
+      } else {
+        sessionStateOverride = "";
+        clearStateSelect();
+      }
+    }
+
+    function renderStateHeader(stateCode, stateMissing, onFile = true) {
+      const explainer = document.getElementById("provider-state-explainer");
+      if (!explainer) return;
+      if (!stateCode && !stateMissing) {
+        explainer.classList.add("hidden");
+        explainer.textContent = "";
+        return;
+      }
+      const fullName = stateCode ? (STATE_NAME_MAP.get(stateCode) || stateCode) : "";
+      explainer.textContent = stateMissing
+        ? `Showing all active providers. License match is not applied because the patient has no state on file.`
+        : `Showing providers licensed in ${fullName}, ranked by availability for these dates.`;
+      explainer.classList.remove("hidden");
+    }
+
+    // ---- Load providers ----
+    // The provider list ranks date aware, against the real projected dates of
+    // the chosen series at the real duration, so it fires only once the when
+    // is set, a note type, a cadence, and a start date all committed. It is
+    // not fetched at patient pick anymore. Every change to the cadence, the
+    // start date, the occurrence count, or the duration re-ranks because the
+    // score moves with the dates.
+    let providersLoaded = false;
+    let loadedProviders = [];
+
+    // While the loader is on, the cards and the Show more button hide so the
+    // spinner sits alone under the explainer rather than stacked above a stale
+    // list. The cards reappear when renderProviderCards paints the new ranking.
+    function setProviderFetchLoading(on) {
+      const el = document.getElementById("provider-fetch-loading");
+      if (el) el.classList.toggle("hidden", !on);
+      if (on) {
+        const wrap = document.getElementById("provider-cards");
+        if (wrap) wrap.classList.add("hidden");
+        const moreBtn = document.getElementById("provider-show-more");
+        if (moreBtn) moreBtn.classList.add("hidden");
+      }
+    }
+
+    // True when a provider list is already painted. Every (re)load now shows
+    // the loader and hides the cards, so the re-rank reads as a deliberate
+    // fetch instead of a silent swap. The providerFetchSeq guard drops stale
+    // responses, so clearing the old cards during the refetch is safe.
+    function providerCardsPresent() {
+      const wrap = document.getElementById("provider-cards");
+      return !!wrap && wrap.querySelector(".provider-card") !== null;
+    }
+
+    function showRankedSection() {
+      document.getElementById("section-provider-ranked").classList.remove("hidden");
+    }
+
+    // Gate plus light debounce. The rapid changes from typing an occurrence
+    // count or clicking through cadences collapse into one fetch, and the
+    // loading state shows at once so the provider area never looks stale while
+    // the new ranking computes.
+    let loadProvidersTimer = null;
+    function maybeLoadProviders() {
+      const ready = !!PATIENT_ID
+        && formState.noteType.status === "committed"
+        && formState.cadence.status === "committed"
+        && formState.startDate.status === "committed";
+      if (!ready) return;
+      // Initiating a fetch deselects any committed provider. The ranking is
+      // about to recompute against the new date, appointment type, cadence,
+      // occurrence count, or duration, so a provider chosen under the prior
+      // inputs must not carry over. The scheduler re-picks from the fresh
+      // list. This also hides Available Times and everything below it.
+      resetProviderAndBelow();
+      showRankedSection();
+      setProviderFetchLoading(true);
+      if (loadProvidersTimer) clearTimeout(loadProvidersTimer);
+      loadProvidersTimer = setTimeout(loadProviders, 250);
+    }
+
+    // Monotonic guard against out of order responses. A fast change can leave
+    // a previous fetch in flight, and if that slower response lands last it
+    // would overwrite the current ranking. Each call takes the next number
+    // and a response only applies while its number is still the latest.
+    let providerFetchSeq = 0;
+
+    async function loadProviders() {
+      const seq = ++providerFetchSeq;
+
+      providersLoaded = false;
+      loadedProviders = [];
+
+      if (!PATIENT_ID
+          || formState.noteType.status !== "committed"
+          || formState.cadence.status !== "committed"
+          || formState.startDate.status !== "committed") {
+        setProviderFetchLoading(false);
+        return;
+      }
+
+      try {
+        showRankedSection();
+        setProviderFetchLoading(true);
+
+        const tz = new Date().getTimezoneOffset();
+        const params = new URLSearchParams({
+          patient_id: PATIENT_ID,
+          start_date: formState.startDate.value,
+          recurrence: JSON.stringify(formState.cadence.value),
+          tz_offset: String(tz),
+          duration_minutes: String(formState.duration.value),
+          v: CACHE_BUST,
+        });
+        if (sessionStateOverride) params.set("state", sessionStateOverride);
+
+        const resp = await fetch(
+          `${API_BASE}/providers?${params.toString()}`,
+          { credentials: "same-origin" }
+        );
+        if (seq !== providerFetchSeq) return;
+        if (!resp.ok) throw await buildFetchError(resp);
+        const data = await resp.json();
+        if (seq !== providerFetchSeq) return;
+
+        if (data.state_missing) {
+          setProviderFetchLoading(false);
+          patientStateMissing = true;
+          // No state on file. The state dropdown is already visible and empty,
+          // so the scheduler can pick one. The provider list stays empty until
+          // then, since the license filter cannot run without a state. Clear any
+          // stale explainer meanwhile.
+          resetProviderAndBelow();
+          const explainer = document.getElementById("provider-state-explainer");
+          if (explainer) {
+            explainer.classList.add("hidden");
+            explainer.textContent = "";
+          }
+          return;
+        }
+
+        loadedProviders = data.providers || [];
+        providersLoaded = true;
+        renderStateHeader(data.state || "", !!data.state_missing, !patientStateMissing);
+
+        // The provider was already deselected when this fetch was initiated in
+        // maybeLoadProviders, so the fresh ranking always paints with nothing
+        // chosen and the scheduler re-picks. A lone viable provider is then
+        // auto-committed below.
+        setProviderFetchLoading(false);
+        renderProviderCards(loadedProviders);
+        maybeAutoSelectSoleProvider();
+      } catch (err) {
+        if (seq !== providerFetchSeq) return;
+        setProviderFetchLoading(false);
+        showError("loadProviders", err);
+      }
+    }
+
+    // ---- Ranked provider cards ----
+    // The only provider picker. Providers arrive already sorted most available
+    // first, so the first three are the top three. The rest stay hidden behind
+    // the Show more button. Each card commits its provider on click.
+    const PROVIDER_CARDS_TOP_N = 3;
+
+    // Honest series availability, the count of occurrences this provider can
+    // take at the best shared start time on the chosen dates, never a 7 day
+    // load percent. A single visit reads open or no opening, a series reads
+    // N of M dates open.
+    function providerAvailabilityLabel(p) {
+      const total = p.series_total_count || 0;
+      const open = p.series_available_count || 0;
+      if (!p.has_capacity) return "No openings for this series";
+      if (total <= 1) return open > 0 ? "Open on this date" : "No opening on this date";
+      if (open === 0) return "No dates open for this series";
+      if (open === total) return `All ${total} dates open`;
+      return `${open} of ${total} dates open`;
+    }
+
+    function clearProviderCards() {
+      const wrap = document.getElementById("provider-cards");
+      if (wrap) wrap.innerHTML = "";
+      const moreBtn = document.getElementById("provider-show-more");
+      if (moreBtn) moreBtn.classList.add("hidden");
+      const emptyMsg = document.getElementById("provider-empty-message");
+      if (emptyMsg) emptyMsg.classList.add("hidden");
+      const ranked = document.getElementById("section-provider-ranked");
+      if (ranked) ranked.classList.add("hidden");
+    }
+
+    function markSelectedProviderCard(id) {
+      document.querySelectorAll("#provider-cards .provider-card").forEach(card => {
+        const isSel = card.dataset.providerId === id;
+        card.classList.toggle("selected", isSel);
+        card.setAttribute("aria-checked", isSel ? "true" : "false");
+        if (isSel) card.setAttribute("raised", "");
+        else card.removeAttribute("raised");
+        const radio = card.querySelector(".provider-card-radio");
+        if (radio) {
+          if (isSel) radio.setAttribute("checked", "");
+          else radio.removeAttribute("checked");
+        }
+      });
+    }
+
+    function selectProviderFromCard(p) {
+      commitProvider(p);
+      // While collapsed, a previously selected overflow card may be the one
+      // visible exception. Picking a different card retires that exception.
+      if (!providersExpanded) applyOverflowVisibility();
+    }
+
+    // The top one left standing. When the ranking yields exactly one viable
+    // candidate there is no real choice to make, so commit it and let the
+    // Available Times reveal without a redundant click. Two or more keeps the
+    // pick explicit, since the scheduler is choosing among real options. The
+    // capacity guard means a lone provider with no openings for this series is
+    // not auto picked, the card stays visible reading its honest count so the
+    // scheduler changes the date or cadence rather than landing on an empty
+    // times list. A provider already committed and surviving a re-rank is left
+    // alone, the id match in loadProviders keeps it.
+    function maybeAutoSelectSoleProvider() {
+      if (formState.provider.status === "committed") return;
+      if (loadedProviders.length !== 1) return;
+      const sole = loadedProviders[0];
+      if (!sole || !sole.has_capacity) return;
+      selectProviderFromCard(sole);
+    }
+
+    function renderProviderCards(providers) {
+      const wrap = document.getElementById("provider-cards");
+      const moreBtn = document.getElementById("provider-show-more");
+      const ranked = document.getElementById("section-provider-ranked");
+      const emptyMsg = document.getElementById("provider-empty-message");
+      if (!wrap || !moreBtn || !ranked) return;
+      // The loader hid the wrap while fetching, reveal it now the ranking paints.
+      wrap.classList.remove("hidden");
+      wrap.innerHTML = "";
+
+      if (!providers.length) {
+        // With the combobox gone there is no empty state to fall back on,
+        // so say it inline where the cards would have been.
+        moreBtn.classList.add("hidden");
+        if (emptyMsg) emptyMsg.classList.remove("hidden");
+        return;
+      }
+      if (emptyMsg) emptyMsg.classList.add("hidden");
+
+      providers.forEach((p, i) => {
+        const card = document.createElement("canvas-card");
+        card.className = "provider-card";
+        card.dataset.providerId = p.id;
+        card.setAttribute("role", "radio");
+        card.setAttribute("tabindex", "0");
+        card.setAttribute("aria-checked", "false");
+        if (i >= PROVIDER_CARDS_TOP_N) card.classList.add("provider-card-overflow", "hidden");
+
+        const body = document.createElement("canvas-card-body");
+        const row = document.createElement("div");
+        row.className = "provider-card-row";
+
+        const main = document.createElement("div");
+        main.className = "provider-card-main";
+        // A real radio control leads the card. Its checked state is driven
+        // centrally by markSelectedProviderCard, the card itself stays the
+        // keyboard control so the radio sits out of the tab order.
+        const radio = document.createElement("canvas-radio");
+        radio.className = "provider-card-radio";
+        radio.setAttribute("name", "provider");
+        radio.setAttribute("value", String(p.id));
+        radio.setAttribute("tabindex", "-1");
+        radio.setAttribute("aria-hidden", "true");
+        main.appendChild(radio);
+        const nameEl = document.createElement("span");
+        nameEl.className = "provider-card-name";
+        nameEl.textContent = p.full_name;
+        main.appendChild(nameEl);
+        if (p.tier === "recommended") {
+          const badge = document.createElement("canvas-badge");
+          badge.setAttribute("color", "blue");
+          badge.setAttribute("size", "mini");
+          badge.textContent = "Recommended";
+          main.appendChild(badge);
+        }
+
+        const avail = document.createElement("span");
+        avail.className = "provider-card-avail";
+        avail.textContent = providerAvailabilityLabel(p);
+
+        row.appendChild(main);
+        row.appendChild(avail);
+        body.appendChild(row);
+        card.appendChild(body);
+
+        card.addEventListener("click", () => selectProviderFromCard(p));
+        card.addEventListener("keydown", e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            selectProviderFromCard(p);
+          }
+        });
+        wrap.appendChild(card);
+      });
+
+      providersExpanded = false;
+      const overflow = providers.length - PROVIDER_CARDS_TOP_N;
+      if (overflow > 0) {
+        moreBtn.textContent = `Show ${overflow} more`;
+        moreBtn.classList.remove("hidden");
+      } else {
+        moreBtn.classList.add("hidden");
+      }
+      ranked.classList.remove("hidden");
+      markSelectedProviderCard(formState.provider.value ? formState.provider.value.id : null);
+      // A committed provider can sit in the overflow after a patient switch,
+      // the visibility pass keeps that card on screen.
+      applyOverflowVisibility();
+    }
+
+    // Show more is a toggle, not a one way reveal. Collapsing keeps one
+    // exception, a selected overflow card stays visible so the collapse can
+    // never hide the user's own choice, and the label counts it out.
+    let providersExpanded = false;
+
+    function applyOverflowVisibility() {
+      const moreBtn = document.getElementById("provider-show-more");
+      const overflowCards = document.querySelectorAll("#provider-cards .provider-card-overflow");
+      if (!moreBtn || !overflowCards.length) return;
+      if (providersExpanded) {
+        overflowCards.forEach(c => c.classList.remove("hidden"));
+        moreBtn.textContent = "Show less";
+        moreBtn.classList.remove("hidden");
+        return;
+      }
+      const selectedId = formState.provider.value ? formState.provider.value.id : null;
+      let hiddenCount = 0;
+      overflowCards.forEach(c => {
+        const keep = c.dataset.providerId === selectedId;
+        c.classList.toggle("hidden", !keep);
+        if (!keep) hiddenCount += 1;
+      });
+      moreBtn.textContent = `Show ${hiddenCount} more`;
+      // A selected card can be the only overflow card, leaving nothing to
+      // reveal. The button hides until the exception retires.
+      moreBtn.classList.toggle("hidden", hiddenCount === 0);
+    }
+
+    document.getElementById("provider-show-more").addEventListener("click", () => {
+      providersExpanded = !providersExpanded;
+      applyOverflowVisibility();
+    });
+
+    // ---- State selection handler ----
+    // Picking a state applies it immediately, no Confirm step. The chosen state
+    // applies to this booking session only. It filters the provider list and is
+    // never saved to the chart, so a patient with no address is not blocked.
+    // Changing the state later re-runs this and re-filters from scratch.
+    document.getElementById("state-recovery-select").addEventListener("change", e => {
+      const code = e.target.value;
+      if (!code) return;
+      sessionStateOverride = code;
+      resetProviderAndBelow();
+      // Re-score the calendar badges and re-rank the providers under the newly
+      // chosen license state.
+      refreshCalendarScores();
+      maybeLoadProviders();
+    });
+
+    // ---- Load note types ----
+    async function loadNoteTypes() {
+      if (noteTypesLoaded) return;
+      try {
+        const resp = await fetch(
+          `${API_BASE}/note-types?v=${CACHE_BUST}`,
+          { credentials: "same-origin" }
+        );
+        if (!resp.ok) throw await buildFetchError(resp);
+        const data = await resp.json();
+        if ((data.note_types || []).length === 0) {
+          showError("loadNoteTypes", { serverMessage: "No note types are configured. Ask your administrator before booking." });
+          return;
+        }
+        const sel = document.getElementById("note-type-select");
+        sel.innerHTML = '';
+        sel.setAttribute("placeholder", "Select note type");
+        data.note_types.forEach(nt => {
+          const opt = document.createElement("canvas-option");
+          opt.setAttribute("value", nt.id);
+          opt.textContent = nt.name;
+          sel.appendChild(opt);
+        });
+        syncDropdownOptions(sel);
+        noteTypesLoaded = true;
+
+        formState.duration.value = data.default_duration_minutes || 60;
+        formState.duration.status = "committed";
+        document.getElementById("duration-info-value").textContent = String(formState.duration.value);
+        document.getElementById("duration-info").classList.remove("hidden");
+      } catch (err) {
+        showError("loadNoteTypes", err);
+      }
+    }
+
+    // ---- Cadence selection ----
+    document.querySelectorAll('canvas-radio[name="cadence"]').forEach(radio => {
+      radio.addEventListener("change", () => {
+        if (radio.hasAttribute("checked") || radio.checked) {
+          commitCadence(radio.getAttribute("value"));
+        }
+      });
+      radio.addEventListener("click", () => {
+        document.querySelectorAll('canvas-radio[name="cadence"]').forEach(r => {
+          if (r !== radio) r.removeAttribute("checked");
+        });
+        radio.setAttribute("checked", "");
+        commitCadence(radio.getAttribute("value"));
+      });
+    });
+
+    document.getElementById("occurrences").addEventListener("input", () => {
+      const n = parseInt(document.getElementById("occurrences").value, 10) || 0;
+      commitOccurrences(n);
+    });
+
+    // ---- Custom recurrence editor wiring ----
+    function syncCustomEndKindUI() {
+      const kind = document.getElementById("custom-end-kind").value;
+      document.getElementById("custom-end-count").classList.toggle("hidden", kind !== "count");
+      document.getElementById("custom-end-suffix").classList.toggle("hidden", kind !== "count");
+      document.getElementById("custom-end-until").classList.toggle("hidden", kind !== "until");
+    }
+
+    function syncCustomWeekdaysUI() {
+      const unit = document.getElementById("custom-interval-unit").value;
+      document.getElementById("custom-weekdays-row").classList.toggle("hidden", unit !== "week");
+    }
+
+    document.getElementById("custom-interval-value").addEventListener("input", refreshCustomSummary);
+    document.getElementById("custom-interval-unit").addEventListener("change", () => {
+      syncCustomWeekdaysUI();
+      refreshCustomSummary();
+    });
+    document.getElementById("custom-end-kind").addEventListener("change", () => {
+      syncCustomEndKindUI();
+      refreshCustomSummary();
+    });
+    document.getElementById("custom-end-count").addEventListener("input", refreshCustomSummary);
+    document.getElementById("custom-end-until").addEventListener("input", refreshCustomSummary);
+    document.querySelectorAll("#custom-weekday-picker .weekday-toggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        btn.classList.toggle("selected");
+        refreshCustomSummary();
+      });
+    });
+
+    function startOfWeek(d) {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const dow = x.getDay();
+      const offset = (dow + 6) % 7;
+      x.setDate(x.getDate() - offset);
+      return x;
+    }
+
+    function isoDate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    // ---- Past time helpers (allow scheduling only at or after the current
+    // moment). Time math is done with locally constructed Dates so it agrees
+    // with the browser offset the booking payload sends.
+    function clientNow() {
+      // Single call site for the current moment so a future test seam is easy.
+      return new Date();
+    }
+
+    function isPastHHMM(dateIso, hhmm) {
+      // Build a local Date from the iso date and HH:MM and compare to now.
+      if (!dateIso || !hhmm) return false;
+      const parts = dateIso.split("-");
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      const hm = hhmm.split(":");
+      const hh = parseInt(hm[0], 10);
+      const mm = parseInt(hm[1], 10);
+      if ([y, m, d, hh, mm].some(n => Number.isNaN(n))) return false;
+      const when = new Date(y, m - 1, d, hh, mm);
+      return when < clientNow();
+    }
+
+    function dropPastTimes(slots, dateIso, key) {
+      // For a future date there is no per option cost, the list is returned
+      // unchanged. Only when the date is today do we filter past times out.
+      if (dateIso !== isoDate(clientNow())) return slots;
+      return slots.filter(s => !isPastHHMM(dateIso, s[key]));
+    }
+
+    // ---- Calendar of viable starts (item C) ----
+
+    const CAL_WINDOW_CAP_DAYS = 90;
+
+    let candidateMap = new Map();
+    let candidateFetchAbort = null;
+    let candidateFetchToken = 0;
+    let calVisible = null;
+
+    function ruleIsSingleVisit(rule) {
+      return rule
+        && rule.end
+        && rule.end.kind === "count"
+        && rule.end.count === 1;
+    }
+
+    function calVisibleWindow(year, month) {
+      // Score fetch is scoped to the displayed month only. Outside cells
+      // that the calendar grid renders for layout cannot be selected by
+      // the user, and our shadow stylesheet hides their score badges, so
+      // fetching scores for those days is pure server cost. When the user
+      // pages months, month-change fires a fresh fetch with the new range.
+      const start = new Date(year, month, 1);
+      const end = new Date(year, month + 1, 0);
+      return { start, end };
+    }
+
+    function repaintCalendar() {
+      const cal = document.getElementById("start-date-cal");
+      if (cal && typeof cal.dayContent === "function") {
+        cal.dayContent = cal.dayContent;
+      }
+    }
+
+    async function fetchCandidateScores() {
+      const rule = formState.cadence.value;
+      const cal = document.getElementById("start-date-cal");
+
+      // The badge is provider agnostic now, it counts how many candidate
+      // providers can cover the whole series from each day, so it needs a
+      // patient for the license filter, a note type for the duration, and a
+      // committed rule, but no provider.
+      if (!PATIENT_ID
+          || formState.noteType.status !== "committed"
+          || !rule
+          || formState.cadence.status !== "committed") {
+        candidateMap = new Map();
+        repaintCalendar();
+        if (cal) cal.removeAttribute("data-loading");
+        return;
+      }
+
+      if (!calVisible) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const horizon = new Date(today);
+      horizon.setDate(horizon.getDate() + CAL_WINDOW_CAP_DAYS - 1);
+
+      const windowStart = calVisible.start < today ? today : new Date(calVisible.start);
+      const windowEnd = calVisible.end > horizon ? horizon : new Date(calVisible.end);
+
+      if (windowEnd < windowStart) {
+        candidateMap = new Map();
+        repaintCalendar();
+        if (cal) cal.removeAttribute("data-loading");
+        return;
+      }
+
+      if (candidateFetchAbort) candidateFetchAbort.abort();
+      candidateFetchAbort = new AbortController();
+      const fetchToken = ++candidateFetchToken;
+
+      candidateMap = new Map();
+      repaintCalendar();
+      setCalendarSoftSignal(null);
+      if (cal) cal.setAttribute("data-loading", "");
+
+      try {
+        const tz = new Date().getTimezoneOffset();
+        const reqBody = {
+          patient_id: PATIENT_ID,
+          recurrence: rule,
+          search_window_start: isoDate(windowStart),
+          search_window_end: isoDate(windowEnd),
+          tz_offset: tz,
+          duration_minutes: formState.duration.value,
+        };
+        if (sessionStateOverride) reqBody.state = sessionStateOverride;
+        const resp = await fetch(`${API_BASE}/candidate-first-dates?v=${CACHE_BUST}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          signal: candidateFetchAbort.signal,
+          body: JSON.stringify(reqBody),
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        if (fetchToken !== candidateFetchToken) return;
+        candidateMap = new Map(
+          (data.candidates || []).map(c => [
+            c.first_date,
+            { covering: c.covering_count, candidates: c.candidate_count },
+          ])
+        );
+        // The agnostic badge also resolves the patient state. With no state on
+        // file the badges keep rendering over all active providers while the
+        // already visible state dropdown lets the scheduler narrow the license
+        // filter. A real state on file just refreshes the provider explainer.
+        if (data.state_missing) {
+          patientStateMissing = true;
+        } else if (!patientStateMissing) {
+          renderStateHeader(data.state || "", false, true);
+        }
+        repaintCalendar();
+        setCalendarSoftSignal(null);
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (fetchToken !== candidateFetchToken) return;
+        candidateMap = new Map();
+        repaintCalendar();
+        setCalendarSoftSignal("Day availability counts are unavailable right now. The calendar still works.");
+        try { console.error("scheduling-modal", "candidateScores", err); } catch (_) {}
+      } finally {
+        if (fetchToken === candidateFetchToken && cal) {
+          cal.removeAttribute("data-loading");
+        }
+      }
+    }
+
+    function setCalendarSoftSignal(message) {
+      const el = document.getElementById("cal-soft-signal");
+      if (!el) return;
+      if (message) {
+        el.textContent = message;
+        el.classList.remove("hidden");
+      } else {
+        el.textContent = "";
+        el.classList.add("hidden");
+      }
+    }
+
+    function refreshCalendarScores() {
+      fetchCandidateScores();
+    }
+
+    (function mountStartDateCalendar() {
+      const cal = document.getElementById("start-date-cal");
+      if (!cal) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const horizon = new Date(today);
+      horizon.setDate(horizon.getDate() + CAL_WINDOW_CAP_DAYS);
+
+      cal.setAttribute("min", isoDate(today));
+      cal.setAttribute("max", isoDate(horizon));
+      cal.value = isoDate(today);
+
+      cal.dayContent = (date) => {
+        const iso = isoDate(date);
+        const candidate = candidateMap.get(iso);
+        const span = document.createElement("span");
+        span.className = "score";
+        if (!candidate) {
+          span.classList.add("score-placeholder");
+          span.textContent = "0/0";
+          return span;
+        }
+        // covering is how many candidate providers can serve the booking
+        // starting this day, the same providers the card list shows with their
+        // honest count. The badge reads that count in both modes, a single
+        // visit counts providers free that day, a series counts providers who
+        // can start the series that day. A day no one can serve reads zero, a
+        // real dead end, grayed out. The title spells the number out so the
+        // bare count is not cryptic.
+        const ruleIsSingle = ruleIsSingleVisit(formState.cadence.value);
+        const n = candidate.covering;
+        const noun = n === 1 ? "provider" : "providers";
+        if (n > 0) {
+          span.textContent = String(n);
+          span.classList.add("score-open");
+          span.title = ruleIsSingle
+            ? `${n} ${noun} free that day`
+            : `${n} ${noun} open for a series from this day`;
+        } else {
+          span.textContent = "0";
+          span.classList.add("score-empty");
+          span.title = ruleIsSingle
+            ? "No providers free that day"
+            : "No providers open for a series from this day";
+        }
+        return span;
+      };
+
+      cal.addEventListener("change", (e) => {
+        const next = (e.detail && e.detail.value) || cal.value;
+        if (!next || next === formState.startDate.value) return;
+        commitStartDate(next);
+      });
+
+      cal.addEventListener("month-change", (e) => {
+        if (e.detail && typeof e.detail.year === "number" && typeof e.detail.month === "number") {
+          calVisible = calVisibleWindow(e.detail.year, e.detail.month);
+        }
+        refreshCalendarScores();
+      });
+
+      onBtnClick("cal-today", () => {
+        const iso = isoDate(new Date());
+        cal.value = iso;
+        commitStartDate(iso);
+      });
+
+      // CSS does not cross the canvas-calendar shadow boundary, so any
+      // rule we want to apply to .score spans inside dayContent or to the
+      // outside month .cell elements must live inside the calendar's
+      // shadow root. Inject one stylesheet that covers both cases. Inside
+      // cells with no candidate get an invisible .score.score-placeholder
+      // span via dayContent. Outside cells get a pseudo element with the
+      // same metrics so day numbers align across the whole grid.
+      function injectCalendarShadowStyles(retries) {
+        if (retries === undefined) retries = 10;
+        if (cal.shadowRoot) {
+          if (cal.shadowRoot.getElementById("cal-shadow-overrides-style")) return;
+          const style = document.createElement("style");
+          style.id = "cal-shadow-overrides-style";
+          style.textContent = ""
+            + ".score.score-placeholder { opacity: 0; }"
+            + ".cell.outside::after {"
+            +   "content: \"0/0\";"
+            +   "display: inline-block;"
+            +   "margin-top: 2px;"
+            +   "padding: 1px 6px;"
+            +   "font-size: 0.65rem;"
+            +   "line-height: 1.4;"
+            +   "font-weight: var(--font-weight-bold, 700);"
+            +   "opacity: 0;"
+            + "}";
+          cal.shadowRoot.appendChild(style);
+          return;
+        }
+        if (retries <= 0) return;
+        requestAnimationFrame(() => injectCalendarShadowStyles(retries - 1));
+      }
+      injectCalendarShadowStyles();
+    })();
+
+    document.getElementById("note-type-select").addEventListener("change", e => {
+      commitNoteType(e.target.value || null);
+    });
+
+    // ---- Time pill grid ----
+    // The time picker is a grid of pill buttons, one per available time
+    // for the chosen date, fed by recomputeAvailability below.
+
+    // The status line is dual purpose. A loading message borrows the shared
+    // inline-loading row, a spinner then a left aligned label, to match the
+    // provider fetch wait. Every other message, empty or error, stays plain
+    // text, so the spinner is added only on the loading path and cleared on
+    // all others.
+    function setTimePillStatus(text, opts) {
+      const el = document.getElementById("time-pill-status");
+      if (!el) return;
+      const loading = !!(opts && opts.loading);
+      el.classList.toggle("inline-loading", loading);
+      if (loading) {
+        el.innerHTML =
+          '<span class="spinner" aria-label="Loading"></span>'
+          + '<span class="spinner-label"></span>';
+        el.querySelector(".spinner-label").textContent = text || "";
+        el.classList.remove("hidden");
+        return;
+      }
+      el.textContent = text || "";
+      el.classList.toggle("hidden", !text);
+    }
+
+    function paintTimePillSelection() {
+      const grid = document.getElementById("time-pill-grid");
+      if (!grid) return;
+      const committed = formState.time.value;
+      grid.querySelectorAll(".time-pill").forEach(btn => {
+        const on = !!committed && btn.dataset.hhmm === committed;
+        btn.classList.toggle("selected", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+
+    function renderTimePills(rows, withRatio) {
+      const grid = document.getElementById("time-pill-grid");
+      if (!grid) return;
+      grid.innerHTML = "";
+      for (const t of rows) {
+        const btn = document.createElement("canvas-button");
+        btn.className = "time-pill";
+        btn.dataset.hhmm = t.hhmm;
+        const label = document.createElement("span");
+        label.textContent = formatHHMMto12h(t.hhmm);
+        btn.appendChild(label);
+        // Every pill of a real series carries its occurrence ratio so the
+        // scheduler can see, per time, whether it covers the whole series or
+        // only some dates without clicking through. A pill only exists when the
+        // time is free on the start date, so the count is always at least 1/m,
+        // never zero. Full reads quiet gray, partial reads amber. A single
+        // visit has total 1, where a 1/1 is meaningless, so it stays bare.
+        if (withRatio
+            && typeof t.available_count === "number"
+            && typeof t.total_count === "number"
+            && t.total_count > 1) {
+          const ratio = document.createElement("span");
+          ratio.className = "pill-ratio";
+          ratio.classList.add(
+            t.available_count >= t.total_count ? "pill-ratio-full" : "pill-ratio-partial"
+          );
+          ratio.textContent = `(${t.available_count}/${t.total_count})`;
+          btn.appendChild(ratio);
+        }
+        // canvas-button clicks do not bubble out of the shadow DOM, listen
+        // in the capture phase like onBtnClick does. A second click on the
+        // selected pill deselects, matching the native slot grid.
+        btn.addEventListener("click", () => {
+          if (btn.hasAttribute("disabled")) return;
+          const hhmm = btn.dataset.hhmm;
+          commitTime(formState.time.value === hhmm ? null : hhmm);
+        }, true);
+        grid.appendChild(btn);
+      }
+      paintTimePillSelection();
+    }
+
+    let availableTimesAbort = null;
+
+    async function recomputeAvailability() {
+      const provider = formState.provider.value;
+      const dateVal = formState.startDate.value;
+
+      if (!provider || !dateVal) {
+        renderTimePills([], false);
+        setTimePillStatus("Select a date first.");
+        return;
+      }
+
+      renderTimePills([], false);
+      setTimePillStatus("Loading times", { loading: true });
+
+      if (availableTimesAbort) availableTimesAbort.abort();
+      availableTimesAbort = new AbortController();
+
+      const preset = formState.cadence.preset;
+      // Named preset recurring rules (weekly, biweekly, monthly) flow through
+      // the legacy /candidate-times endpoint which knows them by string.
+      // Single visit and custom rules use /available-times, which returns
+      // the raw time list for the chosen day without per-recurrence counts.
+      const useCandidateTimes = preset !== "single" && preset !== "custom";
+      const occurrences = useCandidateTimes ? (formState.occurrences.value || 1) : 1;
+
+      try {
+        const tz = new Date().getTimezoneOffset();
+        const url = useCandidateTimes
+          ? `${API_BASE}/candidate-times?provider_id=${provider.id}&cadence=${preset}&start_date=${dateVal}&occurrences=${occurrences}&tz_offset=${tz}&duration_minutes=${formState.duration.value}&v=${CACHE_BUST}`
+          : `${API_BASE}/available-times?provider_id=${provider.id}&date=${dateVal}&tz_offset=${tz}&duration_minutes=${formState.duration.value}&v=${CACHE_BUST}`;
+
+        const resp = await fetch(url, {
+          credentials: "same-origin",
+          signal: availableTimesAbort.signal,
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        const rawRows = useCandidateTimes ? (data.candidate_times || []) : (data.times || []);
+        const rows = dropPastTimes(rawRows, dateVal, "hhmm");
+
+        if (rows.length === 0) {
+          renderTimePills([], false);
+          setTimePillStatus("No available times for this date. Pick another day.");
+          maybeRunAvailabilityCheck();
+          return;
+        }
+
+        renderTimePills(rows, useCandidateTimes);
+        setTimePillStatus("");
+        maybeRunAvailabilityCheck();
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        renderTimePills([], false);
+        setTimePillStatus("Could not load times for this date. Pick another date or try again.");
+      }
+    }
+
+    function formatHHMMto12h(hhmm) {
+      const [hStr, mStr] = hhmm.split(":");
+      const h = parseInt(hStr, 10);
+      const m = parseInt(mStr, 10);
+      const ampm = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 || 12;
+      return m === 0 ? `${h12}:00 ${ampm}` : `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+    }
+
+    // ---- Availability check, auto-fired on input changes ----
+    let availabilityCheckTimer = null;
+    let availabilityCheckSeq = 0;
+
+    function isAvailabilityCheckReady() {
+      return formState.provider.status === "committed"
+        && formState.startDate.status === "committed"
+        && formState.noteType.status === "committed"
+        && formState.time.status === "committed"
+        && formState.occurrences.status === "committed";
+    }
+
+    function maybeRunAvailabilityCheck() {
+      if (availabilityCheckTimer) clearTimeout(availabilityCheckTimer);
+      availabilityCheckSeq += 1;
+      rowStates = [];
+      document.getElementById("btn-book").setAttribute("disabled", "");
+      document.getElementById("section-availability").classList.add("hidden");
+      document.getElementById("check-results").innerHTML = "";
+      document.getElementById("check-summary").textContent = "";
+      document.getElementById("check-loading").classList.add("hidden");
+      setRecoveryNote("");
+
+      if (!isAvailabilityCheckReady()) return;
+
+      availabilityCheckTimer = setTimeout(runAvailabilityCheck, 250);
+    }
+
+    async function runAvailabilityCheck() {
+      const seq = availabilityCheckSeq;
+      clearError();
+
+      document.getElementById("section-availability").classList.remove("hidden");
+      document.getElementById("check-loading").classList.remove("hidden");
+      document.getElementById("check-results").innerHTML = "";
+      document.getElementById("check-summary").textContent = "";
+
+      const provider = formState.provider.value;
+      const rule = formState.cadence.value;
+      const startDate = formState.startDate.value;
+      const startTime = formState.time.value;
+
+      const projected = projectDates(rule, startDate);
+      const slots = projected.map(d => ({ date: d, start_time: startTime }));
+
+      try {
+        const resp = await fetch(`${API_BASE}/check-slots?v=${CACHE_BUST}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider_id: provider.id, slots: slots, tz_offset: new Date().getTimezoneOffset(), duration_minutes: formState.duration.value }),
+        });
+        if (seq !== availabilityCheckSeq) return;
+        if (!resp.ok) throw await buildFetchError(resp);
+        const data = await resp.json();
+        if (seq !== availabilityCheckSeq) return;
+        document.getElementById("check-loading").classList.add("hidden");
+        renderCheckResults(data);
+      } catch (err) {
+        if (seq !== availabilityCheckSeq) return;
+        document.getElementById("check-loading").classList.add("hidden");
+        showError("availabilityCheck", err);
+      }
+    }
+
+    // ---- Row level state for the availability check ----
+    // Every projected occurrence row carries a date combobox, a time
+    // combobox, a status badge, and a Skip control. The scheduler edits
+    // each row directly. Skipped rows are excluded from the booking.
+
+    function buildRowState(i, r) {
+      return {
+        index: i,
+        projectedDate: r.date,
+        projectedTime: r.start_time,
+        committedDate: r.date,
+        committedTime: r.start_time,
+        initialIsFree: !!r.is_free,
+        // free | booked | outside_hours from /check-slots. An older response
+        // without reason falls back to the free boolean so a cached payload
+        // still paints a sensible badge.
+        initialReason: r.reason || (r.is_free ? "free" : "outside_hours"),
+        initialAvailableTimes: (r.available_times || []).map(t => ({
+          hhmm: formatTimeHHMM(t.start),
+          start: t.start,
+          end: t.end,
+        })),
+        skipped: false,
+        windowLoaded: false,
+        windowLoadFailed: false,
+        windowInFlight: null,
+        windowByDate: {},
+        windowBookedByDate: {},
+        windowMinDate: null,
+        windowMaxDate: null,
+        rowEl: null,
+        dateCombobox: null,
+        timeCombobox: null,
+        statusBadge: null,
+      };
+    }
+
+    async function ensureRowWindowLoaded(state) {
+      if (state.windowLoaded) return;
+      if (state.windowLoadFailed) return;
+      if (state.windowInFlight) return state.windowInFlight;
+
+      // Anchor the window on this row's projected date so each row sees its
+      // own neighborhood. The server clamps the start to today, so a row in
+      // the past still gets a forward looking range.
+      const anchor = _parseISODate(state.projectedDate);
+      const windowStart = new Date(anchor);
+      windowStart.setDate(windowStart.getDate() - 7);
+      const windowEnd = new Date(anchor);
+      windowEnd.setDate(windowEnd.getDate() + 13);
+      const windowStartIso = isoDate(windowStart);
+      const windowEndIso = isoDate(windowEnd);
+
+      state.windowInFlight = (async () => {
+        try {
+          const tz = new Date().getTimezoneOffset();
+          const provider = formState.provider.value;
+          if (!provider || !provider.id) throw new Error("no provider committed");
+          const url = `${API_BASE}/availability-window`
+            + `?provider_id=${encodeURIComponent(provider.id)}`
+            + `&window_start=${windowStartIso}`
+            + `&window_end=${windowEndIso}`
+            + `&tz_offset=${tz}`
+            + `&duration_minutes=${formState.duration.value}`
+            + `&v=${CACHE_BUST}`;
+          const resp = await fetch(url, { credentials: "same-origin" });
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+          const data = await resp.json();
+          state.windowByDate = data.by_date || {};
+          state.windowBookedByDate = data.booked_by_date || {};
+          state.windowMinDate = (data.window && data.window.start) || windowStartIso;
+          state.windowMaxDate = (data.window && data.window.end) || windowEndIso;
+          state.windowLoaded = true;
+          state.windowLoadFailed = false;
+        } catch (err) {
+          state.windowLoaded = false;
+          state.windowLoadFailed = true;
+          if (state.dateCombobox) {
+            state.dateCombobox.setAttribute("disabled", "");
+          }
+          applyStatusBadge(state);
+          try { console.error("scheduling-modal", "availabilityWindow", err); } catch (_) {}
+        } finally {
+          state.windowInFlight = null;
+        }
+      })();
+      return state.windowInFlight;
+    }
+
+    function dateCoveredByWindow(state, iso) {
+      if (!state.windowLoaded) return false;
+      if (!state.windowMinDate || !state.windowMaxDate) return false;
+      return iso >= state.windowMinDate && iso <= state.windowMaxDate;
+    }
+
+    // Load availability for a date the row's current window does not cover, so
+    // moving an occurrence to a far date refreshes its times and status instead
+    // of looking frozen. Replaces the window anchored on the new date so the
+    // min and max stay contiguous and the date picker shows the new
+    // neighborhood. Returns true when a refetch happened so the caller can
+    // repaint the date options.
+    async function ensureDateCovered(state, iso) {
+      if (dateCoveredByWindow(state, iso)) return false;
+      const provider = formState.provider.value;
+      if (!provider || !provider.id) return false;
+      const anchor = _parseISODate(iso);
+      const windowStart = new Date(anchor);
+      windowStart.setDate(windowStart.getDate() - 7);
+      const windowEnd = new Date(anchor);
+      windowEnd.setDate(windowEnd.getDate() + 13);
+      const windowStartIso = isoDate(windowStart);
+      const windowEndIso = isoDate(windowEnd);
+      try {
+        const tz = new Date().getTimezoneOffset();
+        const url = `${API_BASE}/availability-window`
+          + `?provider_id=${encodeURIComponent(provider.id)}`
+          + `&window_start=${windowStartIso}`
+          + `&window_end=${windowEndIso}`
+          + `&tz_offset=${tz}`
+          + `&duration_minutes=${formState.duration.value}`
+          + `&v=${CACHE_BUST}`;
+        const resp = await fetch(url, { credentials: "same-origin" });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        state.windowByDate = data.by_date || {};
+        state.windowBookedByDate = data.booked_by_date || {};
+        state.windowMinDate = (data.window && data.window.start) || windowStartIso;
+        state.windowMaxDate = (data.window && data.window.end) || windowEndIso;
+        state.windowLoaded = true;
+        state.windowLoadFailed = false;
+        return true;
+      } catch (err) {
+        try { console.error("scheduling-modal", "ensureDateCovered", err); } catch (_) {}
+        return false;
+      }
+    }
+
+    function enumerateDateRange(startIso, endIso) {
+      const start = _parseISODate(startIso);
+      const end = _parseISODate(endIso);
+      const out = [];
+      const cur = new Date(start);
+      while (cur <= end) {
+        out.push(_isoLocal(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+      return out;
+    }
+
+    function populateDateOptions(state) {
+      const dropdown = state.dateCombobox;
+      if (!dropdown) return;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayIso = _isoLocal(today);
+
+      while (dropdown.firstChild) dropdown.removeChild(dropdown.firstChild);
+
+      let dates;
+      if (state.windowLoaded && state.windowMinDate && state.windowMaxDate) {
+        dates = enumerateDateRange(state.windowMinDate, state.windowMaxDate)
+          .filter(iso => iso >= todayIso);
+        if (!dates.includes(state.committedDate)) dates.unshift(state.committedDate);
+      } else {
+        dates = [state.committedDate];
+      }
+
+      // Trigger label stays whatever textContent we set on canvas-option.
+      // The dropdown markup ships separately via data-html so the count
+      // badge only appears inside the open menu, never in the trigger.
+      // Out of window dates skip the badge entirely so we do not render a
+      // misleading "0 free" for dates the window simply did not cover.
+      for (const iso of dates) {
+        const opt = document.createElement("canvas-option");
+        opt.setAttribute("value", iso);
+        const dateLabel = formatDate(iso);
+        const inWindow = !!(state.windowByDate && state.windowByDate[iso]);
+        const slotCount = inWindow
+          ? state.windowByDate[iso].length
+          : state.windowLoaded
+            ? 0
+            : iso === state.projectedDate
+              ? state.initialAvailableTimes.length
+              : null;
+        opt.textContent = slotCount !== null
+          ? slotCount === 0 ? `${dateLabel} (None)` : `${dateLabel} (${slotCount} free)`
+          : dateLabel;
+        const badge = slotCount !== null
+          ? `<canvas-badge color="gray" size="mini">${slotCount === 0 ? "None" : `${slotCount} free`}</canvas-badge>`
+          : "";
+        opt.dataset.html =
+          `<span style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-small);width:100%;">`
+          + `<span>${dateLabel}</span>`
+          + badge
+          + `</span>`;
+        dropdown.appendChild(opt);
+      }
+
+      syncAndSelect(dropdown, state.committedDate);
+    }
+
+    function rowSlotsForDate(state, iso) {
+      let result;
+      if (state.windowLoaded && state.windowByDate && state.windowByDate[iso]) {
+        result = state.windowByDate[iso].slice();
+      } else if (iso === state.projectedDate) {
+        result = state.initialAvailableTimes.slice();
+      } else {
+        result = [];
+      }
+      // Drop past times for a today row so rowHasKnownNoSlots and the time
+      // dropdown both see only selectable times. Filter by the iso passed in
+      // so any caller stays correct, not just the committedDate callers.
+      return dropPastTimes(result, iso, "hhmm");
+    }
+
+    function rowHasKnownNoSlots(state) {
+      const isProjected = state.committedDate === state.projectedDate;
+      if (!state.windowLoaded && !isProjected) return false;
+      return rowSlotsForDate(state, state.committedDate).length === 0;
+    }
+
+    function fillTimeCombobox(combo, state) {
+      const slots = rowSlotsForDate(state, state.committedDate);
+      const seen = new Set(slots.map(s => s.hhmm));
+      if (state.committedTime && !seen.has(state.committedTime)) {
+        slots.unshift({ hhmm: state.committedTime, start: "", end: "" });
+      }
+      slots.sort((a, b) => a.hhmm.localeCompare(b.hhmm));
+
+      while (combo.firstChild) combo.removeChild(combo.firstChild);
+      for (const s of slots) {
+        const opt = document.createElement("canvas-option");
+        opt.setAttribute("value", s.hhmm);
+        opt.textContent = formatHHMMto12h(s.hhmm);
+        combo.appendChild(opt);
+      }
+    }
+
+    function populateTimeOptions(state) {
+      const combo = state.timeCombobox;
+      if (!combo) return;
+      if (rowHasKnownNoSlots(state)) {
+        while (combo.firstChild) combo.removeChild(combo.firstChild);
+        combo.setAttribute("disabled", "");
+        combo.setAttribute("placeholder", "None");
+        combo.value = "";
+      } else {
+        combo.removeAttribute("disabled");
+        combo.setAttribute("placeholder", "Pick a time");
+        fillTimeCombobox(combo, state);
+        syncAndSelect(combo, state.committedTime);
+      }
+    }
+
+    function computeRowStatus(state) {
+      if (state.skipped) return "skipped";
+      // An already committed time that has slipped into the past takes
+      // priority over free, rescheduled, booked, and outside-fhir.
+      if (isPastHHMM(state.committedDate, state.committedTime)) return "past";
+      const dateChanged = state.committedDate !== state.projectedDate;
+      const timeChanged = state.committedTime !== state.projectedTime;
+      if (!dateChanged && !timeChanged) {
+        // Unedited occurrence. Trust the per occurrence reason the backend
+        // returned so a taken time reads booked, not outside hours.
+        if (state.initialReason === "booked") return "booked";
+        return state.initialReason === "free" ? "free" : "outside-fhir";
+      }
+      // Edited row. A time the window offers free is a clean reschedule. A time
+      // the provider is booked at reads booked. Anything else is outside hours.
+      // Read through rowSlotsForDate, not windowByDate directly, so a time only
+      // edit classifies against the seeded free times when the lazy window
+      // fetch has not run yet. Otherwise the badge and the time dropdown read
+      // different sources and a free pick wrongly shows outside hours until the
+      // date dropdown is opened.
+      const slotsForDate = rowSlotsForDate(state, state.committedDate);
+      if (slotsForDate.some(s => s.hhmm === state.committedTime)) return "rescheduled";
+      const bookedForDate = (state.windowBookedByDate && state.windowBookedByDate[state.committedDate]) || [];
+      if (bookedForDate.includes(state.committedTime)) return "booked";
+      return "outside-fhir";
+    }
+
+    const STATUS_COPY = {
+      free:           { color: "green",  label: "Free" },
+      rescheduled:    { color: "blue",   label: "Rescheduled" },
+      booked:         { color: "orange", label: "Provider already booked" },
+      "outside-fhir": { color: "yellow", label: "Outside provider's hours" },
+      conflicts:      { color: "red",    label: "Conflicts" },
+      skipped:        { color: "gray",   label: "Skipped" },
+      past:           { color: "red",    label: "In the past" },
+    };
+
+    // A row the provider cannot be booked into. Booked and outside-hours rows
+    // are surfaced honestly but excluded from the booking, exactly as a taken
+    // occurrence was before it gained its own badge.
+    function isUnbookableStatus(status) {
+      return status === "outside-fhir" || status === "booked";
+    }
+
+    function applyStatusBadge(state) {
+      if (!state.statusBadge) return;
+      if (state.windowLoadFailed && !state.skipped) {
+        state.statusBadge.setAttribute("color", "gray");
+        state.statusBadge.textContent = "Could not check, refresh modal";
+        return;
+      }
+      const status = computeRowStatus(state);
+      const copy = STATUS_COPY[status] || STATUS_COPY["outside-fhir"];
+      state.statusBadge.setAttribute("color", copy.color);
+      state.statusBadge.textContent = copy.label;
+    }
+
+    function applySkipButton(state) {
+      if (!state.skipBtn) return;
+      // Skip is always available. Every occurrence can be set aside in place,
+      // whether the slot reads free, booked, or outside hours, so no row is a
+      // dead end and nothing is silently dropped at book time.
+      state.skipBtn.classList.remove("hidden");
+    }
+
+    function paintRow(state) {
+      const row = state.rowEl;
+      if (!row) return;
+      row.innerHTML = "";
+
+      if (state.skipped) {
+        row.classList.add("slot-row-skipped");
+        const line = document.createElement("div");
+        line.className = "slot-row-line";
+
+        const num = document.createElement("span");
+        num.className = "slot-row-num";
+        num.textContent = String(state.index + 1);
+        line.appendChild(num);
+
+        const text = document.createElement("span");
+        text.className = "slot-row-skipped-text";
+        text.textContent = `${formatDate(state.committedDate)}, ${formatHHMMto12h(state.committedTime)}`;
+        line.appendChild(text);
+
+        const badge = document.createElement("canvas-badge");
+        badge.className = "slot-row-status";
+        badge.setAttribute("size", "mini");
+        state.statusBadge = badge;
+        line.appendChild(badge);
+        applyStatusBadge(state);
+
+        const includeBtn = document.createElement("canvas-button");
+        includeBtn.classList.add("slot-row-skip");
+        includeBtn.setAttribute("variant", "ghost");
+        includeBtn.setAttribute("size", "small");
+        includeBtn.textContent = "Include";
+        includeBtn.addEventListener("click", () => {
+          if (includeBtn.hasAttribute("disabled")) return;
+          state.skipped = false;
+          paintRow(state);
+          updateBookButton();
+        }, true);
+        line.appendChild(includeBtn);
+
+        row.appendChild(line);
+        return;
+      }
+
+      row.classList.remove("slot-row-skipped");
+
+      const line = document.createElement("div");
+      line.className = "slot-row-line";
+
+      const num = document.createElement("span");
+      num.className = "slot-row-num";
+      num.textContent = String(state.index + 1);
+      line.appendChild(num);
+
+      const dateCombo = document.createElement("canvas-combobox");
+      dateCombo.className = "slot-row-date";
+      dateCombo.dataset.role = "date";
+      dateCombo.setAttribute("placeholder", "Pick a date");
+      const dateOpt = document.createElement("canvas-option");
+      dateOpt.setAttribute("value", state.committedDate);
+      const mountCount = state.committedDate === state.projectedDate
+        ? state.initialAvailableTimes.length
+        : null;
+      dateOpt.textContent = mountCount !== null
+        ? mountCount === 0
+          ? `${formatDate(state.committedDate)} (None)`
+          : `${formatDate(state.committedDate)} (${mountCount} free)`
+        : formatDate(state.committedDate);
+      dateCombo.appendChild(dateOpt);
+      dateCombo.setAttribute("value", state.committedDate);
+      state.dateCombobox = dateCombo;
+
+      dateCombo.addEventListener("change", async e => {
+        const newDate = (e.target && e.target.value) || "";
+        if (!newDate || newDate === state.committedDate) return;
+        state.committedDate = newDate;
+        // Refresh availability for a date the loaded window does not cover, then
+        // repaint from the merged data so a moved occurrence shows real times
+        // and an honest status instead of staying frozen on stale slots.
+        const refetched = await ensureDateCovered(state, newDate);
+        const slotsForDate = rowSlotsForDate(state, newDate);
+        if (slotsForDate.length > 0) {
+          const same = slotsForDate.find(s => s.hhmm === state.committedTime);
+          state.committedTime = (same || slotsForDate[0]).hhmm;
+        }
+        if (refetched) populateDateOptions(state);
+        populateTimeOptions(state);
+        applyStatusBadge(state);
+        applySkipButton(state);
+        updateBookButton();
+      });
+      line.appendChild(dateCombo);
+
+      const timeCombo = document.createElement("canvas-combobox");
+      timeCombo.className = "slot-row-time";
+      timeCombo.dataset.role = "time";
+      timeCombo.setAttribute("placeholder", "Pick a time");
+      state.timeCombobox = timeCombo;
+      if (rowHasKnownNoSlots(state)) {
+        timeCombo.setAttribute("disabled", "");
+        timeCombo.setAttribute("placeholder", "None");
+      } else {
+        fillTimeCombobox(timeCombo, state);
+        timeCombo.setAttribute("value", state.committedTime || "");
+      }
+      // A row whose committed time is now in the past gets a red error border
+      // on the time control. The empty error value suppresses the error text
+      // span so the row layout stays tight.
+      if (computeRowStatus(state) === "past") {
+        timeCombo.setAttribute("error", "");
+      }
+      timeCombo.addEventListener("change", e => {
+        const newTime = (e.target && e.target.value) || "";
+        if (!newTime || newTime === state.committedTime) return;
+        state.committedTime = newTime;
+        applyStatusBadge(state);
+        updateBookButton();
+      });
+
+      line.appendChild(timeCombo);
+
+      // Defer the per row window fetch until the date combobox is opened.
+      // The capture phase handler swaps in the loading state before the
+      // input click handler runs, queues _pendingOpen so the menu reopens
+      // once loading clears, and starts the fetch. The time combobox keeps
+      // the initial slots seeded at mount so opening it without changing
+      // the date does not need a fetch.
+      function triggerDateFetch() {
+        if (state.windowLoaded) return;
+        if (state.windowLoadFailed) return;
+        if (state.windowInFlight) {
+          // eager background fetch already running — show loading and queue reopen
+          dateCombo.setAttribute("loading-label", "Loading availability");
+          dateCombo.setAttribute("loading", "");
+          dateCombo._pendingOpen = true;
+          state.windowInFlight.then(() => {
+            if (state.windowLoaded) {
+              populateDateOptions(state);
+              populateTimeOptions(state);
+            } else {
+              dateCombo._pendingOpen = false;
+            }
+            dateCombo.removeAttribute("loading");
+          });
+          return;
+        }
+        dateCombo.setAttribute("loading-label", "Loading availability");
+        dateCombo.setAttribute("loading", "");
+        dateCombo._pendingOpen = true;
+        ensureRowWindowLoaded(state).then(() => {
+          if (state.windowLoaded) {
+            populateDateOptions(state);
+            populateTimeOptions(state);
+          } else {
+            dateCombo._pendingOpen = false;
+          }
+          dateCombo.removeAttribute("loading");
+        });
+      }
+      dateCombo.addEventListener("mousedown", triggerDateFetch, true);
+      dateCombo.addEventListener("keydown", e => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp"
+            || e.key === "Enter" || e.key === " ") {
+          triggerDateFetch();
+        }
+      }, true);
+
+      // Status badge.
+      const badge = document.createElement("canvas-badge");
+      badge.className = "slot-row-status";
+      badge.setAttribute("size", "mini");
+      const initial = computeRowStatus(state);
+      const copy = STATUS_COPY[initial] || STATUS_COPY["outside-fhir"];
+      badge.setAttribute("color", copy.color);
+      badge.textContent = copy.label;
+      state.statusBadge = badge;
+      line.appendChild(badge);
+
+      // Skip button — always available so any row can be set aside in place.
+      const skipBtn = document.createElement("canvas-button");
+      skipBtn.classList.add("slot-row-skip");
+      skipBtn.setAttribute("variant", "ghost");
+      skipBtn.setAttribute("size", "small");
+      skipBtn.textContent = "Skip";
+      skipBtn.addEventListener("click", () => {
+        if (skipBtn.hasAttribute("disabled")) return;
+        state.skipped = true;
+        paintRow(state);
+        updateBookButton();
+      }, true);
+      state.skipBtn = skipBtn;
+      line.appendChild(skipBtn);
+
+      row.appendChild(line);
+
+      // canvas-combobox runs _readOptions inside a setTimeout(0) in
+      // connectedCallback and does not honor the value attribute as a
+      // selection. Defer one tick so our manual sync lands after that init
+      // and the projected date and projected time render at mount.
+      setTimeout(() => {
+        syncAndSelect(dateCombo, state.committedDate);
+        syncAndSelect(timeCombo, state.committedTime || "");
+      }, 0);
+    }
+
+    function renderCheckResults(data) {
+      const container = document.getElementById("check-results");
+      container.innerHTML = "";
+      rowStates = (data.results || []).map((r, i) => buildRowState(i, r));
+
+      rowStates.forEach(state => {
+        const row = document.createElement("div");
+        row.className = "slot-row";
+        row.dataset.rowIndex = String(state.index);
+        state.rowEl = row;
+        container.appendChild(row);
+        paintRow(state);
+      });
+
+      updateCheckSummary();
+      updateBookButton();
+    }
+
+    // The recurrence ratio shown in the summary, such as
+    // "7 of 8 times available". Counts the occurrences that will actually
+    // book (free or rescheduled) against the total, and stays live as rows
+    // are moved or skipped.
+    function updateCheckSummary() {
+      const el = document.getElementById("check-summary");
+      if (!el) return;
+      const total = rowStates.length;
+      if (!total) {
+        el.textContent = "";
+        return;
+      }
+      const open = rowStates.filter(s => {
+        const status = computeRowStatus(s);
+        return status === "free" || status === "rescheduled";
+      }).length;
+      el.textContent = `${open} of ${total} ${total === 1 ? "time" : "times"} available`;
+    }
+
+    function updateBookButton() {
+      const totalRows = rowStates.length;
+      const bookableRows = rowStates.filter(
+        s => !s.skipped && !isUnbookableStatus(computeRowStatus(s))
+      );
+      const bookableCount = bookableRows.length;
+      const noConflicts = !bookableRows.some(s => computeRowStatus(s) === "conflicts");
+      // A past row is never bookable. Block the button and surface a stated
+      // reason so the user knows to pick a later time or skip the row.
+      const pastRows = rowStates.filter(s => !s.skipped && computeRowStatus(s) === "past");
+      // An unbookable row the user has not skipped would be dropped from the
+      // run silently. Gate the button on it so the choice is made on screen,
+      // either skip the occurrence or retime it, and nothing vanishes.
+      const unresolvedUnbookable = rowStates.filter(
+        s => !s.skipped && isUnbookableStatus(computeRowStatus(s))
+      );
+      const enabled = isFormComplete() && bookableCount > 0 && noConflicts
+        && pastRows.length === 0 && unresolvedUnbookable.length === 0;
+
+      const btn = document.getElementById("btn-book");
+      btn.toggleAttribute("disabled", !enabled);
+
+      const countEl = document.getElementById("booking-count-copy");
+      if (countEl) {
+        if (pastRows.length > 0) {
+          if (pastRows.length === 1) {
+            countEl.textContent = `Appointment ${pastRows[0].index + 1} is in the past. Pick a later time or skip it.`;
+          } else {
+            countEl.textContent = `${pastRows.length} appointments are in the past. Pick a later time or skip them.`;
+          }
+          btn.textContent = totalRows <= 1 ? "Book Appointment" : "Book Appointments";
+        } else if (unresolvedUnbookable.length > 0) {
+          if (unresolvedUnbookable.length === 1) {
+            countEl.textContent = "1 time is unavailable, skip it or pick another time to continue.";
+          } else {
+            countEl.textContent = `${unresolvedUnbookable.length} times are unavailable, skip them or pick another time to continue.`;
+          }
+          btn.textContent = totalRows <= 1 ? "Book Appointment" : "Book Appointments";
+        } else if (totalRows <= 1) {
+          countEl.textContent = "";
+          btn.textContent = "Book Appointment";
+        } else if (bookableCount === 0) {
+          countEl.textContent = "No appointments ready to book. Reschedule or remove rows to continue.";
+          btn.textContent = "Book Appointments";
+        } else if (bookableCount === totalRows) {
+          countEl.textContent = `All ${bookableCount} appointments will be booked.`;
+          btn.textContent = "Book Appointments";
+        } else {
+          countEl.textContent = `${bookableCount} of ${totalRows} appointments will be booked.`;
+          btn.textContent = "Book Appointments";
+        }
+      }
+
+      const section = document.getElementById("section-book");
+      if (section) section.classList.toggle("hidden", totalRows === 0);
+
+      // Keep the recurrence ratio in step with the rows as they change.
+      updateCheckSummary();
+    }
+
+    // ---- Progress mode helpers ----
+    const NORMAL_MODE_SECTION_IDS = [
+      "section-patient",
+      "section-state-recovery",
+      "section-config",
+      "section-visit-details",
+      "section-calendar",
+      "section-provider-ranked",
+      "section-times",
+      "section-availability",
+      "section-book",
+    ];
+
+    let progressModeRestoreState = null;
+
+    function enterProgressMode() {
+      progressModeRestoreState = {};
+      for (const id of NORMAL_MODE_SECTION_IDS) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        progressModeRestoreState[id] = el.classList.contains("hidden");
+        el.classList.add("hidden");
+      }
+      const header = document.getElementById("modal-header");
+      if (header) header.classList.add("hidden");
+      document.getElementById("section-booking-progress").classList.remove("hidden");
+    }
+
+    function exitProgressMode() {
+      document.getElementById("section-booking-progress").classList.add("hidden");
+      const header = document.getElementById("modal-header");
+      if (header) header.classList.remove("hidden");
+      if (progressModeRestoreState) {
+        for (const [id, wasHidden] of Object.entries(progressModeRestoreState)) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          el.classList.toggle("hidden", wasHidden);
+        }
+        progressModeRestoreState = null;
+      }
+    }
+
+    // Hides the whole interface behind the progress panel while a book is in
+    // flight. Both the single and the multi occurrence paths enter this, so the
+    // form and the header are gone the moment Book is clicked. The single path
+    // passes its own label, the multi occurrence loop drives the counter itself.
+    function enterBookingProgress(label) {
+      enterProgressMode();
+      document.getElementById("booking-progress-spinner").classList.remove("hidden");
+      document.getElementById("booking-progress-summary").classList.add("hidden");
+      document.getElementById("booking-progress-actions").classList.add("hidden");
+      const counter = document.getElementById("booking-progress-counter");
+      counter.textContent = label;
+      counter.classList.remove("hidden");
+    }
+
+    // Terminal success state shared by both paths. Drop the progress panel and
+    // restore the header, hide every form section including the Patient and
+    // State fields at the top so no stale top level field stays live, then show
+    // the success banner with the given message and the Schedule another and
+    // Close controls. Single and multi occurrence books end on the same screen.
+    function enterBookedState(message) {
+      bookingInFlight = false;
+      document.getElementById("section-booking-progress").classList.add("hidden");
+      const header = document.getElementById("modal-header");
+      if (header) header.classList.remove("hidden");
+      progressModeRestoreState = null;
+      document.getElementById("booking-loading").classList.add("hidden");
+      for (const id of NORMAL_MODE_SECTION_IDS) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add("hidden");
+      }
+      const banner = document.getElementById("booking-success-banner");
+      if (message) banner.textContent = message;
+      banner.classList.remove("hidden");
+      document.getElementById("booking-success-actions").classList.remove("hidden");
+    }
+
+    // Reloads the modal to its initial start state. The page is served from the
+    // /ui route with the chart patient carried in the URL, so a reload preserves
+    // a pinned patient and returns a global launch to the patient picker, the
+    // same clean state as closing and reopening.
+    function scheduleAnother() {
+      window.location.reload();
+    }
+
+    // ---- Conflict recovery ----
+    // After a booking run that hit slot disputes, the user lands back on the
+    // Availability Check list holding only the occurrences that were taken,
+    // so they can pick new times or skip them and book again. The series
+    // level choices stay hidden, they are locked by the already booked
+    // occurrences and changing them mid recovery would make the half booked
+    // series inconsistent.
+
+    function setRecoveryNote(text) {
+      const note = document.getElementById("recovery-note");
+      if (!note) return;
+      note.textContent = text || "";
+      note.classList.toggle("hidden", !text);
+    }
+
+    function enterConflictRecovery(bookedCount, total, conflicted) {
+      bookingInFlight = false;
+      exitProgressMode();
+      for (const id of NORMAL_MODE_SECTION_IDS) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add("hidden");
+      }
+      document.getElementById("section-availability").classList.remove("hidden");
+      document.getElementById("section-book").classList.remove("hidden");
+
+      renderCheckResults({
+        results: conflicted.map(a => ({
+          date: a.date,
+          start_time: a.start_time,
+          is_free: false,
+          reason: "booked",
+          available_times: [],
+        })),
+      });
+
+      // Load each leftover row's window eagerly so the pickers offer current
+      // times and a re picked time computes its status against fresh data
+      // that already carries the stolen time as booked.
+      rowStates.forEach(state => {
+        ensureRowWindowLoaded(state).then(() => {
+          if (!state.windowLoaded) return;
+          populateDateOptions(state);
+          populateTimeOptions(state);
+          applyStatusBadge(state);
+          applySkipButton(state);
+        });
+      });
+
+      const taken = conflicted.length === 1
+        ? "1 time was taken while booking."
+        : `${conflicted.length} times were taken while booking.`;
+      setRecoveryNote(
+        `${bookedCount} of ${total} booked. ${taken} Pick new times or skip the rows below.`
+      );
+      updateBookButton();
+    }
+
+    // Flags rows whose committed time the server reported as taken, used on
+    // the pre flight 409 where nothing has been booked yet. The unedited
+    // status path reads initialReason and the edited path reads the window
+    // buckets, so both are updated for instant feedback, then the real
+    // window is refetched in the background for honest picker counts.
+    function flagConflictedRows(conflicts) {
+      const keys = new Set(conflicts.map(c => `${c.date} ${c.start_time}`));
+      let flagged = 0;
+      rowStates.forEach(state => {
+        if (state.skipped) return;
+        if (!keys.has(`${state.committedDate} ${state.committedTime}`)) return;
+        flagged += 1;
+        if (state.committedDate === state.projectedDate
+            && state.committedTime === state.projectedTime) {
+          state.initialReason = "booked";
+        }
+        if (!state.windowBookedByDate) state.windowBookedByDate = {};
+        const bookedForDate = state.windowBookedByDate[state.committedDate]
+          || (state.windowBookedByDate[state.committedDate] = []);
+        if (!bookedForDate.includes(state.committedTime)) {
+          bookedForDate.push(state.committedTime);
+        }
+        if (state.windowByDate && state.windowByDate[state.committedDate]) {
+          state.windowByDate[state.committedDate] = state.windowByDate[state.committedDate]
+            .filter(s => s.hhmm !== state.committedTime);
+        }
+        applyStatusBadge(state);
+        applySkipButton(state);
+        state.windowLoaded = false;
+        state.windowLoadFailed = false;
+        ensureRowWindowLoaded(state).then(() => {
+          if (!state.windowLoaded) return;
+          populateDateOptions(state);
+          populateTimeOptions(state);
+          applyStatusBadge(state);
+          applySkipButton(state);
+        });
+      });
+      updateBookButton();
+      return flagged;
+    }
+
+    function setBookingProgressCounter(current, total) {
+      const counter = document.getElementById("booking-progress-counter");
+      counter.textContent = `Booking ${current} of ${total}`;
+      counter.classList.remove("hidden");
+    }
+
+    function setBookingProgressSummary(text) {
+      const summary = document.getElementById("booking-progress-summary");
+      summary.textContent = text;
+      summary.classList.remove("hidden");
+      document.getElementById("booking-progress-counter").classList.add("hidden");
+      document.getElementById("booking-progress-spinner").classList.add("hidden");
+    }
+
+    // Surfaces the progress panel actions on a failure. A clean success never
+    // reaches here, it routes to the shared booked banner instead, so this only
+    // toggles Retry remaining next to Close while a series is still unfinished.
+    function showBookingProgressActions(showRetry) {
+      document.getElementById("booking-progress-actions").classList.remove("hidden");
+      const retry = document.getElementById("btn-booking-retry");
+      retry.classList.toggle("hidden", !showRetry);
+    }
+
+    // ---- Book appointments ----
+    function buildBookingPayload(appointments) {
+      return {
+        patient_id: PATIENT_ID,
+        provider_id: formState.provider.value.id,
+        note_type_id: formState.noteType.value,
+        appointments,
+        tz_offset: new Date().getTimezoneOffset(),
+        duration_minutes: formState.duration.value,
+      };
+    }
+
+    function handleBookingFailure(err, unbooked, booked) {
+      const bookedCount = booked.length;
+      const unbookedCount = unbooked.length;
+      const headline =
+        err && err.serverMessage
+          ? err.serverMessage
+          : "Could not book the remaining appointments.";
+      const lines = [
+        headline,
+        `Booked ${bookedCount}. Not yet booked: ${unbookedCount}.`,
+      ];
+      setBookingProgressSummary(lines.join(" "));
+      showBookingProgressActions(unbookedCount > 0);
+      document.getElementById("btn-booking-retry").dataset.unbooked = JSON.stringify(unbooked);
+    }
+
+    // Canvas applies appointment effects asynchronously, so /book returning
+    // 201 does not prove the appointment persisted. A blank provider NPI or any
+    // other effect rejection lands after the response and used to read as a
+    // false success. After a clean post, poll /book/verify until every
+    // requested time reads back as booked or the budget is spent, narrowing to
+    // the still missing times each pass. Biased toward confirming success, a
+    // time is only reported missing once the retries are exhausted, and a
+    // verify read that itself fails falls back to success since the book POST
+    // already returned 201. Returns { allPresent, missing, verifyFailed }.
+    const VERIFY_ATTEMPTS = 4;
+    const VERIFY_DELAY_MS = 1000;
+    async function verifyBooked(appointments) {
+      let missing = appointments.slice();
+      for (let attempt = 0; attempt < VERIFY_ATTEMPTS; attempt += 1) {
+        try {
+          const resp = await fetch(`${API_BASE}/book/verify?v=${CACHE_BUST}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              provider_id: formState.provider.value.id,
+              appointments: missing,
+              tz_offset: new Date().getTimezoneOffset(),
+            }),
+          });
+          if (!resp.ok) throw await buildFetchError(resp);
+          const data = await resp.json();
+          missing = Array.isArray(data.missing) ? data.missing : [];
+          if (missing.length === 0) return { allPresent: true, missing: [] };
+        } catch (err) {
+          return { allPresent: false, missing, verifyFailed: true };
+        }
+        if (attempt < VERIFY_ATTEMPTS - 1) {
+          await new Promise(r => setTimeout(r, VERIFY_DELAY_MS));
+        }
+      }
+      return { allPresent: false, missing };
+    }
+
+    // Routes a post book verification gap through the same failure panel as a
+    // mid loop failure, so the operator sees how many landed and can retry the
+    // ones that did not. present is the subset of attempted that verified, used
+    // only for the booked count.
+    function handleVerificationGap(missing, attempted, message) {
+      const present = attempted.filter(
+        a => !missing.some(m => m.date === a.date && m.start_time === a.start_time)
+      );
+      handleBookingFailure({ serverMessage: message }, missing, present);
+    }
+
+    async function runBookingLoop(appointments) {
+      document.getElementById("booking-progress-spinner").classList.remove("hidden");
+      document.getElementById("booking-progress-summary").classList.add("hidden");
+      document.getElementById("booking-progress-actions").classList.add("hidden");
+      document.getElementById("btn-booking-retry").classList.add("hidden");
+      setBookingProgressCounter(0, appointments.length);
+
+      const booked = [];
+      const conflicted = [];
+      const total = appointments.length;
+      for (let i = 0; i < total; i += 1) {
+        setBookingProgressCounter(i + 1, total);
+        try {
+          const resp = await fetch(`${API_BASE}/book?v=${CACHE_BUST}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildBookingPayload([appointments[i]])),
+          });
+          if (!resp.ok) throw await buildFetchError(resp);
+          booked.push(appointments[i]);
+        } catch (err) {
+          // A slot dispute costs one occurrence, not the tail. Set it aside
+          // and keep booking. Anything else means the backend is failing,
+          // abort with the conflicted occurrences folded into the unbooked
+          // tail so nothing is lost on retry.
+          if (err && err.status === 409) {
+            conflicted.push(appointments[i]);
+            continue;
+          }
+          const remaining = conflicted.concat(appointments.slice(i));
+          handleBookingFailure(err, remaining, booked);
+          return;
+        }
+      }
+
+      if (conflicted.length > 0) {
+        enterConflictRecovery(booked.length, total, conflicted);
+        return;
+      }
+
+      // Confirm the booked occurrences actually persisted before declaring
+      // success. The post loop is necessary but not sufficient.
+      document.getElementById("booking-progress-counter").textContent = "Confirming appointments...";
+      const verdict = await verifyBooked(booked);
+      if (verdict.allPresent || verdict.verifyFailed) {
+        enterBookedState(`${total} appointments booked successfully.`);
+        return;
+      }
+      handleVerificationGap(
+        verdict.missing,
+        booked,
+        "Some appointments could not be confirmed and may not have been created. Retry the ones below."
+      );
+    }
+
+    function dismissModal() {
+      if (window.CanvasUI && CanvasUI.utils && typeof CanvasUI.utils.dismissModal === "function") {
+        CanvasUI.utils.dismissModal();
+      }
+    }
+
+    onBtnClick("btn-booking-close", dismissModal);
+    onBtnClick("btn-success-close", dismissModal);
+    onBtnClick("btn-schedule-another", scheduleAnother);
+
+    onBtnClick("btn-booking-retry", () => {
+      const raw = document.getElementById("btn-booking-retry").dataset.unbooked;
+      if (!raw) return;
+      let unbooked;
+      try {
+        unbooked = JSON.parse(raw);
+      } catch (e) {
+        unbooked = [];
+      }
+      if (unbooked.length === 0) return;
+      runBookingLoop(unbooked);
+    });
+
+    onBtnClick("btn-book", async () => {
+      if (bookingInFlight) return;
+      bookingInFlight = true;
+      clearError();
+
+      const appointments = rowStates
+        .filter(s => !s.skipped && !isUnbookableStatus(computeRowStatus(s)))
+        .map(s => ({ date: s.committedDate, start_time: s.committedTime }));
+
+      if (appointments.length <= 1) {
+        enterBookingProgress("Booking appointment...");
+        try {
+          const resp = await fetch(`${API_BASE}/book?v=${CACHE_BUST}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildBookingPayload(appointments)),
+          });
+          if (!resp.ok) throw await buildFetchError(resp);
+          // Confirm the appointment persisted before success. Effects apply
+          // after the 201 returns, so a clean POST alone can mask a downstream
+          // rejection such as a provider with no NPI.
+          document.getElementById("booking-progress-counter").textContent = "Confirming appointment...";
+          const verdict = await verifyBooked(appointments);
+          if (verdict.allPresent || verdict.verifyFailed) {
+            enterBookedState("Appointment booked successfully.");
+          } else {
+            handleVerificationGap(
+              verdict.missing,
+              appointments,
+              "The appointment could not be confirmed and may not have been created. Retry below."
+            );
+          }
+        } catch (err) {
+          bookingInFlight = false;
+          exitProgressMode();
+          updateBookButton();
+          if (err && err.status === 409 && Array.isArray(err.conflicts) && err.conflicts.length > 0) {
+            flagConflictedRows(err.conflicts);
+            showError("bookGeneric", {
+              serverMessage: "That time was just booked by someone else. The row is marked below, pick another time or skip it.",
+            });
+          } else {
+            showError("bookGeneric", err);
+          }
+        }
+        return;
+      }
+
+      // Validate the whole batch before entering progress mode. If validation
+      // fails we keep the form intact so the user can correct and retry,
+      // instead of trapping them in the progress panel.
+      try {
+        const validateResp = await fetch(`${API_BASE}/book/validate?v=${CACHE_BUST}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildBookingPayload(appointments)),
+        });
+        if (!validateResp.ok) throw await buildFetchError(validateResp);
+      } catch (err) {
+        bookingInFlight = false;
+        updateBookButton();
+        if (err && err.status === 409 && Array.isArray(err.conflicts) && err.conflicts.length > 0) {
+          flagConflictedRows(err.conflicts);
+          showError("bookGeneric", {
+            serverMessage: "Some times were just booked by someone else. The taken rows are marked below, pick new times or skip them.",
+          });
+        } else {
+          showError("bookGeneric", err);
+        }
+        return;
+      }
+
+      enterProgressMode();
+      await runBookingLoop(appointments);
+    });
+
+    // ---- Helpers ----
+    function formatDate(iso) {
+      if (!iso) return "";
+      const [y, m, d] = iso.split("-");
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`;
+    }
+
+    function formatTime(isoDateTime) {
+      const d = new Date(isoDateTime);
+      if (isNaN(d.getTime())) return isoDateTime;
+      const h = d.getHours();
+      const m = d.getMinutes();
+      const ampm = h >= 12 ? "pm" : "am";
+      const h12 = h % 12 || 12;
+      return m === 0 ? `${h12} ${ampm}` : `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+    }
+
+    function formatTimeHHMM(isoDateTime) {
+      const d = new Date(isoDateTime);
+      if (isNaN(d.getTime())) return isoDateTime;
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    // ---- Patient search (global mode) ----
+    if (NEEDS_PATIENT_SELECTION) {
+      let searchTimeout = null;
+      let patientsById = {};
+
+      const searchInput = document.getElementById("patient-search-input");
+
+      // Defer one tick so the combobox connectedCallback has rendered its
+      // shadow DOM before we patch the filter.
+      setTimeout(() => useServerFilter(searchInput), 0);
+
+      searchInput.addEventListener("input", e => {
+        clearTimeout(searchTimeout);
+        const typed = ((e.composedPath && e.composedPath()[0]) || e.target).value || "";
+        const q = typed.trim();
+        if (q.length < 2) {
+          patientsById = {};
+          while (searchInput.firstChild) searchInput.removeChild(searchInput.firstChild);
+          syncComboboxOptions(searchInput);
+          return;
+        }
+        searchTimeout = setTimeout(async () => {
+          try {
+            const resp = await fetch(
+              `${API_BASE}/patients?q=${encodeURIComponent(q)}&v=${CACHE_BUST}`,
+              { credentials: "same-origin" }
+            );
+            if (!resp.ok) throw await buildFetchError(resp);
+            const data = await resp.json();
+            const patients = data.patients || [];
+            patientsById = {};
+            while (searchInput.firstChild) searchInput.removeChild(searchInput.firstChild);
+            patients.forEach(p => {
+              patientsById[p.id] = p;
+              const opt = document.createElement("canvas-option");
+              opt.setAttribute("value", p.id);
+              const dob = p.birth_date ? ` (DOB ${formatDate(p.birth_date)})` : "";
+              opt.setAttribute("label", p.full_name);
+              opt.textContent = `${p.full_name}${dob}`;
+              searchInput.appendChild(opt);
+            });
+            syncComboboxOptions(searchInput);
+          } catch (err) {
+            showError("patientSearch", err);
+          }
+        }, 300);
+      });
+
+      searchInput.addEventListener("change", e => {
+        const id = e.target.value;
+        const p = patientsById[id];
+        if (!p) return;
+        if (id === PATIENT_ID) return;
+
+        // A different patient must not inherit the previous patient's session
+        // state pick. Clear it so the new patient's own state is resolved fresh.
+        sessionStateOverride = "";
+        patientStateMissing = false;
+
+        const isFirstPick = !PATIENT_ID;
+        clearError();
+        commitPatient(p);
+
+        // Reveal the state dropdown the moment the patient is known, prefilled
+        // from the search result's state. An empty state_code leaves it empty so
+        // the scheduler picks one, which the stateless gate below still requires.
+        showStateSection(p.state_code || "");
+
+        if (isFirstPick) {
+          // Fresh load. Reveal the note type column, the rest of the form
+          // unfolds as the scheduler fills it in. Providers are not fetched
+          // here, they rank against the dates once a note type and a start
+          // date are set.
+          document.getElementById("section-availability").classList.add("hidden");
+          document.getElementById("section-book").classList.add("hidden");
+          showNoteTypeColumn();
+          loadNoteTypes();
+          return;
+        }
+
+        // Subsequent switch. Clear the provider and everything below, since a
+        // provider licensed for the old patient may not be for the new one,
+        // then re-resolve the state and re-rank against the new patient if the
+        // when is already filled in.
+        resetProviderAndBelow();
+        if (formState.noteType.status === "committed") {
+          refreshCalendarScores();
+          maybeLoadProviders();
+        }
+      });
+    }
+
+    // ---- Boot ----
+    {
+      const bootToday = new Date();
+      bootToday.setHours(0, 0, 0, 0);
+      calVisible = calVisibleWindow(bootToday.getFullYear(), bootToday.getMonth());
+    }
+    formState.occurrences.value = parseInt(document.getElementById("occurrences").value, 10) || 1;
+    commitStartDate(isoDate(new Date()));
+
+    if (!NEEDS_PATIENT_SELECTION) {
+      // Chart launch. The patient is already pinned, so load note types now.
+      // The provider ranking and the calendar badges fire once a note type is
+      // chosen, the start date defaults to today so the when is complete then.
+      loadNoteTypes();
+    }
+
+    if (!NEEDS_PATIENT_SELECTION && PATIENT_ID) {
+      const prefilledPatientCombo = document.getElementById("patient-search-input");
+      if (prefilledPatientCombo) {
+        setTimeout(() => syncAndSelect(prefilledPatientCombo, PATIENT_ID), 0);
+      }
+      // Chart launch knows the patient at load, so reveal the state dropdown
+      // prefilled from the patient's state before any note type is chosen. A
+      // patient with no state on file gets the empty dropdown and the existing
+      // pick gate. Deferred one tick so the combobox has rendered its shadow DOM.
+      setTimeout(() => showStateSection(PATIENT_STATE), 0);
+    }
+  </script>
+  </div>
+</body>
+</html>
