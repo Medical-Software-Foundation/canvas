@@ -1,0 +1,65 @@
+{
+    "sdk_version": "0.142.0",
+    "plugin_version": "0.4.0",
+    "name": "surescripts_med_history",
+    "description": "Automates Surescripts medication history requests for upcoming appointments and surfaces history in the chart",
+    "components": {
+        "protocols": [
+            {
+                "class": "surescripts_med_history.protocols.eligibility_cron:EligibilityCronTask",
+                "description": "Daily cron to send Surescripts eligibility requests for appointments at the configured pre-appointment day offsets (default 1 and 7 days from now)",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Appointment", "Patient", "Staff", "Note"],
+                    "write": ["NoteMetadata"]
+                }
+            },
+            {
+                "class": "surescripts_med_history.protocols.med_history_cron:MedHistoryCronTask",
+                "description": "Daily cron to send Surescripts medication history requests for appointments at the configured pre-appointment day offsets (default 1 and 7 days from now)",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Appointment", "Patient", "Staff", "Note"],
+                    "write": ["NoteMetadata"]
+                }
+            },
+            {
+                "class": "surescripts_med_history.protocols.action_button:MedHistoryActionButton",
+                "description": "Action button in medications section that renders and opens the medication history comparison modal",
+                "data_access": {
+                    "event": "ACTION_BUTTON_CLICKED",
+                    "read": ["MedicationHistoryMedication", "MedicationHistoryMedicationCoding", "MedicationHistoryResponse", "Medication", "MedicationCoding", "Patient", "Staff", "Note", "NoteMetadata", "MedicationDismissal"],
+                    "write": ["MedicationDismissal"]
+                }
+            },
+            {
+                "class": "surescripts_med_history.protocols.view:MedHistoryRequestApi",
+                "description": "POST endpoints for requesting fresh Surescripts history and adding medication statements, plus a GET endpoint to refresh the modal in place",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff", "Note", "NoteMetadata", "MedicationHistoryMedication", "MedicationHistoryMedicationCoding", "MedicationHistoryResponse", "Medication", "MedicationCoding", "MedicationDismissal"],
+                    "write": ["Note", "NoteMetadata", "MedicationDismissal"]
+                }
+            },
+            {
+                "class": "surescripts_med_history.protocols.integration_api:DismissalsIntegrationApi",
+                "description": "API-key-authenticated GET/POST /integration/dismissals for other plugins to read or create medication dismissals",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "MedicationDismissal"],
+                    "write": ["MedicationDismissal"]
+                }
+            }
+        ]
+    },
+    "secrets": ["namespace_read_write_access_key", "pre_appointment_days", "commit_medication_statements", "mock_history_data", "simpleapi-api-key"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md",
+    "custom_data": {
+        "namespace": "medication__history",
+        "access": "read_write"
+    }
+}
