@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8f9fb; color: #1a2332; }
+
+.ga-page { max-width: 800px; margin: 0 auto; padding: 32px 24px; }
+
+.ga-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.ga-title { font-size: 20px; font-weight: 700; }
+.ga-subtitle { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+.ga-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.ga-search-input {
+  flex: 1; min-width: 180px; padding: 8px 12px; border: 1.5px solid #e0e4ea; border-radius: 6px;
+  font-size: 13px; background: #fafbfc; outline: none; font-family: inherit;
+}
+.ga-search-input:focus { border-color: #4A6FA5; background: #fff; }
+.ga-filter-select {
+  padding: 8px 12px; border: 1.5px solid #e0e4ea; border-radius: 6px;
+  font-size: 13px; background: #fafbfc; outline: none; min-width: 160px;
+}
+
+.ga-add-btn {
+  padding: 8px 18px; border-radius: 6px; border: 1.5px solid #4A6FA5;
+  background: #4A6FA5; color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s; white-space: nowrap;
+}
+.ga-add-btn:hover { background: #3d5f8f; }
+
+/* Tag pills */
+.ga-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 500; margin: 1px 3px 1px 0;
+  background: #e0e7ff; color: #3730a3;
+}
+
+/* Cards */
+.ga-list { display: flex; flex-direction: column; gap: 8px; }
+
+.ga-card {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  border-radius: 10px; border: 1px solid #e0e4ea; background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ga-card:hover { border-color: #93b4f5; box-shadow: 0 1px 4px rgba(74,111,165,0.08); }
+
+.ga-card-info { flex: 1; min-width: 0; }
+.ga-card-name { font-size: 14px; font-weight: 500; }
+.ga-card-detail { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.ga-card-code { font-size: 11px; color: #8e99a8; font-family: monospace; }
+.ga-card-tags { margin-top: 4px; }
+
+.ga-action-btn {
+  padding: 5px 14px; border-radius: 6px; border: 1.5px solid #e0e4ea;
+  background: #fff; font-size: 12px; cursor: pointer; transition: all 0.15s;
+}
+.ga-action-btn.edit { color: #4A6FA5; }
+.ga-action-btn.edit:hover { border-color: #4A6FA5; background: #f0f4ff; }
+.ga-action-btn.delete { color: #c0392b; }
+.ga-action-btn.delete:hover { border-color: #c0392b; background: #fef2f2; }
+
+/* Form overlay */
+.ga-form-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3); z-index: 50; align-items: center; justify-content: center;
+}
+.ga-form-overlay.active { display: flex; }
+
+.ga-form {
+  background: #fff; border-radius: 12px; padding: 24px; width: 500px;
+  max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+}
+.ga-form-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+.ga-field { margin-bottom: 12px; }
+.ga-label { font-size: 11px; font-weight: 600; color: #5a6475; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 4px; }
+.ga-input, .ga-select, .ga-textarea {
+  width: 100%; padding: 8px 12px; border: 1.5px solid #e0e4ea; border-radius: 6px;
+  font-size: 13px; background: #fafbfc; outline: none; font-family: inherit;
+}
+.ga-textarea { resize: vertical; min-height: 60px; }
+.ga-input:focus, .ga-select:focus, .ga-textarea:focus { border-color: #4A6FA5; background: #fff; }
+.ga-hint { font-size: 10px; color: #8e99a8; margin-top: 2px; }
+
+/* Tag input */
+.ga-tag-input-wrap {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px;
+  border: 1.5px solid #e0e4ea; border-radius: 6px; background: #fafbfc;
+  cursor: text; min-height: 36px; align-items: center;
+}
+.ga-tag-input-wrap:focus-within { border-color: #4A6FA5; background: #fff; }
+.ga-tag-input-wrap .ga-tag { cursor: default; }
+.ga-tag-remove {
+  margin-left: 4px; cursor: pointer; font-weight: 700; color: #6366f1;
+  font-size: 12px; line-height: 1;
+}
+.ga-tag-remove:hover { color: #c0392b; }
+.ga-tag-text-input {
+  border: none; outline: none; font-size: 13px; font-family: inherit;
+  background: transparent; flex: 1; min-width: 80px; padding: 2px 0;
+}
+.ga-tag-suggestions {
+  max-height: 120px; overflow-y: auto; border: 1px solid #e0e4ea; border-radius: 6px;
+  background: #fff; display: none; margin-top: 4px;
+}
+.ga-tag-suggestion {
+  padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
+}
+.ga-tag-suggestion:hover { background: #f0f4ff; }
+.ga-tag-suggestion:last-child { border-bottom: none; }
+
+.ga-form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+.ga-cancel-btn {
+  padding: 8px 18px; border-radius: 6px; border: 1.5px solid #e0e4ea;
+  background: #fff; color: #5a6475; font-size: 13px; cursor: pointer;
+}
+.ga-save-btn {
+  padding: 8px 18px; border-radius: 6px; border: 1.5px solid #5A8F6B;
+  background: #5A8F6B; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ga-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ga-empty { font-size: 13px; color: #8e99a8; padding: 24px 0; text-align: center; }
+.ga-loading { font-size: 13px; color: #8e99a8; padding: 24px 0; text-align: center; }
+
+.ga-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  z-index: 200; opacity: 0; transition: opacity 0.3s;
+}
+.ga-toast.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.ga-toast.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.ga-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="toast" class="ga-toast"></div>
+
+<div class="ga-page">
+  <div class="ga-header">
+    <div>
+      <div class="ga-title">Instruction Library</div>
+      <div class="ga-subtitle">Manage reusable patient instructions available to all clinicians</div>
+    </div>
+    <button class="ga-add-btn" onclick="openForm()">+ Add Instruction</button>
+  </div>
+
+  <div class="ga-toolbar">
+    <input type="text" class="ga-search-input" id="searchInput" placeholder="Search instructions..." oninput="renderList()">
+    <select class="ga-filter-select" id="tagFilter" onchange="renderList()">
+      <option value="">All Tags</option>
+    </select>
+  </div>
+
+  <div id="list" class="ga-list">
+    <div class="ga-loading">Loading instructions...</div>
+  </div>
+</div>
+
+<!-- Add/Edit Form -->
+<div class="ga-form-overlay" id="formOverlay">
+  <div class="ga-form">
+    <div class="ga-form-title" id="formTitle">Add Instruction</div>
+    <input type="hidden" id="editId">
+
+    <div class="ga-field">
+      <label class="ga-label">Type</label>
+      <select class="ga-select" id="codingSystem" onchange="toggleSnomedField()">
+        <option value="UNSTRUCTURED">Free Text</option>
+        <option value="SNOMED">SNOMED</option>
+      </select>
+    </div>
+
+    <div class="ga-field" id="snomedField" style="display:none;">
+      <label class="ga-label">SNOMED Code</label>
+      <input class="ga-input" id="snomedCode" placeholder="e.g. 65921008">
+    </div>
+
+    <div class="ga-field">
+      <label class="ga-label">Display Name</label>
+      <input class="ga-input" id="displayName" placeholder="e.g. Drink plenty of fluids">
+    </div>
+
+    <div class="ga-field">
+      <label class="ga-label">Tags</label>
+      <div class="ga-tag-input-wrap" id="tagInputWrap" onclick="document.getElementById('tagTextInput').focus()">
+        <input type="text" class="ga-tag-text-input" id="tagTextInput"
+          placeholder="Type a tag and press Enter"
+          onkeydown="handleTagKeydown(event)"
+          oninput="showTagSuggestions()">
+      </div>
+      <div class="ga-tag-suggestions" id="tagSuggestions"></div>
+      <div class="ga-hint">Press Enter or comma to add a tag</div>
+    </div>
+
+    <div class="ga-field">
+      <label class="ga-label">Default Comment</label>
+      <textarea class="ga-textarea" id="comment" placeholder="Optional comment included when adding to a note"></textarea>
+    </div>
+
+    <div class="ga-form-actions">
+      <button class="ga-cancel-btn" onclick="closeForm()">Cancel</button>
+      <button class="ga-save-btn" id="saveBtn" onclick="saveInstruction()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var BASE = "/plugin-io/api/patient_instructions";
+  var instructions = [];
+  var allTags = [];
+  var formTags = [];
+
+  function toast(msg, type) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "ga-toast " + type + " show";
+    setTimeout(function() { t.classList.remove("show"); }, 2500);
+  }
+
+  function api(path, opts) {
+    return fetch(BASE + path, opts).then(function(r) { return r.json(); });
+  }
+
+  function esc(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ---- Load ----
+  function loadAll() {
+    api("/library").then(function(data) {
+      instructions = data.instructions || [];
+      collectTags();
+      renderList();
+    });
+  }
+
+  function collectTags() {
+    var seen = {};
+    allTags = [];
+    instructions.forEach(function(i) {
+      (i.tags || []).forEach(function(t) {
+        if (!seen[t]) { seen[t] = true; allTags.push(t); }
+      });
+    });
+    allTags.sort();
+
+    var sel = document.getElementById("tagFilter");
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All Tags</option>';
+    allTags.forEach(function(t) {
+      sel.innerHTML += '<option value="' + esc(t) + '">' + esc(t) + '</option>';
+    });
+    sel.value = current;
+  }
+
+  // ---- Render ----
+  function renderTagPills(tags) {
+    return (tags || []).map(function(t) {
+      return '<span class="ga-tag">' + esc(t) + '</span>';
+    }).join("");
+  }
+
+  window.renderList = function() {
+    var search = document.getElementById("searchInput").value.toLowerCase();
+    var tagFilter = document.getElementById("tagFilter").value;
+    var listEl = document.getElementById("list");
+
+    var filtered = instructions.filter(function(i) {
+      if (tagFilter && (i.tags || []).indexOf(tagFilter) === -1) return false;
+      if (search && i.display.toLowerCase().indexOf(search) === -1 &&
+          i.code.toLowerCase().indexOf(search) === -1 &&
+          (i.comment || "").toLowerCase().indexOf(search) === -1 &&
+          (i.tags || []).join(" ").toLowerCase().indexOf(search) === -1) return false;
+      return true;
+    });
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div class="ga-empty">' + (instructions.length ? 'No matching instructions' : 'No instructions yet. Click + Add Instruction to get started.') + '</div>';
+      return;
+    }
+
+    var html = "";
+    filtered.forEach(function(i) {
+      html += '<div class="ga-card">';
+      html += '<div class="ga-card-info">';
+      html += '<div class="ga-card-name">' + esc(i.display) + '</div>';
+      if (i.comment) html += '<div class="ga-card-detail">' + esc(i.comment) + '</div>';
+      html += '<div class="ga-card-code">' + i.coding_system + (i.coding_system === "SNOMED" ? ": " + i.code : "") + '</div>';
+      if (i.tags && i.tags.length) html += '<div class="ga-card-tags">' + renderTagPills(i.tags) + '</div>';
+      html += '</div>';
+      html += '<button class="ga-action-btn edit" onclick="editInstruction(' + i.id + ')">Edit</button>';
+      html += '<button class="ga-action-btn delete" onclick="deleteInstruction(' + i.id + ')">Delete</button>';
+      html += '</div>';
+    });
+
+    listEl.innerHTML = html;
+  };
+
+  // ---- Form Tag Input ----
+  function renderFormTags() {
+    var wrap = document.getElementById("tagInputWrap");
+    var input = document.getElementById("tagTextInput");
+    // Remove old tag pills
+    wrap.querySelectorAll(".ga-tag").forEach(function(el) { el.remove(); });
+    // Insert before input
+    formTags.forEach(function(t, idx) {
+      var pill = document.createElement("span");
+      pill.className = "ga-tag";
+      pill.innerHTML = esc(t) + '<span class="ga-tag-remove" onclick="removeFormTag(' + idx + ')">&times;</span>';
+      wrap.insertBefore(pill, input);
+    });
+  }
+
+  function addFormTag(tag) {
+    tag = tag.trim();
+    if (!tag || formTags.indexOf(tag) !== -1) return;
+    formTags.push(tag);
+    renderFormTags();
+    document.getElementById("tagTextInput").value = "";
+    document.getElementById("tagSuggestions").style.display = "none";
+  }
+
+  window.removeFormTag = function(idx) {
+    formTags.splice(idx, 1);
+    renderFormTags();
+  };
+
+  window.handleTagKeydown = function(e) {
+    var input = document.getElementById("tagTextInput");
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addFormTag(input.value.replace(",", ""));
+    } else if (e.key === "Backspace" && !input.value && formTags.length) {
+      formTags.pop();
+      renderFormTags();
+    }
+  };
+
+  window.showTagSuggestions = function() {
+    var input = document.getElementById("tagTextInput");
+    var q = input.value.toLowerCase().trim();
+    var sugEl = document.getElementById("tagSuggestions");
+    if (!q) { sugEl.style.display = "none"; return; }
+
+    var matches = allTags.filter(function(t) {
+      return t.toLowerCase().indexOf(q) !== -1 && formTags.indexOf(t) === -1;
+    });
+    if (!matches.length) { sugEl.style.display = "none"; return; }
+
+    sugEl.innerHTML = matches.slice(0, 8).map(function(t) {
+      return '<div class="ga-tag-suggestion" onmousedown="selectTagSuggestion(\'' + esc(t).replace(/'/g, "\\'") + '\')">' + esc(t) + '</div>';
+    }).join("");
+    sugEl.style.display = "block";
+  };
+
+  window.selectTagSuggestion = function(tag) {
+    addFormTag(tag);
+  };
+
+  // ---- Form ----
+  window.openForm = function(inst) {
+    document.getElementById("formOverlay").classList.add("active");
+    document.getElementById("formTitle").textContent = inst ? "Edit Instruction" : "Add Instruction";
+    document.getElementById("editId").value = inst ? inst.id : "";
+    document.getElementById("codingSystem").value = inst ? inst.coding_system : "UNSTRUCTURED";
+    document.getElementById("snomedCode").value = (inst && inst.coding_system === "SNOMED") ? inst.code : "";
+    document.getElementById("displayName").value = inst ? inst.display : "";
+    document.getElementById("comment").value = inst ? inst.comment : "";
+    formTags = inst && inst.tags ? inst.tags.slice() : [];
+    renderFormTags();
+    document.getElementById("tagTextInput").value = "";
+    document.getElementById("tagSuggestions").style.display = "none";
+    toggleSnomedField();
+  };
+
+  window.closeForm = function() {
+    document.getElementById("formOverlay").classList.remove("active");
+  };
+
+  window.toggleSnomedField = function() {
+    var isSnomed = document.getElementById("codingSystem").value === "SNOMED";
+    document.getElementById("snomedField").style.display = isSnomed ? "block" : "none";
+  };
+
+  window.saveInstruction = function() {
+    var editId = document.getElementById("editId").value;
+    var codingSystem = document.getElementById("codingSystem").value;
+    var snomedCode = document.getElementById("snomedCode").value.trim();
+    var display = document.getElementById("displayName").value.trim();
+    var comment = document.getElementById("comment").value.trim();
+
+    if (!display) { toast("Display name is required", "error"); return; }
+
+    var code = codingSystem === "SNOMED" ? snomedCode : display;
+    if (codingSystem === "SNOMED" && !snomedCode) { toast("SNOMED code is required", "error"); return; }
+
+    var body = {
+      coding_system: codingSystem,
+      code: code,
+      display: display,
+      tags: formTags,
+      comment: comment,
+    };
+
+    if (editId) {
+      body.id = parseInt(editId);
+      api("/library", { method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) })
+        .then(function(data) {
+          if (data.status === "ok") { toast("Instruction updated", "success"); closeForm(); loadAll(); }
+          else { toast(data.message || "Error", "error"); }
+        });
+    } else {
+      api("/library", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) })
+        .then(function(data) {
+          if (data.status === "ok") { toast("Instruction added", "success"); closeForm(); loadAll(); }
+          else { toast(data.message || "Error", "error"); }
+        });
+    }
+  };
+
+  window.editInstruction = function(id) {
+    var inst = instructions.find(function(i) { return i.id === id; });
+    if (inst) openForm(inst);
+  };
+
+  window.deleteInstruction = function(id) {
+    if (!confirm("Remove this instruction from the library?")) return;
+    api("/library/" + id, { method: "DELETE" }).then(function(data) {
+      if (data.status === "ok") { toast("Instruction removed", "success"); loadAll(); }
+      else { toast(data.message || "Error", "error"); }
+    });
+  };
+
+  loadAll();
+})();
+</script>
+</body>
+</html>
