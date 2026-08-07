@@ -1,0 +1,246 @@
+{# Rendered inline into a chart pane, so styles and script are inline too:
+   an origin-less document cannot pull in a stylesheet or a script file. #}
+<style>
+  .wlf { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         font-size: 14px; color: #1f2933; padding: 16px; }
+  .wlf h2 { font-size: 16px; margin: 0 0 2px; }
+  .wlf .wlf-sub { color: #61707d; font-size: 13px; margin: 0 0 14px; }
+  .wlf-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .wlf-field label { font-size: 11px; font-weight: 600; letter-spacing: .04em;
+                     text-transform: uppercase; color: #61707d; }
+  .wlf-field select, .wlf-field textarea, .wlf-field input {
+    font: inherit; color: inherit; padding: 7px 9px; border: 1px solid #dde3e9;
+    border-radius: 6px; background: #fff; min-height: 34px; }
+  .wlf-field textarea { min-height: 64px; resize: vertical; }
+  .wlf-error { color: #b02a37; font-size: 12px; min-height: 15px; }
+  .wlf-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .wlf-btn { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid #dde3e9;
+             background: #fff; cursor: pointer; min-height: 34px; }
+  .wlf-btn-primary { background: #0b7285; border-color: #0b7285; color: #fff; }
+  .wlf-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .wlf-notice { border: 1px solid #dde3e9; border-left: 3px solid #b06a1e; background: #fdf8f1;
+                padding: 9px 11px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; }
+  .wlf-done { border: 1px solid #dde3e9; border-left: 3px solid #3f6f4a; background: #f2f8f4;
+              padding: 12px; border-radius: 4px; }
+  .wlf-counter { font-size: 11px; color: #61707d; text-align: right; }
+  .wlf-hidden { display: none; }
+</style>
+
+<div class="wlf" id="wlf-root">
+  <h2>{{ heading }}</h2>
+  <p class="wlf-sub">{{ patient_name }}{% if intro %} &middot; {{ intro }}{% endif %}</p>
+
+  <div id="wlf-existing" class="wlf-notice wlf-hidden"></div>
+  <div id="wlf-unconfigured" class="wlf-notice wlf-hidden">
+    No services are configured for the waitlist yet, so entries cannot be added.
+  </div>
+
+  <form id="wlf-form" novalidate>
+    <div class="wlf-field">
+      <label for="wlf-type">Service</label>
+      <select id="wlf-type" name="appointment_type_id" required></select>
+      <span class="wlf-error" data-error-for="appointment_type_id"></span>
+    </div>
+
+    <div class="wlf-field">
+      <label for="wlf-provider">Provider</label>
+      <select id="wlf-provider" name="provider_id"></select>
+      <span class="wlf-error" data-error-for="provider_id"></span>
+    </div>
+
+    <div class="wlf-field">
+      <label for="wlf-location">Location</label>
+      <select id="wlf-location" name="location_id"></select>
+      <span class="wlf-error" data-error-for="location_id"></span>
+    </div>
+
+    <div class="wlf-field">
+      <label for="wlf-priority">Priority</label>
+      <select id="wlf-priority" name="priority"></select>
+      <span class="wlf-error" data-error-for="priority"></span>
+    </div>
+
+    <div class="wlf-field">
+      <label for="wlf-window">Preferred time</label>
+      <select id="wlf-window" name="preferred_window"></select>
+      <span class="wlf-error" data-error-for="preferred_window"></span>
+    </div>
+
+    <div class="wlf-field">
+      <label for="wlf-note">Note</label>
+      <textarea id="wlf-note" name="note" maxlength="{{ max_note_length }}"></textarea>
+      <span class="wlf-counter" id="wlf-note-count"></span>
+      <span class="wlf-error" data-error-for="note"></span>
+    </div>
+
+    <p class="wlf-error" id="wlf-form-error"></p>
+
+    <div class="wlf-actions">
+      <button type="submit" class="wlf-btn wlf-btn-primary" id="wlf-submit">
+        Add to waitlist
+      </button>
+    </div>
+  </form>
+
+  <div id="wlf-done" class="wlf-done wlf-hidden"></div>
+</div>
+
+<script id="wlf-config" type="application/json">{{ config_json }}</script>
+<script>
+(function () {
+  "use strict";
+
+  var config = {};
+  try {
+    config = JSON.parse(document.getElementById("wlf-config").textContent) || {};
+  } catch (err) { config = {}; }
+
+  var options = config.options || {};
+  var prefill = config.prefill || {};
+  var ANY = options.any_preference || "any";
+
+  var form = document.getElementById("wlf-form");
+  var submit = document.getElementById("wlf-submit");
+  var formError = document.getElementById("wlf-form-error");
+  var note = document.getElementById("wlf-note");
+  var counter = document.getElementById("wlf-note-count");
+
+  function option(value, label) {
+    var node = document.createElement("option");
+    node.value = String(value);
+    // textContent, never innerHTML: these are instance-defined names.
+    node.textContent = label;
+    return node;
+  }
+
+  function fill(select, items, leading) {
+    select.textContent = "";
+    (leading || []).forEach(function (pair) { select.appendChild(option(pair[0], pair[1])); });
+    items.forEach(function (item) { select.appendChild(option(item.value, item.label)); });
+  }
+
+  fill(
+    document.getElementById("wlf-type"),
+    (options.appointment_types || []).map(function (t) { return { value: t.dbid, label: t.name }; }),
+    [["", "Choose a service"]]
+  );
+  fill(
+    document.getElementById("wlf-provider"),
+    (options.providers || []).map(function (p) { return { value: p.dbid, label: p.name }; }),
+    [[ANY, "Any provider"]]
+  );
+  fill(
+    document.getElementById("wlf-location"),
+    (options.locations || []).map(function (l) { return { value: l.dbid, label: l.name }; }),
+    [[ANY, "Any location"]]
+  );
+  fill(
+    document.getElementById("wlf-priority"),
+    (options.priorities || []).map(function (p) { return { value: p.label, label: p.label }; }),
+    []
+  );
+  fill(
+    document.getElementById("wlf-window"),
+    (options.time_windows || []).map(function (w) { return { value: w.value, label: w.label }; }),
+    []
+  );
+
+  // Pre-fill from the freed slot when opened from a cancelled appointment.
+  ["appointment_type_id", "provider_id", "location_id"].forEach(function (key) {
+    if (!prefill[key]) return;
+    var select = form.elements[key];
+    if (select) select.value = String(prefill[key]);
+  });
+
+  // Default priority to the least urgent configured band.
+  var priorities = options.priorities || [];
+  if (priorities.length) {
+    form.elements.priority.value = priorities[priorities.length - 1].label;
+  }
+
+  if (!options.is_configured) {
+    document.getElementById("wlf-unconfigured").classList.remove("wlf-hidden");
+    submit.disabled = true;
+  }
+
+  var existing = config.existing || [];
+  if (existing.length) {
+    var box = document.getElementById("wlf-existing");
+    box.textContent =
+      "Already waiting for: " +
+      existing.map(function (e) { return e.appointment_type; }).join(", ") + ".";
+    box.classList.remove("wlf-hidden");
+  }
+
+  function updateCounter() {
+    counter.textContent = note.value.length + " / " + (config.maxNoteLength || 500);
+  }
+  note.addEventListener("input", updateCounter);
+  updateCounter();
+
+  function clearErrors() {
+    formError.textContent = "";
+    Array.prototype.forEach.call(
+      form.querySelectorAll("[data-error-for]"),
+      function (node) { node.textContent = ""; }
+    );
+  }
+
+  function showErrors(fieldErrors, message) {
+    formError.textContent = message || "";
+    Object.keys(fieldErrors || {}).forEach(function (field) {
+      var node = form.querySelector('[data-error-for="' + field + '"]');
+      if (node) node.textContent = fieldErrors[field];
+    });
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    clearErrors();
+
+    var providerValue = form.elements.provider_id.value;
+    var locationValue = form.elements.location_id.value;
+
+    var body = {
+      patient_id: config.patientId,
+      appointment_type_id: form.elements.appointment_type_id.value,
+      provider_preference: providerValue === ANY ? ANY : "specific",
+      provider_id: providerValue === ANY ? "" : providerValue,
+      location_preference: locationValue === ANY ? ANY : "specific",
+      location_id: locationValue === ANY ? "" : locationValue,
+      priority: form.elements.priority.value,
+      preferred_window: form.elements.preferred_window.value,
+      preferred_window_timezone:
+        (window.Intl && Intl.DateTimeFormat().resolvedOptions().timeZone) || "",
+      note: note.value
+    };
+
+    submit.disabled = true;
+    window
+      .fetch(config.apiBase + "/waitlist/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(body)
+      })
+      .then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          if (!response.ok) {
+            showErrors(data.field_errors, data.error || "Could not add to the waitlist.");
+            submit.disabled = false;
+            return;
+          }
+          form.classList.add("wlf-hidden");
+          var done = document.getElementById("wlf-done");
+          done.textContent =
+            "Added to the waitlist. The scheduling team is notified when a matching slot frees up.";
+          done.classList.remove("wlf-hidden");
+        });
+      })
+      .catch(function () {
+        showErrors({}, "Could not reach the server. Try again.");
+        submit.disabled = false;
+      });
+  });
+})();
+</script>

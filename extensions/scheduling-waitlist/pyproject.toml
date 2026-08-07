@@ -1,0 +1,39 @@
+# Local development and testing only. The Canvas plugin has its own packaging
+# process that does not use this file.
+[project]
+name = "scheduling-waitlist"
+version = "0.1.0"
+description = "Shared scheduling waitlist with cancellation-driven matching"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+# branch = true is deliberate. The repo's review gate is >=90% BRANCH coverage,
+# but almost every plugin here omits this flag and so silently reports statement
+# coverage instead. Without it the gate does not measure what it claims to.
+branch = true
+source = ["scheduling_waitlist"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*", ".venv/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

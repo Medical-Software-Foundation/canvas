@@ -1,0 +1,121 @@
+# Scheduling Waitlist
+
+A shared, priority-ordered list of patients waiting to be scheduled — and a task to the
+scheduling team the moment a booked slot frees up.
+
+When an appointment is cancelled or a patient no-shows, that slot usually goes to waste because
+nobody remembers who was waiting for it. This plugin keeps the waiting list in one place and
+reacts to cancellations automatically.
+
+**The plugin never books anyone.** It recommends; staff schedule from the task.
+
+## What it does
+
+**The roster** — a practice-wide page in the app drawer listing everyone waiting, sorted by
+priority then wait time. Filter by service, provider, or location; search by patient name. Each
+row can open the patient's chart, be edited, marked scheduled, or removed.
+
+**Adding a patient** — two buttons, both opening the same short form:
+
+- On the **patient chart header**, any time.
+- On a **cancelled or no-showed appointment's note**, where the form arrives pre-filled with that
+  appointment's type, provider, and location.
+
+**Cancellation matching** — when a booked appointment is cancelled or no-showed, the plugin finds
+waiting entries whose requested type, provider (or "any"), and location fit the freed slot, and
+raises **one** task to the scheduling team naming them in priority order. Each patient's
+preferred day/time is shown so staff can judge fit.
+
+**Housekeeping** — a nightly job ages out entries past their configured shelf life and logs
+wait-time and fill metrics. Ageing marks entries `expired`; it never deletes them, so the backlog
+report stays intact and an entry can be reinstated in one click.
+
+## Entry lifecycle
+
+```
+waiting ⇄ offered  →  scheduled | removed | expired
+```
+
+`waiting` and `offered` are both matchable — telling a patient about a slot is not the same as
+them booking it. All three terminal states can be reinstated. An entry that was auto-marked
+`scheduled` returns to `waiting` on its own if that appointment is later cancelled.
+
+## Installation
+
+```bash
+canvas install extensions/scheduling-waitlist/scheduling_waitlist
+```
+
+The plugin's Custom Data namespace (`custom_data__scheduling_waitlist`) is created on install.
+Writes require the platform-supplied `namespace_read_write_access_key`.
+
+## Configuration
+
+Set as plugin secrets. Anything marked **required** fails closed — the plugin declines to act
+rather than guessing.
+
+| Secret | Required | Default | What it does |
+|---|---|---|---|
+| `WAITLIST_SCHEDULING_TEAM` | **yes** | — | Team UUID or exact name that receives slot-opened tasks. Unset ⇒ no task is raised (an unassigned task is an unread task) |
+| `WAITLIST_APPOINTMENT_TYPES` | **yes** | — | Comma-separated `NoteType` **codes** offered on the form. Codes, not names, because names change across versions and installs |
+| `WAITLIST_PRIORITY_LABELS` | no | `High,Medium,Low` | Comma-separated, highest priority first |
+| `WAITLIST_TTL_DAYS` | **yes** | — | Days before a waiting entry ages out. Invalid ⇒ nothing expires |
+| `WAITLIST_MANAGER_ROLE_CODES` | no | *(empty)* | Staff role codes allowed to edit or remove **other** people's entries. Unset ⇒ everyone still manages their own |
+| `WAITLIST_ENFORCE_TIME_WINDOWS` | no | `false` | When `true`, a patient's preferred day/time filters matches instead of only being displayed |
+| `WAITLIST_MAX_MATCHES_PER_TASK` | no | `10` | Cap on patients named in one task |
+| `WAITLIST_MIN_LEAD_TIME_HOURS` | no | `2` | Slots starting sooner than this are ignored — nobody can fill them |
+| `WAITLIST_URGENT_LEAD_HOURS` | no | `48` | Slots starting within this window raise an urgent task |
+| `WAITLIST_DISPLAY_TIMEZONE` | no | `UTC` | IANA timezone for times in tasks. The abbreviation is always printed, so a wrong value is visible rather than silent |
+
+> The manifest uses the `secrets` key. Newer CLI versions report it as deprecated in favour of
+> `variables`, but the CLI notes the server may not return `variables` yet, and 80 of the 81
+> plugins in this repo still use `secrets`. Revisit once server support is confirmed.
+
+## Components
+
+| Class | Kind | Responds to |
+|---|---|---|
+| `applications.waitlist_app:WaitlistApp` | Application (global) | app drawer |
+| `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
+| `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD and dropdown options |
+| `handlers.chart_button:AddToWaitlistChartButton` | ActionButton | chart patient header |
+| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed only |
+| `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED` |
+| `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
+| `handlers.waitlist_cron:WaitlistMaintenanceCron` | CronTask | `0 3 * * *` (UTC) |
+
+## Notes for maintainers
+
+**Filtering, search, and sorting run server-side**, unlike some plugins here that bootstrap a
+whole list into the page and filter in JavaScript. Three reasons, all specific to this plugin: a
+practice-wide waitlist is thousands of rows rather than dozens; the search box matches *patient
+name*, so filtering in the browser would ship every waitlisted patient's name and date of birth
+regardless of the filter; and priority rank comes from configuration, so ordering belongs in one
+place. Please don't "fix" this back.
+
+**"Any provider" is stored as a value, not an absent foreign key.** The plugin DDL pipeline emits
+no `NOT NULL` constraints, so a null column cannot be distinguished from one that was never
+filled in — and reading null as "any" would make a malformed row match every open slot. Storing
+the intent explicitly makes a malformed row match nothing instead.
+
+**Slot detection reacts to a freed *booked* slot, not to open availability.** Canvas emits no
+generic "slot opened" event, so scanning arbitrary open availability is out of scope.
+
+## Development
+
+```bash
+cd extensions/scheduling-waitlist
+uv run --python 3.12 --with pytest --no-project pytest tests/ -q
+uv run --python 3.12 --with pytest --with pytest-cov --no-project pytest tests/ --cov --cov-branch -q
+uv run --python 3.12 --with mypy --no-project mypy scheduling_waitlist
+canvas validate-manifest scheduling_waitlist
+```
+
+The test suite stubs the Canvas SDK at import time, so it runs with only `pytest` installed —
+no SDK, no Django, and no database. `--no-project` keeps the run from materializing a `.venv`
+and `uv.lock` inside the plugin directory; `--python 3.12` matches the platform runtime, since
+a bare `uv run` may pick up an older interpreter.
+
+## License
+
+MIT

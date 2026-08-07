@@ -1,0 +1,371 @@
+/* Scheduling Waitlist roster.
+ *
+ * Everything themeable is a custom property on :root so an adopter can rebrand
+ * in one block instead of hunting through rules. No CDN fonts or images: the
+ * page must render with only what this plugin serves.
+ */
+
+:root {
+  --wl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --wl-bg: #f7f8fa;
+  --wl-surface: #ffffff;
+  --wl-ink: #1f2933;
+  --wl-ink-muted: #61707d;
+  --wl-line: #dde3e9;
+  --wl-line-soft: #eef1f4;
+  --wl-accent: #0b7285;
+  --wl-accent-ink: #ffffff;
+  --wl-danger: #b02a37;
+  --wl-focus: #0b7285;
+
+  /* Priority bands are indexed, not named, so a practice can configure any
+     labels it likes without the stylesheet knowing what they are. */
+  --wl-priority-1: #b02a37;
+  --wl-priority-2: #b06a1e;
+  --wl-priority-3: #3f6f4a;
+  --wl-priority-other: #61707d;
+
+  --wl-radius: 6px;
+  --wl-gap: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--wl-font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--wl-ink);
+  background: var(--wl-bg);
+}
+
+#wl-app {
+  padding: 20px 24px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.wl-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- header ---------- */
+
+.wl-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--wl-gap);
+  margin-bottom: 18px;
+}
+
+.wl-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.wl-subtitle {
+  margin: 2px 0 0;
+  color: var(--wl-ink-muted);
+  font-size: 13px;
+}
+
+/* ---------- filters ---------- */
+
+.wl-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--wl-gap);
+  padding: 14px 16px;
+  background: var(--wl-surface);
+  border: 1px solid var(--wl-line);
+  border-radius: var(--wl-radius);
+  margin-bottom: 14px;
+}
+
+.wl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.wl-field-search { flex: 1 1 220px; }
+.wl-field-actions { margin-left: auto; }
+
+.wl-field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--wl-ink-muted);
+}
+
+.wl-field input,
+.wl-field select {
+  font: inherit;
+  color: inherit;
+  padding: 7px 9px;
+  border: 1px solid var(--wl-line);
+  border-radius: var(--wl-radius);
+  background: var(--wl-surface);
+  min-height: 34px;
+}
+
+.wl-field input:focus-visible,
+.wl-field select:focus-visible,
+.wl-btn:focus-visible,
+.wl-link:focus-visible {
+  outline: 2px solid var(--wl-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- buttons ---------- */
+
+.wl-btn {
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: var(--wl-radius);
+  border: 1px solid var(--wl-line);
+  background: var(--wl-surface);
+  color: var(--wl-ink);
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.wl-btn:hover:not(:disabled) { border-color: var(--wl-ink-muted); }
+.wl-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.wl-btn-primary {
+  background: var(--wl-accent);
+  border-color: var(--wl-accent);
+  color: var(--wl-accent-ink);
+}
+
+.wl-btn-danger { color: var(--wl-danger); }
+.wl-btn-quiet { background: transparent; }
+
+.wl-btn-sm { padding: 4px 8px; min-height: 28px; font-size: 13px; }
+
+/* ---------- status line ---------- */
+
+.wl-status {
+  margin: 0 0 10px;
+  color: var(--wl-ink-muted);
+  font-size: 13px;
+  min-height: 20px;
+}
+
+.wl-status[data-tone="error"] { color: var(--wl-danger); }
+
+/* ---------- table ---------- */
+
+.wl-table-wrap {
+  background: var(--wl-surface);
+  border: 1px solid var(--wl-line);
+  border-radius: var(--wl-radius);
+  overflow-x: auto;
+}
+
+.wl-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.wl-table th,
+.wl-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--wl-line-soft);
+  vertical-align: top;
+}
+
+.wl-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--wl-ink-muted);
+  border-bottom: 1px solid var(--wl-line);
+  white-space: nowrap;
+  background: var(--wl-surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.wl-table tbody tr:last-child td { border-bottom: none; }
+.wl-table tbody tr:hover { background: var(--wl-line-soft); }
+
+.wl-sort {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wl-sort[aria-sort="ascending"]::after { content: "\2191"; }
+.wl-sort[aria-sort="descending"]::after { content: "\2193"; }
+
+.wl-patient-name { font-weight: 600; }
+
+.wl-secondary {
+  display: block;
+  color: var(--wl-ink-muted);
+  font-size: 12px;
+}
+
+.wl-link { color: var(--wl-accent); }
+
+.wl-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.wl-empty {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--wl-ink-muted);
+}
+
+/* ---------- pills ---------- */
+
+.wl-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.wl-pill[data-rank="0"] { color: var(--wl-priority-1); }
+.wl-pill[data-rank="1"] { color: var(--wl-priority-2); }
+.wl-pill[data-rank="2"] { color: var(--wl-priority-3); }
+.wl-pill[data-rank="other"] { color: var(--wl-priority-other); }
+
+.wl-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--wl-radius);
+  font-size: 12px;
+  background: var(--wl-line-soft);
+  color: var(--wl-ink-muted);
+  white-space: nowrap;
+}
+
+.wl-expired { color: var(--wl-danger); font-weight: 600; }
+
+/* ---------- pager ---------- */
+
+.wl-pager {
+  display: flex;
+  align-items: center;
+  gap: var(--wl-gap);
+  justify-content: center;
+  margin-top: 14px;
+  color: var(--wl-ink-muted);
+  font-size: 13px;
+}
+
+/* ---------- dialog ---------- */
+
+.wl-dialog {
+  border: 1px solid var(--wl-line);
+  border-radius: var(--wl-radius);
+  padding: 0;
+  width: min(520px, 92vw);
+  color: var(--wl-ink);
+  background: var(--wl-surface);
+}
+
+.wl-dialog::backdrop { background: rgba(31, 41, 51, .45); }
+
+.wl-dialog-body { padding: 18px 20px; }
+
+.wl-dialog h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.wl-dialog-sub {
+  margin: 0 0 16px;
+  color: var(--wl-ink-muted);
+  font-size: 13px;
+}
+
+.wl-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--wl-gap);
+}
+
+.wl-form-grid .wl-field-full { grid-column: 1 / -1; }
+
+.wl-dialog textarea {
+  font: inherit;
+  color: inherit;
+  padding: 7px 9px;
+  border: 1px solid var(--wl-line);
+  border-radius: var(--wl-radius);
+  resize: vertical;
+  min-height: 68px;
+  background: var(--wl-surface);
+}
+
+.wl-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--wl-line-soft);
+}
+
+.wl-field-error {
+  color: var(--wl-danger);
+  font-size: 12px;
+  min-height: 16px;
+}
+
+/* ---------- toast ---------- */
+
+.wl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--wl-ink);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: var(--wl-radius);
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(31, 41, 51, .22);
+  max-width: min(520px, 90vw);
+}
+
+.wl-toast[data-tone="error"] { background: var(--wl-danger); }
+
+@media (max-width: 720px) {
+  #wl-app { padding: 14px; }
+  .wl-form-grid { grid-template-columns: 1fr; }
+  .wl-field-actions { margin-left: 0; }
+}

@@ -1,0 +1,296 @@
+"""Announcing a freed slot to the scheduling team."""
+
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
+
+from scheduling_waitlist.handlers.slot_freed import SlotFreedHandler
+
+MODULE = "scheduling_waitlist.handlers.slot_freed"
+
+SECRETS = {
+    "WAITLIST_SCHEDULING_TEAM": "Front Desk",
+    "WAITLIST_APPOINTMENT_TYPES": "estab",
+}
+
+
+def _handler(appointment_id="appt-key", event_type="APPOINTMENT_CANCELED", secrets=None):
+    handler = SlotFreedHandler.__new__(SlotFreedHandler)
+    event = MagicMock()
+    event.target.id = appointment_id
+    event.context = {}
+    event.type = event_type
+    handler.event = event
+    handler.secrets = SECRETS if secrets is None else secrets
+    return handler
+
+
+def _appointment(start_offset_days=9, **overrides):
+    record = MagicMock()
+    record.dbid = 900
+    record.id = "appt-key"
+    record.start_time = datetime.now(timezone.utc) + timedelta(days=start_offset_days)
+    record.duration_minutes = 30
+    record.note_type_id = 7
+    record.note_type.name = "Established Visit"
+    record.note_type.code = "estab"
+    record.provider_id = 101
+    record.provider.first_name = "Alice"
+    record.provider.last_name = "Chen"
+    record.location_id = 3
+    record.location.full_name = "Riverside Clinic"
+    record.patient_id = 55
+    for key, value in overrides.items():
+        setattr(record, key, value)
+    return record
+
+
+def _entry(name="Jordan Lee"):
+    entry = MagicMock()
+    entry.patient.first_name = name.split()[0]
+    entry.patient.last_name = name.split()[-1]
+    entry.priority_label = "High"
+    entry.preferred_windows = []
+    entry.preferred_window_note = ""
+    entry.note = ""
+    entry.note_type.name = "Established Visit"
+    entry.provider_preference = "specific"
+    entry.desired_provider.first_name = "Alice"
+    entry.desired_provider.last_name = "Chen"
+    entry.location_preference = "specific"
+    entry.desired_location.full_name = "Riverside Clinic"
+    entry.created_at = datetime.now(timezone.utc) - timedelta(days=10)
+    return entry
+
+
+class _Ctx:
+    """Patches everything the handler touches, with sensible defaults."""
+
+    def __init__(self, appointment=None, entries=None, claimed=True, team_id="team-1"):
+        self.appointment = appointment if appointment is not None else _appointment()
+        self.entries = entries if entries is not None else [_entry()]
+        self.claimed = claimed
+        self.team_id = team_id
+        self.ledger = MagicMock()
+
+    def __enter__(self):
+        self._patches = [
+            patch(f"{MODULE}.Appointment"),
+            patch(f"{MODULE}.SlotNotification"),
+            patch(f"{MODULE}.find_matching_entries", return_value=self.entries),
+            patch(f"{MODULE}.find_entries_for_appointment", return_value=[]),
+            patch(f"{MODULE}.resolve_team_id", return_value=self.team_id),
+            patch(f"{MODULE}.apply_transition"),
+        ]
+        (
+            self.appointment_model,
+            self.notification_model,
+            self.matcher,
+            self.rearm_lookup,
+            self.team_resolver,
+            self.transition,
+        ) = [p.start() for p in self._patches]
+
+        queryset = self.appointment_model.objects.filter.return_value.select_related.return_value
+        queryset.first.return_value = self.appointment
+        self.notification_model.objects.get_or_create.return_value = (
+            self.ledger,
+            self.claimed,
+        )
+        return self
+
+    def __exit__(self, *args):
+        for p in self._patches:
+            p.stop()
+        return False
+
+
+def effects_of(handler, **ctx_kwargs):
+    with _Ctx(**ctx_kwargs) as ctx:
+        return handler.compute(), ctx
+
+
+class TestPayloadHandling:
+    def test_an_event_with_no_identifier_is_ignored(self):
+        handler = _handler(appointment_id=None)
+
+        assert handler.compute() == []
+
+    def test_a_missing_appointment_is_ignored(self):
+        handler = _handler()
+        with _Ctx() as ctx:
+            queryset = (
+                ctx.appointment_model.objects.filter.return_value.select_related.return_value
+            )
+            queryset.first.return_value = None
+
+            assert handler.compute() == []
+
+    def test_appointments_marked_entered_in_error_are_excluded(self):
+        _, ctx = effects_of(_handler())
+
+        assert (
+            ctx.appointment_model.objects.filter.call_args.kwargs["entered_in_error__isnull"]
+            is True
+        )
+
+
+class TestGuards:
+    def test_a_slot_with_no_service_is_not_announced(self):
+        effects, _ = effects_of(_handler(), appointment=_appointment(note_type_id=None))
+
+        assert effects == []
+
+    def test_a_slot_starting_too_soon_is_not_announced(self):
+        # Nobody could fill it, so it is not worth interrupting anyone.
+        effects, _ = effects_of(
+            _handler(), appointment=_appointment(start_offset_days=0)
+        )
+
+        assert effects == []
+
+    def test_a_slot_already_in_the_past_is_not_announced(self):
+        effects, _ = effects_of(
+            _handler(), appointment=_appointment(start_offset_days=-2)
+        )
+
+        assert effects == []
+
+    def test_no_matching_patients_means_no_task(self):
+        effects, _ = effects_of(_handler(), entries=[])
+
+        assert effects == []
+
+    def test_no_matches_still_records_the_slot_as_handled(self):
+        # Otherwise a duplicate event re-runs the whole match for nothing.
+        _, ctx = effects_of(_handler(), entries=[])
+
+        ctx.ledger.save.assert_called_once()
+
+
+class TestDeduplication:
+    def test_a_slot_already_announced_raises_no_second_task(self):
+        effects, _ = effects_of(_handler(), claimed=False)
+
+        assert effects == []
+
+    def test_the_slot_is_claimed_before_the_match_runs(self):
+        # The loser of a race then pays one insert instead of a full query and
+        # a duplicate task.
+        _, ctx = effects_of(_handler(), claimed=False)
+
+        ctx.matcher.assert_not_called()
+
+    def test_the_claim_is_keyed_on_the_slot_fingerprint(self):
+        _, ctx = effects_of(_handler())
+
+        assert "slot_fingerprint" in ctx.notification_model.objects.get_or_create.call_args.kwargs
+
+    def test_a_cancellation_and_a_no_show_claim_the_same_key(self):
+        # Same booking, same freed slot; they must not each raise a task. The
+        # one appointment object is shared so the two runs differ only in the
+        # event that delivered them.
+        appointment = _appointment()
+
+        _, cancelled = effects_of(
+            _handler(event_type="APPOINTMENT_CANCELED"), appointment=appointment
+        )
+        _, no_showed = effects_of(
+            _handler(event_type="APPOINTMENT_NO_SHOWED"), appointment=appointment
+        )
+
+        assert (
+            cancelled.notification_model.objects.get_or_create.call_args.kwargs[
+                "slot_fingerprint"
+            ]
+            == no_showed.notification_model.objects.get_or_create.call_args.kwargs[
+                "slot_fingerprint"
+            ]
+        )
+
+
+class TestTask:
+    def test_a_task_and_its_comment_are_returned(self):
+        effects, _ = effects_of(_handler())
+
+        assert len(effects) == 2
+
+    def test_the_task_goes_to_the_configured_team(self):
+        effects, _ = effects_of(_handler())
+
+        assert effects[0].team_id == "team-1"
+
+    def test_the_task_names_how_many_patients_match(self):
+        effects, _ = effects_of(_handler(), entries=[_entry("Jordan Lee"), _entry("Sam Poe")])
+
+        assert "2 waitlisted patients match" in effects[0].title
+
+    def test_the_task_is_not_attached_to_any_one_patient(self):
+        # It names several people; binding it to one would put a task about
+        # everybody on a single person's chart.
+        effects, _ = effects_of(_handler())
+
+        assert getattr(effects[0], "patient_id", None) is None
+
+    def test_the_comment_lists_the_matching_patients(self):
+        effects, _ = effects_of(_handler())
+
+        assert "Jordan Lee" in effects[1].body
+
+    def test_the_comment_says_nobody_has_been_booked(self):
+        effects, _ = effects_of(_handler())
+
+        assert "Nobody has been booked" in effects[1].body
+
+    def test_the_comment_and_task_share_an_identifier(self):
+        effects, _ = effects_of(_handler())
+
+        assert effects[1].task_id == effects[0].id
+
+    def test_an_imminent_slot_is_marked_urgent(self):
+        effects, _ = effects_of(_handler(), appointment=_appointment(start_offset_days=1))
+
+        assert effects[0].priority == "urgent"
+
+    def test_a_distant_slot_is_not_marked_urgent(self):
+        effects, _ = effects_of(_handler())
+
+        assert effects[0].priority is None
+
+
+class TestFailClosedOnTeam:
+    def test_no_configured_team_means_no_task(self):
+        # An unassigned task is a task nobody opens, so guessing a fallback
+        # would quietly drop the notification this plugin exists to send.
+        effects, _ = effects_of(_handler(), team_id="")
+
+        assert effects == []
+
+    def test_the_failure_is_logged_as_an_error(self):
+        import sys
+
+        effects_of(_handler(), team_id="")
+
+        assert sys.modules["logger"].log.error.called
+
+
+class TestReArm:
+    def test_entries_booked_into_this_appointment_go_back_on_the_list(self):
+        handler = _handler()
+        entry = MagicMock()
+
+        with _Ctx() as ctx:
+            ctx.rearm_lookup.return_value = [entry]
+            handler.compute()
+
+        assert ctx.transition.call_args.kwargs["to_status"] == "waiting"
+
+    def test_re_arming_happens_even_when_the_slot_is_not_announced(self):
+        # The patient belongs back on the list whether or not the freed slot is
+        # worth telling anyone about.
+        handler = _handler()
+
+        with _Ctx(appointment=_appointment(start_offset_days=0)) as ctx:
+            ctx.rearm_lookup.return_value = [MagicMock()]
+            handler.compute()
+
+        ctx.transition.assert_called_once()
