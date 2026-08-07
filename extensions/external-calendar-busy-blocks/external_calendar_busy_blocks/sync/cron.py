@@ -1,6 +1,5 @@
-import uuid
-from datetime import datetime, timezone
-from typing import Any
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 from logger import log
 
@@ -9,10 +8,8 @@ from canvas_sdk.effects.calendar import Event
 from canvas_sdk.handlers.cron_task import CronTask
 
 from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
-from external_calendar_busy_blocks.data.models import (
-    ImportedEvent,
-    StaffCalendarFeed,
-)
+from external_calendar_busy_blocks.calendars.live_events import busy_ids_by_time
+from external_calendar_busy_blocks.data.models import StaffCalendarFeed
 from external_calendar_busy_blocks.http.fetcher import (
     FetchOk,
     NotFound,
@@ -27,6 +24,13 @@ from external_calendar_busy_blocks.ics.types import IcsParseError, ParsedEvent
 
 LOOKAHEAD_DAYS_DEFAULT = 90
 
+# Safety valve: the most block deletions a single feed may emit in one tick.
+# A healthy feed deletes only what genuinely dropped out; this bounds the blast
+# radius if a feed ever parses partially, and it spreads the one-time cleanup of
+# historical orphans over a few ticks rather than firing hundreds of deletes at
+# once. Anything left over clears on the next run.
+MAX_DELETES_PER_SYNC_DEFAULT = 500
+
 
 class SyncCron(CronTask):
     """Polls every 15 minutes and reconciles ICS feeds to Canvas Admin events."""
@@ -36,11 +40,12 @@ class SyncCron(CronTask):
     def execute(self) -> list[Effect]:
         now = datetime.now(timezone.utc)
         lookahead = self._lookahead_days()
+        max_deletes = self._max_deletes_per_sync()
         effects: list[Effect] = []
 
         for feed in StaffCalendarFeed.objects.filter(is_active=True):
             try:
-                effects.extend(self._sync_feed(feed, now, lookahead))
+                effects.extend(self._sync_feed(feed, now, lookahead, max_deletes))
             except Exception as exc:  # noqa: BLE001 — isolate per-feed failures
                 # One provider's feed must never abort the whole tick or skip
                 # the remaining feeds. Log with traceback (Sentry-visible) and
@@ -60,11 +65,24 @@ class SyncCron(CronTask):
             log.warning("LOOKAHEAD_DAYS not parseable; using default %d", LOOKAHEAD_DAYS_DEFAULT)
             return LOOKAHEAD_DAYS_DEFAULT
 
+    def _max_deletes_per_sync(self) -> int:
+        try:
+            return int(
+                self.secrets.get("MAX_DELETES_PER_SYNC", str(MAX_DELETES_PER_SYNC_DEFAULT))
+            )
+        except (TypeError, ValueError):
+            log.warning(
+                "MAX_DELETES_PER_SYNC not parseable; using default %d",
+                MAX_DELETES_PER_SYNC_DEFAULT,
+            )
+            return MAX_DELETES_PER_SYNC_DEFAULT
+
     def _sync_feed(
         self,
         feed: StaffCalendarFeed,
         now: datetime,
         lookahead_days: int,
+        max_deletes: int,
     ) -> list[Effect]:
         calendar_id, cal_effects = get_admin_calendar_id(feed.staff_id)
         if not calendar_id:
@@ -110,21 +128,22 @@ class SyncCron(CronTask):
             feed.save()
             return []
 
-        # Only reconcile events that haven't ended yet. The parser never yields
-        # past occurrences, so including past ImportedEvent rows here would make
-        # the diff treat them as "removed from the feed" and delete them within
-        # ~15 min of the meeting ending. Per the spec, past events age out
-        # naturally on the source calendar rather than being deleted by the cron.
-        existing = list(
-            ImportedEvent.objects.filter(staff_id=feed.staff_id, ends_at__gte=now)
-        )
+        # The live calendar is the source of truth for what exists; the feed is
+        # the source of truth for what should. Read live blocks (by their real
+        # uuids) within the same window the parser covers so the two sets line up.
+        window_end = now + timedelta(days=lookahead_days)
+        live_by_time = busy_ids_by_time(calendar_id, now, window_end)
 
-        if not parsed and existing:
+        # Safety guard: a feed that parses to zero events while the calendar still
+        # holds blocks is almost always a transient upstream glitch, not the
+        # provider clearing their calendar. Skip deletions rather than wipe every
+        # block; a genuinely emptied feed clears on a later tick once confirmed.
+        if not parsed and live_by_time:
             feed.last_error = "feed parsed but empty; deletions skipped"
             feed.save()
             return cal_effects
 
-        effects = self._diff_and_emit(feed, calendar_id, parsed, existing, now)
+        effects = self._reconcile(calendar_id, parsed, live_by_time, max_deletes)
 
         feed.last_sync_at = now
         feed.last_etag = result.etag
@@ -133,74 +152,64 @@ class SyncCron(CronTask):
         feed.save()
         return [*cal_effects, *effects]
 
-    def _diff_and_emit(
+    def _reconcile(
         self,
-        feed: StaffCalendarFeed,
         calendar_id: str,
         parsed: list[ParsedEvent],
-        existing: list[Any],
-        now: datetime,
+        live_by_time: dict[tuple[datetime, datetime], list[str]],
+        max_deletes: int,
     ) -> list[Effect]:
-        by_key_existing = {(e.ics_uid, e.recurrence_id): e for e in existing}
-        seen_keys: set[tuple[str, str | None]] = set()
+        """Reconcile the live Admin calendar to the parsed feed by time window.
+
+        Every block is matched on its ``(starts_at, ends_at)`` pair, never on the
+        stored id. A live block the feed no longer wants is deleted by its *real*
+        uuid; a block the feed wants that isn't live yet is created. Because it
+        reconciles against the live calendar rather than a tracking table, it both
+        stops accruing orphans and cleans up ones already stranded by KOALA-6372.
+        """
+        desired: Counter[tuple[datetime, datetime]] = Counter(
+            (ev.starts_at, ev.ends_at) for ev in parsed
+        )
         effects: list[Effect] = []
 
-        for ev in parsed:
-            key = (ev.uid, ev.recurrence_id)
-            seen_keys.add(key)
-            prior = by_key_existing.get(key)
+        # Delete surplus: any block present more times than the feed wants at that
+        # time. A feed count of zero deletes them all — that is the orphan
+        # cleanup. Bounded by max_deletes so a partial parse can't mass-delete;
+        # the remainder clears on subsequent ticks.
+        deletes = 0
+        hit_cap = False
+        for key, real_ids in live_by_time.items():
+            keep = desired.get(key, 0)
+            for real_id in real_ids[keep:]:
+                if deletes >= max_deletes:
+                    hit_cap = True
+                    break
+                effects.append(Event(event_id=real_id).delete())
+                deletes += 1
+            if hit_cap:
+                break
+        if hit_cap:
+            log.warning(
+                "external_calendar_busy_blocks: hit delete cap of %d on calendar %s; "
+                "remaining orphaned blocks will clear on subsequent ticks",
+                max_deletes,
+                calendar_id,
+            )
 
-            if prior is None:
-                new_event_id = str(uuid.uuid4())
+        # Create shortfall: the feed wants more blocks at this time than are live.
+        for (starts_at, ends_at), want in desired.items():
+            have = len(live_by_time.get((starts_at, ends_at), ()))
+            for _ in range(want - have):
+                # event_id is intentionally omitted: the create interpreter
+                # ignores any supplied id and assigns its own (KOALA-6372). The
+                # real id is read back from the calendar on later ticks.
                 effects.append(
                     Event(
-                        event_id=new_event_id,
                         calendar_id=calendar_id,
                         title="Busy",
-                        starts_at=ev.starts_at,
-                        ends_at=ev.ends_at,
+                        starts_at=starts_at,
+                        ends_at=ends_at,
                     ).create()
                 )
-                ImportedEvent(
-                    staff_id=feed.staff_id,
-                    ics_uid=ev.uid,
-                    recurrence_id=ev.recurrence_id,
-                    canvas_event_id=new_event_id,
-                    sequence=ev.sequence,
-                    starts_at=ev.starts_at,
-                    ends_at=ev.ends_at,
-                    is_all_day=ev.is_all_day,
-                    last_seen=now,
-                ).save()
-                continue
-
-            if (
-                prior.starts_at == ev.starts_at
-                and prior.ends_at == ev.ends_at
-                and prior.sequence == ev.sequence
-            ):
-                prior.last_seen = now
-                prior.save()
-                continue
-
-            effects.append(
-                Event(
-                    event_id=prior.canvas_event_id,
-                    title="Busy",
-                    starts_at=ev.starts_at,
-                    ends_at=ev.ends_at,
-                ).update()
-            )
-            prior.starts_at = ev.starts_at
-            prior.ends_at = ev.ends_at
-            prior.sequence = ev.sequence
-            prior.last_seen = now
-            prior.save()
-
-        for key, row in by_key_existing.items():
-            if key in seen_keys:
-                continue
-            effects.append(Event(event_id=row.canvas_event_id).delete())
-            row.delete()
 
         return effects
