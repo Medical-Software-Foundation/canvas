@@ -8,6 +8,7 @@ from candid.effect_helpers import (
     BANNER_KEY,
     DENIED_STATUSES,
     active_coverages_ordered,
+    resubmission_code_comment,
     schedule_async_post,
     sync_banner,
 )
@@ -146,3 +147,89 @@ def test_schedule_async_post_passes_comma_free_secret_through() -> None:
 
         auth = MockEffect.call_args.kwargs["headers"]["Authorization"]
         assert auth == "no-commas-here"
+
+
+# ---------------------------------------------------------------------------
+# resubmission_code_comment
+# ---------------------------------------------------------------------------
+
+
+def _coverage_with_code(payer_order: str, resubmission_code: str) -> MagicMock:
+    """An active coverage carrying an explicit resubmission code.
+
+    The code has to be set explicitly — a bare MagicMock attribute is truthy
+    and would make every coverage look like a correction.
+    """
+    cov = MagicMock()
+    cov.payer_order = payer_order
+    cov.resubmission_code = resubmission_code
+    return cov
+
+
+def _claim_with_coverages(*coverages: MagicMock) -> MagicMock:
+    claim = MagicMock()
+    claim.coverages.active.return_value = list(coverages)
+    return claim
+
+
+def test_resubmission_code_comment_returns_none_when_no_code_set() -> None:
+    """The common case: no correction requested, so nothing is added to the claim."""
+    claim = _claim_with_coverages(
+        _coverage_with_code("Primary", ""),
+        _coverage_with_code("Secondary", ""),
+    )
+    assert resubmission_code_comment(claim, MagicMock()) is None
+
+
+def test_resubmission_code_comment_warns_that_code_was_not_sent() -> None:
+    """Code 7 set: the biller must learn the claim filed as an original anyway."""
+    claim = _claim_with_coverages(_coverage_with_code("Primary", "7"))
+    claim_effect = MagicMock()
+
+    result = resubmission_code_comment(claim, claim_effect)
+
+    assert result is claim_effect.add_comment.return_value
+    comment = claim_effect.add_comment.call_args.kwargs["comment"]
+    assert "7 (replacement of prior claim)" in comment
+    assert "was not sent" in comment
+    assert "filed as an original" in comment
+    assert "resubmit from there" in comment
+
+
+def test_resubmission_code_comment_lists_every_coverage_with_a_code() -> None:
+    """Codes from multiple payers are reported together, primary first."""
+    claim = _claim_with_coverages(
+        _coverage_with_code("Secondary", "8"),
+        _coverage_with_code("Primary", "6"),
+    )
+    claim_effect = MagicMock()
+
+    resubmission_code_comment(claim, claim_effect)
+
+    comment = claim_effect.add_comment.call_args.kwargs["comment"]
+    assert "6 (corrected claim), 8 (void/cancel prior claim)" in comment
+
+
+def test_resubmission_code_comment_ignores_coverages_without_a_code() -> None:
+    """A single corrected coverage alongside ordinary ones reports only itself."""
+    claim = _claim_with_coverages(
+        _coverage_with_code("Primary", ""),
+        _coverage_with_code("Secondary", "7"),
+    )
+    claim_effect = MagicMock()
+
+    resubmission_code_comment(claim, claim_effect)
+
+    comment = claim_effect.add_comment.call_args.kwargs["comment"]
+    assert "7 (replacement of prior claim)" in comment
+    assert "corrected claim" not in comment
+
+
+def test_resubmission_code_comment_falls_back_to_the_raw_unmapped_code() -> None:
+    """An unexpected code still surfaces rather than vanishing from the comment."""
+    claim = _claim_with_coverages(_coverage_with_code("Primary", "1"))
+    claim_effect = MagicMock()
+
+    resubmission_code_comment(claim, claim_effect)
+
+    assert "1" in claim_effect.add_comment.call_args.kwargs["comment"]

@@ -52,6 +52,7 @@ When a claim is moved to the **QueuedForSubmission** queue, the plugin schedules
 - **Resubmission handling:** If the POST fails with `EncounterExternalIdUniquenessError` (the encounter already exists in Candid), the plugin looks up the existing encounter by `external_id` and PATCHes it instead. The PATCH payload excludes `diagnoses` and `service_lines` (Candid's update schema uses `diagnosis_ids` instead and does not accept service lines)
 - On success: adds a claim comment with the submission date and Candid encounter IDs, adds a status banner, and moves claim to **FiledAwaitingResponse**
 - On failure: adds an error comment, writes a `candid_submission_error` metadata entry, and moves claim to **NeedsCodingReview**
+- **Corrected claims are not supported on this path.** Canvas exposes a CMS-1500 box 22 resubmission code (6 corrected, 7 replacement, 8 void) on each claim coverage, but `POST /encounters/v4` has no claim-frequency or original-reference field to carry it — the only `claim_frequency_code` in Candid's schema sits under `external_claim_submission`, which reports claims filed outside Candid. Setting the code therefore does nothing to what Canvas sends. Rather than let that pass silently, the plugin adds a claim comment on every submission where a code is set, saying the claim filed as an original and the correction has to be made in Candid. The payload is unchanged
 
 ### Adjudication Sync (Pull-Based)
 
