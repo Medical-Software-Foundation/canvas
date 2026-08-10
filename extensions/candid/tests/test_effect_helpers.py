@@ -193,7 +193,11 @@ def test_resubmission_code_comment_warns_that_code_was_not_sent() -> None:
     assert "7 (replacement of prior claim)" in comment
     assert "was not sent" in comment
     assert "filed as an original" in comment
-    assert "resubmit from there" in comment
+    assert "Candid UI" in comment
+    # Candid's guidance: correcting before adjudication draws a duplicate denial,
+    # so the comment has to carry the ordering, not just the destination.
+    assert "adjudicate" in comment
+    assert "duplicate denial" in comment
 
 
 def test_resubmission_code_comment_lists_every_coverage_with_a_code() -> None:

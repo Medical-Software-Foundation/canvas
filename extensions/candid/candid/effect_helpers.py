@@ -149,8 +149,16 @@ def active_coverages_ordered(claim: Claim) -> list:
 # Candid's submission path has nowhere to put it: POST /encounters/v4 exposes no
 # claim-frequency or original-reference field, and the only claim_frequency_code
 # in the schema hangs off external_claim_submission, which reports claims filed
-# outside Candid. Corrections are made in Candid directly, so say so on the claim
-# rather than letting the code sit on the coverage looking like it did something.
+# outside Candid.
+#
+# Candid confirmed this directly (Aug 2026): corrections cannot be submitted via
+# the API at all. Voids, corrections, and fresh claims all go through the same
+# Candid UI workflow, where Candid derives the frequency code from the submission
+# type the biller picks, and they must wait for the original claim to adjudicate
+# first or the correction comes back as a duplicate denial.
+#
+# So the code on the coverage can never do anything here. Say that on the claim
+# rather than letting it sit there looking like it worked.
 RESUBMISSION_CODE_LABELS = {
     "6": "6 (corrected claim)",
     "7": "7 (replacement of prior claim)",
@@ -174,10 +182,12 @@ def resubmission_code_comment(claim: Claim, claim_effect: ClaimEffect) -> Effect
 
     return claim_effect.add_comment(
         comment=(
-            f"Resubmission code {', '.join(codes)} is set on this claim, but Candid's "
-            "submission API has no field to carry it, so it was not sent and this claim "
-            "was filed as an original. To file a correction, make the edit in Candid and "
-            "resubmit from there."
+            f"Resubmission code {', '.join(codes)} is set on this claim. Candid has no "
+            "API field for it, so it was not sent and this claim was filed as an "
+            "original. Corrections and voids are submitted in the Candid UI, where "
+            "Candid sets the frequency code from the submission type you choose. Wait "
+            "for the original claim to adjudicate before submitting the correction, "
+            "otherwise it can come back as a duplicate denial."
         )
     )
 
