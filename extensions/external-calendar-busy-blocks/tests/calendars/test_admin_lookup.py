@@ -2,7 +2,10 @@ from unittest.mock import MagicMock, call, patch
 
 from canvas_sdk.v1.data.staff import Staff
 
-from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
+from external_calendar_busy_blocks.calendars.admin_lookup import (
+    find_admin_calendar_id,
+    get_admin_calendar_id,
+)
 
 MODULE = "external_calendar_busy_blocks.calendars.admin_lookup"
 
@@ -93,3 +96,42 @@ def test_returns_empty_when_name_blank() -> None:
     assert cal_id == ""
     assert effects == []
     MockCalEffect.assert_not_called()
+
+
+def test_find_returns_existing_id_without_provisioning() -> None:
+    mock_staff = MagicMock(full_name="Jane Doe")
+    with (
+        patch(f"{MODULE}.Staff.objects") as mock_staff_objects,
+        patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects,
+        patch(f"{MODULE}.CalendarEffect") as MockCalEffect,
+    ):
+        mock_staff_objects.get.return_value = mock_staff
+        mock_cal_objects.for_calendar_name.return_value.first.return_value = MagicMock(
+            id="cal-uuid-123"
+        )
+        cal_id = find_admin_calendar_id("p1")
+
+    assert cal_id == "cal-uuid-123"
+    # Look-up only: it must never emit a create effect as a side effect.
+    MockCalEffect.assert_not_called()
+
+
+def test_find_returns_empty_when_no_calendar() -> None:
+    mock_staff = MagicMock(full_name="Jane Doe")
+    with (
+        patch(f"{MODULE}.Staff.objects") as mock_staff_objects,
+        patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects,
+        patch(f"{MODULE}.CalendarEffect") as MockCalEffect,
+    ):
+        mock_staff_objects.get.return_value = mock_staff
+        mock_cal_objects.for_calendar_name.return_value.first.return_value = None
+        cal_id = find_admin_calendar_id("p1")
+
+    assert cal_id == ""
+    MockCalEffect.assert_not_called()
+
+
+def test_find_returns_empty_when_staff_missing() -> None:
+    with patch(f"{MODULE}.Staff.objects") as mock_staff_objects:
+        mock_staff_objects.get.side_effect = Staff.DoesNotExist
+        assert find_admin_calendar_id("nope") == ""

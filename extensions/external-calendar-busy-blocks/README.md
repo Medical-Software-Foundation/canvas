@@ -20,9 +20,17 @@ Each provider opens the **Calendar Busy Blocks** application from the Canvas glo
 
 1. Fetches each provider's ICS feed (sending `If-None-Match` / `If-Modified-Since` so unchanged feeds return `304 Not Modified` and skip work).
 2. Parses the feed, filters to confirmed busy events, expands recurring events within a 90-day window, and converts everything to UTC.
-3. Diffs the parsed events against the events the plugin previously imported and emits `Event.create`, `Event.update`, or `Event.delete` effects.
+3. Reconciles the provider's live Admin calendar against the parsed feed, matching blocks on their `(starts_at, ends_at)` window. Blocks the feed no longer wants are deleted, blocks it wants that aren't present yet are created (`Event.create` / `Event.delete`).
 
 Canvas users see only "Busy" — the original event titles never leave the personal calendar.
+
+### Why it reconciles on the live calendar (KOALA-6372)
+
+The plugin used to track each block's Canvas event id in an `ImportedEvent` table and update/delete by that id. Canvas's calendar-event **create** interpreter discards the id supplied on the effect and assigns its own uuid (KOALA-6372), so every stored id was a phantom: updates raised "Event does not exist" and deletes silently no-op'd. The plugin could add blocks but never clean them up, and orphaned "Busy" events piled up until they made providers unbookable.
+
+As of **0.4.0** the reconcile no longer trusts any stored id. It reads the live "Busy" events straight off the Admin calendar (with their real uuids), matches them to the feed by start/end time, and deletes by the real uuid. This both stops accruing orphans and cleans up ones already stranded — the next few ticks after upgrading will delete existing orphaned blocks (bounded by `MAX_DELETES_PER_SYNC` per feed per tick). A feed that parses to zero events while blocks still exist is treated as a transient glitch and skips deletions, so an upstream hiccup can't wipe a calendar. The `ImportedEvent` table is now unused and inert; it can be dropped in a later release.
+
+Note: cleanup runs whenever a feed's contents change (any `Event.create`/`Event.delete` tick). A feed that returns `304 Not Modified` is skipped, so a completely static feed's historical orphans clear on its next real change rather than immediately.
 
 ## Admin: connect feeds on behalf of providers
 
@@ -40,6 +48,7 @@ feeds, and the stored URL is never shown back in the UI.
 | Plugin secret | Default | Notes |
 |---|---|---|
 | `LOOKAHEAD_DAYS` | `90` | How far in advance to expand recurring events. |
+| `MAX_DELETES_PER_SYNC` | `500` | Cap on block deletions emitted per feed per tick. A safety valve: bounds the blast radius of a partial parse and spreads the one-time cleanup of historical orphans across ticks. Anything over the cap clears on the next run. |
 | `ADMIN_STAFF_IDS` | _(unset)_ | Comma-separated Canvas staff IDs allowed to manage other providers' feeds from the admin section. Unset means no one has admin access (the admin section is hidden). |
 
 ## Privacy & security

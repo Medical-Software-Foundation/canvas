@@ -30,11 +30,11 @@ def _z(dt: datetime) -> str:
     return dt.strftime("%Y%m%dT%H%M%SZ")
 
 
-def _new_cron(timestamp: datetime) -> SyncCron:
+def _new_cron(timestamp: datetime, secrets: dict | None = None) -> SyncCron:
     """Construct SyncCron with a CRON event keyed to `timestamp`."""
     event = MagicMock()
     event.target.id = timestamp.isoformat()
-    cron = SyncCron(event=event)
+    cron = SyncCron(event=event, secrets=secrets or {})
     cron.SCHEDULE = "*/15 * * * *"
     return cron
 
@@ -75,19 +75,25 @@ def _ok_body(uid: str, start_z: str, end_z: str) -> bytes:
 
 @pytest.fixture
 def patch_sync_deps():
-    """Patch SyncCron's external dependencies in a single place."""
+    """Patch SyncCron's external dependencies in a single place.
+
+    `busy_ids_by_time` stands in for the live Admin calendar: tests set its
+    return value to `{(starts_at, ends_at): [real_uuid, ...]}` to describe the
+    blocks currently on the calendar. It defaults to an empty calendar.
+    """
     with (
         patch("external_calendar_busy_blocks.sync.cron.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.sync.cron.ImportedEvent") as MockImported,
+        patch("external_calendar_busy_blocks.sync.cron.busy_ids_by_time") as mock_busy,
         patch("external_calendar_busy_blocks.sync.cron.fetch_feed") as mock_fetch,
         patch(
             "external_calendar_busy_blocks.sync.cron.get_admin_calendar_id"
         ) as mock_get_cal,
     ):
         mock_get_cal.return_value = ("cal-1", [])
+        mock_busy.return_value = {}
         yield {
             "feed_model": MockFeed,
-            "imported_model": MockImported,
+            "busy": mock_busy,
             "fetch": mock_fetch,
             "get_cal": mock_get_cal,
         }
@@ -98,7 +104,6 @@ def test_new_event_emits_create_effect(patch_sync_deps) -> None:
 
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = FetchOk(
         body=_ok_body("ev-1@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
         etag='"abc"',
@@ -111,6 +116,9 @@ def test_new_event_emits_create_effect(patch_sync_deps) -> None:
     payload = json.loads(create_effects[0].payload)["data"]
     assert payload["title"] == "Busy"
     assert payload["calendar_id"] == "cal-1"
+    # The create no longer supplies an event_id: the interpreter assigns its own
+    # (KOALA-6372), so we stop pretending to control it.
+    assert payload["event_id"] is None
 
 
 def test_unchanged_event_emits_no_effect(patch_sync_deps) -> None:
@@ -119,16 +127,9 @@ def test_unchanged_event_emits_no_effect(patch_sync_deps) -> None:
     feed = _stub_feed()
     start = _future_dt(10, 14)
     end = _future_dt(10, 15)
-    existing = MagicMock(
-        ics_uid="ev-1@x",
-        recurrence_id=None,
-        canvas_event_id="canvas-1",
-        sequence=0,
-        starts_at=start,
-        ends_at=end,
-    )
+    # The block is already live at this exact time; the feed wants the same.
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
+    patch_sync_deps["busy"].return_value = {(start, end): ["real-1"]}
     patch_sync_deps["fetch"].return_value = FetchOk(
         body=_ok_body("ev-1@x", _z(start), _z(end)),
         etag='"abc"',
@@ -140,20 +141,17 @@ def test_unchanged_event_emits_no_effect(patch_sync_deps) -> None:
     assert calendar_effects == []
 
 
-def test_time_changed_emits_update_effect(patch_sync_deps) -> None:
+def test_time_changed_emits_delete_old_and_create_new(patch_sync_deps) -> None:
+    # A moved meeting is a delete of the old block plus a create of the new one.
+    # (The old id-based in-place UPDATE never worked — update by the stored id
+    # raised "Event does not exist" under KOALA-6372.)
     from external_calendar_busy_blocks.http.fetcher import FetchOk
 
     feed = _stub_feed()
-    existing = MagicMock(
-        ics_uid="ev-1@x",
-        recurrence_id=None,
-        canvas_event_id="canvas-1",
-        sequence=0,
-        starts_at=datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc),
-        ends_at=datetime(2026, 6, 15, 15, 0, tzinfo=timezone.utc),
-    )
+    old_start = _future_dt(10, 14)
+    old_end = _future_dt(10, 15)
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
+    patch_sync_deps["busy"].return_value = {(old_start, old_end): ["real-old"]}
     patch_sync_deps["fetch"].return_value = FetchOk(
         body=_ok_body("ev-1@x", _z(_future_dt(10, 16)), _z(_future_dt(10, 17))),
         etag=None,
@@ -161,28 +159,31 @@ def test_time_changed_emits_update_effect(patch_sync_deps) -> None:
     )
 
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
+    delete_effects = [e for e in effects if e.type == _DELETE]
+    create_effects = [e for e in effects if e.type == _CREATE]
     update_effects = [e for e in effects if e.type == _UPDATE]
-    assert len(update_effects) == 1
-    payload = json.loads(update_effects[0].payload)["data"]
-    assert payload["event_id"] == "canvas-1"
+    assert len(delete_effects) == 1
+    assert len(create_effects) == 1
+    assert update_effects == []
+    # The delete carried the REAL uuid read off the calendar, not a stored id.
+    assert json.loads(delete_effects[0].payload)["data"]["event_id"] == "real-old"
 
 
-def test_removed_event_emits_delete_effect(patch_sync_deps) -> None:
+def test_orphan_block_deleted_by_real_uuid(patch_sync_deps) -> None:
+    # The self-heal: a live block the feed no longer contains is deleted by its
+    # real uuid, while the block the feed still wants is left untouched.
     from external_calendar_busy_blocks.http.fetcher import FetchOk
 
     feed = _stub_feed()
-    existing = MagicMock(
-        ics_uid="ev-old@x",
-        recurrence_id=None,
-        canvas_event_id="canvas-old",
-        sequence=0,
-        starts_at=datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc),
-        ends_at=datetime(2026, 6, 15, 15, 0, tzinfo=timezone.utc),
-    )
+    keep_start, keep_end = _future_dt(10, 14), _future_dt(10, 15)
+    orphan_start, orphan_end = _future_dt(20, 9), _future_dt(20, 21)
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
+    patch_sync_deps["busy"].return_value = {
+        (keep_start, keep_end): ["real-keep"],
+        (orphan_start, orphan_end): ["real-orphan"],
+    }
     patch_sync_deps["fetch"].return_value = FetchOk(
-        body=_ok_body("ev-new@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
+        body=_ok_body("ev-keep@x", _z(keep_start), _z(keep_end)),
         etag=None,
         last_modified=None,
     )
@@ -190,26 +191,79 @@ def test_removed_event_emits_delete_effect(patch_sync_deps) -> None:
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
     delete_effects = [e for e in effects if e.type == _DELETE]
     create_effects = [e for e in effects if e.type == _CREATE]
+    assert create_effects == []
     assert len(delete_effects) == 1
-    assert len(create_effects) == 1
-    delete_payload = json.loads(delete_effects[0].payload)["data"]
-    assert delete_payload["event_id"] == "canvas-old"
+    assert json.loads(delete_effects[0].payload)["data"]["event_id"] == "real-orphan"
 
 
-def test_safety_guard_skips_deletes_on_empty_feed(patch_sync_deps) -> None:
+def test_duplicate_blocks_pruned_to_feed_count(patch_sync_deps) -> None:
+    # The triplicate case: the feed wants one block at a time, three are live;
+    # two are deleted and one is kept. No creates.
     from external_calendar_busy_blocks.http.fetcher import FetchOk
 
     feed = _stub_feed()
-    existing = MagicMock(
-        ics_uid="ev-1@x",
-        recurrence_id=None,
-        canvas_event_id="canvas-1",
-        sequence=0,
-        starts_at=datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc),
-        ends_at=datetime(2026, 6, 15, 15, 0, tzinfo=timezone.utc),
-    )
+    start, end = _future_dt(15, 10), _future_dt(15, 11)
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
+    patch_sync_deps["busy"].return_value = {(start, end): ["dup-1", "dup-2", "dup-3"]}
+    patch_sync_deps["fetch"].return_value = FetchOk(
+        body=_ok_body("ev-1@x", _z(start), _z(end)),
+        etag=None,
+        last_modified=None,
+    )
+
+    effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
+    delete_effects = [e for e in effects if e.type == _DELETE]
+    create_effects = [e for e in effects if e.type == _CREATE]
+    assert create_effects == []
+    assert len(delete_effects) == 2
+    deleted_ids = {json.loads(e.payload)["data"]["event_id"] for e in delete_effects}
+    # Exactly one of the three real uuids is kept.
+    assert deleted_ids.issubset({"dup-1", "dup-2", "dup-3"})
+    assert len(deleted_ids) == 2
+
+
+def test_delete_cap_limits_deletes_per_tick(patch_sync_deps) -> None:
+    # The safety valve: with a cap of 2, only two of several orphans are deleted
+    # this tick; the rest clear on later ticks. The feed's own block still needs
+    # creating (creates are not capped).
+    from external_calendar_busy_blocks.http.fetcher import FetchOk
+
+    feed = _stub_feed()
+    wanted_start, wanted_end = _future_dt(5, 8), _future_dt(5, 9)
+    orphans = {
+        (_future_dt(6, 9), _future_dt(6, 10)): ["orph-1"],
+        (_future_dt(7, 9), _future_dt(7, 10)): ["orph-2"],
+        (_future_dt(8, 9), _future_dt(8, 10)): ["orph-3"],
+        (_future_dt(9, 9), _future_dt(9, 10)): ["orph-4"],
+    }
+    patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
+    patch_sync_deps["busy"].return_value = orphans
+    patch_sync_deps["fetch"].return_value = FetchOk(
+        body=_ok_body("ev-want@x", _z(wanted_start), _z(wanted_end)),
+        etag=None,
+        last_modified=None,
+    )
+
+    cron = _new_cron(
+        datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc),
+        secrets={"MAX_DELETES_PER_SYNC": "2"},
+    )
+    effects = cron.execute()
+    delete_effects = [e for e in effects if e.type == _DELETE]
+    create_effects = [e for e in effects if e.type == _CREATE]
+    assert len(delete_effects) == 2  # capped
+    assert len(create_effects) == 1  # the wanted block is created regardless
+
+
+def test_safety_guard_skips_deletes_on_empty_feed(patch_sync_deps) -> None:
+    # A feed that parses to zero events while blocks are still live is treated as
+    # a transient glitch: deletions are skipped rather than wiping the calendar.
+    from external_calendar_busy_blocks.http.fetcher import FetchOk
+
+    feed = _stub_feed()
+    start, end = _future_dt(15, 14), _future_dt(15, 15)
+    patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
+    patch_sync_deps["busy"].return_value = {(start, end): ["real-1"]}
     patch_sync_deps["fetch"].return_value = FetchOk(
         body=b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
         etag=None,
@@ -219,6 +273,7 @@ def test_safety_guard_skips_deletes_on_empty_feed(patch_sync_deps) -> None:
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
     delete_effects = [e for e in effects if e.type == _DELETE]
     assert delete_effects == []
+    assert feed.last_error and "empty" in feed.last_error.lower()
 
 
 def test_304_emits_no_effects(patch_sync_deps) -> None:
@@ -226,12 +281,13 @@ def test_304_emits_no_effects(patch_sync_deps) -> None:
 
     feed = _stub_feed(last_etag='"abc"')
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = NotModified()
 
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
     calendar_effects = [e for e in effects if e.type in _CALENDAR_TYPES]
     assert calendar_effects == []
+    # A 304 never reads the live calendar (nothing to reconcile against).
+    patch_sync_deps["busy"].assert_not_called()
 
 
 def test_401_deactivates_feed(patch_sync_deps) -> None:
@@ -239,7 +295,6 @@ def test_401_deactivates_feed(patch_sync_deps) -> None:
 
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = Unauthorized()
 
     _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
@@ -252,7 +307,6 @@ def test_5xx_keeps_feed_active(patch_sync_deps) -> None:
 
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = TransientError(reason="HTTP 503")
 
     _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
@@ -263,7 +317,6 @@ def test_5xx_keeps_feed_active(patch_sync_deps) -> None:
 def test_no_admin_calendar_records_error_and_skips(patch_sync_deps) -> None:
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["get_cal"].return_value = ("", [])
 
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
@@ -271,32 +324,31 @@ def test_no_admin_calendar_records_error_and_skips(patch_sync_deps) -> None:
     assert feed.last_error and "unable to provision" in feed.last_error.lower()
 
 
-def test_existing_query_excludes_past_events(patch_sync_deps) -> None:
-    # Regression: the reconciliation must only consider events that haven't
-    # ended yet. Past ImportedEvent rows must NOT be loaded, otherwise the diff
-    # treats them as removed-from-feed and deletes them every tick.
+def test_live_calendar_read_within_lookahead_window(patch_sync_deps) -> None:
+    # Regression: the live-calendar read must be bounded to the same window the
+    # parser covers ([now, now + lookahead]), so far-future blocks the feed has
+    # not yielded yet are never treated as orphans and deleted.
     from external_calendar_busy_blocks.http.fetcher import FetchOk
 
     now = datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = FetchOk(
-        body=_ok_body("ev-1@x", "20260615T140000Z", "20260615T150000Z"),
+        body=_ok_body("ev-1@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
         etag=None,
         last_modified=None,
     )
 
     _new_cron(now).execute()
 
-    # The ImportedEvent query must be scoped to ends_at >= now. (The cron uses
-    # its own wall-clock now internally, so assert the kwarg is present and is
-    # a tz-aware datetime rather than equal to a fabricated timestamp.)
-    _, kwargs = patch_sync_deps["imported_model"].objects.filter.call_args
-    assert kwargs.get("staff_id") == "staff-abc"
-    ends_at_gte = kwargs.get("ends_at__gte")
-    assert isinstance(ends_at_gte, datetime)
-    assert ends_at_gte.tzinfo is not None
+    # busy_ids_by_time(calendar_id, now, window_end) with a tz-aware window_end
+    # ~90 days out. The cron uses its own wall-clock now, so assert relative.
+    args, _ = patch_sync_deps["busy"].call_args
+    calendar_id, call_now, window_end = args
+    assert calendar_id == "cal-1"
+    assert call_now.tzinfo is not None
+    assert window_end.tzinfo is not None
+    assert timedelta(days=89) < (window_end - call_now) < timedelta(days=91)
 
 
 def test_one_feed_failure_does_not_abort_other_feeds(patch_sync_deps) -> None:
@@ -308,7 +360,6 @@ def test_one_feed_failure_does_not_abort_other_feeds(patch_sync_deps) -> None:
     feed_a = _stub_feed(staff_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ics_url="https://a/x.ics")
     feed_b = _stub_feed(staff_id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ics_url="https://b/x.ics")
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed_a, feed_b]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
 
     # Feed A blows up unexpectedly; Feed B returns a valid single event.
     def fetch_side_effect(url, etag, last_modified):
@@ -341,7 +392,6 @@ def test_new_calendar_effect_is_prepended_before_events(patch_sync_deps) -> None
 
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = FetchOk(
         body=_ok_body("ev-1@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
         etag=None,
@@ -366,7 +416,6 @@ def test_not_modified_still_provisions_missing_calendar(patch_sync_deps) -> None
 
     feed = _stub_feed(last_etag='"abc"')
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
-    patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = NotModified()
 
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
