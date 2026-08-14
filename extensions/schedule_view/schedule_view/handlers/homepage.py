@@ -1,6 +1,6 @@
-"""Homepage handler for BLH Schedule View.
+"""Homepage handler for Schedule View.
 
-Sets the BLH Schedule View as the default landing page for providers
+Sets the Schedule View as the default landing page for providers
 when they log in or click the home icon.
 """
 
@@ -18,6 +18,6 @@ class ScheduleHomepage(BaseHandler):
     def compute(self) -> list[Effect]:
         return [
             DefaultHomepageEffect(
-                application_identifier="blh_schedule_view.applications.schedule_app:ScheduleViewApp"
+                application_identifier="schedule_view.applications.schedule_app:ScheduleViewApp"
             ).apply()
         ]

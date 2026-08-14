@@ -1,6 +1,6 @@
 """Schedule view API handler.
 
-Serves the HTML shell and a JSON data endpoint for the BLH enriched schedule calendar.
+Serves the HTML shell and a JSON data endpoint for the enriched schedule calendar.
 """
 
 from datetime import datetime, date, timezone, timedelta
@@ -332,7 +332,7 @@ def _serialize_appointment(appt):
 
 
 class ScheduleViewAPI(SimpleAPI):
-    """Serves the BLH enriched schedule view pages and data."""
+    """Serves the enriched schedule view pages and data."""
 
     PREFIX = "/schedule"
 

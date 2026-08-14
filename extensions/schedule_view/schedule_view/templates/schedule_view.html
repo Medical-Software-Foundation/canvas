@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Schedule — Big Leap Health</title>
+  <title>Schedule View</title>
   <link rel="stylesheet" href="styles.css?v={{ cache_bust }}">
   {{ theme_style|safe }}
 </head>
@@ -144,7 +144,7 @@
   </div>
 
   <script>
-    window.__BLH_CONFIG = {
+    window.__SCHEDULE_CONFIG = {
       gridStartHour: {{ grid_start_hour }},
       gridEndHour: {{ grid_end_hour }}
     };

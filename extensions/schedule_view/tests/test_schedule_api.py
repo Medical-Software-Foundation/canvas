@@ -1,4 +1,4 @@
-"""Tests for the BLH Schedule View plugin."""
+"""Tests for the Schedule View plugin."""
 
 from datetime import datetime, timezone, timedelta
 from http import HTTPStatus
@@ -73,7 +73,7 @@ def _make_appt(
 
 class TestSerializeAppointment:
     def test_basic_fields_are_present(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt()
         result = _serialize_appointment(appt)
@@ -93,7 +93,7 @@ class TestSerializeAppointment:
         assert result["patient_key"] == "abc123def456"
 
     def test_note_id_included_when_present(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(note_id=42)
         result = _serialize_appointment(appt)
@@ -101,7 +101,7 @@ class TestSerializeAppointment:
         assert result["note_id"] == "42"
 
     def test_end_time_calculated_from_duration(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         start = datetime(2025, 6, 19, 10, 0, tzinfo=timezone.utc)
         appt = _make_appt(start_time=start, duration_minutes=45)
@@ -111,7 +111,7 @@ class TestSerializeAppointment:
         assert result["end_time"] == expected_end.isoformat()
 
     def test_labels_serialized_with_name_and_color(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(labels=[
             {"name": "New Patient", "color": "green"},
@@ -124,7 +124,7 @@ class TestSerializeAppointment:
         assert result["labels"][1] == {"name": "Recurring", "color": "blue"}
 
     def test_missing_provider_produces_empty_string(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(provider_id=None)
         result = _serialize_appointment(appt)
@@ -133,7 +133,7 @@ class TestSerializeAppointment:
         assert result["provider_id"] == ""
 
     def test_missing_location_produces_empty_strings(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(location_id=None)
         result = _serialize_appointment(appt)
@@ -142,7 +142,7 @@ class TestSerializeAppointment:
         assert result["location_id"] == ""
 
     def test_missing_note_type_produces_empty_string(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(note_type_id=None)
         result = _serialize_appointment(appt)
@@ -150,7 +150,7 @@ class TestSerializeAppointment:
         assert result["note_type_name"] == ""
 
     def test_unknown_status_maps_to_unknown_css(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(status="some_future_status")
         result = _serialize_appointment(appt)
@@ -158,7 +158,7 @@ class TestSerializeAppointment:
         assert result["status_css"] == "status-unknown"
 
     def test_noshowed_status_maps_correctly(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(status="noshowed")
         result = _serialize_appointment(appt)
@@ -167,7 +167,7 @@ class TestSerializeAppointment:
         assert result["status_css"] == "status-noshowed"
 
     def test_label_missing_color_defaults_to_grey(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(labels=[{"name": "Urgent", "color": ""}])
         result = _serialize_appointment(appt)
@@ -175,7 +175,7 @@ class TestSerializeAppointment:
         assert result["labels"][0]["color"] == "grey"
 
     def test_location_id_included_in_serialization(self):
-        from blh_schedule_view.handlers.schedule_api import _serialize_appointment
+        from schedule_view.handlers.schedule_api import _serialize_appointment
 
         appt = _make_appt(location_id="room-42", location_name="Room 42")
         result = _serialize_appointment(appt)
@@ -190,7 +190,7 @@ class TestSerializeAppointment:
 class TestScheduleViewAPIAppointments:
     def _make_handler(self, query_params=None, headers=None):
         """Build a ScheduleViewAPI instance with mocked request."""
-        from blh_schedule_view.handlers.schedule_api import ScheduleViewAPI
+        from schedule_view.handlers.schedule_api import ScheduleViewAPI
 
         mock_event = MagicMock()
         handler = ScheduleViewAPI(event=mock_event)
@@ -210,7 +210,7 @@ class TestScheduleViewAPIAppointments:
         mock_qs.__iter__ = MagicMock(return_value=iter([appt]))
 
         with patch(
-            "blh_schedule_view.handlers.schedule_api.Appointment.objects"
+            "schedule_view.handlers.schedule_api.Appointment.objects"
         ) as mock_mgr:
             mock_mgr.filter.return_value.exclude.return_value.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
 
@@ -243,7 +243,7 @@ class TestScheduleViewAPIAppointments:
         mock_qs.__iter__ = MagicMock(return_value=iter([appt1, appt2, appt3]))
 
         with patch(
-            "blh_schedule_view.handlers.schedule_api.Appointment.objects"
+            "schedule_view.handlers.schedule_api.Appointment.objects"
         ) as mock_mgr:
             mock_mgr.filter.return_value.exclude.return_value.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
 
@@ -263,7 +263,7 @@ class TestScheduleViewAPIAppointments:
         mock_qs.__iter__ = MagicMock(return_value=iter([]))
 
         with patch(
-            "blh_schedule_view.handlers.schedule_api.Appointment.objects"
+            "schedule_view.handlers.schedule_api.Appointment.objects"
         ) as mock_mgr:
             mock_mgr.filter.return_value.exclude.return_value.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
 
@@ -282,7 +282,7 @@ class TestScheduleViewAPIAppointments:
         mock_qs.__iter__ = MagicMock(return_value=iter([appt]))
 
         with patch(
-            "blh_schedule_view.handlers.schedule_api.Appointment.objects"
+            "schedule_view.handlers.schedule_api.Appointment.objects"
         ) as mock_mgr:
             mock_mgr.filter.return_value.exclude.return_value.select_related.return_value.prefetch_related.return_value.order_by.return_value = mock_qs
 
@@ -300,7 +300,7 @@ class TestScheduleViewAPIAppointments:
 
 class TestScheduleViewApp:
     def test_on_open_returns_launch_modal_effect(self):
-        from blh_schedule_view.applications.schedule_app import ScheduleViewApp
+        from schedule_view.applications.schedule_app import ScheduleViewApp
 
         mock_event = MagicMock()
         app = ScheduleViewApp(event=mock_event)
@@ -313,7 +313,7 @@ class TestScheduleViewApp:
         payload = json.loads(effect.payload)
         # LaunchModalEffect wraps the url under payload.data.url
         url = payload.get("data", {}).get("url", payload.get("url", ""))
-        assert "/plugin-io/api/blh_schedule_view/schedule/view" in url
+        assert "/plugin-io/api/schedule_view/schedule/view" in url
 
 
 # ── ScheduleHomepage ─────────────────────────────────────────────────────────
@@ -321,13 +321,13 @@ class TestScheduleViewApp:
 
 class TestScheduleHomepage:
     def test_responds_to_get_homepage_configuration(self):
-        from blh_schedule_view.handlers.homepage import ScheduleHomepage
+        from schedule_view.handlers.homepage import ScheduleHomepage
         from canvas_sdk.events import EventType
 
         assert ScheduleHomepage.RESPONDS_TO == EventType.Name(EventType.GET_HOMEPAGE_CONFIGURATION)
 
     def test_compute_returns_default_homepage_effect(self):
-        from blh_schedule_view.handlers.homepage import ScheduleHomepage
+        from schedule_view.handlers.homepage import ScheduleHomepage
         from canvas_sdk.effects.default_homepage import DefaultHomepageEffect
 
         # DefaultHomepageEffect.apply() validates the application_identifier against the DB,
@@ -344,10 +344,10 @@ class TestScheduleHomepage:
         import json
         payload = json.loads(effect.payload)
         app_id = payload.get("data", {}).get("application_identifier", "")
-        assert app_id == "blh_schedule_view.applications.schedule_app:ScheduleViewApp"
+        assert app_id == "schedule_view.applications.schedule_app:ScheduleViewApp"
 
     def test_compute_returns_list(self):
-        from blh_schedule_view.handlers.homepage import ScheduleHomepage
+        from schedule_view.handlers.homepage import ScheduleHomepage
         from canvas_sdk.effects.default_homepage import DefaultHomepageEffect
 
         with patch.object(DefaultHomepageEffect, "_validate_before_effect"):

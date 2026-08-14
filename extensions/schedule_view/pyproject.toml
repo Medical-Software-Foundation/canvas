@@ -5,10 +5,10 @@ authors = [
 dependencies = [
   "canvas[test-utils]==0.169.1",
 ]
-description = "Some description of your project."
+description = "Enriched schedule calendar with appointment type, labels, provider, room, and status at a glance."
 license = "MIT"
-name = "blh-schedule-view"
-readme = "blh_schedule_view/README.md"
+name = "schedule-view"
+readme = "schedule_view/README.md"
 requires-python = ">=3.11"
 version = "0.1.0"
 

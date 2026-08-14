@@ -1,8 +1,8 @@
-/* BLH Schedule View — full-page dashboard */
+/* Schedule View — full-page dashboard */
 (function () {
   "use strict";
 
-  var API_BASE = "/plugin-io/api/blh_schedule_view/schedule";
+  var API_BASE = "/plugin-io/api/schedule_view/schedule";
 
   // ── DOM refs ───────────────────────────────────────────────
   var datePicker        = document.getElementById("date-picker");
@@ -35,7 +35,7 @@
   var modalOverlay      = document.getElementById("appt-modal-overlay");
 
   // ── Sticky filter persistence (localStorage) ────────────────
-  var STORAGE_KEY_PREFIX = "blh_schedule_";
+  var STORAGE_KEY_PREFIX = "schedule_view_";
 
   function loadStored(key, fallback) {
     try {
@@ -127,7 +127,7 @@
     return h12 + ":" + (m < 10 ? "0" : "") + m + " " + ampm;
   }
 
-  var _cfg = window.__BLH_CONFIG || {};
+  var _cfg = window.__SCHEDULE_CONFIG || {};
   var GRID_START_HOUR = _cfg.gridStartHour != null ? _cfg.gridStartHour : 7;
   var GRID_END_HOUR   = _cfg.gridEndHour   != null ? _cfg.gridEndHour   : 18;
 

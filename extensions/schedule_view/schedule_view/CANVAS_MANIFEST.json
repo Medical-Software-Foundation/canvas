@@ -1,12 +1,12 @@
 {
     "sdk_version": "0.191.0",
     "plugin_version": "0.13.7",
-    "name": "blh_schedule_view",
-    "description": "Enriched schedule calendar for BLH providers. Surfaces appointment type, labels with color coding, provider name, room/location, and appointment status in a single full-page homepage view — without clicking into each appointment.",
+    "name": "schedule_view",
+    "description": "Enriched schedule calendar. Surfaces appointment type, labels with color coding, provider name, room/location, and appointment status in a single full-page homepage view — without clicking into each appointment.",
     "components": {
         "applications": [
             {
-                "class": "blh_schedule_view.applications.schedule_app:ScheduleViewApp",
+                "class": "schedule_view.applications.schedule_app:ScheduleViewApp",
                 "name": "Schedule View",
                 "description": "Rich appointment calendar with type, labels, provider, location, and status at a glance.",
                 "scope": "provider_menu_item",
@@ -17,7 +17,7 @@
         ],
         "handlers": [
             {
-                "class": "blh_schedule_view.handlers.schedule_api:ScheduleViewAPI",
+                "class": "schedule_view.handlers.schedule_api:ScheduleViewAPI",
                 "description": "Serves the schedule view HTML, CSS, JS, and appointment JSON data.",
                 "data_access": {
                     "event": "",
@@ -42,7 +42,7 @@
                 }
             },
             {
-                "class": "blh_schedule_view.handlers.homepage:ScheduleHomepage",
+                "class": "schedule_view.handlers.homepage:ScheduleHomepage",
                 "description": "Sets the Schedule View as the default Canvas homepage.",
                 "data_access": {
                     "event": "GET_HOMEPAGE_CONFIGURATION",
@@ -51,7 +51,7 @@
                 }
             },
             {
-                "class": "blh_schedule_view.handlers.hide_native_schedule:HideNativeScheduleMenu",
+                "class": "schedule_view.handlers.hide_native_schedule:HideNativeScheduleMenu",
                 "description": "Hides the native Schedule item from the provider hamburger menu.",
                 "data_access": {
                     "event": "GET_PROVIDER_MENU_CONFIGURATION",
@@ -60,7 +60,7 @@
                 }
             },
             {
-                "class": "blh_schedule_view.handlers.hide_native_schedule:HideAppointmentsPanelFilter",
+                "class": "schedule_view.handlers.hide_native_schedule:HideAppointmentsPanelFilter",
                 "description": "Hides the Appointments filter from the global panel.",
                 "data_access": {
                     "event": "PANEL_SECTIONS_CONFIGURATION",

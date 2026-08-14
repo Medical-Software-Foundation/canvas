@@ -1,9 +1,9 @@
-blh_schedule_view
+schedule_view
 =================
 
 ## Description
 
-Enriched schedule calendar for BLH providers. Surfaces appointment type,
+Enriched schedule calendar. Surfaces appointment type,
 labels with color coding, provider name, room/location, and appointment
 status in a single full-page homepage view — without clicking into each
 appointment.
@@ -27,13 +27,12 @@ appointment.
 
 There is no Reschedule button in the appointment modal. This is intentional.
 
-BLH uses `scheduling_with_rooms` to book appointments with both a provider
-and a room. When the plugin books an appointment, it stashes a room intent
-in a cache, and the `RREventOrigination` handler creates a linked room
-`ScheduleEvent` via `parent_appointment_id`. Canvas's native reschedule
-flow does not go through the plugin's `/book` endpoint, so the room linkage
-is lost on reschedule — the old room event is deleted by the cascade, but
-a new one is never created.
+When used alongside `scheduling_with_rooms` to book appointments with both a
+provider and a room, the plugin stashes a room intent in a cache, and the
+`RREventOrigination` handler creates a linked room `ScheduleEvent` via
+`parent_appointment_id`. Canvas's native reschedule flow does not go through
+the plugin's `/book` endpoint, so the room linkage is lost on reschedule —
+the old room event is deleted by the cascade, but a new one is never created.
 
 To reschedule a room-coordinated appointment: **cancel** the existing
 appointment from the modal, then **book a new one** through the

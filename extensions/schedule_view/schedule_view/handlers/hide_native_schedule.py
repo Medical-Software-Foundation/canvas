@@ -1,6 +1,6 @@
 """Hide the native Canvas Schedule menu item and Appointments panel filter.
 
-When blh_schedule_view provides the full schedule experience, the native
+When schedule_view provides the full schedule experience, the native
 Schedule entry in the provider hamburger menu is redundant and confusing
 (staff accidentally book via the native scheduler, breaking room linkage).
 
