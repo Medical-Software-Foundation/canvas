@@ -420,3 +420,63 @@ def test_not_modified_still_provisions_missing_calendar(patch_sync_deps) -> None
 
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
     assert effects == [cal_effect]
+
+
+def test_reconcile_refuses_to_create_an_already_ended_block() -> None:
+    # Backstop for the Pylon 32976 duplicate loop. Even if some parser path
+    # yields an occurrence that has already ended, the reconcile must not create
+    # a block for it. Such a block cannot affect availability, and because
+    # `live_busy_events` selects `ends_at > now` it is invisible to every later
+    # tick — so it would be re-created every 15 minutes, forever, and never
+    # matched or cleaned up.
+    from external_calendar_busy_blocks.ics.types import ParsedEvent
+
+    now = datetime(2026, 6, 12, 20, 0, tzinfo=timezone.utc)
+
+    def _pe(start_hour: int, end_hour: int) -> ParsedEvent:
+        return ParsedEvent(
+            uid="u",
+            recurrence_id=None,
+            starts_at=datetime(2026, 6, 12, start_hour, tzinfo=timezone.utc),
+            ends_at=datetime(2026, 6, 12, end_hour, tzinfo=timezone.utc),
+            is_all_day=False,
+            sequence=0,
+        )
+
+    ended = _pe(12, 17)          # over three hours ago
+    ends_exactly_now = _pe(19, 20)  # ends_at == now, also useless
+    still_live = _pe(19, 21)     # in progress, must still be created
+
+    cron = _new_cron(now)
+    effects = cron._reconcile("cal-1", [ended, ends_exactly_now, still_live], {}, 500, now)
+
+    creates = [e for e in effects if e.type == _CREATE]
+    assert len(creates) == 1
+    payload = json.loads(creates[0].payload)["data"]
+    assert payload["starts_at"] == still_live.starts_at.isoformat()
+    assert payload["ends_at"] == still_live.ends_at.isoformat()
+
+
+def test_reconcile_still_deletes_surplus_when_a_past_event_is_skipped() -> None:
+    # The past-event guard must skip only the create. A live block the feed no
+    # longer wants still has to be deleted in the same tick.
+    from external_calendar_busy_blocks.ics.types import ParsedEvent
+
+    now = datetime(2026, 6, 12, 20, 0, tzinfo=timezone.utc)
+    ended = ParsedEvent(
+        uid="u",
+        recurrence_id=None,
+        starts_at=datetime(2026, 6, 12, 12, tzinfo=timezone.utc),
+        ends_at=datetime(2026, 6, 12, 17, tzinfo=timezone.utc),
+        is_all_day=False,
+        sequence=0,
+    )
+    unwanted = (
+        datetime(2026, 6, 13, 14, tzinfo=timezone.utc),
+        datetime(2026, 6, 13, 15, tzinfo=timezone.utc),
+    )
+
+    cron = _new_cron(now)
+    effects = cron._reconcile("cal-1", [ended], {unwanted: ["real-1"]}, 500, now)
+
+    assert [e.type for e in effects] == [_DELETE]
