@@ -37,14 +37,35 @@ Non-prescribers are supported explicitly: the modal lets a user without an SPI
 pick an SPI-registered provider to request on behalf of, since Surescripts
 rejects requests from unregistered staff.
 
+## Before you install
+
+The Surescripts Effects (medication history, eligibility, benefits) are off by
+default and enabled per instance by Canvas, only after an authorized
+representative of your organization signs the Surescripts programmatic-use
+agreement. **Contact Canvas support to start that process and have the effects
+turned on.** Providers who will originate requests also need a valid NPI and
+`spi_number` on their Canvas profile.
+
+The agreement's central condition is that every request be tied to a genuine
+treatment event — a visit, telemedicine encounter, or similar. Batch or
+scheduled requests for patients with no upcoming or recent encounter are
+prohibited by the Surescripts terms of service, and enforcing that is the
+plugin's responsibility, not the platform's. This plugin's crons are scoped to
+patients with an appointment at the configured `pre_appointment_days` offsets,
+which satisfies the condition; widening them to an entire panel would not.
+
+Surescripts also caps reuse — one medication history request per patient per
+calendar day (Central), and eligibility results reused for 72 hours. Canvas
+caches accordingly, so a repeat request inside those windows returns the
+cached result rather than re-querying.
+
 ## How to install
 
 ```bash
 canvas install extensions/surescripts_med_history/surescripts_med_history --host <instance>
 ```
 
-Requires Canvas SDK `0.142.0` or later, and a Surescripts-enabled instance —
-providers must have an `spi_number` for requests to be accepted.
+Requires Canvas SDK `0.142.0` or later.
 
 ## Configuration options
 
