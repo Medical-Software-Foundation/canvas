@@ -45,6 +45,10 @@
     filters: {
       q: "",
       status: "",
+      // Seeded when a chart sent us here to show one patient. queryString()
+      // walks this object, so it reaches the API with no extra plumbing, and
+      // Reset clears it along with everything else.
+      patient: config.focusPatientId || "",
       appointment_type_id: "",
       provider_id: "",
       location_id: "",
@@ -78,6 +82,35 @@
     } else {
       els.status.removeAttribute("data-tone");
     }
+  }
+
+  /* The count line, plus a way out of a single-patient view.
+   *
+   * Arriving from a chart the roster is filtered to one person, which without
+   * saying so looks like a practice-wide list that has lost almost everybody.
+   * The escape hatch is offered here rather than only on Reset, which also
+   * discards every other filter.
+   */
+  function renderCount() {
+    if (!els.status) return;
+    els.status.removeAttribute("data-tone");
+    els.status.textContent =
+      state.total === 1 ? "1 patient waiting." : state.total + " patients waiting.";
+
+    if (!state.filters.patient) return;
+
+    els.status.appendChild(document.createTextNode(" Showing one patient. "));
+    var showAll = el("button", {
+      type: "button",
+      class: "wl-btn wl-btn-quiet wl-btn-inline",
+      text: "Show everyone"
+    });
+    showAll.addEventListener("click", function () {
+      state.filters.patient = "";
+      state.offset = 0;
+      reload();
+    });
+    els.status.appendChild(showAll);
   }
 
   var toastTimer = null;
@@ -376,9 +409,7 @@
         state.canManageAll = !!data.can_manage_all;
         state.currentStaffDbid = data.current_staff_dbid;
         render();
-        setStatus(
-          state.total === 1 ? "1 patient waiting." : state.total + " patients waiting."
-        );
+        renderCount();
       })
       .catch(function (error) {
         if (seq !== state.requestSeq) return;

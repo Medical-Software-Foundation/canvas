@@ -417,3 +417,59 @@ class TestEditableFieldsStayInStep:
         update_entry(entry)
 
         entry.save.assert_not_called()
+
+
+class TestPatientFilter:
+    """Narrowing the roster to one person, by key rather than by name.
+
+    The search box matches names, which would pull in everyone sharing a
+    surname. On a chart, someone else's waitlist entry appearing is worse than
+    no filter at all.
+    """
+
+    def test_the_filter_is_an_exact_match_on_the_patients_key(self):
+        recorder = _recorder()
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.all.return_value = recorder
+
+            build_queryset(patient_id="patient-uuid")
+
+        assert _filter_kwargs(recorder)["patient__id"] == "patient-uuid"
+
+    def test_no_patient_filter_is_applied_when_absent(self):
+        recorder = _recorder()
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.all.return_value = recorder
+
+            build_queryset()
+
+        assert "patient__id" not in _filter_kwargs(recorder)
+
+    def test_a_blank_patient_filter_is_ignored(self):
+        recorder = _recorder()
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.all.return_value = recorder
+
+            build_queryset(patient_id="   ")
+
+        assert "patient__id" not in _filter_kwargs(recorder)
+
+    def test_the_key_is_trimmed(self):
+        recorder = _recorder()
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.all.return_value = recorder
+
+            build_queryset(patient_id="  patient-uuid  ")
+
+        assert _filter_kwargs(recorder)["patient__id"] == "patient-uuid"
+
+    def test_the_patient_filter_composes_with_a_name_search(self):
+        # Both may be present: a chart sets the key, and the scheduler may then
+        # type in the search box without clearing it.
+        recorder = _recorder()
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.all.return_value = recorder
+
+            build_queryset(patient_id="patient-uuid", search="smith")
+
+        assert _filter_kwargs(recorder)["patient__id"] == "patient-uuid"

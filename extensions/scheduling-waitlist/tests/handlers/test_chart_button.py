@@ -96,28 +96,60 @@ class TestVisibility:
 
 
 class TestClick:
-    def test_a_click_opens_the_waitlist_for_this_patient(self):
-        button = _button(patient_id="abc-123")
+    """The two labels have to lead to two different places.
 
-        effects = button.handle()
+    "On waitlist" promising status and then handing over an add form is the bug
+    these pin: that form refuses the obvious resubmission with a 409 and manages
+    nothing.
+    """
+
+    def _click(self, patient_id="abc-123", listed=False):
+        button = _button(patient_id=patient_id)
+        with (
+            patch(f"{MODULE}.Patient") as patient_model,
+            patch(f"{MODULE}.has_live_entry", return_value=listed),
+        ):
+            found = patient_model.objects.filter.return_value.only.return_value.first
+            found.return_value = MagicMock(dbid=55)
+            return button.handle()
+
+    def test_a_click_opens_the_waitlist_for_this_patient(self):
+        effects = self._click()
 
         assert len(effects) == 1
         assert "patient=abc-123" in effects[0].url
 
-    def test_the_modal_opens_the_compact_form_not_the_roster(self):
-        # Opening the roster from a chart put a full-width table on screen to
-        # collect six fields, so this asserts the form route specifically rather
-        # than any path under /app/.
-        url = _button().handle()[0].url
+    def test_a_patient_not_yet_listed_gets_the_compact_form(self):
+        url = self._click(listed=False)[0].url
 
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/add?")
 
-    def test_a_patient_key_needing_encoding_is_escaped(self):
-        button = _button(patient_id="a b/c")
+    def test_a_patient_already_listed_gets_the_roster_filtered_to_them(self):
+        # Editing, marking scheduled and removing all live on the roster, so
+        # that is where "On waitlist" has to lead.
+        url = self._click(listed=True)[0].url
 
-        url = button.handle()[0].url
+        assert url.startswith("/plugin-io/api/scheduling_waitlist/app/?")
+        assert "patient=abc-123" in url
+
+    def test_a_patient_key_needing_encoding_is_escaped(self):
+        url = self._click(patient_id="a b/c")[0].url
+
         assert "a b/c" not in url
         assert "a%20b%2Fc" in url
+
+    def test_the_roster_branch_encodes_the_key_too(self):
+        url = self._click(patient_id="a b/c", listed=True)[0].url
+
+        assert "a b/c" not in url
+        assert "a%20b%2Fc" in url
+
+    def test_an_unresolvable_patient_opens_nothing(self):
+        button = _button(patient_id="ghost")
+        with patch(f"{MODULE}.Patient") as patient_model:
+            patient_model.objects.filter.return_value.only.return_value.first.return_value = None
+
+            assert button.handle() == []
 
     def test_a_click_with_no_patient_does_nothing(self):
         assert _button(patient_id=None).handle() == []

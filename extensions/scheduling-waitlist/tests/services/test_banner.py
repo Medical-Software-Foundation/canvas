@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scheduling_waitlist.constants import BANNER_KEY, BANNER_NARRATIVE_MAX, ROSTER_URL
+from scheduling_waitlist.constants import (
+    BANNER_KEY,
+    BANNER_NARRATIVE_MAX,
+    roster_for_patient_url,
+)
 from scheduling_waitlist.services.banner import (
     banner_effects,
     banner_effects_for_entry,
@@ -79,13 +83,14 @@ class TestAddingTheBanner:
         assert [p.value for p in effects[0].placement] == ["chart"]
         assert effects[0].intent.value == "info"
 
-    def test_the_banner_links_to_the_roster(self):
-        # The chart has no add button, so the banner is the only route from
-        # "this patient is waiting" to the list itself.
+    def test_the_banner_links_to_the_roster_filtered_to_this_patient(self):
+        # A banner on one chart that opened the whole practice list would leave
+        # the reader hunting for the person whose chart they are already on.
         with patch(f"{MODULE}.live_entries_for_patient", return_value=[_entry()]):
-            effects = banner_effects(_patient())
+            effects = banner_effects(_patient(uuid="p-7"))
 
-        assert effects[0].href == ROSTER_URL
+        assert effects[0].href == roster_for_patient_url("p-7")
+        assert "patient=p-7" in effects[0].href
 
 
 class TestClearingTheBanner:

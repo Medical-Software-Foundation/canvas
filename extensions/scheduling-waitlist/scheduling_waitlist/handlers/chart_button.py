@@ -18,12 +18,13 @@ from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data import Patient
 
-from scheduling_waitlist.constants import add_form_url
+from scheduling_waitlist.constants import add_form_url, roster_for_patient_url
 from scheduling_waitlist.services.entries import has_live_entry
 
 ADD_TITLE = "Add to waitlist"
 LISTED_TITLE = "On waitlist"
-MODAL_TITLE = "Add to waitlist"
+ADD_MODAL_TITLE = "Add to waitlist"
+LISTED_MODAL_TITLE = "Scheduling Waitlist"
 
 
 class AddToWaitlistButton(ActionButton):
@@ -63,21 +64,35 @@ class AddToWaitlistButton(ActionButton):
         return True
 
     def handle(self) -> list[Effect]:
-        """Open the compact add form for this patient.
+        """Open whichever surface the button's own label promised.
 
-        Its own small page rather than the roster with a parameter: opening the
-        full-width roster from a chart put a whole table on screen to collect six
-        fields. Both surfaces still post to the same endpoint, so there is one
-        set of validation rules.
+        "Add to waitlist" opens the compact form -- its own small page rather
+        than the roster, because opening a full-width table to collect six fields
+        is not a dialog. "On waitlist" instead opens the roster filtered to this
+        patient, where editing, marking scheduled and removing already live;
+        handing over an add form there refuses the obvious resubmission with a
+        409 and manages nothing.
+
+        The lookup is repeated rather than carried over from ``visible()``: that
+        is a separate invocation, so there is no state to reuse.
         """
         patient_id = self.patient_id()
         if not patient_id:
             return []
 
+        patient = Patient.objects.filter(id=patient_id).only("id", "dbid").first()
+        if patient is None:
+            return []
+
+        if has_live_entry(getattr(patient, "dbid", None)):
+            url, title = roster_for_patient_url(patient_id), LISTED_MODAL_TITLE
+        else:
+            url, title = add_form_url(patient_id), ADD_MODAL_TITLE
+
         return [
             LaunchModalEffect(
-                url=add_form_url(patient_id),
+                url=url,
                 target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
-                title=MODAL_TITLE,
+                title=title,
             ).apply()
         ]

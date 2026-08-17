@@ -38,6 +38,19 @@ def add_form_url(patient_id: str) -> str:
         f"&v={CACHE_BUST}"
     )
 
+
+def roster_for_patient_url(patient_id: str) -> str:
+    """The roster, filtered to one patient's entries.
+
+    Where a chart goes to *manage* what someone is already waiting for: editing,
+    marking scheduled and removing all live on the roster, so this reuses it
+    rather than growing a second management surface. The unfiltered roster would
+    mean hunting for the patient whose chart is already open.
+    """
+    return (
+        f"{ROSTER_URL}&{ADD_FOR_PATIENT_PARAM}={quote(str(patient_id), safe='')}"
+    )
+
 # --- entry statuses ---------------------------------------------------------
 STATUS_WAITING = "waiting"
 STATUS_OFFERED = "offered"

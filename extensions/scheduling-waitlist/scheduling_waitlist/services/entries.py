@@ -97,6 +97,7 @@ def build_queryset(
     *,
     status: str = "",
     search: str = "",
+    patient_id: str = "",
     note_type_dbid: Any = None,
     provider_dbid: Any = None,
     location_dbid: Any = None,
@@ -119,6 +120,13 @@ def build_queryset(
         queryset = queryset.filter(
             Q(patient__first_name__icontains=term) | Q(patient__last_name__icontains=term)
         )
+
+    # By key, not by name. This is how a chart shows "this patient's entries", and
+    # a name match would pull in everyone sharing their surname -- on a chart,
+    # someone else's waitlist entry appearing is worse than no filter at all.
+    focused = (patient_id or "").strip()
+    if focused:
+        queryset = queryset.filter(patient__id=focused)
 
     if note_type_dbid:
         queryset = queryset.filter(note_type_id=note_type_dbid)

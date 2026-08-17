@@ -38,11 +38,14 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
                 "cache_bust": CACHE_BUST,
                 # Wiring only, nothing identifiable: the roster fetches its rows
                 # over the authenticated API rather than having them baked into a
-                # document that may be cached or copied out of the browser.
+                # document that may be cached or copied out of the browser. The
+                # patient key narrows the list when a chart sent the reader here;
+                # the names behind it still arrive over the API.
                 "config_json": safe_json(
                     {
                         "apiBase": API_BASE,
                         "cacheBust": CACHE_BUST,
+                        "focusPatientId": self._add_for_patient_id(),
                     }
                 ),
             },
