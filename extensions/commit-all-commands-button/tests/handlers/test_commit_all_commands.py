@@ -12,13 +12,13 @@ from canvas_sdk.commands.commands.change_medication import ChangeMedicationComma
 from canvas_sdk.commands.commands.immunization_statement import ImmunizationStatementCommand
 from canvas_sdk.v1.data.note import NoteStates
 
-from commit_all_commands_button.protocols.commit_all_commands import CommitButtonHandler
+from commit_all_commands_button.handlers.commit_all_commands import CommitButtonHandler
 
 
 class TestCommitButtonHandlerVisibility:
     """Test cases for button visibility logic."""
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.CurrentNoteStateEvent")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
     def test_visible_when_note_not_locked(self, mock_note_state):
         """Button should be visible when note is not locked."""
         mock_note_event = Mock()
@@ -34,7 +34,7 @@ class TestCommitButtonHandlerVisibility:
         assert result is True
         mock_note_state.objects.get.assert_called_once_with(note__dbid="test-note-id")
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.CurrentNoteStateEvent")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
     def test_not_visible_when_note_locked(self, mock_note_state):
         """Button should not be visible when note is locked."""
         mock_note_event = Mock()
@@ -54,8 +54,8 @@ class TestCommitButtonHandlerVisibility:
 class TestCommitButtonHandlerBasicCommit:
     """Test cases for basic command committing."""
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_commits_single_staged_command(self, mock_log, mock_command_model):
         """Handle should commit a single staged command."""
         mock_command = Mock()
@@ -80,8 +80,8 @@ class TestCommitButtonHandlerBasicCommit:
             assert len(effects) == 1
             mock_log.info.assert_called_once()
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_commits_multiple_staged_commands(self, mock_log, mock_command_model):
         """Handle should commit multiple staged commands."""
         mock_command1 = Mock()
@@ -115,7 +115,7 @@ class TestCommitButtonHandlerBasicCommit:
             mock_assess_commit.assert_called_once()
             assert len(effects) == 2
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
     def test_handle_returns_empty_list_when_no_staged_commands(self, mock_command_model):
         """Handle should return empty list when no staged commands exist."""
         mock_command_model.objects.filter.return_value = []
@@ -135,9 +135,9 @@ class TestCommitButtonHandlerBasicCommit:
 class TestCommitButtonHandlerSpecialCases:
     """Test cases for special command types requiring extra parameters."""
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Interview")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Interview")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_questionnaire_command_with_interview(
         self, mock_log, mock_interview_model, mock_command_model
     ):
@@ -173,8 +173,8 @@ class TestCommitButtonHandlerSpecialCases:
             mock_commit.assert_called_once()
             assert len(effects) == 1
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_immunization_statement_with_cpt_and_cvx(
         self, mock_log, mock_command_model
     ):
@@ -211,8 +211,8 @@ class TestCommitButtonHandlerSpecialCases:
             mock_commit.assert_called_once()
             assert len(effects) == 1
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_immunization_statement_with_missing_codes(
         self, mock_log, mock_command_model
     ):
@@ -240,9 +240,9 @@ class TestCommitButtonHandlerSpecialCases:
             mock_commit.assert_called_once()
             assert len(effects) == 1
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Medication")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Medication")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_change_medication_command(
         self, mock_log, mock_medication_model, mock_command_model
     ):
@@ -274,8 +274,8 @@ class TestCommitButtonHandlerSpecialCases:
             mock_commit.assert_called_once()
             assert len(effects) == 1
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_change_medication_without_medication_value(
         self, mock_log, mock_command_model
     ):
@@ -303,8 +303,8 @@ class TestCommitButtonHandlerSpecialCases:
 class TestCommitButtonHandlerErrorHandling:
     """Test cases for error handling."""
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_logs_validation_error(self, mock_log, mock_command_model):
         """Handle should log validation errors and continue processing."""
         mock_command = Mock()
@@ -330,8 +330,8 @@ class TestCommitButtonHandlerErrorHandling:
             mock_log.error.assert_called()
             assert mock_log.error.call_count == 2
 
-    @patch("commit_all_commands_button.protocols.commit_all_commands.Command")
-    @patch("commit_all_commands_button.protocols.commit_all_commands.log")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
+    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
     def test_handle_logs_warning_for_unmapped_command(self, mock_log, mock_command_model):
         """Handle should log warning for unmapped command types."""
         mock_command = Mock()
@@ -369,6 +369,56 @@ class TestCommitButtonHandlerConfiguration:
         assert CommitButtonHandler.BUTTON_LOCATION == ActionButton.ButtonLocation.NOTE_FOOTER
 
     def test_all_command_types_mapped(self):
-        """All supported command types should be mapped."""
-        expected_command_count = 27
-        assert len(CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS) == expected_command_count
+        """The mapping contains exactly the commands this button commits.
+
+        Asserted as a set of schema keys rather than a count. A bare count went
+        stale silently when the four review commands were added — it still read
+        27 against a map of 31 — and a count also can't say *which* command is
+        missing when it fails.
+
+        Commands deliberately absent, and why:
+          - prescribe / refill / adjustPrescription / imagingOrder: ordering
+            commands that have to be sent, not merely committed.
+          - refer: has a delegate, so a staged Refer doesn't imply the provider
+            meant to commit it.
+          - labOrder: committable, but an order — same reasoning as above.
+          - reasonForVisit: its commit interpreter is commented out in home-app,
+            so the effect is not honored.
+          - reference: committed on origination, so it never sits staged.
+          - chartSectionReview / customCommand: no COMMIT effect in the SDK.
+        """
+        expected_schema_keys = {
+            "allergy",
+            "assess",
+            "changeMedication",
+            "closeGoal",
+            "diagnose",
+            "exam",
+            "familyHistory",
+            "followUp",
+            "goal",
+            "hpi",
+            "imagingReview",
+            "immunizationStatement",
+            "instruct",
+            "labReview",
+            "medicalHistory",
+            "medicationStatement",
+            "perform",
+            "plan",
+            "pocLabTest",
+            "questionnaire",
+            "referralReview",
+            "removeAllergy",
+            "resolveCondition",
+            "ros",
+            "stopMedication",
+            "structuredAssessment",
+            "surgicalHistory",
+            "task",
+            "uncategorizedDocumentReview",
+            "updateDiagnosis",
+            "updateGoal",
+            "vitals",
+        }
+        assert set(CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS) == expected_schema_keys
