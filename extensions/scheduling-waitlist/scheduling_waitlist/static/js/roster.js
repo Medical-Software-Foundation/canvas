@@ -485,15 +485,6 @@
 
     if (els.add) {
       els.add.addEventListener("click", function () {
-        // The roster is the only way onto the waitlist, so a missing service
-        // list has to be said out loud rather than shown as an empty dropdown.
-        if (!state.options || !state.options.is_configured) {
-          toast(
-            "No appointment types are configured yet, so entries cannot be added.",
-            "error"
-          );
-          return;
-        }
         openAddDialog();
       });
     }
@@ -799,6 +790,21 @@
 
   function openAddDialog(preselected) {
     if (!addDialog || !state.options) return;
+
+    // Guarded here rather than at each call site. Without configured services
+    // every submission is refused, and the dropdown is populated from the
+    // instance regardless -- so an unguarded entry point offers a form whose
+    // Service choices can never be saved. Both the header button and the
+    // arrive-from-a-chart path come through here, so neither can skip it.
+    if (!state.options.is_configured) {
+      toast(
+        "No appointment types are configured for the waitlist yet, so entries "
+          + "cannot be added.",
+        "error"
+      );
+      return;
+    }
+
     var options = state.options;
     var ANY = options.any_preference || "any";
     var picked = { patient: preselected || null };
