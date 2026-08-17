@@ -81,11 +81,18 @@
 
   <div id="wl-toast" class="wl-toast" role="status" aria-live="polite" hidden></div>
 
-  {# |safe is required, not an oversight. Django's template engine autoescapes
-     by default, which turns the JSON string delimiters into &quot; and makes
-     JSON.parse throw -- the page then starts with no apiBase and refuses to
-     run. services/html.py:safe_json has already escaped <, > and & to \u00xx
-     precisely so this value can be emitted unescaped. #}
+  {% comment %}
+    |safe is required, not an oversight. Django's template engine autoescapes by
+    default, which turns the JSON string delimiters into &quot; and makes
+    JSON.parse throw -- the page then starts with no apiBase and refuses to run.
+    services/html.py:safe_json has already escaped <, > and & to \u00xx
+    precisely so this value can be emitted unescaped.
+
+    Written as a comment tag rather than a hash comment: the hash form is
+    single-line only, so a multi-line one leaks its remaining lines into the
+    page as visible text. The tag form also does not nest, which is why this
+    note names the tags in prose instead of quoting them.
+  {% endcomment %}
   <script id="wl-config" type="application/json">{{ config_json|safe }}</script>
   <script src="{{ asset_base }}/roster.js?v={{ cache_bust }}" defer></script>
 </body>

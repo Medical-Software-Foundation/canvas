@@ -145,3 +145,27 @@ class TestTemplateEscaping:
         assert ">" not in payload
         assert "&" not in payload
         assert json.loads(payload)["note"] == "</script><img src=x onerror=alert(1)>"
+
+
+class TestTemplateComments:
+    """Django's ``{# #}`` is single-line only.
+
+    A multi-line one comments out its first line and renders the rest as visible
+    page text. That shipped once -- a five-line note about escaping appeared in
+    the middle of the roster -- so the shape is pinned here rather than trusted.
+    """
+
+    TEMPLATE = Path("scheduling_waitlist/templates/roster.html")
+
+    def test_every_short_comment_closes_on_its_own_line(self):
+        for number, line in enumerate(self.TEMPLATE.read_text().splitlines(), start=1):
+            if "{#" in line:
+                assert "#}" in line, (
+                    f"line {number}: {{# #}} spans lines, so its tail renders as "
+                    "page text -- use {% comment %} instead"
+                )
+
+    def test_multi_line_notes_use_the_comment_tag(self):
+        source = self.TEMPLATE.read_text()
+
+        assert source.count("{% comment %}") == source.count("{% endcomment %}")
