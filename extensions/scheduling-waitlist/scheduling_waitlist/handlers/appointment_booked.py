@@ -26,7 +26,7 @@ class AppointmentBookedHandler(BaseHandler):
     can clear in a click.
     """
 
-    RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_CREATED)]
+    RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_CREATED)]  # type: ignore[attr-defined]
 
     def compute(self) -> list[Effect]:
         """Close the entries this booking satisfies, and refresh the chart banner."""

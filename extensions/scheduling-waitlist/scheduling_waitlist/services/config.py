@@ -11,8 +11,13 @@ roster, and the shelf life is required to expire entries but irrelevant to
 creating one.
 """
 
-from __future__ import annotations
-
+# Deliberately no ``from __future__ import annotations``: it turns every
+# annotation into a string, and ``@dataclass`` then resolves those strings via
+# ``sys.modules[cls.__module__]``. The Canvas sandbox execs each module into a
+# synthetic scope that is not registered in ``sys.modules``, so the lookup
+# returns None and the class body raises at import time -- meaning the plugin
+# passes its tests and fails to load on the instance. Same applies in
+# ``services/slot.py``, the other dataclass in this plugin.
 from dataclasses import dataclass, field
 
 from logger import log
@@ -105,7 +110,7 @@ class WaitlistConfig:
     display_timezone: str = DEFAULT_DISPLAY_TIMEZONE
 
     @classmethod
-    def from_secrets(cls, secrets: dict | None) -> WaitlistConfig:
+    def from_secrets(cls, secrets: dict | None) -> "WaitlistConfig":
         """Build a configuration from the plugin's secrets. Never raises."""
         secrets = secrets or {}
 

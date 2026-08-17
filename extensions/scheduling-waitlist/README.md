@@ -18,15 +18,28 @@ row can open the patient's chart, be edited, marked scheduled, or removed.
 **Adding a patient** — from the roster itself: search for the patient by name, then fill in
 service, provider, location, priority, preferred time, and a note.
 
-**Seeing it from the chart** — a patient already waiting carries a banner on their chart saying
-so, which links back to the roster. There is deliberately no "add to waitlist" button on the
-chart: the waitlist is practice-wide rather than a property of one patient, so it is managed in
-one place.
+**From the chart** — the chart carries two things, because it is asked two different questions:
 
-**Cancellation matching** — when a booked appointment is cancelled or no-showed, the plugin finds
-waiting entries whose requested type, provider (or "any"), and location fit the freed slot, and
-raises **one** task to the scheduling team naming them in priority order. Each patient's
-preferred day/time is shown so staff can judge fit.
+- A **banner** on the chart of anyone already waiting, saying what they are waiting for and
+  linking back to the roster. This answers "is this patient on the list?" without a click.
+- An **"Add to waitlist" button** in the chart header, which opens the roster's add dialog with
+  the patient already filled in. The label reads "On waitlist" when they are already waiting.
+  This answers "put them on the list" — an action, which a passive banner cannot serve.
+
+The button reuses the roster's add dialog rather than shipping a second form, so there is one
+set of validation rules. Only the patient's key travels in the page URL; the name behind it is
+fetched over the authenticated API, so no identifiable data is baked into the document.
+
+**Cancellation matching** — when a booked slot frees up, the plugin finds waiting entries whose
+requested type, provider (or "any"), and location fit it, and raises **one** task to the
+scheduling team naming them in priority order. Each patient's preferred day/time is shown so
+staff can judge fit.
+
+A slot counts as freed whether staff cancelled it, the patient cancelled or rescheduled it in
+the patient portal, it was no-showed, or the booking was moved to another time. For a
+reschedule, the slot announced is the one the booking moved *away* from — the new booking is
+occupied. Duplicate deliveries are harmless: every path fingerprints the same freed slot, so a
+cancellation and a no-show for one booking raise one task between them.
 
 **Housekeeping** — a nightly job ages out entries past their configured shelf life and logs
 wait-time and fill metrics. Ageing marks entries `expired`; it never deletes them, so the backlog
@@ -80,7 +93,8 @@ rather than guessing.
 | `applications.waitlist_app:WaitlistApp` | Application (global) | app drawer |
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
 | `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
-| `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED` |
+| `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header |
+| `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
 | `handlers.waitlist_cron:WaitlistMaintenanceCron` | CronTask | `0 3 * * *` (UTC) |
 
@@ -120,14 +134,27 @@ corrected by the next write or the next run.
 cd extensions/scheduling-waitlist
 uv run --python 3.12 --with pytest --no-project pytest tests/ -q
 uv run --python 3.12 --with pytest --with pytest-cov --no-project pytest tests/ --cov --cov-branch -q
-uv run --python 3.12 --with mypy --no-project mypy scheduling_waitlist
+uv run --python 3.12 mypy --config-file=mypy.ini .          # needs the project env
 canvas validate-manifest scheduling_waitlist
 ```
 
 The test suite stubs the Canvas SDK at import time, so it runs with only `pytest` installed —
-no SDK, no Django, and no database. `--no-project` keeps the run from materializing a `.venv`
-and `uv.lock` inside the plugin directory; `--python 3.12` matches the platform runtime, since
-a bare `uv run` may pick up an older interpreter.
+no SDK, no Django, and no database. `--no-project` keeps that run from materializing a `.venv`
+inside the plugin directory; `--python 3.12` matches the platform runtime, since a bare
+`uv run` may pick up an older interpreter.
+
+**Type checking is the exception and does need the project.** `canvas` is a dev dependency for
+exactly one reason: without the real SDK on the path, every `canvas_sdk` import is unresolved,
+and an unresolved import switches off checking for the whole file that imports it — which is
+most of the plugin. With it installed, mypy checks this code properly. It still cannot verify
+SDK call signatures, because `canvas_sdk` ships no `py.typed` marker; `follow_untyped_imports`
+in `mypy.ini` resolves those imports as `Any` and says so.
+
+`mypy.ini` carries per-module exemptions for framework limitations rather than global ones, each
+with the reason inline: the `CustomModel` metaclass being invisible to django-stubs, the
+`ModelExtension` / SDK-model `Meta` clash in `models/proxies.py`, the `StaffSessionAuthMixin`
+override signature, and the protobuf-generated `EventType.Name`. The last two are covered at
+runtime by `tests/test_stub_contract.py`, which checks the stubs against the real SDK.
 
 ## License
 

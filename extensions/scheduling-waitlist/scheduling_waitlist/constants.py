@@ -7,6 +7,8 @@ be enforced at the database level anyway. Validation happens in
 ``services/transitions.py``.
 """
 
+from urllib.parse import quote
+
 from scheduling_waitlist import CACHE_BUST
 
 PLUGIN_NAME = "scheduling_waitlist"
@@ -15,6 +17,20 @@ API_BASE = f"/plugin-io/api/{PLUGIN_NAME}"
 # The roster page. Lives here rather than in the application module so the chart
 # banner can link to it without services importing from applications.
 ROSTER_URL = f"{API_BASE}/app/?v={CACHE_BUST}"
+
+# The query parameter the chart button uses to name a patient. The roster reads
+# it, resolves the patient server-side, and opens its add dialog already filled
+# in -- so there is only ever one add form and one set of validation rules.
+ADD_FOR_PATIENT_PARAM = "patient"
+
+
+def roster_add_url(patient_id: str) -> str:
+    """The roster page, primed to add one named patient.
+
+    Encoded rather than interpolated: a patient key is external input, and an
+    unescaped one would silently truncate the query string.
+    """
+    return f"{ROSTER_URL}&{ADD_FOR_PATIENT_PARAM}={quote(str(patient_id), safe='')}"
 
 # --- entry statuses ---------------------------------------------------------
 STATUS_WAITING = "waiting"

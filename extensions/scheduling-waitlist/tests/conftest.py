@@ -16,7 +16,7 @@ from __future__ import annotations
 import contextlib
 import sys
 import types
-from enum import Enum
+from enum import Enum, StrEnum
 from unittest.mock import MagicMock
 
 import pytest
@@ -321,6 +321,8 @@ class _Api:
 class _EventType:
     """Enough of the protobuf enum for ``EventType.Name(EventType.X)``."""
 
+    # Kept in step with the real enum for the events this plugin subscribes to;
+    # tests/test_stub_contract.py checks each one still round-trips there.
     _NAMES = (
         "APPOINTMENT_CANCELED",
         "APPOINTMENT_CREATED",
@@ -328,6 +330,8 @@ class _EventType:
         "APPOINTMENT_RESCHEDULED",
         "APPOINTMENT_RESTORED",
         "APPOINTMENT_UPDATED",
+        "PATIENT_PORTAL__APPOINTMENT_CANCELED",
+        "PATIENT_PORTAL__APPOINTMENT_RESCHEDULED",
         "CRON",
     )
 
@@ -360,6 +364,8 @@ def _install_canvas_sdk_stubs() -> None:
     app_mod = _ensure_module("canvas_sdk.handlers.application")
     base_handler_mod = _ensure_module("canvas_sdk.handlers.base")
     cron_mod = _ensure_module("canvas_sdk.handlers.cron_task")
+    action_button_handler_mod = _ensure_module("canvas_sdk.handlers.action_button")
+    action_button_effects_mod = _ensure_module("canvas_sdk.effects.action_button")
     simple_api_mod = _ensure_module("canvas_sdk.handlers.simple_api")
     security_mod = _ensure_module("canvas_sdk.handlers.simple_api.security")
     exceptions_mod = _ensure_module("canvas_sdk.handlers.simple_api.exceptions")
@@ -459,6 +465,48 @@ def _install_canvas_sdk_stubs() -> None:
         SCHEDULE = ""
 
     cron_mod.CronTask = CronTask
+
+    class ActionButton(BaseHandler):
+        """Mirrors the real base class closely enough to test a button.
+
+        ``visible()`` is called by the real ``compute()`` immediately before
+        ``BUTTON_TITLE`` is read, which is what lets a button decide its own
+        label from live data. The stub keeps that ordering so a title computed
+        in ``visible()`` is exercised the way the platform exercises it.
+        """
+
+        class ButtonLocation(StrEnum):
+            NOTE_HEADER = "note_header"
+            NOTE_FOOTER = "note_footer"
+            NOTE_BODY = "note_body"
+            NOTE_HEADER_DROPDOWN = "note_header_dropdown"
+            CHART_PATIENT_HEADER = "chart_patient_header"
+
+        BUTTON_TITLE = ""
+        BUTTON_KEY = ""
+        BUTTON_LOCATION = None
+        PRIORITY = 0
+
+        def handle(self):
+            raise NotImplementedError
+
+        def visible(self):
+            return True
+
+    action_button_handler_mod.ActionButton = ActionButton
+
+    class ReloadPatientActionButtonsEffect:
+        """Tells the chart to redraw its buttons so a stale label is corrected."""
+
+        def __init__(self, id=None):  # noqa: A002 - matches the real signature
+            self.id = id
+
+        def apply(self):
+            return self
+
+    action_button_effects_mod.ReloadPatientActionButtonsEffect = (
+        ReloadPatientActionButtonsEffect
+    )
 
     class SimpleAPI:
         def __init__(self, event=None, secrets=None):

@@ -40,10 +40,19 @@ TASK_LABEL = "waitlist"
 class SlotFreedHandler(BaseHandler):
     """Announces a freed slot to the scheduling team, exactly once."""
 
+    # Every channel a booked slot can open through. Subscribing only to the
+    # staff-side cancellation misses the portal, which is where most patients
+    # cancel, and misses reschedules, which free the original slot silently.
+    # Duplicate deliveries are harmless: the slot fingerprint collapses them.
     RESPONDS_TO = [
-        EventType.Name(EventType.APPOINTMENT_CANCELED),
-        EventType.Name(EventType.APPOINTMENT_NO_SHOWED),
+        EventType.Name(EventType.APPOINTMENT_CANCELED),  # type: ignore[attr-defined]
+        EventType.Name(EventType.APPOINTMENT_NO_SHOWED),  # type: ignore[attr-defined]
+        EventType.Name(EventType.APPOINTMENT_RESCHEDULED),  # type: ignore[attr-defined]
+        EventType.Name(EventType.PATIENT_PORTAL__APPOINTMENT_CANCELED),  # type: ignore[attr-defined]
+        EventType.Name(EventType.PATIENT_PORTAL__APPOINTMENT_RESCHEDULED),  # type: ignore[attr-defined]
     ]
+
+    RELATED = ("patient", "note_type", "provider", "location")
 
     def compute(self) -> list[Effect]:
         """Re-arm any affected entry, then announce the slot if it is fillable."""
@@ -54,7 +63,7 @@ class SlotFreedHandler(BaseHandler):
 
         appointment = (
             Appointment.objects.filter(id=appointment_id, entered_in_error__isnull=True)
-            .select_related("patient", "note_type", "provider", "location")
+            .select_related(*self.RELATED)
             .first()
         )
         if appointment is None:
@@ -69,7 +78,8 @@ class SlotFreedHandler(BaseHandler):
         config = WaitlistConfig.from_secrets(self.secrets)
         now = datetime.now(timezone.utc)
         slot = FreedSlot.from_appointment(
-            appointment, source_event=str(getattr(self.event, "type", "") or "")
+            self._freed_appointment(appointment),
+            source_event=str(getattr(self.event, "type", "") or ""),
         )
 
         if slot.note_type_dbid is None:
@@ -143,6 +153,35 @@ class SlotFreedHandler(BaseHandler):
             return TaskPriority.URGENT
         return None
 
+    @classmethod
+    def _freed_appointment(cls, appointment: Any) -> Any:
+        """The appointment whose slot actually opened.
+
+        A reschedule event names the new booking, so announcing that would
+        advertise a slot somebody already holds. The slot that opened is the one
+        it moved away from, reached through ``appointment_rescheduled_from_id``.
+
+        Falls back to the event's own appointment when the original cannot be
+        loaded -- announcing the wrong start time is a smaller failure than
+        going silent, and the guards downstream still apply.
+        """
+        origin_dbid = getattr(appointment, "appointment_rescheduled_from_id", None)
+        if not origin_dbid:
+            return appointment
+
+        origin = (
+            Appointment.objects.filter(dbid=origin_dbid, entered_in_error__isnull=True)
+            .select_related(*cls.RELATED)
+            .first()
+        )
+        if origin is None:
+            log.warning(
+                "scheduling_waitlist: could not load the appointment this booking was "
+                "rescheduled from; announcing the event's own appointment instead"
+            )
+            return appointment
+        return origin
+
     @staticmethod
     def _rearm_entries(appointment: Any) -> list[Effect]:
         """Put entries this appointment satisfied back on the waiting list.
@@ -150,9 +189,19 @@ class SlotFreedHandler(BaseHandler):
         Idempotent by construction: it selects only entries still marked
         scheduled against this appointment, so a repeated event matches nothing.
 
+        Skipped when the booking was moved rather than cancelled: the patient
+        still has an appointment, so putting them back on the list would claim
+        they are waiting when they are booked. Deliberately keyed on the event's
+        own appointment rather than the freed one, so a reschedule cannot re-arm
+        the entry it just satisfied.
+
         Returns the banner refresh for the affected patient, so their chart stops
         claiming they are booked. Empty when nothing was re-armed.
         """
+        moved_elsewhere = getattr(appointment, "appointment_rescheduled_to", None)
+        if moved_elsewhere is not None and moved_elsewhere.exists():
+            return []
+
         rearmed = False
         for entry in find_entries_for_appointment(getattr(appointment, "dbid", None)):
             try:

@@ -52,6 +52,32 @@ def search_patients(term: str) -> list[dict[str, Any]]:
     ]
 
 
+def patient_by_id(patient_id: str) -> dict[str, Any] | None:
+    """One active patient, in the shape the roster's picker renders.
+
+    Used when the chart button names a patient: the page receives only the key,
+    and asks for the name over the authenticated API so no identifiable data has
+    to be embedded in the document itself.
+
+    Returns ``None`` for an unknown or inactive patient, which the page treats as
+    "open an empty picker" rather than an error -- the add form still refuses an
+    unresolvable patient on submit.
+    """
+    cleaned = (patient_id or "").strip()
+    if not cleaned:
+        return None
+
+    patient = Patient.objects.filter(id=cleaned, active=True).first()
+    if patient is None:
+        return None
+
+    return {
+        "id": str(getattr(patient, "id", "") or ""),
+        "name": patient_name(patient),
+        "birth_date": _iso_date(getattr(patient, "birth_date", None)),
+    }
+
+
 def _iso_date(value: Any) -> str:
     """A date as ``YYYY-MM-DD``, or an empty string.
 

@@ -14,7 +14,7 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
 from scheduling_waitlist import CACHE_BUST
-from scheduling_waitlist.constants import API_BASE
+from scheduling_waitlist.constants import ADD_FOR_PATIENT_PARAM, API_BASE
 from scheduling_waitlist.services.html import safe_json
 
 # Assets are addressed absolutely rather than relatively. A relative "roster.css"
@@ -36,14 +36,26 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
             {
                 "asset_base": ASSET_BASE,
                 "cache_bust": CACHE_BUST,
-                # Only wiring, no patient data: the page fetches entries itself,
-                # so nothing identifiable is baked into the document.
+                # Wiring only. The one patient-related value is the key the chart
+                # button put in this page's own URL, which tells the page whose
+                # add dialog to open; the name and date of birth behind it are
+                # fetched over the authenticated API rather than baked into a
+                # document that may be cached or copied out of the browser.
                 "config_json": safe_json(
-                    {"apiBase": API_BASE, "cacheBust": CACHE_BUST}
+                    {
+                        "apiBase": API_BASE,
+                        "cacheBust": CACHE_BUST,
+                        "addForPatientId": self._add_for_patient_id(),
+                    }
                 ),
             },
         )
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
+
+    def _add_for_patient_id(self) -> str:
+        """The patient the chart button asked to add, if any."""
+        params = getattr(self.request, "query_params", None) or {}
+        return str(params.get(ADD_FOR_PATIENT_PARAM) or "").strip()
 
     @api.get("/roster.css")
     def get_css(self) -> list[Response | Effect]:

@@ -1,9 +1,10 @@
 """The chart banner saying a patient is already on the waitlist.
 
-There is no "add to waitlist" button on the chart -- the waitlist is
-practice-wide, so it is managed from the roster. What a clinician does need from
-the chart is the answer to "is this person already waiting?", which is what this
-banner carries, along with a link back to the roster.
+This answers one of the two questions a chart gets asked: "is this person
+already waiting?" -- passively, with no click. The other question, "put them on
+the list", is an action and belongs to the chart-header button in
+``handlers/chart_button.py``; a banner cannot serve it. The two are deliberately
+separate controls rather than one control doing both jobs badly.
 
 The banner is keyed, not appended: re-emitting with the same key replaces the
 previous one, so these effects can be returned from every write path without

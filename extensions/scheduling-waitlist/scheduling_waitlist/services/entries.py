@@ -103,7 +103,7 @@ def build_queryset(
     priority_label: str = "",
     sort: str = SORT_PRIORITY,
     descending: bool = False,
-):
+) -> Any:
     """The filtered, ordered queryset behind the roster."""
     queryset = WaitlistEntry.objects.all()
 
@@ -139,7 +139,7 @@ def build_queryset(
     return queryset.select_related(*ENTRY_RELATIONS).order_by(*_order_by(sort, descending))
 
 
-def list_entries(*, limit: int, offset: int, **filters) -> tuple[list[Any], int]:
+def list_entries(*, limit: int, offset: int, **filters: Any) -> tuple[list[Any], int]:
     """A page of entries plus the total matching the same filters."""
     queryset = build_queryset(**filters)
     total = queryset.count()
@@ -174,6 +174,21 @@ def live_entries_for_patient(patient_dbid: Any) -> list[Any]:
     )
 
 
+def has_live_entry(patient_dbid: Any) -> bool:
+    """Whether this patient has any entry still on the list.
+
+    Separate from :func:`live_entries_for_patient` because the chart-header
+    button only needs the yes/no. That runs on every chart open, and the other
+    function answers it by joining five relations and building model instances
+    that are then discarded -- this is one ``EXISTS`` with no joins.
+    """
+    if patient_dbid is None:
+        return False
+    return WaitlistEntry.objects.filter(
+        patient_id=patient_dbid, status__in=list(MATCHABLE_STATUSES)
+    ).exists()
+
+
 def find_live_entry(patient_dbid: Any, note_type_dbid: Any) -> Any | None:
     """An existing live entry for the same patient and appointment type."""
     return (
@@ -187,7 +202,7 @@ def find_live_entry(patient_dbid: Any, note_type_dbid: Any) -> Any | None:
     )
 
 
-def create_entry(*, created_by_dbid: Any, **fields) -> Any:
+def create_entry(*, created_by_dbid: Any, **fields: Any) -> Any:
     """Add a patient to the waitlist.
 
     Raises :class:`DuplicateEntryError` when the same patient is already
@@ -226,13 +241,51 @@ EDITABLE_FIELDS = (
 )
 
 
-def update_entry(entry: Any, **fields) -> Any:
-    """Apply an edit to an existing entry."""
-    changed = []
-    for name in EDITABLE_FIELDS:
-        if name in fields:
-            setattr(entry, name, fields[name])
-            changed.append(name)
+def update_entry(entry: Any, **fields: Any) -> Any:
+    """Apply an edit to an existing entry.
+
+    Written out field by field rather than looping with ``setattr``: the
+    RestrictedPython sandbox blocks ``setattr``, so the concise version passes
+    the test suite and then fails on the instance. Keeping ``EDITABLE_FIELDS``
+    above as the single list of what may be edited, with
+    ``test_every_editable_field_is_assignable`` pinning the two together.
+    """
+    changed = False
+
+    if "note_type_id" in fields:
+        entry.note_type_id = fields["note_type_id"]
+        changed = True
+    if "provider_preference" in fields:
+        entry.provider_preference = fields["provider_preference"]
+        changed = True
+    if "desired_provider_id" in fields:
+        entry.desired_provider_id = fields["desired_provider_id"]
+        changed = True
+    if "location_preference" in fields:
+        entry.location_preference = fields["location_preference"]
+        changed = True
+    if "desired_location_id" in fields:
+        entry.desired_location_id = fields["desired_location_id"]
+        changed = True
+    if "priority_label" in fields:
+        entry.priority_label = fields["priority_label"]
+        changed = True
+    if "priority_rank" in fields:
+        entry.priority_rank = fields["priority_rank"]
+        changed = True
+    if "preferred_windows" in fields:
+        entry.preferred_windows = fields["preferred_windows"]
+        changed = True
+    if "preferred_windows_timezone" in fields:
+        entry.preferred_windows_timezone = fields["preferred_windows_timezone"]
+        changed = True
+    if "preferred_window_note" in fields:
+        entry.preferred_window_note = fields["preferred_window_note"]
+        changed = True
+    if "note" in fields:
+        entry.note = fields["note"]
+        changed = True
+
     if changed:
         entry.save()
     return entry

@@ -15,6 +15,10 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.12.0",
+    # Type checking only. The test suite fabricates canvas_sdk in sys.modules
+    # (tests/conftest.py) and does not need this installed, but mypy does --
+    # without it every SDK call is untyped and the type check is vacuous.
+    "canvas>=0.147.0",
 ]
 
 [tool.pytest.ini_options]

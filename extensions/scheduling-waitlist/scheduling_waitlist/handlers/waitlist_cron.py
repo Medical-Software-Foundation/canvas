@@ -133,7 +133,7 @@ class WaitlistMaintenanceCron(CronTask):
             entry.status = STATUS_EXPIRED
             entry.status_reason = "passed the configured shelf life"
             entry.status_changed_at = now
-            entry.status_changed_by_id = None
+            entry.status_changed_by_id = None  # type: ignore[attr-defined]
 
         WaitlistEntry.objects.bulk_update(
             due, ["status", "status_reason", "status_changed_at", "status_changed_by"]

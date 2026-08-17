@@ -7,7 +7,7 @@ from scheduling_waitlist.constants import (
     MAX_PATIENT_SEARCH_RESULTS,
     MIN_PATIENT_SEARCH_LENGTH,
 )
-from scheduling_waitlist.services.patients import search_patients
+from scheduling_waitlist.services.patients import patient_by_id, search_patients
 
 MODULE = "scheduling_waitlist.services.patients"
 
@@ -121,3 +121,54 @@ class TestSerialization:
         found, _ = _run("nobody", results=[])
 
         assert found == []
+
+
+class TestPatientById:
+    """Resolving one named patient, for the chart button's add dialog.
+
+    The chart button passes a patient key through the page URL. The name behind
+    it is fetched here rather than embedded in the document, so the roster page
+    carries no identifiable data of its own.
+    """
+
+    def test_an_unknown_patient_resolves_to_nothing(self):
+        with patch(f"{MODULE}.Patient") as model:
+            model.objects.filter.return_value.first.return_value = None
+
+            assert patient_by_id("nobody") is None
+
+    def test_a_blank_key_is_not_looked_up(self):
+        with patch(f"{MODULE}.Patient") as model:
+            assert patient_by_id("") is None
+            model.objects.filter.assert_not_called()
+
+    def test_a_resolved_patient_carries_what_the_picker_shows(self):
+        with patch(f"{MODULE}.Patient") as model:
+            model.objects.filter.return_value.first.return_value = _patient(
+                first="Dana", last="Reyes", uuid="p-1", birth_date=date(1990, 4, 2)
+            )
+
+            assert patient_by_id("p-1") == {
+                "id": "p-1",
+                "name": "Dana Reyes",
+                "birth_date": "1990-04-02",
+            }
+
+    def test_only_active_patients_are_offered(self):
+        # Consistent with the picker: an inactive patient is not schedulable.
+        with patch(f"{MODULE}.Patient") as model:
+            patient_by_id("p-1")
+
+        assert model.objects.filter.call_args.kwargs["active"] is True
+
+    def test_the_lookup_is_by_the_patients_external_key(self):
+        with patch(f"{MODULE}.Patient") as model:
+            patient_by_id("p-1")
+
+        assert model.objects.filter.call_args.kwargs["id"] == "p-1"
+
+    def test_a_missing_date_of_birth_renders_as_nothing(self):
+        with patch(f"{MODULE}.Patient") as model:
+            model.objects.filter.return_value.first.return_value = _patient(first="Ari", last="Blum", uuid="p-2", birth_date=None)
+
+            assert patient_by_id("p-2")["birth_date"] == ""

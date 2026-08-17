@@ -1,13 +1,16 @@
 """The roster page shell and its static assets."""
 
 import json
+from unittest.mock import MagicMock
 
 from scheduling_waitlist import CACHE_BUST
 from scheduling_waitlist.routes.app_routes import WaitlistAppAPI
 
 
-def _api() -> WaitlistAppAPI:
-    return WaitlistAppAPI.__new__(WaitlistAppAPI)
+def _api(query_params=None) -> WaitlistAppAPI:
+    api = WaitlistAppAPI.__new__(WaitlistAppAPI)
+    api.request = MagicMock(query_params=query_params or {})
+    return api
 
 
 class TestRosterPage:
@@ -39,14 +42,38 @@ class TestRosterPage:
         assert json.loads(rendered_context()["config_json"]) == {
             "apiBase": "/plugin-io/api/scheduling_waitlist",
             "cacheBust": CACHE_BUST,
+            "addForPatientId": "",
         }
 
-    def test_embedded_config_contains_no_patient_data(self, rendered_context):
+    def test_embedded_config_contains_no_identifiable_patient_data(
+        self, rendered_context
+    ):
         # The page fetches entries itself, so nothing identifiable is baked into
-        # a document that may be cached or copied out of the browser.
+        # a document that may be cached or copied out of the browser. The patient
+        # key below is the one the chart button already put in this page's URL.
+        _api(query_params={"patient": "abc-123"}).get_roster_page()
+
+        config = json.loads(rendered_context()["config_json"])
+        assert set(config) == {"apiBase", "cacheBust", "addForPatientId"}
+
+    def test_no_patient_is_requested_by_default(self, rendered_context):
         _api().get_roster_page()
 
-        assert set(json.loads(rendered_context()["config_json"])) == {"apiBase", "cacheBust"}
+        assert json.loads(rendered_context()["config_json"])["addForPatientId"] == ""
+
+    def test_the_chart_buttons_patient_is_passed_to_the_page(self, rendered_context):
+        # This is what makes the chart button land on a filled-in add dialog
+        # rather than an empty patient picker.
+        _api(query_params={"patient": "abc-123"}).get_roster_page()
+
+        assert (
+            json.loads(rendered_context()["config_json"])["addForPatientId"] == "abc-123"
+        )
+
+    def test_a_blank_patient_parameter_is_treated_as_absent(self, rendered_context):
+        _api(query_params={"patient": "   "}).get_roster_page()
+
+        assert json.loads(rendered_context()["config_json"])["addForPatientId"] == ""
 
 
 class TestAssets:

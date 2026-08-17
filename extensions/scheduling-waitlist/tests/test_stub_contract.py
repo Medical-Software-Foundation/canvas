@@ -126,5 +126,31 @@ class TestEventTypeStub:
     def test_name_round_trips_for_the_events_this_plugin_uses(self):
         from canvas_sdk.events import EventType
 
-        for name in ("APPOINTMENT_CANCELED", "APPOINTMENT_NO_SHOWED", "APPOINTMENT_CREATED"):
+        for name in (
+            "APPOINTMENT_CANCELED",
+            "APPOINTMENT_NO_SHOWED",
+            "APPOINTMENT_CREATED",
+            "APPOINTMENT_RESCHEDULED",
+            "PATIENT_PORTAL__APPOINTMENT_CANCELED",
+            "PATIENT_PORTAL__APPOINTMENT_RESCHEDULED",
+        ):
             assert EventType.Name(getattr(EventType, name)) == name
+
+    def test_every_event_the_handlers_subscribe_to_exists_in_the_stub(self):
+        """Guards against a handler naming an event the stub does not carry.
+
+        The stub is a hand-written list, so an event added to a handler but not
+        here fails at import rather than at the assertion -- this makes the
+        omission explicit instead.
+        """
+        from scheduling_waitlist.handlers.appointment_booked import (
+            AppointmentBookedHandler,
+        )
+        from scheduling_waitlist.handlers.slot_freed import SlotFreedHandler
+
+        from tests.conftest import _EventType
+
+        subscribed = set(SlotFreedHandler.RESPONDS_TO) | set(
+            AppointmentBookedHandler.RESPONDS_TO
+        )
+        assert subscribed <= set(_EventType._NAMES)

@@ -52,7 +52,10 @@ def summarize(entries: list[Any], *, today: date) -> dict[str, Any]:
     for entry in entries:
         status = getattr(entry, "status", "") or ""
         if status in counts:
-            counts[status] += 1
+            # Explicit reassignment rather than ``counts[status] += 1``: the
+            # RestrictedPython sandbox rejects augmented assignment to a dict
+            # item, so the shorter form fails on the instance only.
+            counts[status] = counts[status] + 1
         if status in (STATUS_WAITING, STATUS_OFFERED):
             waits.append(days_waiting(getattr(entry, "created_at", None), today))
 

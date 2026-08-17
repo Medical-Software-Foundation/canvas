@@ -1,7 +1,8 @@
 """A description of an appointment slot that has just freed up."""
 
-from __future__ import annotations
-
+# No ``from __future__ import annotations`` here, for the reason documented at
+# the top of ``services/config.py``: stringified annotations make ``@dataclass``
+# unloadable inside the Canvas sandbox.
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -38,7 +39,7 @@ class FreedSlot:
     source_event: str
 
     @classmethod
-    def from_appointment(cls, appointment: Any, *, source_event: str = "") -> FreedSlot:
+    def from_appointment(cls, appointment: Any, *, source_event: str = "") -> "FreedSlot":
         """Read a slot off an appointment record."""
         note_type = getattr(appointment, "note_type", None)
         provider = getattr(appointment, "provider", None)

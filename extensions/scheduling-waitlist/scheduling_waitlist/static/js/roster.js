@@ -58,6 +58,10 @@
     total: 0,
     canManageAll: false,
     currentStaffDbid: null,
+    // Set when the chart button opened this page for one patient. The key comes
+    // from the page config; the name is fetched over the API so the document
+    // itself carries nothing identifiable.
+    addForPatientId: config.addForPatientId || "",
     // Bumped on every request; a response whose sequence is stale is dropped.
     // Without this, typing quickly can leave an earlier, slower response
     // painting over a later one.
@@ -793,15 +797,24 @@
     return { input: input, results: results, chosen: chosen };
   }
 
-  function openAddDialog() {
+  function openAddDialog(preselected) {
     if (!addDialog || !state.options) return;
     var options = state.options;
     var ANY = options.any_preference || "any";
-    var picked = { patient: null };
+    var picked = { patient: preselected || null };
 
     var picker = patientPicker(function (patient) {
       picked.patient = patient;
     });
+
+    // Arriving from a chart, the patient is already known. Showing them as
+    // chosen keeps one add form for both entry points rather than a second
+    // form with its own validation.
+    if (picked.patient) {
+      picker.chosen.textContent =
+        picked.patient.name +
+        (picked.patient.birth_date ? " \u00b7 " + picked.patient.birth_date : "");
+    }
 
     var typeSelect = select(
       "wl-add-type",
@@ -930,10 +943,36 @@
     } else {
       addDialog.setAttribute("open", "open");
     }
-    picker.input.focus();
+    // With the patient already chosen, the service is the first thing left to
+    // decide, so focus goes there rather than to a picker nobody needs.
+    if (picked.patient) {
+      typeSelect.focus();
+    } else {
+      picker.input.focus();
+    }
   }
 
   // ---- start -------------------------------------------------------------
+
+  function openAddForRequestedPatient() {
+    // The chart button sent us here to add one patient. Resolve their name over
+    // the API, then open the same add dialog the roster's own button opens.
+    if (!state.addForPatientId) return;
+
+    request("/waitlist/patients/" + window.encodeURIComponent(state.addForPatientId))
+      .then(function (data) {
+        if (data && data.patient) {
+          openAddDialog(data.patient);
+        } else {
+          openAddDialog();
+        }
+      })
+      .catch(function () {
+        // An unresolvable patient is not worth an error banner over the whole
+        // roster: fall back to the picker so the scheduler can still act.
+        openAddDialog();
+      });
+  }
 
   if (!state.apiBase) {
     setStatus("The waitlist could not start: its configuration is missing.", "error");
@@ -943,6 +982,7 @@
   bind();
   loadOptions()
     .then(reload)
+    .then(openAddForRequestedPatient)
     .catch(function (error) {
       setStatus(error.message, "error");
     });

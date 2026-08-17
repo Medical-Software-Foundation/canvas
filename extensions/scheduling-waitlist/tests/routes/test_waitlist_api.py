@@ -1,6 +1,9 @@
 """The staff-authenticated waitlist endpoints."""
 
+import contextlib
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from scheduling_waitlist.routes.waitlist_api import WaitlistAPI
 
@@ -794,3 +797,292 @@ class TestWritesRefreshTheChartBanner:
 
         assert responses[0].status_code == 409
         assert BANNER not in responses
+
+
+class TestMalformedRequestBodies:
+    """A JSON body that is not an object must be refused, not crash the route.
+
+    ``json()`` returns whatever the caller sent, so a list, a bare string, a
+    number or ``null`` all reach the route. Every field reader downstream calls
+    ``payload.get(...)``, which raises ``AttributeError`` on all of those -- an
+    unhandled 500 for what is plainly a bad request.
+    """
+
+    NON_OBJECTS = [[], [1, 2], "text", 5, 1.5, True, None]
+
+    @staticmethod
+    def _api_with_body(make_request, body, path_params=None):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        request = make_request(
+            headers={"canvas-logged-in-user-id": "s1"},
+            path_params=path_params or {},
+        )
+        # Set directly: the fixture's ``json_body or {}`` would turn every
+        # falsy body under test back into an empty object.
+        request.json.return_value = body
+        api.request = request
+        return api
+
+    @pytest.mark.parametrize("body", NON_OBJECTS)
+    def test_create_refuses_a_body_that_is_not_an_object(self, make_request, body):
+        api = self._api_with_body(make_request, body)
+
+        with patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF):
+            responses = api.create()
+
+        assert responses[0].status_code == 400
+        assert "error" in responses[0].data
+
+    @pytest.mark.parametrize("body", NON_OBJECTS)
+    def test_update_refuses_a_body_that_is_not_an_object(self, make_request, body):
+        api = self._api_with_body(make_request, body, path_params={"entry_dbid": "42"})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(
+                f"{ROUTES}.get_entry",
+                return_value=MagicMock(dbid=42, created_by_id=101),
+            ),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+        ):
+            responses = api.update()
+
+        assert responses[0].status_code == 400
+        assert "error" in responses[0].data
+
+    @pytest.mark.parametrize("body", NON_OBJECTS)
+    def test_change_status_refuses_a_body_that_is_not_an_object(
+        self, make_request, body
+    ):
+        api = self._api_with_body(make_request, body, path_params={"entry_dbid": "42"})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(
+                f"{ROUTES}.get_entry",
+                return_value=MagicMock(dbid=42, created_by_id=101),
+            ),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+        ):
+            responses = api.change_status()
+
+        assert responses[0].status_code == 400
+        assert "error" in responses[0].data
+
+    def test_nothing_is_written_when_the_body_is_not_an_object(self, make_request):
+        # The refusal must come before any attempt to create.
+        api = self._api_with_body(make_request, [{"patient_id": "p1"}])
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.create_entry") as create,
+            patch(f"{ROUTES}.validate_entry") as validate,
+        ):
+            responses = api.create()
+
+        assert responses[0].status_code == 400
+        create.assert_not_called()
+        validate.assert_not_called()
+
+    def test_an_empty_object_is_still_a_valid_body(self, make_request):
+        # ``{}`` is a well-formed object; it must reach validation and be
+        # refused on its missing fields, not on its shape.
+        api = self._api_with_body(make_request, {})
+        result = MagicMock(ok=False, errors={"patient_id": "Choose a patient."})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.validate_entry", return_value=result) as validate,
+        ):
+            responses = api.create()
+
+        validate.assert_called_once()
+        assert responses[0].status_code == 400
+        assert responses[0].data["field_errors"] == {"patient_id": "Choose a patient."}
+
+
+class TestGetOnePatient:
+    """Resolving the patient the chart button named."""
+
+    @staticmethod
+    def _api(make_request, patient_id="p-1", authed=True):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "s1"} if authed else {},
+            path_params={"patient_id": patient_id},
+        )
+        return api
+
+    def test_an_unauthenticated_caller_is_rejected(self, make_request):
+        api = self._api(make_request, authed=False)
+
+        with patch(f"{ROUTES}.staff_from_session", return_value=None):
+            responses = api.get_patient()
+
+        assert responses[0].status_code == 401
+
+    def test_no_lookup_runs_for_an_unauthenticated_caller(self, make_request):
+        api = self._api(make_request, authed=False)
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=None),
+            patch(f"{ROUTES}.patient_by_id") as lookup,
+        ):
+            api.get_patient()
+
+        lookup.assert_not_called()
+
+    def test_a_resolved_patient_is_returned(self, make_request):
+        api = self._api(make_request)
+        found = {"id": "p-1", "name": "Dana Reyes", "birth_date": "1990-04-02"}
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.patient_by_id", return_value=found),
+        ):
+            responses = api.get_patient()
+
+        assert responses[0].status_code == 200
+        assert responses[0].data == {"patient": found}
+
+    def test_an_unknown_patient_is_a_not_found(self, make_request):
+        api = self._api(make_request, patient_id="ghost")
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.patient_by_id", return_value=None),
+        ):
+            responses = api.get_patient()
+
+        assert responses[0].status_code == 404
+
+    def test_the_key_comes_from_the_path(self, make_request):
+        api = self._api(make_request, patient_id="p-9")
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.patient_by_id", return_value=None) as lookup,
+        ):
+            api.get_patient()
+
+        lookup.assert_called_once_with("p-9")
+
+
+class TestChartButtonsAreRefreshedAfterAWrite:
+    """The chart button's label is computed at render time.
+
+    Nothing redraws it on its own, so after a write that changes whether a
+    patient is waiting, the chart keeps offering "Add to waitlist" for someone
+    who is already on the list until the page is reloaded.
+    """
+
+    RELOAD = "reload-effect"
+
+    def _patched(self, extra=None):
+        patches = [
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+            patch(f"{ROUTES}.banner_effects_for_entry", return_value=[BANNER]),
+            patch(f"{ROUTES}.serialize_entry", return_value={"dbid": 42}),
+            patch(
+                f"{ROUTES}.reload_chart_buttons",
+                return_value=[self.RELOAD],
+            ),
+        ]
+        return patches + (extra or [])
+
+    def test_creating_an_entry_refreshes_the_chart_buttons(self, make_request):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "s1"},
+            json_body={"patient_id": "p-1"},
+        )
+        entry = MagicMock(dbid=42)
+        result = MagicMock(ok=True, errors={}, cleaned={"patient_id": 55})
+
+        with contextlib.ExitStack() as stack:
+            for p in self._patched(
+                [
+                    patch(f"{ROUTES}.validate_entry", return_value=result),
+                    patch(f"{ROUTES}.create_entry", return_value=entry),
+                    patch(f"{ROUTES}.get_entry", return_value=entry),
+                ]
+            ):
+                stack.enter_context(p)
+            responses = api.create()
+
+        assert self.RELOAD in responses
+
+    def test_a_status_change_refreshes_the_chart_buttons(self, make_request):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "s1"},
+            path_params={"entry_dbid": "42"},
+            json_body={"status": "scheduled"},
+        )
+        entry = MagicMock(dbid=42, created_by_id=101)
+
+        with contextlib.ExitStack() as stack:
+            for p in self._patched(
+                [
+                    patch(f"{ROUTES}.get_entry", return_value=entry),
+                    patch(f"{ROUTES}.apply_transition"),
+                ]
+            ):
+                stack.enter_context(p)
+            responses = api.change_status()
+
+        assert self.RELOAD in responses
+
+    def test_removing_an_entry_refreshes_the_chart_buttons(self, make_request):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "s1"},
+            path_params={"entry_dbid": "42"},
+        )
+        entry = MagicMock(dbid=42, created_by_id=101)
+
+        with contextlib.ExitStack() as stack:
+            for p in self._patched(
+                [
+                    patch(f"{ROUTES}.get_entry", return_value=entry),
+                    patch(f"{ROUTES}.apply_transition"),
+                ]
+            ):
+                stack.enter_context(p)
+            responses = api.remove()
+
+        assert self.RELOAD in responses
+
+    def test_a_refused_write_does_not_refresh_anything(self, make_request):
+        from scheduling_waitlist.services.transitions import TransitionError
+
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "s1"},
+            path_params={"entry_dbid": "42"},
+            json_body={"status": "nonsense"},
+        )
+        entry = MagicMock(dbid=42, created_by_id=101)
+
+        with contextlib.ExitStack() as stack:
+            for p in self._patched(
+                [
+                    patch(f"{ROUTES}.get_entry", return_value=entry),
+                    patch(
+                        f"{ROUTES}.apply_transition",
+                        side_effect=TransitionError("nope"),
+                    ),
+                ]
+            ):
+                stack.enter_context(p)
+            responses = api.change_status()
+
+        assert responses[0].status_code == 409
+        assert self.RELOAD not in responses

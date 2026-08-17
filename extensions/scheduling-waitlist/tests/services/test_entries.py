@@ -6,6 +6,7 @@ import pytest
 
 from scheduling_waitlist.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PREFERENCE_ANY
 from scheduling_waitlist.services.entries import (
+    EDITABLE_FIELDS,
     ENTRY_RELATIONS,
     DuplicateEntryError,
     create_entry,
@@ -382,3 +383,37 @@ class TestLiveEntriesForPatient:
         with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
             model.objects.filter.return_value.select_related.return_value = entries
             assert live_entries_for_patient(55) == entries
+
+
+class TestEditableFieldsStayInStep:
+    """``update_entry`` assigns field by field, so the list can drift from it.
+
+    The sandbox blocks ``setattr``, which is why the assignments are written out.
+    That trades a loop for duplication, and this is the test that makes the
+    duplication safe.
+    """
+
+    def test_every_editable_field_is_assignable(self):
+        for name in EDITABLE_FIELDS:
+            entry = MagicMock()
+
+            update_entry(entry, **{name: "value"})
+
+            assert getattr(entry, name) == "value", f"{name} was not assigned"
+            entry.save.assert_called_once()
+
+    def test_a_field_outside_the_list_is_ignored(self):
+        # The patient in particular: reassigning it through a request body would
+        # quietly move someone else's place in the queue.
+        entry = MagicMock()
+
+        update_entry(entry, patient_id=999)
+
+        entry.save.assert_not_called()
+
+    def test_nothing_to_change_does_not_write(self):
+        entry = MagicMock()
+
+        update_entry(entry)
+
+        entry.save.assert_not_called()

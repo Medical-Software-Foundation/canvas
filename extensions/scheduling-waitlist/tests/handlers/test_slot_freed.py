@@ -39,6 +39,10 @@ def _appointment(start_offset_days=9, **overrides):
     record.location_id = 3
     record.location.full_name = "Riverside Clinic"
     record.patient_id = 55
+    # Set explicitly: an auto-created MagicMock attribute is truthy, which would
+    # make every appointment here look like the result of a reschedule.
+    record.appointment_rescheduled_from_id = None
+    record.appointment_rescheduled_to.exists.return_value = False
     for key, value in overrides.items():
         setattr(record, key, value)
     return record
@@ -64,15 +68,28 @@ def _entry(name="Jordan Lee"):
 
 BANNER = "banner-effect"
 
+MISSING = object()
+
 
 class _Ctx:
     """Patches everything the handler touches, with sensible defaults."""
 
-    def __init__(self, appointment=None, entries=None, claimed=True, team_id="team-1"):
+    def __init__(
+        self,
+        appointment=None,
+        entries=None,
+        claimed=True,
+        team_id="team-1",
+        origin=MISSING,
+    ):
         self.appointment = appointment if appointment is not None else _appointment()
         self.entries = entries if entries is not None else [_entry()]
         self.claimed = claimed
         self.team_id = team_id
+        # The appointment a reschedule was moved away from, returned by the
+        # handler's second lookup. ``MISSING`` means no second lookup is
+        # expected; ``None`` means one happens and finds nothing.
+        self.origin = origin
         self.ledger = MagicMock()
 
     def __enter__(self):
@@ -96,7 +113,12 @@ class _Ctx:
         ) = [p.start() for p in self._patches]
 
         queryset = self.appointment_model.objects.filter.return_value.select_related.return_value
-        queryset.first.return_value = self.appointment
+        if self.origin is MISSING:
+            queryset.first.return_value = self.appointment
+        else:
+            # First lookup resolves the event's appointment, second follows the
+            # reschedule back to the slot that actually opened.
+            queryset.first.side_effect = [self.appointment, self.origin]
         self.notification_model.objects.get_or_create.return_value = (
             self.ledger,
             self.claimed,
@@ -342,3 +364,145 @@ class TestReArm:
 
         assert BANNER not in effects
         ctx.banner.assert_not_called()
+
+
+class TestEventCoverage:
+    """Every channel a booked slot can open through.
+
+    A slot frees up whether staff cancel it, the patient cancels it themselves
+    in the portal, someone no-shows, or the booking is moved to another time.
+    Subscribing only to the staff-side cancellation misses most of them.
+    """
+
+    def test_responds_to_a_staff_cancellation(self):
+        assert "APPOINTMENT_CANCELED" in SlotFreedHandler.RESPONDS_TO
+
+    def test_responds_to_a_no_show(self):
+        assert "APPOINTMENT_NO_SHOWED" in SlotFreedHandler.RESPONDS_TO
+
+    def test_responds_to_a_patient_cancelling_in_the_portal(self):
+        # The most common cancellation channel in practice, and the one the
+        # plugin was silent on.
+        assert "PATIENT_PORTAL__APPOINTMENT_CANCELED" in SlotFreedHandler.RESPONDS_TO
+
+    def test_responds_to_a_patient_rescheduling_in_the_portal(self):
+        assert "PATIENT_PORTAL__APPOINTMENT_RESCHEDULED" in SlotFreedHandler.RESPONDS_TO
+
+    def test_responds_to_a_booking_being_moved_to_another_time(self):
+        assert "APPOINTMENT_RESCHEDULED" in SlotFreedHandler.RESPONDS_TO
+
+    def test_a_portal_cancellation_raises_a_task_like_any_other(self):
+        handler = _handler(event_type="PATIENT_PORTAL__APPOINTMENT_CANCELED")
+        effects, _ = effects_of(handler)
+
+        # A task and its comment. No banner here because nothing was re-armed.
+        assert [type(effect).__name__ for effect in effects] == [
+            "AddTask",
+            "AddTaskComment",
+        ]
+
+    def test_the_triggering_event_is_recorded_on_the_ledger(self):
+        handler = _handler(event_type="PATIENT_PORTAL__APPOINTMENT_CANCELED")
+        with _Ctx() as ctx:
+            handler.compute()
+
+        defaults = ctx.notification_model.objects.get_or_create.call_args.kwargs["defaults"]
+        assert defaults["trigger_event"] == "PATIENT_PORTAL__APPOINTMENT_CANCELED"
+
+
+class TestRescheduledAwayFreesTheOriginalSlot:
+    """A reschedule opens the slot it moved away from, not the one it moved to.
+
+    The event names the new booking, so announcing that appointment would
+    advertise a slot that is occupied. The freed slot is the original, reached
+    through ``appointment_rescheduled_from_id``.
+    """
+
+    def test_the_original_slot_is_announced_rather_than_the_new_booking(self):
+        moved_to = _appointment(
+            start_offset_days=20,
+            dbid=901,
+            id="new-appt",
+            appointment_rescheduled_from_id=900,
+        )
+        original = _appointment(start_offset_days=9, dbid=900, id="appt-key")
+
+        handler = _handler(appointment_id="new-appt", event_type="APPOINTMENT_RESCHEDULED")
+        with _Ctx(appointment=moved_to, origin=original) as ctx:
+            handler.compute()
+
+        # The slot offered to the waitlist is the one that opened up.
+        slot = ctx.matcher.call_args.args[0]
+        assert slot.appointment_dbid == 900
+        assert slot.appointment_id == "appt-key"
+
+    def test_the_original_is_looked_up_by_its_row_id(self):
+        moved_to = _appointment(dbid=901, appointment_rescheduled_from_id=900)
+        handler = _handler(event_type="APPOINTMENT_RESCHEDULED")
+
+        with _Ctx(appointment=moved_to, origin=_appointment(dbid=900)) as ctx:
+            handler.compute()
+
+        second = ctx.appointment_model.objects.filter.call_args_list[1]
+        assert second.kwargs["dbid"] == 900
+        assert second.kwargs["entered_in_error__isnull"] is True
+
+    def test_an_unloadable_original_falls_back_to_the_event_appointment(self):
+        # Better to announce the appointment we have than to go silent.
+        moved_to = _appointment(dbid=901, appointment_rescheduled_from_id=900)
+        handler = _handler(event_type="APPOINTMENT_RESCHEDULED")
+
+        with _Ctx(appointment=moved_to, origin=None) as ctx:
+            effects = handler.compute()
+
+        assert ctx.matcher.call_args.args[0].appointment_dbid == 901
+        assert [type(effect).__name__ for effect in effects] == [
+            "AddTask",
+            "AddTaskComment",
+        ]
+
+    def test_a_plain_cancellation_is_not_traced_back(self):
+        # Nothing was rescheduled, so there is no second lookup to make.
+        handler = _handler()
+        with _Ctx() as ctx:
+            handler.compute()
+
+        assert ctx.appointment_model.objects.filter.call_count == 1
+
+    def test_a_patient_moved_to_another_time_is_not_put_back_on_the_list(self):
+        # They still have an appointment, so re-arming their entry would claim
+        # they are waiting when they are booked.
+        moved_away = _appointment(dbid=900)
+        moved_away.appointment_rescheduled_to.exists.return_value = True
+        handler = _handler(event_type="APPOINTMENT_RESCHEDULED")
+
+        with _Ctx(appointment=moved_away) as ctx:
+            handler.compute()
+
+        ctx.transition.assert_not_called()
+
+    def test_a_cancelled_patient_is_still_put_back_on_the_list(self):
+        handler = _handler()
+        with _Ctx() as ctx:
+            ctx.rearm_lookup.return_value = [MagicMock()]
+            effects = handler.compute()
+
+        ctx.transition.assert_called_once()
+        assert BANNER in effects
+
+    def test_the_same_slot_reached_by_reschedule_and_cancel_is_announced_once(self):
+        # Both paths fingerprint the original appointment, so the ledger turns
+        # the second one away. The one ``original`` object is shared so the two
+        # runs describe the same slot rather than two slots a moment apart.
+        original = _appointment(dbid=900)
+        moved_to = _appointment(dbid=901, appointment_rescheduled_from_id=900)
+
+        with _Ctx(appointment=moved_to, origin=original) as first:
+            _handler(event_type="APPOINTMENT_RESCHEDULED").compute()
+            first_slot = first.matcher.call_args.args[0]
+
+        with _Ctx(appointment=original) as second:
+            _handler(event_type="APPOINTMENT_CANCELED").compute()
+            second_slot = second.matcher.call_args.args[0]
+
+        assert first_slot.fingerprint() == second_slot.fingerprint()

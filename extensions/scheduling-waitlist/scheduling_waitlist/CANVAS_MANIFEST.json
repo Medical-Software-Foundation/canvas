@@ -31,14 +31,23 @@
                 "data_access": {
                     "event": "",
                     "read": ["Patient", "Staff", "NoteType", "PracticeLocation", "Appointment"],
-                    "write": ["BannerAlert"]
+                    "write": ["BannerAlert", "ActionButton"]
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.chart_button:AddToWaitlistButton",
+                "description": "Chart header button that opens the waitlist to add the patient in front of you, labelled to say whether they are already waiting",
+                "data_access": {
+                    "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
+                    "read": ["Patient"],
+                    "write": []
                 }
             },
             {
                 "class": "scheduling_waitlist.handlers.slot_freed:SlotFreedHandler",
                 "description": "When a booked slot frees up, raises one task to the scheduling team naming the matching waitlisted patients",
                 "data_access": {
-                    "event": "APPOINTMENT_CANCELED",
+                    "event": "APPOINTMENT_CANCELED,APPOINTMENT_NO_SHOWED,APPOINTMENT_RESCHEDULED,PATIENT_PORTAL__APPOINTMENT_CANCELED,PATIENT_PORTAL__APPOINTMENT_RESCHEDULED",
                     "read": ["Appointment", "Patient", "Staff", "NoteType", "PracticeLocation", "Team"],
                     "write": ["Task", "BannerAlert"]
                 }
@@ -67,18 +76,18 @@
         "effects": [],
         "views": []
     },
-    "secrets": [
-        "WAITLIST_SCHEDULING_TEAM",
-        "WAITLIST_APPOINTMENT_TYPES",
-        "WAITLIST_PRIORITY_LABELS",
-        "WAITLIST_TTL_DAYS",
-        "WAITLIST_MANAGER_ROLE_CODES",
-        "WAITLIST_ENFORCE_TIME_WINDOWS",
-        "WAITLIST_MAX_MATCHES_PER_TASK",
-        "WAITLIST_MIN_LEAD_TIME_HOURS",
-        "WAITLIST_URGENT_LEAD_HOURS",
-        "WAITLIST_DISPLAY_TIMEZONE",
-        "namespace_read_write_access_key"
+    "variables": [
+        {"name": "WAITLIST_SCHEDULING_TEAM", "sensitive": false},
+        {"name": "WAITLIST_APPOINTMENT_TYPES", "sensitive": false},
+        {"name": "WAITLIST_PRIORITY_LABELS", "sensitive": false},
+        {"name": "WAITLIST_TTL_DAYS", "sensitive": false},
+        {"name": "WAITLIST_MANAGER_ROLE_CODES", "sensitive": false},
+        {"name": "WAITLIST_ENFORCE_TIME_WINDOWS", "sensitive": false},
+        {"name": "WAITLIST_MAX_MATCHES_PER_TASK", "sensitive": false},
+        {"name": "WAITLIST_MIN_LEAD_TIME_HOURS", "sensitive": false},
+        {"name": "WAITLIST_URGENT_LEAD_HOURS", "sensitive": false},
+        {"name": "WAITLIST_DISPLAY_TIMEZONE", "sensitive": false},
+        {"name": "namespace_read_write_access_key", "sensitive": false}
     ],
     "custom_data": {
         "namespace": "custom_data__scheduling_waitlist",
