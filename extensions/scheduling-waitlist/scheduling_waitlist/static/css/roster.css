@@ -77,6 +77,12 @@ body {
   font-size: 13px;
 }
 
+.wl-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* ---------- filters ---------- */
 
 .wl-filters {
@@ -320,6 +326,53 @@ body {
 }
 
 .wl-form-grid .wl-field-full { grid-column: 1 / -1; }
+
+/* ---------- patient picker ---------- */
+
+.wl-picker-results {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--wl-line);
+  border-radius: var(--wl-radius);
+  background: var(--wl-surface);
+}
+
+.wl-picker-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 7px 9px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.wl-picker-option:hover,
+.wl-picker-option:focus {
+  background: var(--wl-line-soft);
+  outline: none;
+}
+
+.wl-picker-empty {
+  padding: 7px 9px;
+  color: var(--wl-ink-muted);
+  font-size: 13px;
+}
+
+/* Reads as a confirmation of the choice, so it has to be legible rather than
+   incidental -- it is the only thing naming who the entry is for. */
+.wl-picker-chosen:empty { display: none; }
+
+.wl-picker-chosen {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
 
 .wl-dialog textarea {
   font: inherit;

@@ -15,11 +15,13 @@ reacts to cancellations automatically.
 priority then wait time. Filter by service, provider, or location; search by patient name. Each
 row can open the patient's chart, be edited, marked scheduled, or removed.
 
-**Adding a patient** — two buttons, both opening the same short form:
+**Adding a patient** — from the roster itself: search for the patient by name, then fill in
+service, provider, location, priority, preferred time, and a note.
 
-- On the **patient chart header**, any time.
-- On a **cancelled or no-showed appointment's note**, where the form arrives pre-filled with that
-  appointment's type, provider, and location.
+**Seeing it from the chart** — a patient already waiting carries a banner on their chart saying
+so, which links back to the roster. There is deliberately no "add to waitlist" button on the
+chart: the waitlist is practice-wide rather than a property of one patient, so it is managed in
+one place.
 
 **Cancellation matching** — when a booked appointment is cancelled or no-showed, the plugin finds
 waiting entries whose requested type, provider (or "any"), and location fit the freed slot, and
@@ -77,9 +79,7 @@ rather than guessing.
 |---|---|---|
 | `applications.waitlist_app:WaitlistApp` | Application (global) | app drawer |
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
-| `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD and dropdown options |
-| `handlers.chart_button:AddToWaitlistChartButton` | ActionButton | chart patient header |
-| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed only |
+| `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
 | `handlers.waitlist_cron:WaitlistMaintenanceCron` | CronTask | `0 3 * * *` (UTC) |
@@ -100,6 +100,19 @@ the intent explicitly makes a malformed row match nothing instead.
 
 **Slot detection reacts to a freed *booked* slot, not to open availability.** Canvas emits no
 generic "slot opened" event, so scanning arbitrary open availability is out of scope.
+
+**The chart banner is emitted from the write paths, not from `apply_transition`.** Banner effects
+have to be *returned* by a handler or route to take effect, and `services/transitions.py` writes
+with `entry.save()` and returns the entry — it has no channel for an effect. So each of the five
+places that change what a patient is waiting for appends `services/banner.py:banner_effects` to
+what it was already returning. If you add a sixth write path, it needs the same line, or that
+patient's chart will quietly go stale. The banner is keyed, so re-emitting replaces rather than
+stacks.
+
+**The nightly sweep caps how many banners it refreshes** (`MAX_BANNER_REFRESH_PER_RUN`). Expiring
+one of a patient's entries does not necessarily clear their banner — they may still be waiting on
+something else — so each affected patient costs a query to recompute. The remainder is logged and
+corrected by the next write or the next run.
 
 ## Development
 

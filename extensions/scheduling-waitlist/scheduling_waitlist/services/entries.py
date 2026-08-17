@@ -159,6 +159,21 @@ class DuplicateEntryError(Exception):
     """This patient already has a live entry for this appointment type."""
 
 
+def live_entries_for_patient(patient_dbid: Any) -> list[Any]:
+    """Every entry this patient is currently waiting on.
+
+    Drives the chart banner, which says whether a patient is already on the
+    waitlist without the reader having to open the roster.
+    """
+    if patient_dbid is None:
+        return []
+    return list(
+        WaitlistEntry.objects.filter(
+            patient_id=patient_dbid, status__in=list(MATCHABLE_STATUSES)
+        ).select_related(*ENTRY_RELATIONS)
+    )
+
+
 def find_live_entry(patient_dbid: Any, note_type_dbid: Any) -> Any | None:
     """An existing live entry for the same patient and appointment type."""
     return (

@@ -27,29 +27,11 @@
             },
             {
                 "class": "scheduling_waitlist.routes.waitlist_api:WaitlistAPI",
-                "description": "Staff-authenticated REST endpoints for waitlist entries and dropdown options",
+                "description": "Staff-authenticated REST endpoints for waitlist entries, patient search, and dropdown options",
                 "data_access": {
                     "event": "",
                     "read": ["Patient", "Staff", "NoteType", "PracticeLocation", "Appointment"],
-                    "write": []
-                }
-            },
-            {
-                "class": "scheduling_waitlist.handlers.chart_button:AddToWaitlistChartButton",
-                "description": "Adds an 'Add to waitlist' button to the patient chart header",
-                "data_access": {
-                    "event": "",
-                    "read": ["Patient", "Staff", "NoteType", "PracticeLocation"],
-                    "write": []
-                }
-            },
-            {
-                "class": "scheduling_waitlist.handlers.appointment_button:AddToWaitlistAppointmentButton",
-                "description": "Adds an 'Add to waitlist' button to a cancelled or no-showed appointment's note, pre-filled from the freed slot",
-                "data_access": {
-                    "event": "",
-                    "read": ["Patient", "Staff", "NoteType", "PracticeLocation", "Appointment", "Note"],
-                    "write": []
+                    "write": ["BannerAlert"]
                 }
             },
             {
@@ -58,7 +40,7 @@
                 "data_access": {
                     "event": "APPOINTMENT_CANCELED",
                     "read": ["Appointment", "Patient", "Staff", "NoteType", "PracticeLocation", "Team"],
-                    "write": ["Task"]
+                    "write": ["Task", "BannerAlert"]
                 }
             },
             {
@@ -67,7 +49,7 @@
                 "data_access": {
                     "event": "APPOINTMENT_CREATED",
                     "read": ["Appointment", "Patient", "NoteType", "PracticeLocation", "Staff"],
-                    "write": []
+                    "write": ["BannerAlert"]
                 }
             },
             {
@@ -75,8 +57,8 @@
                 "description": "Nightly job that ages out stale entries and logs wait-time and fill metrics",
                 "data_access": {
                     "event": "CRON",
-                    "read": ["Patient"],
-                    "write": []
+                    "read": ["Patient", "NoteType"],
+                    "write": ["BannerAlert"]
                 }
             }
         ],

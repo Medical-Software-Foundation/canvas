@@ -11,6 +11,7 @@ from canvas_sdk.v1.data import Appointment
 from logger import log
 
 from scheduling_waitlist.constants import STATUS_SCHEDULED
+from scheduling_waitlist.services.banner import banner_effects
 from scheduling_waitlist.services.event_payload import resolve_appointment_id
 from scheduling_waitlist.services.matching import find_entries_to_flip
 from scheduling_waitlist.services.transitions import TransitionError, apply_transition
@@ -28,7 +29,7 @@ class AppointmentBookedHandler(BaseHandler):
     RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_CREATED)]
 
     def compute(self) -> list[Effect]:
-        """Update the plugin's own records. Produces no effects."""
+        """Close the entries this booking satisfies, and refresh the chart banner."""
         appointment_id = resolve_appointment_id(self.event)
         if not appointment_id:
             return []
@@ -62,9 +63,13 @@ class AppointmentBookedHandler(BaseHandler):
             except TransitionError as exc:
                 log.warning(f"scheduling_waitlist: could not close an entry: {exc}")
 
-        if flipped:
-            log.info(
-                f"scheduling_waitlist: closed {flipped} waitlist "
-                f"entr{'y' if flipped == 1 else 'ies'} for appointment {appointment_id}"
-            )
-        return []
+        if not flipped:
+            return []
+
+        log.info(
+            f"scheduling_waitlist: closed {flipped} waitlist "
+            f"entr{'y' if flipped == 1 else 'ies'} for appointment {appointment_id}"
+        )
+        # Only when something changed: the banner is recomputed from what is
+        # left, so an event that closed nothing has nothing to say.
+        return banner_effects(getattr(appointment, "patient", None))

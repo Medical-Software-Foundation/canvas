@@ -7,8 +7,14 @@ be enforced at the database level anyway. Validation happens in
 ``services/transitions.py``.
 """
 
+from scheduling_waitlist import CACHE_BUST
+
 PLUGIN_NAME = "scheduling_waitlist"
 API_BASE = f"/plugin-io/api/{PLUGIN_NAME}"
+
+# The roster page. Lives here rather than in the application module so the chart
+# banner can link to it without services importing from applications.
+ROSTER_URL = f"{API_BASE}/app/?v={CACHE_BUST}"
 
 # --- entry statuses ---------------------------------------------------------
 STATUS_WAITING = "waiting"
@@ -59,6 +65,19 @@ DEFAULT_URGENT_LEAD_HOURS = 48
 DEFAULT_DISPLAY_TIMEZONE = "UTC"
 DEFAULT_ENFORCE_TIME_WINDOWS = False
 
+# --- chart banner -----------------------------------------------------------
+# One stable key per patient, so re-emitting the banner replaces it rather than
+# stacking a second copy on the chart.
+BANNER_KEY = "scheduling_waitlist"
+# Enforced by the SDK effect, which raises above this length.
+BANNER_NARRATIVE_MAX = 90
+
+# --- patient search ---------------------------------------------------------
+# Short enough that a two-letter surname still works, long enough that a single
+# keystroke does not scan the whole patient table.
+MIN_PATIENT_SEARCH_LENGTH = 2
+MAX_PATIENT_SEARCH_RESULTS = 20
+
 # --- field limits -----------------------------------------------------------
 MAX_NOTE_LENGTH = 500
 MAX_REASON_LENGTH = 200
@@ -68,3 +87,7 @@ DEFAULT_PAGE_SIZE = 100
 # --- housekeeping -----------------------------------------------------------
 SLOT_NOTIFICATION_RETENTION_DAYS = 90
 MAX_ENTRIES_EXPIRED_PER_RUN = 2000
+# Refreshing a banner costs a query per patient, so the nightly sweep refreshes
+# at most this many and logs the rest as skipped. A stale banner is corrected by
+# the next write to that patient's entries, or by the following run.
+MAX_BANNER_REFRESH_PER_RUN = 200

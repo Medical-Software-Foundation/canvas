@@ -6,9 +6,9 @@ to import cleanly, then mock behavior per test. The result is a suite that runs
 with only ``pytest`` present -- no SDK, no Django, no database.
 
 This is a port of the pattern in ``extensions/staff_directory/tests/conftest.py``
-with the pieces this plugin needs that that one has no use for: action buttons,
-note states, task effects, cron tasks, events, and a ``Q`` object that actually
-composes so the matching predicate can be asserted on structurally.
+with the pieces this plugin needs that that one has no use for: banner alerts,
+task effects, cron tasks, events, and a ``Q`` object that actually composes so
+the matching predicate can be asserted on structurally.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import sys
 import types
+from enum import Enum
 from unittest.mock import MagicMock
 
 import pytest
@@ -186,13 +187,65 @@ class ModelExtension:
     pass
 
 
+BANNER_NARRATIVE_MAX = 90
+
+
+class AddBannerAlert:
+    """Mirrors the real effect, including its 90-character narrative cap.
+
+    The cap is the reason this is a hand-written stub rather than a MagicMock:
+    the chart banner composes its text from a patient's entries, so a summary
+    that grows past the limit has to fail here rather than in production.
+    """
+
+    class Placement(Enum):
+        CHART = "chart"
+        TIMELINE = "timeline"
+        APPOINTMENT_CARD = "appointment_card"
+        SCHEDULING_CARD = "scheduling_card"
+        PROFILE = "profile"
+
+    class Intent(Enum):
+        INFO = "info"
+        WARNING = "warning"
+        ALERT = "alert"
+
+    def __init__(
+        self, patient_id=None, key=None, narrative=None, placement=None, intent=None, href=None
+    ):
+        if narrative is not None and len(narrative) > BANNER_NARRATIVE_MAX:
+            raise ValueError(
+                f"narrative must be at most {BANNER_NARRATIVE_MAX} characters"
+            )
+        self.patient_id = patient_id
+        self.key = key
+        self.narrative = narrative
+        self.placement = placement
+        self.intent = intent
+        self.href = href
+
+    def apply(self):
+        return self
+
+
+class RemoveBannerAlert:
+    """Clears a banner by the same key that created it."""
+
+    def __init__(self, patient_id=None, key=None):
+        self.patient_id = patient_id
+        self.key = key
+
+    def apply(self):
+        return self
+
+
 class LaunchModalEffect:
     """Mirrors the real effect, including its mutual-exclusion rule.
 
-    staff_directory's stub accepts only ``url``. This plugin uses ``content``
-    for the chart and appointment forms and ``url`` for the roster, and the real
-    effect raises when both are supplied -- so the stub raises too. Without that,
-    a regression that set both would pass the suite and fail in production.
+    staff_directory's stub accepts only ``url``. This plugin launches the roster
+    by ``url``, and the real effect raises when ``url`` and ``content`` are both
+    supplied -- so the stub raises too. Without that, a regression that set both
+    would pass the suite and fail in production.
     """
 
     class TargetType:
@@ -297,13 +350,15 @@ def _install_canvas_sdk_stubs() -> None:
     task_data_mod = _ensure_module("canvas_sdk.v1.data.task")
     effects_mod = _ensure_module("canvas_sdk.effects")
     launch_modal_mod = _ensure_module("canvas_sdk.effects.launch_modal")
+    banner_mod = _ensure_module("canvas_sdk.effects.banner_alert")
+    add_banner_mod = _ensure_module("canvas_sdk.effects.banner_alert.add_banner_alert")
+    remove_banner_mod = _ensure_module("canvas_sdk.effects.banner_alert.remove_banner_alert")
     simple_api_effects = _ensure_module("canvas_sdk.effects.simple_api")
     task_effects_mod = _ensure_module("canvas_sdk.effects.task")
     task_effects_task_mod = _ensure_module("canvas_sdk.effects.task.task")
     _ensure_module("canvas_sdk.handlers")
     app_mod = _ensure_module("canvas_sdk.handlers.application")
     base_handler_mod = _ensure_module("canvas_sdk.handlers.base")
-    action_button_mod = _ensure_module("canvas_sdk.handlers.action_button")
     cron_mod = _ensure_module("canvas_sdk.handlers.cron_task")
     simple_api_mod = _ensure_module("canvas_sdk.handlers.simple_api")
     security_mod = _ensure_module("canvas_sdk.handlers.simple_api.security")
@@ -334,19 +389,6 @@ def _install_canvas_sdk_stubs() -> None:
     note_data_mod.Note = data.Note
     note_data_mod.NoteType = data.NoteType
 
-    class NoteStates:
-        NEW = "NEW"
-        BOOKED = "BKD"
-        CONVERTED = "CVD"
-        CANCELLED = "CLD"
-        NOSHOW = "NSW"
-        REVERTED = "RVT"
-        LOCKED = "LKD"
-        SIGNED = "SGN"
-
-    note_data_mod.NoteStates = NoteStates
-    data.NoteStates = NoteStates
-
     class TaskPriority:
         URGENT = "urgent"
         HIGH = "high"
@@ -361,6 +403,11 @@ def _install_canvas_sdk_stubs() -> None:
     effects_mod.Effect = Effect
 
     launch_modal_mod.LaunchModalEffect = LaunchModalEffect
+
+    banner_mod.AddBannerAlert = AddBannerAlert
+    banner_mod.RemoveBannerAlert = RemoveBannerAlert
+    add_banner_mod.AddBannerAlert = AddBannerAlert
+    remove_banner_mod.RemoveBannerAlert = RemoveBannerAlert
 
     simple_api_effects.Response = Response
     simple_api_effects.HTMLResponse = HTMLResponse
@@ -407,29 +454,6 @@ def _install_canvas_sdk_stubs() -> None:
             self.secrets = secrets or {}
 
     base_handler_mod.BaseHandler = BaseHandler
-
-    class ActionButton(BaseHandler):
-        class ButtonLocation:
-            NOTE_HEADER = "note_header"
-            NOTE_FOOTER = "note_footer"
-            NOTE_BODY = "note_body"
-            NOTE_HEADER_DROPDOWN = "note_header_dropdown"
-            CHART_PATIENT_HEADER = "chart_patient_header"
-
-        BUTTON_TITLE = ""
-        BUTTON_KEY = ""
-        BUTTON_LOCATION = ButtonLocation.CHART_PATIENT_HEADER
-        PRIORITY = 0
-
-        @property
-        def context(self) -> dict:
-            context = getattr(self.event, "context", None)
-            return context if isinstance(context, dict) else {}
-
-        def visible(self) -> bool:
-            return True
-
-    action_button_mod.ActionButton = ActionButton
 
     class CronTask(BaseHandler):
         SCHEDULE = ""

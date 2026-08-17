@@ -4,10 +4,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import Application
 
-from scheduling_waitlist import CACHE_BUST
-from scheduling_waitlist.constants import API_BASE
-
-ROSTER_URL = f"{API_BASE}/app/?v={CACHE_BUST}"
+from scheduling_waitlist.constants import ROSTER_URL
 
 
 class WaitlistApp(Application):

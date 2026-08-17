@@ -11,6 +11,7 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
 from scheduling_waitlist.constants import STATUS_REMOVED
+from scheduling_waitlist.services.banner import banner_effects_for_entry
 from scheduling_waitlist.services.config import WaitlistConfig
 from scheduling_waitlist.services.entries import (
     DuplicateEntryError,
@@ -23,6 +24,7 @@ from scheduling_waitlist.services.entries import (
     update_entry,
 )
 from scheduling_waitlist.services.options import build_options
+from scheduling_waitlist.services.patients import search_patients
 from scheduling_waitlist.services.permissions import (
     can_manage_all,
     can_modify_entry,
@@ -84,6 +86,25 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
         payload["current_staff_dbid"] = getattr(staff, "dbid", None)
 
         return [JSONResponse(payload, status_code=HTTPStatus.OK)]
+
+    @api.get("/patients")
+    def get_patients(self) -> list[Response | Effect]:
+        """Name-match active patients, for the add form's patient picker.
+
+        Deliberately returns nothing rather than an error for a too-short query:
+        the picker forwards keystrokes, and a 400 on every first character would
+        be noise rather than information.
+        """
+        staff = self._acting_staff()
+        if staff is None:
+            return [self._unauthenticated()]
+
+        return [
+            JSONResponse(
+                {"patients": search_patients(self._query("q"))},
+                status_code=HTTPStatus.OK,
+            )
+        ]
 
     @api.get("/entries")
     def get_entries(self) -> list[Response | Effect]:
@@ -148,8 +169,9 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
     def create(self) -> list[Response | Effect]:
         """Add a patient to the waitlist.
 
-        Used by the roster, the chart-header button, and the button on a
-        cancelled appointment; they differ only in what they pre-fill.
+        Called by the roster's add form, which names the patient explicitly --
+        there is no chart-side entry point, so ``patient_id`` is always supplied
+        by the caller rather than inferred from a chart context.
         """
         staff = self._acting_staff()
         if staff is None:
@@ -191,7 +213,8 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
                     manages_all=manages_all,
                 ),
                 status_code=HTTPStatus.CREATED,
-            )
+            ),
+            *banner_effects_for_entry(stored),
         ]
 
     # -- write routes ----------------------------------------------------
@@ -253,7 +276,11 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
             ]
 
         updated = update_entry(entry, **result.cleaned)
-        return [self._serialized(updated, staff, config, today)]
+        # An edit can change the service, which the banner names.
+        return [
+            self._serialized(updated, staff, config, today),
+            *banner_effects_for_entry(updated),
+        ]
 
     @api.post("/entries/<entry_dbid>/status")
     def change_status(self) -> list[Response | Effect]:
@@ -288,7 +315,10 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
 
         today = datetime.now(timezone.utc).date()
         refreshed = get_entry(getattr(entry, "dbid", None)) or entry
-        return [self._serialized(refreshed, staff, config, today)]
+        return [
+            self._serialized(refreshed, staff, config, today),
+            *banner_effects_for_entry(refreshed),
+        ]
 
     @api.delete("/entries/<entry_dbid>")
     def remove(self) -> list[Response | Effect]:
@@ -323,5 +353,6 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
             JSONResponse(
                 {"dbid": getattr(entry, "dbid", None), "status": STATUS_REMOVED},
                 status_code=HTTPStatus.OK,
-            )
+            ),
+            *banner_effects_for_entry(entry),
         ]

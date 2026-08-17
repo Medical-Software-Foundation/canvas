@@ -22,6 +22,7 @@ from logger import log
 
 from scheduling_waitlist.constants import STATUS_WAITING
 from scheduling_waitlist.models import SlotNotification
+from scheduling_waitlist.services.banner import banner_effects
 from scheduling_waitlist.services.config import WaitlistConfig
 from scheduling_waitlist.services.event_payload import resolve_appointment_id
 from scheduling_waitlist.services.matching import (
@@ -61,8 +62,9 @@ class SlotFreedHandler(BaseHandler):
 
         # Done first, and regardless of whether the slot itself is worth
         # announcing: a patient whose booking has just been cancelled belongs
-        # back on the list either way.
-        self._rearm_entries(appointment)
+        # back on the list either way. Its banner refresh rides along on every
+        # return below, including the ones that decline to announce the slot.
+        banner = self._rearm_entries(appointment)
 
         config = WaitlistConfig.from_secrets(self.secrets)
         now = datetime.now(timezone.utc)
@@ -72,17 +74,17 @@ class SlotFreedHandler(BaseHandler):
 
         if slot.note_type_dbid is None:
             log.info("scheduling_waitlist: freed slot has no service; nothing to match")
-            return []
+            return banner
         if slot.has_passed(now=now) or slot.starts_within(
             config.min_lead_time_hours, now=now
         ):
             log.info("scheduling_waitlist: freed slot is too soon to fill; skipping")
-            return []
+            return banner
 
         ledger, claimed = self._claim(slot, now)
         if not claimed:
             log.info("scheduling_waitlist: this slot has already been announced")
-            return []
+            return banner
 
         entries = find_matching_entries(
             slot,
@@ -92,7 +94,7 @@ class SlotFreedHandler(BaseHandler):
         )
         if not entries:
             self._record(ledger, entry_count=0, task_id="")
-            return []
+            return banner
 
         team_id = resolve_team_id(config.scheduling_team)
         if not team_id:
@@ -103,12 +105,13 @@ class SlotFreedHandler(BaseHandler):
                 "match a team, so no slot-opened task was created"
             )
             self._record(ledger, entry_count=len(entries), task_id="")
-            return []
+            return banner
 
         task_id = str(uuid4())
         self._record(ledger, entry_count=len(entries), task_id=task_id)
 
         return [
+            *banner,
             AddTask(
                 id=task_id,
                 team_id=team_id,
@@ -141,12 +144,16 @@ class SlotFreedHandler(BaseHandler):
         return None
 
     @staticmethod
-    def _rearm_entries(appointment: Any) -> None:
+    def _rearm_entries(appointment: Any) -> list[Effect]:
         """Put entries this appointment satisfied back on the waiting list.
 
         Idempotent by construction: it selects only entries still marked
         scheduled against this appointment, so a repeated event matches nothing.
+
+        Returns the banner refresh for the affected patient, so their chart stops
+        claiming they are booked. Empty when nothing was re-armed.
         """
+        rearmed = False
         for entry in find_entries_for_appointment(getattr(appointment, "dbid", None)):
             try:
                 apply_transition(
@@ -154,8 +161,13 @@ class SlotFreedHandler(BaseHandler):
                     to_status=STATUS_WAITING,
                     reason="the booked appointment was cancelled",
                 )
+                rearmed = True
             except TransitionError as exc:
                 log.warning(f"scheduling_waitlist: could not re-arm an entry: {exc}")
+
+        if not rearmed:
+            return []
+        return banner_effects(getattr(appointment, "patient", None))
 
     @staticmethod
     def _claim(slot: FreedSlot, now: datetime) -> tuple[Any, bool]:

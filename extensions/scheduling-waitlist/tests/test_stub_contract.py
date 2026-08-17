@@ -9,7 +9,7 @@ import pytest
 
 
 class TestLaunchModalEffectStub:
-    """The real effect rejects url+content together; the stub must too."""
+    """The roster is launched by url, and the real effect refuses url+content."""
 
     def test_url_only_is_accepted(self):
         from canvas_sdk.effects.launch_modal import LaunchModalEffect
@@ -19,24 +19,16 @@ class TestLaunchModalEffectStub:
         assert effect.url == "/plugin-io/api/scheduling_waitlist/app/"
         assert effect.content is None
 
-    def test_content_only_is_accepted(self):
-        from canvas_sdk.effects.launch_modal import LaunchModalEffect
-
-        effect = LaunchModalEffect(content="<p>form</p>")
-
-        assert effect.content == "<p>form</p>"
-        assert effect.url is None
-
     def test_url_and_content_together_raise(self):
         from canvas_sdk.effects.launch_modal import LaunchModalEffect
 
         with pytest.raises(ValueError, match="mutually exclusive"):
             LaunchModalEffect(url="/somewhere", content="<p>form</p>")
 
-    def test_right_chart_pane_target_is_available(self):
+    def test_default_modal_target_is_available(self):
         from canvas_sdk.effects.launch_modal import LaunchModalEffect
 
-        assert LaunchModalEffect.TargetType.RIGHT_CHART_PANE == "right_chart_pane"
+        assert LaunchModalEffect.TargetType.DEFAULT_MODAL == "default_modal"
 
 
 class TestAuthMixinImportPaths:
@@ -59,31 +51,38 @@ class TestAuthMixinImportPaths:
         assert from_package is from_security
 
 
-class TestActionButtonStub:
-    def test_chart_patient_header_location_exists(self):
-        from canvas_sdk.handlers.action_button import ActionButton
+class TestBannerAlertStub:
+    """The chart banner depends on a placement, a stable key, and a length cap."""
 
-        assert ActionButton.ButtonLocation.CHART_PATIENT_HEADER == "chart_patient_header"
+    def test_chart_placement_exists(self):
+        from canvas_sdk.effects.banner_alert.add_banner_alert import AddBannerAlert
 
-    def test_note_header_location_exists(self):
-        from canvas_sdk.handlers.action_button import ActionButton
+        assert AddBannerAlert.Placement.CHART.value == "chart"
 
-        assert ActionButton.ButtonLocation.NOTE_HEADER == "note_header"
+    def test_info_intent_exists(self):
+        from canvas_sdk.effects.banner_alert.add_banner_alert import AddBannerAlert
 
-    def test_context_returns_empty_dict_when_event_context_is_not_a_dict(self):
-        from canvas_sdk.handlers.action_button import ActionButton
+        assert AddBannerAlert.Intent.INFO.value == "info"
 
-        button = ActionButton(event=None)
+    def test_narrative_longer_than_ninety_characters_raises(self):
+        from canvas_sdk.effects.banner_alert.add_banner_alert import AddBannerAlert
 
-        assert button.context == {}
+        with pytest.raises(ValueError, match="90"):
+            AddBannerAlert(
+                patient_id="p1",
+                key="scheduling_waitlist",
+                narrative="x" * 91,
+                placement=[AddBannerAlert.Placement.CHART],
+                intent=AddBannerAlert.Intent.INFO,
+            )
 
+    def test_remove_requires_only_patient_and_key(self):
+        from canvas_sdk.effects.banner_alert.remove_banner_alert import RemoveBannerAlert
 
-class TestNoteStatesStub:
-    def test_cancelled_and_noshow_states_exist(self):
-        from canvas_sdk.v1.data.note import NoteStates
+        effect = RemoveBannerAlert(patient_id="p1", key="scheduling_waitlist")
 
-        assert NoteStates.CANCELLED == "CLD"
-        assert NoteStates.NOSHOW == "NSW"
+        assert effect.patient_id == "p1"
+        assert effect.key == "scheduling_waitlist"
 
 
 class TestQStub:

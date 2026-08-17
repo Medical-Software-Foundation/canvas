@@ -13,6 +13,9 @@
         <h1>Scheduling Waitlist</h1>
         <p class="wl-subtitle">Patients waiting to be scheduled, most urgent and longest waiting first</p>
       </div>
+      <div class="wl-header-actions">
+        <button type="button" id="wl-add" class="wl-btn wl-btn-primary">Add to waitlist</button>
+      </div>
     </header>
 
     <form class="wl-filters" id="wl-filters" role="search" aria-label="Filter the waitlist">
@@ -74,6 +77,7 @@
   </div>
 
   <dialog id="wl-edit-dialog" class="wl-dialog" aria-labelledby="wl-edit-title"></dialog>
+  <dialog id="wl-add-dialog" class="wl-dialog" aria-labelledby="wl-add-title"></dialog>
 
   <div id="wl-toast" class="wl-toast" role="status" aria-live="polite" hidden></div>
 

@@ -31,11 +31,15 @@ def _appointment(**overrides):
     return record
 
 
+BANNER = "banner-effect"
+
+
 def _run(handler, appointment=None, entries=None):
     with (
         patch(f"{MODULE}.Appointment") as appointment_model,
         patch(f"{MODULE}.find_entries_to_flip", return_value=entries or []) as matcher,
         patch(f"{MODULE}.apply_transition") as transition,
+        patch(f"{MODULE}.banner_effects", return_value=[BANNER]),
     ):
         queryset = appointment_model.objects.filter.return_value.select_related.return_value
         queryset.first.return_value = appointment
@@ -91,9 +95,17 @@ class TestFlipping:
 
         assert transition.call_count == 2
 
-    def test_the_handler_produces_no_effects(self):
-        # It updates the plugin's own tables; there is nothing for Canvas to do.
+    def test_closing_an_entry_refreshes_the_chart_banner(self):
+        # The patient is no longer waiting for this service, so their chart must
+        # stop saying they are.
         effects, _, _ = _run(_handler(), appointment=_appointment(), entries=[MagicMock()])
+
+        assert effects == [BANNER]
+
+    def test_closing_nothing_leaves_the_banner_alone(self):
+        # Nothing changed, so there is nothing to redraw -- and re-emitting on
+        # every booking would put a write on every appointment in the practice.
+        effects, _, _ = _run(_handler(), appointment=_appointment(), entries=[])
 
         assert effects == []
 
@@ -107,11 +119,13 @@ class TestFlipping:
                 f"{MODULE}.apply_transition",
                 side_effect=[TransitionError("nope"), None],
             ) as transition,
+            patch(f"{MODULE}.banner_effects", return_value=[BANNER]),
         ):
             queryset = appointment_model.objects.filter.return_value.select_related.return_value
             queryset.first.return_value = _appointment()
 
-            assert _handler().compute() == []
+            # The second entry closed, so the banner is still refreshed.
+            assert _handler().compute() == [BANNER]
 
         assert transition.call_count == 2
 

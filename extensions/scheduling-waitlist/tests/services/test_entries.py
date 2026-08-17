@@ -11,6 +11,7 @@ from scheduling_waitlist.services.entries import (
     create_entry,
     find_live_entry,
     get_entry,
+    live_entries_for_patient,
     update_entry,
     SORT_PRIORITY,
     build_queryset,
@@ -340,3 +341,44 @@ class TestGetEntry:
 
         selected = model.objects.filter.return_value.select_related.call_args[0]
         assert "patient" in selected
+
+
+class TestLiveEntriesForPatient:
+    """What the chart banner reads to decide whether to appear."""
+
+    def test_only_matchable_statuses_count_as_waiting(self):
+        # A patient whose only entry was booked or removed is not waiting, and
+        # their chart must not claim otherwise.
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.filter.return_value.select_related.return_value = []
+            live_entries_for_patient(55)
+
+        kwargs = model.objects.filter.call_args.kwargs
+        assert kwargs["status__in"] == ["waiting", "offered"]
+        assert kwargs["patient_id"] == 55
+
+    def test_related_rows_are_selected_for_the_narrative(self):
+        # The banner names the service, so fetching it lazily would be a query
+        # per entry on a path that runs on every write.
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.filter.return_value.select_related.return_value = []
+            live_entries_for_patient(55)
+
+        assert model.objects.filter.return_value.select_related.call_args.args == (
+            ENTRY_RELATIONS
+        )
+
+    def test_a_missing_patient_identifier_queries_nothing(self):
+        # Filtering on a null patient would match every entry with a null
+        # patient, which is the opposite of "this patient is waiting".
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            assert live_entries_for_patient(None) == []
+
+        model.objects.filter.assert_not_called()
+
+    def test_matches_are_returned_as_a_list(self):
+        entries = [MagicMock(), MagicMock()]
+
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.filter.return_value.select_related.return_value = entries
+            assert live_entries_for_patient(55) == entries

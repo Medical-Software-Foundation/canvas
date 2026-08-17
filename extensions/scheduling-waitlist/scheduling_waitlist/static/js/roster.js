@@ -29,6 +29,7 @@
     location: document.getElementById("wl-location"),
     priority: document.getElementById("wl-priority"),
     reset: document.getElementById("wl-reset"),
+    add: document.getElementById("wl-add"),
     pager: document.getElementById("wl-pager"),
     prev: document.getElementById("wl-prev"),
     next: document.getElementById("wl-next"),
@@ -477,6 +478,21 @@
         else if (action === "remove") removeEntry(entry);
       });
     }
+
+    if (els.add) {
+      els.add.addEventListener("click", function () {
+        // The roster is the only way onto the waitlist, so a missing service
+        // list has to be said out loud rather than shown as an empty dropdown.
+        if (!state.options || !state.options.is_configured) {
+          toast(
+            "No appointment types are configured yet, so entries cannot be added.",
+            "error"
+          );
+          return;
+        }
+        openAddDialog();
+      });
+    }
   }
 
   function findEntry(dbid) {
@@ -689,6 +705,232 @@
     } else {
       dialog.setAttribute("open", "open");
     }
+  }
+
+  // ---- add dialog --------------------------------------------------------
+
+  var addDialog = document.getElementById("wl-add-dialog");
+
+  /* The patient picker.
+   *
+   * A patient is named rather than inferred: the waitlist is practice-wide and
+   * is opened from the app drawer, so there is no chart context to read a
+   * patient off. Search runs server-side for the same reason the roster's does
+   * -- matching names in the browser would mean shipping the patient index.
+   */
+  function patientPicker(onPick) {
+    var input = el("input", {
+      id: "wl-add-patient",
+      type: "search",
+      placeholder: "Search by name",
+      autocomplete: "off"
+    });
+    var results = el("ul", { class: "wl-picker-results", role: "listbox" });
+    var chosen = el("p", { class: "wl-picker-chosen" });
+    var timer = null;
+    var seq = 0;
+
+    function clearResults() {
+      results.textContent = "";
+      results.hidden = true;
+    }
+
+    function choose(patient) {
+      onPick(patient);
+      chosen.textContent = patient.name + (patient.birth_date ? " · " + patient.birth_date : "");
+      input.value = "";
+      clearResults();
+    }
+
+    function render(patients) {
+      results.textContent = "";
+      if (!patients.length) {
+        results.appendChild(
+          el("li", { class: "wl-picker-empty", text: "No matching patients." })
+        );
+        results.hidden = false;
+        return;
+      }
+      patients.forEach(function (patient) {
+        var button = el("button", {
+          type: "button",
+          class: "wl-picker-option",
+          text: patient.name + (patient.birth_date ? " · " + patient.birth_date : "")
+        });
+        button.addEventListener("click", function () {
+          choose(patient);
+        });
+        results.appendChild(el("li", { role: "option" }, [button]));
+      });
+      results.hidden = false;
+    }
+
+    input.addEventListener("input", function (event) {
+      var term = event.target.value.trim();
+      if (timer) window.clearTimeout(timer);
+      if (!term) {
+        clearResults();
+        return;
+      }
+      timer = window.setTimeout(function () {
+        // Same stale-response guard as the roster: typing quickly must not let
+        // an earlier, slower response paint over a later one.
+        seq += 1;
+        var mine = seq;
+        request("/waitlist/patients?q=" + window.encodeURIComponent(term))
+          .then(function (data) {
+            if (mine !== seq) return;
+            render((data && data.patients) || []);
+          })
+          .catch(function () {
+            if (mine !== seq) return;
+            clearResults();
+          });
+      }, SEARCH_DEBOUNCE_MS);
+    });
+
+    clearResults();
+    return { input: input, results: results, chosen: chosen };
+  }
+
+  function openAddDialog() {
+    if (!addDialog || !state.options) return;
+    var options = state.options;
+    var ANY = options.any_preference || "any";
+    var picked = { patient: null };
+
+    var picker = patientPicker(function (patient) {
+      picked.patient = patient;
+    });
+
+    var typeSelect = select(
+      "wl-add-type",
+      (options.appointment_types || []).map(function (t) {
+        return { value: t.dbid, label: t.name };
+      })
+    );
+    var providerSelect = select(
+      "wl-add-provider",
+      [{ value: ANY, label: "Any provider" }].concat(
+        (options.providers || []).map(function (p) {
+          return { value: p.dbid, label: p.name };
+        })
+      )
+    );
+    var locationSelect = select(
+      "wl-add-location",
+      [{ value: ANY, label: "Any location" }].concat(
+        (options.locations || []).map(function (l) {
+          return { value: l.dbid, label: l.name };
+        })
+      )
+    );
+    var prioritySelect = select(
+      "wl-add-priority",
+      (options.priorities || []).map(function (p) {
+        return { value: p.label, label: p.label };
+      })
+    );
+    var windowSelect = select(
+      "wl-add-window",
+      (options.time_windows || []).map(function (w) {
+        return { value: w.value, label: w.label };
+      })
+    );
+
+    var noteInput = el("textarea", { id: "wl-add-note", maxlength: "500" });
+
+    var formError = el("p", { class: "wl-field-error", id: "wl-add-error" });
+    var save = el("button", {
+      type: "submit",
+      class: "wl-btn wl-btn-primary",
+      text: "Add to waitlist"
+    });
+    var cancel = el("button", { type: "button", class: "wl-btn", text: "Cancel" });
+
+    var form = el("form", { id: "wl-add-form" }, [
+      el("div", { class: "wl-dialog-body" }, [
+        el("h2", { id: "wl-add-title", text: "Add to waitlist" }),
+        el("div", { class: "wl-form-grid" }, [
+          el("div", { class: "wl-field wl-field-full" }, [
+            el("label", { for: picker.input.id, text: "Patient" }),
+            picker.input,
+            picker.results,
+            picker.chosen,
+            el("span", { class: "wl-field-error", "data-error-for": "patient_id" })
+          ]),
+          field("Service", typeSelect, "appointment_type_id"),
+          field("Provider", providerSelect, "provider_id"),
+          field("Location", locationSelect, "location_id"),
+          field("Priority", prioritySelect, "priority"),
+          field("Preferred time", windowSelect, "preferred_window"),
+          field("Note", noteInput, "note", true)
+        ]),
+        formError
+      ]),
+      el("div", { class: "wl-dialog-actions" }, [cancel, save])
+    ]);
+
+    addDialog.textContent = "";
+    addDialog.appendChild(form);
+
+    cancel.addEventListener("click", function () {
+      addDialog.close();
+    });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      formError.textContent = "";
+      Array.prototype.forEach.call(form.querySelectorAll("[data-error-for]"), function (n) {
+        n.textContent = "";
+      });
+
+      // Checked here as well as server-side: the server refuses a missing
+      // patient anyway, but naming the field is friendlier than a round trip.
+      if (!picked.patient) {
+        var target = form.querySelector('[data-error-for="patient_id"]');
+        if (target) target.textContent = "Choose a patient.";
+        return;
+      }
+
+      var providerValue = providerSelect.value;
+      var locationValue = locationSelect.value;
+      save.disabled = true;
+
+      request("/waitlist/entries", {
+        method: "POST",
+        body: {
+          patient_id: picked.patient.id,
+          appointment_type_id: typeSelect.value,
+          provider_preference: providerValue === ANY ? ANY : "specific",
+          provider_id: providerValue === ANY ? "" : providerValue,
+          location_preference: locationValue === ANY ? ANY : "specific",
+          location_id: locationValue === ANY ? "" : locationValue,
+          priority: prioritySelect.value,
+          preferred_window: windowSelect.value,
+          note: noteInput.value
+        }
+      })
+        .then(function () {
+          addDialog.close();
+          afterWrite(picked.patient.name + " added to the waitlist.");
+        })
+        .catch(function (error) {
+          save.disabled = false;
+          formError.textContent = error.message;
+          Object.keys(error.fieldErrors || {}).forEach(function (name) {
+            var node = form.querySelector('[data-error-for="' + name + '"]');
+            if (node) node.textContent = error.fieldErrors[name];
+          });
+        });
+    });
+
+    if (typeof addDialog.showModal === "function") {
+      addDialog.showModal();
+    } else {
+      addDialog.setAttribute("open", "open");
+    }
+    picker.input.focus();
   }
 
   // ---- start -------------------------------------------------------------

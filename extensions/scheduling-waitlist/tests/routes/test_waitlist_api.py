@@ -594,3 +594,203 @@ class TestUpdate:
 
         assert responses[0].status_code == 400
         update.assert_not_called()
+
+
+ROUTES = "scheduling_waitlist.routes.waitlist_api"
+BANNER = "banner-effect"
+
+
+class TestPatientSearch:
+    """The picker behind the roster's add form.
+
+    The chart has no add button, so this is the only way a patient gets onto the
+    waitlist -- it has to be authenticated, and it has to stay narrow.
+    """
+
+    def _api(self, make_request, query=None, authenticated=True):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "abc"} if authenticated else {},
+            query_params=query or {},
+        )
+        return api
+
+    def test_unauthenticated_caller_is_rejected(self, make_request):
+        # Patient names are the payload here, so an unauthenticated caller must
+        # get nothing at all.
+        api = self._api(make_request, query={"q": "love"}, authenticated=False)
+
+        with patch(f"{ROUTES}.staff_from_session", return_value=None):
+            responses = api.get_patients()
+
+        assert responses[0].status_code == 401
+
+    def test_no_search_runs_for_an_unauthenticated_caller(self, make_request):
+        api = self._api(make_request, query={"q": "love"}, authenticated=False)
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=None),
+            patch(f"{ROUTES}.search_patients") as search,
+        ):
+            api.get_patients()
+
+        search.assert_not_called()
+
+    def test_matches_are_returned_under_a_patients_key(self, make_request, mock_staff):
+        api = self._api(make_request, query={"q": "love"})
+        found = [{"id": "p-1", "name": "Ada Lovelace", "birth_date": "1815-12-10"}]
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=mock_staff),
+            patch(f"{ROUTES}.search_patients", return_value=found),
+        ):
+            responses = api.get_patients()
+
+        assert responses[0].status_code == 200
+        assert responses[0].data == {"patients": found}
+
+    def test_the_query_parameter_is_trimmed_at_the_boundary(self, make_request, mock_staff):
+        # ``_query`` strips, so the service never sees a padded term. The service
+        # strips again anyway -- it is also called from tests and future callers.
+        api = self._api(make_request, query={"q": "  love  "})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=mock_staff),
+            patch(f"{ROUTES}.search_patients", return_value=[]) as search,
+        ):
+            api.get_patients()
+
+        assert search.call_args.args[0] == "love"
+
+    def test_a_missing_query_searches_for_nothing_rather_than_erroring(
+        self, make_request, mock_staff
+    ):
+        api = self._api(make_request)
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=mock_staff),
+            patch(f"{ROUTES}.search_patients", return_value=[]) as search,
+        ):
+            responses = api.get_patients()
+
+        assert responses[0].status_code == 200
+        assert search.call_args.args[0] == ""
+
+    def test_a_short_query_is_answered_with_an_empty_list_not_a_400(
+        self, make_request, mock_staff
+    ):
+        # The picker forwards keystrokes; a 400 on the first character would be
+        # noise rather than information.
+        api = self._api(make_request, query={"q": "a"})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=mock_staff),
+            patch(f"{ROUTES}.search_patients", return_value=[]),
+        ):
+            responses = api.get_patients()
+
+        assert responses[0].status_code == 200
+        assert responses[0].data == {"patients": []}
+
+
+class TestWritesRefreshTheChartBanner:
+    """Every write path has to keep the chart banner honest.
+
+    The chart carries no add button, so the banner is the only chart-side signal
+    that a patient is waiting -- a write that left it stale would be the whole
+    feature failing quietly.
+    """
+
+    def _api(self, make_request, body=None, query=None, path="42"):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        api.request = make_request(
+            headers={"canvas-logged-in-user-id": "abc"},
+            json_body=body or {},
+            query_params=query or {},
+            path_params={"entry_dbid": path},
+        )
+        return api
+
+    def test_creating_an_entry_emits_the_banner(self, make_request):
+        api = self._api(make_request)
+        result = MagicMock(ok=True, errors={}, cleaned={"patient_id": 55, "note_type_id": 7})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.validate_entry", return_value=result),
+            patch(f"{ROUTES}.create_entry", return_value=MagicMock(dbid=42)),
+            patch(f"{ROUTES}.get_entry", return_value=MagicMock(dbid=42)),
+            patch(f"{ROUTES}.serialize_entry", return_value={"dbid": 42}),
+            patch(f"{ROUTES}.banner_effects_for_entry", return_value=[BANNER]),
+        ):
+            responses = api.create()
+
+        assert responses[0].status_code == 201
+        assert BANNER in responses
+
+    def test_editing_an_entry_emits_the_banner(self, make_request):
+        # An edit can change the service, which the banner names.
+        api = self._api(make_request)
+        result = MagicMock(ok=True, errors={}, cleaned={"note_type_id": 9})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.get_entry", return_value=MagicMock(dbid=42, created_by_id=101)),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+            patch(f"{ROUTES}.validate_entry", return_value=result),
+            patch(f"{ROUTES}.update_entry", return_value=MagicMock(dbid=42)),
+            patch(f"{ROUTES}.serialize_entry", return_value={"dbid": 42}),
+            patch(f"{ROUTES}.banner_effects_for_entry", return_value=[BANNER]),
+        ):
+            responses = api.update()
+
+        assert BANNER in responses
+
+    def test_a_status_change_emits_the_banner(self, make_request):
+        api = self._api(make_request, body={"status": "scheduled", "reason": ""})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.get_entry", return_value=MagicMock(dbid=42, created_by_id=101)),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+            patch(f"{ROUTES}.apply_transition"),
+            patch(f"{ROUTES}.serialize_entry", return_value={"dbid": 42}),
+            patch(f"{ROUTES}.banner_effects_for_entry", return_value=[BANNER]),
+        ):
+            responses = api.change_status()
+
+        assert BANNER in responses
+
+    def test_removing_an_entry_emits_the_banner(self, make_request):
+        api = self._api(make_request, query={"reason": "called back"})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.get_entry", return_value=MagicMock(dbid=42, created_by_id=101)),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+            patch(f"{ROUTES}.apply_transition"),
+            patch(f"{ROUTES}.banner_effects_for_entry", return_value=[BANNER]),
+        ):
+            responses = api.remove()
+
+        assert BANNER in responses
+
+    def test_a_refused_write_emits_no_banner(self, make_request):
+        # Nothing changed, so redrawing the banner would be a pointless write.
+        from scheduling_waitlist.services.transitions import TransitionError
+
+        api = self._api(make_request, body={"status": "nonsense"})
+
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.get_entry", return_value=MagicMock(dbid=42, created_by_id=101)),
+            patch(f"{ROUTES}.can_manage_all", return_value=True),
+            patch(f"{ROUTES}.apply_transition", side_effect=TransitionError("nope")),
+            patch(f"{ROUTES}.banner_effects_for_entry", return_value=[BANNER]),
+        ):
+            responses = api.change_status()
+
+        assert responses[0].status_code == 409
+        assert BANNER not in responses

@@ -33,6 +33,9 @@ class _Queryset:
     def only(self, *args):
         return self
 
+    def select_related(self, *args):
+        return self
+
     def delete(self):
         self.deleted = True
 
@@ -43,16 +46,22 @@ class _Queryset:
         return iter(self.items)
 
 
-def _entry(status="waiting", created_days_ago=10, expires_on=None):
+def _entry(status="waiting", created_days_ago=10, expires_on=None, patient_dbid=1):
     entry = MagicMock()
     entry.status = status
     entry.created_at = datetime.now(timezone.utc) - timedelta(days=created_days_ago)
     entry.expires_on = expires_on
+    entry.patient = MagicMock(dbid=patient_dbid, id=f"uuid-{patient_dbid}")
     return entry
 
 
 def _run(cron, *, missing=None, due=None, report=None):
-    """Drive the job with a scripted set of query results."""
+    """Drive the job with a scripted set of query results.
+
+    ``banner_effects`` is stubbed out: these tests are about what the job writes
+    to the waitlist, and the banner's own behaviour is covered in
+    ``tests/services/test_banner.py``.
+    """
     missing_qs = _Queryset(missing or [])
     due_qs = _Queryset(due or [])
     report_qs = _Queryset(report or [])
@@ -68,6 +77,7 @@ def _run(cron, *, missing=None, due=None, report=None):
     with (
         patch(f"{MODULE}.WaitlistEntry") as entry_model,
         patch(f"{MODULE}.SlotNotification") as notification_model,
+        patch(f"{MODULE}.banner_effects", return_value=[]),
     ):
         entry_model.objects.filter.side_effect = entry_filter
         entry_model.objects.all.return_value = report_qs
@@ -184,3 +194,71 @@ class TestReporting:
             str(call) for call in sys.modules["logger"].log.info.call_args_list
         )
         assert "metrics" in logged
+
+
+class TestBannerRefresh:
+    """Aged-out patients must stop being told they are waiting."""
+
+    def _refresh(self, expired):
+        return WaitlistMaintenanceCron._refresh_banners(expired)
+
+    def test_each_aged_out_patient_gets_one_refresh(self):
+        expired = [_entry(patient_dbid=1), _entry(patient_dbid=2)]
+
+        with patch(f"{MODULE}.banner_effects", return_value=["b"]) as banner:
+            effects = self._refresh(expired)
+
+        assert banner.call_count == 2
+        assert effects == ["b", "b"]
+
+    def test_a_patient_with_several_expired_entries_is_refreshed_once(self):
+        # The banner is recomputed from what is left, so one call per patient
+        # says everything -- and the query it costs is worth paying only once.
+        expired = [_entry(patient_dbid=7), _entry(patient_dbid=7)]
+
+        with patch(f"{MODULE}.banner_effects", return_value=["b"]) as banner:
+            self._refresh(expired)
+
+        assert banner.call_count == 1
+
+    def test_entries_without_a_patient_are_skipped(self):
+        entry = _entry()
+        entry.patient = None
+
+        with patch(f"{MODULE}.banner_effects", return_value=["b"]) as banner:
+            assert self._refresh([entry]) == []
+
+        banner.assert_not_called()
+
+    def test_nothing_expired_means_no_refreshes(self):
+        with patch(f"{MODULE}.banner_effects", return_value=["b"]) as banner:
+            assert self._refresh([]) == []
+
+        banner.assert_not_called()
+
+    def test_the_refresh_count_is_capped(self):
+        from scheduling_waitlist.constants import MAX_BANNER_REFRESH_PER_RUN
+
+        expired = [
+            _entry(patient_dbid=n) for n in range(MAX_BANNER_REFRESH_PER_RUN + 5)
+        ]
+
+        with patch(f"{MODULE}.banner_effects", return_value=["b"]) as banner:
+            self._refresh(expired)
+
+        assert banner.call_count == MAX_BANNER_REFRESH_PER_RUN
+
+    def test_hitting_the_cap_is_logged_rather_than_passed_over_silently(self):
+        from scheduling_waitlist.constants import MAX_BANNER_REFRESH_PER_RUN
+
+        expired = [
+            _entry(patient_dbid=n) for n in range(MAX_BANNER_REFRESH_PER_RUN + 1)
+        ]
+
+        with (
+            patch(f"{MODULE}.banner_effects", return_value=["b"]),
+            patch(f"{MODULE}.log") as logger,
+        ):
+            self._refresh(expired)
+
+        assert logger.warning.called

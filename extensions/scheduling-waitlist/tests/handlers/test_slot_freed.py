@@ -62,6 +62,9 @@ def _entry(name="Jordan Lee"):
     return entry
 
 
+BANNER = "banner-effect"
+
+
 class _Ctx:
     """Patches everything the handler touches, with sensible defaults."""
 
@@ -80,6 +83,7 @@ class _Ctx:
             patch(f"{MODULE}.find_entries_for_appointment", return_value=[]),
             patch(f"{MODULE}.resolve_team_id", return_value=self.team_id),
             patch(f"{MODULE}.apply_transition"),
+            patch(f"{MODULE}.banner_effects", return_value=[BANNER]),
         ]
         (
             self.appointment_model,
@@ -88,6 +92,7 @@ class _Ctx:
             self.rearm_lookup,
             self.team_resolver,
             self.transition,
+            self.banner,
         ) = [p.start() for p in self._patches]
 
         queryset = self.appointment_model.objects.filter.return_value.select_related.return_value
@@ -294,3 +299,46 @@ class TestReArm:
             handler.compute()
 
         ctx.transition.assert_called_once()
+
+    def test_re_arming_refreshes_the_patients_chart_banner(self):
+        # Their chart said they were booked; the cancellation makes that false.
+        handler = _handler()
+
+        with _Ctx() as ctx:
+            ctx.rearm_lookup.return_value = [MagicMock()]
+            effects = handler.compute()
+
+        assert BANNER in effects
+
+    def test_the_banner_rides_along_even_when_the_slot_is_not_announced(self):
+        # The early returns are the easy place to drop it, so they are asserted
+        # rather than assumed: a slot too soon to fill still un-books a patient.
+        handler = _handler()
+
+        with _Ctx(appointment=_appointment(start_offset_days=0)) as ctx:
+            ctx.rearm_lookup.return_value = [MagicMock()]
+            effects = handler.compute()
+
+        assert effects == [BANNER]
+
+    def test_the_banner_precedes_the_task_so_the_chart_is_correct_first(self):
+        handler = _handler()
+
+        with _Ctx() as ctx:
+            ctx.rearm_lookup.return_value = [MagicMock()]
+            effects = handler.compute()
+
+        assert effects[0] == BANNER
+        assert len(effects) == 3
+
+    def test_nothing_re_armed_means_no_banner_write(self):
+        # A cancellation for a patient who was never on the list must not touch
+        # their chart.
+        handler = _handler()
+
+        with _Ctx() as ctx:
+            ctx.rearm_lookup.return_value = []
+            effects = handler.compute()
+
+        assert BANNER not in effects
+        ctx.banner.assert_not_called()
