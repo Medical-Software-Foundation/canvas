@@ -13,6 +13,15 @@
                     "read": [],
                     "write": []
                 }
+            },
+            {
+                "class": "commit_all_commands_button.handlers.commit_all_commands:ShowCommitButtonOnOriginateHandler",
+                "description": "Reloads the note's action buttons when a committable command is originated, so the commit button appears without a page refresh.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
             }
         ]
     },

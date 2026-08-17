@@ -28,9 +28,11 @@ The button is shown only if **both** are true:
 
 The second condition is scoped to the supported types deliberately. A note holding only commands this button can't commit — an unsent Prescribe, say — would otherwise show a button that does nothing when clicked.
 
-After a commit run, the plugin returns a [`ReloadNoteActionButtonsEffect`](https://docs.canvasmedical.com/sdk/effect-reload-action-buttons/) for the note. Committing empties the staged set, so the button's own visibility condition no longer holds, and the reload makes it disappear immediately rather than lingering until the next page load.
+Because `visible()` is only evaluated when a note loads its action buttons, the plugin uses [`ReloadNoteActionButtonsEffect`](https://docs.canvasmedical.com/sdk/effect-reload-action-buttons/) to keep the button in step with the note without requiring a page refresh. It does so at two points:
 
-The reload is only requested when at least one command was actually committed. If nothing committed — nothing staged, or every command failed validation — visibility can't have changed, so the round trip is skipped.
+**When a committable command is originated.** `ShowCommitButtonOnOriginateHandler` subscribes to the `POST_ORIGINATE` event of every supported command type and reloads the note's buttons. Without this, staging the first command would leave the button hidden until the page was refreshed. The subscriptions are derived from the same mapping the button uses, so a command added to the button automatically wakes it up too — and staging something the button can't commit, like an unsent Prescribe, deliberately does not.
+
+**After a commit run.** Committing empties the staged set, so the visibility condition stops holding and the reload makes the button disappear at once. This reload is unconditional: if the click committed nothing, the button was being shown against a staged set that had since emptied — commands committed individually elsewhere, say — and reloading is how it corrects itself rather than sitting there doing nothing.
 
 ## How It Works
 

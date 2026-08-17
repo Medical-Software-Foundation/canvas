@@ -39,6 +39,7 @@ from canvas_sdk.commands.commands.immunization_statement import ImmunizationStat
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.action_button import ReloadNoteActionButtonsEffect
+from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.medication import Medication
@@ -168,8 +169,54 @@ class CommitButtonHandler(ActionButton):
         # re-evaluate its buttons so it disappears once nothing is left to
         # commit, instead of lingering until the next page load. Appended last
         # because effects apply in order and the reload has to see the commits.
-        if effects:
-            note = Note.objects.get(dbid=note_id)
-            effects.append(ReloadNoteActionButtonsEffect(id=note.id).apply())
+        #
+        # Unconditional on purpose. If nothing committed, the button was being
+        # shown against a staged set that has since emptied — commands committed
+        # individually elsewhere, say — so reloading is how it corrects itself
+        # rather than sitting there doing nothing when clicked.
+        note = Note.objects.get(dbid=note_id)
+        effects.append(ReloadNoteActionButtonsEffect(id=note.id).apply())
 
         return effects
+
+
+# Two commands' event names don't follow their command's constantized key.
+_EVENT_PREFIX_OVERRIDES = {
+    "hpi": "HISTORY_OF_PRESENT_ILLNESS",
+    "exam": "PHYSICAL_EXAM",
+}
+
+
+def _origination_event_names() -> list[str]:
+    """POST_ORIGINATE event names for every command the button can commit.
+
+    Derived from the button's own mapping so the two cannot drift — the whole
+    point being that a command added to the button also wakes it up. Built as
+    plain name strings, which is what RESPONDS_TO takes; the test suite checks
+    each one against EventType so a bad name fails there rather than breaking
+    the plugin at load.
+    """
+    return [
+        f"{_EVENT_PREFIX_OVERRIDES.get(key, command.constantized_key())}_COMMAND__POST_ORIGINATE"
+        for key, command in CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS.items()
+    ]
+
+
+class ShowCommitButtonOnOriginateHandler(BaseHandler):
+    """Reveal the commit button as soon as a committable command is staged.
+
+    visible() is only evaluated when a note loads its action buttons, so
+    originating the first committable command would otherwise leave the button
+    hidden until the page was refreshed. Reloading the buttons on origination
+    closes that gap.
+
+    Scoped to the commands the button actually commits, so staging something it
+    can't commit — an unsent Prescribe — doesn't wake it up for nothing.
+    """
+
+    RESPONDS_TO = _origination_event_names()
+
+    def compute(self) -> list[Effect]:
+        """Ask the originating command's note to re-evaluate its action buttons."""
+        command = Command.objects.select_related("note").get(id=self.event.target.id)
+        return [ReloadNoteActionButtonsEffect(id=command.note.id).apply()]
