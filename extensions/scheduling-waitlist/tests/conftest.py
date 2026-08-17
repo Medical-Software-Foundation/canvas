@@ -277,14 +277,23 @@ class Response:
 
 
 class HTMLResponse(Response):
-    def __init__(self, body, status_code=200):
-        super().__init__(body=body, status_code=status_code, content_type="text/html")
+    # ``headers`` mirrors the real effect. Omitting it here let a route that
+    # passes headers -- which the SDK accepts -- fail only in the test suite.
+    def __init__(self, body, status_code=200, headers=None):
+        super().__init__(
+            body=body, status_code=status_code, content_type="text/html", headers=headers
+        )
 
 
 class JSONResponse(Response):
-    def __init__(self, data, status_code=200):
+    def __init__(self, data, status_code=200, headers=None):
         self.data = data
-        super().__init__(body=b"", status_code=status_code, content_type="application/json")
+        super().__init__(
+            body=b"",
+            status_code=status_code,
+            content_type="application/json",
+            headers=headers,
+        )
 
 
 class InvalidCredentialsError(Exception):

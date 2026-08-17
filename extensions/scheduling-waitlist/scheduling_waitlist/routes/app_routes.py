@@ -50,7 +50,17 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
                 ),
             },
         )
-        return [HTMLResponse(html, status_code=HTTPStatus.OK)]
+        # no-cache like the assets below. The page carries the cache-bust token
+        # for roster.css/js, but nothing was busting the document that holds
+        # them -- so a redeploy could leave a browser rendering the previous
+        # shell against the new API.
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
 
     def _add_for_patient_id(self) -> str:
         """The patient the chart button asked to add, if any."""

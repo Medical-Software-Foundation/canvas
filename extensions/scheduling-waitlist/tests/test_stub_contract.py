@@ -154,3 +154,31 @@ class TestEventTypeStub:
             AppointmentBookedHandler.RESPONDS_TO
         )
         assert subscribed <= set(_EventType._NAMES)
+
+
+class TestResponseStubs:
+    """The response stubs must accept what the real effects accept.
+
+    A stub with a narrower signature fails only under test, which is backwards:
+    the suite is meant to catch what the instance would reject, not invent its
+    own rejections.
+    """
+
+    def test_html_response_accepts_headers(self):
+        from canvas_sdk.effects.simple_api import HTMLResponse
+
+        response = HTMLResponse("<p>hi</p>", headers={"Cache-Control": "no-cache"})
+
+        assert response.headers["Cache-Control"] == "no-cache"
+
+    def test_json_response_accepts_headers(self):
+        from canvas_sdk.effects.simple_api import JSONResponse
+
+        response = JSONResponse({"ok": True}, headers={"Cache-Control": "no-cache"})
+
+        assert response.headers["Cache-Control"] == "no-cache"
+
+    def test_html_response_defaults_to_no_headers(self):
+        from canvas_sdk.effects.simple_api import HTMLResponse
+
+        assert HTMLResponse("<p>hi</p>").headers == {}

@@ -1,6 +1,8 @@
 """The roster page shell and its static assets."""
 
 import json
+import re
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from scheduling_waitlist import CACHE_BUST
@@ -98,3 +100,48 @@ class TestAssets:
         responses = _api().get_js()
 
         assert b"static/js/roster.js" in responses[0].body
+
+
+class TestTemplateEscaping:
+    """The rendered page, not just the context that goes into it.
+
+    Every other test here asserts on the context dict, which is why a real bug
+    shipped: the JSON was valid going in and Django's autoescaping mangled it on
+    the way out, leaving the page with no apiBase and a "configuration is
+    missing" error. These read the template source instead.
+    """
+
+    TEMPLATE = Path("scheduling_waitlist/templates/roster.html")
+
+    def _source(self):
+        return self.TEMPLATE.read_text()
+
+    def test_the_config_payload_is_emitted_unescaped(self):
+        # Without |safe, autoescaping turns " into &quot; and JSON.parse throws.
+        assert "{{ config_json|safe }}" in self._source()
+
+    def test_no_json_payload_is_interpolated_without_safe(self):
+        """Guards the whole class of bug, not just this one tag.
+
+        Any JSON dropped into the document has to be marked safe, so a second
+        payload added later cannot repeat the mistake.
+        """
+        source = self._source()
+        for match in re.finditer(r"\{\{\s*(\w+_json)\s*(\|[^}]*)?\}\}", source):
+            name, filters = match.group(1), match.group(2) or ""
+            assert "safe" in filters, f"{name} is interpolated without |safe"
+
+    def test_safe_json_leaves_no_raw_angle_brackets_or_ampersands(self):
+        """The other half of the bargain that makes |safe acceptable.
+
+        Marking the value safe is only defensible because safe_json has already
+        neutralised the characters that could close the script tag early.
+        """
+        from scheduling_waitlist.services.html import safe_json
+
+        payload = safe_json({"note": "</script><img src=x onerror=alert(1)>", "amp": "a&b"})
+
+        assert "<" not in payload
+        assert ">" not in payload
+        assert "&" not in payload
+        assert json.loads(payload)["note"] == "</script><img src=x onerror=alert(1)>"
