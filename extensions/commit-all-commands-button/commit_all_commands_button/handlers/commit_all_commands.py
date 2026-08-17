@@ -1,3 +1,4 @@
+from django.db.models.query import QuerySet
 from pydantic import ValidationError
 
 from canvas_sdk.commands import(
@@ -37,10 +38,11 @@ from canvas_sdk.commands.commands.immunization_statement import ImmunizationStat
 
 
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.action_button import ReloadNoteActionButtonsEffect
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.medication import Medication
-from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
+from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note, NoteStates
 from canvas_sdk.v1.data.questionnaire import Interview
 
 from logger import log
@@ -86,11 +88,25 @@ class CommitButtonHandler(ActionButton):
         VitalsCommand.Meta.key: VitalsCommand,
     }
 
+    def staged_commands(self, note_id: int) -> QuerySet[Command]:
+        """Staged commands on this note that this button knows how to commit."""
+        return Command.objects.filter(
+            note_id=note_id,
+            state="staged",
+            schema_key__in=self.SCHEMA_KEYS_TO_COMMANDS.keys(),
+        )
+
     def visible(self) -> bool:
-        note_current_state = CurrentNoteStateEvent.objects.get(note__dbid=self.context["note_id"])
+        note_id = self.context["note_id"]
+
+        note_current_state = CurrentNoteStateEvent.objects.get(note__dbid=note_id)
         if note_current_state.state == NoteStates.LOCKED:
             return False
-        return True
+
+        # Nothing to commit means nothing to show. Scoped to the mapped schema
+        # keys so a note holding only commands this button can't commit — an
+        # unsent Prescribe, say — doesn't surface a button that would do nothing.
+        return self.staged_commands(note_id).exists()
 
     def handle(self) -> list[Effect]:
         effects = []
@@ -146,4 +162,14 @@ class CommitButtonHandler(ActionButton):
                 log.warning(
                     f"{schema.title()} command not able to be committed due to missing mapping."
                 )
+
+        # Committing removes these commands from the staged set, which changes
+        # whether this button should be visible at all. Ask the note to
+        # re-evaluate its buttons so it disappears once nothing is left to
+        # commit, instead of lingering until the next page load. Appended last
+        # because effects apply in order and the reload has to see the commits.
+        if effects:
+            note = Note.objects.get(dbid=note_id)
+            effects.append(ReloadNoteActionButtonsEffect(id=note.id).apply())
+
         return effects

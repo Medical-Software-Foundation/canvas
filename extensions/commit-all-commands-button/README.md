@@ -9,18 +9,36 @@ The `commit_all_commands_button` plugin for Canvas adds a button to the footer o
 
 **User-triggered:** The plugin adds an action button to the note footer. Users click the button to commit all staged commands in the current note.
 
+The button only appears when there is actually something for it to do — see [When the Button Appears](#when-the-button-appears).
+
 ## Effects
 
 When the button is clicked, the plugin:
 1. Queries all staged (uncommitted) commands in the current note
-2. Creates a commit effect for each command
-3. Returns all commit effects, which commits the commands in Canvas
+2. Creates a commit effect for each command it knows how to commit
+3. Appends a `ReloadNoteActionButtonsEffect` so the note re-evaluates its buttons
+4. Returns all effects, which commits the commands in Canvas
+
+## When the Button Appears
+
+The button is shown only if **both** are true:
+
+- The note is not locked.
+- The note has at least one staged command of a [supported type](#supported-command-types).
+
+The second condition is scoped to the supported types deliberately. A note holding only commands this button can't commit — an unsent Prescribe, say — would otherwise show a button that does nothing when clicked.
+
+After a commit run, the plugin returns a [`ReloadNoteActionButtonsEffect`](https://docs.canvasmedical.com/sdk/effect-reload-action-buttons/) for the note. Committing empties the staged set, so the button's own visibility condition no longer holds, and the reload makes it disappear immediately rather than lingering until the next page load.
+
+The reload is only requested when at least one command was actually committed. If nothing committed — nothing staged, or every command failed validation — visibility can't have changed, so the round trip is skipped.
 
 ## How It Works
 
-- The plugin adds a button labeled **"Commit All Commands"** to the note footer.
+- The plugin adds a button labeled **"Commit All Commands"** to the note footer, visible under the conditions above.
 - When the button is pressed, the plugin finds all commands in the current note that are not yet committed.
 - The plugin creates commit effects for each staged command, causing them to be committed.
+- Commands it has no mapping for are logged and skipped rather than failing the run.
+- A button reload is appended last, so it re-evaluates visibility against the post-commit state.
 
 ## Configuration Requirements
 
