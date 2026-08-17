@@ -61,7 +61,6 @@
     // Set when the chart button opened this page for one patient. The key comes
     // from the page config; the name is fetched over the API so the document
     // itself carries nothing identifiable.
-    addForPatientId: config.addForPatientId || "",
     // Bumped on every request; a response whose sequence is stale is dropped.
     // Without this, typing quickly can leave an earlier, slower response
     // painting over a later one.
@@ -391,9 +390,12 @@
     return request("/waitlist/options").then(function (data) {
       state.options = data;
       populateFilters(data);
-      if (!data.is_configured) {
+      if (!data.can_add) {
+        // Not a configuration problem: with nothing configured every bookable
+        // type is offered, so an empty list means the instance has none.
         toast(
-          "No appointment types are configured yet, so entries cannot be added.",
+          "No appointment types on this instance can be scheduled, so entries "
+            + "cannot be added.",
           "error"
         );
       }
@@ -788,17 +790,16 @@
     return { input: input, results: results, chosen: chosen };
   }
 
-  function openAddDialog(preselected) {
+  function openAddDialog() {
     if (!addDialog || !state.options) return;
 
     // Guarded here rather than at each call site. Without configured services
-    // every submission is refused, and the dropdown is populated from the
-    // instance regardless -- so an unguarded entry point offers a form whose
-    // Service choices can never be saved. Both the header button and the
-    // arrive-from-a-chart path come through here, so neither can skip it.
-    if (!state.options.is_configured) {
+    // Refused only when the instance has nothing bookable, which no plugin
+    // setting can fix. An unconfigured allow-list is not a reason to refuse:
+    // it means every bookable type is on offer.
+    if (!state.options.can_add) {
       toast(
-        "No appointment types are configured for the waitlist yet, so entries "
+        "No appointment types on this instance can be scheduled, so entries "
           + "cannot be added.",
         "error"
       );
@@ -807,20 +808,13 @@
 
     var options = state.options;
     var ANY = options.any_preference || "any";
-    var picked = { patient: preselected || null };
+    var picked = { patient: null };
 
+    // Opened from the roster, so nobody is chosen yet. The chart's own button
+    // has its own compact form, which knows its patient from the start.
     var picker = patientPicker(function (patient) {
       picked.patient = patient;
     });
-
-    // Arriving from a chart, the patient is already known. Showing them as
-    // chosen keeps one add form for both entry points rather than a second
-    // form with its own validation.
-    if (picked.patient) {
-      picker.chosen.textContent =
-        picked.patient.name +
-        (picked.patient.birth_date ? " \u00b7 " + picked.patient.birth_date : "");
-    }
 
     var typeSelect = select(
       "wl-add-type",
@@ -958,27 +952,21 @@
     }
   }
 
+  // ---- the host modal ----------------------------------------------------
+
+  // Canvas hands the page a MessagePort once it is embedded. The roster is a
+  // full-width table, so unlike the compact add form it asks for a large size
+  // rather than a dialog-sized one.
+  var port = null;
+  window.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+      port = event.ports[0];
+      port.start();
+      port.postMessage({ type: "RESIZE", width: 1200, height: 800 });
+    }
+  });
+
   // ---- start -------------------------------------------------------------
-
-  function openAddForRequestedPatient() {
-    // The chart button sent us here to add one patient. Resolve their name over
-    // the API, then open the same add dialog the roster's own button opens.
-    if (!state.addForPatientId) return;
-
-    request("/waitlist/patients/" + window.encodeURIComponent(state.addForPatientId))
-      .then(function (data) {
-        if (data && data.patient) {
-          openAddDialog(data.patient);
-        } else {
-          openAddDialog();
-        }
-      })
-      .catch(function () {
-        // An unresolvable patient is not worth an error banner over the whole
-        // roster: fall back to the picker so the scheduler can still act.
-        openAddDialog();
-      });
-  }
 
   if (!state.apiBase) {
     setStatus("The waitlist could not start: its configuration is missing.", "error");
@@ -988,7 +976,6 @@
   bind();
   loadOptions()
     .then(reload)
-    .then(openAddForRequestedPatient)
     .catch(function (error) {
       setStatus(error.message, "error");
     });

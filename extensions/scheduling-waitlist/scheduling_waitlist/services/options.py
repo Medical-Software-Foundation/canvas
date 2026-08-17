@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from canvas_sdk.v1.data import NoteType, PracticeLocation, Staff
+from logger import log
 
 from scheduling_waitlist.constants import (
     PREFERENCE_ANY,
@@ -84,29 +85,46 @@ def list_appointment_types(config: WaitlistConfig) -> list[dict[str, Any]]:
 
     Only types that can actually be scheduled are offered: a waitlist entry for
     something nobody can book is a dead row.
+
+    Configuration **narrows** this list, it does not define it. With nothing
+    configured every bookable type is offered, so the plugin works on a fresh
+    install. A configured list that matches nothing bookable is a mistake rather
+    than an instruction to offer nothing, so it falls back to the full list and
+    says so in the log -- an empty form teaches a scheduler nothing.
+
+    This is the single authority on what may be waitlisted:
+    ``services/validation.py`` checks submissions against this list rather than
+    re-deriving the rule, because the two disagreeing is exactly how the form
+    came to offer services it then refused.
     """
-    note_types = NoteType.objects.filter(
+    bookable: list[dict[str, Any]] = []
+    for note_type in NoteType.objects.filter(
         is_scheduleable=True,
         is_active=True,
         is_visible=True,
         deprecated_at__isnull=True,
-    ).order_by("name")
+    ).order_by("name"):
+        code = (getattr(note_type, "code", "") or "").strip()
+        name = (getattr(note_type, "name", "") or "").strip() or code
+        bookable.append(
+            {"dbid": getattr(note_type, "dbid", None), "code": code, "name": name}
+        )
 
     allowed = {code.casefold() for code in config.appointment_type_codes}
+    if not allowed:
+        return bookable
 
-    options = []
-    for note_type in note_types:
-        code = (getattr(note_type, "code", "") or "").strip()
-        if allowed and code.casefold() not in allowed:
-            continue
-        options.append(
-            {
-                "dbid": getattr(note_type, "dbid", None),
-                "code": code,
-                "name": (getattr(note_type, "name", "") or "").strip() or code,
-            }
+    narrowed = [option for option in bookable if str(option["code"]).casefold() in allowed]
+    if narrowed:
+        return narrowed
+
+    if bookable:
+        log.error(
+            "scheduling_waitlist: WAITLIST_APPOINTMENT_TYPES matches no bookable "
+            "appointment type, so every bookable type is being offered instead; "
+            f"configured codes were {sorted(config.appointment_type_codes)}"
         )
-    return options
+    return bookable
 
 
 def list_providers() -> list[dict[str, Any]]:
@@ -135,8 +153,9 @@ def list_priorities(config: WaitlistConfig) -> list[dict[str, Any]]:
 
 def build_options(config: WaitlistConfig) -> dict[str, Any]:
     """Everything the form and the filter bar need, in one payload."""
+    appointment_types = list_appointment_types(config)
     return {
-        "appointment_types": list_appointment_types(config),
+        "appointment_types": appointment_types,
         "providers": list_providers(),
         "locations": list_locations(),
         "priorities": list_priorities(config),
@@ -145,7 +164,9 @@ def build_options(config: WaitlistConfig) -> dict[str, Any]:
         ],
         "statuses": [{"value": value, "label": label} for value, label in STATUS_LABELS],
         "any_preference": PREFERENCE_ANY,
-        # Surfaced so the form can explain why creation is refused rather than
-        # presenting an empty dropdown with no reason.
-        "is_configured": bool(config.appointment_type_codes),
+        # Whether anything can be waitlisted at all, which is a property of the
+        # instance rather than of this plugin's configuration: with no variable
+        # set every bookable type is offered. False only when the instance has
+        # no bookable appointment types, which no plugin setting can fix.
+        "can_add": bool(appointment_types),
     }

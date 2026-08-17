@@ -82,6 +82,44 @@ class TestListAppointmentTypes:
 
         assert options[0]["name"] == "estab"
 
+    def test_a_configured_list_matching_nothing_offers_everything_instead(self):
+        # A typo in the variable is a mistake, not an instruction to offer
+        # nothing. An empty dropdown teaches a scheduler nothing about why.
+        types = [_note_type(1, "estab", "Established")]
+        config = WaitlistConfig.from_secrets({"WAITLIST_APPOINTMENT_TYPES": "typo"})
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset(types)
+
+            options = list_appointment_types(config)
+
+        assert [option["code"] for option in options] == ["estab"]
+
+    def test_falling_back_is_logged_as_an_error(self):
+        import sys
+
+        types = [_note_type(1, "estab", "Established")]
+        config = WaitlistConfig.from_secrets({"WAITLIST_APPOINTMENT_TYPES": "typo"})
+        sys.modules["logger"].log.error.reset_mock()
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset(types)
+
+            list_appointment_types(config)
+
+        assert sys.modules["logger"].log.error.called
+
+    def test_an_instance_with_nothing_bookable_is_not_an_error(self):
+        # Nothing to fall back to, so there is nothing to warn about either.
+        import sys
+
+        config = WaitlistConfig.from_secrets({"WAITLIST_APPOINTMENT_TYPES": "estab"})
+        sys.modules["logger"].log.error.reset_mock()
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset([])
+
+            assert list_appointment_types(config) == []
+
+        assert not sys.modules["logger"].log.error.called
+
 
 class TestListProviders:
     def test_only_active_staff_are_requested(self):
@@ -207,15 +245,30 @@ class TestBuildOptions:
             "statuses",
         }
 
-    def test_reports_unconfigured_when_no_appointment_types_are_set(self):
+    def test_adding_is_possible_with_nothing_configured(self):
+        # Configuration narrows the list; it is not a precondition for using the
+        # plugin at all.
         payload = self._patched(WaitlistConfig.from_secrets({}))
 
-        assert payload["is_configured"] is False
+        assert payload["can_add"] is True
 
-    def test_reports_configured_once_appointment_types_are_set(self):
+    def test_adding_is_possible_with_a_configured_list(self):
         config = WaitlistConfig.from_secrets({"WAITLIST_APPOINTMENT_TYPES": "estab"})
 
-        assert self._patched(config)["is_configured"] is True
+        assert self._patched(config)["can_add"] is True
+
+    def test_adding_is_impossible_only_when_the_instance_has_nothing_bookable(self):
+        with (
+            patch("scheduling_waitlist.services.options.NoteType") as note_type_model,
+            patch("scheduling_waitlist.services.options.Staff") as staff_model,
+            patch("scheduling_waitlist.services.options.PracticeLocation") as location_model,
+        ):
+            note_type_model.objects.filter.return_value = _queryset([])
+            staff_model.objects.filter.return_value = _queryset([])
+            location_model.objects.filter.return_value = _queryset([])
+            payload = build_options(WaitlistConfig.from_secrets({}))
+
+        assert payload["can_add"] is False
 
     def test_status_vocabulary_matches_the_entry_lifecycle(self):
         payload = self._patched(WaitlistConfig.from_secrets({}))

@@ -36,16 +36,13 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
             {
                 "asset_base": ASSET_BASE,
                 "cache_bust": CACHE_BUST,
-                # Wiring only. The one patient-related value is the key the chart
-                # button put in this page's own URL, which tells the page whose
-                # add dialog to open; the name and date of birth behind it are
-                # fetched over the authenticated API rather than baked into a
+                # Wiring only, nothing identifiable: the roster fetches its rows
+                # over the authenticated API rather than having them baked into a
                 # document that may be cached or copied out of the browser.
                 "config_json": safe_json(
                     {
                         "apiBase": API_BASE,
                         "cacheBust": CACHE_BUST,
-                        "addForPatientId": self._add_for_patient_id(),
                     }
                 ),
             },
@@ -54,6 +51,35 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
         # for roster.css/js, but nothing was busting the document that holds
         # them -- so a redeploy could leave a browser rendering the previous
         # shell against the new API.
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/add")
+    def get_add_form(self) -> list[Response | Effect]:
+        """The compact add form the chart button opens.
+
+        A page of its own rather than the roster with a parameter, because a
+        dialog and a full-width table want different sizes from the host modal.
+        It reads nothing itself: the patient's name and the dropdown choices are
+        fetched over the authenticated API, so this document holds only wiring.
+        """
+        html = render_to_string(
+            "templates/add_patient.html",
+            {
+                "config_json": safe_json(
+                    {
+                        "apiBase": API_BASE,
+                        "cacheBust": CACHE_BUST,
+                        "patientId": self._add_for_patient_id(),
+                    }
+                ),
+            },
+        )
         return [
             HTMLResponse(
                 html,

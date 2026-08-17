@@ -18,19 +18,25 @@ API_BASE = f"/plugin-io/api/{PLUGIN_NAME}"
 # banner can link to it without services importing from applications.
 ROSTER_URL = f"{API_BASE}/app/?v={CACHE_BUST}"
 
-# The query parameter the chart button uses to name a patient. The roster reads
-# it, resolves the patient server-side, and opens its add dialog already filled
-# in -- so there is only ever one add form and one set of validation rules.
+# The query parameter naming the patient an add form is for.
 ADD_FOR_PATIENT_PARAM = "patient"
 
 
-def roster_add_url(patient_id: str) -> str:
-    """The roster page, primed to add one named patient.
+def add_form_url(patient_id: str) -> str:
+    """The compact add form for one named patient.
+
+    A page of its own rather than the roster with a parameter: the chart button
+    opens a dialog, and the roster is a full-width page that sizes itself as one.
+    Both post to the same endpoint, so there is still one set of validation rules.
 
     Encoded rather than interpolated: a patient key is external input, and an
     unescaped one would silently truncate the query string.
     """
-    return f"{ROSTER_URL}&{ADD_FOR_PATIENT_PARAM}={quote(str(patient_id), safe='')}"
+    return (
+        f"{API_BASE}/app/add"
+        f"?{ADD_FOR_PATIENT_PARAM}={quote(str(patient_id), safe='')}"
+        f"&v={CACHE_BUST}"
+    )
 
 # --- entry statuses ---------------------------------------------------------
 STATUS_WAITING = "waiting"

@@ -11,8 +11,7 @@
                 "name": "Scheduling Waitlist",
                 "description": "Shared roster of patients waiting to be scheduled",
                 "scope": "global",
-                "icon": "assets/icon.png",
-                "menu_position": "top"
+                "icon": "assets/icon.png"
             }
         ],
         "protocols": [

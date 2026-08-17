@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from canvas_sdk.v1.data import NoteType, Patient, PracticeLocation, Staff
+from canvas_sdk.v1.data import Patient, PracticeLocation, Staff
 
 from scheduling_waitlist.constants import (
     MAX_NOTE_LENGTH,
@@ -18,7 +18,11 @@ from scheduling_waitlist.constants import (
     PREFERENCE_SPECIFIC,
 )
 from scheduling_waitlist.services.config import WaitlistConfig
-from scheduling_waitlist.services.options import time_window_by_value, windows_for_value
+from scheduling_waitlist.services.options import (
+    list_appointment_types,
+    time_window_by_value,
+    windows_for_value,
+)
 
 
 class ValidationResult:
@@ -97,32 +101,31 @@ def _clean_appointment_type(
         errors["appointment_type_id"] = "Choose a service."
         return
 
-    note_type = NoteType.objects.filter(
-        dbid=raw,
-        is_scheduleable=True,
-        is_active=True,
-        is_visible=True,
-        deprecated_at__isnull=True,
-    ).first()
-    if note_type is None:
-        errors["appointment_type_id"] = "That service cannot be scheduled."
-        return
+    # Checked against exactly what the form was offered, rather than re-deriving
+    # the rule from configuration. Deriving it twice is what made the dropdown
+    # list services this function then refused, so there is deliberately only
+    # one implementation of "may be waitlisted" and it lives in options.
+    offered = {
+        str(option["dbid"]): option
+        for option in list_appointment_types(config)
+        if option["dbid"] is not None
+    }
 
-    # A type the practice has excluded from the waitlist is refused even though
-    # it is otherwise bookable, so a tampered or stale form cannot bypass the
-    # configured list.
-    allowed = {code.casefold() for code in config.appointment_type_codes}
-    code = (getattr(note_type, "code", "") or "").strip().casefold()
-    if not allowed:
+    if not offered:
+        # No plugin setting can fix this: the instance has nothing bookable.
         errors["appointment_type_id"] = (
-            "No services are configured for the waitlist yet."
+            "No appointment types on this instance can be scheduled."
         )
         return
-    if code not in allowed:
+
+    match = offered.get(str(raw))
+    if match is None:
+        # Either not bookable, or excluded by a configured allow-list. A stale or
+        # tampered form lands here rather than writing an unbookable entry.
         errors["appointment_type_id"] = "That service is not offered on the waitlist."
         return
 
-    cleaned["note_type_id"] = getattr(note_type, "dbid", None)
+    cleaned["note_type_id"] = match["dbid"]
 
 
 def _clean_provider(payload: dict, cleaned: dict, errors: dict) -> None:

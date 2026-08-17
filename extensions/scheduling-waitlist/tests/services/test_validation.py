@@ -22,24 +22,32 @@ def _found(**attrs):
     return record
 
 
+OFFERED = [{"dbid": 7, "code": "estab", "name": "Established Visit"}]
+
+
 @pytest.fixture
 def lookups():
-    """Patch every model the validator resolves against."""
+    """Patch every model the validator resolves against.
+
+    The appointment type is not among them: the validator asks
+    ``list_appointment_types`` what is on offer rather than querying NoteType
+    itself, so that the dropdown and the validator cannot disagree.
+    """
     with (
         patch("scheduling_waitlist.services.validation.Patient") as patient_model,
-        patch("scheduling_waitlist.services.validation.NoteType") as note_type_model,
+        patch(
+            "scheduling_waitlist.services.validation.list_appointment_types",
+            return_value=list(OFFERED),
+        ) as offered,
         patch("scheduling_waitlist.services.validation.Staff") as staff_model,
         patch("scheduling_waitlist.services.validation.PracticeLocation") as location_model,
     ):
         patient_model.objects.filter.return_value.first.return_value = _found(dbid=55)
-        note_type_model.objects.filter.return_value.first.return_value = _found(
-            dbid=7, code="estab"
-        )
         staff_model.objects.filter.return_value.first.return_value = _found(dbid=101)
         location_model.objects.filter.return_value.first.return_value = _found(dbid=3)
         yield {
             "patient": patient_model,
-            "note_type": note_type_model,
+            "offered": offered,
             "staff": staff_model,
             "location": location_model,
         }
@@ -123,28 +131,43 @@ class TestAppointmentType:
     def test_a_missing_service_is_refused(self, lookups):
         assert "appointment_type_id" in run(valid_payload(appointment_type_id="")).errors
 
-    def test_an_unbookable_service_is_refused(self, lookups):
-        lookups["note_type"].objects.filter.return_value.first.return_value = None
+    def test_an_offered_service_is_accepted(self, lookups):
+        assert run(valid_payload()).cleaned["note_type_id"] == 7
 
-        assert "appointment_type_id" in run(valid_payload()).errors
+    def test_a_service_not_on_offer_is_refused(self, lookups):
+        # Either unbookable or excluded by a configured allow-list. A stale or
+        # tampered form lands here rather than writing an unbookable entry.
+        assert "appointment_type_id" in run(valid_payload(appointment_type_id="9")).errors
 
-    def test_only_bookable_services_are_looked_up(self, lookups):
-        run(valid_payload())
-
-        assert lookups["note_type"].objects.filter.call_args.kwargs["is_scheduleable"] is True
-
-    def test_a_service_excluded_by_configuration_is_refused(self, lookups):
-        # A tampered or stale form must not slip past the configured list.
-        lookups["note_type"].objects.filter.return_value.first.return_value = _found(
-            dbid=9, code="surgery"
-        )
-
-        assert "appointment_type_id" in run(valid_payload()).errors
-
-    def test_with_nothing_configured_creation_is_refused_with_a_reason(self, lookups):
+    def test_with_nothing_configured_a_bookable_service_is_still_accepted(self, lookups):
+        # The whole point of the fix: an unset allow-list means every bookable
+        # type is on offer, so a reference plugin works on a fresh install.
         result = run(valid_payload(), config=WaitlistConfig.from_secrets({}))
 
-        assert "configured" in result.errors["appointment_type_id"]
+        assert result.ok
+        assert result.cleaned["note_type_id"] == 7
+
+    def test_the_configured_list_is_passed_to_the_single_authority(self, lookups):
+        # Validation must not re-derive "may be waitlisted" from configuration;
+        # deriving it twice is what made the form offer services it refused.
+        config = WaitlistConfig.from_secrets({"WAITLIST_APPOINTMENT_TYPES": "estab"})
+
+        run(valid_payload(), config=config)
+
+        assert lookups["offered"].call_args.args[0] is config
+
+    def test_an_instance_with_nothing_bookable_is_refused_with_a_reason(self, lookups):
+        lookups["offered"].return_value = []
+
+        result = run(valid_payload())
+
+        assert "scheduled" in result.errors["appointment_type_id"]
+
+    def test_options_without_a_key_are_ignored_rather_than_matched(self, lookups):
+        # A malformed row must not become the match for every submission.
+        lookups["offered"].return_value = [{"dbid": None, "code": "x", "name": "X"}]
+
+        assert "appointment_type_id" in run(valid_payload()).errors
 
 
 class TestProvider:

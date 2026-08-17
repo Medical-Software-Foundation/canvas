@@ -44,38 +44,66 @@ class TestRosterPage:
         assert json.loads(rendered_context()["config_json"]) == {
             "apiBase": "/plugin-io/api/scheduling_waitlist",
             "cacheBust": CACHE_BUST,
-            "addForPatientId": "",
         }
 
-    def test_embedded_config_contains_no_identifiable_patient_data(
-        self, rendered_context
-    ):
-        # The page fetches entries itself, so nothing identifiable is baked into
-        # a document that may be cached or copied out of the browser. The patient
-        # key below is the one the chart button already put in this page's URL.
+    def test_the_roster_carries_no_patient_key_at_all(self, rendered_context):
+        # The roster is the practice-wide list. Adding one named patient is the
+        # compact form's job, so a patient parameter here is ignored rather than
+        # threaded into the page.
         _api(query_params={"patient": "abc-123"}).get_roster_page()
 
         config = json.loads(rendered_context()["config_json"])
-        assert set(config) == {"apiBase", "cacheBust", "addForPatientId"}
+        assert set(config) == {"apiBase", "cacheBust"}
 
-    def test_no_patient_is_requested_by_default(self, rendered_context):
-        _api().get_roster_page()
 
-        assert json.loads(rendered_context()["config_json"])["addForPatientId"] == ""
+class TestAddForm:
+    """The compact form the chart button opens.
 
-    def test_the_chart_buttons_patient_is_passed_to_the_page(self, rendered_context):
-        # This is what makes the chart button land on a filled-in add dialog
-        # rather than an empty patient picker.
-        _api(query_params={"patient": "abc-123"}).get_roster_page()
+    A page of its own rather than the roster with a parameter: a dialog and a
+    full-width table want different sizes from the host modal, and opening the
+    roster from a chart put a whole table on screen to collect six fields.
+    """
 
-        assert (
-            json.loads(rendered_context()["config_json"])["addForPatientId"] == "abc-123"
-        )
+    def test_returns_a_single_html_response(self):
+        responses = _api(query_params={"patient": "abc-123"}).get_add_form()
+
+        assert len(responses) == 1
+        assert responses[0].content_type == "text/html"
+        assert responses[0].status_code == 200
+
+    def test_renders_the_compact_template_not_the_roster(self):
+        responses = _api(query_params={"patient": "abc-123"}).get_add_form()
+
+        assert "templates/add_patient.html" in responses[0].body
+
+    def test_the_response_is_not_cached(self):
+        responses = _api(query_params={"patient": "abc-123"}).get_add_form()
+
+        assert responses[0].headers["Cache-Control"] == "no-cache"
+
+    def test_the_patient_key_reaches_the_page(self, rendered_context):
+        _api(query_params={"patient": "abc-123"}).get_add_form()
+
+        assert json.loads(rendered_context()["config_json"])["patientId"] == "abc-123"
 
     def test_a_blank_patient_parameter_is_treated_as_absent(self, rendered_context):
-        _api(query_params={"patient": "   "}).get_roster_page()
+        _api(query_params={"patient": "   "}).get_add_form()
 
-        assert json.loads(rendered_context()["config_json"])["addForPatientId"] == ""
+        assert json.loads(rendered_context()["config_json"])["patientId"] == ""
+
+    def test_a_missing_patient_parameter_is_treated_as_absent(self, rendered_context):
+        _api().get_add_form()
+
+        assert json.loads(rendered_context()["config_json"])["patientId"] == ""
+
+    def test_the_page_carries_only_wiring_and_a_key(self, rendered_context):
+        # The name and date of birth behind the key are fetched over the
+        # authenticated API, so nothing identifiable is baked into a document
+        # the browser may cache.
+        _api(query_params={"patient": "abc-123"}).get_add_form()
+
+        config = json.loads(rendered_context()["config_json"])
+        assert set(config) == {"apiBase", "cacheBust", "patientId"}
 
 
 class TestAssets:
@@ -111,25 +139,31 @@ class TestTemplateEscaping:
     missing" error. These read the template source instead.
     """
 
-    TEMPLATE = Path("scheduling_waitlist/templates/roster.html")
+    TEMPLATES = sorted(Path("scheduling_waitlist/templates").glob("*.html"))
 
-    def _source(self):
-        return self.TEMPLATE.read_text()
+    def test_there_are_templates_to_check(self):
+        # A glob that silently matches nothing would make every test below pass.
+        assert self.TEMPLATES
 
-    def test_the_config_payload_is_emitted_unescaped(self):
+    def test_every_config_payload_is_emitted_unescaped(self):
         # Without |safe, autoescaping turns " into &quot; and JSON.parse throws.
-        assert "{{ config_json|safe }}" in self._source()
+        for template in self.TEMPLATES:
+            source = template.read_text()
+            if "config_json" in source:
+                assert "{{ config_json|safe }}" in source, template.name
 
     def test_no_json_payload_is_interpolated_without_safe(self):
-        """Guards the whole class of bug, not just this one tag.
+        """Guards the whole class of bug across every template.
 
-        Any JSON dropped into the document has to be marked safe, so a second
-        payload added later cannot repeat the mistake.
+        Any JSON dropped into a document has to be marked safe, so a second
+        payload or a second page cannot repeat the mistake.
         """
-        source = self._source()
-        for match in re.finditer(r"\{\{\s*(\w+_json)\s*(\|[^}]*)?\}\}", source):
-            name, filters = match.group(1), match.group(2) or ""
-            assert "safe" in filters, f"{name} is interpolated without |safe"
+        for template in self.TEMPLATES:
+            for match in re.finditer(
+                r"\{\{\s*(\w+_json)\s*(\|[^}]*)?\}\}", template.read_text()
+            ):
+                name, filters = match.group(1), match.group(2) or ""
+                assert "safe" in filters, f"{template.name}: {name} lacks |safe"
 
     def test_safe_json_leaves_no_raw_angle_brackets_or_ampersands(self):
         """The other half of the bargain that makes |safe acceptable.
@@ -155,17 +189,20 @@ class TestTemplateComments:
     the middle of the roster -- so the shape is pinned here rather than trusted.
     """
 
-    TEMPLATE = Path("scheduling_waitlist/templates/roster.html")
+    TEMPLATES = sorted(Path("scheduling_waitlist/templates").glob("*.html"))
 
     def test_every_short_comment_closes_on_its_own_line(self):
-        for number, line in enumerate(self.TEMPLATE.read_text().splitlines(), start=1):
-            if "{#" in line:
-                assert "#}" in line, (
-                    f"line {number}: {{# #}} spans lines, so its tail renders as "
-                    "page text -- use {% comment %} instead"
-                )
+        for template in self.TEMPLATES:
+            for number, line in enumerate(template.read_text().splitlines(), start=1):
+                if "{#" in line:
+                    assert "#}" in line, (
+                        f"{template.name} line {number}: a hash comment spans lines, "
+                        "so its tail renders as page text -- use the comment tag"
+                    )
 
-    def test_multi_line_notes_use_the_comment_tag(self):
-        source = self.TEMPLATE.read_text()
-
-        assert source.count("{% comment %}") == source.count("{% endcomment %}")
+    def test_multi_line_notes_use_a_balanced_comment_tag(self):
+        for template in self.TEMPLATES:
+            source = template.read_text()
+            assert source.count("{% comment %}") == source.count("{% endcomment %}"), (
+                template.name
+            )

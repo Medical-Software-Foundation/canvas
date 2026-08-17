@@ -104,10 +104,13 @@ class TestClick:
         assert len(effects) == 1
         assert "patient=abc-123" in effects[0].url
 
-    def test_the_modal_opens_the_roster_page(self):
-        button = _button()
+    def test_the_modal_opens_the_compact_form_not_the_roster(self):
+        # Opening the roster from a chart put a full-width table on screen to
+        # collect six fields, so this asserts the form route specifically rather
+        # than any path under /app/.
+        url = _button().handle()[0].url
 
-        assert "/plugin-io/api/scheduling_waitlist/app/" in button.handle()[0].url
+        assert url.startswith("/plugin-io/api/scheduling_waitlist/app/add?")
 
     def test_a_patient_key_needing_encoding_is_escaped(self):
         button = _button(patient_id="a b/c")
