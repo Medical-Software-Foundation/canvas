@@ -169,17 +169,25 @@
       "Any service"
     );
 
-    var providers = (options.providers || []).map(function (p) {
-      return { value: p.dbid, label: p.name };
-    });
-    providers.unshift({ value: options.any_preference || "any", label: "Any provider" });
-    fillSelect(els.provider, providers, "All providers");
-
-    var locations = (options.locations || []).map(function (l) {
-      return { value: l.dbid, label: l.name };
-    });
-    locations.unshift({ value: options.any_preference || "any", label: "Any location" });
-    fillSelect(els.location, locations, "All locations");
+    // One entry for "no filter", not two. These dropdowns used to carry both
+    // "All providers" (no filter) and "Any provider" (only entries whose patient
+    // will see anyone) -- a real distinction, but two options a word apart that
+    // read as a duplicate, and the second matches nothing on a list where every
+    // patient named someone. Service and Priority have one each; these now match.
+    fillSelect(
+      els.provider,
+      (options.providers || []).map(function (p) {
+        return { value: p.dbid, label: p.name };
+      }),
+      "Any provider"
+    );
+    fillSelect(
+      els.location,
+      (options.locations || []).map(function (l) {
+        return { value: l.dbid, label: l.name };
+      }),
+      "Any location"
+    );
 
     fillSelect(
       els.priority,

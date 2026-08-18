@@ -123,6 +123,10 @@ def build_queryset(
     if note_type_dbid:
         queryset = queryset.filter(note_type_id=note_type_dbid)
 
+    # Passing PREFERENCE_ANY selects entries whose patient will see anyone, rather
+    # than every entry. The roster's filter bar no longer offers it -- "Any
+    # provider" there means "do not filter" -- but this is a REST endpoint and the
+    # behaviour is kept and tested for callers that want it.
     if provider_dbid == PREFERENCE_ANY:
         queryset = queryset.filter(provider_preference=PREFERENCE_ANY)
     elif provider_dbid:
