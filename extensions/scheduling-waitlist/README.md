@@ -74,10 +74,10 @@ Writes require the platform-supplied `namespace_read_write_access_key`.
 Set as plugin secrets. Anything marked **required** fails closed — the plugin declines to act
 rather than guessing.
 
-| Secret | Required | Default | What it does |
+| Variable | Required | Default | What it does |
 |---|---|---|---|
 | `WAITLIST_SCHEDULING_TEAM` | **yes** | — | Team UUID or exact name that receives slot-opened tasks. Unset ⇒ no task is raised (an unassigned task is an unread task) |
-| `WAITLIST_APPOINTMENT_TYPES` | **yes** | — | Comma-separated `NoteType` **codes** offered on the form. Codes, not names, because names change across versions and installs |
+| `WAITLIST_APPOINTMENT_TYPES` | no | *(every bookable type)* | Comma-separated `NoteType` **codes** to narrow what the form offers. Codes, not names, because names change across versions and installs. Unset ⇒ every bookable type is offered, so the plugin works on a fresh install. A list matching nothing bookable falls back to all of them and logs an error, because a typo should not empty the form |
 | `WAITLIST_PRIORITY_LABELS` | no | `High,Medium,Low` | Comma-separated, highest priority first |
 | `WAITLIST_TTL_DAYS` | **yes** | — | Days before a waiting entry ages out. Invalid ⇒ nothing expires |
 | `WAITLIST_MANAGER_ROLE_CODES` | no | *(empty)* | Staff role codes allowed to edit or remove **other** people's entries. Unset ⇒ everyone still manages their own |
@@ -87,9 +87,9 @@ rather than guessing.
 | `WAITLIST_URGENT_LEAD_HOURS` | no | `48` | Slots starting within this window raise an urgent task |
 | `WAITLIST_DISPLAY_TIMEZONE` | no | `UTC` | IANA timezone for times in tasks. The abbreviation is always printed, so a wrong value is visible rather than silent |
 
-> The manifest uses the `secrets` key. Newer CLI versions report it as deprecated in favour of
-> `variables`, but the CLI notes the server may not return `variables` yet, and 80 of the 81
-> plugins in this repo still use `secrets`. Revisit once server support is confirmed.
+> The manifest declares these under `variables`, the key newer CLI versions expect; the older
+> `secrets` key is reported as deprecated. They are still read through `self.secrets` in handler
+> code, which is the SDK's accessor regardless of which manifest key declares them.
 
 ## Components
 
