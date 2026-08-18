@@ -405,6 +405,27 @@ def _install_canvas_sdk_stubs() -> None:
     note_data_mod.Note = data.Note
     note_data_mod.NoteType = data.NoteType
 
+    class NoteStates:
+        """The stored codes, not the member names.
+
+        The handler compares strings, and ``str()`` of a real ``TextChoices``
+        member is its stored value -- so a stub using readable names would pass
+        the suite and fail on the instance.
+        """
+
+        NEW = "NEW"
+        SCHEDULING = "SCH"
+        BOOKED = "BKD"
+        CONVERTED = "CVD"
+        CANCELLED = "CLD"
+        NOSHOW = "NSW"
+        REVERTED = "RVT"
+        LOCKED = "LKD"
+        SIGNED = "SGN"
+
+    note_data_mod.NoteStates = NoteStates
+    data.NoteStates = NoteStates
+
     class AppointmentProgressStatus:
         """Only the values this plugin reads, as their stored strings.
 

@@ -204,3 +204,22 @@ class TestAppointmentStatusStub:
         assert "confirmed" not in FREED_STATUSES
         assert "cancelled" in FREED_STATUSES
         assert "noshowed" in FREED_STATUSES
+
+
+class TestNoteStatesStub:
+    """The note states the appointment button keys off.
+
+    Stored codes, not member names: the handler compares strings, so a stub with
+    readable names would pass the suite and fail on the instance.
+    """
+
+    def test_cancelled_and_noshow_are_their_stored_codes(self):
+        from canvas_sdk.v1.data.note import NoteStates
+
+        assert str(NoteStates.CANCELLED) == "CLD"
+        assert str(NoteStates.NOSHOW) == "NSW"
+
+    def test_the_freed_set_holds_the_codes_not_the_names(self):
+        from scheduling_waitlist.handlers.appointment_button import FREED_NOTE_STATES
+
+        assert FREED_NOTE_STATES == {"CLD", "NSW"}

@@ -20,13 +20,20 @@ def _button(note_id=536, target_id=None):
     return button
 
 
-def _appointment(status="cancelled", patient_uuid="patient-uuid", **overrides):
+def _appointment(
+    status="cancelled", patient_uuid="patient-uuid", note_state="NEW", **overrides
+):
     record = MagicMock()
     record.status = status
     record.patient = MagicMock(id=patient_uuid) if patient_uuid else None
     record.note_type_id = 7
     record.provider_id = 101
     record.location_id = 3
+    if note_state is None:
+        # A note with no state history yet: nothing to read.
+        record.note = MagicMock(current_state=None)
+    else:
+        record.note = MagicMock(current_state=MagicMock(state=note_state))
     for key, value in overrides.items():
         setattr(record, key, value)
     return record
@@ -106,6 +113,49 @@ class TestVisibility:
             button.visible()
 
         assert model.objects.filter.call_args.kwargs["note__dbid"] == 536
+
+
+class TestEitherRecordCountsAsFreed:
+    """A slot can be given up in two records and only one is sure to move.
+
+    Reading the appointment's status alone meant the button never appeared after
+    a no-show, because marking no-show is a note state transition and whether it
+    also writes Appointment.status is not visible from a plugin.
+    """
+
+    def _visible(self, appointment):
+        button = _button()
+        with patch(f"{MODULE}.Appointment", _found(appointment)):
+            return button.visible()
+
+    def test_the_status_field_alone_is_enough(self):
+        assert self._visible(_appointment(status="noshowed", note_state="NEW")) is True
+
+    def test_a_no_showed_note_alone_is_enough(self):
+        # The case that was failing on the instance.
+        assert self._visible(_appointment(status="confirmed", note_state="NSW")) is True
+
+    def test_a_cancelled_note_alone_is_enough(self):
+        assert self._visible(_appointment(status="confirmed", note_state="CLD")) is True
+
+    def test_neither_record_freed_stays_hidden(self):
+        assert self._visible(_appointment(status="confirmed", note_state="NEW")) is False
+
+    def test_a_note_with_no_state_history_falls_back_to_the_status(self):
+        assert self._visible(_appointment(status="cancelled", note_state=None)) is True
+        assert self._visible(_appointment(status="confirmed", note_state=None)) is False
+
+    def test_an_appointment_with_no_note_does_not_crash(self):
+        assert self._visible(_appointment(status="confirmed", note=None)) is False
+
+    def test_the_note_state_is_selected_with_the_appointment(self):
+        # Otherwise reading it costs a query on every note header render.
+        button = _button()
+        model = _found(_appointment())
+        with patch(f"{MODULE}.Appointment", model):
+            button.visible()
+
+        assert "note__current_state" in model.objects.filter.return_value.select_related.call_args.args
 
 
 class TestClick:

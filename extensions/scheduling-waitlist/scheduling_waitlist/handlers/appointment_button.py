@@ -24,15 +24,20 @@ from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data import Appointment
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
+from canvas_sdk.v1.data.note import NoteStates
 
 from scheduling_waitlist.constants import add_form_url
 
 BUTTON_TITLE = "Add to waitlist"
 MODAL_TITLE = "Add to waitlist"
 
-# The statuses that mean a booked slot has been given up. Read from the
-# appointment rather than from the note's state history: it is one field, and it
-# is the same field the freed-slot handler reacts to.
+# A slot can be given up in two records, and only one of them is certain to move.
+#
+# Marking no-show in the UI is a note state transition -- a NoteStateChangeEvent,
+# surfaced by the CurrentNoteStateEvent view. Whether the platform also writes
+# Appointment.status is server behaviour a plugin cannot see. Reading only the
+# status field meant the button never appeared after a no-show, so both are
+# consulted and either is enough.
 FREED_STATUSES = frozenset(
     {
         str(AppointmentProgressStatus.CANCELLED),
@@ -40,7 +45,10 @@ FREED_STATUSES = frozenset(
     }
 )
 
-RELATED = ("patient", "note_type", "provider", "location")
+FREED_NOTE_STATES = frozenset({str(NoteStates.CANCELLED), str(NoteStates.NOSHOW)})
+
+# ``note__current_state`` is selected so the note's state costs no second query.
+RELATED = ("patient", "note_type", "provider", "location", "note__current_state")
 
 
 class AddToWaitlistAppointmentButton(ActionButton):
@@ -75,11 +83,25 @@ class AddToWaitlistAppointmentButton(ActionButton):
             .first()
         )
 
+    @staticmethod
+    def _note_state(appointment: Any) -> str:
+        """The current state of this appointment's note, if it has one.
+
+        Walked defensively: an appointment may carry no note, and a note may have
+        no state history yet, either of which leaves nothing to read.
+        """
+        note = getattr(appointment, "note", None)
+        current = getattr(note, "current_state", None)
+        return str(getattr(current, "state", "") or "")
+
     def visible(self) -> bool:
         """Only on an appointment note whose slot has been given up.
 
         Everywhere else -- a regular office note, a booked appointment -- this
         button would be clutter.
+
+        Either record counts as given up. See ``FREED_STATUSES`` above: only one
+        of the two is guaranteed to move, and which one is not knowable here.
         """
         appointment = self._appointment()
         if appointment is None:
@@ -87,7 +109,9 @@ class AddToWaitlistAppointmentButton(ActionButton):
         if getattr(appointment, "patient", None) is None:
             # A waitlist entry needs somebody to put on it.
             return False
-        return str(getattr(appointment, "status", "") or "") in FREED_STATUSES
+
+        status = str(getattr(appointment, "status", "") or "")
+        return status in FREED_STATUSES or self._note_state(appointment) in FREED_NOTE_STATES
 
     def handle(self) -> list[Effect]:
         """Open the compact add form, pre-filled from the freed slot."""
