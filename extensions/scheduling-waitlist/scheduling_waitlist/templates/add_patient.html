@@ -128,6 +128,7 @@
 
       var apiBase = config.apiBase || "";
       var patientId = config.patientId || "";
+      var prefill = config.prefill || {};
 
       var els = {
         loading: document.getElementById("wl-loading"),
@@ -182,6 +183,24 @@
           option.textContent = item[labelKey];
           select.appendChild(option);
         });
+      }
+
+      /* Pre-select a value the freed slot already told us.
+       *
+       * Only when the option is really there: a key for a service that is not
+       * bookable, or a provider who has since gone inactive, must leave the
+       * dropdown on its default rather than select nothing at all and look like
+       * an empty field.
+       */
+      function preselect(select, value) {
+        if (!value) return;
+        var wanted = String(value);
+        for (var i = 0; i < select.options.length; i += 1) {
+          if (select.options[i].value === wanted) {
+            select.value = wanted;
+            return;
+          }
+        }
       }
 
       function clearErrors() {
@@ -254,6 +273,12 @@
         );
         fill(els.priority, options.priorities || [], "label", "label");
         fill(els.window, options.time_windows || [], "value", "label");
+
+        // Whatever the cancelled appointment already told us. Absent when the
+        // form was opened from a chart header, where there is no slot to copy.
+        preselect(els.service, prefill.service);
+        preselect(els.provider, prefill.provider);
+        preselect(els.location, prefill.location);
 
         els.loading.hidden = true;
         els.wrap.hidden = false;

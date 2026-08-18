@@ -43,6 +43,15 @@
                 }
             },
             {
+                "class": "scheduling_waitlist.handlers.appointment_button:AddToWaitlistAppointmentButton",
+                "description": "Adds an 'Add to waitlist' button to a cancelled or no-showed appointment's note, opening the form pre-filled from the freed slot",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Note", "Patient", "NoteType", "PracticeLocation", "Staff"],
+                    "write": []
+                }
+            },
+            {
                 "class": "scheduling_waitlist.handlers.slot_freed:SlotFreedHandler",
                 "description": "When a booked slot frees up, raises one task to the scheduling team naming the matching waitlisted patients",
                 "data_access": {

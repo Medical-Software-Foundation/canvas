@@ -102,14 +102,14 @@ class TestAddForm:
 
         assert json.loads(rendered_context()["config_json"])["patientId"] == ""
 
-    def test_the_page_carries_only_wiring_and_a_key(self, rendered_context):
-        # The name and date of birth behind the key are fetched over the
-        # authenticated API, so nothing identifiable is baked into a document
-        # the browser may cache.
+    def test_the_page_carries_only_wiring_and_keys(self, rendered_context):
+        # The name and date of birth behind the patient key, and the names behind
+        # the prefill keys, are all fetched over the authenticated API -- nothing
+        # identifiable is baked into a document the browser may cache.
         _api(query_params={"patient": "abc-123"}).get_add_form()
 
         config = json.loads(rendered_context()["config_json"])
-        assert set(config) == {"apiBase", "cacheBust", "patientId"}
+        assert set(config) == {"apiBase", "cacheBust", "patientId", "prefill"}
 
 
 class TestAssets:
@@ -212,3 +212,34 @@ class TestTemplateComments:
             assert source.count("{% comment %}") == source.count("{% endcomment %}"), (
                 template.name
             )
+
+
+class TestAddFormPrefill:
+    """What the cancelled appointment already told us reaches the form.
+
+    Keys only. The form matches them against dropdowns it fetches itself, so an
+    unknown key fails to pre-select rather than inventing an unbookable option.
+    """
+
+    def _config(self, rendered_context, query):
+        _api(query_params=query).get_add_form()
+        return json.loads(rendered_context()["config_json"])
+
+    def test_service_provider_and_location_reach_the_page(self, rendered_context):
+        config = self._config(
+            rendered_context,
+            {"patient": "abc-123", "service": "7", "provider": "101", "location": "3"},
+        )
+
+        assert config["prefill"] == {"service": "7", "provider": "101", "location": "3"}
+
+    def test_a_chart_opened_form_carries_no_prefill(self, rendered_context):
+        # There is no freed slot to copy from a chart header.
+        config = self._config(rendered_context, {"patient": "abc-123"})
+
+        assert config["prefill"] == {"service": "", "provider": "", "location": ""}
+
+    def test_prefill_keys_are_trimmed(self, rendered_context):
+        config = self._config(rendered_context, {"patient": "abc-123", "service": "  7  "})
+
+        assert config["prefill"]["service"] == "7"

@@ -182,3 +182,25 @@ class TestResponseStubs:
         from canvas_sdk.effects.simple_api import HTMLResponse
 
         assert HTMLResponse("<p>hi</p>").headers == {}
+
+
+class TestAppointmentStatusStub:
+    """The freed-slot statuses the appointment button keys off.
+
+    ``str()`` of a real ``TextChoices`` member is its stored value, which is what
+    the handler compares against -- so the stub has to be those strings, not the
+    member names.
+    """
+
+    def test_cancelled_and_noshowed_are_their_stored_values(self):
+        from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
+
+        assert str(AppointmentProgressStatus.CANCELLED) == "cancelled"
+        assert str(AppointmentProgressStatus.NOSHOWED) == "noshowed"
+
+    def test_a_booked_status_is_not_one_of_them(self):
+        from scheduling_waitlist.handlers.appointment_button import FREED_STATUSES
+
+        assert "confirmed" not in FREED_STATUSES
+        assert "cancelled" in FREED_STATUSES
+        assert "noshowed" in FREED_STATUSES

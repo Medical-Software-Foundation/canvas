@@ -15,8 +15,13 @@ reacts to cancellations automatically.
 priority then wait time. Filter by service, provider, or location; search by patient name. Each
 row can open the patient's chart, be edited, marked scheduled, or removed.
 
-**Adding a patient** — from the roster itself: search for the patient by name, then fill in
-service, provider, location, priority, preferred time, and a note.
+**Adding a patient** — three ways into the same short form:
+
+- **From the roster**, searching for the patient by name.
+- **From the patient chart header**, where the button reads "Add to waitlist", or "On waitlist"
+  if they are already listed — in which case it opens the roster filtered to them instead.
+- **From a cancelled or no-showed appointment's note**, pre-filled with the service, provider
+  and location of the slot that just freed up.
 
 **From the chart** — the chart carries two things, because it is asked two different questions:
 
@@ -94,6 +99,7 @@ rather than guessing.
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
 | `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
 | `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header |
+| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
 | `handlers.waitlist_cron:WaitlistMaintenanceCron` | CronTask | `0 3 * * *` (UTC) |

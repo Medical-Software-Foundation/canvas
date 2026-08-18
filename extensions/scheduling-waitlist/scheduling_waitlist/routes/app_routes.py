@@ -14,7 +14,13 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
 from scheduling_waitlist import CACHE_BUST
-from scheduling_waitlist.constants import ADD_FOR_PATIENT_PARAM, API_BASE
+from scheduling_waitlist.constants import (
+    ADD_FOR_PATIENT_PARAM,
+    API_BASE,
+    PREFILL_LOCATION_PARAM,
+    PREFILL_PROVIDER_PARAM,
+    PREFILL_SERVICE_PARAM,
+)
 from scheduling_waitlist.services.html import safe_json
 
 # Assets are addressed absolutely rather than relatively. A relative "roster.css"
@@ -79,6 +85,15 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
                         "apiBase": API_BASE,
                         "cacheBust": CACHE_BUST,
                         "patientId": self._add_for_patient_id(),
+                        # Keys only, and only the ones supplied. The form matches
+                        # them against dropdowns it fetches itself, so an unknown
+                        # key simply fails to pre-select rather than inventing an
+                        # option nobody can book.
+                        "prefill": {
+                            "service": self._param(PREFILL_SERVICE_PARAM),
+                            "provider": self._param(PREFILL_PROVIDER_PARAM),
+                            "location": self._param(PREFILL_LOCATION_PARAM),
+                        },
                     }
                 ),
             },
@@ -91,10 +106,14 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         ]
 
+    def _param(self, name: str) -> str:
+        """One trimmed query parameter, or an empty string."""
+        params = getattr(self.request, "query_params", None) or {}
+        return str(params.get(name) or "").strip()
+
     def _add_for_patient_id(self) -> str:
         """The patient the chart button asked to add, if any."""
-        params = getattr(self.request, "query_params", None) or {}
-        return str(params.get(ADD_FOR_PATIENT_PARAM) or "").strip()
+        return self._param(ADD_FOR_PATIENT_PARAM)
 
     @api.get("/roster.css")
     def get_css(self) -> list[Response | Effect]:

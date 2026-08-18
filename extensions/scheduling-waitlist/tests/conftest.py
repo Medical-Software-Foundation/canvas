@@ -360,6 +360,7 @@ def _install_canvas_sdk_stubs() -> None:
     data = _ensure_module("canvas_sdk.v1.data")
     base_mod = _ensure_module("canvas_sdk.v1.data.base")
     note_data_mod = _ensure_module("canvas_sdk.v1.data.note")
+    appointment_data_mod = _ensure_module("canvas_sdk.v1.data.appointment")
     task_data_mod = _ensure_module("canvas_sdk.v1.data.task")
     effects_mod = _ensure_module("canvas_sdk.effects")
     launch_modal_mod = _ensure_module("canvas_sdk.effects.launch_modal")
@@ -403,6 +404,24 @@ def _install_canvas_sdk_stubs() -> None:
 
     note_data_mod.Note = data.Note
     note_data_mod.NoteType = data.NoteType
+
+    class AppointmentProgressStatus:
+        """Only the values this plugin reads, as their stored strings.
+
+        ``str()`` of the real ``TextChoices`` member yields the stored value, so
+        the plugin compares against these strings and the stub has to be them.
+        """
+
+        UNCONFIRMED = "unconfirmed"
+        ATTEMPTED = "attempted"
+        CONFIRMED = "confirmed"
+        ARRIVED = "arrived"
+        ROOMED = "roomed"
+        EXITED = "exited"
+        NOSHOWED = "noshowed"
+        CANCELLED = "cancelled"
+
+    appointment_data_mod.AppointmentProgressStatus = AppointmentProgressStatus
 
     class TaskPriority:
         URGENT = "urgent"

@@ -7,6 +7,7 @@ be enforced at the database level anyway. Validation happens in
 ``services/transitions.py``.
 """
 
+from typing import Any
 from urllib.parse import quote
 
 from scheduling_waitlist import CACHE_BUST
@@ -21,22 +22,48 @@ ROSTER_URL = f"{API_BASE}/app/?v={CACHE_BUST}"
 # The query parameter naming the patient an add form is for.
 ADD_FOR_PATIENT_PARAM = "patient"
 
+# What the freed slot already told us, so the scheduler does not re-enter it.
+# Keys rather than names: the form matches them against its own dropdowns.
+PREFILL_SERVICE_PARAM = "service"
+PREFILL_PROVIDER_PARAM = "provider"
+PREFILL_LOCATION_PARAM = "location"
 
-def add_form_url(patient_id: str) -> str:
+
+def add_form_url(
+    patient_id: str,
+    *,
+    note_type_dbid: Any = None,
+    provider_dbid: Any = None,
+    location_dbid: Any = None,
+) -> str:
     """The compact add form for one named patient.
 
     A page of its own rather than the roster with a parameter: the chart button
     opens a dialog, and the roster is a full-width page that sizes itself as one.
     Both post to the same endpoint, so there is still one set of validation rules.
 
-    Encoded rather than interpolated: a patient key is external input, and an
-    unescaped one would silently truncate the query string.
+    The optional keys pre-select the form's dropdowns. They come from the
+    cancelled appointment when the button was clicked there, and are absent when
+    it was clicked on a chart header, where there is no slot to copy.
+
+    Encoded rather than interpolated: these are external input, and an unescaped
+    value would silently truncate the query string.
     """
-    return (
-        f"{API_BASE}/app/add"
-        f"?{ADD_FOR_PATIENT_PARAM}={quote(str(patient_id), safe='')}"
-        f"&v={CACHE_BUST}"
-    )
+    params = [
+        f"{ADD_FOR_PATIENT_PARAM}={quote(str(patient_id), safe='')}",
+        f"v={CACHE_BUST}",
+    ]
+    # Only what was actually known. A blank parameter would be indistinguishable
+    # from a deliberate "any provider", and would pre-select the wrong thing.
+    for name, value in (
+        (PREFILL_SERVICE_PARAM, note_type_dbid),
+        (PREFILL_PROVIDER_PARAM, provider_dbid),
+        (PREFILL_LOCATION_PARAM, location_dbid),
+    ):
+        if value not in (None, ""):
+            params.append(f"{name}={quote(str(value), safe='')}")
+
+    return f"{API_BASE}/app/add?" + "&".join(params)
 
 
 def roster_for_patient_url(patient_id: str) -> str:
