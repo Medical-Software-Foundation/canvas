@@ -12,6 +12,7 @@ from scheduling_waitlist.services.entries import (
     create_entry,
     find_live_entry,
     get_entry,
+    has_live_entry_for_service,
     live_entries_for_patient,
     update_entry,
     SORT_PRIORITY,
@@ -473,3 +474,49 @@ class TestPatientFilter:
             build_queryset(patient_id="patient-uuid", search="smith")
 
         assert _filter_kwargs(recorder)["patient__id"] == "patient-uuid"
+
+
+class TestHasLiveEntryForService:
+    """The narrower question the freed-appointment button asks."""
+
+    def test_it_is_scoped_to_one_patient_and_one_service(self):
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.filter.return_value.exists.return_value = True
+
+            assert has_live_entry_for_service(55, 7) is True
+
+        kwargs = model.objects.filter.call_args.kwargs
+        assert kwargs["patient_id"] == 55
+        assert kwargs["note_type_id"] == 7
+        assert kwargs["status__in"] == ["waiting", "offered"]
+
+    def test_only_live_statuses_count(self):
+        # A booked or removed entry is not something they are still waiting for.
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.filter.return_value.exists.return_value = False
+
+            assert has_live_entry_for_service(55, 7) is False
+
+    def test_a_missing_patient_asks_nothing(self):
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            assert has_live_entry_for_service(None, 7) is False
+
+        model.objects.filter.assert_not_called()
+
+    def test_a_slot_without_a_service_asks_nothing(self):
+        # Filtering on a null note type would match "any appointment type" entries
+        # and claim they are waiting for a service the slot never named.
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            assert has_live_entry_for_service(55, None) is False
+
+        model.objects.filter.assert_not_called()
+
+    def test_it_answers_with_exists_rather_than_building_a_model(self):
+        # It runs on every note header render.
+        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
+            model.objects.filter.return_value.exists.return_value = True
+
+            has_live_entry_for_service(55, 7)
+
+        model.objects.filter.return_value.exists.assert_called_once()
+        model.objects.filter.return_value.select_related.assert_not_called()

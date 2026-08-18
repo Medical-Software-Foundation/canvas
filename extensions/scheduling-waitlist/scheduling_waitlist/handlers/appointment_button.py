@@ -26,10 +26,13 @@ from canvas_sdk.v1.data import Appointment
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 from canvas_sdk.v1.data.note import NoteStates
 
-from scheduling_waitlist.constants import add_form_url
+from scheduling_waitlist.constants import add_form_url, roster_for_patient_url
+from scheduling_waitlist.services.entries import has_live_entry_for_service
 
-BUTTON_TITLE = "Add to waitlist"
-MODAL_TITLE = "Add to waitlist"
+ADD_TITLE = "Add to waitlist"
+LISTED_TITLE = "On waitlist"
+ADD_MODAL_TITLE = "Add to waitlist"
+LISTED_MODAL_TITLE = "Scheduling Waitlist"
 
 # A slot can be given up in two records, and only one of them is certain to move.
 #
@@ -54,7 +57,7 @@ RELATED = ("patient", "note_type", "provider", "location", "note__current_state"
 class AddToWaitlistAppointmentButton(ActionButton):
     """Offers the waitlist form from an appointment that has just freed up."""
 
-    BUTTON_TITLE = BUTTON_TITLE
+    BUTTON_TITLE = ADD_TITLE
     BUTTON_KEY = "scheduling_waitlist__add_from_appointment"
     BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_HEADER
 
@@ -94,6 +97,23 @@ class AddToWaitlistAppointmentButton(ActionButton):
         current = getattr(note, "current_state", None)
         return str(getattr(current, "state", "") or "")
 
+    @staticmethod
+    def _already_waiting(appointment: Any) -> bool:
+        """Whether this patient already wants the service that just freed up.
+
+        Deliberately scoped to this slot's service rather than to the waitlist as
+        a whole: somebody waiting for a physical is not waiting for the follow-up
+        that just opened, and saying "On waitlist" there would talk a scheduler
+        out of adding the very thing they should.
+
+        A slot with no service cannot answer the question, so it reads as not
+        waiting -- the form it opens has no service to pre-fill either.
+        """
+        patient = getattr(appointment, "patient", None)
+        return has_live_entry_for_service(
+            getattr(patient, "dbid", None), getattr(appointment, "note_type_id", None)
+        )
+
     def visible(self) -> bool:
         """Only on an appointment note whose slot has been given up.
 
@@ -102,6 +122,11 @@ class AddToWaitlistAppointmentButton(ActionButton):
 
         Either record counts as given up. See ``FREED_STATUSES`` above: only one
         of the two is guaranteed to move, and which one is not knowable here.
+
+        The label is decided here too, because the platform reads
+        ``BUTTON_TITLE`` immediately after this returns. Assigned to ``self``
+        rather than the class: a class attribute would carry one note's label
+        onto the next.
         """
         appointment = self._appointment()
         if appointment is None:
@@ -111,10 +136,25 @@ class AddToWaitlistAppointmentButton(ActionButton):
             return False
 
         status = str(getattr(appointment, "status", "") or "")
-        return status in FREED_STATUSES or self._note_state(appointment) in FREED_NOTE_STATES
+        if status not in FREED_STATUSES and self._note_state(appointment) not in FREED_NOTE_STATES:
+            return False
+
+        self.BUTTON_TITLE = (
+            LISTED_TITLE if self._already_waiting(appointment) else ADD_TITLE
+        )
+        return True
 
     def handle(self) -> list[Effect]:
-        """Open the compact add form, pre-filled from the freed slot."""
+        """Open whichever surface the label promised.
+
+        "Add to waitlist" opens the compact form pre-filled from the freed slot.
+        "On waitlist" opens the roster filtered to this patient instead, the same
+        as the chart-header button does -- offering an add form for a service they
+        are already waiting for would only earn a 409 from the duplicate guard.
+
+        The lookups are repeated rather than carried over from ``visible()``,
+        which is a separate invocation with no state to reuse.
+        """
         appointment = self._appointment()
         if appointment is None:
             return []
@@ -124,15 +164,23 @@ class AddToWaitlistAppointmentButton(ActionButton):
         if not patient_id:
             return []
 
-        return [
-            LaunchModalEffect(
-                url=add_form_url(
+        if self._already_waiting(appointment):
+            url, title = roster_for_patient_url(str(patient_id)), LISTED_MODAL_TITLE
+        else:
+            url, title = (
+                add_form_url(
                     str(patient_id),
                     note_type_dbid=getattr(appointment, "note_type_id", None),
                     provider_dbid=getattr(appointment, "provider_id", None),
                     location_dbid=getattr(appointment, "location_id", None),
                 ),
+                ADD_MODAL_TITLE,
+            )
+
+        return [
+            LaunchModalEffect(
+                url=url,
                 target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
-                title=MODAL_TITLE,
+                title=title,
             ).apply()
         ]

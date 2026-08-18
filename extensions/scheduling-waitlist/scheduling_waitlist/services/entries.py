@@ -197,6 +197,27 @@ def has_live_entry(patient_dbid: Any) -> bool:
     ).exists()
 
 
+def has_live_entry_for_service(patient_dbid: Any, note_type_dbid: Any) -> bool:
+    """Whether this patient is already waiting for this one appointment type.
+
+    The question the button on a freed appointment asks, which is narrower than
+    :func:`has_live_entry`: a patient waiting for a physical is *not* waiting for
+    the follow-up slot that just opened, and telling a scheduler otherwise would
+    stop them adding the thing they should.
+
+    A yes/no like :func:`has_live_entry` rather than :func:`find_live_entry`,
+    which selects five relations to build a model that would be thrown away. This
+    runs on every note header render.
+    """
+    if patient_dbid is None or note_type_dbid is None:
+        return False
+    return WaitlistEntry.objects.filter(
+        patient_id=patient_dbid,
+        note_type_id=note_type_dbid,
+        status__in=list(MATCHABLE_STATUSES),
+    ).exists()
+
+
 def find_live_entry(patient_dbid: Any, note_type_dbid: Any) -> Any | None:
     """An existing live entry for the same patient and appointment type."""
     return (
