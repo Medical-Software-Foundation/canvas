@@ -91,6 +91,20 @@ class SlotFreedHandler(BaseHandler):
             log.info("scheduling_waitlist: freed slot is too soon to fill; skipping")
             return banner
 
+        # Checked before the slot is claimed, so a misconfigured team costs
+        # nothing. Claiming first meant an instance with no usable team burned
+        # every slot's fingerprint on the way past, leaving them unannounceable
+        # even once the configuration was corrected.
+        team_id = resolve_team_id(config.scheduling_team)
+        if not team_id:
+            # Fail closed. A task with no team is a task nobody opens, and
+            # picking a fallback would quietly drop the notification.
+            log.error(
+                "scheduling_waitlist: WAITLIST_SCHEDULING_TEAM is not set or does not "
+                "match a team, so no slot-opened task was created"
+            )
+            return banner
+
         ledger, claimed = self._claim(slot, now)
         if not claimed:
             log.info("scheduling_waitlist: this slot has already been announced")
@@ -104,17 +118,6 @@ class SlotFreedHandler(BaseHandler):
         )
         if not entries:
             self._record(ledger, entry_count=0, task_id="")
-            return banner
-
-        team_id = resolve_team_id(config.scheduling_team)
-        if not team_id:
-            # Fail closed. A task with no team is a task nobody opens, and
-            # picking a fallback would quietly drop the notification.
-            log.error(
-                "scheduling_waitlist: WAITLIST_SCHEDULING_TEAM is not set or does not "
-                "match a team, so no slot-opened task was created"
-            )
-            self._record(ledger, entry_count=len(entries), task_id="")
             return banner
 
         task_id = str(uuid4())
@@ -224,6 +227,10 @@ class SlotFreedHandler(BaseHandler):
 
         Claimed before the match runs, so a duplicate event pays one insert
         rather than a full query and a second task.
+
+        Claimed *after* the team is resolved, though: the fingerprint is spent
+        once written, so it must only be spent on a slot this instance is
+        actually able to announce.
         """
         try:
             return SlotNotification.objects.get_or_create(

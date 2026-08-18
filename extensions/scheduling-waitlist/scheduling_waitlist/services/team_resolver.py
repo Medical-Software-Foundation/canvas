@@ -23,15 +23,21 @@ def resolve_team_id(configured: str) -> str:
     if not value:
         return ""
 
-    candidates = {value, value.replace("-", "")}
-    try:
-        candidates.add(str(uuid.UUID(value)))
-    except ValueError:
-        pass
+    # Built by parsing, not by hoping. Putting an unparsed value into a UUID
+    # column makes the database raise rather than simply not match, which took
+    # the whole handler down and meant the name lookup below was never reached --
+    # so the documented "or the exact name" path never worked at all.
+    candidates = set()
+    for candidate in (value, value.replace("-", "")):
+        try:
+            candidates.add(str(uuid.UUID(candidate)))
+        except ValueError:
+            continue
 
-    team = Team.objects.filter(id__in=candidates).first()
-    if team is not None:
-        return str(team.id)
+    if candidates:
+        team = Team.objects.filter(id__in=candidates).first()
+        if team is not None:
+            return str(team.id)
 
     team = Team.objects.filter(name=value).first()
     return str(team.id) if team is not None else ""
