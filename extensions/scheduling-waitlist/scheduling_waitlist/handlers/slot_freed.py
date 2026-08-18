@@ -79,7 +79,11 @@ class SlotFreedHandler(BaseHandler):
         now = datetime.now(timezone.utc)
         slot = FreedSlot.from_appointment(
             self._freed_appointment(appointment),
-            source_event=str(getattr(self.event, "type", "") or ""),
+            # The event's *name*, not its type. ``event.type`` is the protobuf
+            # enum integer, so this used to put "Slot freed (4)" in front of
+            # schedulers. The fingerprint deliberately excludes the event, so
+            # changing this does not disturb the duplicate-task guard.
+            source_event=str(getattr(self.event, "name", "") or ""),
         )
 
         if slot.note_type_dbid is None:
@@ -143,6 +147,7 @@ class SlotFreedHandler(BaseHandler):
                     entries,
                     timezone_name=config.display_timezone,
                     today=now.date(),
+                    enforce_time_windows=config.enforce_time_windows,
                 ),
             ).apply(),
         ]

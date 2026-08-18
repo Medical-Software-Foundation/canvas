@@ -14,11 +14,21 @@ SECRETS = {
 
 
 def _handler(appointment_id="appt-key", event_type="APPOINTMENT_CANCELED", secrets=None):
+    """A handler whose event mirrors the real one's two identity fields.
+
+    ``type`` is the protobuf enum *integer* and ``name`` is the readable string,
+    exactly as ``canvas_sdk.events.Event`` sets them. Setting only ``type``, to
+    the name, is what let the handler read the wrong field for so long: the
+    suite saw "APPOINTMENT_CANCELED" where the instance produced "4".
+    """
+    from canvas_sdk.events import EventType
+
     handler = SlotFreedHandler.__new__(SlotFreedHandler)
     event = MagicMock()
     event.target.id = appointment_id
     event.context = {}
-    event.type = event_type
+    event.type = getattr(EventType, event_type)
+    event.name = event_type
     handler.event = event
     handler.secrets = SECRETS if secrets is None else secrets
     return handler
@@ -246,10 +256,17 @@ class TestTask:
 
         assert effects[0].team_id == "team-1"
 
-    def test_the_task_names_how_many_patients_match(self):
+    def test_the_task_names_how_many_people_to_ring(self):
         effects, _ = effects_of(_handler(), entries=[_entry("Jordan Lee"), _entry("Sam Poe")])
 
-        assert "2 waitlisted patients match" in effects[0].title
+        assert "2 to call" in effects[0].title
+
+    def test_the_title_carries_no_internal_event_identifier(self):
+        # event.type is an integer; reading it put "4" in the task text.
+        effects, _ = effects_of(_handler())
+
+        assert "(4)" not in effects[0].title
+        assert "(4)" not in effects[1].body
 
     def test_the_task_is_not_attached_to_any_one_patient(self):
         # It names several people; binding it to one would put a task about
@@ -266,7 +283,12 @@ class TestTask:
     def test_the_comment_says_nobody_has_been_booked(self):
         effects, _ = effects_of(_handler())
 
-        assert "Nobody has been booked" in effects[1].body
+        assert "never books anyone into the slot" in effects[1].body
+
+    def test_the_comment_says_how_the_slot_came_free(self):
+        effects, _ = effects_of(_handler(event_type="APPOINTMENT_NO_SHOWED"))
+
+        assert "Marked no-show." in effects[1].body
 
     def test_the_comment_and_task_share_an_identifier(self):
         effects, _ = effects_of(_handler())
