@@ -143,7 +143,7 @@ class SyncCron(CronTask):
             feed.save()
             return cal_effects
 
-        effects = self._reconcile(calendar_id, parsed, live_by_time, max_deletes)
+        effects = self._reconcile(calendar_id, parsed, live_by_time, max_deletes, now)
 
         feed.last_sync_at = now
         feed.last_etag = result.etag
@@ -158,6 +158,7 @@ class SyncCron(CronTask):
         parsed: list[ParsedEvent],
         live_by_time: dict[tuple[datetime, datetime], list[str]],
         max_deletes: int,
+        now: datetime,
     ) -> list[Effect]:
         """Reconcile the live Admin calendar to the parsed feed by time window.
 
@@ -198,6 +199,24 @@ class SyncCron(CronTask):
 
         # Create shortfall: the feed wants more blocks at this time than are live.
         for (starts_at, ends_at), want in desired.items():
+            # Never create a block that has already ended. Such a block cannot
+            # affect availability, and because `live_busy_events` selects
+            # `ends_at > now` it is unreachable by every later reconcile — so it
+            # would be re-created on every tick and never matched or cleaned up,
+            # an unbounded duplicate loop (Pylon 32976).
+            #
+            # The parser is not supposed to yield ended events. This is a
+            # backstop for any path that slips through, logged loudly rather than
+            # skipped silently so the underlying parser bug stays findable.
+            if ends_at <= now:
+                log.warning(
+                    "external_calendar_busy_blocks: refusing to create an already-ended "
+                    "block on calendar %s (%s to %s); parser yielded a past event",
+                    calendar_id,
+                    starts_at.isoformat(),
+                    ends_at.isoformat(),
+                )
+                continue
             have = len(live_by_time.get((starts_at, ends_at), ()))
             for _ in range(want - have):
                 # event_id is intentionally omitted: the create interpreter
