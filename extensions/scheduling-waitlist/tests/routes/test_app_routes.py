@@ -44,22 +44,16 @@ class TestRosterPage:
         assert json.loads(rendered_context()["config_json"]) == {
             "apiBase": "/plugin-io/api/scheduling_waitlist",
             "cacheBust": CACHE_BUST,
-            "focusPatientId": "",
         }
 
-    def test_a_patient_key_narrows_the_roster_to_one_person(self, rendered_context):
-        # Arrived at from a chart. Only the key travels in the document; the
-        # names behind it still come over the authenticated API.
+    def test_the_roster_ignores_a_patient_parameter(self, rendered_context):
+        # The roster is the practice-wide list. Narrowing it to one patient was a
+        # decision that got reverted; the ticket's filters are service, provider
+        # and location.
         _api(query_params={"patient": "abc-123"}).get_roster_page()
 
         config = json.loads(rendered_context()["config_json"])
-        assert config["focusPatientId"] == "abc-123"
-        assert set(config) == {"apiBase", "cacheBust", "focusPatientId"}
-
-    def test_a_blank_patient_key_leaves_the_roster_unfiltered(self, rendered_context):
-        _api(query_params={"patient": "   "}).get_roster_page()
-
-        assert json.loads(rendered_context()["config_json"])["focusPatientId"] == ""
+        assert set(config) == {"apiBase", "cacheBust"}
 
 
 class TestAddForm:

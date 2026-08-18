@@ -26,7 +26,7 @@ from canvas_sdk.v1.data import Appointment
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 from canvas_sdk.v1.data.note import NoteStates
 
-from scheduling_waitlist.constants import add_form_url, roster_for_patient_url
+from scheduling_waitlist.constants import ROSTER_URL, add_form_url
 from scheduling_waitlist.services.entries import has_live_entry_for_service
 
 ADD_TITLE = "Add to waitlist"
@@ -148,9 +148,9 @@ class AddToWaitlistAppointmentButton(ActionButton):
         """Open whichever surface the label promised.
 
         "Add to waitlist" opens the compact form pre-filled from the freed slot.
-        "On waitlist" opens the roster filtered to this patient instead, the same
-        as the chart-header button does -- offering an add form for a service they
-        are already waiting for would only earn a 409 from the duplicate guard.
+        "On waitlist" opens the roster instead, the same as the chart-header button
+        does -- offering an add form for a service they are already waiting for
+        would only earn a 409 from the duplicate guard.
 
         The lookups are repeated rather than carried over from ``visible()``,
         which is a separate invocation with no state to reuse.
@@ -165,7 +165,7 @@ class AddToWaitlistAppointmentButton(ActionButton):
             return []
 
         if self._already_waiting(appointment):
-            url, title = roster_for_patient_url(str(patient_id)), LISTED_MODAL_TITLE
+            url, title = ROSTER_URL, LISTED_MODAL_TITLE
         else:
             url, title = (
                 add_form_url(

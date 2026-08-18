@@ -18,7 +18,7 @@ from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data import Patient
 
-from scheduling_waitlist.constants import add_form_url, roster_for_patient_url
+from scheduling_waitlist.constants import ROSTER_URL, add_form_url
 from scheduling_waitlist.services.entries import has_live_entry
 
 ADD_TITLE = "Add to waitlist"
@@ -68,10 +68,9 @@ class AddToWaitlistButton(ActionButton):
 
         "Add to waitlist" opens the compact form -- its own small page rather
         than the roster, because opening a full-width table to collect six fields
-        is not a dialog. "On waitlist" instead opens the roster filtered to this
-        patient, where editing, marking scheduled and removing already live;
-        handing over an add form there refuses the obvious resubmission with a
-        409 and manages nothing.
+        is not a dialog. "On waitlist" instead opens the roster, where editing,
+        marking scheduled and removing already live; handing over an add form
+        there refuses the obvious resubmission with a 409 and manages nothing.
 
         The lookup is repeated rather than carried over from ``visible()``: that
         is a separate invocation, so there is no state to reuse.
@@ -85,7 +84,7 @@ class AddToWaitlistButton(ActionButton):
             return []
 
         if has_live_entry(getattr(patient, "dbid", None)):
-            url, title = roster_for_patient_url(patient_id), LISTED_MODAL_TITLE
+            url, title = ROSTER_URL, LISTED_MODAL_TITLE
         else:
             url, title = add_form_url(patient_id), ADD_MODAL_TITLE
 

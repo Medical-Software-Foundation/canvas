@@ -175,7 +175,6 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
             offset=offset,
             status=self._query("status"),
             search=self._query("q"),
-            patient_id=self._query("patient"),
             note_type_dbid=self._query("appointment_type_id") or None,
             provider_dbid=self._query("provider_id") or None,
             location_dbid=self._query("location_id") or None,

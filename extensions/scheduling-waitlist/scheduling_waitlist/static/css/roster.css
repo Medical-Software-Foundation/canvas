@@ -161,17 +161,6 @@ body {
 
 .wl-btn-sm { padding: 4px 8px; min-height: 28px; font-size: 13px; }
 
-/* Sits inside the count line, so it has to read as part of a sentence rather
-   than as a control the eye has to travel to. */
-.wl-btn-inline {
-  padding: 0;
-  min-height: 0;
-  border: 0;
-  font-size: 13px;
-  color: var(--wl-accent);
-  text-decoration: underline;
-}
-
 /* ---------- status line ---------- */
 
 .wl-status {

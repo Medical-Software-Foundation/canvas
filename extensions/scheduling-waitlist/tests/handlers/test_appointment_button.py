@@ -279,10 +279,10 @@ class TestClickFollowsTheLabel:
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/add?")
         assert "service=7" in url
 
-    def test_already_waiting_opens_the_roster_filtered_to_them(self):
+    def test_already_waiting_opens_the_roster(self):
         # Offering an add form for a service they already want would only earn a
         # 409 from the duplicate guard.
         url = self._click(waiting=True)
 
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/?")
-        assert "patient=patient-uuid" in url
+        assert "patient=" not in url

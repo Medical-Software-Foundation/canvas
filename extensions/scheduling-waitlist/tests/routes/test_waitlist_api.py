@@ -275,21 +275,6 @@ class TestGetEntries:
 
         assert lister.call_args.kwargs["note_type_dbid"] is None
 
-    def test_a_patient_key_narrows_the_page_to_one_person(self, make_request, mock_staff):
-        # How a chart shows "this patient's entries". By key, so a shared surname
-        # cannot put someone else's entry on their chart.
-        api = _entries_api(make_request, mock_staff, query={"patient": "patient-uuid"})
-
-        _, lister = self._call(api)
-
-        assert lister.call_args.kwargs["patient_id"] == "patient-uuid"
-
-    def test_no_patient_key_leaves_the_page_practice_wide(self, make_request, mock_staff):
-        api = _entries_api(make_request, mock_staff)
-
-        _, lister = self._call(api)
-
-        assert lister.call_args.kwargs["patient_id"] == ""
 
     def test_oversized_page_is_capped(self, make_request, mock_staff):
         api = _entries_api(make_request, mock_staff, query={"limit": "100000"})

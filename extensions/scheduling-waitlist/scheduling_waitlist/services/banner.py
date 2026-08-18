@@ -19,11 +19,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.banner_alert.add_banner_alert import AddBannerAlert
 from canvas_sdk.effects.banner_alert.remove_banner_alert import RemoveBannerAlert
 
-from scheduling_waitlist.constants import (
-    BANNER_KEY,
-    BANNER_NARRATIVE_MAX,
-    roster_for_patient_url,
-)
+from scheduling_waitlist.constants import BANNER_KEY, BANNER_NARRATIVE_MAX, ROSTER_URL
 from scheduling_waitlist.services.display import ANY_TYPE, note_type_name
 from scheduling_waitlist.services.entries import live_entries_for_patient
 
@@ -73,10 +69,7 @@ def banner_effects(patient: Any) -> list[Effect]:
             narrative=compose_narrative(entries),
             placement=[AddBannerAlert.Placement.CHART],
             intent=AddBannerAlert.Intent.INFO,
-            # Filtered to this patient. A banner on one chart that opened the
-            # whole practice list would leave the reader hunting for the person
-            # whose chart they are already on.
-            href=roster_for_patient_url(str(patient_id)),
+            href=ROSTER_URL,
         ).apply()
     ]
 

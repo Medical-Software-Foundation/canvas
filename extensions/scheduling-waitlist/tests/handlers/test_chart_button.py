@@ -124,22 +124,17 @@ class TestClick:
 
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/add?")
 
-    def test_a_patient_already_listed_gets_the_roster_filtered_to_them(self):
+    def test_a_patient_already_listed_gets_the_roster(self):
         # Editing, marking scheduled and removing all live on the roster, so
-        # that is where "On waitlist" has to lead.
+        # that is where "On waitlist" has to lead. The practice-wide list: a
+        # patient-scoped roster was a decision that got reverted.
         url = self._click(listed=True)[0].url
 
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/?")
-        assert "patient=abc-123" in url
+        assert "patient=" not in url
 
     def test_a_patient_key_needing_encoding_is_escaped(self):
         url = self._click(patient_id="a b/c")[0].url
-
-        assert "a b/c" not in url
-        assert "a%20b%2Fc" in url
-
-    def test_the_roster_branch_encodes_the_key_too(self):
-        url = self._click(patient_id="a b/c", listed=True)[0].url
 
         assert "a b/c" not in url
         assert "a%20b%2Fc" in url
