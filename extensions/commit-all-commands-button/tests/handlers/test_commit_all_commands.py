@@ -10,44 +10,20 @@ from canvas_sdk.commands import (
 )
 from canvas_sdk.commands.commands.change_medication import ChangeMedicationCommand
 from canvas_sdk.commands.commands.immunization_statement import ImmunizationStatementCommand
-from canvas_sdk.events import EventType
 from canvas_sdk.v1.data.note import NoteStates
 
-from commit_all_commands_button.handlers.commit_all_commands import (
-    CommitButtonHandler,
-    ShowCommitButtonOnOriginateHandler,
-)
-
-
-@pytest.fixture(autouse=True)
-def stub_reload():
-    """Stub the note lookup and reload effect appended after a successful commit.
-
-    Autouse because every test that commits something now gets the trailing
-    ReloadNoteActionButtonsEffect, and neither the note lookup nor the effect's
-    own validation is what those tests are about.
-    """
-    with patch("commit_all_commands_button.handlers.commit_all_commands.Note") as mock_note, patch(
-        "commit_all_commands_button.handlers.commit_all_commands.ReloadNoteActionButtonsEffect"
-    ) as mock_reload:
-        mock_note.objects.get.return_value = Mock(id="note-uuid-abc")
-        mock_reload.return_value.apply.return_value = Mock(name="reload_effect")
-        yield mock_reload
+from commit_all_commands_button.handlers.commit_all_commands import CommitButtonHandler
 
 
 class TestCommitButtonHandlerVisibility:
     """Test cases for button visibility logic."""
 
-    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
     @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
-    def test_visible_when_note_not_locked_and_staged_commands_exist(
-        self, mock_note_state, mock_command_model
-    ):
-        """Button should be visible when the note is unlocked and has staged commands."""
+    def test_visible_when_note_not_locked(self, mock_note_state):
+        """Button should be visible when note is not locked."""
         mock_note_event = Mock()
         mock_note_event.state = NoteStates.UNLOCKED
         mock_note_state.objects.get.return_value = mock_note_event
-        mock_command_model.objects.filter.return_value.exists.return_value = True
 
         mock_event = Mock()
         mock_event.context = {"note_id": "test-note-id"}
@@ -57,33 +33,6 @@ class TestCommitButtonHandlerVisibility:
 
         assert result is True
         mock_note_state.objects.get.assert_called_once_with(note__dbid="test-note-id")
-        # Only the schema keys this button can actually commit are counted.
-        _, kwargs = mock_command_model.objects.filter.call_args
-        assert kwargs["note_id"] == "test-note-id"
-        assert kwargs["state"] == "staged"
-        assert set(kwargs["schema_key__in"]) == set(CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS)
-
-    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
-    @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
-    def test_not_visible_when_no_committable_staged_commands(
-        self, mock_note_state, mock_command_model
-    ):
-        """An unlocked note with nothing this button can commit hides the button.
-
-        Covers the case where a note holds only commands this button doesn't map
-        — an unsent Prescribe, for instance — which would otherwise surface a
-        button that does nothing.
-        """
-        mock_note_event = Mock()
-        mock_note_event.state = NoteStates.UNLOCKED
-        mock_note_state.objects.get.return_value = mock_note_event
-        mock_command_model.objects.filter.return_value.exists.return_value = False
-
-        mock_event = Mock()
-        mock_event.context = {"note_id": "test-note-id"}
-        handler = CommitButtonHandler(event=mock_event)
-
-        assert handler.visible() is False
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
     def test_not_visible_when_note_locked(self, mock_note_state):
@@ -128,8 +77,7 @@ class TestCommitButtonHandlerBasicCommit:
             )
             mock_init.assert_called_once_with(command_uuid="command-uuid-123")
             mock_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 2
+            assert len(effects) == 1
             mock_log.info.assert_called_once()
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
@@ -165,13 +113,10 @@ class TestCommitButtonHandlerBasicCommit:
             mock_allergy_commit.assert_called_once()
             mock_assess_init.assert_called_once_with(command_uuid="command-uuid-2")
             mock_assess_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 3
+            assert len(effects) == 2
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
-    def test_handle_returns_only_reload_when_no_staged_commands(
-        self, mock_command_model, stub_reload
-    ):
+    def test_handle_returns_empty_list_when_no_staged_commands(self, mock_command_model):
         """Handle should return empty list when no staged commands exist."""
         mock_command_model.objects.filter.return_value = []
 
@@ -181,9 +126,7 @@ class TestCommitButtonHandlerBasicCommit:
 
         effects = handler.handle()
 
-        # Only the trailing reload: nothing was staged, so the button
-        # corrects its own visibility.
-        assert effects == [stub_reload.return_value.apply.return_value]
+        assert effects == []
         mock_command_model.objects.filter.assert_called_once_with(
             note_id="test-note-id", state="staged"
         )
@@ -228,8 +171,7 @@ class TestCommitButtonHandlerSpecialCases:
                 questionnaire_id="questionnaire-id-456"
             )
             mock_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 2
+            assert len(effects) == 1
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
     @patch("commit_all_commands_button.handlers.commit_all_commands.log")
@@ -267,8 +209,7 @@ class TestCommitButtonHandlerSpecialCases:
                 cvx_code="03"
             )
             mock_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 2
+            assert len(effects) == 1
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
     @patch("commit_all_commands_button.handlers.commit_all_commands.log")
@@ -297,8 +238,7 @@ class TestCommitButtonHandlerSpecialCases:
                 cvx_code=""
             )
             mock_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 2
+            assert len(effects) == 1
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
     @patch("commit_all_commands_button.handlers.commit_all_commands.Medication")
@@ -332,8 +272,7 @@ class TestCommitButtonHandlerSpecialCases:
                 medication_id="medication-id-789"
             )
             mock_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 2
+            assert len(effects) == 1
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
     @patch("commit_all_commands_button.handlers.commit_all_commands.log")
@@ -358,8 +297,7 @@ class TestCommitButtonHandlerSpecialCases:
 
             mock_init.assert_called_once_with(command_uuid="command-uuid-123")
             mock_commit.assert_called_once()
-            # commit effect(s) plus the trailing ReloadNoteActionButtonsEffect
-            assert len(effects) == 2
+            assert len(effects) == 1
 
 
 class TestCommitButtonHandlerErrorHandling:
@@ -388,8 +326,7 @@ class TestCommitButtonHandlerErrorHandling:
         with patch.object(DiagnoseCommand, "__init__", side_effect=validation_error):
             effects = handler.handle()
 
-            # No command committed, so only the trailing reload is returned.
-            assert len(effects) == 1
+            assert len(effects) == 0
             mock_log.error.assert_called()
             assert mock_log.error.call_count == 2
 
@@ -410,8 +347,7 @@ class TestCommitButtonHandlerErrorHandling:
 
         effects = handler.handle()
 
-        # No command committed, so only the trailing reload is returned.
-        assert len(effects) == 1
+        assert len(effects) == 0
         mock_log.warning.assert_called_once()
         assert "not able to be committed" in mock_log.warning.call_args[0][0]
 
@@ -486,121 +422,3 @@ class TestCommitButtonHandlerConfiguration:
             "vitals",
         }
         assert set(CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS) == expected_schema_keys
-
-
-class TestCommitButtonHandlerReload:
-    """Test cases for the button-reload effect appended after committing."""
-
-    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
-    @patch("commit_all_commands_button.handlers.commit_all_commands.log")
-    def test_reload_effect_appended_last_after_committing(
-        self, mock_log, mock_command_model, stub_reload
-    ):
-        """A successful commit appends exactly one reload effect, in last place.
-
-        Order matters: effects apply sequentially, so the reload has to come
-        after the commits or it re-evaluates visibility against the old state.
-        """
-        mock_command = Mock()
-        mock_command.schema_key = AllergyCommand.Meta.key
-        mock_command.id = "command-uuid-123"
-        mock_command.data = {}
-        mock_command_model.objects.filter.return_value = [mock_command]
-
-        mock_event = Mock()
-        mock_event.context = {"note_id": "test-note-id"}
-        handler = CommitButtonHandler(event=mock_event)
-
-        with patch.object(AllergyCommand, "__init__", return_value=None), patch.object(
-            AllergyCommand, "commit", return_value=Mock(name="commit_effect")
-        ):
-            effects = handler.handle()
-
-        stub_reload.assert_called_once_with(id="note-uuid-abc")
-        assert effects[-1] is stub_reload.return_value.apply.return_value
-        assert len(effects) == 2
-
-    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
-    def test_reload_effect_requested_even_when_nothing_committed(
-        self, mock_command_model, stub_reload
-    ):
-        """Clicking with nothing staged still reloads, so the button self-corrects.
-
-        Reaching handle() with nothing to commit means the button was being shown
-        against a staged set that has since emptied — commands committed
-        individually elsewhere, for instance. The reload is how it hides itself
-        instead of sitting there doing nothing.
-        """
-        mock_command_model.objects.filter.return_value = []
-
-        mock_event = Mock()
-        mock_event.context = {"note_id": "test-note-id"}
-        handler = CommitButtonHandler(event=mock_event)
-
-        effects = handler.handle()
-
-        assert len(effects) == 1
-        assert effects[0] is stub_reload.return_value.apply.return_value
-
-
-class TestShowCommitButtonOnOriginate:
-    """Test cases for the handler that reveals the button on origination."""
-
-    def test_responds_to_every_committable_command(self):
-        """Subscriptions are derived from the button's map, so they can't drift."""
-        assert len(ShowCommitButtonOnOriginateHandler.RESPONDS_TO) == len(
-            CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS
-        )
-
-    def test_every_subscription_is_a_real_event(self):
-        """Each derived name must exist in EventType.
-
-        Two commands don't follow their command's constantized key — hpi is
-        HISTORY_OF_PRESENT_ILLNESS and exam is PHYSICAL_EXAM — so a naive
-        derivation produces names that would fail at plugin load. This catches
-        that here instead.
-        """
-        valid = set(EventType.keys())
-        unknown = [n for n in ShowCommitButtonOnOriginateHandler.RESPONDS_TO if n not in valid]
-        assert unknown == []
-
-    def test_subscriptions_cover_the_renamed_commands(self):
-        """The two irregular names resolve to their real events."""
-        assert (
-            "HISTORY_OF_PRESENT_ILLNESS_COMMAND__POST_ORIGINATE"
-            in ShowCommitButtonOnOriginateHandler.RESPONDS_TO
-        )
-        assert (
-            "PHYSICAL_EXAM_COMMAND__POST_ORIGINATE"
-            in ShowCommitButtonOnOriginateHandler.RESPONDS_TO
-        )
-
-    def test_does_not_subscribe_to_uncommittable_commands(self):
-        """Staging something the button can't commit must not wake it up."""
-        for name in (
-            "PRESCRIBE_COMMAND__POST_ORIGINATE",
-            "REFILL_COMMAND__POST_ORIGINATE",
-            "REFER_COMMAND__POST_ORIGINATE",
-            "REASON_FOR_VISIT_COMMAND__POST_ORIGINATE",
-        ):
-            assert name not in ShowCommitButtonOnOriginateHandler.RESPONDS_TO
-
-    @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
-    def test_reloads_the_originating_commands_note(self, mock_command_model, stub_reload):
-        """The reload targets the note the command was originated on."""
-        mock_command = Mock()
-        mock_command.note = Mock(id="note-uuid-from-command")
-        mock_command_model.objects.select_related.return_value.get.return_value = mock_command
-
-        mock_event = Mock()
-        mock_event.target.id = "command-uuid-123"
-        handler = ShowCommitButtonOnOriginateHandler(event=mock_event)
-
-        effects = handler.compute()
-
-        mock_command_model.objects.select_related.assert_called_once_with("note")
-        mock_command_model.objects.select_related.return_value.get.assert_called_once_with(
-            id="command-uuid-123"
-        )
-        stub_reload.assert_called_once_with(id="note-uuid-from-command")
-        assert effects == [stub_reload.return_value.apply.return_value]

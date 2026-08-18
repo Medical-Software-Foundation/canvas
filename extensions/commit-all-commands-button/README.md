@@ -9,38 +9,18 @@ The `commit_all_commands_button` plugin for Canvas adds a button to the footer o
 
 **User-triggered:** The plugin adds an action button to the note footer. Users click the button to commit all staged commands in the current note.
 
-The button only appears when there is actually something for it to do — see [When the Button Appears](#when-the-button-appears).
-
 ## Effects
 
 When the button is clicked, the plugin:
 1. Queries all staged (uncommitted) commands in the current note
-2. Creates a commit effect for each command it knows how to commit
-3. Appends a `ReloadNoteActionButtonsEffect` so the note re-evaluates its buttons
-4. Returns all effects, which commits the commands in Canvas
-
-## When the Button Appears
-
-The button is shown only if **both** are true:
-
-- The note is not locked.
-- The note has at least one staged command of a [supported type](#supported-command-types).
-
-The second condition is scoped to the supported types deliberately. A note holding only commands this button can't commit — an unsent Prescribe, say — would otherwise show a button that does nothing when clicked.
-
-Because `visible()` is only evaluated when a note loads its action buttons, the plugin uses [`ReloadNoteActionButtonsEffect`](https://docs.canvasmedical.com/sdk/effect-reload-action-buttons/) to keep the button in step with the note without requiring a page refresh. It does so at two points:
-
-**When a committable command is originated.** `ShowCommitButtonOnOriginateHandler` subscribes to the `POST_ORIGINATE` event of every supported command type and reloads the note's buttons. Without this, staging the first command would leave the button hidden until the page was refreshed. The subscriptions are derived from the same mapping the button uses, so a command added to the button automatically wakes it up too — and staging something the button can't commit, like an unsent Prescribe, deliberately does not.
-
-**After a commit run.** Committing empties the staged set, so the visibility condition stops holding and the reload makes the button disappear at once. This reload is unconditional: if the click committed nothing, the button was being shown against a staged set that had since emptied — commands committed individually elsewhere, say — and reloading is how it corrects itself rather than sitting there doing nothing.
+2. Creates a commit effect for each command
+3. Returns all commit effects, which commits the commands in Canvas
 
 ## How It Works
 
-- The plugin adds a button labeled **"Commit All Commands"** to the note footer, visible under the conditions above.
+- The plugin adds a button labeled **"Commit All Commands"** to the note footer.
 - When the button is pressed, the plugin finds all commands in the current note that are not yet committed.
 - The plugin creates commit effects for each staged command, causing them to be committed.
-- Commands it has no mapping for are logged and skipped rather than failing the run.
-- A button reload is appended last, so it re-evaluates visibility against the post-commit state.
 
 ## Configuration Requirements
 
