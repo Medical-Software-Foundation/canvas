@@ -16,8 +16,60 @@ from django.db.models import Q
 
 from scheduling_waitlist.constants import MATCHABLE_STATUSES, PREFERENCE_ANY
 from scheduling_waitlist.models import WaitlistEntry
+from scheduling_waitlist.services.display import (
+    location_name,
+    note_type_name,
+    staff_name,
+)
 from scheduling_waitlist.services.entries import ENTRY_RELATIONS
 from scheduling_waitlist.services.slot import FreedSlot
+
+# How many entries the no-match diagnostic quotes verbatim. Enough to see the
+# mismatch on a test instance, few enough that a practice-sized backlog does not
+# produce an unreadable log line.
+MAX_EXPLAINED_ENTRIES = 3
+
+
+def _describe_slot(slot: FreedSlot) -> str:
+    """The slot's three matched attributes, with the identifiers behind them.
+
+    The identifiers are printed because the labels alone can lie. A practice can
+    carry two ``NoteType`` rows with the same name -- Canvas versions them -- so
+    an entry and a slot can both read "Office visit" and still be different rows,
+    which is invisible in a log that prints only names.
+    """
+    return (
+        f"slot was {slot.note_type_label} (type #{slot.note_type_dbid})"
+        f" / {slot.provider_label} (staff #{slot.provider_dbid})"
+        f" / {slot.location_label} (location #{slot.location_dbid})"
+    )
+
+
+def _describe_entry(entry: Any) -> str:
+    """What one entry asked for, in the same shape as the slot description."""
+    note_type = getattr(entry, "note_type", None)
+    if note_type is None:
+        service = "any service"
+    else:
+        service = f"{note_type_name(note_type)} (type #{getattr(entry, 'note_type_id', None)})"
+
+    if getattr(entry, "provider_preference", "") == PREFERENCE_ANY:
+        provider = "any provider"
+    else:
+        provider = (
+            f"{staff_name(getattr(entry, 'desired_provider', None))} "
+            f"(staff #{getattr(entry, 'desired_provider_id', None)})"
+        )
+
+    if getattr(entry, "location_preference", "") == PREFERENCE_ANY:
+        location = "any location"
+    else:
+        location = (
+            f"{location_name(getattr(entry, 'desired_location', None))} "
+            f"(location #{getattr(entry, 'desired_location_id', None)})"
+        )
+
+    return f"{service} / {provider} / {location}"
 
 
 def explain_no_match(slot: FreedSlot) -> str:
@@ -28,15 +80,18 @@ def explain_no_match(slot: FreedSlot) -> str:
     identical from the outside. Working that out has repeatedly meant reading code
     rather than logs, so the reasons are counted here instead.
 
+    When nothing was compatible it also quotes what the entries did ask for,
+    beside what the slot offered. Naming only one side of a comparison that failed
+    leaves the reader to guess the other, which is how diagnosing this turned into
+    several rounds of deploying and cancelling.
+
     Only reached when there were no matches, so the extra counts are paid on the
     diagnostic path rather than on every cancellation that produces a task.
     """
     live = WaitlistEntry.objects.filter(status__in=list(MATCHABLE_STATUSES))
     total = live.count()
 
-    shape = (
-        f"slot was {slot.note_type_label} / {slot.provider_label} / {slot.location_label}"
-    )
+    shape = _describe_slot(slot)
     if not total:
         return f"{shape}; nobody is on the waitlist"
 
@@ -46,10 +101,17 @@ def explain_no_match(slot: FreedSlot) -> str:
         compatibility_q(slot.note_type_dbid, slot.provider_dbid, slot.location_dbid)
     )
     if not compatible.exists():
+        quoted = [
+            _describe_entry(entry)
+            for entry in live.select_related(*ENTRY_RELATIONS)[:MAX_EXPLAINED_ENTRIES]
+        ]
         reasons.append(
             "none of them asked for this service, provider and location "
-            "(an entry matches only if it named exactly that, or said any)"
+            "(an entry matches only if it named exactly that, or said any); "
+            f"the list asked for: {' | '.join(quoted)}"
         )
+        if total > MAX_EXPLAINED_ENTRIES:
+            reasons.append(f"{total - MAX_EXPLAINED_ENTRIES} further entries not quoted")
         return "; ".join(reasons)
 
     if slot.vacating_patient_dbid is not None and compatible.filter(

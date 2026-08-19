@@ -1,10 +1,12 @@
 """Which waiting patients fit a slot."""
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from scheduling_waitlist.constants import PREFERENCE_ANY, PREFERENCE_SPECIFIC
 from scheduling_waitlist.services.matching import (
+    MAX_EXPLAINED_ENTRIES,
     compatibility_q,
     entry_accepts_time,
     explain_no_match,
@@ -279,19 +281,26 @@ class TestFindEntriesToFlip:
 class _Live:
     """A live-entries queryset whose answers are scripted per question."""
 
-    def __init__(self, total=0, compatible=False, vacating=False):
+    def __init__(self, total=0, compatible=False, vacating=False, entries=None):
         self._total = total
         self._compatible = compatible
         self._vacating = vacating
+        self._entries = list(entries or [])
         self.stage = "live"
 
     def filter(self, *args, **kwargs):
-        child = _Live(self._total, self._compatible, self._vacating)
+        child = _Live(self._total, self._compatible, self._vacating, self._entries)
         if "patient_id" in kwargs:
             child.stage = "vacating"
         else:
             child.stage = "compatible"
         return child
+
+    def select_related(self, *args):
+        return self
+
+    def __getitem__(self, item):
+        return self._entries[item]
 
     def count(self):
         return self._total
@@ -300,6 +309,34 @@ class _Live:
         if self.stage == "vacating":
             return self._vacating
         return self._compatible
+
+
+def _named(**attributes):
+    """A stand-in for a related row that only has to answer name lookups."""
+    return SimpleNamespace(**attributes)
+
+
+def _entry(
+    *,
+    note_type=None,
+    note_type_id=None,
+    provider_preference=PREFERENCE_SPECIFIC,
+    desired_provider=None,
+    desired_provider_id=None,
+    location_preference=PREFERENCE_SPECIFIC,
+    desired_location=None,
+    desired_location_id=None,
+):
+    return SimpleNamespace(
+        note_type=note_type,
+        note_type_id=note_type_id,
+        provider_preference=provider_preference,
+        desired_provider=desired_provider,
+        desired_provider_id=desired_provider_id,
+        location_preference=location_preference,
+        desired_location=desired_location,
+        desired_location_id=desired_location_id,
+    )
 
 
 def _explain(**kwargs):
@@ -337,6 +374,63 @@ class TestExplainNoMatch:
 
     def test_one_entry_reads_in_the_singular(self):
         assert "1 live entry" in _explain(total=1, compatible=False)
+
+    def test_it_quotes_what_the_entries_asked_for(self):
+        # Naming only the slot leaves the reader to guess the other side of a
+        # comparison that failed, which is the whole question being asked.
+        text = _explain(
+            total=1,
+            compatible=False,
+            entries=[
+                _entry(
+                    note_type=_named(name="New Patient Visit"),
+                    note_type_id=99,
+                    desired_provider=_named(first_name="Bob", last_name="Stone"),
+                    desired_provider_id=202,
+                    desired_location=_named(full_name="Hilltop Clinic"),
+                    desired_location_id=4,
+                )
+            ],
+        )
+
+        assert "New Patient Visit" in text
+        assert "Bob Stone" in text
+        assert "Hilltop Clinic" in text
+
+    def test_it_prints_identifiers_beside_the_labels(self):
+        # Two NoteType rows can carry the same name -- Canvas versions them -- so
+        # a log that prints only names cannot show that kind of mismatch at all.
+        text = _explain(
+            total=1,
+            compatible=False,
+            entries=[_entry(note_type=_named(name="Established Visit"), note_type_id=99)],
+        )
+
+        assert "type #7" in text, "the slot's own type identifier is missing"
+        assert "type #99" in text, "the entry's type identifier is missing"
+
+    def test_any_preferences_read_as_any(self):
+        text = _explain(
+            total=1,
+            compatible=False,
+            entries=[
+                _entry(
+                    provider_preference=PREFERENCE_ANY,
+                    location_preference=PREFERENCE_ANY,
+                )
+            ],
+        )
+
+        assert "any service" in text
+        assert "any provider" in text
+        assert "any location" in text
+
+    def test_a_long_list_is_capped_and_says_how_many_it_left_out(self):
+        entries = [_entry(note_type_id=index) for index in range(10)]
+        text = _explain(total=10, compatible=False, entries=entries)
+
+        assert text.count(" | ") == MAX_EXPLAINED_ENTRIES - 1
+        assert "7 further entries not quoted" in text
 
     def test_the_self_exclusion_is_named_when_it_is_the_cause(self):
         # The trap that costs testers the most time.
