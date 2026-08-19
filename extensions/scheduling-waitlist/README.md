@@ -20,8 +20,10 @@ row can open the patient's chart, be edited, marked scheduled, or removed.
 - **From the roster**, searching for the patient by name.
 - **From the patient chart header**, where the button reads "Add to waitlist", or "On waitlist"
   if they are already listed — in which case it opens the roster filtered to them instead.
-- **From a cancelled or no-showed appointment's note**, pre-filled with the service, provider
-  and location of the slot that just freed up.
+- **From a no-showed appointment's note**, pre-filled with the service, provider and location
+  of the slot that just freed up. A **cancelled** appointment has no equivalent surface — its
+  note is tombstoned in the timeline with nothing but `Restore`, so use the chart-header button
+  and enter the three fields by hand. See the maintainer note below.
 
 **From the chart** — the chart carries two things, because it is asked two different questions:
 
@@ -114,7 +116,7 @@ rather than guessing.
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
 | `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
 | `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header |
-| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only |
+| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only — so in practice the no-show, which is the only one of the two whose note still has a header |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
 | `handlers.waitlist_cron:WaitlistMaintenanceCron` | CronTask | `0 3 * * *` (UTC) |
@@ -135,6 +137,33 @@ the intent explicitly makes a malformed row match nothing instead.
 
 **Slot detection reacts to a freed *booked* slot, not to open availability.** Canvas emits no
 generic "slot opened" event, so scanning arbitrary open availability is out of scope.
+
+**A cancelled appointment has nowhere to put a button, and this is not fixable here.** Please
+don't spend an afternoon on it. Cancelling an appointment tombstones its note: the chart timeline
+shows a greyed strip — `[CANCELED] Office visit 2 - On Wednesday, 8/19/26 …` — with a trash icon
+and a `Restore` link, and that is the entire surface. The note does not open, so it has no header,
+no footer and no body.
+
+Every note-related `ActionButton.ButtonLocation` the SDK offers requires an **open** note
+(`NOTE_HEADER`, `NOTE_FOOTER`, `NOTE_BODY`, `NOTE_HEADER_DROPDOWN`); the other twelve are chart
+surfaces. There is no appointment-card, calendar-grid or timeline-row location. So no plugin can
+render anything on that strip.
+
+`visible()` is not the problem and does not need changing — it already accepts either
+`Appointment.status ∈ {cancelled, noshowed}` or note state `∈ {CLD, NSW}`, and both signals are
+still needed, because only one of the two records is guaranteed to move on a no-show. The
+condition is right; there is simply nowhere to draw.
+
+The workflow this costs is worth naming, because it is easy to assume the freed-slot task already
+covers it. It does not: the **task** names *other* waiting patients and deliberately excludes the
+one who cancelled, whereas the **button** exists to put *that* patient on the list — someone who
+cancels usually wants a different time rather than nothing at all. The chart-header button serves
+that, and is one click away since you are already in the patient's chart. The only thing lost
+against the note button is the pre-fill of the freed slot's service, provider and location.
+
+If the manual re-entry becomes annoying, the fix is to pre-fill the chart-header button from the
+patient's most recent cancelled or no-showed appointment — which needs no note surface at all.
+That is a behaviour change and deliberately not done yet.
 
 **The chart banner is emitted from the write paths, not from `apply_transition`.** Banner effects
 have to be *returned* by a handler or route to take effect, and `services/transitions.py` writes

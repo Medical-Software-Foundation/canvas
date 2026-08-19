@@ -1,14 +1,28 @@
 """Add-to-waitlist from the appointment that just freed up.
 
 The moment a slot is given up is the moment a scheduler knows someone wants it,
-and the patient who cancelled often wants a different time rather than nothing at
-all. So the button belongs where the cancellation happened.
+and the patient who gave it up often wants a different time rather than nothing at
+all. So the button belongs where that happened.
 
 Canvas offers no button surface on the calendar grid or an appointment card, but
 every appointment has a note and notes do have one. The button therefore lives on
 the note header and shows itself only while that appointment is cancelled or
 no-showed -- inviting a waitlist entry for a visit somebody is about to attend
 would be noise.
+
+In practice that reaches the **no-show** only, and the shortfall is the platform's
+rather than this handler's. Cancelling an appointment tombstones its note: the
+timeline shows a greyed strip with a ``Restore`` link and nothing else, and the note
+never opens. All four note button locations -- header, footer, body, header dropdown
+-- need an open note, and the SDK has no appointment, calendar or timeline location
+at all, so there is nowhere for a plugin to draw. The condition below is correct;
+what is missing is a surface.
+
+Do not "fix" that by widening the condition or moving the location -- the condition
+already admits cancellations, and every location the SDK defines is listed above as
+unavailable. A patient who has just cancelled is added from the chart-header button
+instead, which costs only the pre-fill. The README's maintainer notes carry the full
+reasoning and the follow-up worth doing if the manual re-entry proves annoying.
 
 Because the appointment is in hand, the form opens pre-filled with the service,
 provider and location of the slot that just freed up, which is the whole reason
