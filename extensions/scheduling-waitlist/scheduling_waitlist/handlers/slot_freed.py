@@ -26,6 +26,7 @@ from scheduling_waitlist.services.banner import banner_effects
 from scheduling_waitlist.services.config import WaitlistConfig
 from scheduling_waitlist.services.event_payload import resolve_appointment_id
 from scheduling_waitlist.services.matching import (
+    explain_no_match,
     find_entries_for_appointment,
     find_matching_entries,
 )
@@ -121,12 +122,13 @@ class SlotFreedHandler(BaseHandler):
             fallback_timezone=config.display_timezone,
         )
         if not entries:
-            # Said out loud. This is the commonest answer to "why was there no
-            # task", and staying silent meant it could only be inferred from the
-            # absence of the other log lines.
+            # Said out loud, with the reason. This is the commonest answer to "why
+            # was there no task", and "matched nobody" alone is unactionable: an
+            # empty list and a list whose only candidate cancelled the slot read
+            # the same.
             log.info(
-                "scheduling_waitlist: freed slot matched nobody on the waitlist; "
-                "no task raised"
+                "scheduling_waitlist: freed slot matched nobody, so no task was "
+                f"raised -- {explain_no_match(slot)}"
             )
             self._record(ledger, entry_count=0, task_id="")
             return banner

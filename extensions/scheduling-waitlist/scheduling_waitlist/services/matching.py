@@ -20,6 +20,55 @@ from scheduling_waitlist.services.entries import ENTRY_RELATIONS
 from scheduling_waitlist.services.slot import FreedSlot
 
 
+def explain_no_match(slot: FreedSlot) -> str:
+    """Why this slot named nobody, in terms a person can act on.
+
+    "Matched nobody" on its own is unactionable: an empty list, an incompatible
+    list, and a list whose only candidate is the patient who cancelled all look
+    identical from the outside. Working that out has repeatedly meant reading code
+    rather than logs, so the reasons are counted here instead.
+
+    Only reached when there were no matches, so the extra counts are paid on the
+    diagnostic path rather than on every cancellation that produces a task.
+    """
+    live = WaitlistEntry.objects.filter(status__in=list(MATCHABLE_STATUSES))
+    total = live.count()
+
+    shape = (
+        f"slot was {slot.note_type_label} / {slot.provider_label} / {slot.location_label}"
+    )
+    if not total:
+        return f"{shape}; nobody is on the waitlist"
+
+    reasons = [shape, f"{total} live entr{'y' if total == 1 else 'ies'} on the list"]
+
+    compatible = live.filter(
+        compatibility_q(slot.note_type_dbid, slot.provider_dbid, slot.location_dbid)
+    )
+    if not compatible.exists():
+        reasons.append(
+            "none of them asked for this service, provider and location "
+            "(an entry matches only if it named exactly that, or said any)"
+        )
+        return "; ".join(reasons)
+
+    if slot.vacating_patient_dbid is not None and compatible.filter(
+        patient_id=slot.vacating_patient_dbid
+    ).exists():
+        reasons.append(
+            "the only compatible entries belong to the patient who gave the slot up, "
+            "who is deliberately never offered their own slot back"
+        )
+        return "; ".join(reasons)
+
+    reasons.append(
+        "compatible entries exist but were filtered out -- check whether they are "
+        "already marked scheduled against this appointment, or fall outside their "
+        "preferred window while WAITLIST_ENFORCE_TIME_WINDOWS is on"
+    )
+    return "; ".join(reasons)
+
+
 def compatibility_q(
     note_type_dbid: Any, provider_dbid: Any, location_dbid: Any
 ) -> Q:

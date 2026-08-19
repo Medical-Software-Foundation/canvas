@@ -7,6 +7,7 @@ from scheduling_waitlist.constants import PREFERENCE_ANY, PREFERENCE_SPECIFIC
 from scheduling_waitlist.services.matching import (
     compatibility_q,
     entry_accepts_time,
+    explain_no_match,
     find_entries_to_flip,
     find_matching_entries,
 )
@@ -273,3 +274,79 @@ class TestFindEntriesToFlip:
 
         applied = recorder.filters[0][0][0]
         assert applied == compatibility_q(7, 101, 3)
+
+
+class _Live:
+    """A live-entries queryset whose answers are scripted per question."""
+
+    def __init__(self, total=0, compatible=False, vacating=False):
+        self._total = total
+        self._compatible = compatible
+        self._vacating = vacating
+        self.stage = "live"
+
+    def filter(self, *args, **kwargs):
+        child = _Live(self._total, self._compatible, self._vacating)
+        if "patient_id" in kwargs:
+            child.stage = "vacating"
+        else:
+            child.stage = "compatible"
+        return child
+
+    def count(self):
+        return self._total
+
+    def exists(self):
+        if self.stage == "vacating":
+            return self._vacating
+        return self._compatible
+
+
+def _explain(**kwargs):
+    live = _Live(**kwargs)
+    model = MagicMock()
+    model.objects.filter.return_value = live
+    with patch(f"{MODULE}.WaitlistEntry", model):
+        return explain_no_match(slot())
+
+
+class TestExplainNoMatch:
+    """"Matched nobody" alone is unactionable.
+
+    An empty list, an incompatible list, and a list whose only candidate is the
+    patient who cancelled all look identical from outside -- and working out which
+    it was meant reading code rather than logs.
+    """
+
+    def test_it_always_names_the_slots_shape(self):
+        # Half of "why not" is what the slot actually was.
+        text = _explain(total=0)
+
+        assert "Established Visit" in text
+        assert "Alice Chen" in text
+        assert "Riverside Clinic" in text
+
+    def test_an_empty_waitlist_says_so(self):
+        assert "nobody is on the waitlist" in _explain(total=0)
+
+    def test_an_incompatible_list_says_what_was_asked_for(self):
+        text = _explain(total=3, compatible=False)
+
+        assert "3 live entries" in text
+        assert "none of them asked for this service, provider and location" in text
+
+    def test_one_entry_reads_in_the_singular(self):
+        assert "1 live entry" in _explain(total=1, compatible=False)
+
+    def test_the_self_exclusion_is_named_when_it_is_the_cause(self):
+        # The trap that costs testers the most time.
+        text = _explain(total=1, compatible=True, vacating=True)
+
+        assert "gave the slot up" in text
+        assert "never offered their own slot back" in text
+
+    def test_anything_else_points_at_the_remaining_filters(self):
+        text = _explain(total=2, compatible=True, vacating=False)
+
+        assert "already marked scheduled" in text
+        assert "WAITLIST_ENFORCE_TIME_WINDOWS" in text
