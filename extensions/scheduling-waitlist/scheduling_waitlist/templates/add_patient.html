@@ -258,7 +258,18 @@
         els.name.textContent =
           patient.name + (patient.birth_date ? " · " + patient.birth_date : "");
 
-        fill(els.service, options.appointment_types || [], "dbid", "name");
+        // "Any appointment type" leads, and so is the default. The alternative
+        // default is whichever bookable type happens to sort first, which is a
+        // silent choice the patient never made -- and one that matches no slot
+        // unless the practice books that service.
+        fill(
+          els.service,
+          [{ dbid: ANY, name: "Any appointment type" }].concat(
+            options.appointment_types || []
+          ),
+          "dbid",
+          "name"
+        );
         fill(
           els.provider,
           [{ dbid: ANY, name: "Any provider" }].concat(options.providers || []),

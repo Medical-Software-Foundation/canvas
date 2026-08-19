@@ -208,6 +208,71 @@ class TestTemplateComments:
             )
 
 
+class TestEveryFormOffersAnyForAllThreeMatchedFields:
+    """A form must be able to express every state the model can hold.
+
+    Provider and location both led with an "any" option; service did not, even
+    though ``note_type`` is nullable for exactly that purpose and the serializer
+    and banner both render it. So the service field defaulted to whichever
+    bookable type sorted first, an entry could be created for a service nobody
+    books, and it then matched no slot at all -- silently, because the entry
+    looked perfectly well-formed on the roster.
+
+    Asserted across all three forms, because the fix had to be made three times:
+    the chart's compact form and the roster's own add and edit dialogs each build
+    their own selects.
+    """
+
+    SOURCES = (
+        Path("scheduling_waitlist/templates/add_patient.html"),
+        Path("scheduling_waitlist/static/js/roster.js"),
+    )
+
+    ANY_LABELS = ("Any appointment type", "Any provider", "Any location")
+
+    def test_each_source_offers_an_any_option_for_every_matched_field(self):
+        for source in self.SOURCES:
+            text = source.read_text()
+            for label in self.ANY_LABELS:
+                assert label in text, (
+                    f"{source.name} builds a form without an \"{label}\" option, so a "
+                    "state the model supports cannot be entered"
+                )
+
+    def test_the_roster_offers_it_in_both_of_its_dialogs(self):
+        # One dialog having it is not enough: add and edit are separate builders,
+        # and an entry that cannot be edited back to "any" is a one-way door.
+        text = Path("scheduling_waitlist/static/js/roster.js").read_text()
+
+        assert text.count("Any appointment type") == 2, (
+            "both the add and the edit dialog need the option"
+        )
+
+    # Where each form builds its service select. Scoped to the block rather than
+    # the whole file, because the roster also populates a service *filter*, which
+    # legitimately mentions the instance's types earlier and is not a default.
+    SERVICE_SELECTS = (
+        (Path("scheduling_waitlist/templates/add_patient.html"), "els.service,"),
+        (Path("scheduling_waitlist/static/js/roster.js"), '"wl-add-type"'),
+        (Path("scheduling_waitlist/static/js/roster.js"), '"wl-edit-type"'),
+    )
+
+    def test_any_appointment_type_is_offered_before_the_instances_own_types(self):
+        # Order is the behaviour under test: the first option is the default, and
+        # defaulting to a concrete service is the bug this class exists for.
+        for source, anchor in self.SERVICE_SELECTS:
+            text = source.read_text()
+            block = text[text.index(anchor) : text.index(anchor) + 400]
+
+            assert "Any appointment type" in block, (
+                f"{source.name}: the select at {anchor} offers no any option"
+            )
+            assert block.index("Any appointment type") < block.index("appointment_types"), (
+                f"{source.name}: the select at {anchor} lists the instance's types "
+                "first, so the default is a concrete service again"
+            )
+
+
 class TestAddFormPrefill:
     """What the cancelled appointment already told us reaches the form.
 

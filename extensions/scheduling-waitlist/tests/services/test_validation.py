@@ -134,6 +134,28 @@ class TestAppointmentType:
     def test_an_offered_service_is_accepted(self, lookups):
         assert run(valid_payload()).cleaned["note_type_id"] == 7
 
+    def test_any_service_is_stored_as_no_service(self, lookups):
+        # The column is nullable so an entry can match every type, and both the
+        # serializer and the banner already render that state -- but no form
+        # could produce it, so the service field silently defaulted to whichever
+        # bookable type sorted first and matched nothing.
+        result = run(valid_payload(appointment_type_id=PREFERENCE_ANY))
+
+        assert result.ok
+        assert result.cleaned["note_type_id"] is None
+
+    def test_any_service_does_not_need_to_be_on_the_offered_list(self, lookups):
+        # "Any" is not one of the instance's types, so checking it against them
+        # would refuse the very answer the form now leads with.
+        lookups["offered"].return_value = []
+
+        assert run(valid_payload(appointment_type_id=PREFERENCE_ANY)).ok
+
+    def test_a_blank_service_is_still_refused_rather_than_read_as_any(self, lookups):
+        # A blank field is a broken client, not a preference. Reading it as "any"
+        # would turn a bug in the form into a silently over-broad entry.
+        assert "appointment_type_id" in run(valid_payload(appointment_type_id="")).errors
+
     def test_a_service_not_on_offer_is_refused(self, lookups):
         # Either unbookable or excluded by a configured allow-list. A stale or
         # tampered form lands here rather than writing an unbookable entry.

@@ -649,10 +649,12 @@
 
     var typeSelect = select(
       "wl-edit-type",
-      (options.appointment_types || []).map(function (t) {
-        return { value: t.dbid, label: t.name };
-      }),
-      entry.appointment_type.dbid
+      [{ value: ANY, label: "Any appointment type" }].concat(
+        (options.appointment_types || []).map(function (t) {
+          return { value: t.dbid, label: t.name };
+        })
+      ),
+      entry.appointment_type.is_any ? ANY : entry.appointment_type.dbid
     );
     var providerSelect = select(
       "wl-edit-provider",
@@ -883,9 +885,11 @@
 
     var typeSelect = select(
       "wl-add-type",
-      (options.appointment_types || []).map(function (t) {
-        return { value: t.dbid, label: t.name };
-      })
+      [{ value: ANY, label: "Any appointment type" }].concat(
+        (options.appointment_types || []).map(function (t) {
+          return { value: t.dbid, label: t.name };
+        })
+      )
     );
     var providerSelect = select(
       "wl-add-provider",

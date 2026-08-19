@@ -36,9 +36,14 @@ set of validation rules. Only the patient's key travels in the page URL; the nam
 fetched over the authenticated API, so no identifiable data is baked into the document.
 
 **Cancellation matching** — when a booked slot frees up, the plugin finds waiting entries whose
-requested type, provider (or "any"), and location fit it, and raises **one** task to the
-scheduling team naming them in priority order. Each patient's preferred day/time is shown so
-staff can judge fit.
+requested type, provider, and location fit it, and raises **one** task to the scheduling team
+naming them in priority order. Each patient's preferred day/time is shown so staff can judge fit.
+
+All three of those fields accept "any", and all three **default** to it. That default is
+deliberate: the alternative is defaulting to whichever value happens to sort first, which is a
+choice the patient never made and which matches no slot unless the practice happens to book that
+exact thing. An entry that matches too widely is visible and correctable; one that matches nothing
+looks perfectly well-formed on the roster and simply never fires.
 
 A slot counts as freed whether staff cancelled it, the patient cancelled or rescheduled it in
 the patient portal, it was no-showed, or the booking was moved to another time. For a

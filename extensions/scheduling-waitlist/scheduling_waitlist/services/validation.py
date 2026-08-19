@@ -101,6 +101,19 @@ def _clean_appointment_type(
         errors["appointment_type_id"] = "Choose a service."
         return
 
+    # "Any service" is a real answer, and until now the only one the form could
+    # not give: the column is nullable precisely so an entry can match every
+    # type, and both the serializer and the banner already render that state. A
+    # form that offered no such option left the service field defaulting to
+    # whichever bookable type sorted first, so an entry could be created for a
+    # service nobody books -- and it then matched nothing, silently.
+    #
+    # Kept distinct from a missing value on purpose: a blank field is a broken
+    # client, not a preference.
+    if raw == PREFERENCE_ANY:
+        cleaned["note_type_id"] = None
+        return
+
     # Checked against exactly what the form was offered, rather than re-deriving
     # the rule from configuration. Deriving it twice is what made the dropdown
     # list services this function then refused, so there is deliberately only

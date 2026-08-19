@@ -123,6 +123,16 @@ class TestSerializeEntry:
 
         assert serialize(entry)["appointment_type"]["name"] == "Any appointment type"
 
+    def test_any_appointment_type_is_stated_not_left_to_be_inferred(self):
+        # The edit dialog reselects "any" from this flag, the same way it does for
+        # provider and location, rather than reading a missing identifier as one.
+        entry = make_entry(note_type=None, note_type_id=None)
+
+        assert serialize(entry)["appointment_type"]["is_any"] is True
+
+    def test_a_specific_appointment_type_is_not_marked_any(self):
+        assert serialize(make_entry())["appointment_type"]["is_any"] is False
+
     def test_a_configured_priority_is_reported_as_known(self):
         assert serialize(make_entry())["priority"]["is_known"] is True
 

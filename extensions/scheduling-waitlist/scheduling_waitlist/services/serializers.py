@@ -92,6 +92,10 @@ def serialize_entry(
         "appointment_type": {
             "dbid": getattr(entry, "note_type_id", None),
             "name": note_type_name(note_type) if note_type is not None else ANY_TYPE,
+            # Stated rather than left to be inferred from a null dbid, so the edit
+            # dialog can reselect "any" the same way it does for provider and
+            # location instead of special-casing a missing identifier.
+            "is_any": note_type is None,
         },
         "provider": {
             "dbid": None if prefers_any_provider else getattr(entry, "desired_provider_id", None),
