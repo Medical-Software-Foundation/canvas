@@ -91,16 +91,23 @@ class _Ctx:
         claimed=True,
         team_id="team-1",
         origin=MISSING,
+        existing_task_id="task-earlier",
     ):
         self.appointment = appointment if appointment is not None else _appointment()
         self.entries = entries if entries is not None else [_entry()]
         self.claimed = claimed
         self.team_id = team_id
+        # What an already-present ledger row carries. A row that really was
+        # announced has a task id; one that matched nobody has an empty string,
+        # and must not block a later attempt. A MagicMock's auto-attribute is
+        # truthy, so leaving this implicit hid that distinction entirely.
+        self.existing_task_id = existing_task_id
         # The appointment a reschedule was moved away from, returned by the
         # handler's second lookup. ``MISSING`` means no second lookup is
         # expected; ``None`` means one happens and finds nothing.
         self.origin = origin
         self.ledger = MagicMock()
+        self.ledger.task_id = existing_task_id
 
     def __enter__(self):
         self._patches = [
@@ -528,3 +535,85 @@ class TestRescheduledAwayFreesTheOriginalSlot:
             second_slot = second.matcher.call_args.args[0]
 
         assert first_slot.fingerprint() == second_slot.fingerprint()
+
+
+class TestAnnouncingNothingDoesNotBurnTheSlot:
+    """A slot that matched nobody must still be announceable later.
+
+    The dedup guard exists because one cancellation can reach the plugin several
+    times within seconds, and each delivery would otherwise raise its own task.
+    It is not meant to mean "this slot may never be announced". Freeing a slot
+    while the list is empty, then freeing it again once somebody has joined, is
+    exactly the case a scheduler would expect to work -- and it did not.
+    """
+
+    def test_a_row_that_raised_no_task_is_claimable_again(self):
+        effects, ctx = effects_of(_handler(), claimed=False, existing_task_id="")
+
+        # It got past the guard and matched, so a task is raised.
+        assert any(getattr(e, "title", None) for e in effects)
+        ctx.matcher.assert_called_once()
+
+    def test_a_row_that_raised_a_task_still_blocks(self):
+        # No task, and the match never runs -- a duplicate delivery of one
+        # cancellation must not cost a full query, let alone a second task.
+        effects, ctx = effects_of(
+            _handler(), claimed=False, existing_task_id="task-earlier"
+        )
+
+        assert effects == []
+        ctx.matcher.assert_not_called()
+
+    def test_a_blank_looking_task_id_counts_as_none(self):
+        effects, _ = effects_of(_handler(), claimed=False, existing_task_id="   ")
+
+        assert any(getattr(e, "title", None) for e in effects)
+
+    def test_re_announcing_records_the_freeing_that_counted(self):
+        # Otherwise the ledger would keep pointing at the earlier event that
+        # announced nothing.
+        _, ctx = effects_of(
+            _handler(event_type="APPOINTMENT_NO_SHOWED"),
+            claimed=False,
+            existing_task_id="",
+        )
+
+        assert ctx.ledger.trigger_event == "APPOINTMENT_NO_SHOWED"
+        assert ctx.ledger.notified_at is not None
+
+    def test_the_task_id_is_stored_so_the_next_delivery_is_blocked(self):
+        _, ctx = effects_of(_handler(), claimed=False, existing_task_id="")
+
+        assert ctx.ledger.task_id
+        ctx.ledger.save.assert_called()
+
+
+class TestTheOutcomeIsAlwaysLogged:
+    """Both endings used to be inferable only from the absence of other lines."""
+
+    def test_matching_nobody_says_so(self):
+        import sys
+
+        sys.modules["logger"].log.info.reset_mock()
+        effects_of(_handler(), entries=[])
+
+        logged = " ".join(str(c) for c in sys.modules["logger"].log.info.call_args_list)
+        assert "matched nobody" in logged
+
+    def test_raising_a_task_says_how_many_matched(self):
+        import sys
+
+        sys.modules["logger"].log.info.reset_mock()
+        effects_of(_handler(), entries=[_entry("Jordan Lee"), _entry("Sam Poe")])
+
+        logged = " ".join(str(c) for c in sys.modules["logger"].log.info.call_args_list)
+        assert "matched 2 waitlisted patients" in logged
+
+    def test_one_match_reads_in_the_singular(self):
+        import sys
+
+        sys.modules["logger"].log.info.reset_mock()
+        effects_of(_handler(), entries=[_entry()])
+
+        logged = " ".join(str(c) for c in sys.modules["logger"].log.info.call_args_list)
+        assert "matched 1 waitlisted patient;" in logged

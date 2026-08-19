@@ -121,11 +121,22 @@ class SlotFreedHandler(BaseHandler):
             fallback_timezone=config.display_timezone,
         )
         if not entries:
+            # Said out loud. This is the commonest answer to "why was there no
+            # task", and staying silent meant it could only be inferred from the
+            # absence of the other log lines.
+            log.info(
+                "scheduling_waitlist: freed slot matched nobody on the waitlist; "
+                "no task raised"
+            )
             self._record(ledger, entry_count=0, task_id="")
             return banner
 
         task_id = str(uuid4())
         self._record(ledger, entry_count=len(entries), task_id=task_id)
+        log.info(
+            f"scheduling_waitlist: freed slot matched {len(entries)} "
+            f"waitlisted patient{'' if len(entries) == 1 else 's'}; raising one task"
+        )
 
         return [
             *banner,
@@ -236,9 +247,16 @@ class SlotFreedHandler(BaseHandler):
         Claimed *after* the team is resolved, though: the fingerprint is spent
         once written, so it must only be spent on a slot this instance is
         actually able to announce.
+
+        A row that raised no task does not block a later attempt. The guard
+        exists because one cancellation can reach the plugin several times within
+        seconds, and each delivery would otherwise raise its own task. It is not
+        meant to mean "this slot may never be announced": a slot freed while
+        nobody was waiting, then freed again after someone joined the list,
+        deserves its task. Only a row carrying a real task id closes the door.
         """
         try:
-            return SlotNotification.objects.get_or_create(
+            ledger, created = SlotNotification.objects.get_or_create(
                 slot_fingerprint=slot.fingerprint(),
                 defaults={
                     "appointment_id": slot.appointment_dbid,
@@ -250,8 +268,25 @@ class SlotFreedHandler(BaseHandler):
             # Lost a race with a concurrent delivery of the same slot.
             return None, False
 
+        if created:
+            return ledger, True
+
+        if str(getattr(ledger, "task_id", "") or "").strip():
+            return ledger, False
+
+        # Re-announcing: record this freeing as the one that counts.
+        ledger.trigger_event = slot.source_event
+        ledger.notified_at = now
+        return ledger, True
+
     @staticmethod
     def _record(ledger: Any, *, entry_count: int, task_id: str) -> None:
+        """Store the outcome of this announcement.
+
+        A full ``save()`` rather than an update of two columns, so the
+        ``trigger_event`` and ``notified_at`` that ``_claim`` refreshed on a
+        re-announcement are persisted with it.
+        """
         if ledger is None:
             return
         ledger.entry_count = entry_count
