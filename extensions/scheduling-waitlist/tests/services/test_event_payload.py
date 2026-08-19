@@ -8,7 +8,10 @@ takes the whole event down with it.
 
 from unittest.mock import MagicMock
 
-from scheduling_waitlist.services.event_payload import resolve_appointment_id
+from scheduling_waitlist.services.event_payload import (
+    resolve_appointment_id,
+    resolve_note_state_change_id,
+)
 
 
 def event(target_id=None, context=None):
@@ -75,3 +78,48 @@ class TestContextFallbacks:
 
     def test_an_unrecognised_context_shape_yields_nothing_rather_than_raising(self):
         assert resolve_appointment_id(event(context={"something": "else"})) is None
+
+
+class TestNoteStateChangeIdentifier:
+    """The note-state-change payload, read with the same defensiveness.
+
+    Kept pure: what the identifier points at -- the state-change row or the note
+    itself -- needs a lookup to settle, so that decision belongs to the handler
+    and not here.
+    """
+
+    def test_the_identifier_is_read_from_the_target(self):
+        assert resolve_note_state_change_id(event(target_id="change-uuid")) == "change-uuid"
+
+    def test_the_target_wins_over_the_context(self):
+        record = event(target_id="from-target", context={"note_id": "from-context"})
+
+        assert resolve_note_state_change_id(record) == "from-target"
+
+    def test_a_state_change_key_in_the_context_is_used(self):
+        record = event(context={"note_state_change_event_id": "change-uuid"})
+
+        assert resolve_note_state_change_id(record) == "change-uuid"
+
+    def test_a_note_key_in_the_context_is_used(self):
+        assert resolve_note_state_change_id(event(context={"note_id": "n"})) == "n"
+
+    def test_a_bare_id_in_the_context_is_used(self):
+        assert resolve_note_state_change_id(event(context={"id": "n"})) == "n"
+
+    def test_a_nested_note_identifier_is_used(self):
+        record = event(context={"note": {"id": "note-uuid"}})
+
+        assert resolve_note_state_change_id(record) == "note-uuid"
+
+    def test_a_context_that_is_not_a_mapping_is_tolerated(self):
+        assert resolve_note_state_change_id(event(context="")) is None
+
+    def test_a_nested_note_that_is_not_a_mapping_is_tolerated(self):
+        assert resolve_note_state_change_id(event(context={"note": "n"})) is None
+
+    def test_a_non_string_identifier_is_not_used(self):
+        assert resolve_note_state_change_id(event(context={"note_id": 41})) is None
+
+    def test_an_unrecognised_shape_yields_nothing_rather_than_raising(self):
+        assert resolve_note_state_change_id(event(context={"something": "else"})) is None

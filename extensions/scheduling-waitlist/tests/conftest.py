@@ -341,6 +341,7 @@ class _EventType:
         "APPOINTMENT_UPDATED",
         "PATIENT_PORTAL__APPOINTMENT_CANCELED",
         "PATIENT_PORTAL__APPOINTMENT_RESCHEDULED",
+        "NOTE_STATE_CHANGE_EVENT_CREATED",
         "CRON",
     )
 
@@ -399,11 +400,13 @@ def _install_canvas_sdk_stubs() -> None:
         "Appointment",
         "Team",
         "Note",
+        "NoteStateChangeEvent",
     ):
         setattr(data, name, type(name, (), {"objects": MagicMock()}))
 
     note_data_mod.Note = data.Note
     note_data_mod.NoteType = data.NoteType
+    note_data_mod.NoteStateChangeEvent = data.NoteStateChangeEvent
 
     class NoteStates:
         """The stored codes, not the member names.

@@ -133,6 +133,7 @@ class TestEventTypeStub:
             "APPOINTMENT_RESCHEDULED",
             "PATIENT_PORTAL__APPOINTMENT_CANCELED",
             "PATIENT_PORTAL__APPOINTMENT_RESCHEDULED",
+            "NOTE_STATE_CHANGE_EVENT_CREATED",
         ):
             assert EventType.Name(getattr(EventType, name)) == name
 
@@ -146,12 +147,17 @@ class TestEventTypeStub:
         from scheduling_waitlist.handlers.appointment_booked import (
             AppointmentBookedHandler,
         )
+        from scheduling_waitlist.handlers.note_buttons import NoteButtonsRefreshHandler
         from scheduling_waitlist.handlers.slot_freed import SlotFreedHandler
 
         from tests.conftest import _EventType
 
-        subscribed = set(SlotFreedHandler.RESPONDS_TO) | set(
-            AppointmentBookedHandler.RESPONDS_TO
+        # A single event name is a bare string, not a list, so it is wrapped
+        # rather than iterated -- otherwise this compares the set of its letters.
+        subscribed = (
+            set(SlotFreedHandler.RESPONDS_TO)
+            | set(AppointmentBookedHandler.RESPONDS_TO)
+            | {NoteButtonsRefreshHandler.RESPONDS_TO}
         )
         assert subscribed <= set(_EventType._NAMES)
 

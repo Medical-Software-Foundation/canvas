@@ -70,6 +70,15 @@
                 }
             },
             {
+                "class": "scheduling_waitlist.handlers.note_buttons:NoteButtonsRefreshHandler",
+                "description": "Redraws a note's action buttons when its state changes, so the 'Add to waitlist' button appears on a no-show without a page reload",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": ["Note", "NoteStateChangeEvent", "Appointment"],
+                    "write": []
+                }
+            },
+            {
                 "class": "scheduling_waitlist.handlers.waitlist_cron:WaitlistMaintenanceCron",
                 "description": "Nightly job that ages out stale entries and logs wait-time and fill metrics",
                 "data_access": {

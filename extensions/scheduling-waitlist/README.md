@@ -119,6 +119,7 @@ rather than guessing.
 | `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only — so in practice the no-show, which is the only one of the two whose note still has a header |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
+| `handlers.note_buttons:NoteButtonsRefreshHandler` | Handler | `NOTE_STATE_CHANGE_EVENT_CREATED` |
 | `handlers.waitlist_cron:WaitlistMaintenanceCron` | CronTask | `0 3 * * *` (UTC) |
 
 ## Notes for maintainers
@@ -137,6 +138,27 @@ the intent explicitly makes a malformed row match nothing instead.
 
 **Slot detection reacts to a freed *booked* slot, not to open availability.** Canvas emits no
 generic "slot opened" event, so scanning arbitrary open availability is out of scope.
+
+**A UI no-show emits no `APPOINTMENT_NO_SHOWED` event, so button refreshes hang off the note
+state instead.** Observed on `vicert-testing`: clicking No show moved the note to `NSW` and
+`SlotFreedHandler` — which does subscribe to `APPOINTMENT_NO_SHOWED` — never ran at all. Whether
+the platform writes `Appointment.status` for a UI no-show is server behaviour a plugin cannot see,
+which is why `handlers/appointment_button.py` consults both records and treats either as enough.
+
+An ActionButton also decides visibility only as the note renders, and nothing redraws it, so the
+button appeared on a no-show only after a page reload. `handlers/note_buttons.py` closes that by
+subscribing to `NOTE_STATE_CHANGE_EVENT_CREATED` and emitting `ReloadNoteActionButtonsEffect`.
+Two things about it are deliberate:
+
+- **It does not filter on which state was entered.** The button's answer changes both entering
+  cancelled/no-showed and leaving it — reverted, restored, undeleted, and whatever is added next.
+  Enumerating the second half is a list that goes stale without anything failing, and the two
+  errors are not symmetric: a spare redraw is an idempotent re-render, a missing one leaves a
+  button that lies. It gates on the note having an appointment instead, since no other note can
+  carry the button.
+- **It addresses the note by UUID, not dbid.** `ReloadNoteActionButtonsEffect` validates against
+  `Note.id`, while a note-header button receives the note's *dbid*. Mixing them up passes a test
+  suite and fails on the instance.
 
 **A cancelled appointment has nowhere to put a button, and this is not fixable here.** Please
 don't spend an afternoon on it. Cancelling an appointment tombstones its note: the chart timeline
