@@ -528,15 +528,75 @@
 
   function removeEntry(entry) {
     // Deliberately a confirm step: removal is a write other people can see.
-    if (!window.confirm("Remove " + entry.patient.name + " from the waitlist?")) return;
+    confirmAction({
+      title: "Remove from waitlist?",
+      body:
+        entry.patient.name +
+        " will come off the list. Their history is kept, so they can be put back on.",
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: function () {
+        request("/waitlist/entries/" + entry.dbid, { method: "DELETE" })
+          .then(function () {
+            afterWrite(entry.patient.name + " removed from the waitlist.");
+          })
+          .catch(function (error) {
+            toast(error.message, "error");
+          });
+      }
+    });
+  }
 
-    request("/waitlist/entries/" + entry.dbid, { method: "DELETE" })
-      .then(function () {
-        afterWrite(entry.patient.name + " removed from the waitlist.");
-      })
-      .catch(function (error) {
-        toast(error.message, "error");
-      });
+  // ---- confirmation ------------------------------------------------------
+
+  var confirmDialog = document.getElementById("wl-confirm-dialog");
+
+  /* An in-page confirmation, not window.confirm.
+   *
+   * The roster is embedded in a host modal, so a native dialog is drawn by the
+   * browser at the very top of the window -- detached from the page that asked,
+   * and styled by the browser rather than by us. It also blocks the whole frame
+   * while it is open.
+   *
+   * Falls back to window.confirm only if the dialog element is missing, so a
+   * destructive action is never taken without asking.
+   */
+  function confirmAction(options) {
+    if (!confirmDialog || typeof confirmDialog.showModal !== "function") {
+      if (window.confirm(options.title)) options.onConfirm();
+      return;
+    }
+
+    var confirmButton = el("button", {
+      type: "button",
+      class: "wl-btn " + (options.danger ? "wl-btn-danger" : "wl-btn-primary"),
+      text: options.confirmLabel || "Confirm"
+    });
+    var cancelButton = el("button", { type: "button", class: "wl-btn", text: "Cancel" });
+
+    confirmDialog.textContent = "";
+    confirmDialog.appendChild(
+      el("div", null, [
+        el("div", { class: "wl-dialog-body" }, [
+          el("h2", { id: "wl-confirm-title", text: options.title }),
+          el("p", { class: "wl-dialog-sub", text: options.body || "" })
+        ]),
+        el("div", { class: "wl-dialog-actions" }, [cancelButton, confirmButton])
+      ])
+    );
+
+    function close() {
+      confirmDialog.close();
+    }
+
+    cancelButton.addEventListener("click", close);
+    confirmButton.addEventListener("click", function () {
+      close();
+      options.onConfirm();
+    });
+
+    confirmDialog.showModal();
+    cancelButton.focus();
   }
 
   // ---- edit dialog -------------------------------------------------------

@@ -46,10 +46,17 @@ class SlotNotification(CustomModel):
     entry_count = IntegerField(default=0)
     notified_at = DateTimeField(null=True)
 
+    # Stamped when the nightly job closes the task because its slot has passed.
+    # Without it every past slot would be closed again every night, forever: the
+    # set of finished slots only grows, and closing a closed task is silent.
+    task_closed_at = DateTimeField(null=True)
+
     class Meta:
         indexes = [
             # The nightly prune.
             Index(fields=["notified_at"], name="wl_slotnotif_notified"),
+            # The nightly close: rows that still have a task to close.
+            Index(fields=["task_closed_at"], name="wl_slotnotif_closed"),
         ]
         constraints = [
             UniqueConstraint(

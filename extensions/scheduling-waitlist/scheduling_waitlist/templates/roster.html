@@ -78,6 +78,12 @@
 
   <dialog id="wl-edit-dialog" class="wl-dialog" aria-labelledby="wl-edit-title"></dialog>
   <dialog id="wl-add-dialog" class="wl-dialog" aria-labelledby="wl-add-title"></dialog>
+  {% comment %}
+    Removal is confirmed in here rather than with window.confirm. The roster is
+    embedded in a host modal, so a native dialog is drawn by the browser at the
+    top of the window, detached from the page that asked the question.
+  {% endcomment %}
+  <dialog id="wl-confirm-dialog" class="wl-dialog wl-dialog-narrow" aria-labelledby="wl-confirm-title"></dialog>
 
   <div id="wl-toast" class="wl-toast" role="status" aria-live="polite" hidden></div>
 

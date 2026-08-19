@@ -50,6 +50,16 @@ cancellation and a no-show for one booking raise one task between them.
 wait-time and fill metrics. Ageing marks entries `expired`; it never deletes them, so the backlog
 report stays intact and an entry can be reinstated in one click.
 
+The same job **closes slot-opened tasks whose slot has already started**. A freed slot is only
+fillable until it begins, so after that the task is dead work — and nothing else would ever close
+it, leaving the scheduling team's queue growing by one per cancellation until the live call-lists
+were lost among finished ones. This runs whether or not `WAITLIST_TTL_DAYS` is set: the two are
+unrelated, and an unconfigured instance is still a working one.
+
+A task is *not* closed when someone actually books the freed slot — that would mean matching a new
+appointment back to a freed one, and it is not implemented yet. Until then a filled slot's task is
+closed by the nightly sweep once the slot time passes, or by the scheduler marking it Done.
+
 ## Entry lifecycle
 
 ```

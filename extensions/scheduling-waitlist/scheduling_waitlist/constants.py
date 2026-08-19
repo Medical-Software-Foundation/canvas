@@ -137,6 +137,10 @@ DEFAULT_PAGE_SIZE = 100
 
 # --- housekeeping -----------------------------------------------------------
 SLOT_NOTIFICATION_RETENTION_DAYS = 90
+# Tasks closed per nightly run. A slot-opened task is dead work once its slot has
+# started, and nothing else closes it, so the queue would otherwise grow without
+# limit. Capped because each one is an effect.
+MAX_TASKS_CLOSED_PER_RUN = 200
 MAX_ENTRIES_EXPIRED_PER_RUN = 2000
 # Refreshing a banner costs a query per patient, so the nightly sweep refreshes
 # at most this many and logs the rest as skipped. A stale banner is corrected by

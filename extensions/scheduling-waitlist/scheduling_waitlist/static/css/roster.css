@@ -159,6 +159,15 @@ body {
 .wl-btn-danger { color: var(--wl-danger); }
 .wl-btn-quiet { background: transparent; }
 
+/* Red text is enough for a row action sitting among its neighbours, but the
+   confirming button in a dialog is the one thing being asked about, so there it
+   is filled. */
+.wl-dialog-actions .wl-btn-danger {
+  background: var(--wl-danger);
+  border-color: var(--wl-danger);
+  color: #fff;
+}
+
 .wl-btn-sm { padding: 4px 8px; min-height: 28px; font-size: 13px; }
 
 /* ---------- status line ---------- */
@@ -305,6 +314,9 @@ body {
 }
 
 .wl-dialog::backdrop { background: rgba(31, 41, 51, .45); }
+
+/* A confirmation asks one short question; the entry dialogs carry a form. */
+.wl-dialog-narrow { width: min(400px, 92vw); }
 
 .wl-dialog-body { padding: 18px 20px; }
 

@@ -36,6 +36,10 @@ class _Queryset:
     def select_related(self, *args):
         return self
 
+    def exclude(self, **kwargs):
+        self.exclude_kwargs = kwargs
+        return self
+
     def delete(self):
         self.deleted = True
 
@@ -55,7 +59,15 @@ def _entry(status="waiting", created_days_ago=10, expires_on=None, patient_dbid=
     return entry
 
 
-def _run(cron, *, missing=None, due=None, report=None):
+def _ledger(task_id="task-1"):
+    """A slot-announcement row with a task still open."""
+    row = MagicMock()
+    row.task_id = task_id
+    row.task_closed_at = None
+    return row
+
+
+def _run(cron, *, missing=None, due=None, report=None, finished=None):
     """Drive the job with a scripted set of query results.
 
     ``banner_effects`` is stubbed out: these tests are about what the job writes
@@ -65,7 +77,7 @@ def _run(cron, *, missing=None, due=None, report=None):
     missing_qs = _Queryset(missing or [])
     due_qs = _Queryset(due or [])
     report_qs = _Queryset(report or [])
-    notification_qs = _Queryset()
+    notification_qs = _Queryset(finished or [])
     calls = {"n": 0}
 
     def entry_filter(**kwargs):
@@ -82,8 +94,8 @@ def _run(cron, *, missing=None, due=None, report=None):
         entry_model.objects.filter.side_effect = entry_filter
         entry_model.objects.all.return_value = report_qs
         notification_model.objects.filter.return_value = notification_qs
-        cron.execute()
-        return entry_model, notification_qs
+        effects = cron.execute()
+        return entry_model, notification_qs, notification_model, effects
 
 
 class TestSchedule:
@@ -95,12 +107,12 @@ class TestShelfLifeConfiguration:
     def test_nothing_is_aged_out_without_a_configured_shelf_life(self):
         # Expiring entries is destructive; a mistyped setting must not be the
         # reason somebody drops off the list.
-        entry_model, _ = _run(_cron(secrets={}), due=[_entry()])
+        entry_model, _, _, _ = _run(_cron(secrets={}), due=[_entry()])
 
         entry_model.objects.bulk_update.assert_not_called()
 
     def test_an_invalid_shelf_life_ages_nothing_out(self):
-        entry_model, _ = _run(
+        entry_model, _, _, _ = _run(
             _cron(secrets={"WAITLIST_TTL_DAYS": "soon"}), due=[_entry()]
         )
 
@@ -118,7 +130,7 @@ class TestAgeing:
     def test_entries_past_their_shelf_life_are_marked_expired(self):
         entry = _entry(expires_on=date(2026, 1, 1))
 
-        entry_model, _ = _run(_cron(), due=[entry])
+        entry_model, _, _, _ = _run(_cron(), due=[entry])
 
         assert entry.status == "expired"
         entry_model.objects.bulk_update.assert_called()
@@ -140,7 +152,7 @@ class TestAgeing:
         entry.delete.assert_not_called()
 
     def test_nothing_due_writes_nothing(self):
-        entry_model, _ = _run(_cron(), due=[])
+        entry_model, _, _, _ = _run(_cron(), due=[])
 
         entry_model.objects.bulk_update.assert_not_called()
 
@@ -169,7 +181,7 @@ class TestBackfill:
 class TestPruning:
     def test_old_slot_announcements_are_deleted(self):
         # Pure machine state with no value once the slot has passed.
-        _, notification_qs = _run(_cron())
+        _, notification_qs, _, _ = _run(_cron())
 
         assert notification_qs.deleted is True
 
@@ -262,3 +274,77 @@ class TestBannerRefresh:
             self._refresh(expired)
 
         assert logger.warning.called
+
+
+class TestClosingFinishedTasks:
+    """A slot-opened task is dead work once its slot has started.
+
+    Nothing else closes it, so without this the scheduling team's queue grows by
+    one for every cancellation, forever, and the live call-lists get lost among
+    the finished ones.
+    """
+
+    def test_a_task_for_a_passed_slot_is_completed(self):
+        _, _, _, effects = _run(_cron(), finished=[_ledger("task-1")])
+
+        assert [e.id for e in effects] == ["task-1"]
+        assert effects[0].status == "COMPLETED"
+
+    def test_nothing_finished_closes_nothing(self):
+        _, _, _, effects = _run(_cron(), finished=[])
+
+        assert effects == []
+
+    def test_only_slots_that_have_started_are_considered(self):
+        _, _, model, _ = _run(_cron(), finished=[_ledger()])
+
+        kwargs = model.objects.filter.call_args.kwargs
+        assert "appointment__start_time__lt" in kwargs
+
+    def test_rows_already_closed_are_skipped(self):
+        # Otherwise every past slot would be closed again every night, forever.
+        _, _, model, _ = _run(_cron(), finished=[_ledger()])
+
+        assert model.objects.filter.call_args.kwargs["task_closed_at__isnull"] is True
+
+    def test_rows_that_never_raised_a_task_are_excluded(self):
+        # A slot with no matches records the announcement but has no task id.
+        _, qs, _, _ = _run(_cron(), finished=[_ledger()])
+
+        assert qs.exclude_kwargs == {"task_id": ""}
+
+    def test_closing_is_recorded_on_the_ledger(self):
+        row = _ledger()
+
+        _, _, model, _ = _run(_cron(), finished=[row])
+
+        assert row.task_closed_at is not None
+        assert model.objects.bulk_update.call_args.args[1] == ["task_closed_at"]
+
+    def test_it_runs_even_without_a_shelf_life_configured(self):
+        # The two settings are unrelated, and an unconfigured instance is a
+        # working instance -- it must not accumulate tasks nobody can act on.
+        _, _, _, effects = _run(_cron(secrets={}), finished=[_ledger("task-9")])
+
+        assert [e.id for e in effects] == ["task-9"]
+
+    def test_the_close_is_logged(self):
+        import sys
+
+        sys.modules["logger"].log.info.reset_mock()
+        _run(_cron(), finished=[_ledger()])
+
+        logged = " ".join(str(c) for c in sys.modules["logger"].log.info.call_args_list)
+        assert "closed 1 slot-opened task" in logged
+
+    def test_hitting_the_cap_is_logged_rather_than_passed_over(self):
+        import sys
+        from scheduling_waitlist.constants import MAX_TASKS_CLOSED_PER_RUN
+
+        sys.modules["logger"].log.warning.reset_mock()
+        rows = [_ledger(f"task-{n}") for n in range(MAX_TASKS_CLOSED_PER_RUN)]
+
+        _, _, _, effects = _run(_cron(), finished=rows)
+
+        assert len(effects) == MAX_TASKS_CLOSED_PER_RUN
+        assert sys.modules["logger"].log.warning.called

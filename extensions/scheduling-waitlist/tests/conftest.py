@@ -491,9 +491,23 @@ def _install_canvas_sdk_stubs() -> None:
         def apply(self):
             return self
 
+    class UpdateTask:
+        """Requires an id, like the real effect: it addresses an existing task."""
+
+        def __init__(self, **kwargs):
+            if not kwargs.get("id"):
+                raise ValueError("UpdateTask requires the id of the task to update")
+            self.kwargs = kwargs
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        def apply(self):
+            return self
+
     for module in (task_effects_mod, task_effects_task_mod):
         module.AddTask = AddTask
         module.AddTaskComment = AddTaskComment
+        module.UpdateTask = UpdateTask
         module.TaskStatus = TaskStatus
 
     class Application:
@@ -555,6 +569,23 @@ def _install_canvas_sdk_stubs() -> None:
 
     action_button_effects_mod.ReloadPatientActionButtonsEffect = (
         ReloadPatientActionButtonsEffect
+    )
+
+    class ReloadNoteActionButtonsEffect:
+        """The note-header counterpart, addressed by note rather than patient.
+
+        A separate effect in the SDK, which is why emitting only the patient one
+        left a note's button label stale until the page was reloaded.
+        """
+
+        def __init__(self, id=None):  # noqa: A002 - matches the real signature
+            self.id = id
+
+        def apply(self):
+            return self
+
+    action_button_effects_mod.ReloadNoteActionButtonsEffect = (
+        ReloadNoteActionButtonsEffect
     )
 
     class SimpleAPI:

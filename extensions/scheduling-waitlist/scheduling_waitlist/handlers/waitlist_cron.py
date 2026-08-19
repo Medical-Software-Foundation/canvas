@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.task import TaskStatus, UpdateTask
 from canvas_sdk.handlers.cron_task import CronTask
 from logger import log
 
@@ -13,6 +14,7 @@ from scheduling_waitlist.constants import (
     MATCHABLE_STATUSES,
     MAX_BANNER_REFRESH_PER_RUN,
     MAX_ENTRIES_EXPIRED_PER_RUN,
+    MAX_TASKS_CLOSED_PER_RUN,
     SLOT_NOTIFICATION_RETENTION_DAYS,
     STATUS_EXPIRED,
 )
@@ -28,13 +30,20 @@ class WaitlistMaintenanceCron(CronTask):
     SCHEDULE = "0 3 * * *"
 
     def execute(self) -> list[Effect]:
-        """Backfill expiry dates, age out lapsed entries, prune, and report."""
+        """Close finished tasks, age out lapsed entries, prune, and report."""
         config = WaitlistConfig.from_secrets(self.secrets)
         now = datetime.now(timezone.utc)
         today = now.date()
 
         self._report(today)
         self._prune_notifications(now)
+
+        # Ahead of the shelf-life guard below, and not subject to it: a task for a
+        # slot that has already started is dead work whether or not the practice
+        # configured a shelf life for entries. The two settings are unrelated, and
+        # tying them together would leave an unconfigured instance -- which is a
+        # working instance -- accumulating tasks nobody can act on.
+        closed = self._close_finished_tasks(now)
 
         if config.ttl_days is None:
             # Deliberately not a fallback. Expiring entries is destructive, and
@@ -44,13 +53,55 @@ class WaitlistMaintenanceCron(CronTask):
                 "scheduling_waitlist: WAITLIST_TTL_DAYS is unset or invalid, so no "
                 "entries were aged out"
             )
-            return []
+            return closed
 
         self._backfill_expiry(config.ttl_days, today)
         expired = self._expire_due(today)
-        return self._refresh_banners(expired)
+        return closed + self._refresh_banners(expired)
 
     # -- pieces ----------------------------------------------------------
+
+    @staticmethod
+    def _close_finished_tasks(now: datetime) -> list[Effect]:
+        """Close slot-opened tasks whose slot has already started.
+
+        A freed slot is only fillable until it begins. After that the task is
+        dead work, and nothing else closes it -- so without this the scheduling
+        team's queue grows by one every cancellation, forever, and the real
+        call-lists get lost among finished ones.
+
+        Marked on the ledger rather than recomputed, because the set of finished
+        slots only ever grows and closing a closed task says nothing.
+        """
+        finished = list(
+            SlotNotification.objects.filter(
+                task_closed_at__isnull=True,
+                appointment__start_time__lt=now,
+            )
+            .exclude(task_id="")
+            .order_by("notified_at", "dbid")[:MAX_TASKS_CLOSED_PER_RUN]
+        )
+        if not finished:
+            return []
+
+        for ledger in finished:
+            ledger.task_closed_at = now
+        SlotNotification.objects.bulk_update(finished, ["task_closed_at"])
+
+        log.info(
+            f"scheduling_waitlist: closed {len(finished)} slot-opened "
+            f"task{'' if len(finished) == 1 else 's'} whose slot has passed"
+        )
+        if len(finished) == MAX_TASKS_CLOSED_PER_RUN:
+            log.warning(
+                "scheduling_waitlist: hit the per-run task-close cap, so more tasks are "
+                "still open for slots that have passed; they close on the next run"
+            )
+
+        return [
+            UpdateTask(id=ledger.task_id, status=TaskStatus.COMPLETED).apply()
+            for ledger in finished
+        ]
 
     @staticmethod
     def _refresh_banners(expired: list[Any]) -> list[Effect]:
