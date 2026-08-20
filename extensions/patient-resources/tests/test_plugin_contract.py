@@ -417,3 +417,29 @@ def test_no_module_reaches_a_function_through_an_imported_submodule():
                 if alias.name in package_submodules:
                     offenders.append(f"{path.name}: from {node.module} import {alias.name}")
     assert not offenders, offenders
+
+
+def test_modal_pages_offer_a_way_to_close_themselves():
+    """The host modal for this target draws no chrome, so the page must.
+
+    Without this the picker and library open and cannot be dismissed.
+    """
+    for name in ("library.html", "picker.html"):
+        source = (PACKAGE / "templates" / name).read_text()
+        assert 'id="pr-close"' in source, name
+        assert 'aria-label="Close"' in source, name
+
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        # The platform's contract: it hands over a MessagePort on INIT_CHANNEL
+        # and listens for CLOSE_MODAL on that port.
+        assert "INIT_CHANNEL" in source, name
+        assert "CLOSE_MODAL" in source, name
+        assert "event.origin !== window.location.origin" in source, name
+
+
+def test_the_patient_page_has_no_modal_plumbing():
+    """It opens as a full page, so a close control would be wrong there."""
+    source = _js_code(PACKAGE / "static" / "js" / "portal.js")
+    assert "CLOSE_MODAL" not in source
+    assert "INIT_CHANNEL" not in source

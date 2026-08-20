@@ -45,6 +45,34 @@
     resultMessage: document.getElementById("pr-result-message")
   };
 
+  // --- closing the host modal ---------------------------------------------
+  // The platform hands the iframe a MessagePort in an INIT_CHANNEL message and
+  // listens for CLOSE_MODAL on it. Inlined in each staff bundle rather than
+  // shared: a fourth asset route and cache-busting surface costs more than
+  // fifteen duplicated lines, and it keeps the patient bundle free of anything
+  // that talks to the staff host.
+  var messagePort = null;
+
+  window.addEventListener("message", function (event) {
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+    if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+      messagePort = event.ports[0];
+      messagePort.start();
+    }
+  });
+
+  function closeModal() {
+    if (messagePort) {
+      messagePort.postMessage({ type: "CLOSE_MODAL" });
+      return;
+    }
+    // No port means the host did not offer one. Closing the window is the only
+    // remaining option and is harmless when it is not permitted.
+    window.close();
+  }
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) {
@@ -343,6 +371,11 @@
   });
   els.labelFilter.addEventListener("change", load);
   els.send.addEventListener("click", send);
+
+  var closeButton = document.getElementById("pr-close");
+  if (closeButton) {
+    closeButton.addEventListener("click", closeModal);
+  }
 
   loadLabels();
   loadPatient();
