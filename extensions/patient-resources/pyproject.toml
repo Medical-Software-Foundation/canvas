@@ -2,7 +2,7 @@
 # process that does not use this file.
 [project]
 name = "patient-resources"
-version = "0.1.0"
+version = "0.1.1"
 description = "Admin-curated library of patient-facing resource links, shared to the patient portal"
 license = "MIT"
 license-files = ["LICENSE"]

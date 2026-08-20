@@ -101,12 +101,43 @@
             if (response.ok) {
               return data;
             }
-            var error = new Error(data.error || "That did not work.");
+            var error = new Error(describeFailure(response.status, data));
             error.status = response.status;
             error.fieldErrors = data.field_errors || null;
             throw error;
           });
+      })
+      .catch(function (error) {
+        // A rejected fetch never reached Canvas at all, so there is no status
+        // to report. Presented the same way as a 5xx: not the user's doing, and
+        // worth retrying.
+        if (error.status === undefined) {
+          var wrapped = new Error(describeFailure(0, null));
+          wrapped.status = 0;
+          throw wrapped;
+        }
+        throw error;
       });
+  }
+
+  function describeFailure(status, data) {
+    // A message the reader can act on. The previous version said only "That did
+    // not work", which left a plugin-runner restart indistinguishable from a
+    // permissions problem and read as though the plugin were broken.
+    if (data && data.error) {
+      return data.error;
+    }
+    if (!status || status >= 500) {
+      return (
+        "Canvas could not reach this plugin" +
+        (status ? " (HTTP " + status + ")" : "") +
+        ". It may be reloading \u2014 wait a few seconds and reload the page."
+      );
+    }
+    if (status === 404) {
+      return "That endpoint is not available (HTTP 404). The plugin may still be loading.";
+    }
+    return "The request failed (HTTP " + status + ").";
   }
 
   // ---------- rendering ----------

@@ -20,6 +20,15 @@
 
 * { box-sizing: border-box; }
 
+/* The templates hide the Add button, the read-only notice and the archived
+   toggle with the `hidden` attribute and reveal them from JavaScript. The
+   browser's own `[hidden] { display: none }` lives in the user-agent
+   stylesheet, so any author `display` rule below -- `.pr-toggle { display:
+   flex }`, for one -- outranks it and the element stays visible whatever the
+   attribute says. Restating it here as an author rule, and marking it
+   important because the two rules are then at the same level. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: var(--prp-font);
