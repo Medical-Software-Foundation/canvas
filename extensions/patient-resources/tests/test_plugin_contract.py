@@ -465,3 +465,17 @@ def test_modal_pages_ask_the_host_for_a_size_that_fits():
 def test_the_patient_page_does_not_resize_anything():
     source = _js_code(PACKAGE / "static" / "js" / "portal.js")
     assert "RESIZE" not in source
+
+
+def test_resize_accounts_for_an_open_dialog():
+    """A <dialog> is an overlay, so it adds nothing to the page's flow height.
+
+    Measuring only #pr-app left the window sized to the list behind the form,
+    which meant scrolling to reach the Save button.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert 'querySelector("dialog[open]")' in source, name
+        assert "offsetHeight" in source, name
+        # And it must shrink back afterwards.
+        assert 'addEventListener("close", requestResize)' in source, name
