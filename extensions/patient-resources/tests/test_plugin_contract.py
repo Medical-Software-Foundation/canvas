@@ -29,6 +29,15 @@ def _module_source(path: Path) -> str:
     return path.read_text()
 
 
+def _css_code(path: Path) -> str:
+    """CSS with comments removed.
+
+    The stylesheets document the rule they are restating, so a substring search
+    over the raw text finds the prose first.
+    """
+    return re.sub(r"/\*.*?\*/", "", path.read_text(), flags=re.DOTALL)
+
+
 def _js_code(path: Path) -> str:
     """JavaScript with comments removed.
 
@@ -289,3 +298,67 @@ def test_every_declared_variable_is_read_somewhere():
             # Supplied to the platform, not read by plugin code.
             continue
         assert name in sources, name
+
+
+# --- the hidden attribute ---------------------------------------------------
+
+CSS_FILES = sorted((PACKAGE / "static" / "css").rglob("*.css"))
+TEMPLATES = sorted((PACKAGE / "templates").rglob("*.html"))
+
+
+def test_every_stylesheet_guards_the_hidden_attribute():
+    """An author `display` rule beats the browser's own `[hidden]` rule.
+
+    The templates hide the Add button, the read-only notice and the archived
+    toggle with the `hidden` attribute, then reveal them from JavaScript. But
+    `.pr-toggle { display: flex }` is an author declaration and `[hidden] {
+    display: none }` comes from the user-agent stylesheet, so the author rule
+    wins and the element is visible no matter what the attribute says.
+
+    That is not hypothetical: it shipped, and the archived-resources toggle
+    appeared for a user who had not been granted curation rights.
+    """
+    for path in CSS_FILES:
+        source = _css_code(path)
+        assert "[hidden]" in source, path
+        guard = source[source.index("[hidden]") :]
+        guard = guard[: guard.index("}") + 1]
+        assert "display" in guard and "none" in guard, path
+        # Needed because the conflicting rules are both author-level, so
+        # specificity alone does not settle it.
+        assert "!important" in guard, path
+
+
+def test_elements_hidden_in_a_template_are_covered_by_that_guard():
+    """Any element the templates hide has to be in a page that loads the guard."""
+    for path in TEMPLATES:
+        source = path.read_text()
+        if " hidden>" not in source and " hidden " not in source:
+            continue
+        stylesheets = re.findall(r'href="\{\{ asset_base \}\}/([^"?]+)', source)
+        assert stylesheets, path
+        for name in stylesheets:
+            matches = [css for css in CSS_FILES if css.name == name]
+            assert matches, f"{path} references {name}, which is not on disk"
+            assert "[hidden]" in _css_code(matches[0]), matches[0]
+
+
+def test_staff_pages_report_the_http_status_on_failure():
+    """A failure the reader can act on, rather than a bare "that did not work".
+
+    The first version said only that, which made a plugin-runner restart
+    indistinguishable from a permissions problem: the page showed one red line
+    and no clue whether to retry, ask for access, or report a bug.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert "describeFailure" in source, name
+        assert "response.status" in source, name
+        assert "HTTP " in source, name
+
+
+def test_the_patient_page_does_not_show_http_statuses():
+    """Patients get a plain sentence; a status code is noise to them."""
+    source = _js_code(PACKAGE / "static" / "js" / "portal.js")
+    assert "HTTP " not in source
+    assert "response.status" not in source
