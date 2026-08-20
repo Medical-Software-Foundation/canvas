@@ -17,7 +17,7 @@ from django.db import IntegrityError
 
 from patient_resources.constants import MAX_SHARE_BATCH
 from patient_resources.routes.support import StaffRouteMixin
-from patient_resources.services import shares
+from patient_resources.services.shares import live_shares_for_patient, share_resources
 from patient_resources.services.identity import id_candidates
 from patient_resources.services.serializers import serialize_share_for_staff
 
@@ -60,7 +60,7 @@ class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         if patient is None:
             return self._not_found("That patient could not be found.")
 
-        existing = list(shares.live_shares_for_patient(patient.dbid))
+        existing = list(live_shares_for_patient(patient.dbid))
         return [
             JSONResponse(
                 {
@@ -94,7 +94,7 @@ class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return self._invalid(error)
 
         try:
-            result = shares.share_resources(
+            result = share_resources(
                 patient=patient, resource_dbids=resource_ids, staff_dbid=staff.dbid
             )
         except IntegrityError:

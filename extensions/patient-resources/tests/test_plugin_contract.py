@@ -383,3 +383,37 @@ def test_content_type_is_only_sent_with_a_body():
 def test_the_patient_page_sends_no_content_type():
     source = _js_code(PACKAGE / "static" / "js" / "portal.js")
     assert "Content-Type" not in source
+
+
+def test_no_module_reaches_a_function_through_an_imported_submodule():
+    """Import the symbol, never the module it lives in.
+
+    `from patient_resources.services import catalog` then `catalog.list_resources()`
+    imports cleanly, passes `canvas validate`, and then fails at request time in
+    the sandbox: reaching a function as an attribute of a plugin submodule does
+    not survive. It cost an afternoon. The two route classes that did this
+    returned HTTP 500 on every call while the three that imported symbols
+    directly worked, which is what finally isolated it.
+
+    Diagnostics are exempt, since one probe keeps the broken form deliberately.
+    """
+    package_submodules = {
+        path.stem
+        for path in PACKAGE.rglob("*.py")
+        if path.stem not in {"__init__", "constants"}
+    }
+
+    offenders: list[str] = []
+    for path in PY_FILES:
+        if path.name == "diagnostics.py":
+            continue
+        tree = ast.parse(_module_source(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            if not node.module.startswith("patient_resources"):
+                continue
+            for alias in node.names:
+                if alias.name in package_submodules:
+                    offenders.append(f"{path.name}: from {node.module} import {alias.name}")
+    assert not offenders, offenders

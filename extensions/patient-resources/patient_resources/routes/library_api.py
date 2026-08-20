@@ -19,8 +19,20 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
 from patient_resources.constants import STATUS_ACTIVE, STATUS_ARCHIVED
 from patient_resources.routes.support import StaffRouteMixin
-from patient_resources.services import catalog, shares
+from patient_resources.services.catalog import (
+    DuplicateResourceError,
+    ResourceInUseError,
+    create_resource,
+    distinct_labels,
+    get_resource,
+    list_resources,
+    normalize_limit,
+    normalize_offset,
+    set_status,
+    update_resource,
+)
 from patient_resources.services.permissions import is_library_admin
+from patient_resources.services.shares import revoke_resource_shares
 from patient_resources.services.serializers import serialize_resource
 from patient_resources.services.validation import validate_resource
 
@@ -44,10 +56,37 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         return staff, None
 
     def _resource_for_write(self) -> tuple[Any, list[Response | Effect] | None]:
-        resource = catalog.get_resource(self._path_param("resource_id"))
+        resource = get_resource(self._path_param("resource_id"))
         if resource is None:
             return None, self._not_found("That resource no longer exists.")
         return resource, None
+
+    # --- TEMPORARY DIAGNOSTICS ---------------------------------------------
+    # Remove once the empty-bodied 500 on this class is understood. Each probe
+    # adds exactly one thing to the one before it, so whichever is the first to
+    # fail names the cause.
+
+    @api.get("/ping")
+    def get_ping(self) -> list[Response | Effect]:
+        """No session lookup, no database. Tests the class and prefix alone."""
+        return [JSONResponse({"ok": True, "probe": "library_no_db"})]
+
+    @api.get("/ping-core")
+    def get_ping_core(self) -> list[Response | Effect]:
+        """Adds one query against a core Canvas model."""
+        staff = self._acting_staff()
+        return [JSONResponse({"ok": True, "probe": "library_core_db", "staff": staff is not None})]
+
+    @api.get("/ping-custom")
+    def get_ping_custom(self) -> list[Response | Effect]:
+        """Adds one query against this plugin's own custom_data table."""
+        from patient_resources.models import PatientResource
+
+        return [
+            JSONResponse(
+                {"ok": True, "probe": "library_custom_data", "rows": PatientResource.objects.count()}
+            )
+        ]
 
     # --- reads -------------------------------------------------------------
 
@@ -67,9 +106,9 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         can_edit = is_library_admin(staff, self._config())
         include_archived = can_edit and self._param("include_archived").lower() == "true"
 
-        limit = catalog.normalize_limit(self._param("limit"))
-        offset = catalog.normalize_offset(self._param("offset"))
-        rows, total = catalog.list_resources(
+        limit = normalize_limit(self._param("limit"))
+        offset = normalize_offset(self._param("offset"))
+        rows, total = list_resources(
             search=self._param("q"),
             label=self._param("label"),
             include_archived=include_archived,
@@ -94,7 +133,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         """The labels in use, for the filter control."""
         if self._acting_staff() is None:
             return self._unauthenticated()
-        return [JSONResponse({"labels": catalog.distinct_labels()})]
+        return [JSONResponse({"labels": distinct_labels()})]
 
     # --- curation ----------------------------------------------------------
 
@@ -114,13 +153,13 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return self._invalid("Check the highlighted fields.", errors)
 
         try:
-            resource = catalog.create_resource(
+            resource = create_resource(
                 title=body["title"],
                 url=body["url"],
                 label=body.get("label", ""),
                 staff_dbid=staff.dbid,
             )
-        except catalog.DuplicateResourceError as exc:
+        except DuplicateResourceError as exc:
             return self._conflict(str(exc))
 
         return [JSONResponse(serialize_resource(resource), status_code=HTTPStatus.CREATED)]
@@ -131,7 +170,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
 
         A changed link is refused once the resource has been shared, because the
         link is the identity of what a patient was given. See
-        ``catalog.update_resource``.
+        ``update_resource``.
         """
         staff, refusal = self._curator()
         if refusal is not None:
@@ -150,14 +189,14 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return self._invalid("Check the highlighted fields.", errors)
 
         try:
-            updated = catalog.update_resource(
+            updated = update_resource(
                 resource,
                 title=body["title"],
                 url=body["url"],
                 label=body.get("label", ""),
                 staff_dbid=staff.dbid,
             )
-        except (catalog.ResourceInUseError, catalog.DuplicateResourceError) as exc:
+        except (ResourceInUseError, DuplicateResourceError) as exc:
             return self._conflict(str(exc))
 
         return [JSONResponse(serialize_resource(updated))]
@@ -187,7 +226,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return missing
         return [
             JSONResponse(
-                serialize_resource(catalog.set_status(resource, status, staff_dbid=staff.dbid))
+                serialize_resource(set_status(resource, status, staff_dbid=staff.dbid))
             )
         ]
 
@@ -208,9 +247,9 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return missing
 
         body = self._json_object() or {}
-        withdrawn = shares.revoke_resource_shares(
+        withdrawn = revoke_resource_shares(
             resource_dbid=resource.dbid,
             reason=str(body.get("reason", "") or "").strip(),
         )
-        catalog.set_status(resource, STATUS_ARCHIVED, staff_dbid=staff.dbid)
+        set_status(resource, STATUS_ARCHIVED, staff_dbid=staff.dbid)
         return [JSONResponse({"withdrawn": withdrawn, "resource": serialize_resource(resource)})]

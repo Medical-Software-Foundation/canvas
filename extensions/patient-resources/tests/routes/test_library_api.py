@@ -83,7 +83,7 @@ def test_every_write_route_403s_for_a_non_admin_and_writes_nothing(
     route, mock_staff, make_request
 ):
     with patch(
-        "patient_resources.services.catalog.get_resource", return_value=_resource()
+        "patient_resources.routes.library_api.get_resource", return_value=_resource()
     ):
         responses = _call(route, mock_staff, False, make_request, json_body=dict(VALID))
     assert responses[0].status_code == 403
@@ -95,7 +95,7 @@ def test_every_write_route_403s_for_a_non_admin_and_writes_nothing(
 
 def test_listing_reports_whether_the_caller_may_edit(mock_staff, make_request):
     with patch(
-        "patient_resources.services.catalog.list_resources", return_value=([], 0)
+        "patient_resources.routes.library_api.list_resources", return_value=([], 0)
     ):
         for admin in (True, False):
             responses = _call("get_resources", mock_staff, admin, make_request)
@@ -104,7 +104,7 @@ def test_listing_reports_whether_the_caller_may_edit(mock_staff, make_request):
 
 def test_a_non_admin_cannot_reveal_archived_rows_with_a_query_param(mock_staff, make_request):
     with patch(
-        "patient_resources.services.catalog.list_resources", return_value=([], 0)
+        "patient_resources.routes.library_api.list_resources", return_value=([], 0)
     ) as listing:
         _call(
             "get_resources",
@@ -118,7 +118,7 @@ def test_a_non_admin_cannot_reveal_archived_rows_with_a_query_param(mock_staff, 
 
 def test_a_curator_can_include_archived_rows(mock_staff, make_request):
     with patch(
-        "patient_resources.services.catalog.list_resources", return_value=([], 0)
+        "patient_resources.routes.library_api.list_resources", return_value=([], 0)
     ) as listing:
         _call(
             "get_resources",
@@ -132,7 +132,7 @@ def test_a_curator_can_include_archived_rows(mock_staff, make_request):
 
 def test_paging_parameters_are_clamped(mock_staff, make_request):
     with patch(
-        "patient_resources.services.catalog.list_resources", return_value=([], 0)
+        "patient_resources.routes.library_api.list_resources", return_value=([], 0)
     ) as listing:
         _call(
             "get_resources",
@@ -147,7 +147,7 @@ def test_paging_parameters_are_clamped(mock_staff, make_request):
 
 def test_labels_are_returned_for_the_filter(mock_staff, make_request):
     with patch(
-        "patient_resources.services.catalog.distinct_labels", return_value=["Cardiac"]
+        "patient_resources.routes.library_api.distinct_labels", return_value=["Cardiac"]
     ):
         assert _call("get_labels", mock_staff, False, make_request)[0].data == {
             "labels": ["Cardiac"]
@@ -199,7 +199,7 @@ def test_an_unsafe_link_is_refused_and_nothing_is_written(mock_staff, make_reque
 
 def test_a_valid_resource_is_created_and_attributed(mock_staff, make_request):
     with patch(
-        "patient_resources.services.catalog.create_resource", return_value=_resource()
+        "patient_resources.routes.library_api.create_resource", return_value=_resource()
     ) as create:
         responses = _call(
             "post_resource", mock_staff, True, make_request, json_body=dict(VALID)
@@ -212,7 +212,7 @@ def test_a_duplicate_is_a_409(mock_staff, make_request):
     from patient_resources.services.catalog import DuplicateResourceError
 
     with patch(
-        "patient_resources.services.catalog.create_resource",
+        "patient_resources.routes.library_api.create_resource",
         side_effect=DuplicateResourceError("already exists"),
     ):
         responses = _call(
@@ -225,7 +225,7 @@ def test_a_duplicate_is_a_409(mock_staff, make_request):
 
 
 def test_editing_a_missing_resource_is_a_404(mock_staff, make_request):
-    with patch("patient_resources.services.catalog.get_resource", return_value=None):
+    with patch("patient_resources.routes.library_api.get_resource", return_value=None):
         responses = _call(
             "put_resource", mock_staff, True, make_request, json_body=dict(VALID)
         )
@@ -237,9 +237,9 @@ def test_changing_a_shared_resources_link_is_a_409(mock_staff, make_request):
     from patient_resources.services.catalog import ResourceInUseError
 
     with (
-        patch("patient_resources.services.catalog.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch(
-            "patient_resources.services.catalog.update_resource",
+            "patient_resources.routes.library_api.update_resource",
             side_effect=ResourceInUseError("already shared"),
         ),
     ):
@@ -254,9 +254,9 @@ def test_changing_a_shared_resources_link_is_a_409(mock_staff, make_request):
 
 def test_archiving_sets_the_archived_status(mock_staff, make_request):
     with (
-        patch("patient_resources.services.catalog.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch(
-            "patient_resources.services.catalog.set_status", return_value=_resource()
+            "patient_resources.routes.library_api.set_status", return_value=_resource()
         ) as set_status,
     ):
         _call("archive_resource", mock_staff, True, make_request)
@@ -265,9 +265,9 @@ def test_archiving_sets_the_archived_status(mock_staff, make_request):
 
 def test_restoring_sets_the_active_status(mock_staff, make_request):
     with (
-        patch("patient_resources.services.catalog.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch(
-            "patient_resources.services.catalog.set_status", return_value=_resource()
+            "patient_resources.routes.library_api.set_status", return_value=_resource()
         ) as set_status,
     ):
         _call("restore_resource", mock_staff, True, make_request)
@@ -276,10 +276,10 @@ def test_restoring_sets_the_active_status(mock_staff, make_request):
 
 def test_retracting_withdraws_from_patients_and_archives(mock_staff, make_request):
     with (
-        patch("patient_resources.services.catalog.get_resource", return_value=_resource()),
-        patch("patient_resources.services.catalog.set_status", return_value=_resource()),
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.set_status", return_value=_resource()),
         patch(
-            "patient_resources.services.shares.revoke_resource_shares", return_value=7
+            "patient_resources.routes.library_api.revoke_resource_shares", return_value=7
         ) as revoke,
     ):
         responses = _call(
@@ -295,9 +295,9 @@ def test_retracting_withdraws_from_patients_and_archives(mock_staff, make_reques
 
 def test_retracting_without_a_body_still_works(mock_staff, make_request):
     with (
-        patch("patient_resources.services.catalog.get_resource", return_value=_resource()),
-        patch("patient_resources.services.catalog.set_status", return_value=_resource()),
-        patch("patient_resources.services.shares.revoke_resource_shares", return_value=0),
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.set_status", return_value=_resource()),
+        patch("patient_resources.routes.library_api.revoke_resource_shares", return_value=0),
     ):
         responses = _call("retract_resource", mock_staff, True, make_request, json_body=None)
     assert responses[0].status_code == 200
@@ -306,7 +306,7 @@ def test_retracting_without_a_body_still_works(mock_staff, make_request):
 # --- gating is read from config, not assumed ------------------------------
 
 
-def test_blank_role_config_denies_curation_end_to_end(mock_staff, make_request):
+def test_disabled_role_config_denies_curation_end_to_end(mock_staff, make_request):
     """No patch on is_library_admin here: the real check runs."""
     from canvas_sdk.v1.data.staff import StaffRole
 
@@ -314,7 +314,7 @@ def test_blank_role_config_denies_curation_end_to_end(mock_staff, make_request):
     with patch("patient_resources.routes.support.staff_from_session", return_value=mock_staff):
         api = _api(
             make_request,
-            secrets={SECRET_ADMIN_ROLE_DOMAINS: ""},
+            secrets={SECRET_ADMIN_ROLE_DOMAINS: "NONE"},
             json_body=dict(VALID),
         )
         responses = api.post_resource()
@@ -327,9 +327,9 @@ def test_blank_role_config_denies_curation_end_to_end(mock_staff, make_request):
 
 def test_a_valid_edit_returns_the_updated_resource(mock_staff, make_request):
     with (
-        patch("patient_resources.services.catalog.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch(
-            "patient_resources.services.catalog.update_resource", return_value=_resource()
+            "patient_resources.routes.library_api.update_resource", return_value=_resource()
         ) as update,
     ):
         responses = _call(
@@ -342,13 +342,13 @@ def test_a_valid_edit_returns_the_updated_resource(mock_staff, make_request):
 
 @pytest.mark.parametrize("body", [[], "text", 7])
 def test_editing_with_a_non_object_body_is_a_400(body, mock_staff, make_request):
-    with patch("patient_resources.services.catalog.get_resource", return_value=_resource()):
+    with patch("patient_resources.routes.library_api.get_resource", return_value=_resource()):
         responses = _call("put_resource", mock_staff, True, make_request, json_body=body)
     assert responses[0].status_code == 400
 
 
 def test_editing_with_invalid_fields_reports_them(mock_staff, make_request):
-    with patch("patient_resources.services.catalog.get_resource", return_value=_resource()):
+    with patch("patient_resources.routes.library_api.get_resource", return_value=_resource()):
         responses = _call(
             "put_resource",
             mock_staff,
@@ -362,6 +362,6 @@ def test_editing_with_invalid_fields_reports_them(mock_staff, make_request):
 
 @pytest.mark.parametrize("route", ["archive_resource", "restore_resource", "retract_resource"])
 def test_lifecycle_routes_404_on_a_missing_resource(route, mock_staff, make_request):
-    with patch("patient_resources.services.catalog.get_resource", return_value=None):
+    with patch("patient_resources.routes.library_api.get_resource", return_value=None):
         responses = _call(route, mock_staff, True, make_request)
     assert responses[0].status_code == 404

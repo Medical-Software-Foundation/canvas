@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.200.2",
-    "plugin_version": "0.1.2",
+    "plugin_version": "0.1.6",
     "name": "patient_resources",
     "description": "Admin-curated library of patient-facing resource links that staff can share to a patient's portal",
     "url_permissions": [],
@@ -36,7 +36,10 @@
                 "description": "Staff-authenticated endpoints for reading and curating the resource library. Writes only to this plugin's own Custom Data tables, which the custom_data block covers rather than data_access.write.",
                 "data_access": {
                     "event": "",
-                    "read": ["Staff", "StaffRole"],
+                    "read": [
+                        "Staff",
+                        "StaffRole"
+                    ],
                     "write": []
                 }
             },
@@ -45,7 +48,10 @@
                 "description": "Staff-authenticated patient lookup for the picker, and sending resources to a patient. Split from LibraryAPI so curation needs no patient access.",
                 "data_access": {
                     "event": "",
-                    "read": ["Staff", "Patient"],
+                    "read": [
+                        "Staff",
+                        "Patient"
+                    ],
                     "write": []
                 }
             },
@@ -63,7 +69,9 @@
                 "description": "Patient-authenticated endpoint returning only the signed-in patient's shared resources. Accepts no identifier of any kind.",
                 "data_access": {
                     "event": "",
-                    "read": ["Patient"],
+                    "read": [
+                        "Patient"
+                    ],
                     "write": []
                 }
             },
@@ -73,6 +81,17 @@
                 "data_access": {
                     "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
                     "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_resources.routes.diagnostics:DiagnosticAPI",
+                "description": "TEMPORARY key-authenticated diagnostics; remove after the 500 investigation",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Staff"
+                    ],
                     "write": []
                 }
             }
@@ -94,6 +113,10 @@
         {
             "name": "namespace_read_write_access_key",
             "sensitive": false
+        },
+        {
+            "name": "simpleapi-api-key",
+            "sensitive": true
         }
     ],
     "custom_data": {

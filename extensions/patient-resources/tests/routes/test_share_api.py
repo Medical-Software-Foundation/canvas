@@ -63,7 +63,7 @@ def test_lookup_tries_every_key_form(mock_staff, mock_patient, make_request):
     """Patient.id is a 32-character CharField, so a dashed key misses otherwise."""
     _found(mock_patient)
     with patch(
-        "patient_resources.services.shares.live_shares_for_patient", return_value=[]
+        "patient_resources.routes.share_api.live_shares_for_patient", return_value=[]
     ):
         _call(
             "get_patient", mock_staff, make_request, path_params={"patient_id": DASHED}
@@ -76,7 +76,7 @@ def test_lookup_returns_the_name_and_what_they_already_have(
 ):
     _found(mock_patient)
     with patch(
-        "patient_resources.services.shares.live_shares_for_patient",
+        "patient_resources.routes.share_api.live_shares_for_patient",
         return_value=[_created_row()],
     ):
         data = _call(
@@ -97,7 +97,7 @@ def test_lookup_handles_a_patient_with_no_recorded_name(
     mock_patient.last_name = None
     _found(mock_patient)
     with patch(
-        "patient_resources.services.shares.live_shares_for_patient", return_value=[]
+        "patient_resources.routes.share_api.live_shares_for_patient", return_value=[]
     ):
         data = _call(
             "get_patient",
@@ -191,7 +191,7 @@ def test_an_over_cap_batch_is_refused_by_the_api(mock_staff, mock_patient, make_
 def test_a_successful_send_reports_all_three_counts(mock_staff, mock_patient, make_request):
     _found(mock_patient)
     with patch(
-        "patient_resources.services.shares.share_resources",
+        "patient_resources.routes.share_api.share_resources",
         return_value=ShareResult(
             created=[_created_row(12)], already_shared=1, skipped_unavailable=2
         ),
@@ -214,7 +214,7 @@ def test_the_sender_comes_from_the_session_not_the_body(
     """A caller could otherwise attribute a share to anyone."""
     _found(mock_patient)
     with patch(
-        "patient_resources.services.shares.share_resources",
+        "patient_resources.routes.share_api.share_resources",
         return_value=ShareResult(created=[], already_shared=0, skipped_unavailable=0),
     ) as share:
         _call(
@@ -237,7 +237,7 @@ def test_a_concurrent_duplicate_send_is_reported_not_a_500(
     """The pre-check races with a second provider; the constraint is the real guard."""
     _found(mock_patient)
     with patch(
-        "patient_resources.services.shares.share_resources", side_effect=IntegrityError()
+        "patient_resources.routes.share_api.share_resources", side_effect=IntegrityError()
     ):
         response = _call(
             "post_shares",
