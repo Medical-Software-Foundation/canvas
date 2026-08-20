@@ -74,6 +74,7 @@
     if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
       messagePort = event.ports[0];
       messagePort.start();
+      requestResize();
     }
   });
 
@@ -85,6 +86,32 @@
     // No port means the host did not offer one. Closing the window is the only
     // remaining option and is harmless when it is not permitted.
     window.close();
+  }
+
+  // --- sizing the host modal ----------------------------------------------
+  // The host opens this iframe at its own default, which for a short list is a
+  // mostly empty window. It accepts a RESIZE on the same port, so the page asks
+  // for the height its content actually needs, re-measured whenever the list
+  // changes. Clamped: a long library must scroll inside the modal rather than
+  // request a window taller than the viewport.
+  var MODAL_WIDTH = 920;
+  var MODAL_MIN_HEIGHT = 340;
+  var MODAL_MAX_HEIGHT = 700;
+  var lastRequestedHeight = 0;
+
+  function requestResize() {
+    if (!messagePort) {
+      return;
+    }
+    var app = document.getElementById("pr-app");
+    var content = app ? app.scrollHeight : 0;
+    var desired = Math.max(MODAL_MIN_HEIGHT, Math.min(MODAL_MAX_HEIGHT, content + 32));
+    // Small fluctuations are not worth a message on every keystroke.
+    if (Math.abs(desired - lastRequestedHeight) < 8) {
+      return;
+    }
+    lastRequestedHeight = desired;
+    messagePort.postMessage({ type: "RESIZE", width: MODAL_WIDTH, height: desired });
   }
 
   function el(tag, className, text) {
@@ -276,6 +303,8 @@
       total > resources.length
         ? "Showing " + resources.length + " of " + total + " resources."
         : "";
+
+    requestResize();
   }
 
   function hasFilters() {

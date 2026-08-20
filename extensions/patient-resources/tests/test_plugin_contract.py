@@ -443,3 +443,25 @@ def test_the_patient_page_has_no_modal_plumbing():
     source = _js_code(PACKAGE / "static" / "js" / "portal.js")
     assert "CLOSE_MODAL" not in source
     assert "INIT_CHANNEL" not in source
+
+
+def test_modal_pages_ask_the_host_for_a_size_that_fits():
+    """The host opens the iframe at its own default, which dwarfs a short list.
+
+    RESIZE goes over the same port as CLOSE_MODAL, and the height is measured
+    from the rendered content and clamped, so a long library scrolls inside the
+    modal instead of asking for a window taller than the screen.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert "RESIZE" in source, name
+        assert "requestResize" in source, name
+        assert "scrollHeight" in source, name
+        # Clamped in both directions.
+        assert "MODAL_MIN_HEIGHT" in source and "MODAL_MAX_HEIGHT" in source, name
+        assert "Math.max" in source and "Math.min" in source, name
+
+
+def test_the_patient_page_does_not_resize_anything():
+    source = _js_code(PACKAGE / "static" / "js" / "portal.js")
+    assert "RESIZE" not in source
