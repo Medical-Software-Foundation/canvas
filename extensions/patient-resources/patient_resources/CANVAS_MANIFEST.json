@@ -1,0 +1,108 @@
+{
+    "sdk_version": "0.200.2",
+    "plugin_version": "0.1.0",
+    "name": "patient_resources",
+    "description": "Admin-curated library of patient-facing resource links that staff can share to a patient's portal",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "patient_resources.applications.library_app:PatientResourcesAdminApp",
+                "name": "Patient Resources",
+                "description": "Curate the library of resources staff can share with patients",
+                "scope": "global",
+                "icon": "assets/icon.png"
+            },
+            {
+                "class": "patient_resources.applications.portal_app:MyResourcesPortalApp",
+                "name": "My Resources",
+                "description": "Resources your care team has shared with you",
+                "scope": "portal_menu_item",
+                "icon": "assets/portal_icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "patient_resources.routes.staff_pages:StaffPagesAPI",
+                "description": "Serves the library and picker pages and their static assets. Reads no data.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_resources.routes.library_api:LibraryAPI",
+                "description": "Staff-authenticated endpoints for reading and curating the resource library. Writes only to this plugin's own Custom Data tables, which the custom_data block covers rather than data_access.write.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Staff", "StaffRole"],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_resources.routes.share_api:ShareAPI",
+                "description": "Staff-authenticated patient lookup for the picker, and sending resources to a patient. Split from LibraryAPI so curation needs no patient access.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Staff", "Patient"],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_resources.routes.portal_pages:PortalPagesAPI",
+                "description": "Serves the patient-facing My Resources page and its assets. Reads no data.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_resources.routes.portal_api:PortalAPI",
+                "description": "Patient-authenticated endpoint returning only the signed-in patient's shared resources. Accepts no identifier of any kind.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient"],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_resources.handlers.chart_button:ShareResourcesButton",
+                "description": "Chart-header button that opens the resource picker for the open patient",
+                "data_access": {
+                    "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS",
+            "sensitive": false
+        },
+        {
+            "name": "PATIENT_RESOURCES_ADMIN_STAFF_IDS",
+            "sensitive": false
+        },
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": false
+        }
+    ],
+    "custom_data": {
+        "namespace": "custom_data__patient_resources",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

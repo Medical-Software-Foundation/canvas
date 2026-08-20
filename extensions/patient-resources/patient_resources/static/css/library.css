@@ -1,0 +1,263 @@
+/* Patient Resources: staff-facing library and chart picker.
+ *
+ * Everything themeable is a custom property on :root so an adopter can rebrand
+ * in one block instead of hunting through rules. No CDN fonts or images: the
+ * page must render with only what this plugin serves, because the sandbox can
+ * serve nothing else.
+ */
+
+:root {
+  --pr-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --pr-bg: #f7f8fa;
+  --pr-surface: #ffffff;
+  --pr-ink: #1f2933;
+  --pr-ink-muted: #61707d;
+  --pr-line: #dde3e9;
+  --pr-line-soft: #eef1f4;
+  --pr-accent: #0b7285;
+  --pr-accent-ink: #ffffff;
+  --pr-danger: #b02a37;
+  --pr-focus: #0b7285;
+  --pr-radius: 6px;
+  --pr-gap: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--pr-font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pr-ink);
+  background: var(--pr-bg);
+}
+
+#pr-app {
+  padding: 20px 24px 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pr-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- header ---------- */
+
+.pr-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pr-gap);
+  margin-bottom: 16px;
+}
+
+.pr-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.pr-subtitle {
+  color: var(--pr-ink-muted);
+  margin: 2px 0 0;
+}
+
+/* Shown to staff who may not curate. A notice rather than a blank screen: the
+   library is worth reading even when it is not yours to change. */
+.pr-readonly-notice {
+  background: var(--pr-line-soft);
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 10px 12px;
+  color: var(--pr-ink-muted);
+  margin-bottom: 16px;
+}
+
+/* ---------- controls ---------- */
+
+.pr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pr-gap);
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.pr-controls input[type="search"],
+.pr-controls select {
+  font: inherit;
+  color: inherit;
+  padding: 7px 9px;
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  background: var(--pr-surface);
+}
+
+.pr-controls input[type="search"] { min-width: 240px; flex: 1 1 240px; }
+
+.pr-toggle { display: flex; align-items: center; gap: 6px; color: var(--pr-ink-muted); }
+
+button {
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-line);
+  background: var(--pr-surface);
+  color: var(--pr-ink);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--pr-ink-muted); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--pr-focus);
+  outline-offset: 1px;
+}
+
+.pr-primary {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+}
+
+.pr-danger { color: var(--pr-danger); }
+
+/* ---------- list ---------- */
+
+.pr-list { list-style: none; margin: 0; padding: 0; }
+
+.pr-item {
+  background: var(--pr-surface);
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: var(--pr-gap);
+  align-items: flex-start;
+}
+
+.pr-item-body { flex: 1 1 auto; min-width: 0; }
+
+.pr-item-title {
+  font-weight: 600;
+  margin: 0 0 2px;
+  /* Admin-entered text of any length must not push the row sideways. */
+  overflow-wrap: anywhere;
+}
+
+.pr-item-link {
+  color: var(--pr-accent);
+  overflow-wrap: anywhere;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* A stored link that no longer passes validation renders as plain text. */
+.pr-item-link-unsafe { color: var(--pr-ink-muted); font-style: italic; }
+
+.pr-label {
+  display: inline-block;
+  background: var(--pr-line-soft);
+  border-radius: 999px;
+  padding: 1px 9px;
+  color: var(--pr-ink-muted);
+  font-size: 12px;
+}
+
+.pr-archived-flag { color: var(--pr-danger); font-size: 12px; }
+.pr-item-archived { opacity: 0.72; }
+
+.pr-item-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+
+.pr-empty {
+  background: var(--pr-surface);
+  border: 1px dashed var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--pr-ink-muted);
+}
+
+.pr-status { margin-top: 12px; color: var(--pr-ink-muted); }
+.pr-error { margin-top: 12px; color: var(--pr-danger); }
+
+/* ---------- picker ---------- */
+
+.pr-check-row { display: flex; gap: 10px; align-items: flex-start; }
+.pr-check-row input[type="checkbox"] { margin-top: 3px; flex: 0 0 auto; }
+
+.pr-shared-flag { color: var(--pr-ink-muted); font-size: 12px; }
+
+.pr-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--pr-bg);
+  border-top: 1px solid var(--pr-line);
+  padding: 12px 0 0;
+  margin-top: 16px;
+  display: flex;
+  gap: var(--pr-gap);
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ---------- dialogs ---------- */
+
+/* A <dialog>, never window.confirm: this page is itself inside a host modal,
+   and a native confirm there is unreliable. */
+dialog {
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 0;
+  max-width: 520px;
+  width: calc(100% - 32px);
+  color: var(--pr-ink);
+  background: var(--pr-surface);
+}
+
+dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
+
+.pr-dialog-body { padding: 18px 20px; }
+.pr-dialog-body h2 { margin: 0 0 12px; font-size: 17px; }
+
+.pr-field { display: block; margin-bottom: 12px; }
+.pr-field span { display: block; margin-bottom: 4px; color: var(--pr-ink-muted); }
+
+.pr-field input {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  background: var(--pr-surface);
+}
+
+.pr-field-error { color: var(--pr-danger); margin-top: 4px; min-height: 1em; }
+
+.pr-dialog-note {
+  background: var(--pr-line-soft);
+  border-radius: var(--pr-radius);
+  padding: 9px 11px;
+  color: var(--pr-ink-muted);
+  margin-bottom: 12px;
+}
+
+.pr-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px 18px;
+}
