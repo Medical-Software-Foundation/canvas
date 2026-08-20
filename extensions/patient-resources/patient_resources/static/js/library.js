@@ -84,12 +84,20 @@
 
   function request(path, options) {
     var opts = options || {};
+    var body = opts.body ? JSON.stringify(opts.body) : undefined;
+    // Content-Type describes a body, so it is only sent when there is one. A GET
+    // that advertises `application/json` and then carries nothing invites the
+    // layer in front of the plugin to parse an empty string as JSON.
+    var headers = { Accept: "application/json" };
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
     return window
       .fetch(apiBase + path, {
         method: opts.method || "GET",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: headers,
         credentials: "same-origin",
-        body: opts.body ? JSON.stringify(opts.body) : undefined
+        body: body
       })
       .then(function (response) {
         return response

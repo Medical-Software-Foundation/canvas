@@ -362,3 +362,24 @@ def test_the_patient_page_does_not_show_http_statuses():
     source = _js_code(PACKAGE / "static" / "js" / "portal.js")
     assert "HTTP " not in source
     assert "response.status" not in source
+
+
+def test_content_type_is_only_sent_with_a_body():
+    """A bodyless GET must not advertise a JSON body it does not have.
+
+    The header describes a payload; sending it on a GET invites whatever parses
+    request bodies in front of the plugin to read an empty string as JSON. The
+    browser-issued asset requests carry no Content-Type and work, which is what
+    made this visible.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert 'headers = { Accept: "application/json" }' in source, name
+        assert "if (body !== undefined)" in source, name
+        # Never unconditionally in the fetch options.
+        assert 'headers: { "Content-Type"' not in source, name
+
+
+def test_the_patient_page_sends_no_content_type():
+    source = _js_code(PACKAGE / "static" / "js" / "portal.js")
+    assert "Content-Type" not in source
