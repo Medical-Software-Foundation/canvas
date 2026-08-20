@@ -82,16 +82,32 @@
   // request a window taller than the viewport.
   var MODAL_WIDTH = 760;
   var MODAL_MIN_HEIGHT = 300;
-  var MODAL_MAX_HEIGHT = 620;
+  var MODAL_MAX_HEIGHT = 660;
   var lastRequestedHeight = 0;
+
+  function measuredContentHeight() {
+    var app = document.getElementById("pr-app");
+    var content = app ? app.scrollHeight : 0;
+
+    // An open <dialog> is an overlay: it is laid out on top of the page rather
+    // than inside #pr-app, so it contributes nothing to the measurement above.
+    // Without this the window stays sized to the list behind it and the form has
+    // to be scrolled.
+    var openDialog = document.querySelector("dialog[open]");
+    if (openDialog) {
+      content = Math.max(content, openDialog.offsetHeight + 56);
+    }
+    return content;
+  }
 
   function requestResize() {
     if (!messagePort) {
       return;
     }
-    var app = document.getElementById("pr-app");
-    var content = app ? app.scrollHeight : 0;
-    var desired = Math.max(MODAL_MIN_HEIGHT, Math.min(MODAL_MAX_HEIGHT, content + 32));
+    var desired = Math.max(
+      MODAL_MIN_HEIGHT,
+      Math.min(MODAL_MAX_HEIGHT, measuredContentHeight() + 32)
+    );
     // Small fluctuations are not worth a message on every keystroke.
     if (Math.abs(desired - lastRequestedHeight) < 8) {
       return;
@@ -357,6 +373,7 @@
         state.selected = {};
         els.resultMessage.textContent = summarize(payload);
         els.resultDialog.showModal();
+        requestResize();
         load();
       })
       .catch(function (error) {
@@ -399,6 +416,7 @@
   });
   els.labelFilter.addEventListener("change", load);
   els.send.addEventListener("click", send);
+  els.resultDialog.addEventListener("close", requestResize);
 
   var closeButton = document.getElementById("pr-close");
   if (closeButton) {

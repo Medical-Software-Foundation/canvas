@@ -96,16 +96,32 @@
   // request a window taller than the viewport.
   var MODAL_WIDTH = 920;
   var MODAL_MIN_HEIGHT = 340;
-  var MODAL_MAX_HEIGHT = 700;
+  var MODAL_MAX_HEIGHT = 780;
   var lastRequestedHeight = 0;
+
+  function measuredContentHeight() {
+    var app = document.getElementById("pr-app");
+    var content = app ? app.scrollHeight : 0;
+
+    // An open <dialog> is an overlay: it is laid out on top of the page rather
+    // than inside #pr-app, so it contributes nothing to the measurement above.
+    // Without this the window stays sized to the list behind it and the form has
+    // to be scrolled.
+    var openDialog = document.querySelector("dialog[open]");
+    if (openDialog) {
+      content = Math.max(content, openDialog.offsetHeight + 56);
+    }
+    return content;
+  }
 
   function requestResize() {
     if (!messagePort) {
       return;
     }
-    var app = document.getElementById("pr-app");
-    var content = app ? app.scrollHeight : 0;
-    var desired = Math.max(MODAL_MIN_HEIGHT, Math.min(MODAL_MAX_HEIGHT, content + 32));
+    var desired = Math.max(
+      MODAL_MIN_HEIGHT,
+      Math.min(MODAL_MAX_HEIGHT, measuredContentHeight() + 32)
+    );
     // Small fluctuations are not worth a message on every keystroke.
     if (Math.abs(desired - lastRequestedHeight) < 8) {
       return;
@@ -382,6 +398,7 @@
     els.editLabel.value = resource ? resource.label || "" : "";
     els.editSharedNote.hidden = !resource;
     els.editDialog.showModal();
+    requestResize();
     els.editTitle.focus();
   }
 
@@ -440,6 +457,7 @@
     els.confirmMessage.textContent = options.message;
     els.confirmTypedField.hidden = !options.requireTyped;
     els.confirmDialog.showModal();
+    requestResize();
   }
 
   function confirmArchive(resource) {
@@ -507,6 +525,12 @@
   els.confirmCancel.addEventListener("click", function () {
     pendingConfirm = null;
     els.confirmDialog.close();
+  });
+
+  // Shrink back once a dialog goes away. Listening for `close` covers Esc, the
+  // cancel buttons and a programmatic close with one handler.
+  [els.editDialog, els.confirmDialog].forEach(function (dialog) {
+    dialog.addEventListener("close", requestResize);
   });
 
   var closeButton = document.getElementById("pr-close");
