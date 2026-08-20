@@ -29,9 +29,22 @@ def test_none_secrets_are_tolerated():
     assert PatientResourcesConfig.from_secrets(None).admin_role_domains == DEFAULT_ADMIN_ROLE_DOMAINS
 
 
-def test_blank_value_denies_everyone_and_warns():
-    """An operator who emptied this meant to switch curation off."""
-    config = PatientResourcesConfig.from_secrets({SECRET_ADMIN_ROLE_DOMAINS: "   "})
+def test_blank_value_falls_back_to_the_default():
+    """Blank is how the platform reports "never configured".
+
+    A variable declared in the manifest and never given a value arrives as an
+    empty string rather than a missing key -- verified on a live instance, where
+    treating blank as "switched off" left the library with no administrator and
+    no way to add the first resource.
+    """
+    for raw in ("", "   ", ",,"):
+        config = PatientResourcesConfig.from_secrets({SECRET_ADMIN_ROLE_DOMAINS: raw})
+        assert config.admin_role_domains == DEFAULT_ADMIN_ROLE_DOMAINS, raw
+
+
+def test_the_none_sentinel_disables_curation():
+    """Switching curation off has to be explicit, since blank cannot mean it."""
+    config = PatientResourcesConfig.from_secrets({SECRET_ADMIN_ROLE_DOMAINS: "none"})
     assert config.admin_role_domains == ()
     assert log.warning.called
 

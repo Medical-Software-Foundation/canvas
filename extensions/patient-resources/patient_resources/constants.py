@@ -66,6 +66,11 @@ KNOWN_ROLE_DOMAINS = (
 )
 DEFAULT_ADMIN_ROLE_DOMAINS = (ROLE_DOMAIN_ADMINISTRATIVE,)
 
+# Set the admin-role-domains variable to this to switch curation off for
+# everybody. Needed because the platform delivers an unset variable as an
+# empty string, so blank cannot mean "off" without breaking fresh installs.
+DISABLE_SENTINEL = "NONE"
+
 SECRET_ADMIN_ROLE_DOMAINS = "PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS"
 SECRET_ADMIN_STAFF_IDS = "PATIENT_RESOURCES_ADMIN_STAFF_IDS"
 

@@ -10,7 +10,7 @@ from http import HTTPStatus
 from typing import Any
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.simple_api import HTMLResponse, Response
+from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
@@ -62,6 +62,15 @@ class StaffPagesAPI(StaffSessionAuthMixin, SimpleAPI):
                 "patientId": self._param("patient"),
             },
         )
+
+    @api.get("/ping")
+    def get_ping(self) -> list[Response | Effect]:
+        """TEMPORARY DIAGNOSTIC. Remove once the 500 is understood.
+
+        A JSONResponse from the class whose other routes return 200, touching no
+        database. Isolates the response type from the class and from data access.
+        """
+        return [JSONResponse({"ok": True, "probe": "staff_pages_no_db"})]
 
     @api.get("/library.css")
     def get_library_css(self) -> list[Response | Effect]:
