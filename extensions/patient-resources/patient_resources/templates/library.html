@@ -1,0 +1,105 @@
+<!--
+  The resource library, for staff.
+
+  config_json is marked |safe because Django autoescaping would turn the JSON
+  quotes into &quot; and break JSON.parse. It is pre-escaped by services/html.py
+  safe_json(), which escapes < > and & so the value cannot terminate this
+  element.
+
+  Asset hrefs are absolute and versioned: a relative href resolves against
+  whether the page URL happened to end in a slash, which is a silent 404.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patient Resources</title>
+<link rel="stylesheet" href="{{ asset_base }}/library.css?v={{ cache_bust }}" />
+
+<div id="pr-app">
+  <header class="pr-header">
+    <div>
+      <h1>Patient resources</h1>
+      <p class="pr-subtitle">Links your team can share with patients through the portal.</p>
+    </div>
+    <button type="button" id="pr-add" class="pr-primary" hidden>Add resource</button>
+  </header>
+
+  <p class="pr-readonly-notice" id="pr-readonly" hidden></p>
+
+  <div class="pr-controls">
+    <label class="pr-visually-hidden" for="pr-search">Search resources</label>
+    <input type="search" id="pr-search" placeholder="Search by title or label" autocomplete="off" />
+
+    <label class="pr-visually-hidden" for="pr-label-filter">Filter by label</label>
+    <select id="pr-label-filter">
+      <option value="">All labels</option>
+    </select>
+
+    <label class="pr-toggle" id="pr-archived-toggle" hidden>
+      <input type="checkbox" id="pr-show-archived" />
+      Show archived
+    </label>
+  </div>
+
+  <ul class="pr-list" id="pr-list"></ul>
+  <div class="pr-empty" id="pr-empty" hidden></div>
+  <p class="pr-status" id="pr-status" role="status" aria-live="polite"></p>
+  <p class="pr-error" id="pr-error" role="alert"></p>
+</div>
+
+<dialog id="pr-edit-dialog">
+  <form id="pr-edit-form" method="dialog">
+    <div class="pr-dialog-body">
+      <h2 id="pr-edit-heading">Add resource</h2>
+
+      <p class="pr-dialog-note" id="pr-edit-shared-note" hidden>
+        This resource has already been shared with patients. Changes to the title and
+        label will show in their portal, and the link can no longer be changed.
+      </p>
+
+      <label class="pr-field">
+        <span>Title</span>
+        <input type="text" id="pr-edit-title" maxlength="200" required />
+        <span class="pr-field-error" id="pr-edit-title-error"></span>
+      </label>
+
+      <label class="pr-field">
+        <span>Link</span>
+        <input type="url" id="pr-edit-url" maxlength="2000" placeholder="https://" required />
+        <span class="pr-field-error" id="pr-edit-url-error"></span>
+      </label>
+
+      <label class="pr-field">
+        <span>Label (optional)</span>
+        <input type="text" id="pr-edit-label" maxlength="100" />
+        <span class="pr-field-error" id="pr-edit-label-error"></span>
+      </label>
+
+      <p class="pr-error" id="pr-edit-error" role="alert"></p>
+    </div>
+    <div class="pr-dialog-actions">
+      <button type="button" id="pr-edit-cancel">Cancel</button>
+      <button type="submit" class="pr-primary" id="pr-edit-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pr-confirm-dialog">
+  <form id="pr-confirm-form" method="dialog">
+    <div class="pr-dialog-body">
+      <h2 id="pr-confirm-heading">Archive resource</h2>
+      <p id="pr-confirm-message"></p>
+      <label class="pr-field" id="pr-confirm-typed-field" hidden>
+        <span>Type <strong>WITHDRAW</strong> to confirm</span>
+        <input type="text" id="pr-confirm-typed" autocomplete="off" />
+      </label>
+      <p class="pr-error" id="pr-confirm-error" role="alert"></p>
+    </div>
+    <div class="pr-dialog-actions">
+      <button type="button" id="pr-confirm-cancel">Cancel</button>
+      <button type="submit" class="pr-primary" id="pr-confirm-ok">Confirm</button>
+    </div>
+  </form>
+</dialog>
+
+<script id="pr-config" type="application/json">{{ config_json|safe }}</script>
+<script src="{{ asset_base }}/library.js?v={{ cache_bust }}" defer></script>

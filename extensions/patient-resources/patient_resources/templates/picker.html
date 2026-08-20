@@ -1,0 +1,52 @@
+<!--
+  The chart picker. Loads the same stylesheet as the library so the two staff
+  surfaces stay visually consistent, but its own script: this page only reads
+  and shares, it cannot curate.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Share resources</title>
+<link rel="stylesheet" href="{{ asset_base }}/library.css?v={{ cache_bust }}" />
+
+<div id="pr-app">
+  <header class="pr-header">
+    <div>
+      <h1>Share resources</h1>
+      <p class="pr-subtitle" id="pr-patient">Loading patient&hellip;</p>
+    </div>
+  </header>
+
+  <div class="pr-controls">
+    <label class="pr-visually-hidden" for="pr-search">Search resources</label>
+    <input type="search" id="pr-search" placeholder="Search by title or label" autocomplete="off" />
+
+    <label class="pr-visually-hidden" for="pr-label-filter">Filter by label</label>
+    <select id="pr-label-filter">
+      <option value="">All labels</option>
+    </select>
+  </div>
+
+  <ul class="pr-list" id="pr-list"></ul>
+  <div class="pr-empty" id="pr-empty" hidden></div>
+  <p class="pr-error" id="pr-error" role="alert"></p>
+
+  <div class="pr-footer">
+    <span id="pr-selection" role="status" aria-live="polite">Nothing selected</span>
+    <button type="button" id="pr-send" class="pr-primary" disabled>Send to portal</button>
+  </div>
+</div>
+
+<dialog id="pr-result-dialog">
+  <form method="dialog">
+    <div class="pr-dialog-body">
+      <h2>Sent</h2>
+      <p id="pr-result-message"></p>
+    </div>
+    <div class="pr-dialog-actions">
+      <button type="submit" class="pr-primary">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<script id="pr-config" type="application/json">{{ config_json|safe }}</script>
+<script src="{{ asset_base }}/picker.js?v={{ cache_bust }}" defer></script>
