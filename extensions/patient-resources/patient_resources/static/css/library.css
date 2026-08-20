@@ -164,6 +164,10 @@ a:focus-visible {
   margin: 0 0 2px;
   /* Admin-entered text of any length must not push the row sideways. */
   overflow-wrap: anywhere;
+  /* Explicit, because the picker renders this class on a <label> so that the
+     whole title is a click target for its checkbox. A label is inline by
+     default, which ran the title straight into the URL beneath it. */
+  display: block;
 }
 
 .pr-item-link {
@@ -189,6 +193,31 @@ a:focus-visible {
 .pr-item-archived { opacity: 0.72; }
 
 .pr-item-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+
+/* ---------- header actions ---------- */
+
+.pr-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* The host modal for this target provides no chrome of its own, so the page
+   supplies its own dismiss control and closes itself over the MessagePort. */
+.pr-close {
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 10px 5px;
+  color: var(--pr-ink-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.pr-close:hover {
+  color: var(--pr-ink);
+  border-color: var(--pr-line);
+}
 
 .pr-empty {
   background: var(--pr-surface);
