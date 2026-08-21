@@ -422,12 +422,37 @@ dialog {
   background: var(--pr-surface);
 }
 
+/* Scoped to [open] on purpose. A bare `dialog { display: flex }` would beat the
+   user-agent's `dialog:not([open]) { display: none }` and leave every closed
+   dialog on the page -- the same trap as styling `display` over `[hidden]`. */
+dialog[open] {
+  display: flex;
+  flex-direction: column;
+  /* The UA already caps dialog height. Stating it here keeps the cap
+     predictable and leaves room for the host modal's own chrome. */
+  max-height: calc(100vh - 32px);
+}
+
+dialog[open] form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
 
-.pr-dialog-body { padding: 18px 20px; }
+.pr-dialog-body {
+  padding: 18px 20px;
+  /* Only this part scrolls when the form is taller than the dialog, so Save and
+     Cancel stay on screen instead of sitting below the fold. `min-height: 0` is
+     what allows a flex child to shrink below its content height and actually
+     scroll. */
+  overflow-y: auto;
+  min-height: 0;
+}
 .pr-dialog-body h2 { margin: 0 0 12px; font-size: 17px; }
 
-.pr-field { display: block; margin-bottom: 12px; }
+.pr-field { display: block; margin-bottom: 10px; }
 .pr-field span { display: block; margin-bottom: 4px; color: var(--pr-ink-muted); }
 
 .pr-field input {
@@ -440,7 +465,11 @@ dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
   background: var(--pr-surface);
 }
 
-.pr-field-error { color: var(--pr-danger); margin-top: 4px; min-height: 1em; }
+/* No reserved empty line under every field: three of them added ~48px of
+   nothing to a form that then had to scroll. The row appears when it has
+   something to say. */
+.pr-field-error { color: var(--pr-danger); margin-top: 4px; }
+.pr-field-error:empty { display: none; }
 
 .pr-dialog-note {
   background: var(--pr-line-soft);
@@ -454,5 +483,9 @@ dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  padding: 12px 20px 18px;
+  padding: 12px 20px;
+  /* Pinned: never shrinks, never scrolls away. */
+  flex: 0 0 auto;
+  border-top: 1px solid var(--pr-line);
+  background: var(--pr-surface);
 }

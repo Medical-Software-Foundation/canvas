@@ -547,3 +547,40 @@ def test_the_indigo_accent_from_the_design_is_the_only_accent():
     assert "--pr-pill-bg" in source and "--pr-pill-ink" in source
     # The old teal must not survive anywhere in the staff stylesheet.
     assert "#0b7285" not in source
+
+
+def test_dialog_actions_stay_visible_when_the_form_is_tall():
+    """Save and Cancel must never sit below the fold.
+
+    Only the dialog body scrolls; the actions row is pinned. `min-height: 0` is
+    what lets the flex child shrink below its content and actually scroll.
+    """
+    source = _css_code(PACKAGE / "static" / "css" / "library.css")
+    assert "dialog[open]" in source
+    body = source[source.index(".pr-dialog-body {") :]
+    body = body[: body.index("}")]
+    assert "overflow-y: auto" in body
+    assert "min-height: 0" in body
+
+
+def test_the_open_dialog_rule_is_scoped_to_the_open_state():
+    """A bare `dialog { display: flex }` beats the UA's own hiding rule.
+
+    That would leave every closed dialog rendered on the page -- the same trap as
+    styling `display` over the `[hidden]` attribute, which already shipped once.
+    """
+    source = _css_code(PACKAGE / "static" / "css" / "library.css")
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("dialog") and stripped.endswith("{"):
+            selector = stripped[:-1].strip()
+            if "display" in source.split(stripped, 1)[1].split("}", 1)[0]:
+                assert "[open]" in selector, selector
+
+
+def test_dialog_height_is_measured_from_content_not_the_clamped_box():
+    """offsetHeight of a clamped dialog is the clamp, so it can never escape it."""
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert "wantedDialogHeight" in source, name
+        assert "scrollHeight" in source, name
