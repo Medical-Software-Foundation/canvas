@@ -600,3 +600,24 @@ def test_text_controls_are_styled_by_element_not_by_container():
     block = block[: block.index("{")]
     for control in ('input[type="text"]', 'input[type="url"]', "select"):
         assert control in block, control
+
+
+def test_the_picker_offers_search_only():
+    """No label filter in the chart picker.
+
+    A provider looking at one patient's chart wants to find a resource by name,
+    not to browse categories -- and the design shows a single full-width search.
+    The library keeps its filter, where curating a growing list needs it.
+    """
+    picker = (PACKAGE / "templates" / "picker.html").read_text()
+    assert "pr-label-filter" not in picker
+    assert "All labels" not in picker
+    assert 'id="pr-search"' in picker
+
+    library = (PACKAGE / "templates" / "library.html").read_text()
+    assert "pr-label-filter" in library
+
+    # And the picker must not still be fetching a vocabulary it cannot show.
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    assert "labelFilter" not in source
+    assert "/library/labels" not in source
