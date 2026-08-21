@@ -584,3 +584,19 @@ def test_dialog_height_is_measured_from_content_not_the_clamped_box():
         source = _js_code(PACKAGE / "static" / "js" / name)
         assert "wantedDialogHeight" in source, name
         assert "scrollHeight" in source, name
+
+
+def test_text_controls_are_styled_by_element_not_by_container():
+    """A control outside `.pr-controls` must not fall back to browser styling.
+
+    The header search lives in the header rather than the filter row, and a
+    container-scoped rule left it visibly thinner than everything beside it.
+    """
+    source = _css_code(PACKAGE / "static" / "css" / "library.css")
+    assert 'input[type="search"],' in source
+    assert ".pr-controls input[type=\"search\"] {\n  font: inherit" not in source
+    # Every text control the templates use has to be covered by that rule.
+    block = source[source.index('input[type="search"],') :]
+    block = block[: block.index("{")]
+    for control in ('input[type="text"]', 'input[type="url"]', "select"):
+        assert control in block, control
