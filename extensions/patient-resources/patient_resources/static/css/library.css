@@ -88,9 +88,9 @@ body {
 .pr-header-main h1 { white-space: nowrap; }
 
 .pr-header-search {
-  flex: 1 1 220px;
+  flex: 1 1 240px;
   min-width: 0;
-  max-width: 340px;
+  max-width: 380px;
 }
 
 .pr-header h1 {
@@ -125,11 +125,18 @@ body {
   margin-bottom: 16px;
 }
 
-.pr-controls input[type="search"],
-.pr-controls select {
+/* Styled by element rather than by container. The previous rule was scoped to
+   `.pr-controls`, so the header search -- which lives in the header, not in that
+   row -- fell through to user-agent styling and rendered noticeably thinner than
+   everything around it. */
+input[type="search"],
+input[type="text"],
+input[type="url"],
+select {
   font: inherit;
+  font-size: 15px;
   color: inherit;
-  padding: 7px 9px;
+  padding: 10px 12px;
   border: 1px solid var(--pr-line);
   border-radius: var(--pr-radius);
   background: var(--pr-surface);
@@ -141,7 +148,7 @@ body {
 
 button {
   font: inherit;
-  padding: 7px 12px;
+  padding: 9px 14px;
   border-radius: var(--pr-radius);
   border: 1px solid var(--pr-line);
   background: var(--pr-surface);
@@ -455,15 +462,7 @@ dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
 .pr-field { display: block; margin-bottom: 10px; }
 .pr-field span { display: block; margin-bottom: 4px; color: var(--pr-ink-muted); }
 
-.pr-field input {
-  font: inherit;
-  color: inherit;
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--pr-line);
-  border-radius: var(--pr-radius);
-  background: var(--pr-surface);
-}
+.pr-field input { width: 100%; }
 
 /* No reserved empty line under every field: three of them added ~48px of
    nothing to a form that then had to scroll. The row appears when it has
