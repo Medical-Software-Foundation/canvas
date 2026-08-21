@@ -268,3 +268,73 @@ def test_a_missing_patient_key_in_the_path_is_a_404(mock_staff, make_request):
     responses = _call("get_patient", mock_staff, make_request, path_params={})
     assert responses[0].status_code == 404
     Patient.objects.filter.assert_not_called()
+
+
+# --- the patient card ------------------------------------------------------
+
+
+def _lookup(mock_staff, mock_patient, make_request):
+    _found(mock_patient)
+    with patch(
+        "patient_resources.routes.share_api.live_shares_for_patient", return_value=[]
+    ):
+        return _call(
+            "get_patient",
+            mock_staff,
+            make_request,
+            path_params={"patient_id": mock_patient.id},
+        )[0].data["patient"]
+
+
+def test_the_card_carries_name_dob_and_mrn(mock_staff, mock_patient, make_request):
+    assert _lookup(mock_staff, mock_patient, make_request) == {
+        "name": "Jordan Lee",
+        "birth_date": "04/12/1979",
+        "mrn": "88213",
+    }
+
+
+def test_birth_date_is_formatted_month_first(mock_staff, mock_patient, make_request):
+    """Deliberately formatted server-side.
+
+    toLocaleDateString follows the reader's locale, so an en-GB session would
+    render this same date as 12/04/1979 -- the same digits reading as a different
+    day in a US clinical record.
+    """
+    assert _lookup(mock_staff, mock_patient, make_request)["birth_date"] == "04/12/1979"
+
+
+def test_a_missing_birth_date_is_empty_not_a_placeholder(
+    mock_staff, mock_patient, make_request
+):
+    """The card joins these itself, so empty drops the separator.
+
+    "DOB None" on a patient card is exactly the placeholder this repo's rules
+    forbid.
+    """
+    mock_patient.birth_date = None
+    assert _lookup(mock_staff, mock_patient, make_request)["birth_date"] == ""
+
+
+def test_a_missing_mrn_is_empty(mock_staff, mock_patient, make_request):
+    mock_patient.mrn = None
+    assert _lookup(mock_staff, mock_patient, make_request)["mrn"] == ""
+
+
+def test_identifiers_are_fetched_in_the_same_query(mock_staff, mock_patient, make_request):
+    """No extra round trip to populate the card."""
+    _lookup(mock_staff, mock_patient, make_request)
+    only_fields = Patient.objects.filter.return_value.only.call_args.args
+    assert "birth_date" in only_fields
+    assert "mrn" in only_fields
+
+
+def test_a_birth_date_stored_as_text_degrades_to_that_text(
+    mock_staff, mock_patient, make_request
+):
+    """The DDL emits no column types beyond text for plugin tables, and this
+    column belongs to Canvas rather than to us -- but a reader still has to
+    tolerate a value that is not a date object rather than raising on it.
+    """
+    mock_patient.birth_date = "1979-04-12"
+    assert _lookup(mock_staff, mock_patient, make_request)["birth_date"] == "1979-04-12"

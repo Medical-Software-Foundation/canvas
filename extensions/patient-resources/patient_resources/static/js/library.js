@@ -36,7 +36,7 @@
     labelFilter: document.getElementById("pr-label-filter"),
     archivedToggle: document.getElementById("pr-archived-toggle"),
     showArchived: document.getElementById("pr-show-archived"),
-    list: document.getElementById("pr-list"),
+    rows: document.getElementById("pr-rows"),
     empty: document.getElementById("pr-empty"),
     status: document.getElementById("pr-status"),
     error: document.getElementById("pr-error"),
@@ -221,73 +221,97 @@
 
   // ---------- rendering ----------
 
-  function renderItem(resource) {
-    var item = el("li", "pr-item" + (resource.is_active ? "" : " pr-item-archived"));
+  function cell(className) {
+    var td = document.createElement("td");
+    if (className) {
+      td.className = className;
+    }
+    return td;
+  }
 
-    var body = el("div", "pr-item-body");
-    body.appendChild(el("p", "pr-item-title", resource.title || "Untitled"));
+  function renderTitleCell(resource) {
+    var td = cell(null);
+    var title = resource.title || "Untitled";
 
+    // An anchor so an admin can check where a resource actually points, styled
+    // as body text because the design shows no blue link. A stored value that no
+    // longer passes validation renders as inert text instead.
     if (isSafeUrl(resource.url)) {
-      var link = el("a", "pr-item-link", resource.url);
+      var link = el("a", "pr-row-title", title);
       link.setAttribute("href", resource.url);
       link.setAttribute("target", "_blank");
       link.setAttribute("rel", "noopener noreferrer");
-      body.appendChild(link);
+      link.setAttribute("title", resource.url);
+      td.appendChild(link);
     } else {
-      body.appendChild(el("p", "pr-item-link-unsafe", "No usable link on this resource."));
+      td.appendChild(el("span", "pr-row-title-plain", title));
     }
 
-    var meta = el("p");
-    if (resource.label) {
-      meta.appendChild(el("span", "pr-label", resource.label));
-    }
     if (!resource.is_active) {
-      meta.appendChild(el("span", "pr-archived-flag", " Archived"));
+      td.appendChild(document.createTextNode(" "));
+      td.appendChild(el("span", "pr-archived-flag", "Archived"));
     }
-    if (meta.childNodes.length) {
-      body.appendChild(meta);
-    }
-    item.appendChild(body);
-
-    if (state.canEdit) {
-      item.appendChild(renderActions(resource));
-    }
-    return item;
+    return td;
   }
 
-  function renderActions(resource) {
-    var actions = el("div", "pr-item-actions");
+  function renderActionsCell(resource) {
+    var td = cell("pr-col-actions");
+    var group = el("div", "pr-row-actions");
 
     var edit = el("button", null, "Edit");
     edit.type = "button";
     edit.addEventListener("click", function () {
       openEditDialog(resource);
     });
-    actions.appendChild(edit);
+    group.appendChild(edit);
 
     if (resource.is_active) {
-      var archive = el("button", null, "Archive");
+      var archive = el("button", "pr-action-secondary", "Archive");
       archive.type = "button";
       archive.addEventListener("click", function () {
         confirmArchive(resource);
       });
-      actions.appendChild(archive);
+      group.appendChild(archive);
 
-      var retract = el("button", "pr-danger", "Withdraw");
+      var retract = el("button", "pr-action-secondary pr-danger", "Withdraw");
       retract.type = "button";
       retract.addEventListener("click", function () {
         confirmRetract(resource);
       });
-      actions.appendChild(retract);
+      group.appendChild(retract);
     } else {
-      var restore = el("button", null, "Restore");
+      var restore = el("button", "pr-action-secondary", "Restore");
       restore.type = "button";
       restore.addEventListener("click", function () {
         act("/library/resources/" + resource.id + "/restore", "Restored.");
       });
-      actions.appendChild(restore);
+      group.appendChild(restore);
     }
-    return actions;
+
+    td.appendChild(group);
+    return td;
+  }
+
+  function renderRow(resource) {
+    var row = document.createElement("tr");
+    if (!resource.is_active) {
+      row.className = "pr-row-archived";
+    }
+
+    row.appendChild(renderTitleCell(resource));
+
+    // Always LINK: the scope is links only, and a real type field arrives with
+    // PDF support. A constant here rather than computed state.
+    var type = cell("pr-col-type");
+    type.appendChild(el("span", "pr-type-pill", "Link"));
+    row.appendChild(type);
+
+    var label = cell("pr-col-label pr-row-label");
+    label.textContent = resource.label || "";
+    row.appendChild(label);
+
+    row.appendChild(state.canEdit ? renderActionsCell(resource) : cell("pr-col-actions"));
+    return row;
   }
 
   function render(payload) {
@@ -300,10 +324,10 @@
         "Read-only. Only administrators can change the resource library.";
     }
 
-    els.list.textContent = "";
+    els.rows.textContent = "";
     var resources = payload.resources || [];
     resources.forEach(function (resource) {
-      els.list.appendChild(renderItem(resource));
+      els.rows.appendChild(renderRow(resource));
     });
 
     var isEmpty = resources.length === 0;

@@ -41,7 +41,7 @@ class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return None
         return (
             Patient.objects.filter(id__in=list(candidates))
-            .only("id", "dbid", "first_name", "last_name")
+            .only("id", "dbid", "first_name", "last_name", "birth_date", "mrn")
             .first()
         )
 
@@ -64,7 +64,11 @@ class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         return [
             JSONResponse(
                 {
-                    "patient": {"name": _display_name(patient)},
+                    "patient": {
+                        "name": _display_name(patient),
+                        "birth_date": _display_birth_date(patient),
+                        "mrn": _text(getattr(patient, "mrn", "")),
+                    },
                     "shared": [serialize_share_for_staff(share) for share in existing],
                 }
             )
@@ -135,6 +139,32 @@ def _display_name(patient: Any) -> str:
         getattr(patient, "last_name", "") or "",
     )
     return " ".join(part for part in parts if part)
+
+
+def _text(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def _display_birth_date(patient: Any) -> str:
+    """The patient's date of birth as MM/DD/YYYY, or empty.
+
+    Formatted here rather than in the browser: ``toLocaleDateString`` follows the
+    reader's locale, so an en-GB session renders 1979-04-12 as "12/04/1979",
+    which reads as a different date than the same digits in a US clinical
+    record. A date of birth is an identifier on this card, not a timestamp to
+    localise -- unlike the portal's "shared on" dates, which are deliberately
+    rendered in the patient's own locale.
+
+    Returns empty rather than a placeholder when unset, so the caller drops the
+    separator instead of showing "DOB None".
+    """
+    birth_date = getattr(patient, "birth_date", None)
+    if birth_date is None:
+        return ""
+    strftime = getattr(birth_date, "strftime", None)
+    if strftime is None:
+        return _text(birth_date)
+    return str(strftime("%m/%d/%Y"))
 
 
 def _resource_ids(raw: Any) -> tuple[list[int], str | None]:
