@@ -16,12 +16,19 @@
 
 <div id="pr-app">
   <header class="pr-header">
-    <div>
-      <h1>Patient resources</h1>
-      <p class="pr-subtitle">Links your team can share with patients through the portal.</p>
+    <div class="pr-header-main">
+      <h1>Resource library</h1>
+      <label class="pr-visually-hidden" for="pr-search">Search resources</label>
+      <input
+        class="pr-header-search"
+        type="search"
+        id="pr-search"
+        placeholder="Search resources&hellip;"
+        autocomplete="off"
+      />
     </div>
     <div class="pr-header-actions">
-      <button type="button" id="pr-add" class="pr-primary" hidden>Add resource</button>
+      <button type="button" id="pr-add" class="pr-primary" hidden>+ Add resource</button>
       <button type="button" id="pr-close" class="pr-close" aria-label="Close">&times;</button>
     </div>
   </header>
@@ -29,9 +36,6 @@
   <p class="pr-readonly-notice" id="pr-readonly" hidden></p>
 
   <div class="pr-controls">
-    <label class="pr-visually-hidden" for="pr-search">Search resources</label>
-    <input type="search" id="pr-search" placeholder="Search by title or label" autocomplete="off" />
-
     <label class="pr-visually-hidden" for="pr-label-filter">Filter by label</label>
     <select id="pr-label-filter">
       <option value="">All labels</option>
@@ -43,8 +47,23 @@
     </label>
   </div>
 
-  <ul class="pr-list" id="pr-list"></ul>
-  <div class="pr-empty" id="pr-empty" hidden></div>
+  <div class="pr-table-wrap">
+    <table class="pr-table">
+      <thead>
+        <tr>
+          <th scope="col">Title</th>
+          <th scope="col" class="pr-col-type">Type</th>
+          <th scope="col" class="pr-col-label">Label</th>
+          <th scope="col" class="pr-col-actions">
+            <span class="pr-visually-hidden">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="pr-rows"></tbody>
+    </table>
+    <div class="pr-empty" id="pr-empty" hidden></div>
+  </div>
+
   <p class="pr-status" id="pr-status" role="status" aria-live="polite"></p>
   <p class="pr-error" id="pr-error" role="alert"></p>
 </div>

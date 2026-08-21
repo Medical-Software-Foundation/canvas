@@ -61,33 +61,6 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return None, self._not_found("That resource no longer exists.")
         return resource, None
 
-    # --- TEMPORARY DIAGNOSTICS ---------------------------------------------
-    # Remove once the empty-bodied 500 on this class is understood. Each probe
-    # adds exactly one thing to the one before it, so whichever is the first to
-    # fail names the cause.
-
-    @api.get("/ping")
-    def get_ping(self) -> list[Response | Effect]:
-        """No session lookup, no database. Tests the class and prefix alone."""
-        return [JSONResponse({"ok": True, "probe": "library_no_db"})]
-
-    @api.get("/ping-core")
-    def get_ping_core(self) -> list[Response | Effect]:
-        """Adds one query against a core Canvas model."""
-        staff = self._acting_staff()
-        return [JSONResponse({"ok": True, "probe": "library_core_db", "staff": staff is not None})]
-
-    @api.get("/ping-custom")
-    def get_ping_custom(self) -> list[Response | Effect]:
-        """Adds one query against this plugin's own custom_data table."""
-        from patient_resources.models import PatientResource
-
-        return [
-            JSONResponse(
-                {"ok": True, "probe": "library_custom_data", "rows": PatientResource.objects.count()}
-            )
-        ]
-
     # --- reads -------------------------------------------------------------
 
     @api.get("/resources")

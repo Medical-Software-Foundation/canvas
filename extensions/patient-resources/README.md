@@ -52,13 +52,21 @@ All optional. The plugin works unconfigured.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS` | `ADM` | Comma-separated `StaffRole` domains allowed to curate the library. Valid values: `ADM` (administrative), `CLI` (clinical), `HYB` (hybrid). |
+| `PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS` | `ADM` | Comma-separated `StaffRole` domains allowed to curate the library. Valid values: `ADM` (administrative), `CLI` (clinical), `HYB` (hybrid), or `NONE` to allow nobody. |
 | `PATIENT_RESOURCES_ADMIN_STAFF_IDS` | empty | Comma-separated staff keys. When set, **replaces** the role rule — only these people may curate. |
 | `namespace_read_write_access_key` | supplied by the platform | Required for the plugin to write to its own Custom Data tables. |
 
-Setting `PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS` to an empty value switches
-curation off for everybody, which is treated as deliberate rather than as a
-misconfiguration to fall back from.
+Leaving `PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS` empty means "not configured" and
+falls back to `ADM`. That is not a quirk worth working around: a variable
+declared in the manifest and never given a value reaches the plugin as an empty
+string rather than a missing key, so blank and unset are indistinguishable. An
+earlier version read blank as "switched off", which left every fresh install with
+no administrator and no way to add a first resource.
+
+To switch curation off for everybody, set the value to `NONE` explicitly. A value
+that parses to no recognised domain also denies everyone, and logs why — a wrong
+value was clearly meant to mean something, so it is not quietly replaced with the
+default.
 
 ## How it behaves
 

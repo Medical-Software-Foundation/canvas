@@ -33,7 +33,8 @@
   };
 
   var els = {
-    patient: document.getElementById("pr-patient"),
+    patientName: document.getElementById("pr-patient-name"),
+    patientMeta: document.getElementById("pr-patient-meta"),
     search: document.getElementById("pr-search"),
     labelFilter: document.getElementById("pr-label-filter"),
     list: document.getElementById("pr-list"),
@@ -245,28 +246,22 @@
     label.setAttribute("for", checkbox.id);
     label.className = "pr-item-title";
     label.textContent = resource.title || "Untitled";
+    if (isSafeUrl(resource.url)) {
+      // The URL is not shown in the design, but a provider deciding what to send
+      // should be able to see where it goes.
+      label.setAttribute("title", resource.url);
+    }
     body.appendChild(label);
 
-    if (isSafeUrl(resource.url)) {
-      var link = el("a", "pr-item-link", resource.url);
-      link.setAttribute("href", resource.url);
-      link.setAttribute("target", "_blank");
-      link.setAttribute("rel", "noopener noreferrer");
-      body.appendChild(link);
-    }
-
-    var meta = el("p");
-    if (resource.label) {
-      meta.appendChild(el("span", "pr-label", resource.label));
-    }
     if (shared) {
-      meta.appendChild(el("span", "pr-shared-flag", " Already shared"));
+      body.appendChild(el("span", "pr-shared-flag", "Already shared"));
     }
-    if (meta.childNodes.length) {
-      body.appendChild(meta);
-    }
-
     row.appendChild(body);
+
+    // Always LINK while the scope is links only; a real type field arrives with
+    // PDF support.
+    row.appendChild(el("span", "pr-type-pill", "Link"));
+
     item.appendChild(row);
     return item;
   }
@@ -337,24 +332,34 @@
 
   function loadPatient() {
     if (!patientId) {
-      els.patient.textContent = "This patient could not be found.";
-      els.send.disabled = true;
+      showPatientProblem();
       return;
     }
     request("/shares/patients/" + encodeURIComponent(patientId))
       .then(function (payload) {
         state.patientResolved = true;
-        var name = (payload.patient && payload.patient.name) || "";
-        els.patient.textContent = name ? "Sharing with " + name : "Sharing with this patient";
+        var patient = payload.patient || {};
+        els.patientName.textContent = patient.name || "This patient";
+        // Joined here rather than server-side so a missing birth date drops the
+        // separator instead of leaving it dangling.
+        els.patientMeta.textContent = [
+          patient.birth_date ? "DOB " + patient.birth_date : "",
+          patient.mrn ? "MRN " + patient.mrn : ""
+        ]
+          .filter(Boolean)
+          .join(" \u00b7 ");
         (payload.shared || []).forEach(function (share) {
           state.alreadyShared[share.resource_id] = true;
         });
         load();
       })
-      .catch(function () {
-        els.patient.textContent = "This patient could not be found.";
-        els.send.disabled = true;
-      });
+      .catch(showPatientProblem);
+  }
+
+  function showPatientProblem() {
+    els.patientName.textContent = "This patient could not be found.";
+    els.patientMeta.textContent = "";
+    els.send.disabled = true;
   }
 
   function send() {

@@ -395,7 +395,6 @@ def test_no_module_reaches_a_function_through_an_imported_submodule():
     returned HTTP 500 on every call while the three that imported symbols
     directly worked, which is what finally isolated it.
 
-    Diagnostics are exempt, since one probe keeps the broken form deliberately.
     """
     package_submodules = {
         path.stem
@@ -405,8 +404,6 @@ def test_no_module_reaches_a_function_through_an_imported_submodule():
 
     offenders: list[str] = []
     for path in PY_FILES:
-        if path.name == "diagnostics.py":
-            continue
         tree = ast.parse(_module_source(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ImportFrom) or not node.module:
@@ -479,3 +476,74 @@ def test_resize_accounts_for_an_open_dialog():
         assert "offsetHeight" in source, name
         # And it must shrink back afterwards.
         assert 'addEventListener("close", requestResize)' in source, name
+
+
+# --- the approved designs ---------------------------------------------------
+
+
+def test_the_library_is_a_table_with_the_designed_columns():
+    source = (PACKAGE / "templates" / "library.html").read_text()
+    assert "<table" in source
+    assert 'id="pr-rows"' in source
+    for heading in ("Title", "Type", "Label"):
+        assert f">{heading}</th>" in source, heading
+    # The actions column is unlabelled in the design but still needs a name for
+    # anyone not reading it visually.
+    assert "Actions</span>" in source
+
+
+def test_the_library_uses_the_designed_labels():
+    source = (PACKAGE / "templates" / "library.html").read_text()
+    assert "Resource library" in source
+    assert "+ Add resource" in source
+    assert "Search resources" in source
+
+
+def test_the_picker_shows_a_patient_card_and_the_designed_button():
+    source = (PACKAGE / "templates" / "picker.html").read_text()
+    assert 'id="pr-patient-name"' in source
+    assert 'id="pr-patient-meta"' in source
+    assert "Choose resources (searchable)" in source
+    assert "Send to patient portal" in source
+
+
+def test_the_selection_count_is_still_announced():
+    """The design drops the visible counter; screen readers keep it."""
+    source = (PACKAGE / "templates" / "picker.html").read_text()
+    assert 'id="pr-selection"' in source
+    assert 'aria-live="polite"' in source
+    selection_line = next(
+        line for line in source.splitlines() if 'id="pr-selection"' in line
+    )
+    assert "pr-visually-hidden" in selection_line
+
+
+def test_table_cells_are_built_without_markup_injection():
+    """The new cells are still assembled node by node, never from a string."""
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    assert "renderRow" in source
+    assert "createElement" in source
+    assert "innerHTML" not in source
+    # The title cell is an anchor, so it must carry the same link hardening as
+    # everywhere else.
+    assert "noopener noreferrer" in source
+
+
+def test_the_type_badge_is_a_constant_until_pdfs_land():
+    """Every resource is a link today, so the badge is a placeholder.
+
+    Asserted so that a future PDF field replaces it deliberately rather than
+    someone reading the constant as a bug and inventing logic for it.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert 'pr-type-pill", "Link"' in source, name
+
+
+def test_the_indigo_accent_from_the_design_is_the_only_accent():
+    """The palette lives in :root so a rebrand is one block, not a sweep."""
+    source = _css_code(PACKAGE / "static" / "css" / "library.css")
+    assert "--pr-accent: #2f55d4" in source
+    assert "--pr-pill-bg" in source and "--pr-pill-ink" in source
+    # The old teal must not survive anywhere in the staff stylesheet.
+    assert "#0b7285" not in source

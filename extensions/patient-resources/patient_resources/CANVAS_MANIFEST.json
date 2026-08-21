@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.200.2",
-    "plugin_version": "0.1.9",
+    "plugin_version": "0.2.0",
     "name": "patient_resources",
     "description": "Admin-curated library of patient-facing resource links that staff can share to a patient's portal",
     "url_permissions": [],
@@ -83,17 +83,6 @@
                     "read": [],
                     "write": []
                 }
-            },
-            {
-                "class": "patient_resources.routes.diagnostics:DiagnosticAPI",
-                "description": "TEMPORARY key-authenticated diagnostics; remove after the 500 investigation",
-                "data_access": {
-                    "event": "",
-                    "read": [
-                        "Staff"
-                    ],
-                    "write": []
-                }
             }
         ],
         "commands": [],
@@ -113,10 +102,6 @@
         {
             "name": "namespace_read_write_access_key",
             "sensitive": false
-        },
-        {
-            "name": "simpleapi-api-key",
-            "sensitive": true
         }
     ],
     "custom_data": {

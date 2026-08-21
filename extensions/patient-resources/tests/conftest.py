@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import sys
 import types
+from datetime import date
 from enum import StrEnum
 from unittest.mock import MagicMock
 
@@ -546,6 +547,11 @@ def mock_patient():
     patient.id = "00000000000000000000000000000055"
     patient.first_name = "Jordan"
     patient.last_name = "Lee"
+    # Real values, not mocks: a MagicMock birth_date has a strftime attribute
+    # that returns another mock, so a formatting bug would stringify to junk and
+    # still pass.
+    patient.birth_date = date(1979, 4, 12)
+    patient.mrn = "88213"
     return patient
 
 

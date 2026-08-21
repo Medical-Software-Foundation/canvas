@@ -10,18 +10,25 @@
 
 <div id="pr-app">
   <header class="pr-header">
-    <div>
+    <div class="pr-header-main">
       <h1>Share resources</h1>
-      <p class="pr-subtitle" id="pr-patient">Loading patient&hellip;</p>
     </div>
     <div class="pr-header-actions">
       <button type="button" id="pr-close" class="pr-close" aria-label="Close">&times;</button>
     </div>
   </header>
 
+  <span class="pr-field-label">Patient</span>
+  <div class="pr-patient-card">
+    <span class="pr-patient-name" id="pr-patient-name">Loading&hellip;</span>
+    <span class="pr-patient-meta" id="pr-patient-meta"></span>
+  </div>
+
+  <span class="pr-field-label" id="pr-choose-label">Choose resources (searchable)</span>
+
   <div class="pr-controls">
     <label class="pr-visually-hidden" for="pr-search">Search resources</label>
-    <input type="search" id="pr-search" placeholder="Search by title or label" autocomplete="off" />
+    <input type="search" id="pr-search" placeholder="Search resources&hellip;" autocomplete="off" />
 
     <label class="pr-visually-hidden" for="pr-label-filter">Filter by label</label>
     <select id="pr-label-filter">
@@ -34,8 +41,10 @@
   <p class="pr-error" id="pr-error" role="alert"></p>
 
   <div class="pr-footer">
-    <span id="pr-selection" role="status" aria-live="polite">Nothing selected</span>
-    <button type="button" id="pr-send" class="pr-primary" disabled>Send to portal</button>
+    <!-- The design shows no selection counter, but the count is still worth
+         announcing, so the live region stays and is only visually hidden. -->
+    <span class="pr-visually-hidden" id="pr-selection" role="status" aria-live="polite"></span>
+    <button type="button" id="pr-send" class="pr-primary" disabled>Send to patient portal</button>
   </div>
 </div>
 
