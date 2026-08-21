@@ -36,7 +36,6 @@
     patientName: document.getElementById("pr-patient-name"),
     patientMeta: document.getElementById("pr-patient-meta"),
     search: document.getElementById("pr-search"),
-    labelFilter: document.getElementById("pr-label-filter"),
     list: document.getElementById("pr-list"),
     empty: document.getElementById("pr-empty"),
     error: document.getElementById("pr-error"),
@@ -298,7 +297,7 @@
   }
 
   function hasFilters() {
-    return Boolean(els.search.value.trim() || els.labelFilter.value);
+    return Boolean(els.search.value.trim());
   }
 
   function query() {
@@ -306,9 +305,6 @@
     var term = els.search.value.trim();
     if (term) {
       parts.push("q=" + encodeURIComponent(term));
-    }
-    if (els.labelFilter.value) {
-      parts.push("label=" + encodeURIComponent(els.labelFilter.value));
     }
     return parts.length ? "?" + parts.join("&") : "";
   }
@@ -326,20 +322,6 @@
         if (seq === state.requestSeq) {
           els.error.textContent = error.message;
         }
-      });
-  }
-
-  function loadLabels() {
-    request("/library/labels")
-      .then(function (payload) {
-        (payload.labels || []).forEach(function (label) {
-          var option = el("option", null, label);
-          option.value = label;
-          els.labelFilter.appendChild(option);
-        });
-      })
-      .catch(function () {
-        /* The filter is optional; the list still works without it. */
       });
   }
 
@@ -432,7 +414,6 @@
     window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(load, 200);
   });
-  els.labelFilter.addEventListener("change", load);
   els.send.addEventListener("click", send);
   els.resultDialog.addEventListener("close", requestResize);
 
@@ -441,6 +422,5 @@
     closeButton.addEventListener("click", closeModal);
   }
 
-  loadLabels();
   loadPatient();
 })();
