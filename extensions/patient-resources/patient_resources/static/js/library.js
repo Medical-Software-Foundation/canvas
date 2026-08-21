@@ -99,6 +99,19 @@
   var MODAL_MAX_HEIGHT = 780;
   var lastRequestedHeight = 0;
 
+  function wantedDialogHeight(dialog) {
+    // Deliberately not dialog.offsetHeight. A <dialog> is capped by the user
+    // agent's own max-height, so once it is clamped offsetHeight reports the
+    // clamped value -- asking the host for exactly that can never grow the
+    // window back out of the clamp, and the form stays scrolled forever.
+    // Summing the body's scrollHeight with the pinned actions gives the height
+    // the content actually wants.
+    var body = dialog.querySelector(".pr-dialog-body");
+    var actions = dialog.querySelector(".pr-dialog-actions");
+    var wanted = (body ? body.scrollHeight : 0) + (actions ? actions.offsetHeight : 0);
+    return wanted || dialog.offsetHeight;
+  }
+
   function measuredContentHeight() {
     var app = document.getElementById("pr-app");
     var content = app ? app.scrollHeight : 0;
@@ -109,7 +122,7 @@
     // to be scrolled.
     var openDialog = document.querySelector("dialog[open]");
     if (openDialog) {
-      content = Math.max(content, openDialog.offsetHeight + 56);
+      content = Math.max(content, wantedDialogHeight(openDialog) + 56);
     }
     return content;
   }
