@@ -7,6 +7,7 @@ import hashlib
 import hmac
 
 from appointment_reminders.services.twilio_inbound import (
+    classify_consent,
     classify_reply,
     parse_form_body,
     valid_twilio_signature,
@@ -120,3 +121,39 @@ def test_classify_unrecognized() -> None:
     for body in ["", None, "maybe", "stop", "no problem, see you then",
                  "yes please, I have a question", "reschedule"]:
         assert classify_reply(body) == "unrecognized", body
+
+
+# ---- classify_consent ----
+
+def test_classify_opt_out_keywords() -> None:
+    for body in ["STOP", "stop", " Stop ", "stop.", "STOPALL", "unsubscribe",
+                 "CANCEL", "end", "QUIT", "revoke", "optout"]:
+        assert classify_consent(body) == "opt_out", body
+
+
+def test_classify_opt_in_keywords() -> None:
+    for body in ["START", "start", "Yes", "YES", "unstop", "UNSTOP"]:
+        assert classify_consent(body) == "opt_in", body
+
+
+def test_classify_consent_ignores_everything_else() -> None:
+    for body in ["", None, "Y", "N", "no", "confirm", "1", "2", "maybe",
+                 "please cancel", "stop texting me about this"]:
+        assert classify_consent(body) == "", body
+
+
+def test_consent_and_reply_classification_are_independent() -> None:
+    """The overlapping tokens must register on both axes, not one or the other.
+
+    CANCEL opts a patient out at Twilio *and* declines the appointment; YES
+    opts them back in *and* confirms. Collapsing these into a single verdict
+    would silently drop half of what the patient asked for.
+    """
+    assert (classify_consent("CANCEL"), classify_reply("CANCEL")) == ("opt_out", "decline")
+    assert (classify_consent("YES"), classify_reply("YES")) == ("opt_in", "confirm")
+    # STOP and START carry no appointment intent.
+    assert (classify_consent("STOP"), classify_reply("STOP")) == ("opt_out", "unrecognized")
+    assert (classify_consent("START"), classify_reply("START")) == ("opt_in", "unrecognized")
+    # Y/N carry no consent change.
+    assert (classify_consent("Y"), classify_reply("Y")) == ("", "confirm")
+    assert (classify_consent("N"), classify_reply("N")) == ("", "decline")

@@ -5,7 +5,12 @@ Public endpoint (Twilio cannot present a Canvas session); its security is the
 verified reply:
   - "Y" → set the patient's nearest upcoming appointment to CONFIRMED
   - "N" → open an ops Task to follow up (distinguishes decline from no-response)
+  - a Twilio opt-out keyword → clear SMS consent on the number that texted in
+  - a Twilio opt-in keyword → restore it
   - anything else → logged only (no action)
+Consent is classified separately from appointment intent because Twilio's
+keyword sets overlap ours: CANCEL is both an opt-out and a decline, YES both an
+opt-in and a confirm, and each half is actioned.
 Every reply is recorded via ``log_inbound_response`` so it appears in the
 activity log / "needs outreach" view. No PHI is sent or stored beyond the
 patient's own reply text.
@@ -24,9 +29,11 @@ from canvas_sdk.v1.data.appointment import Appointment as AppointmentModel
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
+from appointment_reminders.services.consent import sms_consent_effect
 from appointment_reminders.services.delivery import _normalize_phone
 from appointment_reminders.services.history import log_inbound_response
 from appointment_reminders.services.twilio_inbound import (
+    classify_consent,
     classify_reply,
     parse_form_body,
     valid_twilio_signature,
@@ -102,6 +109,7 @@ class TwilioInboundAPI(SimpleAPI):
         from_number = _normalize_phone(params.get("From", ""))
         body = params.get("Body", "")
         intent = classify_reply(body)
+        consent = classify_consent(body)
 
         patient = self._resolve_patient(from_number)
         if patient is None:
@@ -111,6 +119,25 @@ class TwilioInboundAPI(SimpleAPI):
         appointment = self._nearest_upcoming_appointment(patient)
         effects: list[Response | Effect] = []
         status = intent
+
+        # Consent first: Twilio has already blocked or unblocked the number on
+        # its side, and mirroring that onto the chart is what keeps the plugin
+        # from texting someone Twilio will refuse to deliver to (error 21610).
+        if consent:
+            consent_effect = sms_consent_effect(
+                patient, from_number, has_consent=(consent == "opt_in")
+            )
+            if consent_effect is not None:
+                effects.append(consent_effect)
+                log.info(
+                    f"[inbound] Patient {patient.id} texted a Twilio {consent} keyword; "
+                    f"SMS consent {'restored' if consent == 'opt_in' else 'cleared'}"
+                )
+            else:
+                log.info(
+                    f"[inbound] Patient {patient.id} texted a Twilio {consent} keyword; "
+                    "chart already agrees, no write"
+                )
 
         if intent == "confirm":
             if appointment is not None:
@@ -138,6 +165,16 @@ class TwilioInboundAPI(SimpleAPI):
             )
             status = "declined"
             log.info(f"[inbound] Patient {patient.id} declined; opened follow-up task")
+
+        # One audit row per reply, so a keyword that carries both a consent
+        # change and an appointment intent (CANCEL, YES) records both rather
+        # than losing one to the other.
+        parts = []
+        if consent:
+            parts.append("opted_in" if consent == "opt_in" else "opted_out")
+        if status != "unrecognized":
+            parts.append(status)
+        status = "+".join(parts) or "unrecognized"
 
         log_inbound_response(
             patient_id=str(patient.id),

@@ -7,6 +7,8 @@ Appointment reminders and confirmations over SMS and email, with per-business-li
 - **Appointment notifications** — confirmation, reminder, cancellation, no-show, and telehealth-join messages via Twilio (SMS) and SendGrid (email). Per-note-type templates with `{{placeholder}}`s; multi-interval reminder cadence (default `[4320, 45]` = 3 days + 45 min).
 - **Per-business-line branding + routing** — `{{business_line_attribution}}` / `{{business_line}}` placeholders; per-line **attribution** override → default fallback; per-line outbound **from-number** → global fallback. A patient's business line (`Patient.business_line`) drives which branding/number is used.
 - **Two-way structured confirm** — a signature-gated Twilio inbound webhook: `Y` confirms the patient's nearest upcoming appointment, `N` opens a follow-up Task. Strict Y/N token match (no free-form), `MessageSid` replay dedup, fail-closed signature check.
+- **STOP writes back to the chart** — a patient who texts a Twilio opt-out keyword has `has_consent` cleared on the number they texted from, so the opt-out survives in Canvas and not just in Twilio's block list. `START` / `UNSTOP` / `YES` restore it.
+- **Admin console gated by role** — the `/admin` endpoints require a staff role listed in `ADMIN_ROLE_NAMES`. Fail-closed: unset means nobody.
 - **Testing-mode gate** — a fail-closed allowlist (`TESTING_MODE`) that restricts *all* sends to specific patients **and** recipients, for safe troubleshooting on a live instance.
 
 > **Reminder and telehealth-join are independent campaigns, so overlapping intervals double up.** Telehealth-join runs whether or not the reminder campaign is on for that visit type. Give them the same interval and a patient with a telehealth visit receives two SMS and two emails about the same appointment, seconds apart (observed in UAT with both set to 15 minutes). Configure around it: stagger the intervals, for example reminders at 45 minutes and the join nudge at 15, or switch the reminder campaign off for telehealth visit types under **Per-visit-type settings**.
@@ -58,7 +60,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 
 1. **Check whether native reminders are on.** Look for the `appointmentReminders` organization setting. If it holds a value like `{"daysAhead": 3, "hourOfDay": 9}`, native reminders are **active**. If the setting is absent, they're off — absence is how "disabled" is represented; there is no `false` form.
 2. **Clear it if present**, via Django admin or Canvas support, and coordinate the timing with enabling this plugin. Anything else means either a gap in coverage or double messages. Note that clearing it also **retires the native `Y` confirm loop**, which is gated on the same setting — this plugin rebuilds that flow, but only once step 4 is done.
-3. **Set the required secrets**, then verify the admin app shows Twilio and SendGrid as *Configured*. Missing credentials mean campaigns silently deliver nothing.
+3. **Set the required secrets**, including `ADMIN_ROLE_NAMES` — without it nobody can open the admin app — then verify it shows Twilio and SendGrid as *Configured*. Missing credentials mean campaigns silently deliver nothing.
 4. **For two-way confirm, provision a dedicated Twilio number** whose inbound webhook points at `…/plugin-io/api/appointment_reminders/twilio/inbound`, and set `twilio-inbound-webhook-url` to that exact URL. See *Integration with Canvas core* below — this has real lead time and can't be done at the last minute.
 
 **Strongly recommended for the first run:** set `TESTING_MODE=true` plus `TESTING_MODE_PATIENTS` and `TESTING_MODE_RECIPIENTS`, enable one campaign, and confirm delivery to your own phone or inbox before opening it up. The gate is fail-closed — with `TESTING_MODE` on, a message sends only when **both** the patient and the recipient address are allowlisted. While a campaign is enabled and `TESTING_MODE` is off, the admin app shows a live-sending warning.
@@ -69,10 +71,10 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 | --- | --- | --- |
 | `AppointmentEventHandler` | events | Confirmation / cancellation / no-show on appointment events |
 | `ReminderScheduler` | cron `*/5 * * * *` | Reminder + telehealth-join messages for upcoming booked appointments |
-| `NotificationAPI` | SimpleAPI | Admin config, manual sends, notification history |
-| `TwilioInboundAPI` | SimpleAPI | Signature-gated inbound-SMS webhook (`POST /twilio/inbound`) — Y/N confirm/decline |
+| `NotificationAPI` | SimpleAPI | Admin config (role-gated), manual sends, notification history |
+| `TwilioInboundAPI` | SimpleAPI | Signature-gated inbound-SMS webhook (`POST /twilio/inbound`) — Y/N confirm/decline, STOP/START consent write-back |
 | `TimelineMessageFilter` | config | Hides "Message" notes from the patient timeline |
-| `NotifyAdminApp` | Application | "Appointment Reminders" — provider-menu admin: configure campaigns, view global history |
+| `NotifyAdminApp` | Application | "Appointment Reminders" — provider-menu admin: configure campaigns, view global history. Refuses staff without an `ADMIN_ROLE_NAMES` role |
 | `NotifyPatientApp` | Application | "Appointment Reminders" — chart panel: this patient's reminder history |
 
 ## Key files
@@ -83,7 +85,9 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 | `services/delivery.py` | Twilio SMS + SendGrid email senders; consent + testing-mode gates; delivery audit |
 | `services/templates.py` | Variable extraction + `{{placeholder}}` rendering |
 | `services/business_line.py` | Resolve per-line attribution + from-number from config |
-| `services/twilio_inbound.py` | Signature verification, form parsing, Y/N intent classification |
+| `services/twilio_inbound.py` | Signature verification, form parsing, Y/N intent + STOP/START consent classification |
+| `services/consent.py` | Build the `Patient` effect that writes SMS consent back after an opt-out/opt-in |
+| `services/authz.py` | `ADMIN_ROLE_NAMES` role gate for the admin endpoints |
 | `services/history.py` | `NotificationDelivery` audit rows (outbound sends + inbound responses) |
 
 Custom data lives under the `canvas__appointment_reminders` namespace: `CampaignConfigRecord` (config singleton) and `NotificationDelivery` (activity log; `campaign_type=inbound_response` rows record confirms/declines).
@@ -109,10 +113,19 @@ Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`
 | `TESTING_MODE_PATIENTS` | With `TESTING_MODE` | Comma-separated patient identifiers allowed to receive. Matched against the patient's id, key, or dbid, so whichever value you copy works | Copy the patient id from the chart URL |
 | `TESTING_MODE_RECIPIENTS` | With `TESTING_MODE` | Comma-separated addresses allowed to receive. Phones compared in normalized E.164, emails case-insensitively; one list may mix both | Your own mobile and inbox, e.g. `+15551234567,you@example.com` |
 | `LOCK_MESSAGE_TEMPLATES` | No | `1`/`true`/`yes`/`on` stops **manual senders** departing from the approved copy. See below. Unset means a manual send can be reworded freely | You set it |
+| `ADMIN_ROLE_NAMES` | Yes, to use the admin app | Comma-separated staff roles allowed to open the admin console and call its endpoints. Fail-closed: unset locks **everyone** out, including you. See *Who can open the admin app* | Your instance's role names, e.g. `Practice Manager,Administrator`. Either the display name or the internal code matches |
 
 **Outbound Twilio auth** picks the API key when `twilio-api-key-sid` and `twilio-api-key-secret` are both set, and otherwise falls back to `twilio-account-sid` + `twilio-auth-token` (`services/delivery.py:_twilio_auth`). The request URL is built from the account SID either way, which is why that secret is required even under API-key auth.
 
 A send needs **both** allowlists to match when `TESTING_MODE` is on: the patient *and* the destination address. One without the other sends nothing, which is deliberate.
+
+### Who can open the admin app
+
+`ADMIN_ROLE_NAMES` lists the staff roles allowed to configure campaigns, matched case-insensitively against each role's display name *and* its internal code, so either form works. Set it before you go looking for the app — unset denies everyone, by design, since an admin console that opens itself when misconfigured is the worse failure.
+
+The real gate is `NotificationAPI.authenticate`, which refuses every `/admin*` request from a staff member without a listed role. The per-patient chart panel is untouched and stays available to any logged-in staff member.
+
+**The menu item itself stays visible to everyone.** Canvas has no per-user visibility hook for a `provider_menu_item` application: `visible()` is defined only on embedded (note and scheduling) applications, and the `ProviderMenuConfiguration` effect [explicitly does not apply](https://docs.canvasmedical.com/sdk/layout-effect/#provider-menu-configuration) to plugin-provided menu items. A non-admin who clicks **Appointment Reminders** gets a short "you don't have access" page instead of the console. Since the URL is reachable without the menu at all, the server-side check is what protects the configuration; the refusal page is only courtesy.
 
 ### Locking message copy
 
@@ -136,7 +149,20 @@ Enforced at send time in `services/delivery.py:_get_patient_contacts`:
 
 - **SMS** requires `has_consent=True` **and** `opted_out=False` on the phone contact point.
 - **Email** requires only `opted_out=False` (implicit consent).
-- A patient who texts STOP (which sets `opted_out=True`) is silently skipped, logged `skipped:no_phone_on_file`. The plugin never opts a patient back in — that happens through normal Canvas consent flows.
+- A patient with neither is silently skipped, logged `skipped:no_phone_on_file`.
+
+### STOP / START write-back
+
+Twilio maintains its own block list. When a patient texts a standard opt-out keyword — `STOP`, `STOPALL`, `UNSUBSCRIBE`, `CANCEL`, `END`, `QUIT`, `REVOKE`, `OPTOUT` — Twilio blocks the number, auto-replies, and then [forwards the message to the webhook](https://help.twilio.com/articles/223134027). Nothing in that flow reaches Canvas. `services/consent.py` closes the gap by clearing `has_consent` on the contact point the message came from, so the chart agrees with Twilio and later sends are skipped before they can fail with error 21610. `START` / `UNSTOP` / `YES` restore it, matching Twilio's opt-in keywords.
+
+This matters specifically *because* two-way confirm repoints the number's inbound webhook at this plugin. Canvas's native incoming-SMS handler used to record the opt-out; once the webhook moves, it no longer sees the message.
+
+Two consequences worth knowing:
+
+- **`has_consent`, not `opted_out`.** The `Patient` effect's contact-point payload has no `opted_out` field, so no plugin can set it. That turns out to be the better field anyway: `has_consent` gates SMS alone, while `opted_out` would also suppress email, and STOP is an SMS carrier keyword. A patient who opts out of texts keeps getting email reminders.
+- **Twilio's keyword sets overlap this plugin's.** `CANCEL` is both an opt-out keyword and a decline token, so it clears consent *and* opens the follow-up Task. `YES` is both an opt-in keyword and a confirm token, so it restores consent *and* confirms the appointment. Both halves are actioned; `services/twilio_inbound.py` classifies the two axes separately for exactly this reason.
+
+The plugin never opts a patient in on its own — only in response to the patient's own opt-in keyword. Staff can still change consent by hand in the chart.
 
 ## Integration with Canvas core — read before enabling
 
@@ -151,6 +177,8 @@ Campaigns ship **disabled** (opt-in). Enable per campaign in the admin app.
 ## Known gaps
 
 - **No runtime detection of native reminders.** `appointmentReminders` is an `OrganizationSetting` with no `canvas_sdk` model and no replica table, and native sends are logged to `api_appointmentreminder` without writing `Message`/`MessageTransmission` rows. The plugin therefore has no signal — direct or indirect — that native reminders are still active. Avoiding double sends is a deployment-checklist step, not something the code can enforce.
+- **The admin menu item cannot be hidden per role**, only made inert — see *Who can open the admin app*. Hiding it would need a Canvas platform change.
+- **Contact-point update semantics are undocumented.** Canvas documents `addresses` updates as replace-based and says nothing about `contact_points`, and the payload carries no row ids. `services/consent.py` therefore resends every live contact point on each consent write, which is correct under either reading but should be confirmed against a real chart during UAT: send a STOP from a patient who has an email and a second phone on file, then check both survived.
 - **No send retry queue.** Twilio/SendGrid failures are logged to `NotificationDelivery` + an `AppointmentsMetadata` effect, but not retried.
 - **Email uses implicit consent** (opt-out only, no per-email opt-in) and has no built-in unsubscribe (would require SendGrid Subscription Tracking / ASM).
 - **No consolidated confirmation-status view** yet — confirms surface as appointment status on the schedule, declines as Tasks, and all replies as `inbound_response` audit rows, but there's no single "needs outreach" roll-up.

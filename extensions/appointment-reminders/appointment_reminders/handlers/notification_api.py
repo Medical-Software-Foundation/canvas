@@ -9,10 +9,16 @@ from http import HTTPStatus
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
-from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.handlers.simple_api import (
+    SessionCredentials,
+    SimpleAPI,
+    StaffSessionAuthMixin,
+    api,
+)
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
+from appointment_reminders.services.authz import is_admin_staff
 from appointment_reminders.services.business_line import (
     get_business_line_from_number,
     get_business_line_name,
@@ -35,11 +41,70 @@ SENDABLE_CAMPAIGNS = frozenset(
     {"confirmation", "reminder", "telehealth", "noshow", "cancellation"}
 )
 
+# Routes under this prefix configure campaigns for the whole instance, so they
+# need an admin role on top of a staff session. Everything else here serves the
+# per-patient chart panel and stays open to any logged-in staff member.
+_ADMIN_PATH_PREFIX = "/admin"
+
 
 class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
     """API endpoints for admin configuration and notification history."""
 
     PREFIX = ""
+
+    def authenticate(self, credentials: SessionCredentials) -> bool:
+        """Require a staff session, plus an admin role for the ``/admin`` routes.
+
+        The annotation on ``credentials`` is load-bearing: ``SimpleAPI`` reads it
+        to decide which credentials class to build, so it has to stay.
+
+        This is the enforceable boundary for the admin console. The provider-menu
+        item cannot be hidden per user — ``visible()`` exists only on embedded
+        applications, and ``ProviderMenuConfiguration`` explicitly does not apply
+        to plugin-provided menu items — so a non-admin can always reach these URLs
+        directly. Refusing them here is what actually protects the config.
+        """
+        if not super().authenticate(credentials):
+            return False
+        path = getattr(self.request, "path", "") or ""
+        if not path.startswith(_ADMIN_PATH_PREFIX):
+            return True
+        return is_admin_staff(credentials.logged_in_user.get("id"), self.secrets)
+
+    @api.get("/access-denied")
+    def get_access_denied_page(self) -> list[Response | Effect]:
+        """Serve the page shown when a non-admin opens the admin application.
+
+        Deliberately outside the ``/admin`` prefix: the whole point is that it
+        renders for someone the gate above turns away.
+        """
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appointment Reminders</title>
+    {theme_style_block()}
+    <style>
+        body {{
+            font-family: var(--font-stack);
+            background: var(--surface-page);
+            color: var(--text-body);
+            margin: 0;
+            padding: 48px 24px;
+            text-align: center;
+        }}
+        h1 {{ color: var(--text-strong); font-size: 18px; margin: 0 0 8px; }}
+        p {{ color: var(--text-muted); font-size: 14px; margin: 0; }}
+    </style>
+</head>
+<body>
+    <h1>You don't have access to Appointment Reminders</h1>
+    <p>Configuring reminder campaigns is limited to administrator roles.
+       Ask an administrator if you need access.</p>
+</body>
+</html>"""
+        return [HTMLResponse(html)]
 
     @api.get("/admin")
     def get_admin_page(self) -> list[Response | Effect]:

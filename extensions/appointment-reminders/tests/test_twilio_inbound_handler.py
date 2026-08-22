@@ -167,13 +167,17 @@ def test_inbound_confirm_updates_appointment_status() -> None:
 
 
 def test_inbound_confirm_without_appointment_logs_no_appointment() -> None:
-    api = _api("Body=YES&From=%2B14155551234")
+    # "C" confirms without also being a Twilio opt-in keyword, so this isolates
+    # the no-appointment branch. The YES overlap is covered separately below.
+    api = _api("Body=C&From=%2B14155551234")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=None), \
          patch(f"{_MOD}.Appointment") as mock_appt, \
+         patch(f"{_MOD}.sms_consent_effect") as mock_consent, \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         api.inbound()
     mock_appt.assert_not_called()
+    mock_consent.assert_not_called()
     assert mock_log.call_args.kwargs["status"] == "confirmed_no_appointment"
 
 
@@ -227,6 +231,99 @@ def test_inbound_replayed_message_sid_is_ignored() -> None:
     mock_log.assert_called_once()
     assert len(second) == 1
     assert second[0].status_code == HTTPStatus.OK
+
+
+# ---- consent write-back (STOP / START) ----
+
+def test_inbound_stop_clears_sms_consent() -> None:
+    api = _api("Body=STOP&From=%2B14155551234")
+    effect = MagicMock()
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Appointment") as mock_appt, \
+         patch(f"{_MOD}.AddTask") as mock_task, \
+         patch(f"{_MOD}.sms_consent_effect", return_value=effect) as mock_consent, \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        result = api.inbound()
+
+    mock_consent.assert_called_once()
+    assert mock_consent.call_args.args[1] == "+14155551234"
+    assert mock_consent.call_args.kwargs["has_consent"] is False
+    # STOP says nothing about the appointment itself.
+    mock_appt.assert_not_called()
+    mock_task.assert_not_called()
+    assert mock_log.call_args.kwargs["status"] == "opted_out"
+    assert effect in result
+
+
+def test_inbound_start_restores_sms_consent() -> None:
+    api = _api("Body=START&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.sms_consent_effect", return_value=MagicMock()) as mock_consent, \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        api.inbound()
+
+    assert mock_consent.call_args.kwargs["has_consent"] is True
+    assert mock_log.call_args.kwargs["status"] == "opted_in"
+
+
+def test_inbound_cancel_both_opts_out_and_opens_decline_task() -> None:
+    """CANCEL is a Twilio opt-out keyword *and* this plugin's decline token.
+
+    Acting on only one half would either leave a patient Twilio has blocked
+    still marked as consenting, or silently drop their request to cancel.
+    """
+    api = _api("Body=CANCEL&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.AddTask") as mock_task, \
+         patch(f"{_MOD}.sms_consent_effect", return_value=MagicMock()) as mock_consent, \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        api.inbound()
+
+    assert mock_consent.call_args.kwargs["has_consent"] is False
+    mock_task.assert_called_once()
+    assert mock_log.call_args.kwargs["status"] == "opted_out+declined"
+
+
+def test_inbound_yes_both_opts_in_and_confirms_appointment() -> None:
+    """YES is a Twilio opt-in keyword as well as a confirm token."""
+    api = _api("Body=YES&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Appointment") as mock_appt, \
+         patch(f"{_MOD}.sms_consent_effect", return_value=MagicMock()) as mock_consent, \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        api.inbound()
+
+    assert mock_consent.call_args.kwargs["has_consent"] is True
+    mock_appt.return_value.update.assert_called_once()
+    assert mock_log.call_args.kwargs["status"] == "opted_in+confirmed"
+
+
+def test_inbound_logs_opt_out_even_when_no_write_is_needed() -> None:
+    """A redundant STOP emits no patient effect but is still audited."""
+    api = _api("Body=STOP&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.sms_consent_effect", return_value=None), \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        result = api.inbound()
+
+    assert mock_log.call_args.kwargs["status"] == "opted_out"
+    assert len(result) == 1  # response only, no patient update
+
+
+def test_inbound_confirm_does_not_touch_consent() -> None:
+    api = _api("Body=Y&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Appointment"), \
+         patch(f"{_MOD}.sms_consent_effect") as mock_consent, \
+         patch(f"{_MOD}.log_inbound_response"):
+        api.inbound()
+    mock_consent.assert_not_called()
 
 
 # ---- _form_params (source-of-params) ----

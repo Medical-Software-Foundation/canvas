@@ -1,6 +1,6 @@
 {
   "sdk_version": "0.95.0",
-  "plugin_version": "0.7.6",
+  "plugin_version": "0.8.0",
   "name": "appointment_reminders",
   "description": "Appointment reminders and confirmations (SMS + email) with per-business-line customization, optional locked message copy, and two-way Y/N confirmation.",
   "components": {
@@ -53,6 +53,7 @@
             "v1.Patient",
             "v1.Appointment",
             "v1.Staff",
+            "v1.StaffRole",
             "v1.Organization",
             "v1.PracticeLocation",
             "v1.BusinessLine"
@@ -75,7 +76,7 @@
       },
       {
         "class": "appointment_reminders.handlers.twilio_inbound_api:TwilioInboundAPI",
-        "description": "Twilio-signature-gated webhook for inbound patient SMS: structured Y/N confirms/declines an appointment and opens follow-up tasks",
+        "description": "Twilio-signature-gated webhook for inbound patient SMS: structured Y/N confirms/declines an appointment, mirrors STOP/START consent onto the patient's phone, and opens follow-up tasks",
         "data_access": {
           "event": "",
           "read": [
@@ -84,7 +85,8 @@
           ],
           "write": [
             "v1.Appointment",
-            "v1.Task"
+            "v1.Task",
+            "v1.Patient"
           ]
         }
       }
@@ -127,7 +129,8 @@
     "TESTING_MODE",
     "TESTING_MODE_PATIENTS",
     "TESTING_MODE_RECIPIENTS",
-    "LOCK_MESSAGE_TEMPLATES"
+    "LOCK_MESSAGE_TEMPLATES",
+    "ADMIN_ROLE_NAMES"
   ],
   "custom_data": {
     "namespace": "canvas__appointment_reminders",

@@ -89,6 +89,26 @@ def valid_twilio_signature(
 _CONFIRM = {"y", "yes", "confirm", "confirmed", "1", "c"}
 _DECLINE = {"n", "no", "cancel", "decline", "declined", "2"}
 
+# Twilio's standard consent keywords. Twilio acts on these itself — it adds or
+# removes the number from its block list and auto-replies — and then forwards
+# the message here, so the plugin's job is to mirror the same decision onto the
+# chart. See https://help.twilio.com/articles/223134027.
+#
+# Two of these deliberately overlap the sets above: CANCEL is also a decline
+# token and YES is also a confirm token. That is why consent is classified
+# separately rather than folded into `classify_reply` — a patient texting
+# CANCEL both wants off the list and wants the appointment dealt with, and both
+# should happen.
+_OPT_OUT = {"stop", "stopall", "unsubscribe", "cancel", "end", "quit", "revoke", "optout"}
+_OPT_IN = {"start", "yes", "unstop"}
+
+
+def _normalize(body: str | None) -> str:
+    """Trim surrounding whitespace and punctuation and casefold."""
+    if not body:
+        return ""
+    return body.strip().lower().strip(".!?, ")
+
 
 def classify_reply(body: str | None) -> str:
     """Classify an inbound SMS as ``"confirm"`` / ``"decline"`` / ``"unrecognized"``.
@@ -98,11 +118,28 @@ def classify_reply(body: str | None) -> str:
     ``"unrecognized"`` — a deliberate no-op, since a false decline would wrongly
     flag a patient who actually meant to confirm.
     """
-    if not body:
-        return "unrecognized"
-    normalized = body.strip().lower().strip(".!?, ")
+    normalized = _normalize(body)
     if normalized in _CONFIRM:
         return "confirm"
     if normalized in _DECLINE:
         return "decline"
     return "unrecognized"
+
+
+def classify_consent(body: str | None) -> str:
+    """Classify an inbound SMS as ``"opt_out"`` / ``"opt_in"`` / ``""`` (neither).
+
+    Orthogonal to :func:`classify_reply`: a message can carry both a consent
+    change and an appointment intent, and the caller acts on each.
+
+    Twilio only matches a bare keyword, so "PLEASE CANCEL" does not opt anyone
+    out on their side. Stripping trailing punctuation makes this slightly more
+    generous than that ("stop." counts here), which errs toward *not* texting a
+    patient who plainly asked us to stop.
+    """
+    normalized = _normalize(body)
+    if normalized in _OPT_OUT:
+        return "opt_out"
+    if normalized in _OPT_IN:
+        return "opt_in"
+    return ""

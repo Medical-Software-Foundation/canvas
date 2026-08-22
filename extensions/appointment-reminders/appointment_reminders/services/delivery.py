@@ -42,9 +42,11 @@ def _get_patient_contacts(patient: Patient) -> tuple[str | None, str | None]:
     Phone (SMS) requires explicit ``has_consent=True`` — TCPA compliance.
     The Canvas patient-chart UI exposes a "Has consent to send messages"
     toggle on phone numbers so practices can record this affirmatively.
-    Patients who replied STOP via Twilio have ``opted_out=True`` set by the
-    incoming-SMS webhook; sending to them again is both a TCPA violation
-    and will be rejected by Twilio (error 21610).
+    A patient who replies STOP has ``has_consent`` cleared by this plugin's
+    inbound webhook (``services/consent.py``), and may separately carry
+    ``opted_out=True`` from Canvas's native handler or a staff edit; either
+    one suppresses SMS here. Texting them again is both a TCPA violation and
+    will be rejected by Twilio (error 21610).
 
     Email consent is implicit. The Canvas UI does NOT expose a per-email
     consent toggle — adding an email to the chart is the consent gesture

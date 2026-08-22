@@ -53,11 +53,21 @@ def test_timeline_filter_excludes_message_note_type() -> None:
 
 
 
-def test_notify_admin_app_on_open_returns_modal_effect() -> None:
+def _admin_app(user: dict | None = None) -> NotifyAdminApp:
     app = NotifyAdminApp.__new__(NotifyAdminApp)
+    app.event = MagicMock()
+    app.event.context = {"user": user if user is not None else {"id": "s1", "type": "Staff"}}
+    app.secrets = {"ADMIN_ROLE_NAMES": "Practice Manager"}
+    return app
+
+
+def test_notify_admin_app_on_open_returns_modal_effect() -> None:
+    app = _admin_app()
     with patch(
         "appointment_reminders.handlers.admin_app.LaunchModalEffect"
-    ) as mock_modal:
+    ) as mock_modal, patch(
+        "appointment_reminders.handlers.admin_app.is_admin_staff", return_value=True
+    ):
         mock_effect = MagicMock()
         mock_modal.return_value.apply.return_value = mock_effect
         result = app.on_open()
@@ -66,6 +76,35 @@ def test_notify_admin_app_on_open_returns_modal_effect() -> None:
     kwargs = mock_modal.call_args.kwargs
     assert "/admin?v=" in kwargs["url"]  # cache-bust query string appended
     assert "Appointment Reminders" == kwargs["title"]
+
+
+def test_notify_admin_app_on_open_refuses_staff_without_admin_role() -> None:
+    app = _admin_app()
+    with patch(
+        "appointment_reminders.handlers.admin_app.LaunchModalEffect"
+    ) as mock_modal, patch(
+        "appointment_reminders.handlers.admin_app.is_admin_staff", return_value=False
+    ) as mock_gate:
+        app.on_open()
+
+    mock_gate.assert_called_once_with("s1", {"ADMIN_ROLE_NAMES": "Practice Manager"})
+    url = mock_modal.call_args.kwargs["url"]
+    assert "/access-denied" in url
+    assert "/admin?" not in url
+
+
+def test_notify_admin_app_on_open_refuses_non_staff_without_role_lookup() -> None:
+    """A patient-typed user is refused before any role query runs."""
+    app = _admin_app(user={"id": "p1", "type": "Patient"})
+    with patch(
+        "appointment_reminders.handlers.admin_app.LaunchModalEffect"
+    ) as mock_modal, patch(
+        "appointment_reminders.handlers.admin_app.is_admin_staff"
+    ) as mock_gate:
+        app.on_open()
+
+    mock_gate.assert_not_called()
+    assert "/access-denied" in mock_modal.call_args.kwargs["url"]
 
 
 def test_notify_patient_app_on_open_uses_patient_id_from_context() -> None:

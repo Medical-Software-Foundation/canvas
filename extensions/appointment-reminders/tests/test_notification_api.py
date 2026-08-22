@@ -35,7 +35,102 @@ def _api(
     api.request.query_params = MagicMock()
     api.request.query_params.get = MagicMock(side_effect=lambda k, d=None: (query_params or {}).get(k, d))
     api.secrets = secrets if secrets is not None else {}
+    api.request.path = "/admin"
     return api
+
+
+# ---- authenticate: admin role gate ----
+#
+# This is the enforceable boundary for the admin console. The provider-menu
+# item cannot be hidden per user, so any logged-in staff member can navigate
+# straight to these URLs; refusing them here is what protects the config.
+
+_AUTHZ = "appointment_reminders.handlers.notification_api.is_admin_staff"
+
+
+def _creds(user_id: str = "s1", user_type: str = "Staff") -> MagicMock:
+    credentials = MagicMock()
+    credentials.logged_in_user = {"id": user_id, "type": user_type}
+    return credentials
+
+
+def _api_at(path: str, secrets: dict | None = None) -> NotificationAPI:
+    api = _api(secrets=secrets)
+    api.request.path = path
+    return api
+
+
+def test_authenticate_allows_admin_on_admin_route() -> None:
+    api = _api_at("/admin", secrets={"ADMIN_ROLE_NAMES": "Practice Manager"})
+    with patch(_AUTHZ, return_value=True) as gate:
+        assert api.authenticate(_creds()) is True
+    gate.assert_called_once_with("s1", {"ADMIN_ROLE_NAMES": "Practice Manager"})
+
+
+def test_authenticate_rejects_non_admin_on_admin_route() -> None:
+    api = _api_at("/admin")
+    with patch(_AUTHZ, return_value=False):
+        assert api.authenticate(_creds()) is False
+
+
+def test_authenticate_rejects_non_admin_on_config_write() -> None:
+    """POST /admin/config rewrites campaigns instance-wide — the route that matters most."""
+    api = _api_at("/admin/config")
+    with patch(_AUTHZ, return_value=False):
+        assert api.authenticate(_creds()) is False
+
+
+def test_authenticate_gates_every_admin_subroute() -> None:
+    for path in (
+        "/admin",
+        "/admin/config",
+        "/admin/note-types",
+        "/admin/business-lines",
+        "/admin/integration-status",
+        "/admin/patient/abc123",
+    ):
+        api = _api_at(path)
+        with patch(_AUTHZ, return_value=False):
+            assert api.authenticate(_creds()) is False, path
+
+
+def test_authenticate_leaves_patient_panel_routes_open_to_any_staff() -> None:
+    """The chart panel is ordinary staff workflow; only /admin is restricted."""
+    for path in (
+        "/patient/abc123/history",
+        "/patient/abc123/appointments",
+        "/patient/abc123/preview",
+        "/patient/abc123/send",
+        "/patient-view",
+        "/access-denied",
+    ):
+        api = _api_at(path)
+        with patch(_AUTHZ, return_value=False) as gate:
+            assert api.authenticate(_creds()) is True, path
+        gate.assert_not_called()
+
+
+def test_authenticate_rejects_a_patient_session_outright() -> None:
+    """StaffSessionAuthMixin raises for a non-staff session, before the role check."""
+    from canvas_sdk.handlers.simple_api.security import InvalidCredentialsError
+
+    api = _api_at("/patient-view")
+    with patch(_AUTHZ) as gate:
+        try:
+            api.authenticate(_creds(user_type="Patient"))
+        except InvalidCredentialsError:
+            pass
+        else:
+            raise AssertionError("expected InvalidCredentialsError")
+    gate.assert_not_called()
+
+
+# ---- access-denied page ----
+
+def test_access_denied_page_renders_without_admin_role() -> None:
+    result = _api().get_access_denied_page()
+    assert len(result) == 1
+    assert result[0].status_code == HTTPStatus.OK
 
 
 # ---- get_admin_page ----
