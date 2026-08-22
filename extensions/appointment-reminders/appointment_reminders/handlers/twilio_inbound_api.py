@@ -53,17 +53,24 @@ class TwilioInboundAPI(SimpleAPI):
     def _form_params(self) -> dict[str, str]:
         """Twilio's POST params as a flat str dict.
 
-        Uses the SDK's ``form_data()`` (the reliable accessor for form-encoded
-        posts), coercing FormPart values to str; falls back to parsing the raw
-        body if unavailable.
+        Parses the raw body rather than using the SDK's ``form_data()``, because
+        that accessor discards keys whose value is empty — it runs ``parse_qsl``
+        without ``keep_blank_values``. Twilio includes empty-valued params
+        (``FromCity``, ``FromZip``, ... when the carrier does not supply them) in
+        the string it signs, so dropping them makes the recomputed HMAC differ
+        and every genuine inbound SMS is rejected with 401.
+        ``parse_form_body`` preserves blanks.
+
+        Falls back to ``form_data()`` only when the raw body is unavailable.
         """
+        params = parse_form_body(self.request.body)
+        if params:
+            return params
         try:
             data = self.request.form_data()
         except Exception:
-            data = None
-        if data:
-            return {k: getattr(v, "value", str(v)) for k, v in data.items()}
-        return parse_form_body(self.request.body)
+            return {}
+        return {k: getattr(v, "value", str(v)) for k, v in (data or {}).items()}
 
     def _signature_ok(self, params: dict[str, str]) -> bool:
         """Verify the X-Twilio-Signature over (webhook URL + sorted params)."""

@@ -79,6 +79,31 @@ def test_valid_signature_fails_closed_without_signature() -> None:
     assert valid_twilio_signature(_URL, _PARAMS, _TOKEN, None) is False
 
 
+def test_parse_form_body_preserves_empty_values():
+    """Twilio signs key+"" for empty params; dropping them breaks the HMAC."""
+    body = b"AccountSid=AC1&Body=Y&From=%2B15551230000&FromCity=&FromZip=&To=%2B15559990000"
+    params = parse_form_body(body)
+    assert params["FromCity"] == ""
+    assert params["FromZip"] == ""
+    assert len(params) == 6
+
+
+def test_signature_valid_when_params_include_empty_values():
+    """A signature computed over blanks must verify when blanks are preserved."""
+    url = "https://example.com/hook"
+    params = {"Body": "Y", "From": "+15551230000", "FromCity": "", "MessageSid": "SM1"}
+    token = "test-token"
+    data = url + "".join(k + params[k] for k in sorted(params))
+    sig = base64.b64encode(
+        hmac.new(token.encode(), data.encode(), hashlib.sha1).digest()
+    ).decode()
+
+    assert valid_twilio_signature(url, params, token, sig) is True
+    # Dropping the blank, as form_data() did, must NOT verify.
+    without_blank = {k: v for k, v in params.items() if v != ""}
+    assert valid_twilio_signature(url, without_blank, token, sig) is False
+
+
 # ---- classify_reply ----
 
 def test_classify_confirm_variants() -> None:

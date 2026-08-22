@@ -101,6 +101,33 @@ def test_inbound_valid_signature_passes_gate() -> None:
     assert result[0].status_code == HTTPStatus.OK
 
 
+def test_inbound_accepts_a_realistic_twilio_payload_with_blank_geo_fields() -> None:
+    """Regression: the shape real Twilio actually posts.
+
+    Carriers routinely omit the geo fields, so Twilio sends them empty and signs
+    over ``key + ""`` for each. Sourcing params from the SDK's ``form_data()``
+    dropped those keys, the recomputed HMAC differed, and every genuine inbound
+    SMS was rejected 401 — the two-way confirm flow had never worked live. Every
+    other test here builds a fully-populated payload, which is exactly the case
+    that passed.
+    """
+    body = (
+        "AccountSid=AC123&MessageSid=SM456&Body=Y&From=%2B14155551234"
+        "&To=%2B15559990000&FromCity=&FromState=&FromZip=&FromCountry=US"
+        "&ToCity=&ToState=CA&ToZip=&NumMedia=0"
+    )
+    api = _api(body)
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Appointment") as mock_appt, \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        result = api.inbound()
+
+    assert result[-1].status_code == HTTPStatus.OK  # not 401
+    mock_appt.return_value.update.assert_called_once()  # and it actually confirmed
+    assert mock_log.call_args.kwargs["status"] == "confirmed"
+
+
 def test_inbound_rejects_invalid_signature() -> None:
     api = _api("Body=Y&From=%2B14155551234", headers={"X-Twilio-Signature": "bogus"})
     with patch.object(api, "_resolve_patient") as mock_resolve:
@@ -210,8 +237,37 @@ def _bare_api() -> TwilioInboundAPI:
     return api
 
 
-def test_form_params_prefers_form_data_and_coerces_values() -> None:
+def test_form_params_parses_the_raw_body_in_preference_to_form_data() -> None:
+    """The raw body wins because ``form_data()`` silently drops blank values."""
     api = _bare_api()
+    api.request.body = "Body=N&From=%2B14155551234"
+    api.request.form_data.return_value = {"Body": MagicMock(value="WRONG")}
+    params = api._form_params()
+    assert params["Body"] == "N"
+    assert params["From"] == "+14155551234"  # %2B decoded by parse_form_body
+
+
+def test_form_params_keeps_empty_valued_twilio_params() -> None:
+    """Regression: blanks are part of the signed string and must survive.
+
+    ``form_data()`` runs ``parse_qsl`` without ``keep_blank_values``, so it
+    returns 2 of these 4 keys. Rebuilding the signing string from that subset
+    produced a different HMAC and rejected every real inbound SMS with 401.
+    """
+    api = _bare_api()
+    api.request.body = "Body=Y&From=%2B14155551234&FromCity=&FromZip="
+    params = api._form_params()
+    assert params == {
+        "Body": "Y",
+        "From": "+14155551234",
+        "FromCity": "",
+        "FromZip": "",
+    }
+
+
+def test_form_params_falls_back_to_form_data_when_body_is_unavailable() -> None:
+    api = _bare_api()
+    api.request.body = ""
     form_part = MagicMock()
     form_part.value = "Y"  # FormPart-like: value read off .value
     api.request.form_data.return_value = {"Body": form_part, "From": "+14155551234"}
@@ -219,13 +275,11 @@ def test_form_params_prefers_form_data_and_coerces_values() -> None:
     assert params == {"Body": "Y", "From": "+14155551234"}  # str fallback for plain str
 
 
-def test_form_params_falls_back_to_body_when_form_data_raises() -> None:
+def test_form_params_returns_empty_when_neither_source_works() -> None:
     api = _bare_api()
+    api.request.body = ""
     api.request.form_data.side_effect = RuntimeError("form_data unavailable")
-    api.request.body = "Body=N&From=%2B14155551234"
-    params = api._form_params()
-    assert params["Body"] == "N"
-    assert params["From"] == "+14155551234"  # %2B decoded by parse_form_body
+    assert api._form_params() == {}
 
 
 # ---- _resolve_patient (real ORM path, mocked) ----
