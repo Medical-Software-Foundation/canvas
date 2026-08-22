@@ -60,7 +60,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 
 1. **Check whether native reminders are on.** Look for the `appointmentReminders` organization setting. If it holds a value like `{"daysAhead": 3, "hourOfDay": 9}`, native reminders are **active**. If the setting is absent, they're off — absence is how "disabled" is represented; there is no `false` form.
 2. **Clear it if present**, via Django admin or Canvas support, and coordinate the timing with enabling this plugin. Anything else means either a gap in coverage or double messages. Note that clearing it also **retires the native `Y` confirm loop**, which is gated on the same setting — this plugin rebuilds that flow, but only once step 4 is done.
-3. **Set the required secrets**, including `ADMIN_ROLE_NAMES` — without it nobody can open the admin app — then verify it shows Twilio and SendGrid as *Configured*. Missing credentials mean campaigns silently deliver nothing.
+3. **Set the required variables**, including `ADMIN_ROLE_NAMES` — without it nobody can open the admin app — then verify it shows Twilio and SendGrid as *Configured*. Missing credentials mean campaigns silently deliver nothing.
 4. **For two-way confirm, provision a dedicated Twilio number** whose inbound webhook points at `…/plugin-io/api/appointment_reminders/twilio/inbound`, and set `twilio-inbound-webhook-url` to that exact URL. See *Integration with Canvas core* below — this has real lead time and can't be done at the last minute.
 
 **Strongly recommended for the first run:** set `TESTING_MODE=true` plus `TESTING_MODE_PATIENTS` and `TESTING_MODE_RECIPIENTS`, enable one campaign, and confirm delivery to your own phone or inbox before opening it up. The gate is fail-closed — with `TESTING_MODE` on, a message sends only when **both** the patient and the recipient address are allowlisted. While a campaign is enabled and `TESTING_MODE` is off, the admin app shows a live-sending warning.
@@ -92,28 +92,32 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 
 Custom data lives under the `canvas__appointment_reminders` namespace: `CampaignConfigRecord` (config singleton) and `NotificationDelivery` (activity log; `campaign_type=inbound_response` rows record confirms/declines).
 
-## Configuration options (secrets)
+## Configuration options (variables)
 
-Set these with `canvas config set appointment_reminders --host <hostname> KEY=value`. Values are write-only: `canvas config list` reports only whether each key is set, never what it holds. Nothing here belongs in the repo.
+Set these with `canvas config set appointment_reminders --host <hostname> KEY=value`. Nothing here belongs in the repo.
+
+Each is declared in `CANVAS_MANIFEST.json` under `variables`, with a `sensitive` flag that decides whether the value can be read back. **Sensitive** values are write-only: masked in the Admin UI and reported by `canvas config list` only as `[set]` / `[not set]`. Non-sensitive values are readable, which is what you want for things you'll need to eyeball — the from-number, the webhook URL, the allowed admin roles. The **Masked** column below records which is which; `canvas config set` never changes the flag, only the manifest does.
+
+Every credential is sensitive. So are the two testing-mode allowlists, since they hold patient identifiers and contact details rather than configuration.
 
 Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`, and `twilio-phone-number` for SMS, plus `sendgrid-api-key` and `sendgrid-from-email` for email. Those exact five are what the admin app checks before showing *Configured*.
 
-| Secret | Required | Purpose | Where to get it |
-| --- | --- | --- | --- |
-| `namespace_read_write_access_key` | Auto | Custom Data access for `CampaignConfigRecord` + `NotificationDelivery` | **Do not set.** Canvas provisions it on install. Setting it by hand breaks custom-data reads |
-| `twilio-account-sid` | Yes, for SMS | Identifies the Twilio account; always used in the request URL, even when API-key auth is in play | Twilio Console home page, "Account Info". Starts `AC` |
-| `twilio-auth-token` | Yes, for SMS | Two jobs: fallback outbound auth, **and** the key used to verify the `X-Twilio-Signature` on inbound replies. Inbound confirm/decline cannot work without it | Twilio Console home page, next to the account SID. Treat as a master credential |
-| `twilio-api-key-sid` | No | Preferred outbound auth when paired with the secret below, because it is revocable without rotating the master token | Twilio Console → Account → API keys & tokens → Create API key. Starts `SK` |
-| `twilio-api-key-secret` | No | The other half of the API key. Both must be set or the pair is ignored | Shown **once** at API-key creation. Not retrievable later; make a new key if lost |
-| `twilio-phone-number` | Yes, for SMS | Default outbound sender. Per-business-line from-numbers in the admin app override it; this is the fallback | Twilio Console → Phone Numbers → Active numbers. E.164 form, so `+15551234567` |
-| `twilio-inbound-webhook-url` | Only for two-way confirm | The exact URL Twilio POSTs to. The signature is computed over this string, so any mismatch fails closed and replies are rejected | You choose it: `https://<hostname>/plugin-io/api/appointment_reminders/twilio/inbound`. Paste the identical string into the number's "A message comes in" webhook in Twilio |
-| `sendgrid-api-key` | Yes, for email | Authenticates the send | SendGrid → Settings → API Keys → Create. Needs Mail Send permission. Starts `SG.` |
-| `sendgrid-from-email` | Yes, for email | The From address on every email | Any address you have verified in SendGrid → Settings → Sender Authentication. Unverified senders are rejected at send time |
-| `TESTING_MODE` | No | `1`/`true`/`yes`/`on` restricts **all** sending to the two allowlists below. Fail-closed: with it on and the lists empty, nothing sends at all | You set it. Strongly recommended for a first run |
-| `TESTING_MODE_PATIENTS` | With `TESTING_MODE` | Comma-separated patient identifiers allowed to receive. Matched against the patient's id, key, or dbid, so whichever value you copy works | Copy the patient id from the chart URL |
-| `TESTING_MODE_RECIPIENTS` | With `TESTING_MODE` | Comma-separated addresses allowed to receive. Phones compared in normalized E.164, emails case-insensitively; one list may mix both | Your own mobile and inbox, e.g. `+15551234567,you@example.com` |
-| `LOCK_MESSAGE_TEMPLATES` | No | `1`/`true`/`yes`/`on` stops **manual senders** departing from the approved copy. See below. Unset means a manual send can be reworded freely | You set it |
-| `ADMIN_ROLE_NAMES` | Yes, to use the admin app | Comma-separated staff roles allowed to open the admin console and call its endpoints. Fail-closed: unset locks **everyone** out, including you. See *Who can open the admin app* | Your instance's role names, e.g. `Practice Manager,Administrator`. Either the display name or the internal code matches |
+| Variable | Masked | Required | Purpose | Where to get it |
+| --- | --- | --- | --- | --- |
+| `namespace_read_write_access_key` | Yes | Auto | Custom Data access for `CampaignConfigRecord` + `NotificationDelivery` | **Do not set.** Canvas provisions it on install. Setting it by hand breaks custom-data reads |
+| `twilio-account-sid` | Yes | Yes, for SMS | Identifies the Twilio account; always used in the request URL, even when API-key auth is in play | Twilio Console home page, "Account Info". Starts `AC` |
+| `twilio-auth-token` | Yes | Yes, for SMS | Two jobs: fallback outbound auth, **and** the key used to verify the `X-Twilio-Signature` on inbound replies. Inbound confirm/decline cannot work without it | Twilio Console home page, next to the account SID. Treat as a master credential |
+| `twilio-api-key-sid` | Yes | No | Preferred outbound auth when paired with the secret below, because it is revocable without rotating the master token | Twilio Console → Account → API keys & tokens → Create API key. Starts `SK` |
+| `twilio-api-key-secret` | Yes | No | The other half of the API key. Both must be set or the pair is ignored | Shown **once** at API-key creation. Not retrievable later; make a new key if lost |
+| `twilio-phone-number` | No | Yes, for SMS | Default outbound sender. Per-business-line from-numbers in the admin app override it; this is the fallback | Twilio Console → Phone Numbers → Active numbers. E.164 form, so `+15551234567` |
+| `twilio-inbound-webhook-url` | No | Only for two-way confirm | The exact URL Twilio POSTs to. The signature is computed over this string, so any mismatch fails closed and replies are rejected | You choose it: `https://<hostname>/plugin-io/api/appointment_reminders/twilio/inbound`. Paste the identical string into the number's "A message comes in" webhook in Twilio |
+| `sendgrid-api-key` | Yes | Yes, for email | Authenticates the send | SendGrid → Settings → API Keys → Create. Needs Mail Send permission. Starts `SG.` |
+| `sendgrid-from-email` | No | Yes, for email | The From address on every email | Any address you have verified in SendGrid → Settings → Sender Authentication. Unverified senders are rejected at send time |
+| `TESTING_MODE` | No | No | `1`/`true`/`yes`/`on` restricts **all** sending to the two allowlists below. Fail-closed: with it on and the lists empty, nothing sends at all | You set it. Strongly recommended for a first run |
+| `TESTING_MODE_PATIENTS` | Yes | With `TESTING_MODE` | Comma-separated patient identifiers allowed to receive. Matched against the patient's id, key, or dbid, so whichever value you copy works | Copy the patient id from the chart URL |
+| `TESTING_MODE_RECIPIENTS` | Yes | With `TESTING_MODE` | Comma-separated addresses allowed to receive. Phones compared in normalized E.164, emails case-insensitively; one list may mix both | Your own mobile and inbox, e.g. `+15551234567,you@example.com` |
+| `LOCK_MESSAGE_TEMPLATES` | No | No | `1`/`true`/`yes`/`on` stops **manual senders** departing from the approved copy. See below. Unset means a manual send can be reworded freely | You set it |
+| `ADMIN_ROLE_NAMES` | No | Yes, to use the admin app | Comma-separated staff roles allowed to open the admin console and call its endpoints. Fail-closed: unset locks **everyone** out, including you. See *Who can open the admin app* | Your instance's role names, e.g. `Practice Manager,Administrator`. Either the display name or the internal code matches |
 
 **Outbound Twilio auth** picks the API key when `twilio-api-key-sid` and `twilio-api-key-secret` are both set, and otherwise falls back to `twilio-account-sid` + `twilio-auth-token` (`services/delivery.py:_twilio_auth`). The request URL is built from the account SID either way, which is why that secret is required even under API-key auth.
 
@@ -139,7 +143,7 @@ Concretely, with the lock on:
 - `POST /patient/<id>/send` re-renders the message from the stored template and **discards whatever body the client posted**, so the approved copy is what is delivered.
 - A campaign with no stored template behind it is refused with **403** rather than delivered as an empty message. (The free-text **Custom** option was removed from the product entirely, so every send is template-backed regardless of the lock.)
 
-The server-side behavior is the actual boundary; the read-only textareas are a convenience on top of it, since anything holding a staff session could POST to the endpoint directly. Unset the secret to lift the lock. It deliberately can't be lifted from inside the app, so the people who control the wording are the ones with plugin-config access.
+The server-side behavior is the actual boundary; the read-only textareas are a convenience on top of it, since anything holding a staff session could POST to the endpoint directly. Unset the variable to lift the lock. It deliberately can't be lifted from inside the app, so the people who control the wording are the ones with plugin-config access.
 
 **Independent of the lock**, a manual send is refused with **422** when the rendered body still contains a `{{placeholder}}` the renderer could not fill, so template syntax never reaches a patient verbatim. Only the channels actually selected are checked, so a typo in an unused template can't block a send.
 

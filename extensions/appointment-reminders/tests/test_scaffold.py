@@ -40,14 +40,85 @@ def test_custom_data_namespace_matches_required_pattern() -> None:
     )
 
 
+def _declared_variables() -> dict[str, bool]:
+    """Declared variable names mapped to their ``sensitive`` flag.
+
+    Reads the current ``variables`` array and the deprecated ``secrets`` list,
+    so the invariants below hold through the migration either way.
+    """
+    manifest = json.loads((PLUGIN_DIR / "CANVAS_MANIFEST.json").read_text())
+    declared = {name: True for name in manifest.get("secrets", [])}
+    for entry in manifest.get("variables", []):
+        declared[entry["name"]] = entry.get("sensitive", False)
+    return declared
+
+
 def test_namespace_read_write_access_key_declared() -> None:
     """When custom_data.access is read_write, the manifest MUST declare
-    the namespace_read_write_access_key secret or installs fail."""
+    the namespace_read_write_access_key variable or installs fail."""
     manifest = json.loads((PLUGIN_DIR / "CANVAS_MANIFEST.json").read_text())
     if manifest.get("custom_data", {}).get("access") == "read_write":
-        assert "namespace_read_write_access_key" in manifest.get("secrets", []), (
-            "read_write namespace requires namespace_read_write_access_key in secrets"
+        assert "namespace_read_write_access_key" in _declared_variables(), (
+            "read_write namespace requires namespace_read_write_access_key declared"
         )
+
+
+def test_credential_variables_are_marked_sensitive() -> None:
+    """Anything that authenticates, or that holds patient data, must be masked.
+
+    A credential declared non-sensitive is readable in the Admin UI and by
+    anyone with managing-user permissions, so this is a real exposure rather
+    than a style preference.
+    """
+    declared = _declared_variables()
+    must_be_masked = {
+        "namespace_read_write_access_key",
+        "twilio-account-sid",
+        "twilio-auth-token",
+        "twilio-api-key-sid",
+        "twilio-api-key-secret",
+        "sendgrid-api-key",
+        # Not credentials, but they hold patient identifiers and contact details.
+        "TESTING_MODE_PATIENTS",
+        "TESTING_MODE_RECIPIENTS",
+    }
+    for name in must_be_masked:
+        assert declared.get(name) is True, f"{name} must be declared sensitive"
+
+
+def test_operational_variables_stay_readable() -> None:
+    """Values an operator has to eyeball are deliberately not masked.
+
+    A sensitive variable can only be confirmed as ``[set]``, which makes
+    diagnosing a signature mismatch or a wrong sender number needlessly hard.
+    """
+    declared = _declared_variables()
+    for name in (
+        "twilio-phone-number",
+        "twilio-inbound-webhook-url",
+        "sendgrid-from-email",
+        "ADMIN_ROLE_NAMES",
+    ):
+        assert declared.get(name) is False, f"{name} should be readable, not masked"
+
+
+def test_every_variable_used_in_code_is_declared() -> None:
+    """A variable read at runtime but missing from the manifest can never be set."""
+    declared = _declared_variables()
+    for name in (
+        "twilio-account-sid",
+        "twilio-auth-token",
+        "twilio-phone-number",
+        "twilio-inbound-webhook-url",
+        "sendgrid-api-key",
+        "sendgrid-from-email",
+        "TESTING_MODE",
+        "TESTING_MODE_PATIENTS",
+        "TESTING_MODE_RECIPIENTS",
+        "LOCK_MESSAGE_TEMPLATES",
+        "ADMIN_ROLE_NAMES",
+    ):
+        assert name in declared, f"{name} is read in code but not declared"
 
 
 def test_no_legacy_bigleap_references_in_manifest() -> None:

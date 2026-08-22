@@ -116,21 +116,21 @@
     "effects": [],
     "views": []
   },
-  "secrets": [
-    "namespace_read_write_access_key",
-    "twilio-account-sid",
-    "twilio-auth-token",
-    "twilio-api-key-sid",
-    "twilio-api-key-secret",
-    "twilio-phone-number",
-    "twilio-inbound-webhook-url",
-    "sendgrid-api-key",
-    "sendgrid-from-email",
-    "TESTING_MODE",
-    "TESTING_MODE_PATIENTS",
-    "TESTING_MODE_RECIPIENTS",
-    "LOCK_MESSAGE_TEMPLATES",
-    "ADMIN_ROLE_NAMES"
+  "variables": [
+    {"name": "namespace_read_write_access_key", "sensitive": true},
+    {"name": "twilio-account-sid", "sensitive": true},
+    {"name": "twilio-auth-token", "sensitive": true},
+    {"name": "twilio-api-key-sid", "sensitive": true},
+    {"name": "twilio-api-key-secret", "sensitive": true},
+    {"name": "twilio-phone-number", "sensitive": false},
+    {"name": "twilio-inbound-webhook-url", "sensitive": false},
+    {"name": "sendgrid-api-key", "sensitive": true},
+    {"name": "sendgrid-from-email", "sensitive": false},
+    {"name": "TESTING_MODE", "sensitive": false},
+    {"name": "TESTING_MODE_PATIENTS", "sensitive": true},
+    {"name": "TESTING_MODE_RECIPIENTS", "sensitive": true},
+    {"name": "LOCK_MESSAGE_TEMPLATES", "sensitive": false},
+    {"name": "ADMIN_ROLE_NAMES", "sensitive": false}
   ],
   "custom_data": {
     "namespace": "canvas__appointment_reminders",
