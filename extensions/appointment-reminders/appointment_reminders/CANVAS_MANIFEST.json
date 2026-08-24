@@ -1,6 +1,6 @@
 {
   "sdk_version": "0.95.0",
-  "plugin_version": "0.8.2",
+  "plugin_version": "0.9.0",
   "name": "appointment_reminders",
   "description": "Appointment reminders and confirmations (SMS + email) with per-business-line customization, optional locked message copy, and two-way Y/N confirmation.",
   "components": {
@@ -126,9 +126,6 @@
     {"name": "twilio-inbound-webhook-url", "sensitive": false},
     {"name": "sendgrid-api-key", "sensitive": true},
     {"name": "sendgrid-from-email", "sensitive": false},
-    {"name": "TESTING_MODE", "sensitive": false},
-    {"name": "TESTING_MODE_PATIENTS", "sensitive": true},
-    {"name": "TESTING_MODE_RECIPIENTS", "sensitive": true},
     {"name": "LOCK_MESSAGE_TEMPLATES", "sensitive": false},
     {"name": "ADMIN_ROLE_NAMES", "sensitive": false}
   ],

@@ -165,6 +165,7 @@ class ReminderScheduler(CronTask):
                         self.secrets,
                         str(appointment.id),
                         from_number=bl_from_number,
+                        config=config,
                     )
                     all_effects.extend(effects)
 
@@ -243,6 +244,7 @@ class ReminderScheduler(CronTask):
                     self.secrets,
                     str(appointment.id),
                     from_number=bl_from_number,
+                    config=config,
                 )
                 all_effects.extend(th_effects)
 
