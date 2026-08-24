@@ -92,9 +92,11 @@ def _appt(aid: str = "appt-1") -> MagicMock:
 # ---- signature gate (inside inbound) ----
 
 def test_inbound_valid_signature_passes_gate() -> None:
-    # Valid signature + no patient match → 200 no-op (proves the gate let it through).
+    # Valid signature + no patient match → 200 with no effects (proves the gate
+    # let it through; the unresolved sender is audited separately below).
     api = _api("Body=Y&From=%2B15005550999")
     with patch.object(api, "_resolve_patient", return_value=None), \
+         patch(f"{_MOD}.log_unresolved_sender"), \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         result = api.inbound()
     mock_log.assert_not_called()
@@ -195,14 +197,70 @@ def test_inbound_decline_opens_followup_task() -> None:
     assert mock_log.call_args.kwargs["status"] == "declined"
 
 
-def test_inbound_unknown_sender_is_noop() -> None:
+def test_inbound_unknown_sender_produces_no_effects() -> None:
+    """No patient means no appointment or task to act on — but see the audit below."""
     api = _api("Body=Y&From=%2B19998887777")
     with patch.object(api, "_resolve_patient", return_value=None), \
+         patch(f"{_MOD}.log_unresolved_sender"), \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         result = api.inbound()
-    mock_log.assert_not_called()
+    mock_log.assert_not_called()  # the patient-keyed writer cannot run
     assert len(result) == 1
     assert result[0].status_code == HTTPStatus.OK
+
+
+def test_inbound_unknown_sender_writes_an_unresolved_audit_row() -> None:
+    """A verified reply from an unmatched number must leave a trace.
+
+    Previously it returned 200 and wrote nothing, so the appointment simply
+    stayed unconfirmed and ops read that as the patient never replying — when
+    they had replied, from a number on no chart.
+    """
+    api = _api("Body=Y&From=%2B19998887777")
+    with patch.object(api, "_resolve_patient", return_value=None), \
+         patch(f"{_MOD}.log_unresolved_sender") as mock_unresolved:
+        api.inbound()
+
+    mock_unresolved.assert_called_once_with(body="Y", from_number="+19998887777")
+
+
+def test_inbound_does_not_audit_an_unresolved_sender_without_a_valid_signature() -> None:
+    """The audit row is for verified traffic only.
+
+    Writing on an unverified request would let anyone POST arbitrary phone
+    numbers and message bodies into the activity log.
+    """
+    api = _api("Body=Y&From=%2B19998887777", headers={"X-Twilio-Signature": "bogus"})
+    with patch(f"{_MOD}.log_unresolved_sender") as mock_unresolved:
+        result = api.inbound()
+
+    mock_unresolved.assert_not_called()
+    assert result[0].status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_inbound_does_not_audit_a_replayed_unresolved_sender() -> None:
+    """The replay guard runs first, so a replayed SID cannot inflate the log."""
+    api = _api("Body=Y&From=%2B19998887777&MessageSid=SM999")
+    with patch.object(api, "_resolve_patient", return_value=None), \
+         patch(f"{_MOD}.log_unresolved_sender") as mock_unresolved:
+        api.inbound()
+        api.inbound()  # replay of the same MessageSid
+
+    mock_unresolved.assert_called_once()
+
+
+def test_inbound_audits_a_resolved_sender_via_the_patient_writer_only() -> None:
+    """The two writers are mutually exclusive — never both for one reply."""
+    api = _api("Body=Y&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Appointment"), \
+         patch(f"{_MOD}.log_unresolved_sender") as mock_unresolved, \
+         patch(f"{_MOD}.log_inbound_response") as mock_log:
+        api.inbound()
+
+    mock_unresolved.assert_not_called()
+    mock_log.assert_called_once()
 
 
 def test_inbound_unrecognized_logs_only_no_effects() -> None:
@@ -268,23 +326,26 @@ def test_inbound_start_restores_sms_consent() -> None:
     assert mock_log.call_args.kwargs["status"] == "opted_in"
 
 
-def test_inbound_cancel_both_opts_out_and_opens_decline_task() -> None:
-    """CANCEL is a Twilio opt-out keyword *and* this plugin's decline token.
+def test_inbound_cancel_opts_out_without_touching_the_appointment() -> None:
+    """CANCEL is an unsubscribe keyword, not an appointment decline.
 
-    Acting on only one half would either leave a patient Twilio has blocked
-    still marked as consenting, or silently drop their request to cancel.
+    Twilio publishes it as a STOP synonym, so it clears consent — but it must
+    not open a reschedule Task, which would attribute an intent about the visit
+    that the patient never expressed.
     """
     api = _api("Body=CANCEL&From=%2B14155551234")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch(f"{_MOD}.AddTask") as mock_task, \
+         patch(f"{_MOD}.Appointment") as mock_appt, \
          patch(f"{_MOD}.sms_consent_effect", return_value=MagicMock()) as mock_consent, \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         api.inbound()
 
     assert mock_consent.call_args.kwargs["has_consent"] is False
-    mock_task.assert_called_once()
-    assert mock_log.call_args.kwargs["status"] == "opted_out+declined"
+    mock_task.assert_not_called()
+    mock_appt.assert_not_called()
+    assert mock_log.call_args.kwargs["status"] == "opted_out"
 
 
 def test_inbound_yes_both_opts_in_and_confirms_appointment() -> None:

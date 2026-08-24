@@ -92,6 +92,8 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 
 Custom data lives under the `canvas__appointment_reminders` namespace: `CampaignConfigRecord` (config singleton) and `NotificationDelivery` (activity log; `campaign_type=inbound_response` rows record confirms/declines).
 
+`NotificationDelivery.patient` is nullable for exactly one case: a verified inbound reply whose sender matched no patient, written with `status=unresolved_sender`. Those rows have no chart to hang off, so the per-patient history can't return them — read them from `GET /admin/unresolved-senders` instead. See *Replies from unknown numbers*.
+
 ## Configuration options (variables)
 
 Set these with `canvas config set appointment_reminders --host <hostname> KEY=value`. Nothing here belongs in the repo.
@@ -131,6 +133,23 @@ The real gate is `NotificationAPI.authenticate`, which refuses every `/admin*` r
 
 **The menu item itself stays visible to everyone.** Canvas has no per-user visibility hook for a `provider_menu_item` application: `visible()` is defined only on embedded (note and scheduling) applications, and the `ProviderMenuConfiguration` effect [explicitly does not apply](https://docs.canvasmedical.com/sdk/layout-effect/#provider-menu-configuration) to plugin-provided menu items. A non-admin who clicks **Appointment Reminders** gets a short "you don't have access" page instead of the console. Since the URL is reachable without the menu at all, the server-side check is what protects the configuration; the refusal page is only courtesy.
 
+### Replies from unknown numbers
+
+A verified reply whose sender matches no patient used to return 200 and write nothing. The appointment stayed unconfirmed, which reads exactly like the patient never replying — so a misconfigured number, a patient texting from a phone that isn't on their chart, or a wrong-number reply all looked identical to silence.
+
+Those replies are now recorded as `NotificationDelivery` rows with `campaign_type=inbound_response` and `status=unresolved_sender`, carrying the sender's number and the message body so staff can tell a stray "Y" from a wrong number. They belong to no patient, so they're read from a dedicated endpoint rather than any chart:
+
+```
+GET /plugin-io/api/appointment_reminders/admin/unresolved-senders
+```
+
+Role-gated with the rest of `/admin*`, newest first, capped at 100.
+
+Two things to know:
+
+- **Only verified traffic is recorded.** The write happens after the signature check and after the `MessageSid` replay guard, so nobody can POST arbitrary numbers and message bodies into the log, and a replayed request can't inflate it.
+- **The rows hold a phone number belonging to nobody on file.** That is the point — you cannot follow up without it — but it is data about a person with no patient record, so treat the endpoint as you would any other patient-data surface. It is not exposed in the admin UI yet; the endpoint is the interface for now.
+
 ### Locking message copy
 
 Set `LOCK_MESSAGE_TEMPLATES` to `1` / `true` / `yes` / `on` where wording is compliance-approved and must not drift on its way to a patient.
@@ -164,7 +183,8 @@ This matters specifically *because* two-way confirm repoints the number's inboun
 Two consequences worth knowing:
 
 - **`has_consent`, not `opted_out`.** The `Patient` effect's contact-point payload has no `opted_out` field, so no plugin can set it. That turns out to be the better field anyway: `has_consent` gates SMS alone, while `opted_out` would also suppress email, and STOP is an SMS carrier keyword. A patient who opts out of texts keeps getting email reminders.
-- **Twilio's keyword sets overlap this plugin's.** `CANCEL` is both an opt-out keyword and a decline token, so it clears consent *and* opens the follow-up Task. `YES` is both an opt-in keyword and a confirm token, so it restores consent *and* confirms the appointment. Both halves are actioned; `services/twilio_inbound.py` classifies the two axes separately for exactly this reason.
+- **`YES` means two things at once.** It is both Twilio's opt-in keyword and this plugin's confirm token, so it restores consent *and* confirms the appointment. Both halves are actioned; `services/twilio_inbound.py` classifies consent and appointment intent on separate axes for exactly this reason, since a single verdict could only carry one of them.
+- **`CANCEL` is an unsubscribe keyword, not an appointment word.** Twilio publishes it as a `STOP` synonym, so it clears consent and nothing more. It is deliberately *not* in the decline set: a patient texting it means "stop texting me", and opening a reschedule Task off the back of that would attribute an intent about the visit that they never expressed. To decline an appointment a patient replies `N`, `NO`, `2`, or `DECLINE`.
 
 The plugin never opts a patient in on its own — only in response to the patient's own opt-in keyword. Staff can still change consent by hand in the chart.
 
@@ -186,7 +206,7 @@ Campaigns ship **disabled** (opt-in). Enable per campaign in the admin app.
 - **Inbound patient lookup is a sequential scan.** Resolving a reply's sender matches the last 10 digits as a suffix (`telecom__value__endswith`), which compiles to `LIKE '%…'` and so cannot use a standard B-tree index. That is fine for a webhook firing a few times a minute, and cheaper than the 4-digit substring scan plus 50-row hydration it replaced. Making it fast would need a normalized or reversed-string expression index on the column — a platform change, not a plugin one.
 - **No send retry queue.** Twilio/SendGrid failures are logged to `NotificationDelivery` + an `AppointmentsMetadata` effect, but not retried.
 - **Email uses implicit consent** (opt-out only, no per-email opt-in) and has no built-in unsubscribe (would require SendGrid Subscription Tracking / ASM).
-- **No consolidated confirmation-status view** yet — confirms surface as appointment status on the schedule, declines as Tasks, and all replies as `inbound_response` audit rows, but there's no single "needs outreach" roll-up.
+- **No consolidated confirmation-status view** yet — confirms surface as appointment status on the schedule, declines as Tasks, and all replies as `inbound_response` audit rows, but there's no single "needs outreach" roll-up. Unresolved senders have an endpoint (`GET /admin/unresolved-senders`) but no admin-UI surface, so nothing shows them unless someone asks.
 
 ## Running tests
 

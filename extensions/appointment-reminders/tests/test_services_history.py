@@ -8,8 +8,13 @@ from unittest.mock import MagicMock, patch
 from appointment_reminders.services.history import (
     _iso,
     get_patient_history,
+    get_unresolved_senders,
     log_delivery,
+    log_inbound_response,
+    log_unresolved_sender,
 )
+
+_HIST = "appointment_reminders.services.history"
 
 
 def _result(channel="sms", success=True, error=None, recipient="+1") -> MagicMock:
@@ -125,3 +130,116 @@ def test_iso_naive_datetime_is_treated_as_utc() -> None:
 
 def test_iso_none_returns_empty_string() -> None:
     assert _iso(None) == ""
+
+
+# ---- unresolved senders ----
+
+def test_log_unresolved_sender_writes_a_patientless_row() -> None:
+    """The one row that carries no patient — there is no patient to carry."""
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        log_unresolved_sender(body="Y", from_number="+14155551234")
+
+    kwargs = mock_delivery.objects.create.call_args.kwargs
+    assert kwargs["patient"] is None
+    assert kwargs["campaign_type"] == "inbound_response"
+    assert kwargs["status"] == "unresolved_sender"
+    assert kwargs["channel"] == "sms"
+    assert kwargs["content"] == "Y"        # ops needs to know it was a confirm
+    assert kwargs["recipient"] == "+14155551234"  # and who to chase
+    assert kwargs["appointment_id"] == ""
+
+
+def test_log_unresolved_sender_does_not_look_up_a_patient() -> None:
+    """Unlike the other writers, it must not require a patient row to exist."""
+    with patch(f"{_HIST}.CustomPatient") as mock_patient, \
+         patch(f"{_HIST}.NotificationDelivery"):
+        log_unresolved_sender(body="STOP", from_number="+19998887777")
+    mock_patient.objects.get.assert_not_called()
+
+
+def test_log_unresolved_sender_tolerates_empty_body() -> None:
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        log_unresolved_sender(body="", from_number="")
+    kwargs = mock_delivery.objects.create.call_args.kwargs
+    assert kwargs["content"] == ""
+    assert kwargs["recipient"] == ""
+
+
+def test_get_unresolved_senders_filters_and_orders() -> None:
+    row = MagicMock()
+    row.created_at = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+    row.appointment_id = ""
+    row.campaign_type = "inbound_response"
+    row.channel = "sms"
+    row.status = "unresolved_sender"
+    row.error = ""
+    row.content = "Y"
+    row.recipient = "+14155551234"
+
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_delivery.objects.filter.return_value.order_by.return_value = [row]
+        result = get_unresolved_senders(limit=100)
+
+    mock_delivery.objects.filter.assert_called_once_with(
+        campaign_type="inbound_response", status="unresolved_sender"
+    )
+    mock_delivery.objects.filter.return_value.order_by.assert_called_once_with(
+        "-created_at"
+    )
+    assert len(result) == 1
+    assert result[0]["status"] == "unresolved_sender"
+    assert result[0]["recipient"] == "+14155551234"
+    assert result[0]["patient_id"] == ""  # no patient to report
+
+
+def test_unresolved_rows_are_excluded_from_patient_history() -> None:
+    """Patient history is keyed on a patient, so these can never appear there.
+
+    Guards the pairing: the write path is the only producer and the /admin
+    endpoint the only reader, so a patient-less row is never orphaned.
+    """
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_delivery.objects.filter.return_value.order_by.return_value = []
+        get_patient_history("pat-1")
+    mock_delivery.objects.filter.assert_called_once_with(patient__id="pat-1")
+
+
+# ---- log_inbound_response (the patient-keyed sibling) ----
+
+def test_log_inbound_response_writes_a_patient_keyed_row() -> None:
+    patient = MagicMock()
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_patient_cls.objects.get.return_value = patient
+        log_inbound_response(
+            patient_id="pat-1",
+            appointment_id="appt-1",
+            status="opted_out+declined",
+            body="CANCEL",
+            from_number="+14155551234",
+        )
+
+    kwargs = mock_delivery.objects.create.call_args.kwargs
+    assert kwargs["patient"] is patient
+    assert kwargs["campaign_type"] == "inbound_response"
+    assert kwargs["status"] == "opted_out+declined"
+    assert kwargs["appointment_id"] == "appt-1"
+    assert kwargs["content"] == "CANCEL"
+
+
+def test_log_inbound_response_skips_when_patient_missing() -> None:
+    """A vanished patient must not raise out of the webhook."""
+    class DNE(Exception):
+        pass
+
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.Patient") as mock_proxy, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_proxy.DoesNotExist = DNE
+        mock_patient_cls.objects.get.side_effect = DNE
+        log_inbound_response(
+            patient_id="gone", appointment_id="", status="confirmed",
+            body="Y", from_number="+1",
+        )
+
+    mock_delivery.objects.create.assert_not_called()

@@ -33,6 +33,9 @@ from appointment_reminders.services.config import (
 from appointment_reminders.services.theming import theme_style_block
 from appointment_reminders.services.delivery import is_testing_mode_active
 from appointment_reminders.services.history import get_patient_history as fetch_patient_history
+from appointment_reminders.services.history import (
+    get_unresolved_senders as fetch_unresolved_senders,
+)
 
 
 # Campaign types with stored templates behind them. Manual sends are limited to
@@ -2439,6 +2442,20 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             JSONResponse(
                 [{"id": str(bl.id), "name": bl.name} for bl in business_lines],
                 status_code=HTTPStatus.OK,
+            )
+        ]
+
+    @api.get("/admin/unresolved-senders")
+    def get_unresolved_senders_endpoint(self) -> list[Response | Effect]:
+        """Verified inbound replies whose sender matched no patient, newest first.
+
+        Under ``/admin`` because these rows belong to no patient, so there is no
+        chart to scope them to and no per-patient endpoint that could return
+        them. Role-gated like the rest of ``/admin*``.
+        """
+        return [
+            JSONResponse(
+                fetch_unresolved_senders(limit=100), status_code=HTTPStatus.OK
             )
         ]
 

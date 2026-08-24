@@ -113,8 +113,20 @@ def test_classify_confirm_variants() -> None:
 
 
 def test_classify_decline_variants() -> None:
-    for body in ["N", "no", "NO", "2", "cancel", "Decline"]:
+    for body in ["N", "no", "NO", "2", "Decline", "declined"]:
         assert classify_reply(body) == "decline", body
+
+
+def test_cancel_is_not_an_appointment_decline() -> None:
+    """Twilio publishes CANCEL as an unsubscribe synonym, not an appointment word.
+
+    A patient texting it means "stop texting me". Reading it as a decline would
+    attribute an intent they never expressed — and open a reschedule Task off
+    the back of it. Consent still clears; see classify_consent.
+    """
+    for body in ["cancel", "CANCEL", "Cancel"]:
+        assert classify_reply(body) == "unrecognized", body
+        assert classify_consent(body) == "opt_out", body
 
 
 def test_classify_unrecognized() -> None:
@@ -143,16 +155,17 @@ def test_classify_consent_ignores_everything_else() -> None:
 
 
 def test_consent_and_reply_classification_are_independent() -> None:
-    """The overlapping tokens must register on both axes, not one or the other.
+    """A token carrying both meanings must register on both axes.
 
-    CANCEL opts a patient out at Twilio *and* declines the appointment; YES
-    opts them back in *and* confirms. Collapsing these into a single verdict
-    would silently drop half of what the patient asked for.
+    YES is the case that needs it: the patient is opting back in *and*
+    confirming. Collapsing the two into a single verdict would drop half of
+    what they asked for.
     """
-    assert (classify_consent("CANCEL"), classify_reply("CANCEL")) == ("opt_out", "decline")
     assert (classify_consent("YES"), classify_reply("YES")) == ("opt_in", "confirm")
-    # STOP and START carry no appointment intent.
+    # Opt-out/opt-in keywords that carry no appointment intent — CANCEL among
+    # them, since it means "stop texting me" rather than anything about a visit.
     assert (classify_consent("STOP"), classify_reply("STOP")) == ("opt_out", "unrecognized")
+    assert (classify_consent("CANCEL"), classify_reply("CANCEL")) == ("opt_out", "unrecognized")
     assert (classify_consent("START"), classify_reply("START")) == ("opt_in", "unrecognized")
     # Y/N carry no consent change.
     assert (classify_consent("Y"), classify_reply("Y")) == ("", "confirm")
