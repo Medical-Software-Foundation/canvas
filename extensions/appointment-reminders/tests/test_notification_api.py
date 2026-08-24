@@ -87,6 +87,7 @@ def test_authenticate_gates_every_admin_subroute() -> None:
         "/admin/note-types",
         "/admin/business-lines",
         "/admin/integration-status",
+        "/admin/unresolved-senders",
         "/admin/patient/abc123",
     ):
         api = _api_at(path)
@@ -123,6 +124,30 @@ def test_authenticate_rejects_a_patient_session_outright() -> None:
         else:
             raise AssertionError("expected InvalidCredentialsError")
     gate.assert_not_called()
+
+
+# ---- unresolved senders ----
+
+def test_unresolved_senders_endpoint_returns_rows() -> None:
+    rows = [{"status": "unresolved_sender", "recipient": "+14155551234", "content": "Y"}]
+    with patch(
+        "appointment_reminders.handlers.notification_api.fetch_unresolved_senders",
+        return_value=rows,
+    ) as mock_fetch:
+        result = _api().get_unresolved_senders_endpoint()
+
+    assert result[0].status_code == HTTPStatus.OK
+    assert json.loads(result[0].content) == rows
+    mock_fetch.assert_called_once_with(limit=100)
+
+
+def test_unresolved_senders_endpoint_returns_empty_list_when_none() -> None:
+    with patch(
+        "appointment_reminders.handlers.notification_api.fetch_unresolved_senders",
+        return_value=[],
+    ):
+        result = _api().get_unresolved_senders_endpoint()
+    assert json.loads(result[0].content) == []
 
 
 # ---- access-denied page ----

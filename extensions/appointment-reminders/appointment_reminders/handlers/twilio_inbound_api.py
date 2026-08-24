@@ -9,11 +9,14 @@ verified reply:
   - a Twilio opt-in keyword → restore it
   - anything else → logged only (no action)
 Consent is classified separately from appointment intent because Twilio's
-keyword sets overlap ours: CANCEL is both an opt-out and a decline, YES both an
-opt-in and a confirm, and each half is actioned.
-Every reply is recorded via ``log_inbound_response`` so it appears in the
-activity log / "needs outreach" view. No PHI is sent or stored beyond the
-patient's own reply text.
+keyword set overlaps ours: YES is both an opt-in and a confirm, and both halves
+are actioned. CANCEL is an opt-out only — Twilio publishes it as an unsubscribe
+synonym, so it is not read as an appointment decline.
+Every reply is recorded: ``log_inbound_response`` when the sender resolves to a
+patient, ``log_unresolved_sender`` when it does not, so a reply from a number on
+no chart is distinguishable from no reply at all. Nothing is stored beyond the
+sender's number and their own reply text — which for an unresolved sender means
+a number belonging to nobody on file, retained so staff can follow it up.
 """
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -31,7 +34,10 @@ from logger import log
 
 from appointment_reminders.services.consent import sms_consent_effect
 from appointment_reminders.services.delivery import _normalize_phone
-from appointment_reminders.services.history import log_inbound_response
+from appointment_reminders.services.history import (
+    log_inbound_response,
+    log_unresolved_sender,
+)
 from appointment_reminders.services.twilio_inbound import (
     classify_consent,
     classify_reply,
@@ -113,7 +119,14 @@ class TwilioInboundAPI(SimpleAPI):
 
         patient = self._resolve_patient(from_number)
         if patient is None:
-            log.info("[inbound] No patient matched inbound number; ignoring reply")
+            # Audited, not just logged. The appointment stays unconfirmed either
+            # way, and without a row that is indistinguishable from the patient
+            # never replying — when in fact they did, from a number on no chart.
+            log.warning(
+                "[inbound] Verified reply from a number on no chart; "
+                "recorded as unresolved_sender"
+            )
+            log_unresolved_sender(body=body, from_number=from_number)
             return [PlainTextResponse("", status_code=HTTPStatus.OK)]
 
         appointment = self._nearest_upcoming_appointment(patient)

@@ -80,6 +80,42 @@ def log_inbound_response(
     )
 
 
+def log_unresolved_sender(body: str, from_number: str) -> None:
+    """Record a verified inbound reply whose sender matched no patient.
+
+    Without this the event leaves no trace: ``inbound()`` returns 200 and the
+    appointment simply stays unconfirmed, which ops reads as the patient never
+    replying. That is the opposite of what happened — the patient did reply, and
+    the number they replied from is not on any chart.
+
+    Written with ``patient=None``, the one case where that is allowed. Rows are
+    read back by ``get_unresolved_senders`` rather than the per-patient history,
+    which is keyed on a patient by definition.
+    """
+    NotificationDelivery.objects.create(
+        patient=None,
+        appointment_id="",
+        campaign_type="inbound_response",
+        channel="sms",
+        status="unresolved_sender",
+        error="",
+        content=body or "",
+        recipient=from_number or "",
+    )
+
+
+def get_unresolved_senders(limit: int = 100) -> list[dict]:
+    """Return recent replies that matched no patient, newest first."""
+    rows = (
+        NotificationDelivery.objects.filter(
+            campaign_type="inbound_response",
+            status="unresolved_sender",
+        )
+        .order_by("-created_at")[:limit]
+    )
+    return [_row_to_dict("", row) for row in rows]
+
+
 def get_patient_history(patient_id: str, limit: int = 100) -> list[dict]:
     """Return the most recent deliveries for a patient, newest first."""
     rows = (
