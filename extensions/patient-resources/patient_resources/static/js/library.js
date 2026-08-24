@@ -261,8 +261,19 @@
     }
 
     if (!resource.is_active) {
+      // Why it is inactive, not just that it is. Withdrawing archives the
+      // resource as part of taking it back from patients, so the two states are
+      // otherwise indistinguishable in this list.
+      var withdrawn = Boolean(resource.withdrawn);
+      var flag = el("span", "pr-archived-flag", withdrawn ? "Withdrawn" : "Archived");
+      flag.setAttribute(
+        "title",
+        withdrawn
+          ? "Taken back from patients who had it, and no longer offered"
+          : "No longer offered. Patients who received it were not affected."
+      );
       td.appendChild(document.createTextNode(" "));
-      td.appendChild(el("span", "pr-archived-flag", "Archived"));
+      td.appendChild(flag);
     }
     return td;
   }

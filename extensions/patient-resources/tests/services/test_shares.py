@@ -228,7 +228,10 @@ def test_unviewed_count_ignores_revoked_and_archived():
 
 
 def test_resources_with_shares_is_one_query_for_the_page():
-    PatientResourceShare.objects.filter.return_value.values_list.return_value = [12, 19]
+    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [
+        12,
+        19,
+    ]
     assert shares.resources_with_shares([12, 15, 19]) == {12, 19}
     assert PatientResourceShare.objects.filter.call_count == 1
 
@@ -242,6 +245,33 @@ def test_resources_with_shares_counts_withdrawn_shares_too():
     """A withdrawn share still means a patient received it, so the resource
     must stay undeletable.
     """
-    PatientResourceShare.objects.filter.return_value.values_list.return_value = [12]
+    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [12]
     shares.resources_with_shares([12])
     assert "revoked_at__isnull" not in PatientResourceShare.objects.filter.call_args.kwargs
+
+
+def test_withdrawn_lookup_finds_only_revoked_shares():
+    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [12]
+    assert shares.resources_with_withdrawn_shares([12, 15]) == {12}
+    assert PatientResourceShare.objects.filter.call_args.kwargs == {
+        "resource__dbid__in": [12, 15],
+        "revoked_at__isnull": False,
+    }
+
+
+def test_withdrawn_lookup_short_circuits_on_an_empty_page():
+    assert shares.resources_with_withdrawn_shares([]) == set()
+    PatientResourceShare.objects.filter.assert_not_called()
+
+
+def test_both_share_lookups_ask_for_distinct_rows():
+    """One row per resource, not one per share.
+
+    Without it a resource given to five hundred patients drags five hundred rows
+    back to build a set of one.
+    """
+    for call in (shares.resources_with_shares, shares.resources_with_withdrawn_shares):
+        PatientResourceShare.objects.reset_mock(side_effect=True, return_value=True)
+        PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = []
+        call([12])
+        PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.assert_called_once()

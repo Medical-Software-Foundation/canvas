@@ -664,3 +664,13 @@ def test_row_actions_share_a_minimum_width():
     block = source[source.index(".pr-row-actions button") :]
     block = block[: block.index("}")]
     assert "min-width" in block
+
+
+def test_an_inactive_row_says_why_it_is_inactive():
+    """Withdraw archives the resource, so "Archived" alone hides the difference
+    between a row that was retired and one taken back off patients.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    assert '"Withdrawn"' in source
+    assert '"Archived"' in source
+    assert "resource.withdrawn" in source

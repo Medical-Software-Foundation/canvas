@@ -46,7 +46,11 @@ def _safe_url(value: Any) -> str:
 
 
 def serialize_resource(
-    resource: Any, *, shared: bool | None = None, ever_shared: bool | None = None
+    resource: Any,
+    *,
+    shared: bool | None = None,
+    ever_shared: bool | None = None,
+    withdrawn: bool | None = None,
 ) -> dict[str, Any]:
     """One catalog row, for the admin library or the chart picker."""
     data: dict[str, Any] = {
@@ -66,6 +70,11 @@ def serialize_resource(
     # deleted at all.
     if ever_shared is not None:
         data["ever_shared"] = ever_shared
+    # Why the resource is inactive, not just that it is. An archived row and a
+    # withdrawn one are indistinguishable without this, though only one of them
+    # took something back off patients.
+    if withdrawn is not None:
+        data["withdrawn"] = withdrawn
     return data
 
 

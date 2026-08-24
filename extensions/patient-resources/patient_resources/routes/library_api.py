@@ -33,7 +33,11 @@ from patient_resources.services.catalog import (
     update_resource,
 )
 from patient_resources.services.permissions import is_library_admin
-from patient_resources.services.shares import resources_with_shares, revoke_resource_shares
+from patient_resources.services.shares import (
+    resources_with_shares,
+    resources_with_withdrawn_shares,
+    revoke_resource_shares,
+)
 from patient_resources.services.serializers import serialize_resource
 from patient_resources.services.validation import validate_resource
 
@@ -94,8 +98,14 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         # response needs the flag that chooses between them. One set lookup for
         # the page rather than a check per row.
         ever_shared: set[Any] = set()
+        withdrawn: set[Any] = set()
         if can_edit and rows:
-            ever_shared = resources_with_shares([row.dbid for row in rows])
+            page = [row.dbid for row in rows]
+            ever_shared = resources_with_shares(page)
+            # A second lookup rather than deriving both from one, because one
+            # query returning every share row would drag back a row per patient.
+            # Each of these returns at most one row per resource on the page.
+            withdrawn = resources_with_withdrawn_shares(page)
 
         return [
             JSONResponse(
@@ -104,6 +114,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
                         serialize_resource(
                             row,
                             ever_shared=(row.dbid in ever_shared) if can_edit else None,
+                            withdrawn=(row.dbid in withdrawn) if can_edit else None,
                         )
                         for row in rows
                     ],
