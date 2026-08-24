@@ -86,6 +86,14 @@ def _filter_args(recorder):
     return found
 
 
+def _filter_leaves(recorder):
+    """Every leaf condition across the Q objects the query was filtered with."""
+    leaves = []
+    for arg in _filter_args(recorder):
+        leaves.extend(arg.leaves())
+    return leaves
+
+
 class TestNormalizeSort:
     def test_blank_falls_back_to_priority(self):
         assert normalize_sort("") == (SORT_PRIORITY, False)
@@ -173,41 +181,64 @@ class TestBuildQueryset:
 
         assert _filter_args(recorder) == []
 
-    def test_appointment_type_filter_is_applied(self):
-        recorder = self._build(note_type_dbid=7)
+    def test_a_named_type_also_keeps_entries_that_accept_any_type(self):
+        # Filtering the roster by a service asks "who could take a slot like
+        # this?", and somebody waiting for anything qualifies. Filtering on
+        # note_type_id alone hid exactly those people.
+        leaves = _filter_leaves(self._build(note_type_dbid=7))
 
-        assert _filter_kwargs(recorder)["note_type_id"] == 7
+        assert {"note_type_id": 7} in leaves
+        assert {"note_type__isnull": True} in leaves
 
     def test_provider_any_matches_entries_that_accept_anyone(self):
+        # The REST behaviour: PREFERENCE_ANY narrows to the any-provider entries
+        # rather than widening. The roster's filter bar does not offer this.
         recorder = self._build(provider_dbid=PREFERENCE_ANY)
 
         assert _filter_kwargs(recorder)["provider_preference"] == PREFERENCE_ANY
 
-    def test_a_named_provider_filters_by_that_provider(self):
-        recorder = self._build(provider_dbid=101)
+    def test_a_named_provider_also_keeps_entries_that_accept_anyone(self):
+        # The bug this class exists for. A patient who will see any provider is
+        # the most likely candidate for a named provider's freed slot, and the
+        # roster used to deny they existed while the matcher named them.
+        leaves = _filter_leaves(self._build(provider_dbid=101))
 
-        assert _filter_kwargs(recorder)["desired_provider_id"] == 101
+        assert {"desired_provider_id": 101} in leaves
+        assert {"provider_preference": PREFERENCE_ANY} in leaves
 
     def test_location_any_matches_entries_that_accept_anywhere(self):
         recorder = self._build(location_dbid=PREFERENCE_ANY)
 
         assert _filter_kwargs(recorder)["location_preference"] == PREFERENCE_ANY
 
-    def test_a_named_location_filters_by_that_location(self):
-        recorder = self._build(location_dbid=3)
+    def test_a_named_location_also_keeps_entries_that_accept_anywhere(self):
+        leaves = _filter_leaves(self._build(location_dbid=3))
 
-        assert _filter_kwargs(recorder)["desired_location_id"] == 3
+        assert {"desired_location_id": 3} in leaves
+        assert {"location_preference": PREFERENCE_ANY} in leaves
+
+    def test_the_roster_filter_agrees_with_the_freed_slot_matcher(self):
+        """The two used to disagree, which is why they now share the predicates.
+
+        A roster that hides a patient the next cancellation will name is worse
+        than either behaviour on its own -- it makes the task look wrong.
+        """
+        from scheduling_waitlist.services.matching import compatibility_q
+
+        roster = _filter_leaves(self._build(provider_dbid=101))
+        matcher = compatibility_q(None, 101, None).leaves()
+
+        for leaf in ({"desired_provider_id": 101}, {"provider_preference": PREFERENCE_ANY}):
+            assert leaf in roster
+            assert leaf in matcher
 
     def test_blank_filters_are_not_applied(self):
         recorder = self._build(
             note_type_dbid=None, provider_dbid=None, location_dbid=None, priority_label=""
         )
 
-        merged = _filter_kwargs(recorder)
-        assert "note_type_id" not in merged
-        assert "desired_provider_id" not in merged
-        assert "desired_location_id" not in merged
-        assert "priority_label" not in merged
+        assert _filter_args(recorder) == []
+        assert "priority_label" not in _filter_kwargs(recorder)
 
     def test_related_rows_are_selected_up_front(self):
         # Without this, a page of 100 rows becomes hundreds of queries because

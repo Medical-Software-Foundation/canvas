@@ -162,6 +162,54 @@ class TestEventTypeStub:
         assert subscribed <= set(_EventType._NAMES)
 
 
+class TestNoteTypeCategoryStub:
+    """The categories the service list excludes must be the stored strings.
+
+    ``options.py`` compares them against a note type's stored ``category``, so a
+    stub carrying member names would exclude nothing on a real instance while the
+    suite stayed green — and "Generic event" would be back in the form.
+    """
+
+    def test_the_excluded_categories_are_their_stored_values(self):
+        from canvas_sdk.v1.data.note import NoteTypeCategories
+
+        from scheduling_waitlist.services.options import NON_VISIT_CATEGORIES
+
+        assert str(NoteTypeCategories.SCHEDULE_EVENT) == "schedule_event"
+        assert "schedule_event" in NON_VISIT_CATEGORIES
+
+    def test_visit_categories_are_not_excluded(self):
+        from canvas_sdk.v1.data.note import NoteTypeCategories
+
+        from scheduling_waitlist.services.options import NON_VISIT_CATEGORIES
+
+        for member in (
+            NoteTypeCategories.APPOINTMENT,
+            NoteTypeCategories.ENCOUNTER,
+            NoteTypeCategories.INPATIENT,
+        ):
+            assert str(member) not in NON_VISIT_CATEGORIES
+
+    def test_the_excluded_set_is_exactly_the_named_members(self):
+        # Pins both the contents and their stored form. A renamed SDK member is
+        # caught earlier and harder -- ``options.py`` reads the attribute at import
+        # time, so ``canvas validate`` fails against the real SDK rather than the
+        # exclusion quietly matching nothing.
+        from canvas_sdk.v1.data.note import NoteTypeCategories
+
+        from scheduling_waitlist.services.options import NON_VISIT_CATEGORIES
+
+        assert NON_VISIT_CATEGORIES == {
+            str(NoteTypeCategories.SCHEDULE_EVENT),
+            str(NoteTypeCategories.MESSAGE),
+            str(NoteTypeCategories.LETTER),
+            str(NoteTypeCategories.TASK),
+            str(NoteTypeCategories.DATA),
+            str(NoteTypeCategories.CCDA),
+            str(NoteTypeCategories.REVIEW),
+        }
+
+
 class TestResponseStubs:
     """The response stubs must accept what the real effects accept.
 

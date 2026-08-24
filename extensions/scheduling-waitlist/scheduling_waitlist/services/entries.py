@@ -20,6 +20,11 @@ from scheduling_waitlist.constants import (
     PREFERENCE_ANY,
 )
 from scheduling_waitlist.models import WaitlistEntry
+from scheduling_waitlist.services.preferences import (
+    accepts_location,
+    accepts_note_type,
+    accepts_provider,
+)
 
 # Related rows every serialized entry reads. Selecting them up front turns a
 # page of 100 entries from 500 queries into one.
@@ -120,22 +125,28 @@ def build_queryset(
             Q(patient__first_name__icontains=term) | Q(patient__last_name__icontains=term)
         )
 
+    # Each of these three asks the question the user is really asking: "who could
+    # take a slot like this?" -- so an entry that said "any" is included, not
+    # filtered out. Selecting a provider used to hide exactly the patients who
+    # would see anybody, which is backwards: they are the most likely candidates,
+    # and the freed-slot matcher would name them while the roster denied they
+    # existed. The predicates are shared with matching so the two cannot drift.
     if note_type_dbid:
-        queryset = queryset.filter(note_type_id=note_type_dbid)
+        queryset = queryset.filter(accepts_note_type(note_type_dbid))
 
-    # Passing PREFERENCE_ANY selects entries whose patient will see anyone, rather
-    # than every entry. The roster's filter bar no longer offers it -- "Any
-    # provider" there means "do not filter" -- but this is a REST endpoint and the
+    # Passing PREFERENCE_ANY narrows to entries whose patient will see anyone,
+    # rather than widening. The roster's filter bar does not offer it -- there,
+    # "Any provider" means "do not filter" -- but this is a REST endpoint and the
     # behaviour is kept and tested for callers that want it.
     if provider_dbid == PREFERENCE_ANY:
         queryset = queryset.filter(provider_preference=PREFERENCE_ANY)
     elif provider_dbid:
-        queryset = queryset.filter(desired_provider_id=provider_dbid)
+        queryset = queryset.filter(accepts_provider(provider_dbid))
 
     if location_dbid == PREFERENCE_ANY:
         queryset = queryset.filter(location_preference=PREFERENCE_ANY)
     elif location_dbid:
-        queryset = queryset.filter(desired_location_id=location_dbid)
+        queryset = queryset.filter(accepts_location(location_dbid))
 
     if priority_label:
         queryset = queryset.filter(priority_label=priority_label)

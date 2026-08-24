@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scheduling_waitlist.services.config import WaitlistConfig
 from scheduling_waitlist.services.options import (
     build_options,
@@ -21,11 +23,15 @@ def _queryset(items):
     return qs
 
 
-def _note_type(dbid, code, name):
+def _note_type(dbid, code, name, category="appointment"):
     note_type = MagicMock()
     note_type.dbid = dbid
     note_type.code = code
     note_type.name = name
+    # Set explicitly, because a MagicMock attribute passes every category check
+    # silently -- which is how a calendar block reached the form in the first
+    # place.
+    note_type.category = category
     return note_type
 
 
@@ -52,6 +58,71 @@ class TestListAppointmentTypes:
             options = list_appointment_types(WaitlistConfig.from_secrets({}))
 
         assert [option["code"] for option in options] == ["estab", "newpt"]
+
+    def test_a_calendar_block_is_not_offered_as_a_service(self):
+        """"Generic event" is scheduleable, and is not an appointment.
+
+        Canvas marks schedule events scheduleable because staff schedule *time*
+        with them. There is no patient, so a waitlist entry for one can never be
+        filled -- and it was being offered first, alphabetically, as the default.
+        """
+        types = [
+            _note_type(1, "office", "Office visit"),
+            _note_type(13, "generic", "Generic event", category="schedule_event"),
+        ]
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset(types)
+
+            options = list_appointment_types(WaitlistConfig.from_secrets({}))
+
+        assert [option["code"] for option in options] == ["office"]
+
+    @pytest.mark.parametrize(
+        "category", ["message", "letter", "task", "data", "ccda", "review"]
+    )
+    def test_other_non_visit_categories_are_excluded_too(self, category):
+        types = [
+            _note_type(1, "office", "Office visit"),
+            _note_type(2, "other", "Other", category=category),
+        ]
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset(types)
+
+            options = list_appointment_types(WaitlistConfig.from_secrets({}))
+
+        assert [option["code"] for option in options] == ["office"]
+
+    @pytest.mark.parametrize("category", ["appointment", "encounter", "inpatient", ""])
+    def test_visit_categories_are_kept(self, category):
+        # An unset category counts as a visit: hiding a real appointment type is
+        # the worse mistake, because an entry nobody can create is invisible.
+        types = [_note_type(1, "visit", "Visit", category=category)]
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset(types)
+
+            options = list_appointment_types(WaitlistConfig.from_secrets({}))
+
+        assert [option["code"] for option in options] == ["visit"]
+
+    def test_an_instance_of_nothing_but_blocks_falls_back_rather_than_emptying(self):
+        # An empty form teaches a scheduler nothing, so an instance that
+        # categorises everything unusually still gets a usable list -- and an
+        # error in the log naming the categories it saw.
+        types = [_note_type(13, "generic", "Generic event", category="schedule_event")]
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset(types)
+
+            options = list_appointment_types(WaitlistConfig.from_secrets({}))
+
+        assert [option["code"] for option in options] == ["generic"]
+
+    def test_an_instance_with_nothing_scheduleable_stays_empty(self):
+        # Distinct from the case above: there is nothing to fall back to, and the
+        # form has to say so rather than invent an option.
+        with patch("scheduling_waitlist.services.options.NoteType") as note_type_model:
+            note_type_model.objects.filter.return_value = _queryset([])
+
+            assert list_appointment_types(WaitlistConfig.from_secrets({})) == []
 
     def test_configured_secret_narrows_the_list(self):
         types = [_note_type(1, "estab", "Established"), _note_type(2, "newpt", "New Patient")]

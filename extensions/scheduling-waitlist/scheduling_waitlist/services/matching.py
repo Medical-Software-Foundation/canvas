@@ -22,6 +22,11 @@ from scheduling_waitlist.services.display import (
     staff_name,
 )
 from scheduling_waitlist.services.entries import ENTRY_RELATIONS
+from scheduling_waitlist.services.preferences import (
+    accepts_location,
+    accepts_note_type,
+    accepts_provider,
+)
 from scheduling_waitlist.services.slot import FreedSlot
 
 # How many entries the no-match diagnostic quotes verbatim. Enough to see the
@@ -139,20 +144,11 @@ def compatibility_q(
     An entry matches when, for each of type, provider, and location, either it
     asked for exactly that or it said anything would do.
     """
-    # A null appointment type on an entry means "any type".
-    type_q = Q(note_type__isnull=True)
-    if note_type_dbid is not None:
-        type_q = type_q | Q(note_type_id=note_type_dbid)
-
-    provider_q = Q(provider_preference=PREFERENCE_ANY)
-    if provider_dbid is not None:
-        provider_q = provider_q | Q(desired_provider_id=provider_dbid)
-
-    location_q = Q(location_preference=PREFERENCE_ANY)
-    if location_dbid is not None:
-        location_q = location_q | Q(desired_location_id=location_dbid)
-
-    return type_q & provider_q & location_q
+    return (
+        accepts_note_type(note_type_dbid)
+        & accepts_provider(provider_dbid)
+        & accepts_location(location_dbid)
+    )
 
 
 def _window_covers(window: dict, local_start: datetime) -> bool:

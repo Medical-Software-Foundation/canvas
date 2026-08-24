@@ -1032,6 +1032,17 @@
       port = event.ports[0];
       port.start();
       port.postMessage({ type: "RESIZE", width: 1200, height: 800 });
+
+      // Only now is closing possible, so only now does the button exist. The
+      // roster had no way out at all except whatever chrome the host drew around
+      // it.
+      var close = document.getElementById("wl-close");
+      if (close) {
+        close.hidden = false;
+        close.addEventListener("click", function () {
+          port.postMessage({ type: "CLOSE_MODAL" });
+        });
+      }
     }
   });
 

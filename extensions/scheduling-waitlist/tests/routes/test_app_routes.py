@@ -208,6 +208,40 @@ class TestTemplateComments:
             )
 
 
+class TestTheRosterCanBeClosed:
+    """The roster had no way out of its own modal.
+
+    The compact add form has always sent ``CLOSE_MODAL``; the roster only ever
+    sent ``RESIZE``, so it relied entirely on whatever chrome the host drew around
+    it. The button is hidden until the port arrives, because that port is the only
+    thing that can close the modal and the page is also reachable outside one.
+    """
+
+    ROSTER_HTML = Path("scheduling_waitlist/templates/roster.html")
+    ROSTER_JS = Path("scheduling_waitlist/static/js/roster.js")
+
+    def test_the_roster_has_a_close_control(self):
+        assert 'id="wl-close"' in self.ROSTER_HTML.read_text()
+
+    def test_it_ships_hidden(self):
+        markup = self.ROSTER_HTML.read_text()
+        button = markup[markup.index('id="wl-close"') :]
+
+        assert "hidden" in button[: button.index(">")], (
+            "a close button that appears before the port arrives cannot close anything"
+        )
+
+    def test_the_roster_sends_close_modal(self):
+        assert "CLOSE_MODAL" in self.ROSTER_JS.read_text()
+
+    def test_it_is_revealed_and_wired_only_once_the_port_exists(self):
+        source = self.ROSTER_JS.read_text()
+        handshake = source[source.index("INIT_CHANNEL") :]
+
+        assert handshake.index("wl-close") < handshake.index("CLOSE_MODAL")
+        assert "close.hidden = false" in handshake
+
+
 class TestEveryFormOffersAnyForAllThreeMatchedFields:
     """A form must be able to express every state the model can hold.
 

@@ -429,6 +429,28 @@ def _install_canvas_sdk_stubs() -> None:
     note_data_mod.NoteStates = NoteStates
     data.NoteStates = NoteStates
 
+    class NoteTypeCategories:
+        """The stored values, not the member names.
+
+        ``options.py`` compares ``str()`` of these against a note type's stored
+        ``category``, so a stub using readable names would pass the suite and
+        exclude nothing on the instance.
+        """
+
+        MESSAGE = "message"
+        LETTER = "letter"
+        INPATIENT = "inpatient"
+        REVIEW = "review"
+        ENCOUNTER = "encounter"
+        APPOINTMENT = "appointment"
+        TASK = "task"
+        DATA = "data"
+        CCDA = "ccda"
+        SCHEDULE_EVENT = "schedule_event"
+
+    note_data_mod.NoteTypeCategories = NoteTypeCategories
+    data.NoteTypeCategories = NoteTypeCategories
+
     class AppointmentProgressStatus:
         """Only the values this plugin reads, as their stored strings.
 

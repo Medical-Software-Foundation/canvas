@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from canvas_sdk.v1.data import NoteType, PracticeLocation, Staff
+from canvas_sdk.v1.data.note import NoteTypeCategories
 from logger import log
 
 from scheduling_waitlist.constants import (
@@ -80,11 +81,59 @@ def windows_for_value(value: str) -> list[dict[str, Any]]:
     return [{"days": list(window["days"]), "start": window["start"], "end": window["end"]}]
 
 
+# Categories a patient can never be booked into, so they have no business in a
+# waitlist form. ``schedule_event`` is the one that prompted this: Canvas uses it
+# for calendar blocks such as "Generic event", which are marked scheduleable
+# because staff schedule *time* with them -- there is no patient involved, and an
+# entry waiting for one can never be filled.
+#
+# Stated as an exclusion rather than an allow-list of visit categories so an
+# instance that classifies a real visit type unusually still offers it. Read from
+# the SDK enum rather than typed as strings, so a renamed member breaks the import
+# instead of silently matching nothing.
+NON_VISIT_CATEGORIES = frozenset(
+    {
+        str(NoteTypeCategories.SCHEDULE_EVENT),
+        str(NoteTypeCategories.MESSAGE),
+        str(NoteTypeCategories.LETTER),
+        str(NoteTypeCategories.TASK),
+        str(NoteTypeCategories.DATA),
+        str(NoteTypeCategories.CCDA),
+        str(NoteTypeCategories.REVIEW),
+    }
+)
+
+
+def _category(note_type: Any) -> str:
+    """An appointment type's category, as the stored string."""
+    return str(getattr(note_type, "category", "") or "")
+
+
+def _is_patient_visit(note_type: Any) -> bool:
+    """Whether a patient could actually be booked into this type.
+
+    An unset category is treated as a visit: it is more likely an instance the SDK
+    enum does not cover than a calendar block, and hiding a real appointment type
+    is the worse mistake -- an entry nobody can create is invisible, while an odd
+    one in the list is obvious and harmless.
+    """
+    return _category(note_type) not in NON_VISIT_CATEGORIES
+
+
+def _type_option(note_type: Any) -> dict[str, Any]:
+    """One appointment type as the form and the roster filters consume it."""
+    code = (getattr(note_type, "code", "") or "").strip()
+    name = (getattr(note_type, "name", "") or "").strip() or code
+    return {"dbid": getattr(note_type, "dbid", None), "code": code, "name": name}
+
+
 def list_appointment_types(config: WaitlistConfig) -> list[dict[str, Any]]:
-    """Bookable appointment types, optionally narrowed by configuration.
+    """Appointment types a patient can be booked into, narrowed by configuration.
 
     Only types that can actually be scheduled are offered: a waitlist entry for
-    something nobody can book is a dead row.
+    something nobody can book is a dead row. Being scheduleable is not sufficient,
+    though -- a calendar block such as "Generic event" is scheduleable because
+    staff schedule time with it, and has no patient. See ``NON_VISIT_CATEGORIES``.
 
     Configuration **narrows** this list, it does not define it. With nothing
     configured every bookable type is offered, so the plugin works on a fresh
@@ -97,18 +146,30 @@ def list_appointment_types(config: WaitlistConfig) -> list[dict[str, Any]]:
     re-deriving the rule, because the two disagreeing is exactly how the form
     came to offer services it then refused.
     """
-    bookable: list[dict[str, Any]] = []
-    for note_type in NoteType.objects.filter(
-        is_scheduleable=True,
-        is_active=True,
-        is_visible=True,
-        deprecated_at__isnull=True,
-    ).order_by("name"):
-        code = (getattr(note_type, "code", "") or "").strip()
-        name = (getattr(note_type, "name", "") or "").strip() or code
-        bookable.append(
-            {"dbid": getattr(note_type, "dbid", None), "code": code, "name": name}
+    scheduleable = list(
+        NoteType.objects.filter(
+            is_scheduleable=True,
+            is_active=True,
+            is_visible=True,
+            deprecated_at__isnull=True,
+        ).order_by("name")
+    )
+
+    # Narrowed in Python rather than SQL: this is a small reference table read to
+    # fill a dropdown, and doing it here means the fallback below costs no second
+    # query.
+    bookable = [_type_option(nt) for nt in scheduleable if _is_patient_visit(nt)]
+    if not bookable and scheduleable:
+        # Nothing left. Rather than hand a scheduler an empty form, offer what the
+        # instance says is scheduleable and say so -- an instance that categorises
+        # its visit types unusually is a configuration to look at, not a reason to
+        # stop working.
+        log.error(
+            "scheduling_waitlist: no scheduleable appointment type has a "
+            "patient-visit category, so every scheduleable type is being offered "
+            f"instead; categories seen were {sorted({_category(nt) for nt in scheduleable})}"
         )
+        bookable = [_type_option(nt) for nt in scheduleable]
 
     allowed = {code.casefold() for code in config.appointment_type_codes}
     if not allowed:

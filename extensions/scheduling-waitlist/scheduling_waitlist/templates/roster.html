@@ -15,6 +15,13 @@
       </div>
       <div class="wl-header-actions">
         <button type="button" id="wl-add" class="wl-btn wl-btn-primary">Add to waitlist</button>
+        {% comment %}
+          Hidden until the host modal hands over its message port, because that
+          port is the only way to close the modal. A button that cannot do what it
+          says is worse than no button, and the roster is also reachable outside a
+          modal, where there is nothing to close.
+        {% endcomment %}
+        <button type="button" id="wl-close" class="wl-btn wl-btn-quiet" hidden>Close</button>
       </div>
     </header>
 

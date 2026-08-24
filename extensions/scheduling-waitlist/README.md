@@ -15,6 +15,12 @@ reacts to cancellations automatically.
 priority then wait time. Filter by service, provider, or location; search by patient name. Each
 row can open the patient's chart, be edited, marked scheduled, or removed.
 
+Filtering asks "who could take a slot like this?", so choosing a provider **also** lists the
+patients who said they would see anybody — they are the likeliest candidates for that provider's
+next cancellation, and hiding them contradicted the task the plugin would go on to raise. Same for
+service and location. The roster and the freed-slot matcher share one implementation of that rule
+(`services/preferences.py`) so they cannot drift apart again.
+
 **Adding a patient** — three ways into the same short form:
 
 - **From the roster**, searching for the patient by name.
@@ -138,6 +144,17 @@ the intent explicitly makes a malformed row match nothing instead.
 
 **Slot detection reacts to a freed *booked* slot, not to open availability.** Canvas emits no
 generic "slot opened" event, so scanning arbitrary open availability is out of scope.
+
+**Being scheduleable does not make a note type an appointment.** Canvas marks calendar blocks —
+"Generic event" and friends, category `schedule_event` — as scheduleable, because staff schedule
+*time* with them. There is no patient, so a waitlist entry for one can never be filled. It was
+also alphabetically first on the test instance, and therefore the form's default, which is how
+entries got created that matched nothing while looking perfectly well-formed.
+`services/options.py:NON_VISIT_CATEGORIES` excludes it along with messages, letters, tasks, data,
+C-CDA and chart reviews. Stated as an exclusion rather than an allow-list of visit categories, so
+an instance that classifies a real visit type unusually still offers it; if the exclusion would
+empty the list entirely it falls back to everything scheduleable and logs an error, because an
+empty form teaches a scheduler nothing.
 
 **A UI no-show emits no `APPOINTMENT_NO_SHOWED` event, so button refreshes hang off the note
 state instead.** Observed on `vicert-testing`: clicking No show moved the note to `NSW` and
