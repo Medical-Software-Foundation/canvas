@@ -346,6 +346,13 @@ a:focus-visible {
 
 .pr-row-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
+/* A uniform minimum so the three controls read as columns down the table.
+   Without it a shorter label -- Delete against Withdraw, Restore against
+   Archive -- narrows the group, and because the group is right-aligned the whole
+   row's buttons shift sideways against the rows above. Sized for the longest
+   label rather than fixed, so a longer one later widens instead of clipping. */
+.pr-row-actions button { min-width: 5.4rem; }
+
 /* Edit is the button the design draws. Archive, Restore and Withdraw are kept
    because retraction is the only way to pull a bad link back out of patients'
    portals, so they sit alongside at a lower weight. */
