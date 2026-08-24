@@ -227,27 +227,29 @@ def test_unviewed_count_ignores_revoked_and_archived():
 # --- the page-wide has-shares lookup --------------------------------------
 
 
-def test_resources_with_shares_is_one_query_for_the_page():
+def test_resources_with_live_shares_is_one_query_for_the_page():
     PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [
         12,
         19,
     ]
-    assert shares.resources_with_shares([12, 15, 19]) == {12, 19}
+    assert shares.resources_with_live_shares([12, 15, 19]) == {12, 19}
     assert PatientResourceShare.objects.filter.call_count == 1
 
 
-def test_resources_with_shares_short_circuits_on_an_empty_page():
-    assert shares.resources_with_shares([]) == set()
+def test_resources_with_live_shares_short_circuits_on_an_empty_page():
+    assert shares.resources_with_live_shares([]) == set()
     PatientResourceShare.objects.filter.assert_not_called()
 
 
-def test_resources_with_shares_counts_withdrawn_shares_too():
-    """A withdrawn share still means a patient received it, so the resource
-    must stay undeletable.
+def test_the_live_lookup_excludes_withdrawn_shares():
+    """The question is what a patient holds now, not what they once received.
+
+    Including withdrawn shares here is what made the library offer Withdraw on a
+    resource with nothing left to withdraw.
     """
     PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [12]
-    shares.resources_with_shares([12])
-    assert "revoked_at__isnull" not in PatientResourceShare.objects.filter.call_args.kwargs
+    shares.resources_with_live_shares([12])
+    assert PatientResourceShare.objects.filter.call_args.kwargs["revoked_at__isnull"] is True
 
 
 def test_withdrawn_lookup_finds_only_revoked_shares():
@@ -270,8 +272,27 @@ def test_both_share_lookups_ask_for_distinct_rows():
     Without it a resource given to five hundred patients drags five hundred rows
     back to build a set of one.
     """
-    for call in (shares.resources_with_shares, shares.resources_with_withdrawn_shares):
+    for call in (shares.resources_with_live_shares, shares.resources_with_withdrawn_shares):
         PatientResourceShare.objects.reset_mock(side_effect=True, return_value=True)
         PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = []
         call([12])
         PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.assert_called_once()
+
+
+def test_has_live_shares_asks_only_about_unrevoked_shares():
+    """The server-side counterpart of the Withdraw control.
+
+    A direct request must not be able to withdraw a resource whose every share
+    was already taken back.
+    """
+    PatientResourceShare.objects.filter.return_value.exists.return_value = True
+    assert shares.has_live_shares(MagicMock(dbid=12)) is True
+    assert PatientResourceShare.objects.filter.call_args.kwargs == {
+        "resource__dbid": 12,
+        "revoked_at__isnull": True,
+    }
+
+
+def test_has_live_shares_is_false_when_everything_was_withdrawn():
+    PatientResourceShare.objects.filter.return_value.exists.return_value = False
+    assert shares.has_live_shares(MagicMock(dbid=12)) is False

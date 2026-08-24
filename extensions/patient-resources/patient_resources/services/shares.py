@@ -80,25 +80,38 @@ def shared_resource_dbids(patient_dbid: Any, resource_dbids: list[Any]) -> set[A
     )
 
 
-def resources_with_shares(resource_dbids: list[Any]) -> set[Any]:
-    """Which of these resources have ever reached a patient.
+def resources_with_live_shares(resource_dbids: list[Any]) -> set[Any]:
+    """Which of these resources a patient currently holds.
 
-    One set lookup for a whole page rather than a ``has_shares`` call per row.
-    Deliberately unfiltered on ``revoked_at``: a withdrawn share is still a
-    record that a patient received something, so it must keep the resource
-    undeletable.
+    This is what decides whether Withdraw has anything to act on. "Has ever been
+    shared" is the wrong question for that: a resource whose every share was
+    already withdrawn would still offer the control, and clicking it would revoke
+    nothing.
 
     ``distinct()`` matters more than it looks. Without it this returns one row per
-    share, so a resource given to five hundred patients drags five hundred rows
+    share, so a resource held by five hundred patients drags five hundred rows
     back to build a set of one.
     """
     if not resource_dbids:
         return set()
     return set(
-        PatientResourceShare.objects.filter(resource__dbid__in=list(resource_dbids))
+        PatientResourceShare.objects.filter(
+            resource__dbid__in=list(resource_dbids), revoked_at__isnull=True
+        )
         .values_list("resource_id", flat=True)
         .distinct()
     )
+
+
+def has_live_shares(resource: Any) -> bool:
+    """True if a patient currently holds this resource.
+
+    The server-side counterpart of the control above, so a direct request cannot
+    withdraw something with nothing left to withdraw.
+    """
+    return PatientResourceShare.objects.filter(
+        resource__dbid=resource.dbid, revoked_at__isnull=True
+    ).exists()
 
 
 def resources_with_withdrawn_shares(resource_dbids: list[Any]) -> set[Any]:

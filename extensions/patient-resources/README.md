@@ -97,6 +97,12 @@ anything a patient ever received, including shares that were later withdrawn,
 because the foreign keys carry no cascade and removing the catalog row would
 leave those records pointing at nothing.
 
+**A resource already taken back offers nothing to take back.** The row's
+destructive control follows what is actually possible: Withdraw when a patient
+currently holds it, Delete when no patient ever did, and neither when every share
+has already been withdrawn. The server refuses a withdrawal with nothing to
+revoke as well, so a direct request cannot succeed at doing nothing.
+
 **An inactive resource says why it is inactive.** Withdrawing archives the
 resource as part of taking it back, so the library marks the row **Withdrawn**
 rather than **Archived** when patients actually lost something. Restoring it
