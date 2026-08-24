@@ -68,6 +68,7 @@ WRITE_ROUTES = [
     "archive_resource",
     "restore_resource",
     "retract_resource",
+    "delete_resource_route",
 ]
 ALL_ROUTES = ["get_resources", "get_labels", *WRITE_ROUTES]
 
@@ -365,3 +366,84 @@ def test_lifecycle_routes_404_on_a_missing_resource(route, mock_staff, make_requ
     with patch("patient_resources.routes.library_api.get_resource", return_value=None):
         responses = _call(route, mock_staff, True, make_request)
     assert responses[0].status_code == 404
+
+
+# --- delete ---------------------------------------------------------------
+
+
+def test_delete_403s_for_a_non_admin_and_removes_nothing(mock_staff, make_request):
+    with (
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.delete_resource") as remove,
+    ):
+        responses = _call("delete_resource_route", mock_staff, False, make_request)
+    assert responses[0].status_code == 403
+    remove.assert_not_called()
+
+
+def test_delete_404s_on_a_missing_resource(mock_staff, make_request):
+    with patch("patient_resources.routes.library_api.get_resource", return_value=None):
+        responses = _call("delete_resource_route", mock_staff, True, make_request)
+    assert responses[0].status_code == 404
+
+
+def test_a_never_shared_resource_is_deleted(mock_staff, make_request):
+    with (
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.delete_resource") as remove,
+    ):
+        responses = _call("delete_resource_route", mock_staff, True, make_request)
+    assert responses[0].status_code == 200
+    assert responses[0].data == {"deleted": True, "id": 12}
+    remove.assert_called_once()
+
+
+def test_deleting_a_shared_resource_is_a_409(mock_staff, make_request):
+    """Refused, with the message naming Withdraw and Archive instead."""
+    from patient_resources.services.catalog import ResourceInUseError
+
+    with (
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.delete_resource",
+            side_effect=ResourceInUseError("shared with patients"),
+        ),
+    ):
+        responses = _call("delete_resource_route", mock_staff, True, make_request)
+    assert responses[0].status_code == 409
+
+
+# --- the flag that chooses the control ------------------------------------
+
+
+def test_the_listing_tells_a_curator_which_rows_were_ever_shared(mock_staff, make_request):
+    with (
+        patch(
+            "patient_resources.routes.library_api.list_resources",
+            return_value=([_resource(12), _resource(15)], 2),
+        ),
+        patch(
+            "patient_resources.routes.library_api.resources_with_shares", return_value={12}
+        ) as lookup,
+    ):
+        data = _call("get_resources", mock_staff, True, make_request)[0].data
+
+    assert [r["ever_shared"] for r in data["resources"]] == [True, False]
+    # One lookup for the page, not one per row.
+    assert lookup.call_count == 1
+    assert lookup.call_args.args[0] == [12, 15]
+
+
+def test_a_non_curator_gets_no_flag_and_costs_no_query(mock_staff, make_request):
+    """They see no destructive controls, so the flag would be dead weight."""
+    with (
+        patch(
+            "patient_resources.routes.library_api.list_resources",
+            return_value=([_resource(12)], 1),
+        ),
+        patch("patient_resources.routes.library_api.resources_with_shares") as lookup,
+    ):
+        data = _call("get_resources", mock_staff, False, make_request)[0].data
+
+    assert "ever_shared" not in data["resources"][0]
+    lookup.assert_not_called()

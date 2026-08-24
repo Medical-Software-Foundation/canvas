@@ -222,3 +222,26 @@ def test_unviewed_count_ignores_revoked_and_archived():
     assert kwargs["revoked_at__isnull"] is True
     assert kwargs["resource__status"] == STATUS_ACTIVE
     assert kwargs["first_viewed_at__isnull"] is True
+
+
+# --- the page-wide has-shares lookup --------------------------------------
+
+
+def test_resources_with_shares_is_one_query_for_the_page():
+    PatientResourceShare.objects.filter.return_value.values_list.return_value = [12, 19]
+    assert shares.resources_with_shares([12, 15, 19]) == {12, 19}
+    assert PatientResourceShare.objects.filter.call_count == 1
+
+
+def test_resources_with_shares_short_circuits_on_an_empty_page():
+    assert shares.resources_with_shares([]) == set()
+    PatientResourceShare.objects.filter.assert_not_called()
+
+
+def test_resources_with_shares_counts_withdrawn_shares_too():
+    """A withdrawn share still means a patient received it, so the resource
+    must stay undeletable.
+    """
+    PatientResourceShare.objects.filter.return_value.values_list.return_value = [12]
+    shares.resources_with_shares([12])
+    assert "revoked_at__isnull" not in PatientResourceShare.objects.filter.call_args.kwargs

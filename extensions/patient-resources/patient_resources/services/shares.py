@@ -80,6 +80,23 @@ def shared_resource_dbids(patient_dbid: Any, resource_dbids: list[Any]) -> set[A
     )
 
 
+def resources_with_shares(resource_dbids: list[Any]) -> set[Any]:
+    """Which of these resources have ever reached a patient.
+
+    One set lookup for a whole page rather than a ``has_shares`` call per row.
+    Deliberately unfiltered on ``revoked_at``: a withdrawn share is still a
+    record that a patient received something, so it must keep the resource
+    undeletable.
+    """
+    if not resource_dbids:
+        return set()
+    return set(
+        PatientResourceShare.objects.filter(
+            resource__dbid__in=list(resource_dbids)
+        ).values_list("resource_id", flat=True)
+    )
+
+
 def share_resources(*, patient: Any, resource_dbids: list[Any], staff_dbid: Any) -> ShareResult:
     """Give a patient every one of these resources they do not already have.
 

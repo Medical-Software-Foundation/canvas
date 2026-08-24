@@ -45,7 +45,9 @@ def _safe_url(value: Any) -> str:
     return candidate if is_safe_href(candidate) else ""
 
 
-def serialize_resource(resource: Any, *, shared: bool | None = None) -> dict[str, Any]:
+def serialize_resource(
+    resource: Any, *, shared: bool | None = None, ever_shared: bool | None = None
+) -> dict[str, Any]:
     """One catalog row, for the admin library or the chart picker."""
     data: dict[str, Any] = {
         "id": resource.dbid,
@@ -59,6 +61,11 @@ def serialize_resource(resource: Any, *, shared: bool | None = None) -> dict[str
     }
     if shared is not None:
         data["shared"] = shared
+    # Distinct from `shared`, which means "this patient already has it". This one
+    # means "any patient ever received it", and it decides whether the row may be
+    # deleted at all.
+    if ever_shared is not None:
+        data["ever_shared"] = ever_shared
     return data
 
 

@@ -87,6 +87,16 @@ things are deliberate consequences:
   different under the same name, so the plugin asks you to add a replacement and
   archive the original instead. Titles and labels can still be corrected.
 
+**A resource nobody received can be deleted outright.** Archiving is the right
+answer for something you used to offer, but it is the wrong record to leave for a
+row added by mistake — a typo, a duplicate, or test data on a trial instance. So
+a resource that has never been shared with anyone offers **Delete** where a
+shared one offers **Withdraw**: one slot in the row, and which control appears
+tells you whether that resource ever reached a patient. Deletion is refused for
+anything a patient ever received, including shares that were later withdrawn,
+because the foreign keys carry no cascade and removing the catalog row would
+leave those records pointing at nothing.
+
 **Withdrawing is louder than archiving.** *Withdraw* marks every patient's copy
 as withdrawn and archives the resource. The patient's portal then says the item
 was withdrawn by their care team, with the date, rather than the row silently

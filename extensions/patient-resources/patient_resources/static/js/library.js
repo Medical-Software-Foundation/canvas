@@ -285,13 +285,6 @@
         confirmArchive(resource);
       });
       group.appendChild(archive);
-
-      var retract = el("button", "pr-action-secondary pr-danger", "Withdraw");
-      retract.type = "button";
-      retract.addEventListener("click", function () {
-        confirmRetract(resource);
-      });
-      group.appendChild(retract);
     } else {
       var restore = el("button", "pr-action-secondary", "Restore");
       restore.type = "button";
@@ -299,6 +292,27 @@
         act("/library/resources/" + resource.id + "/restore", "Restored.");
       });
       group.appendChild(restore);
+    }
+
+    // One destructive slot, and which control fills it says whether this
+    // resource ever reached a patient. Withdraw is meaningless for a resource
+    // nobody has; Delete is refused for one they do.
+    if (resource.ever_shared) {
+      var retract = el("button", "pr-action-secondary pr-danger", "Withdraw");
+      retract.type = "button";
+      retract.setAttribute("title", "Shared with patients \u2014 take it back from them");
+      retract.addEventListener("click", function () {
+        confirmRetract(resource);
+      });
+      group.appendChild(retract);
+    } else {
+      var remove = el("button", "pr-action-secondary pr-danger", "Delete");
+      remove.type = "button";
+      remove.setAttribute("title", "Never shared \u2014 safe to remove entirely");
+      remove.addEventListener("click", function () {
+        confirmDelete(resource);
+      });
+      group.appendChild(remove);
     }
 
     td.appendChild(group);
@@ -472,8 +486,8 @@
 
   // ---------- archive and withdraw ----------
 
-  function act(path, message) {
-    request(path, { method: "POST" })
+  function act(path, message, method) {
+    request(path, { method: method || "POST" })
       .then(function () {
         els.status.textContent = message;
         loadLabels();
@@ -521,6 +535,23 @@
       requireTyped: true,
       run: function () {
         act("/library/resources/" + resource.id + "/retract", "Withdrawn from patients.");
+      }
+    });
+  }
+
+  function confirmDelete(resource) {
+    openConfirm({
+      heading: "Delete resource",
+      message:
+        'Delete "' +
+        (resource.title || "this resource") +
+        '" from the library? It has never been shared with a patient, so nobody \u2014 ' +
+        "and no record \u2014 loses anything. This cannot be undone.",
+      // No typed confirmation: unlike Withdraw, this changes nothing a patient
+      // holds, so demanding a typed word would be theatre.
+      requireTyped: false,
+      run: function () {
+        act("/library/resources/" + resource.id, "Deleted.", "DELETE");
       }
     });
   }

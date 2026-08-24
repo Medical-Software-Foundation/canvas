@@ -21,6 +21,7 @@ from patient_resources.constants import STATUS_ACTIVE, STATUS_ARCHIVED
 from patient_resources.routes.support import StaffRouteMixin
 from patient_resources.services.catalog import (
     DuplicateResourceError,
+    delete_resource,
     ResourceInUseError,
     create_resource,
     distinct_labels,
@@ -32,7 +33,7 @@ from patient_resources.services.catalog import (
     update_resource,
 )
 from patient_resources.services.permissions import is_library_admin
-from patient_resources.services.shares import revoke_resource_shares
+from patient_resources.services.shares import resources_with_shares, revoke_resource_shares
 from patient_resources.services.serializers import serialize_resource
 from patient_resources.services.validation import validate_resource
 
@@ -89,10 +90,23 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             offset=offset,
         )
 
+        # Only a curator sees the destructive controls, so only a curator's
+        # response needs the flag that chooses between them. One set lookup for
+        # the page rather than a check per row.
+        ever_shared: set[Any] = set()
+        if can_edit and rows:
+            ever_shared = resources_with_shares([row.dbid for row in rows])
+
         return [
             JSONResponse(
                 {
-                    "resources": [serialize_resource(row) for row in rows],
+                    "resources": [
+                        serialize_resource(
+                            row,
+                            ever_shared=(row.dbid in ever_shared) if can_edit else None,
+                        )
+                        for row in rows
+                    ],
                     "total": total,
                     "limit": limit,
                     "offset": offset,
@@ -202,6 +216,32 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
                 serialize_resource(set_status(resource, status, staff_dbid=staff.dbid))
             )
         ]
+
+    @api.delete("/resources/<resource_id>")
+    def delete_resource_route(self) -> list[Response | Effect]:
+        """Remove a resource that never reached a patient.
+
+        The narrow case this exists for is a resource added by mistake: a typo, a
+        duplicate, or test data on a trial instance. Archiving hides such a row
+        but leaves it in the library forever, and "we used to offer this" is the
+        wrong thing to record about something that should never have existed.
+
+        Anything a patient ever received is refused with a 409 and keeps Archive
+        and Withdraw instead.
+        """
+        staff, refusal = self._curator()
+        if refusal is not None:
+            return refusal
+        resource, missing = self._resource_for_write()
+        if missing is not None:
+            return missing
+
+        try:
+            delete_resource(resource)
+        except ResourceInUseError as exc:
+            return self._conflict(str(exc))
+
+        return [JSONResponse({"deleted": True, "id": resource.dbid})]
 
     @api.post("/resources/<resource_id>/retract")
     def retract_resource(self) -> list[Response | Effect]:

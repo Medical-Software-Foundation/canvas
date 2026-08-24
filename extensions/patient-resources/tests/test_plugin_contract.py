@@ -621,3 +621,33 @@ def test_the_picker_offers_search_only():
     source = _js_code(PACKAGE / "static" / "js" / "picker.js")
     assert "labelFilter" not in source
     assert "/library/labels" not in source
+
+
+def test_the_destructive_control_depends_on_whether_a_patient_ever_had_it():
+    """One slot, and which control fills it carries the meaning.
+
+    Withdraw is meaningless for a resource nobody holds; Delete is refused for
+    one they do. Rendering both would offer an action the server rejects.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    assert "ever_shared" in source
+    assert "confirmDelete" in source
+    assert '"DELETE"' in source
+    # Delete sits inside the else branch of the ever_shared test, so the two
+    # controls cannot both render.
+    branch = source[source.index("if (resource.ever_shared)") :]
+    branch = branch[: branch.index("td.appendChild(group)")]
+    assert branch.index("Withdraw") < branch.index("else") < branch.index("Delete")
+
+
+def test_deleting_is_confirmed_but_not_typed():
+    """Withdraw demands a typed word because it changes what patients hold.
+
+    Delete reaches no patient, so the same ceremony would be theatre -- but it is
+    still irreversible, so it is still confirmed.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    block = source[source.index("function confirmDelete") :]
+    block = block[: block.index("function submitConfirm")]
+    assert "openConfirm" in block
+    assert "requireTyped: false" in block
