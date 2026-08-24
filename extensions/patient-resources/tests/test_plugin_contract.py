@@ -651,3 +651,16 @@ def test_deleting_is_confirmed_but_not_typed():
     block = block[: block.index("function submitConfirm")]
     assert "openConfirm" in block
     assert "requireTyped: false" in block
+
+
+def test_row_actions_share_a_minimum_width():
+    """So the three controls line up as columns down the table.
+
+    The group is right-aligned, so a shorter label on one row -- Delete where
+    another has Withdraw -- otherwise narrows the group and shifts that row's
+    buttons out of line with the rows above.
+    """
+    source = _css_code(PACKAGE / "static" / "css" / "library.css")
+    block = source[source.index(".pr-row-actions button") :]
+    block = block[: block.index("}")]
+    assert "min-width" in block
