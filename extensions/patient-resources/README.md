@@ -98,10 +98,11 @@ because the foreign keys carry no cascade and removing the catalog row would
 leave those records pointing at nothing.
 
 **A resource already taken back offers nothing to take back.** The row's
-destructive control follows what is actually possible: Withdraw when a patient
-currently holds it, Delete when no patient ever did, and neither when every share
-has already been withdrawn. The server refuses a withdrawal with nothing to
-revoke as well, so a direct request cannot succeed at doing nothing.
+destructive control follows what is actually possible: Delete only where no
+patient ever received it, and Withdraw for anything with share history — shown
+disabled, with the reason on hover, when every share has already been withdrawn.
+The server refuses such a withdrawal with a 409 as well, so a direct request
+cannot succeed at doing nothing.
 
 **An inactive resource says why it is inactive.** Withdrawing archives the
 resource as part of taking it back, so the library marks the row **Withdrawn**

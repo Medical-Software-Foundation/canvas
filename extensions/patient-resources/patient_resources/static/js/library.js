@@ -305,21 +305,31 @@
       group.appendChild(restore);
     }
 
-    // One destructive slot, and the control that fills it follows what is
-    // actually possible. Withdraw needs a patient currently holding it; Delete
-    // needs no share to have ever existed. A resource whose every share was
-    // already withdrawn is neither, and gets no control at all -- the Withdrawn
-    // marker beside the title is the explanation. Offering Withdraw there would
-    // revoke nothing and re-archive an archived row.
-    if (resource.has_live_shares) {
+    // One destructive slot. Delete is offered only for a resource no patient
+    // ever received; anything with share history gets Withdraw instead.
+    //
+    // Withdraw is shown disabled rather than omitted when there is nothing left
+    // to take back. An empty slot was defensible while the row also carried a
+    // "Withdrawn" marker to explain it, but a restored resource has no marker,
+    // so the row simply looked arbitrarily different from its neighbours. A
+    // disabled control with a reason says why.
+    if (resource.has_live_shares || resource.has_withdrawn_shares) {
       var retract = el("button", "pr-action-secondary pr-danger", "Withdraw");
       retract.type = "button";
-      retract.setAttribute("title", "Shared with patients \u2014 take it back from them");
-      retract.addEventListener("click", function () {
-        confirmRetract(resource);
-      });
+      if (resource.has_live_shares) {
+        retract.setAttribute("title", "Shared with patients \u2014 take it back from them");
+        retract.addEventListener("click", function () {
+          confirmRetract(resource);
+        });
+      } else {
+        retract.disabled = true;
+        retract.setAttribute(
+          "title",
+          "No patient currently holds this resource, so there is nothing to withdraw"
+        );
+      }
       group.appendChild(retract);
-    } else if (!resource.has_withdrawn_shares) {
+    } else {
       var remove = el("button", "pr-action-secondary pr-danger", "Delete");
       remove.type = "button";
       remove.setAttribute("title", "Never shared \u2014 safe to remove entirely");
