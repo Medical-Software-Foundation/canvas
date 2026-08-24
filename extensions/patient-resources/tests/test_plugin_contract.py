@@ -657,17 +657,19 @@ def test_deleting_is_confirmed_but_not_typed():
     assert "requireTyped: false" in block
 
 
-def test_row_actions_share_a_minimum_width():
-    """So the three controls line up as columns down the table.
+def test_row_actions_reserve_a_slot_whether_or_not_it_is_filled():
+    """Three fixed columns, so the controls line up down the table.
 
-    The group is right-aligned, so a shorter label on one row -- Delete where
-    another has Withdraw -- otherwise narrows the group and shifts that row's
-    buttons out of line with the rows above.
+    Flex collapses the space of a control that is not there, which slid a
+    two-button row rightwards under the three-button rows above it. A row can
+    legitimately have two: an already-withdrawn resource has nothing left to
+    withdraw and cannot be deleted either.
     """
     source = _css_code(PACKAGE / "static" / "css" / "library.css")
-    block = source[source.index(".pr-row-actions button") :]
+    block = source[source.index(".pr-row-actions {") :]
     block = block[: block.index("}")]
-    assert "min-width" in block
+    assert "inline-grid" in block
+    assert "repeat(3," in block
 
 
 def test_an_inactive_row_says_why_it_is_inactive():
