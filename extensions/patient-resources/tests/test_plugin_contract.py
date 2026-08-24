@@ -624,24 +624,37 @@ def test_the_picker_offers_search_only():
 
 
 def test_the_destructive_control_follows_what_is_actually_possible():
-    """Three states, and the row must not offer an action the server refuses.
+    """Three states, and the row must never offer an action the server refuses.
 
-    Withdraw needs a patient currently holding it. Delete needs no share to have
-    ever existed. A resource whose every share was already withdrawn is neither,
-    and must get no control at all -- offering Withdraw there revoked nothing and
-    re-archived an archived row.
+    Delete only where no patient ever received it. Withdraw for anything with
+    share history -- but disabled when every share was already taken back, since
+    a withdrawal with nothing to revoke is a 409 on the server.
+
+    Disabled rather than omitted: an empty slot read as an arbitrary difference
+    once the resource was restored and lost its "Withdrawn" marker, which had
+    been the only explanation for the gap.
     """
     source = _js_code(PACKAGE / "static" / "js" / "library.js")
     assert "confirmDelete" in source
     assert '"DELETE"' in source
 
-    branch = source[source.index("if (resource.has_live_shares)") :]
+    branch = source[source.index("if (resource.has_live_shares || resource.has_withdrawn_shares)") :]
     branch = branch[: branch.index("td.appendChild(group)")]
-    # Withdraw first, then Delete guarded by there being no withdrawn shares
-    # either. The all-withdrawn case falls through both.
-    assert branch.index("Withdraw") < branch.index("has_withdrawn_shares")
-    assert branch.index("has_withdrawn_shares") < branch.index("Delete")
-    assert "else if (!resource.has_withdrawn_shares)" in branch
+    # A click handler only on the enabled path, and disabled on the other.
+    assert "retract.disabled = true" in branch
+    assert branch.index("confirmRetract") < branch.index("retract.disabled")
+    # Delete sits outside that branch entirely, so it cannot render for a
+    # resource with any share history.
+    assert branch.index("retract.disabled") < branch.index("Delete")
+
+
+def test_a_disabled_control_explains_itself():
+    """A control that cannot be used has to say why, or it reads as a bug."""
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    block = source[source.index("retract.disabled = true") :]
+    block = block[: block.index("group.appendChild(retract)")]
+    assert "title" in block
+    assert "nothing to withdraw" in block
 
 
 def test_deleting_is_confirmed_but_not_typed():
