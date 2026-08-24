@@ -23,8 +23,14 @@ def _api(make_request, **kwargs):
     return api
 
 
-def _share(title="Managing diabetes"):
+def _share(title="Managing diabetes", live_title=None):
     share = MagicMock()
+    # The live catalog row the payload now reads its title and label from.
+    # Defaults to matching the snapshot; a test passes live_title to prove a
+    # correction reaches the patient.
+    share.resource = MagicMock()
+    share.resource.title = live_title or title
+    share.resource.label = "Diabetes"
     share.title_at_share = title
     share.url_at_share = "https://example.org/d"
     share.label_at_share = "Diabetes"
@@ -39,19 +45,21 @@ def _signed_in(patient):
 
 
 def _rows(live=(), revoked=()):
-    PatientResourceShare.objects.reset_mock()
+    """Arrange the two portal queries.
+
+    They are told apart by their chains rather than by inspecting filter
+    arguments: the live list joins the catalog row it reads the title from, and
+    the withdrawn list does not.
+    """
+    PatientResourceShare.objects.reset_mock(side_effect=True, return_value=True)
     manager = PatientResourceShare.objects.filter.return_value
 
-    def order_by(*args):
-        result = MagicMock()
-        # The live query filters on revoked_at__isnull=True, the withdrawn one on
-        # False; both land here, so pick by the most recent filter kwargs.
-        kwargs = PatientResourceShare.objects.filter.call_args.kwargs
-        rows = list(live) if kwargs.get("revoked_at__isnull") else list(revoked)
-        result.__getitem__.return_value = rows
-        return result
+    live_chain = manager.select_related.return_value.order_by.return_value
+    live_chain.__getitem__.return_value = list(live)
 
-    manager.order_by.side_effect = order_by
+    revoked_chain = manager.order_by.return_value
+    revoked_chain.__getitem__.return_value = list(revoked)
+
     manager.update.return_value = 0
 
 
@@ -93,7 +101,21 @@ def test_a_patient_query_param_is_ignored(mock_patient, make_request):
         assert call.kwargs["patient__dbid"] == mock_patient.dbid
 
 
-def test_the_list_projects_the_snapshot(mock_patient, make_request):
+def test_a_corrected_title_reaches_the_patient(mock_patient, make_request):
+    """Editing a shared resource's title has to show in the portal.
+
+    The link is frozen once shared, so the correction can only ever redescribe
+    the same resource.
+    """
+    _signed_in(mock_patient)
+    _rows(live=[_share(title="Managing diabtes", live_title="Managing diabetes")])
+    data = _api(
+        make_request, headers={SESSION_ID_HEADER: mock_patient.id}
+    ).get_my_resources()[0].data
+    assert data["resources"][0]["title"] == "Managing diabetes"
+
+
+def test_the_list_projects_the_share(mock_patient, make_request):
     _signed_in(mock_patient)
     _rows(live=[_share()])
     data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data

@@ -74,18 +74,27 @@ default.
 own Custom Data namespace, so they survive plugin upgrades and can be searched
 and paged rather than parsed out of a configuration string.
 
-**A patient's list does not change under them.** When a resource is shared, its
-title, link and label are copied onto the share record. A later edit to the
-catalog entry does not rewrite what the patient was told they received. Two
-things are deliberate consequences:
+**Correcting a title reaches patients who already have it.** The portal reads
+the resource's current title and label, so fixing a typo fixes it for everyone,
+including people who received it last month.
+
+That is safe because **a shared resource's link cannot be changed.** Once anyone
+has received it, the link is frozen and an edit is refused, with a prompt to add a
+replacement and archive the original. The link is the identity of what a patient
+was given, so with it immutable a title edit can only ever redescribe the same
+resource — never quietly swap it for a different one.
+
+Each share still stores the title, link and label as they were when it was sent.
+Those are the fallback when a catalog row is missing, and they are what a
+withdrawn notice shows, since a withdrawn resource may since have been edited and
+the patient cannot open it anyway.
+
+Two consequences of the same rule are worth knowing:
 
 - **Archiving hides a resource for everyone, immediately.** That is how a wrong
-  or harmful link is pulled back — the portal only lists shares whose catalog
-  entry is still active.
-- **A shared resource's link cannot be edited.** The link is the identity of the
-  thing the patient was given. Change it and you are handing them something
-  different under the same name, so the plugin asks you to add a replacement and
-  archive the original instead. Titles and labels can still be corrected.
+  or harmful link is pulled from the picker and from every portal at once.
+- **There is no hard delete for anything a patient received.** The foreign keys
+  carry no cascade, so removing the catalog row would orphan the share records.
 
 **A resource nobody received can be deleted outright.** Archiving is the right
 answer for something you used to offer, but it is the wrong record to leave for a

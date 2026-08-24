@@ -152,13 +152,15 @@ def test_patient_list_is_scoped_filtered_and_ordered():
         "revoked_at__isnull": True,
         "resource__status": STATUS_ACTIVE,
     }
-    order_by = PatientResourceShare.objects.filter.return_value.order_by
+    order_by = PatientResourceShare.objects.filter.return_value.select_related.return_value.order_by
     assert order_by.call_args.args == ("-shared_at", "-dbid")
 
 
 def test_patient_list_is_capped():
     shares.live_shares_for_patient(55)
-    sliced = PatientResourceShare.objects.filter.return_value.order_by.return_value
+    sliced = (
+        PatientResourceShare.objects.filter.return_value.select_related.return_value.order_by.return_value
+    )
     assert sliced.__getitem__.call_args.args[0] == slice(None, PORTAL_MAX_RESOURCES)
 
 
@@ -296,3 +298,13 @@ def test_has_live_shares_asks_only_about_unrevoked_shares():
 def test_has_live_shares_is_false_when_everything_was_withdrawn():
     PatientResourceShare.objects.filter.return_value.exists.return_value = False
     assert shares.has_live_shares(MagicMock(dbid=12)) is False
+
+
+def test_the_patient_list_fetches_the_resource_it_now_reads():
+    """The payload takes title and label from the live row, so without this join
+    every share would fetch its resource separately.
+    """
+    shares.live_shares_for_patient(55)
+    PatientResourceShare.objects.filter.return_value.select_related.assert_called_once_with(
+        "resource"
+    )

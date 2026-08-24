@@ -91,19 +91,41 @@ def serialize_share_for_staff(share: Any) -> dict[str, Any]:
 def serialize_share_for_patient(share: Any) -> dict[str, Any]:
     """One share, for the patient's own list.
 
-    Reads the snapshot columns rather than the live catalog row, so the patient's
-    record of what they were given stays what they were given.
+    Title and label come from the live catalog row, so correcting a typo reaches
+    the patients who already have it. Reading the snapshot instead meant a
+    misspelling followed them forever, with no way to fix it.
+
+    That is safe because the link is frozen once a resource has been shared: with
+    the URL immutable, a title edit can only redescribe the same resource, never
+    swap it for a different one. Repurposing was the risk the snapshot guarded
+    against, and the immutable URL already covers it.
+
+    The URL itself still comes from the snapshot. It cannot have changed, so the
+    two agree -- and the snapshot keeps working if the catalog row is ever
+    missing, since that foreign key is nullable.
     """
+    resource = getattr(share, "resource", None)
+    live_title = getattr(resource, "title", None) if resource is not None else None
+    live_label = getattr(resource, "label", None) if resource is not None else None
+
     return {
-        "title": _text(getattr(share, "title_at_share", "")),
-        "label": _text(getattr(share, "label_at_share", "")),
+        "title": _text(live_title or getattr(share, "title_at_share", "")),
+        # An empty label is a real value, so only a missing row falls back.
+        "label": _text(
+            live_label if live_label is not None else getattr(share, "label_at_share", "")
+        ),
         "url": _safe_url(getattr(share, "url_at_share", "")),
         "shared_at": _isoformat(getattr(share, "shared_at", None)),
     }
 
 
 def serialize_withdrawn_share(share: Any) -> dict[str, Any]:
-    """A withdrawn resource: named and dated, but not linkable."""
+    """A withdrawn resource: named and dated, but not linkable.
+
+    Still the snapshot here, unlike the live list. A withdrawn resource is
+    archived and may since have been edited or removed, and the patient cannot
+    open it anyway, so the name they were given is the more useful record.
+    """
     return {
         "title": _text(getattr(share, "title_at_share", "")),
         "label": _text(getattr(share, "label_at_share", "")),
