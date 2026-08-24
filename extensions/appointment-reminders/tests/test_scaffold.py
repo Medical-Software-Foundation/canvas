@@ -78,9 +78,6 @@ def test_credential_variables_are_marked_sensitive() -> None:
         "twilio-api-key-sid",
         "twilio-api-key-secret",
         "sendgrid-api-key",
-        # Not credentials, but they hold patient identifiers and contact details.
-        "TESTING_MODE_PATIENTS",
-        "TESTING_MODE_RECIPIENTS",
     }
     for name in must_be_masked:
         assert declared.get(name) is True, f"{name} must be declared sensitive"
@@ -112,9 +109,6 @@ def test_every_variable_used_in_code_is_declared() -> None:
         "twilio-inbound-webhook-url",
         "sendgrid-api-key",
         "sendgrid-from-email",
-        "TESTING_MODE",
-        "TESTING_MODE_PATIENTS",
-        "TESTING_MODE_RECIPIENTS",
         "LOCK_MESSAGE_TEMPLATES",
         "ADMIN_ROLE_NAMES",
     ):
@@ -125,3 +119,18 @@ def test_no_legacy_bigleap_references_in_manifest() -> None:
     raw = (PLUGIN_DIR / "CANVAS_MANIFEST.json").read_text().lower()
     for term in ("big_leap", "bigleap", "spravato", "rebate", "forms_with_signature"):
         assert term not in raw, f"manifest still contains legacy term {term!r}"
+
+
+def test_plugin_config_holds_only_credentials_and_permissions() -> None:
+    """Operational settings belong in the admin app, not plugin config.
+
+    Plugin config requires instance-level access to change, which is the right
+    bar for credentials and for who may administer the plugin — and the wrong
+    bar for day-to-day operation. Testing mode used to live here and now lives
+    in CampaignConfig, where an administrator can reach it.
+    """
+    declared = set(_declared_variables())
+    operational = {"TESTING_MODE", "TESTING_MODE_PATIENTS", "TESTING_MODE_RECIPIENTS"}
+    assert not (declared & operational), (
+        "operational settings must not be declared as plugin variables"
+    )

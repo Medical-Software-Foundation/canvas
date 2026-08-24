@@ -445,3 +445,48 @@ def test_collect_templates_ignores_non_template_fields() -> None:
 
 
 
+
+
+# ---- testing mode (moved out of plugin secrets into admin-editable config) ----
+
+def test_testing_mode_round_trips_through_to_dict() -> None:
+    config = CampaignConfig(
+        testing_mode=True,
+        testing_mode_patients=["pat-1", "pat-2"],
+        testing_mode_recipients=["+14155551234", "me@example.com"],
+    )
+    restored = CampaignConfig.from_dict(config.to_dict())
+    assert restored.testing_mode is True
+    assert restored.testing_mode_patients == ["pat-1", "pat-2"]
+    assert restored.testing_mode_recipients == ["+14155551234", "me@example.com"]
+
+
+def test_testing_mode_defaults_on_for_a_config_row_that_predates_it() -> None:
+    """The upgrade path that matters.
+
+    An instance whose stored config was written before this setting existed
+    must land with the gate shut. Defaulting off would silently start texting
+    every patient the moment the TESTING_MODE secret stopped being read.
+    """
+    restored = CampaignConfig.from_dict({"reminders_enabled": True})
+    assert restored.testing_mode is True
+    assert restored.testing_mode_patients == []
+
+
+def test_testing_mode_allowlists_accept_text() -> None:
+    """The admin textareas post newlines; operators paste commas."""
+    restored = CampaignConfig.from_dict({
+        "testing_mode_patients": "pat-1, pat-2 ,,",
+        "testing_mode_recipients": "+14155551234\nme@example.com\n",
+    })
+    assert restored.testing_mode_patients == ["pat-1", "pat-2"]
+    assert restored.testing_mode_recipients == ["+14155551234", "me@example.com"]
+
+
+def test_testing_mode_allowlists_tolerate_junk() -> None:
+    restored = CampaignConfig.from_dict({
+        "testing_mode_patients": None,
+        "testing_mode_recipients": 42,
+    })
+    assert restored.testing_mode_patients == []
+    assert restored.testing_mode_recipients == []

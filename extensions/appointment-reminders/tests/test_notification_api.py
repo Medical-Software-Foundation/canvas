@@ -200,6 +200,19 @@ def test_get_business_lines_returns_active_lines() -> None:
 
 # ---- get_integration_status ----
 
+def _status(api) -> dict:
+    """Call get_integration_status with the config read stubbed out.
+
+    Testing mode moved from a plugin secret into CampaignConfig, so this
+    endpoint now reads the config singleton.
+    """
+    with patch(
+        "appointment_reminders.handlers.notification_api.load_config",
+        return_value=CampaignConfig(),
+    ):
+        return api.get_integration_status()
+
+
 def test_integration_status_all_configured() -> None:
     api = _api()
     api.secrets = {
@@ -209,14 +222,14 @@ def test_integration_status_all_configured() -> None:
         "sendgrid-api-key": "SG",
         "sendgrid-from-email": "from@example.com",
     }
-    result = api.get_integration_status()
+    result = _status(api)
     assert result[0].status_code == HTTPStatus.OK
 
 
 def test_integration_status_neither_configured() -> None:
     api = _api()
     api.secrets = {}
-    result = api.get_integration_status()
+    result = _status(api)
     assert result[0].status_code == HTTPStatus.OK
 
 
@@ -319,18 +332,19 @@ def test_save_config_endpoint_allows_template_edit_when_unlocked() -> None:
 
 def test_integration_status_reports_lock_state() -> None:
     """The admin page reads the lock from here to render read-only templates."""
-    unlocked = _api(secrets={})
-    locked = _api(secrets=_LOCKED)
-    assert json.loads(unlocked.get_integration_status()[0].content)["templates_locked"] is False
-    assert json.loads(locked.get_integration_status()[0].content)["templates_locked"] is True
+    assert json.loads(_status(_api(secrets={}))[0].content)["templates_locked"] is False
+    assert json.loads(_status(_api(secrets=_LOCKED))[0].content)["templates_locked"] is True
 
 
-def test_integration_status_reports_testing_mode() -> None:
-    """Drives the live-sending warning banner in the admin app."""
-    off = _api(secrets={})
-    on = _api(secrets={"TESTING_MODE": "true"})
-    assert json.loads(off.get_integration_status()[0].content)["testing_mode"] is False
-    assert json.loads(on.get_integration_status()[0].content)["testing_mode"] is True
+def test_integration_status_reports_testing_mode_from_config() -> None:
+    """Drives the live-sending warning banner. Read from config, not a secret."""
+    for testing_mode in (True, False):
+        with patch(
+            "appointment_reminders.handlers.notification_api.load_config",
+            return_value=CampaignConfig(testing_mode=testing_mode),
+        ):
+            body = json.loads(_api().get_integration_status()[0].content)
+        assert body["testing_mode"] is testing_mode
 
 
 # ---- get_patient_detail ----

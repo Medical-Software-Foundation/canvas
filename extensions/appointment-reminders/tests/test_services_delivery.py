@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from appointment_reminders.services.config import CampaignConfig
 from appointment_reminders.services.delivery import (
     DeliveryResult,
     _build_metadata_effects,
@@ -368,6 +369,20 @@ def _full_secrets() -> dict[str, str]:
     }
 
 
+def _cfg(testing_mode: bool = False, patients=None, recipients=None) -> CampaignConfig:
+    """Config for a delivery call.
+
+    Testing mode defaults OFF here so the ordinary delivery tests exercise the
+    sending path. Note this inverts the *product* default, which is ON — see
+    test_testing_mode_defaults_on.
+    """
+    return CampaignConfig(
+        testing_mode=testing_mode,
+        testing_mode_patients=patients or [],
+        testing_mode_recipients=recipients or [],
+    )
+
+
 def test_deliver_to_patient_uses_from_number_override(_full_secrets) -> None:
     """A per-business-line from_number overrides the global Twilio number."""
     patient = _patient_with_contacts("4155551234", None)
@@ -387,6 +402,7 @@ def test_deliver_to_patient_uses_from_number_override(_full_secrets) -> None:
             secrets=_full_secrets,
             appointment_id="appt-1",
             from_number="+15555550199",
+            config=_cfg(),
         )
     assert mock_send.call_args.kwargs["from_number"] == "+15555550199"
 
@@ -409,6 +425,7 @@ def test_deliver_to_patient_falls_back_to_global_from_number(_full_secrets) -> N
             campaign_type="reminder",
             secrets=_full_secrets,
             appointment_id="appt-1",
+            config=_cfg(),
         )
     assert mock_send.call_args.kwargs["from_number"] == "+18001112222"
 
@@ -432,6 +449,7 @@ def test_deliver_to_patient_skips_sms_when_keys_missing(_full_secrets) -> None:
             campaign_type="reminder",
             secrets=secrets,
             appointment_id="appt-1",
+            config=_cfg(),
         )
 
     sms_result = next(r for r in results if r.channel == "sms")
@@ -457,6 +475,7 @@ def test_deliver_to_patient_skips_sms_when_no_phone(_full_secrets) -> None:
             campaign_type="reminder",
             secrets=_full_secrets,
             appointment_id="appt-1",
+            config=_cfg(),
         )
 
     sms_result = next(r for r in results if r.channel == "sms")
@@ -482,6 +501,7 @@ def test_deliver_to_patient_skips_email_when_keys_missing(_full_secrets) -> None
             campaign_type="reminder",
             secrets=secrets,
             appointment_id="appt-1",
+            config=_cfg(),
         )
 
     email_result = next(r for r in results if r.channel == "email")
@@ -506,6 +526,7 @@ def test_deliver_to_patient_skips_email_when_no_email_on_file(_full_secrets) -> 
             campaign_type="reminder",
             secrets=_full_secrets,
             appointment_id="appt-1",
+            config=_cfg(),
         )
 
     email_result = next(r for r in results if r.channel == "email")
@@ -531,6 +552,7 @@ def test_deliver_to_patient_no_appointment_id_returns_no_metadata_effects(_full_
             campaign_type="message_notification",
             secrets=_full_secrets,
             appointment_id="",
+            config=_cfg(),
         )
     assert effects == []
     assert len(results) == 2
@@ -558,6 +580,7 @@ def test_deliver_to_patient_sms_failure_logs_warning(_full_secrets) -> None:
             campaign_type="reminder",
             secrets=_full_secrets,
             appointment_id="appt-1",
+            config=_cfg(),
         )
     # Both sends failed but we still got results back
     assert len(results) == 2
@@ -566,18 +589,29 @@ def test_deliver_to_patient_sms_failure_logs_warning(_full_secrets) -> None:
 
 # ---- testing mode gate (safe-launch / troubleshooting allowlist) ----
 
-def _tm_secrets(base: dict, **over) -> dict:
-    s = dict(base)
-    s.update(over)
-    return s
+def test_is_testing_mode_active_reads_the_config() -> None:
+    assert is_testing_mode_active(CampaignConfig(testing_mode=True)) is True
+    assert is_testing_mode_active(CampaignConfig(testing_mode=False)) is False
 
 
-def test_is_testing_mode_active_parsing() -> None:
-    for v in ("true", "TRUE", "on", "1", "yes"):
-        assert is_testing_mode_active({"TESTING_MODE": v}) is True
-    for v in ("false", "0", "", "off"):
-        assert is_testing_mode_active({"TESTING_MODE": v}) is False
-    assert is_testing_mode_active({}) is False
+def test_testing_mode_defaults_on() -> None:
+    """Fail closed by default.
+
+    A fresh install, and one upgrading from the old TESTING_MODE secret, must
+    both land with the gate shut rather than silently broadcasting to every
+    patient. With both allowlists empty that means nothing sends at all.
+    """
+    assert CampaignConfig().testing_mode is True
+    assert CampaignConfig().testing_mode_patients == []
+    assert CampaignConfig().testing_mode_recipients == []
+
+
+def test_is_testing_mode_active_assumes_on_when_the_field_is_absent() -> None:
+    """An object predating the field must not read as an open gate."""
+    class Old:
+        pass
+
+    assert is_testing_mode_active(Old()) is True
 
 
 def test_recipient_allowlisted_phone_normalized_and_email_ci() -> None:
@@ -598,47 +632,46 @@ def test_patient_allowlisted_matches_any_identifier() -> None:
     assert _patient_allowlisted(p, set()) is False
 
 
-def _deliver_sms(patient, secrets):
+def _deliver_sms(patient, secrets, config):
     with patch("appointment_reminders.services.delivery.AppointmentsMetadata") as mm, \
          patch("appointment_reminders.services.delivery._send_sms",
                return_value=DeliveryResult(success=True, channel="sms", message_id="SM1")) as ms:
         mm.return_value.upsert.return_value = MagicMock()
         _, results = deliver_to_patient(
             patient, sms_content="hi", email_content="", channels=["sms"],
-            campaign_type="confirmation", secrets=secrets, appointment_id="a1")
+            campaign_type="confirmation", secrets=secrets, appointment_id="a1",
+            config=config)
     return ms, results
 
 
 def test_testing_mode_sends_when_patient_and_recipient_allowlisted(_full_secrets) -> None:
     p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
-    ms, results = _deliver_sms(p, _tm_secrets(
-        _full_secrets, TESTING_MODE="true",
-        TESTING_MODE_PATIENTS="pat-1", TESTING_MODE_RECIPIENTS="+14155551234"))
+    ms, results = _deliver_sms(p, _full_secrets, _cfg(
+        True, patients=["pat-1"], recipients=["+14155551234"]))
     ms.assert_called_once()
     assert results[0].success is True
 
 
 def test_testing_mode_blocks_when_recipient_not_allowlisted(_full_secrets) -> None:
     p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
-    ms, results = _deliver_sms(p, _tm_secrets(
-        _full_secrets, TESTING_MODE="true",
-        TESTING_MODE_PATIENTS="pat-1", TESTING_MODE_RECIPIENTS="+19998887777"))
+    ms, results = _deliver_sms(p, _full_secrets, _cfg(
+        True, patients=["pat-1"], recipients=["+19998887777"]))
     ms.assert_not_called()
     assert results[0].error == "skipped:testing_mode"
 
 
 def test_testing_mode_blocks_when_patient_not_allowlisted(_full_secrets) -> None:
     p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
-    ms, results = _deliver_sms(p, _tm_secrets(
-        _full_secrets, TESTING_MODE="true",
-        TESTING_MODE_PATIENTS="someone-else", TESTING_MODE_RECIPIENTS="+14155551234"))
+    ms, results = _deliver_sms(p, _full_secrets, _cfg(
+        True, patients=["someone-else"], recipients=["+14155551234"]))
     ms.assert_not_called()
     assert results[0].error == "skipped:testing_mode"
 
 
 def test_testing_mode_fail_closed_when_allowlists_empty(_full_secrets) -> None:
+    """The default state of a fresh install: on, with nothing allowlisted."""
     p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
-    ms, results = _deliver_sms(p, _tm_secrets(_full_secrets, TESTING_MODE="true"))
+    ms, results = _deliver_sms(p, _full_secrets, _cfg(True))
     ms.assert_not_called()
     assert results[0].error == "skipped:testing_mode"
 
@@ -646,8 +679,21 @@ def test_testing_mode_fail_closed_when_allowlists_empty(_full_secrets) -> None:
 def test_testing_mode_off_ignores_allowlists(_full_secrets) -> None:
     # Allowlists present but mode off ⇒ normal send (gate inactive).
     p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
-    ms, results = _deliver_sms(p, _tm_secrets(
-        _full_secrets, TESTING_MODE_PATIENTS="nobody", TESTING_MODE_RECIPIENTS="+19998887777"))
+    ms, results = _deliver_sms(p, _full_secrets, _cfg(
+        False, patients=["nobody"], recipients=["+19998887777"]))
+    ms.assert_called_once()
+    assert results[0].success is True
+
+
+def test_testing_mode_tolerates_allowlists_stored_as_text(_full_secrets) -> None:
+    """A hand-edited config row may hold the lists as comma/newline text."""
+    p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
+    config = CampaignConfig.from_dict({
+        "testing_mode": True,
+        "testing_mode_patients": "pat-1, other",
+        "testing_mode_recipients": "+14155551234\n+19998887777",
+    })
+    ms, results = _deliver_sms(p, _full_secrets, config)
     ms.assert_called_once()
     assert results[0].success is True
 
@@ -655,13 +701,41 @@ def test_testing_mode_off_ignores_allowlists(_full_secrets) -> None:
 def test_testing_mode_gates_email_channel(_full_secrets) -> None:
     # Patient allowlisted + phone allowlisted, but the EMAIL address is not ⇒ email blocked.
     p = _patient_with_contacts(None, "pt@example.com"); p.id = "pat-1"
-    secrets = _tm_secrets(_full_secrets, TESTING_MODE="true",
-                          TESTING_MODE_PATIENTS="pat-1", TESTING_MODE_RECIPIENTS="+14155551234")
     with patch("appointment_reminders.services.delivery.AppointmentsMetadata") as mm, \
          patch("appointment_reminders.services.delivery._send_email") as me:
         mm.return_value.upsert.return_value = MagicMock()
         _, results = deliver_to_patient(
             p, sms_content="", email_content="e", channels=["email"],
-            campaign_type="confirmation", secrets=secrets, appointment_id="a1")
+            campaign_type="confirmation", secrets=_full_secrets, appointment_id="a1",
+            config=_cfg(True, patients=["pat-1"], recipients=["+14155551234"]))
     me.assert_not_called()
+    assert results[0].error == "skipped:testing_mode"
+
+
+def test_passing_config_avoids_a_per_delivery_config_read(_full_secrets) -> None:
+    """Callers hand over the config they already hold.
+
+    Falling back to load_config() here would be one query per patient inside
+    the reminder cron's loop, which is why every call site passes it.
+    """
+    p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
+    with patch("appointment_reminders.services.delivery.load_config") as mock_load:
+        _deliver_sms(p, _full_secrets, _cfg())
+    mock_load.assert_not_called()
+
+
+def test_omitting_config_falls_back_to_loading_it(_full_secrets) -> None:
+    """The fallback still has to work — and still has to fail closed."""
+    p = _patient_with_contacts("4155551234", None); p.id = "pat-1"
+    with patch("appointment_reminders.services.delivery.load_config",
+               return_value=CampaignConfig()) as mock_load, \
+         patch("appointment_reminders.services.delivery.AppointmentsMetadata") as mm, \
+         patch("appointment_reminders.services.delivery._send_sms") as ms:
+        mm.return_value.upsert.return_value = MagicMock()
+        _, results = deliver_to_patient(
+            p, sms_content="hi", email_content="", channels=["sms"],
+            campaign_type="confirmation", secrets=_full_secrets, appointment_id="a1")
+
+    mock_load.assert_called_once()
+    ms.assert_not_called()  # default config has testing mode on, allowlists empty
     assert results[0].error == "skipped:testing_mode"

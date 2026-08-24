@@ -851,7 +851,39 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                         Direct delivery not fully configured. Add Twilio/SendGrid secrets to enable SMS/email.
                     </div>
                     <div id="broadcast_warning" style="margin-top:8px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
-                        <strong>Live sending.</strong> A campaign is enabled and <strong>TESTING_MODE</strong> is off, so saved changes reach every patient with a consented phone or email. Before the first live run, confirm Canvas's native <strong>appointmentReminders</strong> organization setting has been cleared — if it is still set, patients receive two reminders.
+                        <strong>Live sending.</strong> A campaign is enabled and <strong>testing mode</strong> is off, so saved changes reach every patient with a consented phone or email. Before the first live run, confirm Canvas's native <strong>appointmentReminders</strong> organization setting has been cleared — if it is still set, patients receive two reminders.
+                    </div>
+                </div>
+            </div>
+
+            <div class="campaign-card" id="testing_mode_card">
+                <div class="campaign-header" style="cursor:default;">
+                    <div class="campaign-title">Testing mode</div>
+                    <label class="toggle" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="testing_mode" onchange="updateTestingModeUI()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="campaign-body">
+                    <p style="color:var(--text-soft);font-size:13px;margin-top:0;">
+                        A safe-launch gate. While it is on, a message sends only when <strong>both</strong>
+                        the patient and the destination address appear in the lists below. Everything
+                        else is skipped, whatever the campaigns say.
+                    </p>
+                    <div id="testing_mode_closed_warning" style="margin-bottom:12px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
+                        <strong>Nothing is sending.</strong> Testing mode is on and at least one list is
+                        empty, so every message is being skipped. Add a patient and a recipient to test
+                        with, or turn testing mode off to go live.
+                    </div>
+                    <div class="form-group">
+                        <label for="testing_mode_patients">Allowed patients</label>
+                        <textarea id="testing_mode_patients" rows="3" placeholder="One patient id per line"></textarea>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Copy the id from the chart URL. Matched against the patient's id, key, or dbid, so whichever value you paste works.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="testing_mode_recipients">Allowed recipients</label>
+                        <textarea id="testing_mode_recipients" rows="3" placeholder="One phone or email per line"></textarea>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Your own mobile and inbox. Phones compared in normalized E.164, emails case-insensitively; one list may mix both.</p>
                     </div>
                 </div>
             </div>
@@ -1572,6 +1604,38 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             document.getElementById('default_attribution_input').value = config.default_attribution || '';
             savedBusinessLineOverrides = config.business_line_overrides || {};
             loadBusinessLines();
+
+            // Absent means an older config row that predates the setting. Treat
+            // that as ON, matching the server-side default — erring toward
+            // "nothing sends" rather than showing a gate as open when the
+            // server considers it closed.
+            document.getElementById('testing_mode').checked =
+                config.testing_mode === undefined ? true : !!config.testing_mode;
+            document.getElementById('testing_mode_patients').value =
+                (config.testing_mode_patients || []).join('\\n');
+            document.getElementById('testing_mode_recipients').value =
+                (config.testing_mode_recipients || []).join('\\n');
+            updateTestingModeUI();
+        }
+
+        function splitLines(id) {
+            return document.getElementById(id).value
+                .split(/[\\n,]/)
+                .map(function(s) { return s.trim(); })
+                .filter(function(s) { return s.length > 0; });
+        }
+
+        function updateTestingModeUI() {
+            var on = document.getElementById('testing_mode').checked;
+            // Mirror the server's fail-closed rule: on, with either list empty,
+            // means every send is skipped. Silent in that state is the failure
+            // mode the banner exists to prevent.
+            var starved = on && (splitLines('testing_mode_patients').length === 0 ||
+                                 splitLines('testing_mode_recipients').length === 0);
+            document.getElementById('testing_mode_closed_warning').style.display =
+                starved ? '' : 'none';
+            testingModeActive = on;
+            updateBroadcastWarning();
         }
 
         function parseDuration(str) {
@@ -2241,7 +2305,10 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 if (!data.twilio_configured && !data.sendgrid_configured) {
                     document.getElementById('integration_fallback_note').style.display = '';
                 }
-                testingModeActive = !!data.testing_mode;
+                // Testing mode is not read from here any more — it lives in the
+                // config the form already holds, so the checkbox is the live
+                // source and this response would go stale the moment it is
+                // toggled. Only the credential checks come from this call.
                 integrationStatusLoaded = true;
                 updateBroadcastWarning();
             } catch (e) {
@@ -2249,8 +2316,8 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             }
         }
 
-        // Set from /admin/integration-status; the server re-checks on save, so
-        // this only drives presentation.
+        // Mirrors the testing-mode checkbox, kept current by updateTestingModeUI.
+        // The server re-checks on every send, so this only drives presentation.
         var testingModeActive = false;
         var integrationStatusLoaded = false;
 
@@ -2300,6 +2367,9 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 telehealth_intervals: telehealthIntervals.slice(),
                 note_type_reminders: gatherNoteTypeReminders(),
                 default_attribution: document.getElementById('default_attribution_input').value.trim(),
+                testing_mode: document.getElementById('testing_mode').checked,
+                testing_mode_patients: splitLines('testing_mode_patients'),
+                testing_mode_recipients: splitLines('testing_mode_recipients'),
                 business_line_overrides: gatherBusinessLineOverrides(),
             };
 
@@ -2472,7 +2542,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     "twilio_configured": twilio_configured,
                     "sendgrid_configured": sendgrid_configured,
                     "templates_locked": templates_locked(self.secrets),
-                    "testing_mode": is_testing_mode_active(self.secrets),
+                    "testing_mode": is_testing_mode_active(load_config()),
                 },
                 status_code=HTTPStatus.OK,
             )
@@ -2904,6 +2974,9 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         # reminder/confirmation paths) so the patient sees one consistent sender;
         # falls back to the global Twilio number when the line has no number.
         business_line = get_business_line_name(patient)
+        # One read, used for both the business-line from-number and the
+        # testing-mode gate inside delivery.
+        config = load_config()
         effects, results = deliver_to_patient(
             patient,
             sms_content,
@@ -2912,7 +2985,8 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             campaign_type,
             self.secrets,
             appointment_id or note_id,
-            from_number=get_business_line_from_number(load_config(), business_line),
+            from_number=get_business_line_from_number(config, business_line),
+            config=config,
         )
 
         # Skip appointment metadata effects for note-only sends

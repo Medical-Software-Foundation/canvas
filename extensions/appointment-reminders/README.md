@@ -9,7 +9,7 @@ Appointment reminders and confirmations over SMS and email, with per-business-li
 - **Two-way structured confirm** — a signature-gated Twilio inbound webhook: `Y` confirms the patient's nearest upcoming appointment, `N` opens a follow-up Task. Strict Y/N token match (no free-form), `MessageSid` replay dedup, fail-closed signature check.
 - **STOP writes back to the chart** — a patient who texts a Twilio opt-out keyword has `has_consent` cleared on the number they texted from, so the opt-out survives in Canvas and not just in Twilio's block list. `START` / `UNSTOP` / `YES` restore it.
 - **Admin console gated by role** — the `/admin` endpoints require a staff role listed in `ADMIN_ROLE_NAMES`. Fail-closed: unset means nobody.
-- **Testing-mode gate** — a fail-closed allowlist (`TESTING_MODE`) that restricts *all* sends to specific patients **and** recipients, for safe troubleshooting on a live instance.
+- **Testing-mode gate** — a fail-closed allowlist, set in the admin app, that restricts *all* sends to specific patients **and** recipients. On by default, so a fresh install cannot message anyone until someone deliberately opens it up.
 
 > **Reminder and telehealth-join are independent campaigns, so overlapping intervals double up.** Telehealth-join runs whether or not the reminder campaign is on for that visit type. Give them the same interval and a patient with a telehealth visit receives two SMS and two emails about the same appointment, seconds apart (observed in UAT with both set to 15 minutes). Configure around it: stagger the intervals, for example reminders at 45 minutes and the join nudge at 15, or switch the reminder campaign off for telehealth visit types under **Per-visit-type settings**.
 
@@ -56,14 +56,13 @@ If you need one reminder, at one interval, with one wording, Canvas's native set
 
 ## Pre-install checklist
 
-Work through these in order. Steps 1–3 are required before enabling any campaign; step 4 applies only if you want two-way confirmation.
+Work through these in order. Steps 1–3 are required before enabling any campaign, step 4 applies only if you want two-way confirmation, and step 5 is how you should do the first run.
 
 1. **Check whether native reminders are on.** Look for the `appointmentReminders` organization setting. If it holds a value like `{"daysAhead": 3, "hourOfDay": 9}`, native reminders are **active**. If the setting is absent, they're off — absence is how "disabled" is represented; there is no `false` form.
 2. **Clear it if present**, via Django admin or Canvas support, and coordinate the timing with enabling this plugin. Anything else means either a gap in coverage or double messages. Note that clearing it also **retires the native `Y` confirm loop**, which is gated on the same setting — this plugin rebuilds that flow, but only once step 4 is done.
 3. **Set the required variables**, including `ADMIN_ROLE_NAMES` — without it nobody can open the admin app — then verify it shows Twilio and SendGrid as *Configured*. Missing credentials mean campaigns silently deliver nothing.
 4. **For two-way confirm, provision a dedicated Twilio number** whose inbound webhook points at `…/plugin-io/api/appointment_reminders/twilio/inbound`, and set `twilio-inbound-webhook-url` to that exact URL. See *Integration with Canvas core* below — this has real lead time and can't be done at the last minute.
-
-**Strongly recommended for the first run:** set `TESTING_MODE=true` plus `TESTING_MODE_PATIENTS` and `TESTING_MODE_RECIPIENTS`, enable one campaign, and confirm delivery to your own phone or inbox before opening it up. The gate is fail-closed — with `TESTING_MODE` on, a message sends only when **both** the patient and the recipient address are allowlisted. While a campaign is enabled and `TESTING_MODE` is off, the admin app shows a live-sending warning.
+5. **Do the first run behind testing mode.** It is on by default. Add yourself under **Testing mode** in the admin app, enable one campaign, and confirm delivery to your own phone or inbox before turning it off. See *Testing mode* below.
 
 ## Components
 
@@ -81,7 +80,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 
 | File | Purpose |
 | --- | --- |
-| `services/config.py` | `CampaignConfig` dataclass + load/save via `CampaignConfigRecord` |
+| `services/config.py` | `CampaignConfig` dataclass (campaigns, attribution, testing mode) + load/save via `CampaignConfigRecord` |
 | `services/delivery.py` | Twilio SMS + SendGrid email senders; consent + testing-mode gates; delivery audit |
 | `services/templates.py` | Variable extraction + `{{placeholder}}` rendering |
 | `services/business_line.py` | Resolve per-line attribution + from-number from config |
@@ -100,7 +99,7 @@ Set these with `canvas config set appointment_reminders --host <hostname> KEY=va
 
 Each is declared in `CANVAS_MANIFEST.json` under `variables`, with a `sensitive` flag that decides whether the value can be read back. **Sensitive** values are write-only: masked in the Admin UI and reported by `canvas config list` only as `[set]` / `[not set]`. Non-sensitive values are readable, which is what you want for things you'll need to eyeball — the from-number, the webhook URL, the allowed admin roles. The **Masked** column below records which is which; `canvas config set` never changes the flag, only the manifest does.
 
-Every credential is sensitive. So are the two testing-mode allowlists, since they hold patient identifiers and contact details rather than configuration.
+Every credential is sensitive. Everything here is either a credential or a staff permission — operational settings such as testing mode live in the admin app instead, where an administrator can reach them without instance-level access.
 
 Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`, and `twilio-phone-number` for SMS, plus `sendgrid-api-key` and `sendgrid-from-email` for email. Those exact five are what the admin app checks before showing *Configured*.
 
@@ -115,15 +114,24 @@ Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`
 | `twilio-inbound-webhook-url` | No | Only for two-way confirm | The exact URL Twilio POSTs to. The signature is computed over this string, so any mismatch fails closed and replies are rejected | You choose it: `https://<hostname>/plugin-io/api/appointment_reminders/twilio/inbound`. Paste the identical string into the number's "A message comes in" webhook in Twilio |
 | `sendgrid-api-key` | Yes | Yes, for email | Authenticates the send | SendGrid → Settings → API Keys → Create. Needs Mail Send permission. Starts `SG.` |
 | `sendgrid-from-email` | No | Yes, for email | The From address on every email | Any address you have verified in SendGrid → Settings → Sender Authentication. Unverified senders are rejected at send time |
-| `TESTING_MODE` | No | No | `1`/`true`/`yes`/`on` restricts **all** sending to the two allowlists below. Fail-closed: with it on and the lists empty, nothing sends at all | You set it. Strongly recommended for a first run |
-| `TESTING_MODE_PATIENTS` | Yes | With `TESTING_MODE` | Comma-separated patient identifiers allowed to receive. Matched against the patient's id, key, or dbid, so whichever value you copy works | Copy the patient id from the chart URL |
-| `TESTING_MODE_RECIPIENTS` | Yes | With `TESTING_MODE` | Comma-separated addresses allowed to receive. Phones compared in normalized E.164, emails case-insensitively; one list may mix both | Your own mobile and inbox, e.g. `+15551234567,you@example.com` |
 | `LOCK_MESSAGE_TEMPLATES` | No | No | `1`/`true`/`yes`/`on` stops **manual senders** departing from the approved copy. See below. Unset means a manual send can be reworded freely | You set it |
 | `ADMIN_ROLE_NAMES` | No | Yes, to use the admin app | Comma-separated staff roles allowed to open the admin console and call its endpoints. Fail-closed: unset locks **everyone** out, including you. See *Who can open the admin app* | Your instance's role names, e.g. `Practice Manager,Administrator`. Either the display name or the internal code matches |
 
 **Outbound Twilio auth** picks the API key when `twilio-api-key-sid` and `twilio-api-key-secret` are both set, and otherwise falls back to `twilio-account-sid` + `twilio-auth-token` (`services/delivery.py:_twilio_auth`). The request URL is built from the account SID either way, which is why that secret is required even under API-key auth.
 
-A send needs **both** allowlists to match when `TESTING_MODE` is on: the patient *and* the destination address. One without the other sends nothing, which is deliberate.
+## Testing mode
+
+A fail-closed safe-launch gate, set under **Testing mode** in the admin app. While it is on, a message sends only when **both** the patient and the destination address are allowlisted. One without the other sends nothing, which is deliberate.
+
+**It is on by default, with both lists empty — so a fresh install sends nothing to anyone.** That is the intended starting state: add yourself, enable one campaign, confirm the message arrives, then turn the gate off to go live. While a campaign is enabled and testing mode is off, the admin app shows a live-sending warning; while testing mode is on with an empty list, it warns that nothing is sending at all.
+
+Allowed patients are matched against the patient's id, key, or dbid, so whichever value you copy from the chart URL works. Allowed recipients may mix phones and emails — phones are compared in normalized E.164, emails case-insensitively.
+
+### It used to be a plugin secret
+
+Through 0.8.x this was the `TESTING_MODE`, `TESTING_MODE_PATIENTS`, and `TESTING_MODE_RECIPIENTS` plugin variables. It moved into campaign config in 0.9.0, because it is an operational setting rather than a credential: plugin config takes instance-level access to change, which is the right bar for secrets and for who may administer the plugin, and the wrong bar for the person running a test send. Anyone who can enable a campaign in the admin app can already cause live sending, so gating this behind plugin config bought nothing.
+
+**Upgrading from 0.8.x:** the old variables are no longer read. Testing mode defaults to **on**, so an instance that was running behind the gate stays behind it rather than silently broadcasting the moment the secret stops being consulted — but the allowlists do **not** carry over, so re-enter them in the admin app before your next test send. If you were running with testing mode off, you must turn it off again in the admin app before anything sends. Clear the three stale values with `canvas config unset` at your convenience; they are inert.
 
 ### Who can open the admin app
 

@@ -9,6 +9,8 @@ from canvas_sdk.effects.appointments_metadata import AppointmentsMetadata
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
+from appointment_reminders.services.config import load_config
+
 
 @dataclass
 class DeliveryResult:
@@ -205,23 +207,28 @@ def _has_direct_email_keys(secrets: dict[str, str]) -> bool:
     return all(secrets.get(k) for k in ("sendgrid-api-key", "sendgrid-from-email"))
 
 
-_TESTING_TRUE = {"1", "true", "yes", "on"}
-
-
-def is_testing_mode_active(secrets: dict[str, str]) -> bool:
+def is_testing_mode_active(config: Any) -> bool:
     """Global safe-launch/troubleshooting gate.
 
-    When ``TESTING_MODE`` is on, ALL outbound is suppressed unless BOTH the
-    patient AND the recipient address are on their allowlists — a hard, fail-closed
-    restriction so the plugin can be exercised on any instance (incl. prod) without
-    messaging the general population. Empty/absent allowlists ⇒ nothing sends.
+    When testing mode is on, ALL outbound is suppressed unless BOTH the patient
+    AND the recipient address are on their allowlists — a hard, fail-closed
+    restriction so the plugin can be exercised on any instance (incl. prod)
+    without messaging the general population. Empty allowlists ⇒ nothing sends.
+
+    Read from the campaign config, which is where an administrator sets it in
+    the admin app. It used to be the ``TESTING_MODE`` plugin secret; plugin
+    config is now reserved for credentials and staff permissions.
     """
-    return (secrets.get("TESTING_MODE") or "").strip().lower() in _TESTING_TRUE
+    return bool(getattr(config, "testing_mode", True))
 
 
-def _csv_set(raw: str | None) -> set[str]:
-    """Parse a comma-separated secret into a set of trimmed, non-empty tokens."""
-    return {item.strip() for item in (raw or "").split(",") if item.strip()}
+def _allowlist(config: Any, attr: str) -> set[str]:
+    """Read one testing-mode allowlist off the config as a set of tokens."""
+    return {
+        str(item).strip()
+        for item in (getattr(config, attr, None) or [])
+        if str(item).strip()
+    }
 
 
 def _patient_allowlisted(patient: Patient, allow: set[str]) -> bool:
@@ -297,6 +304,7 @@ def deliver_to_patient(
     secrets: dict[str, str],
     appointment_id: str = "",
     from_number: str = "",
+    config: Any = None,
 ) -> tuple[list[Effect], list[DeliveryResult]]:
     """Deliver a notification to a patient via SMS/email.
 
@@ -305,6 +313,10 @@ def deliver_to_patient(
 
     ``from_number`` overrides the outbound SMS sender (e.g. a per-business-line
     number). When empty, the global ``twilio-phone-number`` secret is used.
+
+    ``config`` supplies the testing-mode gate. Every caller already has it in
+    hand, so pass it: omitting it costs a config read per patient, which inside
+    the reminder cron's loop is a query per delivery.
 
     Returns a tuple of (effects to apply, delivery results for logging).
     """
@@ -315,10 +327,14 @@ def deliver_to_patient(
 
     # Testing-mode gate: when active, a send requires the patient AND the recipient
     # address to both be allowlisted (fail-closed). Resolved once per delivery.
-    testing_mode = is_testing_mode_active(secrets)
-    tm_recipients = _csv_set(secrets.get("TESTING_MODE_RECIPIENTS"))
+    # Callers pass the config they already loaded; falling back to a load here
+    # would re-query per patient inside the reminder cron's loop.
+    if config is None:
+        config = load_config()
+    testing_mode = is_testing_mode_active(config)
+    tm_recipients = _allowlist(config, "testing_mode_recipients")
     patient_ok = (
-        _patient_allowlisted(patient, _csv_set(secrets.get("TESTING_MODE_PATIENTS")))
+        _patient_allowlisted(patient, _allowlist(config, "testing_mode_patients"))
         if testing_mode
         else True
     )

@@ -121,6 +121,7 @@ class AppointmentEventHandler(BaseHandler):
             self.secrets,
             str(appointment_id),
             from_number=get_business_line_from_number(config, business_line),
+            config=config,
         )
         effects.extend(delivery_effects)
 

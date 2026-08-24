@@ -43,6 +43,9 @@ _CAMPAIGN_CONFIG_FIELDS = {
     "note_type_reminders",
     "default_attribution",
     "business_line_overrides",
+    "testing_mode",
+    "testing_mode_patients",
+    "testing_mode_recipients",
 }
 
 _NOTE_TYPE_FIELDS = {
@@ -197,6 +200,19 @@ class NoteTypeCampaignConfig:
 NoteTypeReminderConfig = NoteTypeCampaignConfig
 
 
+def _as_token_list(raw: Any) -> list[str]:
+    """Normalize an allowlist to a list of trimmed, non-empty tokens.
+
+    Accepts a list, or a string separated by commas and/or newlines — the admin
+    textareas post the latter and operators paste both interchangeably.
+    """
+    if isinstance(raw, str):
+        raw = raw.replace("\n", ",").split(",")
+    if not isinstance(raw, (list, tuple)):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
 @dataclass
 class CampaignConfig:
     """Campaign configuration for notifications."""
@@ -295,6 +311,21 @@ class CampaignConfig:
     # Layered on top of note-type resolution — business line wins for templates.
     business_line_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
+    # Safe-launch gate. Lives here rather than in plugin config so an
+    # administrator can work it from the admin app, alongside the campaign
+    # switches that decide whether anything sends at all — gating it behind
+    # plugin-config access bought nothing, since anyone who can enable a
+    # campaign can already cause live sends.
+    #
+    # Defaults to ON, and with both allowlists empty that means nothing sends
+    # to anyone. That is deliberate in both directions: a fresh install is safe
+    # until someone deliberately opens it up, and an instance upgrading from
+    # the TESTING_MODE secret lands closed rather than silently broadcasting to
+    # every patient the moment the secret stops being read.
+    testing_mode: bool = True
+    testing_mode_patients: list[str] = field(default_factory=list)
+    testing_mode_recipients: list[str] = field(default_factory=list)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -325,12 +356,21 @@ class CampaignConfig:
             "note_type_reminders": self.note_type_reminders,
             "default_attribution": self.default_attribution,
             "business_line_overrides": self.business_line_overrides,
+            "testing_mode": self.testing_mode,
+            "testing_mode_patients": self.testing_mode_patients,
+            "testing_mode_recipients": self.testing_mode_recipients,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CampaignConfig":
         """Create from dictionary with backward compatibility."""
         cleaned = dict(data)
+
+        # Accept the allowlists as a list or as the comma/newline-separated text
+        # the admin textareas post, so a hand-edited record loads either way.
+        for key in ("testing_mode_patients", "testing_mode_recipients"):
+            if key in cleaned:
+                cleaned[key] = _as_token_list(cleaned[key])
 
         if "note_type_reminders" not in cleaned:
             cleaned["note_type_reminders"] = {}
