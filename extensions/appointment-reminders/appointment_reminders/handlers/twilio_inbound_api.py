@@ -189,19 +189,37 @@ class TwilioInboundAPI(SimpleAPI):
     def _resolve_patient(self, from_number: str) -> Patient | None:
         """Find the patient who owns ``from_number`` (E.164), or None.
 
-        Narrows candidates by the last 4 digits (format-agnostic) then confirms
-        an exact normalized match — bounded work suitable for a webhook.
+        Filters on the last 10 digits as a *suffix*. Both sides of the
+        comparison are already canonical: the caller normalizes Twilio's
+        ``From`` to E.164 via ``_normalize_phone``, and stored contact-point
+        values are bare digits. So the suffix is precise enough to return the
+        one matching patient rather than a crowd of near-misses.
+
+        An earlier version narrowed on the last **4** digits with ``__contains``
+        and capped the result at 50 rows of an unordered queryset — ``LIMIT 50``
+        with no ``ORDER BY``, so the rows kept were arbitrary. At production
+        scale that lookup returned roughly 200 candidates and discarded three
+        quarters of them before the exact-match loop, so most real replies never
+        resolved. Not flaky, either: the slice is arbitrary but stable, so a
+        given patient tended to fail consistently. The 4-digit prefilter was
+        defending against punctuation variation that occurs on neither side.
+
+        The Python pass stays: it confirms the exact normalized match, so a
+        suffix collision between two different numbers cannot resolve wrongly.
         """
         digits = "".join(c for c in (from_number or "") if c.isdigit())
-        if len(digits) < 4:
+        if len(digits) < 10:
             return None
-        last4 = digits[-4:]
+        suffix = digits[-10:]
+        # Deliberately uncapped. After a 10-digit suffix match, more than one
+        # hit means genuinely duplicated patient records — a data-quality
+        # problem the caller should see rather than have silently truncated.
         candidates = (
             Patient.objects.filter(
-                telecom__system="phone", telecom__value__contains=last4
+                telecom__system="phone", telecom__value__endswith=suffix
             )
             .prefetch_related("telecom")
-            .distinct()[:50]
+            .distinct()
         )
         for patient in candidates:
             for contact in patient.telecom.all():
