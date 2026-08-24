@@ -283,3 +283,48 @@ def test_get_resource_looks_up_by_dbid():
 def test_get_resource_returns_none_when_absent():
     PatientResource.objects.filter.return_value.first.return_value = None
     assert catalog.get_resource(999) is None
+
+
+# --- delete ---------------------------------------------------------------
+
+
+def test_delete_removes_a_resource_no_patient_ever_had():
+    _no_shares()
+    resource = _resource(dbid=12)
+    catalog.delete_resource(resource)
+    assert PatientResource.objects.filter.call_args.kwargs == {"dbid": 12}
+    PatientResource.objects.filter.return_value.delete.assert_called_once()
+
+
+def test_delete_is_refused_once_a_patient_has_it():
+    """Withdraw exists for that. Deleting would leave share rows pointing at
+    nothing, since the foreign keys carry no cascade.
+    """
+    PatientResourceShare.objects.filter.return_value.exists.return_value = True
+    with pytest.raises(catalog.ResourceInUseError):
+        catalog.delete_resource(_resource(dbid=12))
+    PatientResource.objects.filter.return_value.delete.assert_not_called()
+
+
+def test_a_withdrawn_share_still_blocks_deletion():
+    """A withdrawn share is still a record that a patient received something.
+
+    The has-shares check is deliberately unfiltered on revoked_at, so this is the
+    same code path -- asserted separately because the distinction is the whole
+    reason the filter is absent.
+    """
+    PatientResourceShare.objects.filter.return_value.exists.return_value = True
+    with pytest.raises(catalog.ResourceInUseError):
+        catalog.delete_resource(_resource(dbid=12))
+    share_filter = PatientResourceShare.objects.filter.call_args.kwargs
+    assert "revoked_at__isnull" not in share_filter
+
+
+def test_the_refusal_names_the_alternatives():
+    """A dead end is worse than a redirection."""
+    PatientResourceShare.objects.filter.return_value.exists.return_value = True
+    with pytest.raises(catalog.ResourceInUseError) as caught:
+        catalog.delete_resource(_resource(dbid=12))
+    message = str(caught.value).lower()
+    assert "withdraw" in message
+    assert "archive" in message

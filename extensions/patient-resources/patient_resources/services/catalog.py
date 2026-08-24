@@ -174,6 +174,29 @@ def has_shares(resource: Any) -> bool:
     return PatientResourceShare.objects.filter(resource__dbid=resource.dbid).exists()
 
 
+def delete_resource(resource: Any) -> None:
+    """Remove a resource that has never reached a patient.
+
+    Refuses anything with share rows, including shares that were later
+    withdrawn: a withdrawn share is still a record that a patient received
+    something, and the foreign keys carry no cascade, so removing the catalog row
+    would leave those rows pointing at nothing.
+
+    Deliberately without a transaction. The delete is a single statement, so
+    there is nothing partial to roll back, and a transaction would not close the
+    only real gap -- a provider sharing this resource between the check and the
+    delete. Closing that needs row locking the DDL pipeline does not give us. A
+    share created inside that window is lost rather than left dangling, and the
+    window is one statement wide.
+    """
+    if has_shares(resource):
+        raise ResourceInUseError(
+            "This resource has been shared with patients, so it cannot be deleted. "
+            "Withdraw it to take it back from them, or archive it to stop offering it."
+        )
+    PatientResource.objects.filter(dbid=resource.dbid).delete()
+
+
 def set_status(resource: Any, status: str, *, staff_dbid: Any) -> Any:
     """Archive or restore a resource.
 
