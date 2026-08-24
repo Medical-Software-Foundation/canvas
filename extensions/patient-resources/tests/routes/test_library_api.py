@@ -425,6 +425,10 @@ def test_the_listing_tells_a_curator_which_rows_were_ever_shared(mock_staff, mak
         patch(
             "patient_resources.routes.library_api.resources_with_shares", return_value={12}
         ) as lookup,
+        patch(
+            "patient_resources.routes.library_api.resources_with_withdrawn_shares",
+            return_value=set(),
+        ),
     ):
         data = _call("get_resources", mock_staff, True, make_request)[0].data
 
@@ -442,8 +446,59 @@ def test_a_non_curator_gets_no_flag_and_costs_no_query(mock_staff, make_request)
             return_value=([_resource(12)], 1),
         ),
         patch("patient_resources.routes.library_api.resources_with_shares") as lookup,
+        patch(
+            "patient_resources.routes.library_api.resources_with_withdrawn_shares"
+        ) as withdrawn_lookup,
     ):
         data = _call("get_resources", mock_staff, False, make_request)[0].data
 
     assert "ever_shared" not in data["resources"][0]
+    assert "withdrawn" not in data["resources"][0]
     lookup.assert_not_called()
+    withdrawn_lookup.assert_not_called()
+
+
+def test_the_listing_says_which_rows_were_withdrawn_rather_than_just_archived(
+    mock_staff, make_request
+):
+    """Withdrawing archives the resource, so without this flag a row that was
+    taken back off patients is indistinguishable from one merely retired.
+    """
+    with (
+        patch(
+            "patient_resources.routes.library_api.list_resources",
+            return_value=([_resource(12), _resource(15)], 2),
+        ),
+        patch(
+            "patient_resources.routes.library_api.resources_with_shares",
+            return_value={12, 15},
+        ),
+        patch(
+            "patient_resources.routes.library_api.resources_with_withdrawn_shares",
+            return_value={12},
+        ),
+    ):
+        data = _call("get_resources", mock_staff, True, make_request)[0].data
+
+    assert [r["withdrawn"] for r in data["resources"]] == [True, False]
+
+
+def test_both_share_lookups_run_once_for_the_page(mock_staff, make_request):
+    with (
+        patch(
+            "patient_resources.routes.library_api.list_resources",
+            return_value=([_resource(12), _resource(15)], 2),
+        ),
+        patch(
+            "patient_resources.routes.library_api.resources_with_shares", return_value=set()
+        ) as ever,
+        patch(
+            "patient_resources.routes.library_api.resources_with_withdrawn_shares",
+            return_value=set(),
+        ) as withdrawn,
+    ):
+        _call("get_resources", mock_staff, True, make_request)
+
+    assert ever.call_count == 1
+    assert withdrawn.call_count == 1
+    assert ever.call_args.args[0] == withdrawn.call_args.args[0] == [12, 15]

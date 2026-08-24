@@ -87,13 +87,40 @@ def resources_with_shares(resource_dbids: list[Any]) -> set[Any]:
     Deliberately unfiltered on ``revoked_at``: a withdrawn share is still a
     record that a patient received something, so it must keep the resource
     undeletable.
+
+    ``distinct()`` matters more than it looks. Without it this returns one row per
+    share, so a resource given to five hundred patients drags five hundred rows
+    back to build a set of one.
+    """
+    if not resource_dbids:
+        return set()
+    return set(
+        PatientResourceShare.objects.filter(resource__dbid__in=list(resource_dbids))
+        .values_list("resource_id", flat=True)
+        .distinct()
+    )
+
+
+def resources_with_withdrawn_shares(resource_dbids: list[Any]) -> set[Any]:
+    """Which of these resources were actively pulled back from patients.
+
+    Separate from ``resources_with_shares`` because the two answer different
+    questions about the same rows: whether a patient ever received it, and
+    whether it was taken back off them. An archived resource and a withdrawn one
+    look identical in the library otherwise, though only one of them changed what
+    patients already held.
+
+    ``distinct()`` for the same reason as above: one row per resource, not one
+    per withdrawal.
     """
     if not resource_dbids:
         return set()
     return set(
         PatientResourceShare.objects.filter(
-            resource__dbid__in=list(resource_dbids)
-        ).values_list("resource_id", flat=True)
+            resource__dbid__in=list(resource_dbids), revoked_at__isnull=False
+        )
+        .values_list("resource_id", flat=True)
+        .distinct()
     )
 
 
