@@ -344,14 +344,23 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-.pr-row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+/* Three fixed columns rather than a flex row. Flex collapses the space of a
+   control that is not there, so a row with two buttons slid both of them
+   rightwards under the three-button rows above -- and a shorter label did the
+   same thing on a smaller scale. A grid keeps the slot whether or not it is
+   filled.
 
-/* A uniform minimum so the three controls read as columns down the table.
-   Without it a shorter label -- Delete against Withdraw, Restore against
-   Archive -- narrows the group, and because the group is right-aligned the whole
-   row's buttons shift sideways against the rows above. Sized for the longest
-   label rather than fixed, so a longer one later widens instead of clipping. */
-.pr-row-actions button { min-width: 5.4rem; }
+   inline-grid so the group still hugs its columns and the cell's right alignment
+   applies. The column width is fixed on purpose: lining up across rows needs
+   deterministic widths, so a longer label in future means raising this value
+   rather than letting one row size itself and drift out of line again. */
+.pr-row-actions {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 5.4rem);
+  gap: 6px;
+}
+
+.pr-row-actions button { white-space: nowrap; }
 
 /* Edit is the button the design draws. Archive, Restore and Withdraw are kept
    because retraction is the only way to pull a bad link back out of patients'
