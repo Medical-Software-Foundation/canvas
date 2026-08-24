@@ -49,8 +49,8 @@ def serialize_resource(
     resource: Any,
     *,
     shared: bool | None = None,
-    ever_shared: bool | None = None,
-    withdrawn: bool | None = None,
+    has_live_shares: bool | None = None,
+    has_withdrawn_shares: bool | None = None,
 ) -> dict[str, Any]:
     """One catalog row, for the admin library or the chart picker."""
     data: dict[str, Any] = {
@@ -65,16 +65,15 @@ def serialize_resource(
     }
     if shared is not None:
         data["shared"] = shared
-    # Distinct from `shared`, which means "this patient already has it". This one
-    # means "any patient ever received it", and it decides whether the row may be
-    # deleted at all.
-    if ever_shared is not None:
-        data["ever_shared"] = ever_shared
-    # Why the resource is inactive, not just that it is. An archived row and a
-    # withdrawn one are indistinguishable without this, though only one of them
-    # took something back off patients.
-    if withdrawn is not None:
-        data["withdrawn"] = withdrawn
+    # Two facts rather than one, because the row's controls turn on different
+    # questions. `shared` above means "this patient already has it"; these mean
+    # "some patient currently holds it" and "some patient had it taken back".
+    # Together they decide all three cases: withdrawable, already withdrawn, and
+    # never shared and so deletable.
+    if has_live_shares is not None:
+        data["has_live_shares"] = has_live_shares
+    if has_withdrawn_shares is not None:
+        data["has_withdrawn_shares"] = has_withdrawn_shares
     return data
 
 

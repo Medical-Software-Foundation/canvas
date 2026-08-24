@@ -34,7 +34,8 @@ from patient_resources.services.catalog import (
 )
 from patient_resources.services.permissions import is_library_admin
 from patient_resources.services.shares import (
-    resources_with_shares,
+    has_live_shares,
+    resources_with_live_shares,
     resources_with_withdrawn_shares,
     revoke_resource_shares,
 )
@@ -97,14 +98,14 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         # Only a curator sees the destructive controls, so only a curator's
         # response needs the flag that chooses between them. One set lookup for
         # the page rather than a check per row.
-        ever_shared: set[Any] = set()
+        live: set[Any] = set()
         withdrawn: set[Any] = set()
         if can_edit and rows:
             page = [row.dbid for row in rows]
-            ever_shared = resources_with_shares(page)
-            # A second lookup rather than deriving both from one, because one
+            # Two lookups rather than deriving both from one, because a single
             # query returning every share row would drag back a row per patient.
             # Each of these returns at most one row per resource on the page.
+            live = resources_with_live_shares(page)
             withdrawn = resources_with_withdrawn_shares(page)
 
         return [
@@ -113,8 +114,10 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
                     "resources": [
                         serialize_resource(
                             row,
-                            ever_shared=(row.dbid in ever_shared) if can_edit else None,
-                            withdrawn=(row.dbid in withdrawn) if can_edit else None,
+                            has_live_shares=(row.dbid in live) if can_edit else None,
+                            has_withdrawn_shares=(
+                                (row.dbid in withdrawn) if can_edit else None
+                            ),
                         )
                         for row in rows
                     ],
@@ -269,6 +272,14 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         resource, missing = self._resource_for_write()
         if missing is not None:
             return missing
+
+        if not has_live_shares(resource):
+            # Nothing to take back. Without this the call quietly revokes zero
+            # rows and re-archives an archived resource, so a direct request
+            # reports success for an action that did nothing.
+            return self._conflict(
+                "No patient currently holds this resource, so there is nothing to withdraw."
+            )
 
         body = self._json_object() or {}
         withdrawn = revoke_resource_shares(

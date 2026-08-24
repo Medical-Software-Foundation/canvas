@@ -623,21 +623,25 @@ def test_the_picker_offers_search_only():
     assert "/library/labels" not in source
 
 
-def test_the_destructive_control_depends_on_whether_a_patient_ever_had_it():
-    """One slot, and which control fills it carries the meaning.
+def test_the_destructive_control_follows_what_is_actually_possible():
+    """Three states, and the row must not offer an action the server refuses.
 
-    Withdraw is meaningless for a resource nobody holds; Delete is refused for
-    one they do. Rendering both would offer an action the server rejects.
+    Withdraw needs a patient currently holding it. Delete needs no share to have
+    ever existed. A resource whose every share was already withdrawn is neither,
+    and must get no control at all -- offering Withdraw there revoked nothing and
+    re-archived an archived row.
     """
     source = _js_code(PACKAGE / "static" / "js" / "library.js")
-    assert "ever_shared" in source
     assert "confirmDelete" in source
     assert '"DELETE"' in source
-    # Delete sits inside the else branch of the ever_shared test, so the two
-    # controls cannot both render.
-    branch = source[source.index("if (resource.ever_shared)") :]
+
+    branch = source[source.index("if (resource.has_live_shares)") :]
     branch = branch[: branch.index("td.appendChild(group)")]
-    assert branch.index("Withdraw") < branch.index("else") < branch.index("Delete")
+    # Withdraw first, then Delete guarded by there being no withdrawn shares
+    # either. The all-withdrawn case falls through both.
+    assert branch.index("Withdraw") < branch.index("has_withdrawn_shares")
+    assert branch.index("has_withdrawn_shares") < branch.index("Delete")
+    assert "else if (!resource.has_withdrawn_shares)" in branch
 
 
 def test_deleting_is_confirmed_but_not_typed():
@@ -673,4 +677,4 @@ def test_an_inactive_row_says_why_it_is_inactive():
     source = _js_code(PACKAGE / "static" / "js" / "library.js")
     assert '"Withdrawn"' in source
     assert '"Archived"' in source
-    assert "resource.withdrawn" in source
+    assert "resource.has_withdrawn_shares" in source

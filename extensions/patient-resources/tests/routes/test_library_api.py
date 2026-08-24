@@ -279,6 +279,7 @@ def test_retracting_withdraws_from_patients_and_archives(mock_staff, make_reques
     with (
         patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch("patient_resources.routes.library_api.set_status", return_value=_resource()),
+        patch("patient_resources.routes.library_api.has_live_shares", return_value=True),
         patch(
             "patient_resources.routes.library_api.revoke_resource_shares", return_value=7
         ) as revoke,
@@ -298,6 +299,7 @@ def test_retracting_without_a_body_still_works(mock_staff, make_request):
     with (
         patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch("patient_resources.routes.library_api.set_status", return_value=_resource()),
+        patch("patient_resources.routes.library_api.has_live_shares", return_value=True),
         patch("patient_resources.routes.library_api.revoke_resource_shares", return_value=0),
     ):
         responses = _call("retract_resource", mock_staff, True, make_request, json_body=None)
@@ -416,14 +418,14 @@ def test_deleting_a_shared_resource_is_a_409(mock_staff, make_request):
 # --- the flag that chooses the control ------------------------------------
 
 
-def test_the_listing_tells_a_curator_which_rows_were_ever_shared(mock_staff, make_request):
+def test_the_listing_tells_a_curator_which_rows_a_patient_still_holds(mock_staff, make_request):
     with (
         patch(
             "patient_resources.routes.library_api.list_resources",
             return_value=([_resource(12), _resource(15)], 2),
         ),
         patch(
-            "patient_resources.routes.library_api.resources_with_shares", return_value={12}
+            "patient_resources.routes.library_api.resources_with_live_shares", return_value={12}
         ) as lookup,
         patch(
             "patient_resources.routes.library_api.resources_with_withdrawn_shares",
@@ -432,7 +434,7 @@ def test_the_listing_tells_a_curator_which_rows_were_ever_shared(mock_staff, mak
     ):
         data = _call("get_resources", mock_staff, True, make_request)[0].data
 
-    assert [r["ever_shared"] for r in data["resources"]] == [True, False]
+    assert [r["has_live_shares"] for r in data["resources"]] == [True, False]
     # One lookup for the page, not one per row.
     assert lookup.call_count == 1
     assert lookup.call_args.args[0] == [12, 15]
@@ -445,15 +447,15 @@ def test_a_non_curator_gets_no_flag_and_costs_no_query(mock_staff, make_request)
             "patient_resources.routes.library_api.list_resources",
             return_value=([_resource(12)], 1),
         ),
-        patch("patient_resources.routes.library_api.resources_with_shares") as lookup,
+        patch("patient_resources.routes.library_api.resources_with_live_shares") as lookup,
         patch(
             "patient_resources.routes.library_api.resources_with_withdrawn_shares"
         ) as withdrawn_lookup,
     ):
         data = _call("get_resources", mock_staff, False, make_request)[0].data
 
-    assert "ever_shared" not in data["resources"][0]
-    assert "withdrawn" not in data["resources"][0]
+    assert "has_live_shares" not in data["resources"][0]
+    assert "has_withdrawn_shares" not in data["resources"][0]
     lookup.assert_not_called()
     withdrawn_lookup.assert_not_called()
 
@@ -470,7 +472,7 @@ def test_the_listing_says_which_rows_were_withdrawn_rather_than_just_archived(
             return_value=([_resource(12), _resource(15)], 2),
         ),
         patch(
-            "patient_resources.routes.library_api.resources_with_shares",
+            "patient_resources.routes.library_api.resources_with_live_shares",
             return_value={12, 15},
         ),
         patch(
@@ -480,7 +482,7 @@ def test_the_listing_says_which_rows_were_withdrawn_rather_than_just_archived(
     ):
         data = _call("get_resources", mock_staff, True, make_request)[0].data
 
-    assert [r["withdrawn"] for r in data["resources"]] == [True, False]
+    assert [r["has_withdrawn_shares"] for r in data["resources"]] == [True, False]
 
 
 def test_both_share_lookups_run_once_for_the_page(mock_staff, make_request):
@@ -490,7 +492,7 @@ def test_both_share_lookups_run_once_for_the_page(mock_staff, make_request):
             return_value=([_resource(12), _resource(15)], 2),
         ),
         patch(
-            "patient_resources.routes.library_api.resources_with_shares", return_value=set()
+            "patient_resources.routes.library_api.resources_with_live_shares", return_value=set()
         ) as ever,
         patch(
             "patient_resources.routes.library_api.resources_with_withdrawn_shares",
@@ -502,3 +504,25 @@ def test_both_share_lookups_run_once_for_the_page(mock_staff, make_request):
     assert ever.call_count == 1
     assert withdrawn.call_count == 1
     assert ever.call_args.args[0] == withdrawn.call_args.args[0] == [12, 15]
+
+
+def test_withdrawing_with_nothing_left_to_withdraw_is_a_409(mock_staff, make_request):
+    """The row hides the control in this state, but a direct request must not
+    succeed at doing nothing.
+
+    Without the guard the call revokes zero rows, re-archives an already archived
+    resource, and reports success.
+    """
+    with (
+        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch("patient_resources.routes.library_api.has_live_shares", return_value=False),
+        patch(
+            "patient_resources.routes.library_api.revoke_resource_shares"
+        ) as revoke,
+        patch("patient_resources.routes.library_api.set_status") as status,
+    ):
+        responses = _call("retract_resource", mock_staff, True, make_request)
+
+    assert responses[0].status_code == 409
+    revoke.assert_not_called()
+    status.assert_not_called()

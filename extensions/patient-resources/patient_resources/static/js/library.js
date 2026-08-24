@@ -264,7 +264,7 @@
       // Why it is inactive, not just that it is. Withdrawing archives the
       // resource as part of taking it back from patients, so the two states are
       // otherwise indistinguishable in this list.
-      var withdrawn = Boolean(resource.withdrawn);
+      var withdrawn = Boolean(resource.has_withdrawn_shares);
       var flag = el("span", "pr-archived-flag", withdrawn ? "Withdrawn" : "Archived");
       flag.setAttribute(
         "title",
@@ -305,10 +305,13 @@
       group.appendChild(restore);
     }
 
-    // One destructive slot, and which control fills it says whether this
-    // resource ever reached a patient. Withdraw is meaningless for a resource
-    // nobody has; Delete is refused for one they do.
-    if (resource.ever_shared) {
+    // One destructive slot, and the control that fills it follows what is
+    // actually possible. Withdraw needs a patient currently holding it; Delete
+    // needs no share to have ever existed. A resource whose every share was
+    // already withdrawn is neither, and gets no control at all -- the Withdrawn
+    // marker beside the title is the explanation. Offering Withdraw there would
+    // revoke nothing and re-archive an archived row.
+    if (resource.has_live_shares) {
       var retract = el("button", "pr-action-secondary pr-danger", "Withdraw");
       retract.type = "button";
       retract.setAttribute("title", "Shared with patients \u2014 take it back from them");
@@ -316,7 +319,7 @@
         confirmRetract(resource);
       });
       group.appendChild(retract);
-    } else {
+    } else if (!resource.has_withdrawn_shares) {
       var remove = el("button", "pr-action-secondary pr-danger", "Delete");
       remove.type = "button";
       remove.setAttribute("title", "Never shared \u2014 safe to remove entirely");
