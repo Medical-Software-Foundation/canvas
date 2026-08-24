@@ -397,7 +397,76 @@ def _patient_with_contacts(contacts: list, pid: str = "pat-1") -> MagicMock:
 
 def test_resolve_patient_none_when_too_few_digits() -> None:
     api = _bare_api()
-    assert api._resolve_patient("+12") is None  # < 4 digits, no query
+    assert api._resolve_patient("+12") is None  # < 10 digits, no query
+
+
+def test_resolve_patient_returns_none_below_ten_digits() -> None:
+    """Fewer than 10 digits cannot match; fail safe rather than over-match."""
+    api = _bare_api()
+    with patch(f"{_MOD}.Patient") as mock_patient:
+        assert api._resolve_patient("+141555512") is None  # 9 digits
+    mock_patient.objects.filter.assert_not_called()  # bailed before querying
+
+
+def test_resolve_patient_filters_on_the_full_ten_digit_suffix() -> None:
+    """The query must anchor on a 10-digit suffix, not a 4-digit substring.
+
+    ``telecom__value__contains=last4`` matched those digits anywhere in the
+    value, so a number merely *containing* 1234 was a candidate alongside the
+    one ending in it.
+    """
+    api = _bare_api()
+    with patch(f"{_MOD}.Patient") as mock_patient:
+        (mock_patient.objects.filter.return_value
+            .prefetch_related.return_value
+            .distinct.return_value) = []
+        api._resolve_patient("+14155551234")
+
+    mock_patient.objects.filter.assert_called_once_with(
+        telecom__system="phone", telecom__value__endswith="4155551234"
+    )
+
+
+def test_resolve_patient_finds_match_beyond_the_old_50_row_cap() -> None:
+    """Regression: the target must resolve even when it sorts past row 50.
+
+    The old query sliced ``[:50]`` off a queryset with no ``ORDER BY``, so at
+    production scale (~200 candidates sharing a last-4) it threw away three
+    quarters of them before the exact-match loop ever ran — and silently, since
+    a miss returns 200 with no audit row and reads as patient non-response.
+    """
+    decoys = [
+        _patient_with_contacts([_contact(value=f"555{i:07d}")], f"decoy-{i}")
+        for i in range(200)
+    ]
+    target = _patient_with_contacts([_contact(value="4155551234")], "pat-target")
+    candidates = decoys[:150] + [target] + decoys[150:]  # target sits at index 150
+
+    api = _bare_api()
+    with patch(f"{_MOD}.Patient") as mock_patient:
+        (mock_patient.objects.filter.return_value
+            .prefetch_related.return_value
+            .distinct.return_value) = candidates
+        result = api._resolve_patient("+14155551234")
+
+    assert result is target
+
+
+def test_resolve_patient_query_is_not_capped() -> None:
+    """No slice on the queryset: a truncated candidate set is what caused the bug.
+
+    Guards the `.distinct()` result against a `[:N]` creeping back in — with a
+    mock, slicing silently succeeds on the returned list, so only asserting the
+    absence of `__getitem__` catches it.
+    """
+    api = _bare_api()
+    with patch(f"{_MOD}.Patient") as mock_patient:
+        distinct = (mock_patient.objects.filter.return_value
+                    .prefetch_related.return_value
+                    .distinct.return_value)
+        distinct.__iter__ = lambda self: iter([])
+        api._resolve_patient("+14155551234")
+        distinct.__getitem__.assert_not_called()
 
 
 def test_resolve_patient_returns_match_on_normalized_phone() -> None:
