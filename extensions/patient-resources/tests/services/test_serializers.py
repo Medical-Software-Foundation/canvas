@@ -35,6 +35,9 @@ def _share(**overrides):
     share.label_at_share = "Diabetes"
     share.shared_at = WHEN
     share.revoked_at = None
+    # Explicitly absent unless a test supplies one. Left as a MagicMock, the
+    # live-title lookup would find a mock attribute and stringify it.
+    share.resource = None
     for key, value in overrides.items():
         setattr(share, key, value)
     return share
@@ -84,13 +87,49 @@ def test_a_stored_unsafe_url_is_dropped_at_serialize_time():
 # --- shares ---------------------------------------------------------------
 
 
-def test_patient_view_reads_the_snapshot_not_the_catalog():
-    """This is what keeps a patient's history stable when an admin edits a row."""
+def test_patient_view_shows_a_corrected_title():
+    """Correcting a typo has to reach the patients who already have it.
+
+    Safe because the link is frozen once a resource has been shared, so a title
+    edit can only redescribe the same resource.
+    """
     share = _share()
-    share.resource = _resource(title="Renamed later", url="https://example.org/other")
+    share.resource = _resource(title="Managing type 2 diabetes", label="Endocrine")
     data = serializers.serialize_share_for_patient(share)
+    assert data["title"] == "Managing type 2 diabetes"
+    assert data["label"] == "Endocrine"
+
+
+def test_the_patient_keeps_the_link_they_were_given():
+    """The URL is immutable once shared, so snapshot and catalog agree -- and the
+    snapshot still works when the catalog row is missing.
+    """
+    share = _share()
+    share.resource = _resource(url="https://example.org/other")
+    assert serializers.serialize_share_for_patient(share)["url"] == "https://example.org/d"
+
+
+def test_a_share_whose_resource_is_gone_falls_back_to_the_snapshot():
+    """That foreign key is nullable, so the payload cannot assume a row."""
+    data = serializers.serialize_share_for_patient(_share())
     assert data["title"] == "Managing diabetes"
-    assert data["url"] == "https://example.org/d"
+    assert data["label"] == "Diabetes"
+
+
+def test_an_empty_label_on_the_live_row_is_respected():
+    """No label is a real state, not a missing value to fall back from."""
+    share = _share()
+    share.resource = _resource(label="")
+    assert serializers.serialize_share_for_patient(share)["label"] == ""
+
+
+def test_a_withdrawn_notice_keeps_the_name_the_patient_was_given():
+    """Its resource may since have been edited or removed, and it is not openable
+    anyway, so the snapshot is the more useful record.
+    """
+    share = _share(revoked_at=WHEN, title_at_share="Old handout")
+    share.resource = _resource(title="Something else entirely")
+    assert serializers.serialize_withdrawn_share(share)["title"] == "Old handout"
 
 
 def test_patient_view_emits_utc_iso_for_client_side_formatting():

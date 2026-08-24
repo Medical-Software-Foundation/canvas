@@ -31,10 +31,10 @@ class ShareResult(NamedTuple):
 def live_shares_for_patient(patient_dbid: Any) -> Any:
     """The resources a patient can currently see, newest first.
 
-    Reads the ``*_at_share`` snapshot rather than the catalog, so no
-    ``select_related`` is needed: one query, no join. The ``resource__status``
-    filter is the exception that has to traverse the key, and it is what makes
-    archiving a harmful link remove it from every patient at once.
+    ``select_related`` because the payload now reads the live title and label
+    from the catalog row, so without it every share would fetch its resource
+    separately. The ``resource__status`` filter traverses the same key, and is
+    what makes archiving a harmful link remove it from every patient at once.
 
     Ordered by ``-dbid`` as a tiebreak because ``shared_at`` is nullable and rows
     written in one batch share a timestamp -- without it the order of a
@@ -46,6 +46,7 @@ def live_shares_for_patient(patient_dbid: Any) -> Any:
             revoked_at__isnull=True,
             resource__status=STATUS_ACTIVE,
         )
+        .select_related("resource")
         .order_by("-shared_at", "-dbid")[:PORTAL_MAX_RESOURCES]
     )
 
