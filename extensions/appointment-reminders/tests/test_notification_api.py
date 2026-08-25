@@ -10,6 +10,7 @@ import the endpoint uses.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
@@ -1046,3 +1047,54 @@ def test_manual_send_ignores_placeholders_in_unselected_channel() -> None:
 
     assert result[-1].status_code == HTTPStatus.OK
     mock_deliver.assert_called_once()
+
+
+# ---- admin page markup ----
+#
+# The page is one large HTML string, so a class name that no CSS rule defines
+# fails silently. That is not cosmetic for a toggle: the <input> is
+# opacity:0 and the visible control is the styled span, so a wrong class
+# renders nothing at all and the setting cannot be reached.
+
+def _admin_html() -> str:
+    content = _api().get_admin_page()[0].content
+    return content.decode() if isinstance(content, bytes) else content
+
+
+def test_every_toggle_has_a_styled_slider() -> None:
+    """A `toggle` label whose span is not `slider` renders as an invisible control."""
+    html = _admin_html()
+    labels = re.findall(r'<label class="toggle".*?</label>', html, re.S)
+    assert labels, "expected toggle controls on the admin page"
+    for label in labels:
+        assert '<span class="slider"></span>' in label, label
+
+
+def test_testing_mode_card_uses_only_defined_classes() -> None:
+    """Every class on the testing-mode card must have a CSS rule behind it.
+
+    Narrow on purpose: a whole-page audit picks up class names assembled in JS
+    template strings and drowns in false positives.
+    """
+    html = _admin_html()
+    defined = set(re.findall(r"\.([a-zA-Z][\w-]*)\s*(?:[,{:]|\.)", html))
+    card = html[html.index('id="testing_mode_card"'):]
+    card = card[: card.index("<!-- end testing mode -->")]
+    used = set()
+    for attr in re.findall(r'class="([^"]+)"', card):
+        used.update(attr.split())
+    assert used, "expected classes on the testing-mode card"
+    assert not (used - defined), f"undefined classes: {sorted(used - defined)}"
+
+
+def test_testing_mode_controls_are_present_and_wired() -> None:
+    """The gate has to be reachable, or an install cannot leave testing mode."""
+    html = _admin_html()
+    assert 'id="testing_mode"' in html
+    assert 'id="testing_mode_patients"' in html
+    assert 'id="testing_mode_recipients"' in html
+    # Toggling must refresh the warnings, and the values must reach the payload.
+    assert 'onchange="updateTestingModeUI()"' in html
+    assert "testing_mode: document.getElementById('testing_mode').checked" in html
+    assert "testing_mode_patients: splitLines('testing_mode_patients')" in html
+    assert "testing_mode_recipients: splitLines('testing_mode_recipients')" in html
