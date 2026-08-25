@@ -54,8 +54,6 @@ def test_execute_returns_empty_when_all_intervals_disabled() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
-    ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ):
         result = scheduler.execute()
@@ -78,8 +76,6 @@ def test_execute_sends_reminder_for_matching_interval() -> None:
     with patch(
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
-    ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
@@ -117,8 +113,6 @@ def test_execute_skips_already_sent_reminders() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
-    ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
@@ -149,8 +143,6 @@ def test_execute_skips_appointments_outside_interval_window() -> None:
     with patch(
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
-    ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
@@ -184,8 +176,6 @@ def test_execute_sends_telehealth_when_appointment_is_telehealth() -> None:
     with patch(
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
-    ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
@@ -231,8 +221,6 @@ def test_execute_sends_telehealth_when_reminders_globally_disabled() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
-    ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
@@ -273,8 +261,6 @@ def test_execute_logs_telehealth_failure_when_no_link() -> None:
     with patch(
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
-    ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
@@ -378,8 +364,6 @@ def test_execute_sends_reminder_that_came_due_within_the_grace_window() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
-    ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
@@ -418,8 +402,6 @@ def test_execute_skips_reminder_staler_than_the_grace_window() -> None:
     with patch(
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
-    ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.save_config"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.get_cache"
     ) as mock_cache, patch(
@@ -469,3 +451,29 @@ def test_is_day_out_window_never_sends_before_the_send_time() -> None:
         is False
     )
 
+
+
+def test_execute_never_writes_the_config() -> None:
+    """The cron is read-only with respect to config.
+
+    It used to call save_config() on every tick to "refresh the config TTL" —
+    real when config lived in the cache, meaningless once it moved to a
+    CampaignConfigRecord row with no expiry. That rewrote the whole config blob
+    288 times a day to change nothing, and let a tick clobber an admin's
+    concurrent save with its own stale copy.
+    """
+    import appointment_reminders.handlers.reminder_scheduler as mod
+
+    assert not hasattr(mod, "save_config"), "the cron must not import save_config"
+
+    scheduler = _scheduler()
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=CampaignConfig(reminders_enabled=False, telehealth_enabled=False),
+    ), patch(
+        "appointment_reminders.services.config.save_config"
+    ) as mock_save, patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+    ):
+        scheduler.execute()
+    mock_save.assert_not_called()

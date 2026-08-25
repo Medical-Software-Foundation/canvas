@@ -2785,10 +2785,12 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
 
         patient_id = self.request.path_params["patient_id"]
 
-        # Fetch appointments (patient FK stores dbid, so filter via UUID traversal)
+        # Fetch appointments (patient FK stores dbid, so filter via UUID traversal).
+        # No location join: this endpoint never reads it. Only the two relations
+        # whose fields are actually serialized below are joined.
         appointments = (
             Appointment.objects.filter(patient__id=patient_id)
-            .select_related("provider", "note_type", "location")
+            .select_related("provider", "note_type")
             .order_by("-start_time")[:20]
         )
 
@@ -2813,9 +2815,14 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             })
 
         # Fetch standalone notes (no linked appointment)
+        # `body` and `related_data` are JSONFields holding the note's clinical
+        # content — routinely the largest thing on the row, and nothing here
+        # reads either. Deferring them keeps 20 note bodies per chart open out
+        # of memory. Location is dropped for the same reason as above: unused.
         notes_qs = (
             Note.objects.filter(patient__id=patient_id)
-            .select_related("provider", "note_type_version", "location")
+            .select_related("provider", "note_type_version")
+            .defer("body", "related_data")
             .order_by("-datetime_of_service")
         )
         if linked_note_ids:

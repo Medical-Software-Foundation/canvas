@@ -243,3 +243,16 @@ def test_log_inbound_response_skips_when_patient_missing() -> None:
         )
 
     mock_delivery.objects.create.assert_not_called()
+
+
+def test_unresolved_sender_query_has_a_supporting_index() -> None:
+    """get_unresolved_senders filters campaign_type + status, orders -created_at.
+
+    Without a composite index the query walks the whole delivery log in
+    created_at order filtering as it goes, and the worst case is the healthy
+    one: no unresolved senders means scanning every row to return nothing.
+    """
+    from appointment_reminders.models.delivery import NotificationDelivery
+
+    index_fields = [tuple(i.fields) for i in NotificationDelivery._meta.indexes]
+    assert ("campaign_type", "status", "-created_at") in index_fields
