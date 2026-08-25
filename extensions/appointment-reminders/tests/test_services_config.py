@@ -490,3 +490,16 @@ def test_testing_mode_allowlists_tolerate_junk() -> None:
     })
     assert restored.testing_mode_patients == []
     assert restored.testing_mode_recipients == []
+
+
+def test_decline_task_team_round_trips() -> None:
+    restored = CampaignConfig.from_dict(
+        CampaignConfig(decline_task_team_id="team-7").to_dict()
+    )
+    assert restored.decline_task_team_id == "team-7"
+
+
+def test_decline_task_team_defaults_to_unassigned() -> None:
+    """Matches what the plugin did before this was configurable."""
+    assert CampaignConfig().decline_task_team_id == ""
+    assert CampaignConfig.from_dict({"reminders_enabled": True}).decline_task_team_id == ""

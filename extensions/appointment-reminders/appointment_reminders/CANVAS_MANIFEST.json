@@ -1,6 +1,6 @@
 {
   "sdk_version": "0.95.0",
-  "plugin_version": "0.9.1",
+  "plugin_version": "0.10.0",
   "name": "appointment_reminders",
   "description": "Appointment reminders and confirmations (SMS + email) with per-business-line customization, optional locked message copy, and two-way Y/N confirmation.",
   "components": {
@@ -54,6 +54,7 @@
             "v1.Appointment",
             "v1.Staff",
             "v1.StaffRole",
+            "v1.Team",
             "v1.Organization",
             "v1.PracticeLocation",
             "v1.BusinessLine"
@@ -81,7 +82,8 @@
           "event": "",
           "read": [
             "v1.Patient",
-            "v1.Appointment"
+            "v1.Appointment",
+            "v1.Team"
           ],
           "write": [
             "v1.Appointment",

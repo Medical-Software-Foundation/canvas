@@ -1098,3 +1098,57 @@ def test_testing_mode_controls_are_present_and_wired() -> None:
     assert "testing_mode: document.getElementById('testing_mode').checked" in html
     assert "testing_mode_patients: splitLines('testing_mode_patients')" in html
     assert "testing_mode_recipients: splitLines('testing_mode_recipients')" in html
+
+
+# ---- teams ----
+
+def test_teams_endpoint_lists_teams_by_name() -> None:
+    t1 = MagicMock(); t1.id = "team-1"; t1.name = "Front Desk"
+    t2 = MagicMock(); t2.id = "team-2"; t2.name = "Scheduling"
+    with patch("canvas_sdk.v1.data.team.Team") as mock_team:
+        mock_team.objects.order_by.return_value = [t1, t2]
+        result = _api().get_teams()
+    mock_team.objects.order_by.assert_called_once_with("name")
+    assert json.loads(result[0].content) == [
+        {"id": "team-1", "name": "Front Desk"},
+        {"id": "team-2", "name": "Scheduling"},
+    ]
+
+
+def test_teams_endpoint_returns_empty_list_when_none() -> None:
+    with patch("canvas_sdk.v1.data.team.Team") as mock_team:
+        mock_team.objects.order_by.return_value = []
+        result = _api().get_teams()
+    assert json.loads(result[0].content) == []
+
+
+def test_settings_tab_exists_with_both_cards_collapsed() -> None:
+    """Both settings are rarely touched, so neither should occupy the top of
+    the Campaigns tab, and both open on click like the campaign cards."""
+    html = _admin_html()
+    assert "switchTab('settings_tab')" in html
+    assert 'id="settings_tab" class="tab-content"' in html  # not 'active'
+    for prefix in ("testing_mode", "task_routing"):
+        assert f'id="{prefix}_card"' in html
+        assert f"toggleSettingsCard('{prefix}')" in html
+        assert f'id="{prefix}_arrow"' in html
+        assert f'id="{prefix}_body" class="nt-card-body" style="display:none"' in html
+
+
+def test_task_routing_card_uses_only_defined_classes() -> None:
+    html = _admin_html()
+    defined = set(re.findall(r"\.([a-zA-Z][\w-]*)\s*(?:[,{:]|\.)", html))
+    card = html[html.index('id="task_routing_card"'):]
+    card = card[: card.index("<!-- end task routing -->")]
+    used = set()
+    for attr in re.findall(r'class="([^"]+)"', card):
+        used.update(attr.split())
+    assert used
+    assert not (used - defined), f"undefined classes: {sorted(used - defined)}"
+
+
+def test_team_selection_reaches_the_save_payload() -> None:
+    html = _admin_html()
+    assert 'id="decline_task_team_id"' in html
+    assert "decline_task_team_id: document.getElementById('decline_task_team_id').value" in html
+    assert "/admin/teams" in html
