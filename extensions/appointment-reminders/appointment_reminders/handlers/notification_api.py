@@ -861,10 +861,10 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     <div class="campaign-title">Testing mode</div>
                     <label class="toggle" onclick="event.stopPropagation()">
                         <input type="checkbox" id="testing_mode" onchange="updateTestingModeUI()">
-                        <span class="toggle-slider"></span>
+                        <span class="slider"></span>
                     </label>
                 </div>
-                <div class="campaign-body">
+                <div class="nt-card-body">
                     <p style="color:var(--text-soft);font-size:13px;margin-top:0;">
                         A safe-launch gate. While it is on, a message sends only when <strong>both</strong>
                         the patient and the destination address appear in the lists below. Everything
@@ -887,7 +887,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     </div>
                 </div>
             </div>
-
+            <!-- end testing mode -->
 
             <div class="campaign-card collapsed" id="confirmation_card">
                 <div class="campaign-header" onclick="toggleSettingsCard('confirmation')">
