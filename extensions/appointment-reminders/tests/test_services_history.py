@@ -256,3 +256,31 @@ def test_unresolved_sender_query_has_a_supporting_index() -> None:
 
     index_fields = [tuple(i.fields) for i in NotificationDelivery._meta.indexes]
     assert ("campaign_type", "status", "-created_at") in index_fields
+
+
+def test_every_index_is_explicitly_named_and_unique_when_truncated() -> None:
+    """Auto-generated index names collide here, and the loser is dropped silently.
+
+    Canvas builds index names from schema + table, then Postgres truncates to 63
+    bytes. "canvas__appointment_reminders" + "notificationdelivery" leaves 12
+    bytes of discriminator, so every auto-named index on this table truncates to
+    the same identifier and only the first is created. Observed on a live
+    instance: one index present, two declared ones silently missing.
+
+    So each index must carry an explicit name, and those names must remain
+    distinct after truncation.
+    """
+    from appointment_reminders.models.delivery import NotificationDelivery
+
+    prefix = "canvas__appointment_reminders_notificationdelivery_"
+    names = []
+    for index in NotificationDelivery._meta.indexes:
+        assert index.name, f"index on {index.fields} has no explicit name"
+        assert len(index.name) <= 30, f"{index.name} is {len(index.name)} chars"
+        names.append(index.name)
+
+    assert len(set(names)) == len(names), f"duplicate index names: {names}"
+    truncated = {(prefix + n)[:63] for n in names}
+    assert len(truncated) == len(names), (
+        f"names collide once truncated to 63 bytes: {sorted(names)}"
+    )

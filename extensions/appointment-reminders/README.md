@@ -91,6 +91,8 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 
 Custom data lives under the `canvas__appointment_reminders` namespace: `CampaignConfigRecord` (config singleton) and `NotificationDelivery` (activity log; `campaign_type=inbound_response` rows record confirms/declines).
 
+Index names on `NotificationDelivery` are declared explicitly and must stay under 30 characters. Auto-generated names are built from schema + table and then truncated to Postgres's 63-byte identifier limit; `canvas__appointment_reminders` plus `notificationdelivery` consumes 51 of those bytes, leaving 12 for the discriminator. Every auto-named index on that table therefore truncated to the same identifier and **only the first was created** — verified on a live instance, where two declared indexes were silently absent.
+
 `NotificationDelivery.patient` is nullable for exactly one case: a verified inbound reply whose sender matched no patient, written with `status=unresolved_sender`. Those rows have no chart to hang off, so the per-patient history can't return them — read them from `GET /admin/unresolved-senders` instead. See *Replies from unknown numbers*.
 
 ## Configuration options (variables)
