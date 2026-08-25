@@ -835,6 +835,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             <div class="tab active" onclick="switchTab('campaigns')">Campaigns</div>
             <div class="tab" onclick="switchTab('business_lines_tab')">Business Line Overrides</div>
             <div class="tab" onclick="switchTab('overrides')">Visit Type Overrides</div>
+            <div class="tab" onclick="switchTab('settings_tab')">Settings</div>
             <button class="save-btn" onclick="saveConfig()">Save</button>
         </div>
 
@@ -856,38 +857,6 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 </div>
             </div>
 
-            <div class="campaign-card" id="testing_mode_card">
-                <div class="campaign-header" style="cursor:default;">
-                    <div class="campaign-title">Testing mode</div>
-                    <label class="toggle" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="testing_mode" onchange="updateTestingModeUI()">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="nt-card-body">
-                    <p style="color:var(--text-soft);font-size:13px;margin-top:0;">
-                        A safe-launch gate. While it is on, a message sends only when <strong>both</strong>
-                        the patient and the destination address appear in the lists below. Everything
-                        else is skipped, whatever the campaigns say.
-                    </p>
-                    <div id="testing_mode_closed_warning" style="margin-bottom:12px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
-                        <strong>Nothing is sending.</strong> Testing mode is on and at least one list is
-                        empty, so every message is being skipped. Add a patient and a recipient to test
-                        with, or turn testing mode off to go live.
-                    </div>
-                    <div class="form-group">
-                        <label for="testing_mode_patients">Allowed patients</label>
-                        <textarea id="testing_mode_patients" rows="3" placeholder="One patient id per line"></textarea>
-                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Copy the id from the chart URL. Matched against the patient's id, key, or dbid, so whichever value you paste works.</p>
-                    </div>
-                    <div class="form-group">
-                        <label for="testing_mode_recipients">Allowed recipients</label>
-                        <textarea id="testing_mode_recipients" rows="3" placeholder="One phone or email per line"></textarea>
-                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Your own mobile and inbox. Phones compared in normalized E.164, emails case-insensitively; one list may mix both.</p>
-                    </div>
-                </div>
-            </div>
-            <!-- end testing mode -->
 
             <div class="campaign-card collapsed" id="confirmation_card">
                 <div class="campaign-header" onclick="toggleSettingsCard('confirmation')">
@@ -1187,6 +1156,70 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             </div>
             <div id="business_lines_loading" style="color:var(--text-soft);padding:12px 0;">Loading business lines...</div>
             <div id="business_line_overrides_container"></div>
+        </div>
+
+        <div id="settings_tab" class="tab-content">
+            <h2 style="margin-top:0;">Settings</h2>
+            <p style="color:var(--text-soft);font-size:13px;margin-top:0;">Set once and rarely revisited. Both cards start collapsed; click a header to open it.</p>
+
+            <div class="campaign-card collapsed" id="testing_mode_card">
+                <div class="campaign-header" onclick="toggleSettingsCard('testing_mode')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="nt-expand-arrow" id="testing_mode_arrow">&#9654;</span>
+                        <div class="campaign-title">Testing mode</div>
+                        <span id="testing_mode_state" style="display:none;font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px;background:var(--warning-bg);color:var(--warning-fg);"></span>
+                    </div>
+                    <label class="toggle" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="testing_mode" onchange="updateTestingModeUI()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="testing_mode_body" class="nt-card-body" style="display:none">
+                    <p style="color:var(--text-soft);font-size:13px;margin-top:0;">
+                        A safe-launch gate. While it is on, a message sends only when <strong>both</strong>
+                        the patient and the destination address appear in the lists below. Everything
+                        else is skipped, whatever the campaigns say.
+                    </p>
+                    <div id="testing_mode_closed_warning" style="margin-bottom:12px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
+                        <strong>Nothing is sending.</strong> Testing mode is on and at least one list is
+                        empty, so every message is being skipped. Add a patient and a recipient to test
+                        with, or turn testing mode off to go live.
+                    </div>
+                    <div class="form-group">
+                        <label for="testing_mode_patients">Allowed patients</label>
+                        <textarea id="testing_mode_patients" rows="3" placeholder="One patient id per line" oninput="updateTestingModeUI()"></textarea>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Copy the id from the chart URL. Matched against the patient's id, key, or dbid, so whichever value you paste works.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="testing_mode_recipients">Allowed recipients</label>
+                        <textarea id="testing_mode_recipients" rows="3" placeholder="One phone or email per line" oninput="updateTestingModeUI()"></textarea>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Your own mobile and inbox. Phones compared in normalized E.164, emails case-insensitively; one list may mix both.</p>
+                    </div>
+                </div>
+            </div>
+            <!-- end testing mode -->
+
+            <div class="campaign-card collapsed" id="task_routing_card">
+                <div class="campaign-header" onclick="toggleSettingsCard('task_routing')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="nt-expand-arrow" id="task_routing_arrow">&#9654;</span>
+                        <div class="campaign-title">Task assignment</div>
+                    </div>
+                </div>
+                <div id="task_routing_body" class="nt-card-body" style="display:none">
+                    <p style="color:var(--text-soft);font-size:13px;margin-top:0;">
+                        Which team receives the follow-up task raised when a patient declines an
+                        appointment by SMS. Leave it unassigned and the task is still created, but
+                        it lands in no team's queue and someone has to go looking for it.
+                    </p>
+                    <div class="form-group" style="max-width:420px;">
+                        <label for="decline_task_team_id">Team for decline follow-ups</label>
+                        <select id="decline_task_team_id"><option value="">Unassigned</option></select>
+                        <p id="task_routing_note" style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Loading teams...</p>
+                    </div>
+                </div>
+            </div>
+            <!-- end task routing -->
         </div>
 
     </div>
@@ -1615,7 +1648,45 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 (config.testing_mode_patients || []).join('\\n');
             document.getElementById('testing_mode_recipients').value =
                 (config.testing_mode_recipients || []).join('\\n');
+            savedDeclineTaskTeamId = config.decline_task_team_id || '';
+            loadTeams();
             updateTestingModeUI();
+        }
+
+        var savedDeclineTaskTeamId = '';
+
+        async function loadTeams() {
+            var select = document.getElementById('decline_task_team_id');
+            var note = document.getElementById('task_routing_note');
+            try {
+                var resp = await fetch('/plugin-io/api/appointment_reminders/admin/teams');
+                var teams = await resp.json();
+                select.innerHTML = '<option value="">Unassigned</option>';
+                teams.forEach(function(team) {
+                    var opt = document.createElement('option');
+                    opt.value = team.id;
+                    opt.textContent = team.name;
+                    select.appendChild(opt);
+                });
+                // A configured team that no longer exists must not look like
+                // "Unassigned" — the saved value would then be silently dropped
+                // the next time someone hits Save.
+                if (savedDeclineTaskTeamId &&
+                    !teams.some(function(x) { return x.id === savedDeclineTaskTeamId; })) {
+                    var stale = document.createElement('option');
+                    stale.value = savedDeclineTaskTeamId;
+                    stale.textContent = 'Team no longer exists (' + savedDeclineTaskTeamId + ')';
+                    select.appendChild(stale);
+                    note.textContent = 'The configured team was not found. Pick another, or tasks will be created unassigned.';
+                } else {
+                    note.textContent = teams.length
+                        ? 'Teams are configured in Canvas settings.'
+                        : 'No teams found on this instance. Tasks will be created unassigned.';
+                }
+                select.value = savedDeclineTaskTeamId;
+            } catch (e) {
+                note.textContent = 'Could not load teams.';
+            }
         }
 
         function splitLines(id) {
@@ -1627,6 +1698,13 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
 
         function updateTestingModeUI() {
             var on = document.getElementById('testing_mode').checked;
+            // The card is collapsed by default, so surface the state in the header
+            // too — otherwise a closed gate is invisible from the tab.
+            var badge = document.getElementById('testing_mode_state');
+            if (badge) {
+                badge.style.display = on ? '' : 'none';
+                badge.textContent = 'ON';
+            }
             // Mirror the server's fail-closed rule: on, with either list empty,
             // means every send is skipped. Silent in that state is the failure
             // mode the banner exists to prevent.
@@ -2367,6 +2445,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 telehealth_intervals: telehealthIntervals.slice(),
                 note_type_reminders: gatherNoteTypeReminders(),
                 default_attribution: document.getElementById('default_attribution_input').value.trim(),
+                decline_task_team_id: document.getElementById('decline_task_team_id').value,
                 testing_mode: document.getElementById('testing_mode').checked,
                 testing_mode_patients: splitLines('testing_mode_patients'),
                 testing_mode_recipients: splitLines('testing_mode_recipients'),
@@ -2511,6 +2590,19 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         return [
             JSONResponse(
                 [{"id": str(bl.id), "name": bl.name} for bl in business_lines],
+                status_code=HTTPStatus.OK,
+            )
+        ]
+
+    @api.get("/admin/teams")
+    def get_teams(self) -> list[Response | Effect]:
+        """Teams available to receive the decline follow-up task."""
+        from canvas_sdk.v1.data.team import Team
+
+        teams = Team.objects.order_by("name")
+        return [
+            JSONResponse(
+                [{"id": str(team.id), "name": team.name} for team in teams],
                 status_code=HTTPStatus.OK,
             )
         ]

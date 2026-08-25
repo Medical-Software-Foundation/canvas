@@ -6,7 +6,7 @@ Appointment reminders and confirmations over SMS and email, with per-business-li
 
 - **Appointment notifications** — confirmation, reminder, cancellation, no-show, and telehealth-join messages via Twilio (SMS) and SendGrid (email). Per-note-type templates with `{{placeholder}}`s; multi-interval reminder cadence (default `[4320, 45]` = 3 days + 45 min).
 - **Per-business-line branding + routing** — `{{business_line_attribution}}` / `{{business_line}}` placeholders; per-line **attribution** override → default fallback; per-line outbound **from-number** → global fallback. A patient's business line (`Patient.business_line`) drives which branding/number is used.
-- **Two-way structured confirm** — a signature-gated Twilio inbound webhook: `Y` confirms the patient's nearest upcoming appointment, `N` opens a follow-up Task. Strict Y/N token match (no free-form), `MessageSid` replay dedup, fail-closed signature check.
+- **Two-way structured confirm** — a signature-gated Twilio inbound webhook: `Y` confirms the patient's nearest upcoming appointment, `N` opens a follow-up Task routed to a configurable team. Strict Y/N token match (no free-form), `MessageSid` replay dedup, fail-closed signature check.
 - **STOP writes back to the chart** — a patient who texts a Twilio opt-out keyword has `has_consent` cleared on the number they texted from, so the opt-out survives in Canvas and not just in Twilio's block list. `START` / `UNSTOP` / `YES` restore it.
 - **Admin console gated by role** — the `/admin` endpoints require a staff role listed in `ADMIN_ROLE_NAMES`. Fail-closed: unset means nobody.
 - **Testing-mode gate** — a fail-closed allowlist, set in the admin app, that restricts *all* sends to specific patients **and** recipients. On by default, so a fresh install cannot message anyone until someone deliberately opens it up.
@@ -62,7 +62,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 2. **Clear it if present**, via Django admin or Canvas support, and coordinate the timing with enabling this plugin. Anything else means either a gap in coverage or double messages. Note that clearing it also **retires the native `Y` confirm loop**, which is gated on the same setting — this plugin rebuilds that flow, but only once step 4 is done.
 3. **Set the required variables**, including `ADMIN_ROLE_NAMES` — without it nobody can open the admin app — then verify it shows Twilio and SendGrid as *Configured*. Missing credentials mean campaigns silently deliver nothing.
 4. **For two-way confirm, provision a dedicated Twilio number** whose inbound webhook points at `…/plugin-io/api/appointment_reminders/twilio/inbound`, and set `twilio-inbound-webhook-url` to that exact URL. See *Integration with Canvas core* below — this has real lead time and can't be done at the last minute.
-5. **Do the first run behind testing mode.** It is on by default. Add yourself under **Testing mode** in the admin app, enable one campaign, and confirm delivery to your own phone or inbox before turning it off. See *Testing mode* below.
+5. **Do the first run behind testing mode.** It is on by default. Add yourself under **Settings → Testing mode** in the admin app, enable one campaign, and confirm delivery to your own phone or inbox before turning it off. See *Testing mode* below.
 
 ## Components
 
@@ -73,7 +73,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 | `NotificationAPI` | SimpleAPI | Admin config (role-gated), manual sends, notification history |
 | `TwilioInboundAPI` | SimpleAPI | Signature-gated inbound-SMS webhook (`POST /twilio/inbound`) — Y/N confirm/decline, STOP/START consent write-back |
 | `TimelineMessageFilter` | config | Hides "Message" notes from the patient timeline |
-| `NotifyAdminApp` | Application | "Appointment Reminders" — provider-menu admin: configure campaigns, view global history. Refuses staff without an `ADMIN_ROLE_NAMES` role |
+| `NotifyAdminApp` | Application | "Appointment Reminders" — provider-menu admin: configure campaigns, per-line and per-visit-type overrides, and **Settings** (testing mode, task assignment). Refuses staff without an `ADMIN_ROLE_NAMES` role |
 | `NotifyPatientApp` | Application | "Appointment Reminders" — chart panel: this patient's reminder history |
 
 ## Key files
@@ -119,9 +119,17 @@ Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`
 
 **Outbound Twilio auth** picks the API key when `twilio-api-key-sid` and `twilio-api-key-secret` are both set, and otherwise falls back to `twilio-account-sid` + `twilio-auth-token` (`services/delivery.py:_twilio_auth`). The request URL is built from the account SID either way, which is why that secret is required even under API-key auth.
 
+## Task assignment
+
+When a patient declines by SMS, the plugin opens a follow-up Task. **Settings → Task assignment** chooses which team receives it, from the teams configured on the instance.
+
+Leaving it **Unassigned** is the default and matches what the plugin did before this was configurable: the Task is still created and still carries the `appointment-decline` label, but it lands in no team's queue, so someone has to go looking for it.
+
+If the chosen team is later deleted in Canvas, the Task is created unassigned and a warning is logged rather than the effect being risked on a dangling id — losing the Task would mean losing the only signal that this patient wants to reschedule. The dropdown flags a configured team it can no longer find, so a stale setting is visible rather than silently behaving as "Unassigned".
+
 ## Testing mode
 
-A fail-closed safe-launch gate, set under **Testing mode** in the admin app. While it is on, a message sends only when **both** the patient and the destination address are allowlisted. One without the other sends nothing, which is deliberate.
+A fail-closed safe-launch gate, set under **Settings → Testing mode** in the admin app. The card starts collapsed; when the gate is on, the header carries an **ON** badge so a closed gate is visible without opening it. While it is on, a message sends only when **both** the patient and the destination address are allowlisted. One without the other sends nothing, which is deliberate.
 
 **It is on by default, with both lists empty — so a fresh install sends nothing to anyone.** That is the intended starting state: add yourself, enable one campaign, confirm the message arrives, then turn the gate off to go live. While a campaign is enabled and testing mode is off, the admin app shows a live-sending warning; while testing mode is on with an empty list, it warns that nothing is sending at all.
 

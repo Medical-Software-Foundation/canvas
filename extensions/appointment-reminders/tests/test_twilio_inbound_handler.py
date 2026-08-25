@@ -187,6 +187,7 @@ def test_inbound_decline_opens_followup_task() -> None:
     api = _api("Body=N&From=%2B14155551234")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch.object(api, "_decline_task_team_id", return_value=None), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         api.inbound()
@@ -281,6 +282,7 @@ def test_inbound_replayed_message_sid_is_ignored() -> None:
     api = _api("Body=N&From=%2B14155551234&MessageSid=SM123ABC")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch.object(api, "_decline_task_team_id", return_value=None), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         api.inbound()           # first: acts (opens a Task)
@@ -336,6 +338,7 @@ def test_inbound_cancel_opts_out_without_touching_the_appointment() -> None:
     api = _api("Body=CANCEL&From=%2B14155551234")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch.object(api, "_decline_task_team_id", return_value=None), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.Appointment") as mock_appt, \
          patch(f"{_MOD}.sms_consent_effect", return_value=MagicMock()) as mock_consent, \
@@ -568,3 +571,69 @@ def test_nearest_upcoming_appointment_returns_first_ordered() -> None:
         result = api._nearest_upcoming_appointment(_patient())
     assert result is appt
     mock_appt.objects.filter.return_value.order_by.assert_called_once_with("start_time")
+
+
+# ---- decline task team routing ----
+
+def test_decline_task_is_assigned_to_the_configured_team() -> None:
+    api = _api("Body=N&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch.object(api, "_decline_task_team_id", return_value="team-7"), \
+         patch(f"{_MOD}.AddTask") as mock_task, \
+         patch(f"{_MOD}.log_inbound_response"):
+        api.inbound()
+    assert mock_task.call_args.kwargs["team_id"] == "team-7"
+
+
+def _bare_with_config(team_id: str):
+    api = _bare_api()
+    return api, patch(f"{_MOD}.load_config", return_value=MagicMock(
+        decline_task_team_id=team_id))
+
+
+def test_decline_team_none_when_unconfigured() -> None:
+    """Unassigned is the pre-existing behavior and stays the default."""
+    api, cfg = _bare_with_config("")
+    with cfg, patch(f"{_MOD}.Team") as mock_team:
+        assert api._decline_task_team_id() is None
+    mock_team.objects.filter.assert_not_called()  # nothing to verify
+
+
+def test_decline_team_none_when_configured_blank() -> None:
+    api, cfg = _bare_with_config("   ")
+    with cfg, patch(f"{_MOD}.Team"):
+        assert api._decline_task_team_id() is None
+
+
+def test_decline_team_returned_when_it_exists() -> None:
+    api, cfg = _bare_with_config("team-7")
+    with cfg, patch(f"{_MOD}.Team") as mock_team:
+        mock_team.objects.filter.return_value.exists.return_value = True
+        assert api._decline_task_team_id() == "team-7"
+    mock_team.objects.filter.assert_called_once_with(id="team-7")
+
+
+def test_decline_team_falls_back_to_unassigned_when_team_deleted() -> None:
+    """A dangling team id must not cost us the task.
+
+    Handing AddTask an id that no longer resolves risks the effect failing,
+    which would lose the one artifact telling staff this patient wants to
+    reschedule. An unassigned task beats no task.
+    """
+    api, cfg = _bare_with_config("team-gone")
+    with cfg, patch(f"{_MOD}.Team") as mock_team:
+        mock_team.objects.filter.return_value.exists.return_value = False
+        assert api._decline_task_team_id() is None
+
+
+def test_confirm_does_not_read_the_team_config() -> None:
+    """Only a decline needs it, so the lookup stays off every other path."""
+    api = _api("Body=Y&From=%2B14155551234")
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Appointment"), \
+         patch(f"{_MOD}.load_config") as mock_load, \
+         patch(f"{_MOD}.log_inbound_response"):
+        api.inbound()
+    mock_load.assert_not_called()

@@ -46,6 +46,7 @@ _CAMPAIGN_CONFIG_FIELDS = {
     "testing_mode",
     "testing_mode_patients",
     "testing_mode_recipients",
+    "decline_task_team_id",
 }
 
 _NOTE_TYPE_FIELDS = {
@@ -326,6 +327,11 @@ class CampaignConfig:
     testing_mode_patients: list[str] = field(default_factory=list)
     testing_mode_recipients: list[str] = field(default_factory=list)
 
+    # Team that receives the follow-up task when a patient declines by SMS.
+    # The Team's ``id``, or "" for unassigned — which is what the plugin did
+    # before this was configurable, so an existing install keeps its behavior.
+    decline_task_team_id: str = ""
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -359,6 +365,7 @@ class CampaignConfig:
             "testing_mode": self.testing_mode,
             "testing_mode_patients": self.testing_mode_patients,
             "testing_mode_recipients": self.testing_mode_recipients,
+            "decline_task_team_id": self.decline_task_team_id,
         }
 
     @classmethod

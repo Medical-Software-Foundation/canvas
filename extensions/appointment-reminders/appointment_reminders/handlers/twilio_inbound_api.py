@@ -30,8 +30,10 @@ from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 from canvas_sdk.v1.data.appointment import Appointment as AppointmentModel
 from canvas_sdk.v1.data.patient import Patient
+from canvas_sdk.v1.data.team import Team
 from logger import log
 
+from appointment_reminders.services.config import load_config
 from appointment_reminders.services.consent import sms_consent_effect
 from appointment_reminders.services.delivery import _normalize_phone
 from appointment_reminders.services.history import (
@@ -168,6 +170,7 @@ class TwilioInboundAPI(SimpleAPI):
             effects.append(
                 AddTask(
                     patient_id=str(patient.id),
+                    team_id=self._decline_task_team_id(),
                     title=(
                         "Patient declined an appointment reminder via SMS — "
                         "follow up to reschedule or cancel."
@@ -198,6 +201,29 @@ class TwilioInboundAPI(SimpleAPI):
         )
         effects.append(PlainTextResponse("", status_code=HTTPStatus.OK))
         return effects
+
+    def _decline_task_team_id(self) -> str | None:
+        """The configured team for decline follow-ups, or None for unassigned.
+
+        Verifies the team still exists. A configured team can be deleted in
+        Canvas long after it was chosen here, and handing ``AddTask`` a dangling
+        id risks losing the whole effect — which would mean losing the task, the
+        one artifact telling staff this patient wants to reschedule. An
+        unassigned task in someone's way beats no task at all.
+
+        Read lazily: only a decline reaches this, so the config and team lookups
+        stay off the path of every other inbound reply.
+        """
+        team_id = (load_config().decline_task_team_id or "").strip()
+        if not team_id:
+            return None
+        if not Team.objects.filter(id=team_id).exists():
+            log.warning(
+                f"[inbound] Configured decline-task team {team_id} no longer "
+                "exists; creating the task unassigned"
+            )
+            return None
+        return team_id
 
     def _resolve_patient(self, from_number: str) -> Patient | None:
         """Find the patient who owns ``from_number`` (E.164), or None.
