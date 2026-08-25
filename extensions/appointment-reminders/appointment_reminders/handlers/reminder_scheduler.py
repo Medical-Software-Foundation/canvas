@@ -1,6 +1,7 @@
 """Cron task for scheduled appointment reminders."""
 import zoneinfo
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dt_time
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
@@ -41,6 +42,10 @@ DAY_OUT_THRESHOLD = 1440  # minutes
 # skipped, not replayed.
 GRACE_MINUTES = 7
 
+_DEFAULT_TZ = "America/New_York"
+_DEFAULT_SEND_HOUR = 9
+_DEFAULT_SEND_MINUTE = 0
+
 
 class ReminderScheduler(CronTask):
     """Check for appointments needing reminders every 5 minutes."""
@@ -64,22 +69,56 @@ class ReminderScheduler(CronTask):
         # Compute dynamic end_window from every interval that might fire.
         # Global acts as the master switch; per-type records can extend the
         # window with their own intervals unless they're explicit opt-outs.
-        all_intervals: list[int] = []
+        #
+        # Reminder and telehealth intervals are kept apart because they are
+        # scheduled differently: a reminder interval >= a day is date-relative
+        # (fires at a configured send time), while *every* telehealth interval is
+        # time-relative regardless of size — the telehealth branch below ignores
+        # send_time entirely. Lumping them together would make the gate treat a
+        # large telehealth interval as date-relative and skip scans it needs.
+        reminder_intervals: list[int] = []
+        telehealth_intervals: list[int] = []
+        send_windows: set[tuple[str, str]] = set()
 
         if config.reminders_enabled:
-            all_intervals.extend(config.reminder_intervals)
+            reminder_intervals.extend(config.reminder_intervals)
+            send_windows.add((config.reminder_send_time, config.reminder_timezone))
         if config.telehealth_enabled:
-            all_intervals.extend(config.telehealth_intervals)
+            telehealth_intervals.extend(config.telehealth_intervals)
 
         for nt_data in config.note_type_reminders.values():
             nt_cfg = NoteTypeCampaignConfig.from_dict(nt_data)
             if config.reminders_enabled and nt_cfg.reminders_enabled is not False:
-                all_intervals.extend(nt_cfg.reminder_intervals)
+                reminder_intervals.extend(nt_cfg.reminder_intervals)
+                # A blank per-type value inherits the global one, already added.
+                if nt_cfg.reminder_send_time:
+                    send_windows.add(
+                        (nt_cfg.reminder_send_time,
+                         nt_cfg.reminder_timezone or config.reminder_timezone)
+                    )
             if config.telehealth_enabled and nt_cfg.telehealth_enabled is not False:
-                all_intervals.extend(nt_cfg.telehealth_intervals)
+                telehealth_intervals.extend(nt_cfg.telehealth_intervals)
 
+        all_intervals = reminder_intervals + telehealth_intervals
         if not all_intervals:
             log.info("Reminders and telehealth globally disabled, skipping")
+            return []
+
+        # Gate: skip the appointment query entirely when nothing can fire on this
+        # tick. Every telehealth interval and every sub-day reminder interval is
+        # time-relative, so those can fire at any tick and force the scan. But a
+        # day-out reminder can only fire in the grace window after its send time,
+        # which is a property of `now` alone — so with only day-out intervals
+        # configured (a single daily reminder, the common case) this turns 288
+        # scans a day into one. Business-line overrides cannot set a send time or
+        # interval, so these two sources are the complete set.
+        time_relative = [i for i in reminder_intervals if i < DAY_OUT_THRESHOLD]
+        time_relative.extend(telehealth_intervals)
+        if not time_relative and not any(
+            _in_send_window(now, send_time, send_tz)
+            for send_time, send_tz in send_windows
+        ):
+            log.info("No interval can fire on this tick; skipping the scan")
             return []
 
         max_interval_minutes = max(all_intervals)
@@ -268,6 +307,37 @@ class ReminderScheduler(CronTask):
         return all_effects
 
 
+def _parse_send_time(send_time: str) -> tuple[int, int]:
+    """Parse ``HH:MM`` into (hour, minute), falling back to 09:00.
+
+    Defensive because a malformed value would otherwise raise inside the
+    per-appointment loop and take down the whole scan — every patient's
+    reminders lost to one bad config string.
+    """
+    if not send_time:
+        return _DEFAULT_SEND_HOUR, _DEFAULT_SEND_MINUTE
+    parts = send_time.split(":")
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except (IndexError, ValueError):
+        log.warning(
+            f"Malformed reminder send time {send_time!r}; "
+            f"falling back to {_DEFAULT_SEND_HOUR:02d}:{_DEFAULT_SEND_MINUTE:02d}"
+        )
+        return _DEFAULT_SEND_HOUR, _DEFAULT_SEND_MINUTE
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        log.warning(f"Out-of-range reminder send time {send_time!r}; falling back")
+        return _DEFAULT_SEND_HOUR, _DEFAULT_SEND_MINUTE
+    return hour, minute
+
+
+def _scheduled_moment(day: date, send_time: str, send_tz: str) -> datetime:
+    """The absolute instant ``send_time`` falls on ``day`` in ``send_tz``."""
+    hour, minute = _parse_send_time(send_time)
+    tz = zoneinfo.ZoneInfo(send_tz or _DEFAULT_TZ)
+    return datetime.combine(day, dt_time(hour, minute), tzinfo=tz)
+
+
 def _is_day_out_window(
     now: datetime,
     appt_start: datetime,
@@ -275,28 +345,39 @@ def _is_day_out_window(
     send_time: str,
     send_tz: str,
 ) -> bool:
-    """Whether a day-out interval is due: right date, at or just after send time.
+    """Whether a day-out interval is due: at or just after the send time on the
+    target date. ``GRACE_MINUTES`` bounds how late the send may be.
 
-    ``GRACE_MINUTES`` bounds how late the send may be.
-
-    Caveat: the date check is local to ``send_tz``, so a send time within
-    ``GRACE_MINUTES`` of local midnight can be missed: the next scan falls on
-    the following date and no longer matches ``target_date``.
+    The scheduled instant is anchored to the **target date**, not to ``now``'s
+    local date. That distinction is the fix for a real miss: anchoring to ``now``
+    meant a send time within ``GRACE_MINUTES`` of the end of the local day could
+    never fire at all, because the only ticks inside its grace window landed on
+    the following date and were then rejected by a date-equality check. Anchoring
+    to the target date lets the window span midnight, and makes that date check
+    redundant — being within grace of one specific instant already implies it.
     """
-    tz = zoneinfo.ZoneInfo(send_tz or "America/New_York")
-    now_local = now.astimezone(tz)
-    appt_local = appt_start.astimezone(tz)
-
+    appt_local = appt_start.astimezone(zoneinfo.ZoneInfo(send_tz or _DEFAULT_TZ))
     interval_days = interval_minutes // 1440
     target_date = (appt_local - timedelta(days=interval_days)).date()
-    if now_local.date() != target_date:
-        return False
+    elapsed = (now - _scheduled_moment(target_date, send_time, send_tz)).total_seconds()
+    return 0 <= elapsed <= GRACE_MINUTES * 60
 
-    # Due once the configured send time has arrived, within one scan's grace
-    hour, minute = 9, 0
-    if send_time:
-        parts = send_time.split(":")
-        hour, minute = int(parts[0]), int(parts[1])
-    scheduled = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    elapsed_seconds = (now_local - scheduled).total_seconds()
-    return 0 <= elapsed_seconds <= GRACE_MINUTES * 60
+
+def _in_send_window(now: datetime, send_time: str, send_tz: str) -> bool:
+    """Could a day-out reminder on this (send_time, tz) fire right now?
+
+    Appointment-independent, which is what makes it usable as a gate before the
+    query runs: the firing instants for a given send time are "that time on some
+    local date", so being inside one is a property of ``now`` alone.
+
+    Checks yesterday's instant as well as today's, because a send time near the
+    end of the local day has a grace window that spills past midnight — the same
+    case ``_is_day_out_window`` handles.
+    """
+    now_local = now.astimezone(zoneinfo.ZoneInfo(send_tz or _DEFAULT_TZ))
+    for days_back in (0, 1):
+        day = (now_local - timedelta(days=days_back)).date()
+        elapsed = (now - _scheduled_moment(day, send_time, send_tz)).total_seconds()
+        if 0 <= elapsed <= GRACE_MINUTES * 60:
+            return True
+    return False
