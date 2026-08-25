@@ -9,7 +9,9 @@ from unittest.mock import MagicMock, patch
 
 from appointment_reminders.handlers.reminder_scheduler import (
     ReminderScheduler,
+    _in_send_window,
     _is_day_out_window,
+    _parse_send_time,
 )
 from appointment_reminders.services.config import CampaignConfig
 
@@ -477,3 +479,190 @@ def test_execute_never_writes_the_config() -> None:
     ):
         scheduler.execute()
     mock_save.assert_not_called()
+
+
+# ---- the near-midnight miss ----
+
+_TZ = zoneinfo.ZoneInfo("America/New_York")
+
+
+def _utc(y, m, d, hh, mm, tz=_TZ) -> datetime:
+    """A local wall-clock moment, as UTC."""
+    return datetime(y, m, d, hh, mm, tzinfo=tz).astimezone(timezone.utc)
+
+
+def test_day_out_send_time_late_in_the_day_still_fires_after_midnight() -> None:
+    """Regression: a send time in the last GRACE_MINUTES of the day never fired.
+
+    The scheduled instant used to be anchored to *now*'s local date and then
+    gated on `now.date() == target_date`. With send_time 23:58 the only ticks
+    inside the grace window land on the following date, so they failed that
+    check and the reminder was lost entirely — not late, never sent.
+    """
+    appt = _utc(2026, 9, 10, 14, 0)          # appointment, local 2pm
+    # target date is 2026-09-09, so the scheduled instant is 09-09 23:58 local.
+    before = _utc(2026, 9, 9, 23, 55)        # tick before it: not yet due
+    after = _utc(2026, 9, 10, 0, 0)          # tick 2 min later, next local date
+    assert _is_day_out_window(before, appt, 1440, "23:58", "America/New_York") is False
+    assert _is_day_out_window(after, appt, 1440, "23:58", "America/New_York") is True
+
+
+def test_day_out_still_bounded_by_grace_after_midnight_spill() -> None:
+    """The spill must not become an unbounded catch-up window."""
+    appt = _utc(2026, 9, 10, 14, 0)
+    too_late = _utc(2026, 9, 10, 0, 10)      # 12 min after 23:58, grace is 7
+    assert _is_day_out_window(too_late, appt, 1440, "23:58", "America/New_York") is False
+
+
+def test_day_out_ordinary_send_time_unchanged() -> None:
+    """The common case must behave exactly as before the anchor change."""
+    appt = _utc(2026, 9, 10, 14, 0)
+    assert _is_day_out_window(
+        _utc(2026, 9, 9, 9, 2), appt, 1440, "09:00", "America/New_York") is True
+    assert _is_day_out_window(
+        _utc(2026, 9, 9, 8, 55), appt, 1440, "09:00", "America/New_York") is False
+    assert _is_day_out_window(
+        _utc(2026, 9, 9, 9, 30), appt, 1440, "09:00", "America/New_York") is False
+    # wrong date entirely
+    assert _is_day_out_window(
+        _utc(2026, 9, 8, 9, 2), appt, 1440, "09:00", "America/New_York") is False
+
+
+def test_day_out_honours_multi_day_intervals() -> None:
+    appt = _utc(2026, 9, 10, 14, 0)
+    # 3 days out => target date 2026-09-07
+    assert _is_day_out_window(
+        _utc(2026, 9, 7, 9, 2), appt, 4320, "09:00", "America/New_York") is True
+    assert _is_day_out_window(
+        _utc(2026, 9, 9, 9, 2), appt, 4320, "09:00", "America/New_York") is False
+
+
+def test_malformed_send_time_falls_back_instead_of_raising() -> None:
+    """A bad config string must not take the whole scan down with it."""
+    assert _parse_send_time("09:30") == (9, 30)
+    assert _parse_send_time("") == (9, 0)
+    assert _parse_send_time("9") == (9, 0)          # no colon: IndexError before
+    assert _parse_send_time("abc") == (9, 0)
+    assert _parse_send_time("25:00") == (9, 0)      # out of range
+    assert _parse_send_time("09:99") == (9, 0)
+
+
+# ---- the day-out gate ----
+
+def test_in_send_window_true_only_within_grace() -> None:
+    assert _in_send_window(_utc(2026, 9, 9, 9, 0), "09:00", "America/New_York") is True
+    assert _in_send_window(_utc(2026, 9, 9, 9, 7), "09:00", "America/New_York") is True
+    assert _in_send_window(_utc(2026, 9, 9, 9, 8), "09:00", "America/New_York") is False
+    assert _in_send_window(_utc(2026, 9, 9, 8, 59), "09:00", "America/New_York") is False
+
+
+def test_in_send_window_covers_the_midnight_spill() -> None:
+    """Yesterday's instant counts, or the gate would block the very tick that
+    _is_day_out_window needs for a late send time."""
+    assert _in_send_window(_utc(2026, 9, 10, 0, 0), "23:58", "America/New_York") is True
+
+
+def _run_gate(config: CampaignConfig, now: datetime):
+    """Run execute() at a fixed `now`, returning the appointment queryset mock."""
+    scheduler = _scheduler()
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.datetime"
+    ) as mock_dt, patch(
+        "appointment_reminders.handlers.reminder_scheduler.Appointment"
+    ) as mock_appt:
+        mock_dt.now.return_value = now
+        mock_dt.combine = datetime.combine
+        (mock_appt.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+            .iterator.return_value) = []
+        scheduler.execute()
+    return mock_appt
+
+
+def test_gate_skips_the_scan_when_only_day_out_and_outside_the_window() -> None:
+    """The whole point: 287 of 288 daily ticks should not touch the table.
+
+    With a single day-out interval, a reminder can only fire in the grace
+    window after its send time. Every other tick was querying every booked
+    appointment in a multi-day window to discover it had nothing to do.
+    """
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440],
+        telehealth_enabled=False, reminder_send_time="00:50",
+        reminder_timezone="America/New_York",
+    )
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 14, 0))  # nowhere near 00:50
+    mock_appt.objects.filter.assert_not_called()
+
+
+def test_gate_allows_the_scan_inside_the_send_window() -> None:
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440],
+        telehealth_enabled=False, reminder_send_time="00:50",
+        reminder_timezone="America/New_York",
+    )
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 0, 52))
+    mock_appt.objects.filter.assert_called_once()
+
+
+def test_gate_always_allows_the_scan_when_a_short_interval_exists() -> None:
+    """Sub-day reminder intervals are time-relative and can fire on any tick."""
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440, 45],
+        telehealth_enabled=False, reminder_send_time="00:50",
+        reminder_timezone="America/New_York",
+    )
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 14, 0))
+    mock_appt.objects.filter.assert_called_once()
+
+
+def test_gate_always_allows_the_scan_when_telehealth_is_on() -> None:
+    """Telehealth intervals are time-relative *whatever their size* — the
+    telehealth branch ignores send_time. A day-sized one must not be mistaken
+    for date-relative and gated away."""
+    for th_intervals in ([15], [1440]):
+        config = CampaignConfig(
+            reminders_enabled=True, reminder_intervals=[1440],
+            telehealth_enabled=True, telehealth_intervals=th_intervals,
+            reminder_send_time="00:50", reminder_timezone="America/New_York",
+        )
+        mock_appt = _run_gate(config, _utc(2026, 9, 9, 14, 0))
+        mock_appt.objects.filter.assert_called_once(), th_intervals
+
+
+def test_gate_respects_a_per_visit_type_send_time() -> None:
+    """A visit type with its own send time must open the gate at that time.
+
+    Missing a send-time source here would silently stop that type's reminders,
+    which is the failure mode this gate has to avoid.
+    """
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440],
+        telehealth_enabled=False, reminder_send_time="09:00",
+        reminder_timezone="America/New_York",
+        note_type_reminders={
+            "nt-1": {"note_type_id": "nt-1", "reminder_send_time": "17:00"},
+        },
+    )
+    # 17:02 matches only the per-type send time, not the 09:00 global.
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 17, 2))
+    mock_appt.objects.filter.assert_called_once()
+
+
+def test_gate_still_skips_when_no_configured_send_time_matches() -> None:
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440],
+        telehealth_enabled=False, reminder_send_time="09:00",
+        reminder_timezone="America/New_York",
+        note_type_reminders={
+            "nt-1": {"note_type_id": "nt-1", "reminder_send_time": "17:00"},
+        },
+    )
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 13, 0))
+    mock_appt.objects.filter.assert_not_called()

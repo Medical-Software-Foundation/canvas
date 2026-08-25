@@ -69,7 +69,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 | Handler | Type | Role |
 | --- | --- | --- |
 | `AppointmentEventHandler` | events | Confirmation / cancellation / no-show on appointment events |
-| `ReminderScheduler` | cron `*/5 * * * *` | Reminder + telehealth-join messages for upcoming booked appointments |
+| `ReminderScheduler` | cron `*/5 * * * *` | Reminder + telehealth-join messages for upcoming booked appointments. Skips the appointment scan entirely on ticks where no configured interval can fire |
 | `NotificationAPI` | SimpleAPI | Admin config (role-gated), manual sends, notification history |
 | `TwilioInboundAPI` | SimpleAPI | Signature-gated inbound-SMS webhook (`POST /twilio/inbound`) — Y/N confirm/decline, STOP/START consent write-back |
 | `TimelineMessageFilter` | config | Hides "Message" notes from the patient timeline |
@@ -182,6 +182,18 @@ The server-side behavior is the actual boundary; the read-only textareas are a c
 
 **Independent of the lock**, a manual send is refused with **422** when the rendered body still contains a `{{placeholder}}` the renderer could not fill, so template syntax never reaches a patient verbatim. Only the channels actually selected are checked, so a typo in an unused template can't block a send.
 
+## Reminder scheduling
+
+The cron runs every 5 minutes, but most ticks do no work and no longer pay for a scan.
+
+A reminder interval of **a day or more** is *date-relative*: it fires at the configured **send time** on the target date, so it can only fire inside a `GRACE_MINUTES` window once per day. A reminder interval **under a day**, and **every** telehealth interval regardless of size, is *time-relative*: it fires once the appointment is that many minutes away, which can happen on any tick.
+
+So before querying anything, the scheduler asks whether any configured interval could fire right now. With only day-out intervals configured — a single daily reminder, the common case — that is true on about two ticks a day and the other ~286 return immediately without touching the appointment table. Configure any short reminder interval, or enable telehealth, and every tick scans as before.
+
+The send-time sources the gate considers are the global setting plus any per-visit-type override. Business-line overrides cannot set an interval, send time, or timezone — they only refine copy, channels, and opt-out — so that pair is the complete set. Missing a source here would silently stop that visit type's reminders, so it is covered by tests.
+
+**Send times near the end of the local day work.** The scheduled instant is anchored to the target date rather than to the current date, so a grace window that spills past local midnight still fires. Before that fix, a send time in the last `GRACE_MINUTES` of the day never fired at all — the only ticks inside its window landed on the next date and were rejected by a date-equality check. A malformed send time falls back to 09:00 with a warning rather than raising, since an exception there would take down the whole scan and lose every patient's reminder, not just the misconfigured type's.
+
 ## Consent (TCPA / opt-out)
 
 Enforced at send time in `services/delivery.py:_get_patient_contacts`:
@@ -219,7 +231,7 @@ Campaigns ship **disabled** (opt-in). Enable per campaign in the admin app.
 - **No runtime detection of native reminders.** `appointmentReminders` is an `OrganizationSetting` with no `canvas_sdk` model and no replica table, and native sends are logged to `api_appointmentreminder` without writing `Message`/`MessageTransmission` rows. The plugin therefore has no signal — direct or indirect — that native reminders are still active. Avoiding double sends is a deployment-checklist step, not something the code can enforce.
 - **The admin menu item cannot be hidden per role**, only made inert — see *Who can open the admin app*. Hiding it would need a Canvas platform change.
 - **Contact-point update semantics are undocumented.** Canvas documents `addresses` updates as replace-based and says nothing about `contact_points`, and the payload carries no row ids. `services/consent.py` therefore resends every live contact point on each consent write, which is correct under either reading but should be confirmed against a real chart during UAT: send a STOP from a patient who has an email and a second phone on file, then check both survived.
-- **The reminder cron scans a wide window.** It queries every booked appointment from now to `max(interval) + grace` — three days with the default `[4320, 45]` cadence — but a given tick can only fire an appointment sitting in a 7-minute band, so ~99.7% of the rows it hydrates cannot act. `.iterator()` bounds peak memory, not the work. Narrowing the query to the bands that can actually fire is the open item; it has to union per-visit-type and per-business-line interval/send-time combinations, so it is not a one-liner.
+- **The reminder cron does not narrow its window to the firing band.** When a scan does run it queries every booked appointment from now to `max(interval) + grace`, though only those in a 7-minute band can actually fire. The gate below removes the *scans* that can do nothing at all, which is the bigger win; narrowing the surviving scan's window is still open. It would have to union the interval, send-time and timezone combinations across visit types, so it is not a one-liner — and with only day-out intervals configured, the gate already reduces the scans to two a day.
 - **Inbound patient lookup is a sequential scan.** Resolving a reply's sender matches the last 10 digits as a suffix (`telecom__value__endswith`), which compiles to `LIKE '%…'` and so cannot use a standard B-tree index. That is fine for a webhook firing a few times a minute, and cheaper than the 4-digit substring scan plus 50-row hydration it replaced. Making it fast would need a normalized or reversed-string expression index on the column — a platform change, not a plugin one.
 - **No send retry queue.** Twilio/SendGrid failures are logged to `NotificationDelivery` + an `AppointmentsMetadata` effect, but not retried.
 - **Email uses implicit consent** (opt-out only, no per-email opt-in) and has no built-in unsubscribe (would require SendGrid Subscription Tracking / ASM).
