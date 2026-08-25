@@ -16,7 +16,6 @@ from appointment_reminders.services.config import (
     NoteTypeCampaignConfig,
     get_effective_campaign_config,
     load_config,
-    save_config,
 )
 from appointment_reminders.services.delivery import deliver_to_patient
 from appointment_reminders.services.history import log_delivery
@@ -50,10 +49,14 @@ class ReminderScheduler(CronTask):
 
     def execute(self) -> list[Effect]:
         """Check appointments and send reminders."""
+        # Read-only. This used to call save_config() right here to "refresh the
+        # config TTL", which was real when the config lived in the cache. It now
+        # lives in a CampaignConfigRecord row with no expiry, so that write
+        # rewrote the entire config blob — every campaign's templates, every
+        # per-visit-type and per-business-line override — 288 times a day to
+        # change nothing, and opened a window where a tick could clobber an
+        # admin's concurrent save with its own stale copy.
         config = load_config()
-
-        # Refresh config TTL every time we run
-        save_config(config)
 
         cache = get_cache()
         now = datetime.now(timezone.utc)

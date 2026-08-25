@@ -47,4 +47,10 @@ class NotificationDelivery(CustomModel):
         indexes = [
             Index(fields=["patient", "-created_at"]),
             Index(fields=["-created_at"]),
+            # For get_unresolved_senders, which filters campaign_type + status
+            # and orders by -created_at. Without this the query walks the whole
+            # log in created_at order filtering as it goes — and the worst case
+            # is the *healthy* one: no unresolved senders means scanning every
+            # row to return nothing, getting slower as the log grows.
+            Index(fields=["campaign_type", "status", "-created_at"]),
         ]
