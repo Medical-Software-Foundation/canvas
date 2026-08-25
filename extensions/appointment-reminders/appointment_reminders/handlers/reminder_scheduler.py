@@ -121,8 +121,40 @@ class ReminderScheduler(CronTask):
             log.info("No interval can fire on this tick; skipping the scan")
             return []
 
+        # Kept as-is for the dedup cache TTLs further down, which want the raw
+        # interval rather than the scan horizon.
         max_interval_minutes = max(all_intervals)
-        end_window = now + timedelta(minutes=max_interval_minutes + GRACE_MINUTES)
+
+        # A day-out interval does not fire on a duration. It fires at `send_time`
+        # on (appointment's local date - interval_days), and the appointment can
+        # sit anywhere within that date — so its real lead time runs from just
+        # over interval_days days to a full day more. Sizing the scan window by
+        # the raw interval therefore dropped every eligible appointment past
+        # interval_minutes + grace, silently: no log line, no error.
+        #
+        # Measured on a test instance with reminder_intervals [1440] and a 09:00 ET
+        # send. Three appointments on the next local date, all date-eligible:
+        # 16.5h out fired, 29h and 35h out were dropped. The old 24.1h horizon
+        # admitted only the first.
+        #
+        # So pad day-out reminder intervals to cover their whole target date.
+        # Telehealth intervals are never padded, whatever their size, because the
+        # telehealth branch below is genuinely time-relative — the same
+        # distinction the gate above draws. The extra hour absorbs a DST
+        # fall-back day, which is 25 hours long locally and would otherwise put
+        # the last hour of the target date out of reach once a year.
+        #
+        # Over-inclusion is free here: _is_day_out_window still makes the exact
+        # per-appointment decision, so a wider scan changes only how many rows
+        # are considered, never which ones fire. Under-inclusion was the bug.
+        scan_horizon_minutes = max(
+            [
+                ((i // 1440) + 1) * 1440 + 60 if i >= DAY_OUT_THRESHOLD else i
+                for i in reminder_intervals
+            ]
+            + telehealth_intervals
+        )
+        end_window = now + timedelta(minutes=scan_horizon_minutes + GRACE_MINUTES)
 
         # Only query booked appointments (excludes canceled, no-showed, etc.).
         # Single pass, so .iterator() bounds peak memory over a window that held

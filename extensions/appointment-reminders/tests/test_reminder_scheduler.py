@@ -666,3 +666,119 @@ def test_gate_still_skips_when_no_configured_send_time_matches() -> None:
     )
     mock_appt = _run_gate(config, _utc(2026, 9, 9, 13, 0))
     mock_appt.objects.filter.assert_not_called()
+
+
+# ---- scan horizon for day-out intervals ----
+
+def _end_window(config: CampaignConfig, now: datetime):
+    """Run execute() and return the start_time__lte the scan was given."""
+    scheduler = _scheduler()
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.datetime"
+    ) as mock_dt, patch(
+        "appointment_reminders.handlers.reminder_scheduler.Appointment"
+    ) as mock_appt:
+        mock_dt.now.return_value = now
+        mock_dt.combine = datetime.combine
+        (mock_appt.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+            .iterator.return_value) = []
+        scheduler.execute()
+    if not mock_appt.objects.filter.called:
+        return None
+    return mock_appt.objects.filter.call_args.kwargs["start_time__lte"]
+
+
+def test_day_out_scan_reaches_the_end_of_the_target_date() -> None:
+    """Regression: appointments late on the target date were silently dropped.
+
+    A day-out interval fires at send_time on (appt_date - interval_days), so an
+    appointment anywhere in that date is eligible — a lead time of up to a full
+    extra day. Sizing the window by the raw interval gave a 24.1h horizon for a
+    1-day interval, so only appointments in the first few hours of the target
+    date were ever seen.
+
+    Measured on a test instance at the 09:00 ET window on 2026-08-25 with
+    reminder_intervals [1440]: three appointments on 2026-08-26, all
+    date-eligible. 01:30 ET (16.5h out) fired; 14:00 ET (29h) and 20:00 ET (35h)
+    produced no rows at all.
+    """
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440], telehealth_enabled=False,
+        reminder_send_time="09:00", reminder_timezone="America/New_York",
+    )
+    now = _utc(2026, 8, 25, 9, 0)
+    end_window = _end_window(config, now)
+    assert end_window is not None, "the send window should open the gate"
+
+    horizon_hours = (end_window - now).total_seconds() / 3600
+    assert horizon_hours >= 48, f"horizon only reaches {horizon_hours:.1f}h"
+
+    # The three real appointments, by lead time from that window.
+    for lead_hours in (16.5, 29.0, 35.0):
+        assert now + timedelta(hours=lead_hours) <= end_window, lead_hours
+
+
+def test_day_out_horizon_covers_a_dst_lengthened_day() -> None:
+    """A fall-back local day is 25 hours, putting the target date's last hour
+    just past a flat 48h. Cheap to cover, since over-inclusion is free."""
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440], telehealth_enabled=False,
+        reminder_send_time="00:00", reminder_timezone="America/New_York",
+    )
+    now = _utc(2026, 11, 1, 0, 1)
+    end_window = _end_window(config, now)
+    assert (end_window - now).total_seconds() / 3600 >= 49
+
+
+def test_multi_day_interval_horizon_is_padded_too() -> None:
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[4320], telehealth_enabled=False,
+        reminder_send_time="09:00", reminder_timezone="America/New_York",
+    )
+    now = _utc(2026, 8, 25, 9, 0)
+    horizon_hours = (_end_window(config, now) - now).total_seconds() / 3600
+    # 3-day interval spans target dates up to 4 days out.
+    assert 96 <= horizon_hours < 120, horizon_hours
+
+
+def test_sub_day_reminder_interval_is_not_padded() -> None:
+    """Short intervals really are durations; padding them would widen the scan
+    for no reason on every tick, since they keep the gate permanently open."""
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[45], telehealth_enabled=False,
+        reminder_send_time="09:00", reminder_timezone="America/New_York",
+    )
+    now = _utc(2026, 8, 25, 14, 0)
+    horizon_minutes = (_end_window(config, now) - now).total_seconds() / 60
+    assert horizon_minutes == 45 + 7
+
+
+def test_telehealth_interval_is_never_padded_whatever_its_size() -> None:
+    """The telehealth branch ignores send_time entirely — a day-sized telehealth
+    interval is still a duration, so padding it would be wrong in kind."""
+    config = CampaignConfig(
+        reminders_enabled=False, telehealth_enabled=True,
+        telehealth_intervals=[1440],
+        reminder_send_time="09:00", reminder_timezone="America/New_York",
+    )
+    now = _utc(2026, 8, 25, 14, 0)
+    horizon_minutes = (_end_window(config, now) - now).total_seconds() / 60
+    assert horizon_minutes == 1440 + 7
+
+
+def test_horizon_takes_the_widest_across_mixed_intervals() -> None:
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440, 45],
+        telehealth_enabled=True, telehealth_intervals=[15],
+        reminder_send_time="09:00", reminder_timezone="America/New_York",
+    )
+    now = _utc(2026, 8, 25, 14, 0)
+    horizon_hours = (_end_window(config, now) - now).total_seconds() / 3600
+    assert horizon_hours >= 48
