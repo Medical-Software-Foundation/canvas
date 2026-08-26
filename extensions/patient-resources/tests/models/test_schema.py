@@ -51,10 +51,15 @@ def test_resource_text_columns_declare_no_max_length_or_choices():
     Length is checked in services/validation.py; the status vocabulary is checked
     in services/catalog.py.
     """
-    for name in ("title", "url", "label", "status"):
+    for name in ("title", "url", "label", "default_note", "status"):
         kwargs = _field(PatientResource, name).kwargs
         assert "max_length" not in kwargs, name
         assert "choices" not in kwargs, name
+
+
+def test_the_default_note_is_a_column_on_the_resource():
+    """The library-level blurb the picker starts from. Never read by the portal."""
+    assert _field(PatientResource, "default_note").default == ""
 
 
 def test_resource_unique_constraint_is_scoped_to_active_rows():
@@ -91,13 +96,25 @@ def test_resource_curator_keys_are_nullable():
 
 
 def test_share_snapshot_columns_exist_and_default_empty():
-    """The portal renders these, not the live catalog row.
+    """What was sent, as it was sent.
 
-    Their presence is what keeps a patient's history stable when an admin edits
-    a resource months later.
+    ``url_at_share`` is what the patient opens and cannot change. The other two
+    are history: the title is a fallback for a catalog row that goes missing, and
+    the label is written but no longer read anywhere, since labels are internal.
     """
     for name in ("title_at_share", "url_at_share", "label_at_share"):
         assert _field(PatientResourceShare, name).default == ""
+
+
+def test_the_patient_note_is_a_column_on_the_share_not_the_resource():
+    """It was written for one patient, so it belongs to their row.
+
+    Storing it on the catalog instead would mean editing the library's default
+    silently rewrote what somebody said about a specific person.
+    """
+    assert _field(PatientResourceShare, "note").default == ""
+    # And the catalog carries only a default, never the note itself.
+    assert "note" not in PatientResource.__dict__
 
 
 def test_share_shared_at_is_nullable_and_not_auto_now_add():

@@ -58,6 +58,9 @@ def serialize_resource(
         "title": _text(getattr(resource, "title", "")),
         "url": _safe_url(getattr(resource, "url", "")),
         "label": _text(getattr(resource, "label", "")),
+        # The blurb this resource usually goes out with. Staff-facing here: the
+        # picker pre-fills it so the sender can rewrite it for one patient.
+        "default_note": _text(getattr(resource, "default_note", "")),
         "status": _text(getattr(resource, "status", "")),
         "is_active": _text(getattr(resource, "status", "")) == STATUS_ACTIVE,
         "created_at": _isoformat(getattr(resource, "created_at", None)),
@@ -78,12 +81,17 @@ def serialize_resource(
 
 
 def serialize_share_for_staff(share: Any) -> dict[str, Any]:
-    """One share, for the picker's "already shared" list."""
+    """One share, for the picker's "already shared" list.
+
+    Keeps the label, unlike the patient's copy: this payload is read by staff,
+    and the label is the internal filing they use to find things.
+    """
     return {
         "resource_id": getattr(share, "resource_id", None),
         "title": _text(getattr(share, "title_at_share", "")),
         "label": _text(getattr(share, "label_at_share", "")),
         "url": _safe_url(getattr(share, "url_at_share", "")),
+        "note": _text(getattr(share, "note", "")),
         "shared_at": _isoformat(getattr(share, "shared_at", None)),
     }
 
@@ -91,30 +99,33 @@ def serialize_share_for_staff(share: Any) -> dict[str, Any]:
 def serialize_share_for_patient(share: Any) -> dict[str, Any]:
     """One share, for the patient's own list.
 
-    Title and label come from the live catalog row, so correcting a typo reaches
-    the patients who already have it. Reading the snapshot instead meant a
-    misspelling followed them forever, with no way to fix it.
+    Three fields, each read from a deliberately different place.
 
-    That is safe because the link is frozen once a resource has been shared: with
-    the URL immutable, a title edit can only redescribe the same resource, never
-    swap it for a different one. Repurposing was the risk the snapshot guarded
-    against, and the immutable URL already covers it.
+    **Title** comes from the live catalog row, so correcting a typo reaches the
+    patients who already have it. Reading the snapshot instead meant a
+    misspelling followed them forever, with no way to fix it. That is safe
+    because the link is frozen once a resource has been shared: with the URL
+    immutable, a title edit can only redescribe the same resource, never swap it
+    for a different one. Repurposing was the risk the snapshot guarded against,
+    and the immutable URL already covers it.
 
-    The URL itself still comes from the snapshot. It cannot have changed, so the
-    two agree -- and the snapshot keeps working if the catalog row is ever
-    missing, since that foreign key is nullable.
+    **URL** still comes from the snapshot. It cannot have changed, so the two
+    agree -- and the snapshot keeps working if the catalog row is ever missing,
+    since that foreign key is nullable.
+
+    **Note** comes from the share and only from the share. It was written for
+    this patient, and a later edit to the library's default must never reach
+    back and rewrite what somebody said about one person.
+
+    No label. Labels are internal filing for staff and are not shown to patients.
     """
     resource = getattr(share, "resource", None)
     live_title = getattr(resource, "title", None) if resource is not None else None
-    live_label = getattr(resource, "label", None) if resource is not None else None
 
     return {
         "title": _text(live_title or getattr(share, "title_at_share", "")),
-        # An empty label is a real value, so only a missing row falls back.
-        "label": _text(
-            live_label if live_label is not None else getattr(share, "label_at_share", "")
-        ),
         "url": _safe_url(getattr(share, "url_at_share", "")),
+        "note": _text(getattr(share, "note", "")),
         "shared_at": _isoformat(getattr(share, "shared_at", None)),
     }
 
@@ -125,9 +136,12 @@ def serialize_withdrawn_share(share: Any) -> dict[str, Any]:
     Still the snapshot here, unlike the live list. A withdrawn resource is
     archived and may since have been edited or removed, and the patient cannot
     open it anyway, so the name they were given is the more useful record.
+
+    No note either. The notice says the resource was withdrawn; repeating
+    instructions for something the patient can no longer open would be telling
+    them to do a thing their care team has just taken back.
     """
     return {
         "title": _text(getattr(share, "title_at_share", "")),
-        "label": _text(getattr(share, "label_at_share", "")),
         "revoked_at": _isoformat(getattr(share, "revoked_at", None)),
     }

@@ -23,17 +23,20 @@ def _api(make_request, **kwargs):
     return api
 
 
-def _share(title="Managing diabetes", live_title=None):
+def _share(title="Managing diabetes", live_title=None, note="Bring your logbook."):
     share = MagicMock()
-    # The live catalog row the payload now reads its title and label from.
-    # Defaults to matching the snapshot; a test passes live_title to prove a
-    # correction reaches the patient.
+    # The live catalog row the payload reads its title from. Defaults to matching
+    # the snapshot; a test passes live_title to prove a correction reaches the
+    # patient. Its label and default_note are set to values that must not appear
+    # in the response.
     share.resource = MagicMock()
     share.resource.title = live_title or title
     share.resource.label = "Diabetes"
+    share.resource.default_note = "The library default, written for nobody."
     share.title_at_share = title
     share.url_at_share = "https://example.org/d"
     share.label_at_share = "Diabetes"
+    share.note = note
     share.shared_at = WHEN
     share.revoked_at = None
     return share
@@ -122,11 +125,35 @@ def test_the_list_projects_the_share(mock_patient, make_request):
     assert data["resources"] == [
         {
             "title": "Managing diabetes",
-            "label": "Diabetes",
             "url": "https://example.org/d",
+            "note": "Bring your logbook.",
             "shared_at": "2026-08-20T14:03:11+00:00",
         }
     ]
+
+
+def test_the_patient_payload_carries_no_label(mock_patient, make_request):
+    """Labels are internal. The whole response is asserted, key by key.
+
+    A weaker check on the resources list alone would miss a label reappearing in
+    the withdrawn notices beside it.
+    """
+    _signed_in(mock_patient)
+    withdrawn = _share("Old handout")
+    withdrawn.revoked_at = WHEN
+    _rows(live=[_share()], revoked=[withdrawn])
+
+    data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data
+    for row in data["resources"] + data["withdrawn"]:
+        assert "label" not in row
+
+
+def test_the_note_the_patient_sees_is_the_one_sent_to_them(mock_patient, make_request):
+    """Not the library default, which may since have been rewritten."""
+    _signed_in(mock_patient)
+    _rows(live=[_share(note="Read section 3 before Thursday.")])
+    data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data
+    assert data["resources"][0]["note"] == "Read section 3 before Thursday."
 
 
 def test_withdrawn_resources_are_reported_separately(mock_patient, make_request):

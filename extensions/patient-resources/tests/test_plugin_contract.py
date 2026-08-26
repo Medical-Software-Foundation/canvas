@@ -598,7 +598,7 @@ def test_text_controls_are_styled_by_element_not_by_container():
     # Every text control the templates use has to be covered by that rule.
     block = source[source.index('input[type="search"],') :]
     block = block[: block.index("{")]
-    for control in ('input[type="text"]', 'input[type="url"]', "select"):
+    for control in ('input[type="text"]', 'input[type="url"]', "textarea", "select"):
         assert control in block, control
 
 
@@ -693,3 +693,71 @@ def test_an_inactive_row_says_why_it_is_inactive():
     assert '"Withdrawn"' in source
     assert '"Archived"' in source
     assert "resource.has_withdrawn_shares" in source
+
+
+# --- labels are internal, notes are patient-facing --------------------------
+
+
+def test_the_patient_page_never_renders_a_label():
+    """Labels file the library for staff. They are not written for a patient.
+
+    Checked on the page as well as in the serializer: the payload dropping the
+    field and the page not reading it are two separate ways to get this wrong,
+    and a stray `resource.label` here would render "undefined" rather than fail.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "portal.js")
+    assert "label" not in source
+    assert "prp-label" not in _css_code(PACKAGE / "static" / "css" / "portal.css")
+
+
+def test_the_patient_page_renders_the_note_as_text():
+    """Staff-entered free text on a patient-facing page: textContent, never markup."""
+    source = _js_code(PACKAGE / "static" / "js" / "portal.js")
+    assert "resource.note" in source
+    assert 'el("p", "prp-note"' in source
+    assert "innerHTML" not in source
+
+
+def test_the_note_keeps_the_line_breaks_the_sender_typed():
+    """A note written as three lines must not arrive as one paragraph.
+
+    `pre-line` and not `pre`: the text is inserted with textContent, so it cannot
+    be markup, but it should still wrap to the reader's screen width.
+    """
+    source = _css_code(PACKAGE / "static" / "css" / "portal.css")
+    block = source[source.index(".prp-note {") :]
+    block = block[: block.index("}")]
+    assert "white-space: pre-line" in block
+
+
+def test_the_library_form_says_who_each_field_is_for():
+    """An input box does not say whether patients see what goes in it."""
+    source = (PACKAGE / "templates" / "library.html").read_text()
+    assert "Label (internal, optional)" in source
+    assert "Patients never see it." in source
+    assert "Note for patients (optional)" in source
+    assert 'id="pr-edit-default-note"' in source
+    # Keyed by the server's field name so a 400 lands beside the right control.
+    assert 'id="pr-edit-default_note-error"' in source
+
+
+def test_the_picker_offers_a_note_per_selected_resource():
+    """Set as a default on the resource, edited for the patient before sending."""
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    assert "renderNoteField" in source
+    assert "resource.default_note" in source
+    assert "notes: notes" in source
+
+
+def test_a_note_typed_in_the_picker_survives_a_search():
+    """Searching re-renders the list, so the textareas are rebuilt.
+
+    Reading the notes off the DOM at send time would lose anything typed before
+    the sender searched again.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    assert "state.notes" in source
+    block = source[source.index("function send()") :]
+    block = block[: block.index("function summarize")]
+    assert "state.notes[id]" in block
+    assert "getElementById" not in block

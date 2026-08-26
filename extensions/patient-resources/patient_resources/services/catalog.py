@@ -116,9 +116,11 @@ def _live_title_label_conflict(title: str, label: str, *, exclude_dbid: Any = No
     return queryset.exists()
 
 
-def create_resource(*, title: str, url: str, label: str, staff_dbid: Any) -> Any:
+def create_resource(
+    *, title: str, url: str, label: str, default_note: str = "", staff_dbid: Any
+) -> Any:
     """Add a resource to the library. Assumes ``validate_resource`` already passed."""
-    fields = normalize_resource(title, url, label)
+    fields = normalize_resource(title, url, label, default_note)
     if _live_title_label_conflict(fields["title"], fields["label"]):
         raise DuplicateResourceError(
             f"A resource called {fields['title']!r} already exists with that label."
@@ -127,13 +129,22 @@ def create_resource(*, title: str, url: str, label: str, staff_dbid: Any) -> Any
         title=fields["title"],
         url=fields["url"],
         label=fields["label"],
+        default_note=fields["default_note"],
         status=STATUS_ACTIVE,
         created_by_id=staff_dbid,
         updated_by_id=staff_dbid,
     )
 
 
-def update_resource(resource: Any, *, title: str, url: str, label: str, staff_dbid: Any) -> Any:
+def update_resource(
+    resource: Any,
+    *,
+    title: str,
+    url: str,
+    label: str,
+    default_note: str = "",
+    staff_dbid: Any,
+) -> Any:
     """Edit a resource in place.
 
     The fields are assigned one at a time on purpose. The RestrictedPython
@@ -145,8 +156,12 @@ def update_resource(resource: Any, *, title: str, url: str, label: str, staff_db
 
     A URL change is refused once the resource has been shared; see
     ``ResourceInUseError``.
+
+    Editing ``default_note`` changes nothing a patient already holds. The note
+    they were sent lives on their share row, written for them, and this is only
+    the value the picker will start from next time.
     """
-    fields = normalize_resource(title, url, label)
+    fields = normalize_resource(title, url, label, default_note)
 
     if fields["url"] != resource.url and has_shares(resource):
         raise ResourceInUseError(
@@ -162,6 +177,7 @@ def update_resource(resource: Any, *, title: str, url: str, label: str, staff_db
     resource.title = fields["title"]
     resource.url = fields["url"]
     resource.label = fields["label"]
+    resource.default_note = fields["default_note"]
     resource.updated_by_id = staff_dbid
     resource.save()
     return resource

@@ -47,6 +47,7 @@
     editTitle: document.getElementById("pr-edit-title"),
     editUrl: document.getElementById("pr-edit-url"),
     editLabel: document.getElementById("pr-edit-label"),
+    editDefaultNote: document.getElementById("pr-edit-default-note"),
     editError: document.getElementById("pr-edit-error"),
     editCancel: document.getElementById("pr-edit-cancel"),
     confirmDialog: document.getElementById("pr-confirm-dialog"),
@@ -458,7 +459,8 @@
   // ---------- editing ----------
 
   function clearFieldErrors() {
-    ["title", "url", "label"].forEach(function (field) {
+    // Keyed by the server's field names, so a 400 lands beside the right input.
+    ["title", "url", "label", "default_note"].forEach(function (field) {
       document.getElementById("pr-edit-" + field + "-error").textContent = "";
     });
     els.editError.textContent = "";
@@ -471,6 +473,7 @@
     els.editTitle.value = resource ? resource.title || "" : "";
     els.editUrl.value = resource ? resource.url || "" : "";
     els.editLabel.value = resource ? resource.label || "" : "";
+    els.editDefaultNote.value = resource ? resource.default_note || "" : "";
     els.editSharedNote.hidden = !resource;
     els.editDialog.showModal();
     requestResize();
@@ -484,7 +487,8 @@
     var body = {
       title: els.editTitle.value,
       url: els.editUrl.value,
-      label: els.editLabel.value
+      label: els.editLabel.value,
+      default_note: els.editDefaultNote.value
     };
     var editing = state.editing;
     var path = editing ? "/library/resources/" + editing.id : "/library/resources";

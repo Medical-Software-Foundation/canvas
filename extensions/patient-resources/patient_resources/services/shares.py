@@ -138,7 +138,13 @@ def resources_with_withdrawn_shares(resource_dbids: list[Any]) -> set[Any]:
     )
 
 
-def share_resources(*, patient: Any, resource_dbids: list[Any], staff_dbid: Any) -> ShareResult:
+def share_resources(
+    *,
+    patient: Any,
+    resource_dbids: list[Any],
+    staff_dbid: Any,
+    notes: dict[Any, str] | None = None,
+) -> ShareResult:
     """Give a patient every one of these resources they do not already have.
 
     Three reads and one write, regardless of batch size. The already-shared set
@@ -149,6 +155,12 @@ def share_resources(*, patient: Any, resource_dbids: list[Any], staff_dbid: Any)
     The unique constraint still backs this up, because the pre-check races with a
     second provider sending the same resource. The route catches
     ``IntegrityError`` and re-reports rather than 500ing.
+
+    ``notes`` carries what the sender wrote for this patient, keyed by resource.
+    A key that is present wins even when its value is empty -- the picker
+    pre-fills the library default, so a box the sender cleared is a decision to
+    send no note, not an omission. Only a resource absent from the mapping
+    entirely falls back to ``default_note``.
     """
     requested = list(resource_dbids)[:MAX_SHARE_BATCH]
     if not requested:
@@ -172,6 +184,7 @@ def share_resources(*, patient: Any, resource_dbids: list[Any], staff_dbid: Any)
             skipped_unavailable=len(unavailable),
         )
 
+    supplied = notes or {}
     now = datetime.now(timezone.utc)
     rows = [
         PatientResourceShare(
@@ -179,11 +192,13 @@ def share_resources(*, patient: Any, resource_dbids: list[Any], staff_dbid: Any)
             resource_id=dbid,
             shared_by_id=staff_dbid,
             shared_at=now,
-            # The snapshot is taken here, once. This is what the patient sees
-            # from now on, and it does not change when the catalog row does.
+            # The snapshot is taken here, once. The URL is what the patient
+            # opens from now on; the title is the fallback for a catalog row
+            # that later goes missing.
             title_at_share=available[dbid].title or "",
             url_at_share=available[dbid].url or "",
             label_at_share=available[dbid].label or "",
+            note=_note_for(dbid, supplied, available[dbid]),
         )
         for dbid in to_create
     ]
@@ -194,6 +209,18 @@ def share_resources(*, patient: Any, resource_dbids: list[Any], staff_dbid: Any)
         already_shared=len(existing),
         skipped_unavailable=len(unavailable),
     )
+
+
+def _note_for(resource_dbid: Any, supplied: dict[Any, str], resource: Any) -> str:
+    """What to store as this share's patient-facing note.
+
+    Membership decides, not truthiness: an empty string the sender left behind is
+    a real answer, and only a resource the caller said nothing about inherits the
+    library default.
+    """
+    if resource_dbid in supplied:
+        return str(supplied[resource_dbid] or "").strip()
+    return str(getattr(resource, "default_note", "") or "").strip()
 
 
 def revoke_resource_shares(*, resource_dbid: Any, reason: str = "") -> int:

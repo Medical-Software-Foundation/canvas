@@ -28,9 +28,16 @@
   var state = {
     selected: {},
     alreadyShared: {},
+    // What will actually be sent with each resource, seeded from the library's
+    // default and overwritten as the sender types. Held here rather than read
+    // off the textareas at send time because searching re-renders the list, and
+    // a note typed before a search must survive it.
+    notes: {},
     requestSeq: 0,
     patientResolved: false
   };
+
+  var NOTE_MAX_CHARS = 1000;
 
   var els = {
     patientName: document.getElementById("pr-patient-name"),
@@ -236,9 +243,38 @@
     els.send.disabled = count === 0 || !state.patientResolved;
   }
 
+  function renderNoteField(resource) {
+    // The note the patient will see. Pre-filled with the library default so the
+    // common case is "send it as written", and editable so the uncommon case --
+    // something specific to this person -- does not need a new library entry.
+    var field = el("div", "pr-note-field");
+
+    var label = el("label", "pr-note-label", "Note for this patient (optional)");
+    label.setAttribute("for", "pr-note-" + resource.id);
+    field.appendChild(label);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "pr-note-" + resource.id;
+    textarea.rows = 2;
+    textarea.maxLength = NOTE_MAX_CHARS;
+    textarea.value = state.notes[resource.id];
+    textarea.addEventListener("input", function () {
+      state.notes[resource.id] = textarea.value;
+    });
+    field.appendChild(textarea);
+
+    return field;
+  }
+
   function renderItem(resource) {
     var item = el("li", "pr-item");
     var row = el("div", "pr-check-row");
+
+    // Seeded on every render so the send path can read one place for every
+    // resource, whether or not the sender ever opened its note.
+    if (state.notes[resource.id] === undefined) {
+      state.notes[resource.id] = resource.default_note || "";
+    }
 
     var checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -248,7 +284,11 @@
     checkbox.disabled = shared;
     checkbox.addEventListener("change", function () {
       state.selected[resource.id] = checkbox.checked;
+      // The note only appears once a resource is going out. Showing every note
+      // at once turns a list of ten resources into a wall of textareas.
+      noteField.hidden = !checkbox.checked;
       refreshFooter();
+      requestResize();
     });
     row.appendChild(checkbox);
 
@@ -275,6 +315,11 @@
     row.appendChild(el("span", "pr-type-pill", "Link"));
 
     item.appendChild(row);
+
+    var noteField = renderNoteField(resource);
+    noteField.hidden = !checkbox.checked;
+    item.appendChild(noteField);
+
     return item;
   }
 
@@ -365,7 +410,17 @@
     els.send.disabled = true;
     els.error.textContent = "";
 
-    request("/shares/", { method: "POST", body: { patient: patientId, resource_ids: ids } })
+    // Only the notes for what is going out. Sending the whole map would name
+    // resources the server was not asked to share, which it refuses.
+    var notes = {};
+    ids.forEach(function (id) {
+      notes[id] = state.notes[id] || "";
+    });
+
+    request("/shares/", {
+      method: "POST",
+      body: { patient: patientId, resource_ids: ids, notes: notes }
+    })
       .then(function (payload) {
         (payload.shared_resource_ids || []).forEach(function (id) {
           state.alreadyShared[id] = true;

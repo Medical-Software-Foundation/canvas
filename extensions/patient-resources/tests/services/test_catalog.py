@@ -143,6 +143,25 @@ def test_create_stores_trimmed_values_and_attributes_the_curator():
     assert kwargs["created_by_id"] == 101
 
 
+def test_create_stores_the_default_note():
+    _no_conflict()
+    catalog.create_resource(
+        title="T",
+        url="https://example.org/d",
+        label="L",
+        default_note="  Read the first two pages.  ",
+        staff_dbid=1,
+    )
+    kwargs = PatientResource.objects.create.call_args.kwargs
+    assert kwargs["default_note"] == "Read the first two pages."
+
+
+def test_a_resource_can_be_created_without_a_default_note():
+    _no_conflict()
+    catalog.create_resource(title="T", url="https://example.org/d", label="L", staff_dbid=1)
+    assert PatientResource.objects.create.call_args.kwargs["default_note"] == ""
+
+
 def test_create_refuses_a_case_insensitive_duplicate():
     """The database constraint is case-sensitive, so this is the real guard."""
     PatientResource.objects.filter.return_value.exists.return_value = True
@@ -237,6 +256,27 @@ def test_update_allows_a_url_change_before_anyone_has_it():
         resource, title="T", url="https://example.org/new", label="L", staff_dbid=1
     )
     assert resource.url == "https://example.org/new"
+
+
+def test_the_default_note_can_be_changed_after_a_resource_has_been_shared():
+    """Unlike the URL. Editing it changes nothing a patient already holds.
+
+    Their note lives on their own share row, written for them; this only changes
+    what the picker starts from next time.
+    """
+    _no_conflict()
+    PatientResourceShare.objects.filter.return_value.exists.return_value = True
+    resource = _resource()
+    catalog.update_resource(
+        resource,
+        title="Managing diabetes",
+        url="https://example.org/d",
+        label="Diabetes",
+        default_note="A better default.",
+        staff_dbid=1,
+    )
+    assert resource.default_note == "A better default."
+    resource.save.assert_called_once()
 
 
 def test_update_refuses_a_duplicate_excluding_itself():

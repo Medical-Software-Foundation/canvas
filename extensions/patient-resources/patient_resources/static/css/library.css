@@ -132,6 +132,7 @@ body {
 input[type="search"],
 input[type="text"],
 input[type="url"],
+textarea,
 select {
   font: inherit;
   font-size: 15px;
@@ -141,6 +142,10 @@ select {
   border-radius: var(--pr-radius);
   background: var(--pr-surface);
 }
+
+/* Only taller. A textarea that can be widened escapes its container, and both
+   places one appears are inside a modal that sizes itself to its content. */
+textarea { resize: vertical; }
 
 .pr-controls input[type="search"] { min-width: 240px; flex: 1 1 240px; }
 
@@ -418,6 +423,22 @@ a:focus-visible {
 
 .pr-shared-flag { color: var(--pr-ink-muted); font-size: 12px; }
 
+/* The per-patient note, revealed when a resource is selected. Indented to the
+   checkbox's text column so it reads as belonging to the row above it rather
+   than as a new item in the list. */
+.pr-note-field {
+  margin: 10px 0 0 30px;
+}
+
+.pr-note-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--pr-ink-muted);
+  font-size: 13px;
+}
+
+.pr-note-field textarea { width: 100%; }
+
 .pr-footer {
   position: sticky;
   bottom: 0;
@@ -478,7 +499,18 @@ dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
 .pr-field { display: block; margin-bottom: 10px; }
 .pr-field span { display: block; margin-bottom: 4px; color: var(--pr-ink-muted); }
 
-.pr-field input { width: 100%; }
+.pr-field input,
+.pr-field textarea { width: 100%; }
+
+/* Says who a field is for -- the label is internal, the note is not -- since
+   neither is obvious from an input box. Smaller than the field name above it so
+   it reads as a footnote rather than a second label. */
+.pr-field-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--pr-ink-muted);
+}
 
 /* No reserved empty line under every field: three of them added ~48px of
    nothing to a form that then had to scroll. The row appears when it has

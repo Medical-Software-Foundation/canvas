@@ -18,7 +18,11 @@ class ShareResourcesButton(ActionButton):
     points at the same URL stays a small change.
     """
 
-    BUTTON_TITLE = "Share resources"
+    # One word on purpose. The chart header gives each plugin button a narrow
+    # fixed slot and clips what does not fit, so "Share resources" arrived
+    # visibly cut off. The modal it opens is still titled in full, which is where
+    # there is room to say what the button does.
+    BUTTON_TITLE = "Resources"
     BUTTON_KEY = "patient_resources__share"
     BUTTON_LOCATION = ActionButton.ButtonLocation.CHART_PATIENT_HEADER
 
