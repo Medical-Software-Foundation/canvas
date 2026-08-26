@@ -623,13 +623,62 @@ def test_recipient_allowlisted_phone_normalized_and_email_ci() -> None:
     assert _recipient_allowlisted("4155551234", "sms", set()) is False  # empty ⇒ fail-closed
 
 
+def _allowlist_patient(pid="pat-1", dbid=42, mrn="900000001") -> MagicMock:
+    """A patient carrying the three identifiers the allowlist accepts.
+
+    `spec=` matters: a bare MagicMock answers every getattr, so a lookup of a
+    field the model does not have would appear to succeed. That is how the dead
+    `key` branch survived — a mock happily returned p.key even though
+    Patient.id is declared CharField(db_column="key") and `.key` never existed.
+    """
+    p = MagicMock(spec=["id", "dbid", "mrn"])
+    p.id, p.dbid, p.mrn = pid, dbid, mrn
+    return p
+
+
 def test_patient_allowlisted_matches_any_identifier() -> None:
-    p = MagicMock(); p.id = "pat-1"; p.dbid = 42; p.key = "KEYX"
-    assert _patient_allowlisted(p, {"pat-1"}) is True
-    assert _patient_allowlisted(p, {"42"}) is True
-    assert _patient_allowlisted(p, {"KEYX"}) is True
+    p = _allowlist_patient()
+    assert _patient_allowlisted(p, {"pat-1"}) is True        # chart-URL id
+    assert _patient_allowlisted(p, {"42"}) is True           # internal dbid
+    assert _patient_allowlisted(p, {"900000001"}) is True    # MRN
     assert _patient_allowlisted(p, {"nope"}) is False
     assert _patient_allowlisted(p, set()) is False
+
+
+def test_patient_allowlisted_accepts_an_mrn() -> None:
+    """MRN is what staff see and quote, so it is the likeliest paste.
+
+    It used to match nothing, and the failure was silent: every send skipped
+    with `skipped:testing_mode`, indistinguishable from a gate working as
+    configured. Real case on a test instance: patient id
+    00000000000000000000000000000000 carries MRN 900000001.
+    """
+    p = _allowlist_patient(pid="00000000000000000000000000000000", mrn="900000001")
+    assert _patient_allowlisted(p, {"900000001"}) is True
+
+
+def test_patient_allowlisted_tolerates_a_missing_or_blank_mrn() -> None:
+    """Not every patient has one, and a blank must not match a blank entry."""
+    p = MagicMock(spec=["id", "dbid", "mrn"])
+    p.id, p.dbid, p.mrn = "pat-1", 42, None
+    assert _patient_allowlisted(p, {"pat-1"}) is True
+    assert _patient_allowlisted(p, {""}) is False
+
+    without = MagicMock(spec=["id", "dbid"])
+    without.id, without.dbid = "pat-1", 42
+    assert _patient_allowlisted(without, {"pat-1"}) is True
+
+
+def test_patient_allowlisted_does_not_consult_a_key_attribute() -> None:
+    """Regression: the `key` lookup was dead code, and the old test asserted it.
+
+    Patient.id is CharField(db_column="key"), so the attribute is `id` and
+    `.key` does not exist. Anything relying on it only ever worked against a
+    permissive mock.
+    """
+    p = MagicMock(spec=["id", "dbid", "mrn", "key"])
+    p.id, p.dbid, p.mrn, p.key = "pat-1", 42, "900000001", "KEYX"
+    assert _patient_allowlisted(p, {"KEYX"}) is False
 
 
 def _deliver_sms(patient, secrets, config):

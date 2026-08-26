@@ -135,7 +135,7 @@ A fail-closed safe-launch gate, set under **Settings → Testing mode** in the a
 
 **It is on by default, with both lists empty — so a fresh install sends nothing to anyone.** That is the intended starting state: add yourself, enable one campaign, confirm the message arrives, then turn the gate off to go live. While a campaign is enabled and testing mode is off, the admin app shows a live-sending warning; while testing mode is on with an empty list, it warns that nothing is sending at all.
 
-Allowed patients are matched against the patient's id, key, or dbid, so whichever value you copy from the chart URL works. Allowed recipients may mix phones and emails — phones are compared in normalized E.164, emails case-insensitively.
+Allowed patients are matched against the patient's **MRN**, the **id** from their chart URL, or the internal **dbid** — paste whichever you have. MRN is usually the one to reach for, since it is what staff see and quote. An entry matching no patient fails silently: every send is skipped and the gate looks correctly configured while the allowlist is inert, so check a test send actually arrives rather than trusting the absence of errors. Allowed recipients may mix phones and emails — phones are compared in normalized E.164, emails case-insensitively.
 
 ### It used to be a plugin secret
 
