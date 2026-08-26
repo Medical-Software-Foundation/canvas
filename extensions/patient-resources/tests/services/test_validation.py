@@ -6,10 +6,16 @@ rendered as anchors on a page a patient opens.
 
 import pytest
 
-from patient_resources.constants import LABEL_MAX_CHARS, TITLE_MAX_CHARS, URL_MAX_CHARS
+from patient_resources.constants import (
+    LABEL_MAX_CHARS,
+    NOTE_MAX_CHARS,
+    TITLE_MAX_CHARS,
+    URL_MAX_CHARS,
+)
 from patient_resources.services.validation import (
     is_safe_href,
     normalize_resource,
+    note_length_error,
     validate_resource,
 )
 
@@ -105,20 +111,51 @@ def test_each_length_cap_reports_against_its_own_field():
         "t" * (TITLE_MAX_CHARS + 1),
         "https://example.org/" + "a" * URL_MAX_CHARS,
         "l" * (LABEL_MAX_CHARS + 1),
+        "n" * (NOTE_MAX_CHARS + 1),
     )
-    assert set(errors) == {"title", "url", "label"}
+    assert set(errors) == {"title", "url", "label", "default_note"}
+
+
+def test_a_note_within_the_cap_passes():
+    assert validate_resource("Title", "https://example.org/d", "", "n" * NOTE_MAX_CHARS) == {}
+
+
+def test_the_note_is_optional():
+    assert validate_resource("Title", "https://example.org/d", "") == {}
 
 
 def test_validate_resource_never_raises_on_odd_input():
-    assert validate_resource(object(), object(), object()) != {}
+    assert validate_resource(object(), object(), object(), object()) != {}
+
+
+# --- note_length_error -----------------------------------------------------
+# The send endpoint reuses this, so the default and the copy a sender edits are
+# held to one limit rather than two that can drift.
+
+
+def test_note_length_error_is_none_within_the_cap():
+    assert note_length_error("n" * NOTE_MAX_CHARS) is None
+
+
+def test_note_length_error_names_the_cap():
+    message = note_length_error("n" * (NOTE_MAX_CHARS + 1))
+    assert message is not None
+    assert str(NOTE_MAX_CHARS) in message
+
+
+def test_note_length_error_tolerates_none():
+    assert note_length_error(None) is None
 
 
 # --- normalize_resource ----------------------------------------------------
 
 
 def test_normalize_trims_but_does_not_repair():
-    assert normalize_resource("  Title  ", "  https://example.org/a  ", "  Care  ") == {
+    assert normalize_resource(
+        "  Title  ", "  https://example.org/a  ", "  Care  ", "  Read this first.  "
+    ) == {
         "title": "Title",
         "url": "https://example.org/a",
         "label": "Care",
+        "default_note": "Read this first.",
     }

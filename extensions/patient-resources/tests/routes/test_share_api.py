@@ -8,7 +8,7 @@ import pytest
 from canvas_sdk.v1.data import Patient
 from django.db import IntegrityError
 
-from patient_resources.constants import MAX_SHARE_BATCH
+from patient_resources.constants import MAX_SHARE_BATCH, NOTE_MAX_CHARS
 from patient_resources.routes.share_api import ShareAPI
 from patient_resources.services.identity import id_candidates
 from patient_resources.services.shares import ShareResult
@@ -268,6 +268,132 @@ def test_a_missing_patient_key_in_the_path_is_a_404(mock_staff, make_request):
     responses = _call("get_patient", mock_staff, make_request, path_params={})
     assert responses[0].status_code == 404
     Patient.objects.filter.assert_not_called()
+
+
+# --- the patient-facing note -----------------------------------------------
+
+
+def _send(mock_staff, mock_patient, make_request, body):
+    _found(mock_patient)
+    with patch(
+        "patient_resources.routes.share_api.share_resources",
+        return_value=ShareResult(created=[], already_shared=0, skipped_unavailable=0),
+    ) as share:
+        responses = _call("post_shares", mock_staff, make_request, json_body=body)
+    return responses, share
+
+
+def test_a_note_reaches_the_share_service(mock_staff, mock_patient, make_request):
+    _, share = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {
+            "patient": mock_patient.id,
+            "resource_ids": [12],
+            "notes": {"12": "Read section 3 before Thursday."},
+        },
+    )
+    assert share.call_args.kwargs["notes"] == {12: "Read section 3 before Thursday."}
+
+
+def test_a_send_without_notes_passes_an_empty_mapping(
+    mock_staff, mock_patient, make_request
+):
+    """Which is what makes every resource fall back to its library default."""
+    _, share = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {"patient": mock_patient.id, "resource_ids": [12]},
+    )
+    assert share.call_args.kwargs["notes"] == {}
+
+
+def test_a_cleared_note_is_kept_as_a_deliberate_empty(
+    mock_staff, mock_patient, make_request
+):
+    """The picker pre-fills the default, so an empty box is a decision.
+
+    Dropping it here would silently restore the default the sender just deleted.
+    """
+    _, share = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {"patient": mock_patient.id, "resource_ids": [12], "notes": {"12": ""}},
+    )
+    assert share.call_args.kwargs["notes"] == {12: ""}
+
+
+@pytest.mark.parametrize("notes", ["a string", 12, ["a list"]])
+def test_notes_that_are_not_an_object_are_a_400(
+    notes, mock_staff, mock_patient, make_request
+):
+    responses, share = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {"patient": mock_patient.id, "resource_ids": [12], "notes": notes},
+    )
+    assert responses[0].status_code == 400
+    share.assert_not_called()
+
+
+def test_a_note_key_that_is_not_a_resource_id_is_a_400(
+    mock_staff, mock_patient, make_request
+):
+    responses, _ = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {"patient": mock_patient.id, "resource_ids": [12], "notes": {"twelve": "hi"}},
+    )
+    assert responses[0].status_code == 400
+
+
+def test_a_note_for_a_resource_not_being_shared_is_a_400(
+    mock_staff, mock_patient, make_request
+):
+    """Caller and endpoint disagree about what is going out.
+
+    Dropping the stray note instead would be guessing, and a note that lands on
+    the wrong resource is worse than no note at all.
+    """
+    responses, share = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {"patient": mock_patient.id, "resource_ids": [12], "notes": {"99": "hi"}},
+    )
+    assert responses[0].status_code == 400
+    share.assert_not_called()
+
+
+def test_a_non_text_note_is_a_400(mock_staff, mock_patient, make_request):
+    responses, _ = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {"patient": mock_patient.id, "resource_ids": [12], "notes": {"12": 5}},
+    )
+    assert responses[0].status_code == 400
+
+
+def test_an_over_long_note_is_refused_by_the_api(mock_staff, mock_patient, make_request):
+    """The textarea caps it too; a direct client bypasses the picker."""
+    responses, _ = _send(
+        mock_staff,
+        mock_patient,
+        make_request,
+        {
+            "patient": mock_patient.id,
+            "resource_ids": [12],
+            "notes": {"12": "n" * (NOTE_MAX_CHARS + 1)},
+        },
+    )
+    assert responses[0].status_code == 400
+    assert str(NOTE_MAX_CHARS) in responses[0].data["error"]
 
 
 # --- the patient card ------------------------------------------------------

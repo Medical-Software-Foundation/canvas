@@ -10,6 +10,7 @@ from typing import Any
 from patient_resources.constants import (
     ALLOWED_URL_SCHEMES,
     LABEL_MAX_CHARS,
+    NOTE_MAX_CHARS,
     TITLE_MAX_CHARS,
     URL_MAX_CHARS,
 )
@@ -75,7 +76,9 @@ def is_safe_href(value: Any) -> bool:
     return True
 
 
-def validate_resource(title: Any, url: Any, label: Any) -> dict[str, str]:
+def validate_resource(
+    title: Any, url: Any, label: Any, default_note: Any = ""
+) -> dict[str, str]:
     """Check one resource submission. Returns ``{field: message}``, empty if valid.
 
     Never raises, and never silently repairs a value -- an admin who pasted a
@@ -102,13 +105,33 @@ def validate_resource(title: Any, url: Any, label: Any) -> dict[str, str]:
     if len(clean_label) > LABEL_MAX_CHARS:
         errors["label"] = f"Keep the label to {LABEL_MAX_CHARS} characters or fewer."
 
+    note_error = note_length_error(default_note)
+    if note_error is not None:
+        errors["default_note"] = note_error
+
     return errors
 
 
-def normalize_resource(title: Any, url: Any, label: Any) -> dict[str, str]:
+def note_length_error(value: Any) -> str | None:
+    """The message for an over-long patient note, or ``None``.
+
+    Shared by the library form and the send endpoint so the default and the copy
+    a sender edits are held to the same limit -- the picker starts from the
+    default, and a limit that only one of them enforced would let a note through
+    one door and refuse it at the other.
+    """
+    if len(str(value or "").strip()) > NOTE_MAX_CHARS:
+        return f"Keep the note to {NOTE_MAX_CHARS} characters or fewer."
+    return None
+
+
+def normalize_resource(
+    title: Any, url: Any, label: Any, default_note: Any = ""
+) -> dict[str, str]:
     """The trimmed values to store, once ``validate_resource`` has passed."""
     return {
         "title": str(title or "").strip(),
         "url": str(url or "").strip(),
         "label": str(label or "").strip(),
+        "default_note": str(default_note or "").strip(),
     }

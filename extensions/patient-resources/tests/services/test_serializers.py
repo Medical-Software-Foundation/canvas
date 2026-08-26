@@ -19,6 +19,7 @@ def _resource(**overrides):
     resource.title = "Managing diabetes"
     resource.url = "https://example.org/d"
     resource.label = "Diabetes"
+    resource.default_note = "Read the first two pages before your visit."
     resource.status = STATUS_ACTIVE
     resource.created_at = WHEN
     resource.updated_at = WHEN
@@ -33,6 +34,7 @@ def _share(**overrides):
     share.title_at_share = "Managing diabetes"
     share.url_at_share = "https://example.org/d"
     share.label_at_share = "Diabetes"
+    share.note = "Bring your logbook to the next appointment."
     share.shared_at = WHEN
     share.revoked_at = None
     # Explicitly absent unless a test supplies one. Left as a MagicMock, the
@@ -94,10 +96,25 @@ def test_patient_view_shows_a_corrected_title():
     edit can only redescribe the same resource.
     """
     share = _share()
-    share.resource = _resource(title="Managing type 2 diabetes", label="Endocrine")
-    data = serializers.serialize_share_for_patient(share)
-    assert data["title"] == "Managing type 2 diabetes"
-    assert data["label"] == "Endocrine"
+    share.resource = _resource(title="Managing type 2 diabetes")
+    assert serializers.serialize_share_for_patient(share)["title"] == "Managing type 2 diabetes"
+
+
+def test_the_patient_never_sees_the_label():
+    """Labels are internal filing for staff.
+
+    Asserted on both patient-facing projections, and with a label present on the
+    share and on the live row, so neither read path can put one back.
+    """
+    share = _share()
+    share.resource = _resource(label="Endocrine")
+    assert "label" not in serializers.serialize_share_for_patient(share)
+    assert "label" not in serializers.serialize_withdrawn_share(share)
+
+
+def test_the_staff_view_keeps_the_label():
+    """The picker is read by staff, who file and find things by it."""
+    assert serializers.serialize_share_for_staff(_share())["label"] == "Diabetes"
 
 
 def test_the_patient_keeps_the_link_they_were_given():
@@ -111,16 +128,44 @@ def test_the_patient_keeps_the_link_they_were_given():
 
 def test_a_share_whose_resource_is_gone_falls_back_to_the_snapshot():
     """That foreign key is nullable, so the payload cannot assume a row."""
+    assert serializers.serialize_share_for_patient(_share())["title"] == "Managing diabetes"
+
+
+# --- the patient-facing note ----------------------------------------------
+
+
+def test_the_patient_sees_the_note_written_for_them():
     data = serializers.serialize_share_for_patient(_share())
-    assert data["title"] == "Managing diabetes"
-    assert data["label"] == "Diabetes"
+    assert data["note"] == "Bring your logbook to the next appointment."
 
 
-def test_an_empty_label_on_the_live_row_is_respected():
-    """No label is a real state, not a missing value to fall back from."""
+def test_editing_the_library_default_does_not_rewrite_a_sent_note():
+    """The note was written about one person. Nothing in the catalog may edit it.
+
+    This is the opposite rule to the title above, and deliberately so: a title
+    describes the resource, a note describes what this patient should do with it.
+    """
     share = _share()
-    share.resource = _resource(label="")
-    assert serializers.serialize_share_for_patient(share)["label"] == ""
+    share.resource = _resource(default_note="Something written for somebody else.")
+    assert (
+        serializers.serialize_share_for_patient(share)["note"]
+        == "Bring your logbook to the next appointment."
+    )
+
+
+def test_a_share_sent_without_a_note_carries_an_empty_one():
+    assert serializers.serialize_share_for_patient(_share(note=""))["note"] == ""
+
+
+def test_a_withdrawn_notice_carries_no_note():
+    """It repeats instructions for something the patient can no longer open."""
+    assert "note" not in serializers.serialize_withdrawn_share(_share(revoked_at=WHEN))
+
+
+def test_the_default_note_reaches_the_picker():
+    """The picker pre-fills it, so it has to be in the catalog payload."""
+    data = serializers.serialize_resource(_resource())
+    assert data["default_note"] == "Read the first two pages before your visit."
 
 
 def test_a_withdrawn_notice_keeps_the_name_the_patient_was_given():
@@ -149,9 +194,14 @@ def test_share_with_an_unsafe_snapshot_url_renders_no_link():
 
 def test_share_with_null_snapshot_columns_serializes():
     data = serializers.serialize_share_for_patient(
-        _share(title_at_share=None, url_at_share=None, label_at_share=None)
+        _share(title_at_share=None, url_at_share=None, note=None)
     )
-    assert data == {"title": "", "label": "", "url": "", "shared_at": "2026-08-20T14:03:11+00:00"}
+    assert data == {
+        "title": "",
+        "url": "",
+        "note": "",
+        "shared_at": "2026-08-20T14:03:11+00:00",
+    }
 
 
 def test_staff_view_carries_the_resource_id_for_picker_marking():

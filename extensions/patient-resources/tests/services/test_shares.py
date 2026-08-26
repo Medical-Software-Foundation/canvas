@@ -17,12 +17,19 @@ def _reset_managers():
     yield
 
 
-def _resource(dbid, title="Managing diabetes", url="https://example.org/d", label="Diabetes"):
+def _resource(
+    dbid,
+    title="Managing diabetes",
+    url="https://example.org/d",
+    label="Diabetes",
+    default_note="Read the first two pages.",
+):
     resource = MagicMock()
     resource.dbid = dbid
     resource.title = title
     resource.url = url
     resource.label = label
+    resource.default_note = default_note
     resource.status = STATUS_ACTIVE
     return resource
 
@@ -68,6 +75,48 @@ def test_shared_at_is_set_explicitly_and_is_timezone_aware():
     row = PatientResourceShare.objects.bulk_create.call_args.args[0][0]
     assert row.shared_at is not None
     assert row.shared_at.tzinfo is not None
+
+
+# --- the patient-facing note ----------------------------------------------
+
+
+def _sent_note(*, notes=None, default_note="Read the first two pages."):
+    _catalog(_resource(12, default_note=default_note))
+    _already_shared()
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1, notes=notes
+    )
+    return PatientResourceShare.objects.bulk_create.call_args.args[0][0].note
+
+
+def test_a_resource_nobody_wrote_a_note_for_inherits_the_library_default():
+    assert _sent_note(notes=None) == "Read the first two pages."
+
+
+def test_a_supplied_note_wins_over_the_default():
+    assert _sent_note(notes={12: "Bring your logbook."}) == "Bring your logbook."
+
+
+def test_a_supplied_empty_note_is_kept_rather_than_replaced_by_the_default():
+    """Membership decides, not truthiness.
+
+    The picker pre-fills the default, so a sender who cleared the box has said
+    "send no note". Falling back here would quietly put it back.
+    """
+    assert _sent_note(notes={12: ""}, default_note="Read the first two pages.") == ""
+
+
+def test_a_note_is_trimmed_but_not_otherwise_repaired():
+    assert _sent_note(notes={12: "  Bring your logbook.  "}) == "Bring your logbook."
+
+
+def test_a_resource_with_no_default_note_sends_an_empty_one():
+    assert _sent_note(notes=None, default_note="") == ""
+
+
+def test_a_null_default_note_does_not_reach_the_share_as_the_text_none():
+    """The DDL emits no defaults, so a row written elsewhere can hold null."""
+    assert _sent_note(notes=None, default_note=None) == ""
 
 
 def test_curator_is_never_a_placeholder():

@@ -10,6 +10,7 @@ import pytest
 
 from patient_resources.constants import (
     MAX_PAGE_SIZE,
+    NOTE_MAX_CHARS,
     SECRET_ADMIN_ROLE_DOMAINS,
     STATUS_ACTIVE,
     STATUS_ARCHIVED,
@@ -207,6 +208,61 @@ def test_a_valid_resource_is_created_and_attributed(mock_staff, make_request):
         )
     assert responses[0].status_code == 201
     assert create.call_args.kwargs["staff_dbid"] == mock_staff.dbid
+
+
+def test_the_default_note_reaches_the_catalog(mock_staff, make_request):
+    with patch(
+        "patient_resources.routes.library_api.create_resource", return_value=_resource()
+    ) as create:
+        _call(
+            "post_resource",
+            mock_staff,
+            True,
+            make_request,
+            json_body=dict(VALID, default_note="Read the first two pages."),
+        )
+    assert create.call_args.kwargs["default_note"] == "Read the first two pages."
+
+
+def test_a_resource_can_be_added_without_a_default_note(mock_staff, make_request):
+    with patch(
+        "patient_resources.routes.library_api.create_resource", return_value=_resource()
+    ) as create:
+        _call("post_resource", mock_staff, True, make_request, json_body=dict(VALID))
+    assert create.call_args.kwargs["default_note"] == ""
+
+
+def test_an_over_long_default_note_is_a_400_against_its_own_field(
+    mock_staff, make_request
+):
+    """Keyed as `default_note` so the message lands beside the textarea."""
+    responses = _call(
+        "post_resource",
+        mock_staff,
+        True,
+        make_request,
+        json_body=dict(VALID, default_note="n" * (NOTE_MAX_CHARS + 1)),
+    )
+    assert responses[0].status_code == 400
+    assert set(responses[0].data["field_errors"]) == {"default_note"}
+    PatientResource.objects.create.assert_not_called()
+
+
+def test_editing_a_resource_carries_the_default_note(mock_staff, make_request):
+    with patch(
+        "patient_resources.routes.library_api.get_resource", return_value=_resource()
+    ), patch(
+        "patient_resources.routes.library_api.update_resource", return_value=_resource()
+    ) as update:
+        _call(
+            "put_resource",
+            mock_staff,
+            True,
+            make_request,
+            path_params={"resource_id": "12"},
+            json_body=dict(VALID, default_note="A better default."),
+        )
+    assert update.call_args.kwargs["default_note"] == "A better default."
 
 
 def test_a_duplicate_is_a_409(mock_staff, make_request):

@@ -71,10 +71,18 @@ h1 { font-size: 24px; margin: 0 0 4px; }
   margin-bottom: 12px;
 }
 
-.prp-label {
-  background: var(--prp-line-soft);
-  border-radius: 999px;
-  padding: 2px 10px;
+/* What the care team wrote for this patient about this resource. Set apart from
+   the metadata above it: this is a message from a person, not a field. The rule
+   on the left reads as a quotation without needing quotation marks around
+   free text somebody typed. `white-space: pre-line` keeps the line breaks they
+   typed, and nothing else -- the text is inserted with textContent, so it can
+   never be markup. */
+.prp-note {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 3px solid var(--prp-line);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 .prp-open {

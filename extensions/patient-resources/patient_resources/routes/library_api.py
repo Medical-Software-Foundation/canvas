@@ -149,7 +149,12 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         if body is None:
             return self._invalid("The request body must be a JSON object.")
 
-        errors = validate_resource(body.get("title"), body.get("url"), body.get("label"))
+        errors = validate_resource(
+            body.get("title"),
+            body.get("url"),
+            body.get("label"),
+            body.get("default_note"),
+        )
         if errors:
             return self._invalid("Check the highlighted fields.", errors)
 
@@ -158,6 +163,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
                 title=body["title"],
                 url=body["url"],
                 label=body.get("label", ""),
+                default_note=body.get("default_note", ""),
                 staff_dbid=staff.dbid,
             )
         except DuplicateResourceError as exc:
@@ -185,7 +191,12 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         if body is None:
             return self._invalid("The request body must be a JSON object.")
 
-        errors = validate_resource(body.get("title"), body.get("url"), body.get("label"))
+        errors = validate_resource(
+            body.get("title"),
+            body.get("url"),
+            body.get("label"),
+            body.get("default_note"),
+        )
         if errors:
             return self._invalid("Check the highlighted fields.", errors)
 
@@ -195,6 +206,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
                 title=body["title"],
                 url=body["url"],
                 label=body.get("label", ""),
+                default_note=body.get("default_note", ""),
                 staff_dbid=staff.dbid,
             )
         except (ResourceInUseError, DuplicateResourceError) as exc:

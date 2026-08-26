@@ -20,6 +20,7 @@ from patient_resources.routes.support import StaffRouteMixin
 from patient_resources.services.shares import live_shares_for_patient, share_resources
 from patient_resources.services.identity import id_candidates
 from patient_resources.services.serializers import serialize_share_for_staff
+from patient_resources.services.validation import note_length_error
 
 
 class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
@@ -97,9 +98,16 @@ class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         if error is not None:
             return self._invalid(error)
 
+        notes, error = _notes(body.get("notes"), resource_ids)
+        if error is not None:
+            return self._invalid(error)
+
         try:
             result = share_resources(
-                patient=patient, resource_dbids=resource_ids, staff_dbid=staff.dbid
+                patient=patient,
+                resource_dbids=resource_ids,
+                staff_dbid=staff.dbid,
+                notes=notes,
             )
         except IntegrityError:
             # The already-shared pre-check races with a second provider sending
@@ -182,3 +190,39 @@ def _resource_ids(raw: Any) -> tuple[list[int], str | None]:
             return [], "Resource ids must be whole numbers."
         ids.append(value)
     return ids, None
+
+
+def _notes(raw: Any, resource_ids: list[int]) -> tuple[dict[int, str], str | None]:
+    """Validate the per-patient notes. Returns ``(notes, error)``.
+
+    Keyed by resource id, because JSON object keys are strings and the ids they
+    name are integers -- a list parallel to ``resource_ids`` would silently
+    mis-assign every note if the two ever fell out of step, and a note attached
+    to the wrong resource is worse than no note at all.
+
+    Anything naming a resource outside this send is rejected rather than
+    dropped. It means the caller and this endpoint disagree about what is being
+    sent, and guessing which of them is right is how a note lands on the wrong
+    person's resource.
+    """
+    if raw is None:
+        return {}, None
+    if not isinstance(raw, dict):
+        return {}, "Notes must be an object keyed by resource id."
+
+    allowed = set(resource_ids)
+    notes: dict[int, str] = {}
+    for key, value in raw.items():
+        try:
+            resource_id = int(key)
+        except (TypeError, ValueError):
+            return {}, "Note keys must be resource ids."
+        if resource_id not in allowed:
+            return {}, "A note names a resource that is not being shared."
+        if not isinstance(value, str):
+            return {}, "A note must be text."
+        length_error = note_length_error(value)
+        if length_error is not None:
+            return {}, length_error
+        notes[resource_id] = value
+    return notes, None

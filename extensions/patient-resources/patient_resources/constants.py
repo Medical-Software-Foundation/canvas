@@ -50,7 +50,7 @@ RESOURCE_STATUSES = (STATUS_ACTIVE, STATUS_ARCHIVED)
 # the assignments in services/catalog.py by a test: the RestrictedPython sandbox
 # blocks setattr, so the fields cannot be applied in a loop and the two places
 # can silently drift.
-EDITABLE_FIELDS = ("title", "url", "label")
+EDITABLE_FIELDS = ("title", "url", "label", "default_note")
 
 # --- Admin gating ----------------------------------------------------------
 # StaffRole.domain values. A closed three-value vocabulary that means the same
@@ -88,6 +88,13 @@ SESSION_TYPE_PATIENT = "Patient"
 TITLE_MAX_CHARS = 200
 URL_MAX_CHARS = 2000
 LABEL_MAX_CHARS = 100
+
+# The patient-facing note. Long enough for a few sentences of instruction --
+# "read the section on evening doses before Thursday" -- and short enough that
+# the portal card stays a card. One limit for both the library default and the
+# per-patient copy, because the picker starts from the default and the two must
+# not disagree about what fits.
+NOTE_MAX_CHARS = 1000
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200

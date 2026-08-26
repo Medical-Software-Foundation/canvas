@@ -3,10 +3,11 @@
 A configurable library of patient-facing resources that staff can share with a
 patient through the patient portal.
 
-Administrators curate a list of links — a title, a public web address, and an
-optional label. Any staff member can then open a patient's chart, search that
-list, pick one or several, and send them. The patient signs into the portal and
-finds them under **My Resources**, with the date they were shared.
+Administrators curate a list of links — a title, a public web address, an
+internal label, and a note for patients. Any staff member can then open a
+patient's chart, search that list, pick one or several, adjust the note for the
+person in front of them, and send. The patient signs into the portal and finds
+them under **My Resources**, with the note and the date they were shared.
 
 The plugin ships with an empty library. Every practice fills in its own
 resources after install; nothing here is specific to any clinic.
@@ -43,7 +44,7 @@ After install, three things appear:
 | Surface | Where | Who sees it |
 |---|---|---|
 | **Patient Resources** | Global app drawer | All staff (read-only for non-administrators) |
-| **Share resources** | Button in the patient chart header | All staff |
+| **Resources** | Button in the patient chart header | All staff |
 | **My Resources** | Patient portal menu | Patients |
 
 ## Configuration
@@ -74,9 +75,20 @@ default.
 own Custom Data namespace, so they survive plugin upgrades and can be searched
 and paged rather than parsed out of a configuration string.
 
-**Correcting a title reaches patients who already have it.** The portal reads
-the resource's current title and label, so fixing a typo fixes it for everyone,
-including people who received it last month.
+**Labels are internal; notes are patient-facing.** A label is how staff file and
+filter a growing library — "Diabetes", "Post-op", "Spanish" — and it is never
+sent to a patient. The note is the opposite: it is written for them, and it is
+what they read under the title in the portal.
+
+**A note has a default, and a per-patient copy.** The library entry carries the
+blurb the resource usually goes out with. The picker pre-fills it, the sender can
+rewrite it for the person in front of them, and what they send is stored on that
+patient's own share. Editing the library default afterwards changes what the next
+send starts from — never what somebody already received.
+
+**Correcting a title reaches patients who already have it.** The portal reads the
+resource's current title, so fixing a typo fixes it for everyone, including people
+who received it last month.
 
 That is safe because **a shared resource's link cannot be changed.** Once anyone
 has received it, the link is frozen and an edit is refused, with a prompt to add a
@@ -84,10 +96,15 @@ replacement and archive the original. The link is the identity of what a patient
 was given, so with it immutable a title edit can only ever redescribe the same
 resource — never quietly swap it for a different one.
 
-Each share still stores the title, link and label as they were when it was sent.
-Those are the fallback when a catalog row is missing, and they are what a
-withdrawn notice shows, since a withdrawn resource may since have been edited and
-the patient cannot open it anyway.
+The title and note behave in deliberately opposite ways, because they say
+different things. A title describes the resource, so one correction should reach
+everyone. A note describes what *this* patient should do with it, so nothing in
+the library may reach back and rewrite it.
+
+Each share also stores the title and link as they were when it was sent. Those
+are the fallback when a catalog row is missing, and the title is what a withdrawn
+notice shows, since a withdrawn resource may since have been edited and the
+patient cannot open it anyway.
 
 Two consequences of the same rule are worth knowing:
 
@@ -175,11 +192,11 @@ somebody clicking something.
 
 Two tables in the `custom_data__patient_resources` namespace:
 
-- `PatientResource` — the catalog. Title, link, label, status, and who last
-  changed it.
+- `PatientResource` — the catalog. Title, link, internal label, the default
+  patient-facing note, status, and who last changed it.
 - `PatientResourceShare` — one row per resource given to one patient, holding the
-  snapshot of what was sent, who sent it, and when it was withdrawn or first
-  viewed.
+  snapshot of what was sent, the note written for that patient, who sent it, and
+  when it was withdrawn or first viewed.
 
 ## Security notes
 

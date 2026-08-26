@@ -4,7 +4,7 @@
  * because this content is rendered for a patient:
  *
  *   1. Every node is built with createElement and textContent. Never innerHTML.
- *      Resource titles and labels are staff-entered free text and must never be
+ *      Resource titles and notes are staff-entered free text and must never be
  *      parsed as markup.
  *   2. An href is set only after re-checking the scheme in the browser. The
  *      server drops unsafe URLs already; this is the second of two independent
@@ -83,16 +83,21 @@
     var item = el("li", "prp-item");
     item.appendChild(el("h2", "prp-item-title", resource.title || "Untitled"));
 
+    // No label. Labels are how staff file the library; they are not written for
+    // a patient and are no longer sent to this page.
     var meta = el("div", "prp-meta");
-    if (resource.label) {
-      meta.appendChild(el("span", "prp-label", resource.label));
-    }
     var when = formatWhen(resource.shared_at);
     if (when) {
       meta.appendChild(el("span", null, "Shared " + when));
     }
     if (meta.childNodes.length) {
       item.appendChild(meta);
+    }
+
+    // What the care team wrote for this patient about this resource. Above the
+    // link, because it is the reason they were sent it.
+    if (resource.note) {
+      item.appendChild(el("p", "prp-note", resource.note));
     }
 
     if (isSafeUrl(resource.url)) {

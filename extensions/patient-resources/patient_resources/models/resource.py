@@ -40,10 +40,18 @@ class PatientResource(CustomModel):
     # because the DDL emits no constraints.
     url = TextField(default="")
 
-    # Free text, one value per resource. The filter vocabulary is derived from
-    # the labels actually in use rather than configured, so an empty library
-    # yields an empty filter instead of a stale hardcoded list.
+    # Free text, one value per resource. Staff-only: the label organises the
+    # library and drives the filter, and is never sent to a patient. The filter
+    # vocabulary is derived from the labels actually in use rather than
+    # configured, so an empty library yields an empty filter instead of a stale
+    # hardcoded list.
     label = TextField(default="")
+
+    # The patient-facing blurb this resource usually goes out with. Only a
+    # default: the picker pre-fills it and the sender may rewrite it for the
+    # patient in front of them, and what they send is stored on the share. This
+    # column is never read by the portal.
+    default_note = TextField(default="")
 
     # A text status rather than `active = BooleanField()`. Because the DDL emits
     # no NOT NULL, a null boolean cannot be told apart from one that was never

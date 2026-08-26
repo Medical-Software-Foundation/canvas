@@ -22,6 +22,16 @@ def test_button_is_declared_on_the_chart_patient_header():
     assert ShareResourcesButton.BUTTON_LOCATION == ActionButton.ButtonLocation.CHART_PATIENT_HEADER
 
 
+def test_the_button_title_fits_its_slot():
+    """The chart header clips what does not fit.
+
+    "Share resources" arrived visibly cut off, so the label is one word and the
+    modal it opens carries the full description.
+    """
+    assert ShareResourcesButton.BUTTON_TITLE == "Resources"
+    assert " " not in ShareResourcesButton.BUTTON_TITLE
+
+
 def test_button_key_is_namespaced_to_this_plugin():
     """An unprefixed key can collide with another plugin's button."""
     assert ShareResourcesButton.BUTTON_KEY.startswith("patient_resources__")

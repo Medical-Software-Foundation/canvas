@@ -74,8 +74,9 @@
       <h2 id="pr-edit-heading">Add resource</h2>
 
       <p class="pr-dialog-note" id="pr-edit-shared-note" hidden>
-        This resource has already been shared with patients. Changes to the title and
-        label will show in their portal, and the link can no longer be changed.
+        This resource has already been shared with patients. A change to the title
+        will show in their portal; the link can no longer be changed, and the note
+        each patient was sent stays as it was written for them.
       </p>
 
       <label class="pr-field">
@@ -91,9 +92,22 @@
       </label>
 
       <label class="pr-field">
-        <span>Label (optional)</span>
+        <span>Label (internal, optional)</span>
         <input type="text" id="pr-edit-label" maxlength="100" />
+        <span class="pr-field-hint">
+          Used to file and filter the library. Patients never see it.
+        </span>
         <span class="pr-field-error" id="pr-edit-label-error"></span>
+      </label>
+
+      <label class="pr-field">
+        <span>Note for patients (optional)</span>
+        <textarea id="pr-edit-default-note" maxlength="1000" rows="3"></textarea>
+        <span class="pr-field-hint">
+          Shown to the patient with this resource. Whoever shares it can edit this
+          for one patient before sending.
+        </span>
+        <span class="pr-field-error" id="pr-edit-default_note-error"></span>
       </label>
 
       <p class="pr-error" id="pr-edit-error" role="alert"></p>
