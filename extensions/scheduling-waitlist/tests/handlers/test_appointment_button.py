@@ -240,7 +240,7 @@ class TestLabelReflectsThisSlotsService:
         return button.BUTTON_TITLE
 
     def test_not_yet_waiting_invites_an_add(self):
-        assert self._title(_appointment(), waiting=False) == "Add to waitlist"
+        assert self._title(_appointment(), waiting=False) == "Waitlist"
 
     def test_already_waiting_for_this_service_says_so(self):
         assert self._title(_appointment(), waiting=True) == "On waitlist"
@@ -261,7 +261,7 @@ class TestLabelReflectsThisSlotsService:
         # A class attribute would carry one note's label onto the next.
         self._title(_appointment(), waiting=True)
 
-        assert AddToWaitlistAppointmentButton.BUTTON_TITLE == "Add to waitlist"
+        assert AddToWaitlistAppointmentButton.BUTTON_TITLE == "Waitlist"
 
     def _colours(self, waiting):
         button = _button()

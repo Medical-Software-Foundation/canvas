@@ -13,7 +13,6 @@ from scheduling_waitlist.services.entries import (
     find_live_entry,
     get_entry,
     has_live_entry_for_service,
-    has_live_general_entry,
     live_entries_for_patient,
     update_entry,
     SORT_PRIORITY,
@@ -496,58 +495,3 @@ class TestHasLiveEntryForService:
 
         model.objects.filter.return_value.exists.assert_called_once()
         model.objects.filter.return_value.select_related.assert_not_called()
-
-
-class TestHasLiveGeneralEntry:
-    """The question the one-click button asks: are they waiting for anything?
-
-    Deliberately not ``has_live_entry_for_service(patient, None)``, which reads a
-    missing service as "cannot answer" and returns False -- right for a freed slot
-    with no service, but it would let the button offer an add the duplicate guard
-    then refuses.
-    """
-
-    def test_it_looks_for_an_entry_with_no_service(self):
-        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
-            model.objects.filter.return_value.exists.return_value = True
-
-            assert has_live_general_entry(55) is True
-
-        kwargs = model.objects.filter.call_args.kwargs
-        assert kwargs["patient_id"] == 55
-        assert kwargs["note_type__isnull"] is True
-
-    def test_only_live_statuses_count(self):
-        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
-            model.objects.filter.return_value.exists.return_value = False
-
-            assert has_live_general_entry(55) is False
-
-        assert model.objects.filter.call_args.kwargs["status__in"] == [
-            "waiting",
-            "offered",
-        ]
-
-    def test_a_missing_patient_asks_nothing(self):
-        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
-            assert has_live_general_entry(None) is False
-
-        model.objects.filter.assert_not_called()
-
-    def test_it_answers_with_exists_rather_than_building_a_model(self):
-        # It runs on every chart open.
-        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
-            model.objects.filter.return_value.exists.return_value = True
-
-            has_live_general_entry(55)
-
-        model.objects.filter.return_value.exists.assert_called_once()
-        model.objects.filter.return_value.select_related.assert_not_called()
-
-    def test_waiting_for_a_named_service_is_not_waiting_for_anything(self):
-        # Someone waiting for a physical has said nothing about taking whatever
-        # comes up, so the general entry is still worth offering them.
-        with patch("scheduling_waitlist.services.entries.WaitlistEntry") as model:
-            model.objects.filter.return_value.exists.return_value = False
-
-            assert has_live_general_entry(55) is False

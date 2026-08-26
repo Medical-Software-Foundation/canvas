@@ -225,28 +225,6 @@ def has_live_entry_for_service(patient_dbid: Any, note_type_dbid: Any) -> bool:
     ).exists()
 
 
-def has_live_general_entry(patient_dbid: Any) -> bool:
-    """Whether this patient is already waiting for *any* appointment type.
-
-    The question the one-click button asks, and deliberately not
-    :func:`has_live_entry_for_service` with ``None``: that reads a missing
-    service as "cannot answer" and returns ``False``, which is right for a freed
-    slot with no service but would let the button offer an add that the duplicate
-    guard then refuses.
-
-    Narrower than :func:`has_live_entry` on purpose. Someone waiting for a
-    physical has said nothing about taking whatever comes up, so the general
-    entry is still worth offering them.
-    """
-    if patient_dbid is None:
-        return False
-    return WaitlistEntry.objects.filter(
-        patient_id=patient_dbid,
-        note_type__isnull=True,
-        status__in=list(MATCHABLE_STATUSES),
-    ).exists()
-
-
 def find_live_entry(patient_dbid: Any, note_type_dbid: Any) -> Any | None:
     """An existing live entry for the same patient and appointment type."""
     return (

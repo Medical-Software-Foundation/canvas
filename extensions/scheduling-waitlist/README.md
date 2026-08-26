@@ -21,51 +21,53 @@ next cancellation, and hiding them contradicted the task the plugin would go on 
 service and location. The roster and the freed-slot matcher share one implementation of that rule
 (`services/preferences.py`) so they cannot drift apart again.
 
-**Adding a patient** — three ways into the same short form:
+**Adding a patient** — three ways, and only two of them involve a form:
 
-- **From the roster**, searching for the patient by name.
-- **From the patient chart header**, where the button reads "Add to waitlist", or "On waitlist"
-  if they are already listed — in which case it opens the roster filtered to them instead.
+- **From the patient chart header**, in one click. The **"Waitlist"** button adds them on the
+  broadest terms — any appointment type, any provider, any location, the configured default
+  priority, no time preference — with no modal in between. It reads **"On waitlist"** once they
+  are listed, and opens the roster instead.
+- **From the roster**, searching for the patient by name. This is the full form, and the way to
+  state a *specific* want: this service, that provider, Tuesday mornings.
 - **From a no-showed appointment's note**, pre-filled with the service, provider and location
   of the slot that just freed up. A **cancelled** appointment has no equivalent surface — its
-  note is tombstoned in the timeline with nothing but `Restore`, so use the chart-header button
-  and enter the three fields by hand. See the maintainer note below.
+  note is tombstoned in the timeline with nothing but `Restore`, so use the chart-header button.
+  See the maintainer note below.
 
-…plus one way that skips the form entirely:
+**Why the chart writes immediately.** Every field on that form already defaulted to its broadest
+setting, so the modal and the second click were confirming answers that were correct on arrival.
+Reviewers asked for the clicks back. Offering the shortcut as a *second* button beside the form
+was tried and was worse than either: a chart header truncates labels at roughly twelve
+characters, so "Add to waitlist" and "Waitlist: any" both rendered as an ellipsis and became
+impossible to tell apart. (That truncation had been mangling "Add to waitlist" all along —
+"On waitlist" is eleven characters and always fitted, which is why it is unchanged.)
 
-- **"Waitlist: any"** in the chart header adds the patient on the broadest terms — any
-  appointment type, any provider, any location, the configured default priority, no time
-  preference — in a single click. Every one of those is already the form's default, so the modal
-  and the second click were only ever confirming answers that were correct on arrival. It hides
-  itself once the patient has such an entry, since a click that writes immediately has nowhere to
-  report a refusal.
+What the chart gives up is stating a specific want, and it is the right surface to give it up on:
+it is the only one with no slot to copy, so it had the least to gain from a form. The write goes
+through the same `validate_entry` the two forms post to (`services/quick_add.py`), so the shelf
+life, the priority default and the shape of a preferred window have exactly one implementation.
 
-  It still goes through the same `validate_entry` the forms post to (`services/quick_add.py`),
-  rather than assembling model fields of its own — the shelf life, the priority default and the
-  shape of a preferred window all have exactly one implementation.
-
-  If the clicking staff member cannot be resolved from the event, the click **opens the ordinary
-  form instead of writing**. An entry attributed to nobody can be edited or removed only by a
-  configured manager, never by the person who added it, so degrading to two clicks is the
-  cheaper failure. See the maintainer note on button actors.
+If the clicking staff member cannot be resolved from the event, the click **opens the old form
+instead of writing**. An entry attributed to nobody can be edited or removed only by a configured
+manager, never by the person who added it, so degrading to two clicks is the cheaper failure. See
+the maintainer note on button actors.
 
 **From the chart** — the chart carries two things, because it is asked two different questions:
 
 - A **banner** on the chart of anyone already waiting, saying what they are waiting for and
   linking back to the roster. This answers "is this patient on the list?" without a click.
-- An **"Add to waitlist" button** in the chart header, which opens the roster's add dialog with
-  the patient already filled in. The label reads "On waitlist" when they are already waiting.
-  This answers "put them on the list" — an action, which a passive banner cannot serve.
+- The **button** above, which answers "put them on the list" — an action, which a passive banner
+  cannot serve.
 
 Both waitlist buttons are **filled in the listed state** and left on the platform's own styling
-otherwise. The two labels do different jobs — "Add to waitlist" is an action, "On waitlist" is a
+otherwise. The two labels do different jobs — "Waitlist" is an action, "On waitlist" is a
 statement of fact — and drawn identically the second read as an action too, which reviewers
 reported as confusing. Colouring only the exception means a plain button always means "there is
 something to do here". Both colours live in `constants.py`; `ShowButtonEffect` validates them as
 exactly `#RRGGBB`, so names, shorthand and `rgba()` are refused at the effect.
 
-The button reuses the roster's add dialog rather than shipping a second form, so there is one
-set of validation rules. Only the patient's key travels in the page URL; the name behind it is
+Where a form *is* shown, it is the roster's own rather than a second implementation, so there is
+one set of validation rules. Only the patient's key travels in the page URL; the name behind it is
 fetched over the authenticated API, so no identifiable data is baked into the document.
 
 **Cancellation matching** — when a booked slot frees up, the plugin finds waiting entries whose
@@ -166,8 +168,7 @@ rather than guessing.
 | `applications.waitlist_app:WaitlistApp` | Application (`provider_menu_item`) | provider (hamburger) menu, pinned to the top |
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
 | `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
-| `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header |
-| `handlers.quick_add_button:QuickAddToWaitlistButton` | ActionButton | chart patient header — one-click add on the broadest terms, hidden once the patient has such an entry |
+| `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header — one-click add on the broadest terms, or the roster once they are listed |
 | `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only — so in practice the no-show, which is the only one of the two whose note still has a header |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
@@ -199,8 +200,8 @@ as one — so `services/permissions.py:staff_from_actor` goes through `Staff.use
 matching `Staff.id`.
 
 Whether that field is populated for `ACTION_BUTTON_CLICKED` is server behaviour a plugin cannot
-see from the SDK source, which is why `QuickAddToWaitlistButton.handle()` treats an unresolved
-actor as a reason to open the form instead of writing. Do not "simplify" that fallback into
+see from the SDK source, which is why `AddToWaitlistButton.handle()` treats an unresolved actor
+as a reason to open the form instead of writing. Do not "simplify" that fallback into
 `created_by=None`: `can_modify_entry` keys on the creator, so such an entry becomes untouchable by
 the very scheduler who added it. If the fallback turns out to fire on the instance, the fix is to
 find where the actor really lives — not to write the entry anyway.

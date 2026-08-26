@@ -41,6 +41,8 @@ from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 from canvas_sdk.v1.data.note import NoteStates
 
 from scheduling_waitlist.constants import (
+    BUTTON_ADD_TITLE,
+    BUTTON_LISTED_TITLE,
     LISTED_BUTTON_BACKGROUND,
     LISTED_BUTTON_TEXT,
     ROSTER_URL,
@@ -48,8 +50,6 @@ from scheduling_waitlist.constants import (
 )
 from scheduling_waitlist.services.entries import has_live_entry_for_service
 
-ADD_TITLE = "Add to waitlist"
-LISTED_TITLE = "On waitlist"
 ADD_MODAL_TITLE = "Add to waitlist"
 LISTED_MODAL_TITLE = "Scheduling Waitlist"
 
@@ -76,7 +76,7 @@ RELATED = ("patient", "note_type", "provider", "location", "note__current_state"
 class AddToWaitlistAppointmentButton(ActionButton):
     """Offers the waitlist form from an appointment that has just freed up."""
 
-    BUTTON_TITLE = ADD_TITLE
+    BUTTON_TITLE = BUTTON_ADD_TITLE
     BUTTON_KEY = "scheduling_waitlist__add_from_appointment"
     BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_HEADER
 
@@ -159,7 +159,7 @@ class AddToWaitlistAppointmentButton(ActionButton):
             return False
 
         waiting = self._already_waiting(appointment)
-        self.BUTTON_TITLE = LISTED_TITLE if waiting else ADD_TITLE
+        self.BUTTON_TITLE = BUTTON_LISTED_TITLE if waiting else BUTTON_ADD_TITLE
         # Matches the chart-header button rather than styling this surface
         # separately: the same two states mean the same two things wherever they
         # are drawn, and a note header is the surface reviewers found ambiguous.
@@ -170,10 +170,13 @@ class AddToWaitlistAppointmentButton(ActionButton):
     def handle(self) -> list[Effect]:
         """Open whichever surface the label promised.
 
-        "Add to waitlist" opens the compact form pre-filled from the freed slot.
-        "On waitlist" opens the roster instead, the same as the chart-header button
-        does -- offering an add form for a service they are already waiting for
-        would only earn a 409 from the duplicate guard.
+        "Waitlist" opens the compact form pre-filled from the freed slot -- this
+        is the one surface where a form still earns its place, because the slot
+        already knows the service, provider and location, and pre-filling them is
+        the whole reason to offer a button here rather than on the chart, which
+        writes immediately. "On waitlist" opens the roster instead, the same as the
+        chart-header button does: offering an add form for a service they are
+        already waiting for would only earn a 409 from the duplicate guard.
 
         The lookups are repeated rather than carried over from ``visible()``,
         which is a separate invocation with no state to reuse.

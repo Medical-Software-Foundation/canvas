@@ -36,16 +36,7 @@
             },
             {
                 "class": "scheduling_waitlist.handlers.chart_button:AddToWaitlistButton",
-                "description": "Chart header button that opens the waitlist to add the patient in front of you, labelled to say whether they are already waiting",
-                "data_access": {
-                    "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
-                    "read": ["Patient"],
-                    "write": []
-                }
-            },
-            {
-                "class": "scheduling_waitlist.handlers.quick_add_button:QuickAddToWaitlistButton",
-                "description": "Chart header button that adds the patient to the waitlist for any appointment type, provider and location in a single click",
+                "description": "Chart header button that adds the patient in front of you to the waitlist for any appointment type, provider and location in one click, or opens the roster when they are already waiting",
                 "data_access": {
                     "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
                     "read": ["Patient", "Staff", "NoteType", "PracticeLocation"],
@@ -54,7 +45,7 @@
             },
             {
                 "class": "scheduling_waitlist.handlers.appointment_button:AddToWaitlistAppointmentButton",
-                "description": "Adds an 'Add to waitlist' button to a cancelled or no-showed appointment's note, opening the form pre-filled from the freed slot",
+                "description": "Adds a 'Waitlist' button to a cancelled or no-showed appointment's note, opening the form pre-filled from the freed slot",
                 "data_access": {
                     "event": "",
                     "read": ["Appointment", "Note", "Patient", "NoteType", "PracticeLocation", "Staff"],
@@ -81,7 +72,7 @@
             },
             {
                 "class": "scheduling_waitlist.handlers.note_buttons:NoteButtonsRefreshHandler",
-                "description": "Redraws a note's action buttons when its state changes, so the 'Add to waitlist' button appears on a no-show without a page reload",
+                "description": "Redraws a note's action buttons when its state changes, so the 'Waitlist' button appears on a no-show without a page reload",
                 "data_access": {
                     "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
                     "read": ["Note", "NoteStateChangeEvent", "Appointment"],

@@ -123,11 +123,25 @@ BANNER_KEY = "scheduling_waitlist"
 # Enforced by the SDK effect, which raises above this length.
 BANNER_NARRATIVE_MAX = 90
 
+# --- action button labels ----------------------------------------------------
+# One vocabulary for both waitlist buttons. A chart header truncates at roughly
+# twelve characters, which "Add to waitlist" never fitted -- it was rendering as
+# "Add to wai…" long before anyone noticed, and beside a second button reading
+# "Waitlist: a…" the two became impossible to tell apart.
+#
+# "On waitlist" is eleven and always fitted, so it stays as it is: reviewers
+# named it as the thing they liked. Only the action label is shortened, and to a
+# word that differs from the first character rather than the last -- "Waitlist"
+# against "Waitlisted" would be two labels distinguished by their tails, which is
+# the part truncation takes.
+BUTTON_ADD_TITLE = "Waitlist"
+BUTTON_LISTED_TITLE = "On waitlist"
+
 # --- action button appearance -----------------------------------------------
-# Both waitlist buttons do two jobs: they are an action ("Add to waitlist") when
-# the patient is not listed, and a statement of fact ("On waitlist") when they
-# are. Drawn identically, the second reads as an action too -- reviewers reported
-# the button as confusing for exactly that reason. Filling it only in the listed
+# Each waitlist button does two jobs: it is an action ("Waitlist") when the
+# patient is not listed, and a statement of fact ("Waitlisted") when they are.
+# Drawn identically, the second reads as an action too -- reviewers reported the
+# button as confusing for exactly that reason. Filling it only in the listed
 # state makes the plain button mean "there is something to do here".
 #
 # Exactly seven characters each: the SDK's ShowButtonEffect validates the field
