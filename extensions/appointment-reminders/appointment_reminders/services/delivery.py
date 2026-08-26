@@ -234,15 +234,23 @@ def _allowlist(config: Any, attr: str) -> set[str]:
 def _patient_allowlisted(patient: Patient, allow: set[str]) -> bool:
     """True if the patient matches the testing-mode patient allowlist.
 
-    Matches against any of the patient's identifiers (key/id/dbid) so whichever
-    value an operator pastes from the chart works. Empty allowlist ⇒ False.
+    Matches the ``id`` (the hex key in the chart URL), the ``mrn``, or the
+    ``dbid``, so whichever identifier an operator has to hand works. MRN matters
+    most in practice: it is the one staff actually see and quote, and an entry
+    that matches nothing fails *silently* — every send is skipped and the gate
+    looks correctly configured while the allowlist is inert.
+
+    Empty allowlist ⇒ False.
+
+    There is deliberately no ``key`` lookup. ``Patient.id`` is declared as
+    ``CharField(db_column="key")``, so the attribute is ``id`` and ``.key`` never
+    existed; the branch that read it was dead from the start.
     """
     if not allow:
         return False
-    candidates = {str(getattr(patient, "id", "")), str(getattr(patient, "dbid", ""))}
-    key = getattr(patient, "key", None)
-    if key:
-        candidates.add(str(key))
+    candidates = {
+        str(getattr(patient, attr, "") or "") for attr in ("id", "mrn", "dbid")
+    }
     candidates.discard("")
     return bool(candidates & allow)
 

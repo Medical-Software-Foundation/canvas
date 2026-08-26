@@ -1188,7 +1188,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     <div class="form-group">
                         <label for="testing_mode_patients">Allowed patients</label>
                         <textarea id="testing_mode_patients" rows="3" placeholder="One patient id per line" oninput="updateTestingModeUI()"></textarea>
-                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Copy the id from the chart URL. Matched against the patient's id, key, or dbid, so whichever value you paste works.</p>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">The patient's MRN, or the id from their chart URL. Either works, so paste whichever you have.</p>
                     </div>
                     <div class="form-group">
                         <label for="testing_mode_recipients">Allowed recipients</label>
