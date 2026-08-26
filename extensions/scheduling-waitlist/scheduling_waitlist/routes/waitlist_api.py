@@ -11,6 +11,7 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
 from scheduling_waitlist.constants import STATUS_REMOVED
+from scheduling_waitlist.services.appointments import next_appointment_map
 from scheduling_waitlist.services.banner import banner_effects_for_entry
 from scheduling_waitlist.services.chart_buttons import reload_chart_buttons
 from scheduling_waitlist.services.config import WaitlistConfig
@@ -85,6 +86,19 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
         if isinstance(body, dict):
             return body
         return None
+
+    @staticmethod
+    def _appointments_for(entries: list[Any]) -> dict[Any, dict[str, Any]]:
+        """What each of these patients already has booked, in one query.
+
+        Called once per response rather than once per row. A page of a hundred
+        entries would otherwise be a hundred appointment queries, and the roster
+        is the one page in this plugin that is read constantly.
+        """
+        return next_appointment_map(
+            [getattr(entry, "patient_id", None) for entry in entries],
+            now=datetime.now(timezone.utc),
+        )
 
     @staticmethod
     def _malformed_body() -> JSONResponse:
@@ -184,6 +198,7 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
         )
 
         today = datetime.now(timezone.utc).date()
+        appointments = self._appointments_for(entries)
         return [
             JSONResponse(
                 {
@@ -194,6 +209,9 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
                             today=today,
                             viewer=staff,
                             manages_all=manages_all,
+                            next_appointment=appointments.get(
+                                getattr(entry, "patient_id", None)
+                            ),
                         )
                         for entry in entries
                     ],
@@ -260,6 +278,9 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
                     today=today,
                     viewer=staff,
                     manages_all=manages_all,
+                    next_appointment=self._appointments_for([stored]).get(
+                        getattr(stored, "patient_id", None)
+                    ),
                 ),
                 status_code=HTTPStatus.CREATED,
             ),
@@ -294,6 +315,13 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
     def _serialized(
         self, entry: Any, staff: Any, config: WaitlistConfig, today: date
     ) -> JSONResponse:
+        """One entry, shaped exactly as a roster row.
+
+        Including the next appointment, which costs one query for the single
+        patient: the roster replaces the edited row in place with what comes back,
+        so a response that omitted it would blank a column the rest of the table
+        is showing.
+        """
         return JSONResponse(
             serialize_entry(
                 entry,
@@ -301,6 +329,9 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
                 today=today,
                 viewer=staff,
                 manages_all=can_manage_all(staff, config.manager_role_codes),
+                next_appointment=self._appointments_for([entry]).get(
+                    getattr(entry, "patient_id", None)
+                ),
             ),
             status_code=HTTPStatus.OK,
         )

@@ -5,8 +5,8 @@ banner in ``services/banner.py`` answers "is this patient already waiting?" --
 passive, always visible, no click. This button answers "put them on the list",
 which is an action and needs an affordance.
 
-Serving only the first left the chart read-only: a scheduler had to open the app
-drawer and search for the patient whose chart was already on screen.
+Serving only the first left the chart read-only: a scheduler had to open the
+provider menu and search for the patient whose chart was already on screen.
 """
 
 from __future__ import annotations
@@ -18,7 +18,12 @@ from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data import Patient
 
-from scheduling_waitlist.constants import ROSTER_URL, add_form_url
+from scheduling_waitlist.constants import (
+    LISTED_BUTTON_BACKGROUND,
+    LISTED_BUTTON_TEXT,
+    ROSTER_URL,
+    add_form_url,
+)
 from scheduling_waitlist.services.entries import has_live_entry
 
 ADD_TITLE = "Add to waitlist"
@@ -40,7 +45,7 @@ class AddToWaitlistButton(ActionButton):
         return str(target_id) if target_id else ""
 
     def visible(self) -> bool:
-        """Whether to draw the button, and under which label.
+        """Whether to draw the button, and under which label and colour.
 
         The platform reads ``BUTTON_TITLE`` immediately after this returns, so
         the label is decided here from live data. Assigned to ``self`` rather
@@ -61,6 +66,11 @@ class AddToWaitlistButton(ActionButton):
 
         waiting = has_live_entry(getattr(patient, "dbid", None))
         self.BUTTON_TITLE = LISTED_TITLE if waiting else ADD_TITLE
+        # Only the listed state is coloured. Leaving the action state on the
+        # platform's own styling keeps it looking like every other chart button,
+        # so the filled one reads as the exception it is.
+        self.BUTTON_BACKGROUND_COLOR = LISTED_BUTTON_BACKGROUND if waiting else None
+        self.BUTTON_TEXT_COLOR = LISTED_BUTTON_TEXT if waiting else None
         return True
 
     def handle(self) -> list[Effect]:

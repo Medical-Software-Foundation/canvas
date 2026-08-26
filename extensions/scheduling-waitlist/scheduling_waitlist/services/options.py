@@ -109,8 +109,12 @@ def _category(note_type: Any) -> str:
     return str(getattr(note_type, "category", "") or "")
 
 
-def _is_patient_visit(note_type: Any) -> bool:
+def is_patient_visit(note_type: Any) -> bool:
     """Whether a patient could actually be booked into this type.
+
+    Public because the roster's next-appointment column asks the same question of
+    an appointment already on the books, and answering it twice is how the form
+    and the validator came to disagree about "Generic event".
 
     An unset category is treated as a visit: it is more likely an instance the SDK
     enum does not cover than a calendar block, and hiding a real appointment type
@@ -158,7 +162,7 @@ def list_appointment_types(config: WaitlistConfig) -> list[dict[str, Any]]:
     # Narrowed in Python rather than SQL: this is a small reference table read to
     # fill a dropdown, and doing it here means the fallback below costs no second
     # query.
-    bookable = [_type_option(nt) for nt in scheduleable if _is_patient_visit(nt)]
+    bookable = [_type_option(nt) for nt in scheduleable if is_patient_visit(nt)]
     if not bookable and scheduleable:
         # Nothing left. Rather than hand a scheduler an empty form, offer what the
         # instance says is scheduleable and say so -- an instance that categorises

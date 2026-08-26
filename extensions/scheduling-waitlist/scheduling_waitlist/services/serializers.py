@@ -61,12 +61,19 @@ def serialize_entry(
     today: date,
     viewer: Any | None = None,
     manages_all: bool = False,
+    next_appointment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One roster row.
 
     Reads the related patient, type, provider, and location, so the queryset
     that produced ``entry`` must have selected them; otherwise this is four
     extra queries per row.
+
+    ``next_appointment`` is passed in rather than looked up. It comes from
+    ``services/appointments.py``, which answers it for a whole page in one query;
+    fetching it here would be one query per row, and would also make this
+    function -- the one place the roster's shape is defined -- depend on the
+    database.
     """
     prefers_any_provider = getattr(entry, "provider_preference", "") == PREFERENCE_ANY
     prefers_any_location = getattr(entry, "location_preference", "") == PREFERENCE_ANY
@@ -126,6 +133,10 @@ def serialize_entry(
             "dbid": getattr(entry, "created_by_id", None),
             "name": staff_name(creator) if creator is not None else "",
         },
+        # ``None`` when this patient has nothing booked and no recent visit,
+        # which the roster renders as an empty cell rather than a reassuring
+        # phrase: "no appointment" is the normal state for someone waiting.
+        "next_appointment": next_appointment,
         "days_waiting": days_waiting(getattr(entry, "created_at", None), today),
         "expires_on": _iso(expires_on),
         "is_past_shelf_life": is_past_shelf_life(expires_on, today),

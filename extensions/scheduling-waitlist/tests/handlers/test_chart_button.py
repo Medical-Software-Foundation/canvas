@@ -2,7 +2,7 @@
 
 The banner answers "is this patient waiting?". This button answers "put them on
 the list" -- a different question, and one a passive banner cannot serve. Without
-it a scheduler looking at a chart has to open the app drawer and search for the
+it a scheduler looking at a chart has to open the provider menu and search for the
 patient they are already looking at.
 """
 
@@ -58,6 +58,34 @@ class TestVisibility:
             button.visible()
 
         assert button.BUTTON_TITLE == "On waitlist"
+
+    def test_the_listed_state_is_coloured(self):
+        # Reviewers read "On waitlist" as an action because it was drawn like
+        # one. Filling it makes the status form look like a state.
+        button = _button()
+        with patch(f"{MODULE}.has_live_entry", return_value=True):
+            button.visible()
+
+        assert button.BUTTON_BACKGROUND_COLOR == "#0b7285"
+        assert button.BUTTON_TEXT_COLOR == "#ffffff"
+
+    def test_the_action_state_keeps_the_platforms_own_styling(self):
+        # So the filled one reads as the exception it is.
+        button = _button()
+        with patch(f"{MODULE}.has_live_entry", return_value=False):
+            button.visible()
+
+        assert button.BUTTON_BACKGROUND_COLOR is None
+        assert button.BUTTON_TEXT_COLOR is None
+
+    def test_a_colour_computed_for_one_patient_does_not_leak_to_another(self):
+        # Per-render state, exactly like the label: a class attribute would
+        # carry one patient's colour onto the next patient's chart.
+        listed = _button(patient_id="listed")
+        with patch(f"{MODULE}.has_live_entry", return_value=True):
+            listed.visible()
+
+        assert AddToWaitlistButton.BUTTON_BACKGROUND_COLOR is None
 
     def test_a_label_computed_for_one_patient_does_not_leak_to_another(self):
         # The label is per-render state. Assigning it to the class would show

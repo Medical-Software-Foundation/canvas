@@ -336,3 +336,56 @@ class TestAddFormPrefill:
         config = self._config(rendered_context, {"patient": "abc-123", "service": "  7  "})
 
         assert config["prefill"]["service"] == "7"
+
+
+class TestTheNextAppointmentColumn:
+    """A column showing what each waiting patient already has booked.
+
+    The list goes stale quietly: an entry is closed only when a booking satisfies
+    what it asked for, so someone seen through any other route keeps a row that
+    claims they are still waiting. Schedulers then stop trusting the page.
+    """
+
+    ROSTER_HTML = Path("scheduling_waitlist/templates/roster.html")
+    ROSTER_JS = Path("scheduling_waitlist/static/js/roster.js")
+    ROSTER_CSS = Path("scheduling_waitlist/static/css/roster.css")
+
+    def test_the_table_has_the_column(self):
+        assert "<th scope=\"col\">Next appointment</th>" in self.ROSTER_HTML.read_text()
+
+    def test_it_sits_beside_waiting(self):
+        # "Waiting 40 days" and "seen last week" are two halves of one question.
+        markup = self.ROSTER_HTML.read_text()
+
+        assert markup.index("Next appointment") < markup.index(">Waiting<")
+
+    def test_the_header_count_matches_the_rendered_cells(self):
+        # COLUMN_COUNT spans the empty-state row. A stale value leaves the "no
+        # entries" message short of the table it sits in.
+        headers = self.ROSTER_HTML.read_text().count('<th scope="col">')
+        source = self.ROSTER_JS.read_text()
+        declared = source[source.index("var COLUMN_COUNT = ") :].split(";")[0]
+
+        assert declared.endswith(str(headers))
+
+    def test_an_attended_visit_is_flagged_on_the_row(self):
+        # So a long table can be scanned for the stale rows without reading each
+        # cell.
+        source = self.ROSTER_JS.read_text()
+
+        assert '"data-appointment-state"' in source
+
+    def test_the_flag_survives_hovering(self):
+        # The hover tint would otherwise replace the flag on the one row the
+        # reader has just pointed at.
+        css = self.ROSTER_CSS.read_text()
+        rule = css[css.index('tr[data-appointment-state="attended"]') :]
+
+        assert ":hover" in rule[: rule.index("{")]
+
+    def test_only_the_attended_state_is_tinted(self):
+        # Booked is reassurance, not a warning; colouring both would leave
+        # nothing standing out.
+        css = self.ROSTER_CSS.read_text()
+
+        assert 'tr[data-appointment-state="upcoming"]' not in css

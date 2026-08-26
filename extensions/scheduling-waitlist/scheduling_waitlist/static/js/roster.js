@@ -37,7 +37,7 @@
     toast: document.getElementById("wl-toast")
   };
 
-  var COLUMN_COUNT = 9;
+  var COLUMN_COUNT = 10;
   var SEARCH_DEBOUNCE_MS = 250;
 
   var state = {
@@ -233,6 +233,60 @@
       .join("; ");
   }
 
+  /* When and with whom this patient is next seen, if they are.
+   *
+   * Two states, and they mean opposite things to a scheduler. "Booked" is
+   * reassurance: something is in the diary, so this row is probably not urgent.
+   * "Seen" is a warning: the visit has already happened while the entry stayed
+   * open, which is how a waitlist quietly fills up with people who no longer
+   * need the call. Only the second is coloured.
+   *
+   * Not a reason to remove the entry on the reader's behalf. A patient seen for a
+   * different service still wants the one they asked for -- that is why the entry
+   * is still here -- so this states the fact and leaves the judgement alone.
+   */
+  function nextAppointmentCell(entry) {
+    var next = entry.next_appointment;
+    if (!next) {
+      // Absent is the normal state for someone waiting, so it reads as an empty
+      // cell rather than a phrase claiming something.
+      return el("td", { class: "wl-next" });
+    }
+
+    var attended = next.state === "attended";
+    var children = [
+      el("span", {
+        class: attended ? "wl-pill wl-pill-warn" : "wl-pill wl-pill-quiet",
+        text: (attended ? "Seen " : "Booked ") + formatAppointmentDate(next.start)
+      })
+    ];
+
+    var detail = [next.type, next.provider].filter(Boolean).join(" · ");
+    if (detail) {
+      children.push(el("span", { class: "wl-secondary", text: detail }));
+    }
+
+    return el("td", { class: "wl-next", "data-state": next.state }, children);
+  }
+
+  /* The practice's own clock, not the plugin's configured one.
+   *
+   * Task bodies use the configured display timezone because they are read
+   * anywhere; this page is read by someone sitting in a practice comparing it
+   * against the diary in front of them.
+   */
+  function formatAppointmentDate(iso) {
+    if (!iso) return "";
+    var when = new Date(iso);
+    if (isNaN(when.getTime())) return "";
+    return when.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
   function waitingCell(entry) {
     var children = [
       el("span", {
@@ -294,13 +348,20 @@
       entry.note ? el("span", { class: "wl-secondary", text: entry.note }) : null
     ]);
 
-    return el("tr", { "data-dbid": entry.dbid }, [
+    // The row carries the state too, so a table full of rows can be scanned for
+    // the ones that have already been seen without reading each cell.
+    var next = entry.next_appointment;
+    return el("tr", {
+      "data-dbid": entry.dbid,
+      "data-appointment-state": next ? next.state : ""
+    }, [
       patientCell,
       el("td", { text: entry.appointment_type.name }),
       el("td", { text: entry.provider.name }),
       el("td", { text: entry.location.name }),
       priorityCell(entry),
       el("td", { text: prefersText(entry) }),
+      nextAppointmentCell(entry),
       waitingCell(entry),
       el("td", null, [el("span", { class: "wl-badge", text: entry.status })]),
       actionsCell(entry)
@@ -778,7 +839,7 @@
   /* The patient picker.
    *
    * A patient is named rather than inferred: the waitlist is practice-wide and
-   * is opened from the app drawer, so there is no chart context to read a
+   * is opened from the provider menu, so there is no chart context to read a
    * patient off. Search runs server-side for the same reason the roster's does
    * -- matching names in the browser would mean shipping the patient index.
    */

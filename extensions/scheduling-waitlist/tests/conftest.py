@@ -561,6 +561,12 @@ def _install_canvas_sdk_stubs() -> None:
         ``BUTTON_TITLE`` is read, which is what lets a button decide its own
         label from live data. The stub keeps that ordering so a title computed
         in ``visible()`` is exercised the way the platform exercises it.
+
+        The two colour attributes are read at the same moment and default to
+        ``None``, which the real ``compute()`` passes straight through to
+        ``ShowButtonEffect``. Declared here rather than left to appear as instance
+        attributes: a plugin that misspelled one would otherwise set an attribute
+        nobody reads and the suite would call it styled.
         """
 
         class ButtonLocation(StrEnum):
@@ -574,6 +580,8 @@ def _install_canvas_sdk_stubs() -> None:
         BUTTON_KEY = ""
         BUTTON_LOCATION = None
         PRIORITY = 0
+        BUTTON_TEXT_COLOR = None
+        BUTTON_BACKGROUND_COLOR = None
 
         def handle(self):
             raise NotImplementedError

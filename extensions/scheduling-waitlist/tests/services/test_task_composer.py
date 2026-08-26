@@ -286,16 +286,17 @@ class TestComposeBody:
 
         assert "a hint" not in body
 
-    def test_it_closes_by_saying_nobody_was_booked(self):
+    def test_it_carries_no_standing_footer(self):
+        # A line on every task is read once and skipped from then on, so the
+        # comment now ends on the last thing the reader has to act on.
         body = self._body()
 
-        assert body.rstrip().endswith(
-            "Book in Canvas as usual - this plugin never books anyone into the slot."
-        )
+        assert "never books anyone into the slot" not in body
 
-    def test_the_closing_notice_is_one_sentence(self):
-        # It appears on every task; two paragraphs went unread.
+    def test_it_ends_on_a_patient_rather_than_a_blank_line(self):
+        # The blank separator moved inside the caveat, so a comment without one
+        # must not trail an empty line where the footer used to sit.
         body = self._body()
-        tail = body.rstrip().splitlines()[-1]
 
-        assert tail.count(".") == 1
+        assert body == body.rstrip()
+        assert body.splitlines()[-1].startswith("1. ")

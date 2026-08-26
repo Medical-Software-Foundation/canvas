@@ -51,6 +51,26 @@ def staff_from_session(user_id: str | None) -> Any | None:
     return Staff.objects.filter(id__in=candidates).first()
 
 
+def staff_from_actor(actor_dbid: Any) -> Any | None:
+    """Resolve the staff member who triggered an event.
+
+    An event carries ``event.actor.id``, which is a ``CanvasUser`` *dbid* rather
+    than a staff key -- ``Actor.instance`` looks it up as one. ``Staff.user`` is
+    the one-to-one back to that row, so this is a single query and does not build
+    the intermediate user object.
+
+    Buttons need this because there is no request and therefore no
+    ``canvas-logged-in-user-id`` header, which is where every other surface in
+    this plugin gets its actor. Returns ``None`` when the event named nobody or
+    the user has no active staff record, and callers must then refuse to write:
+    an entry nobody is recorded as having created cannot be edited or removed by
+    the person who created it.
+    """
+    if actor_dbid in (None, ""):
+        return None
+    return Staff.objects.filter(user_id=actor_dbid, active=True).first()
+
+
 def can_manage_all(staff: Any | None, manager_role_codes: tuple[str, ...]) -> bool:
     """Whether this person may modify entries other people created.
 

@@ -15,12 +15,10 @@ from scheduling_waitlist.services.slot import FreedSlot
 
 TITLE_MAX = 140
 
-# A task is an instruction, not a query result, so the wording is imperative and
-# the closing line says what the reader must still do. Kept to one sentence: this
-# appears on every task, and anything longer is skipped after the first read.
-NO_BOOKING_NOTICE = (
-    "Book in Canvas as usual - this plugin never books anyone into the slot."
-)
+# Only ever added when it says something the reader could not already see. There
+# is deliberately no standing footer: a line that appears on every task -- such
+# as a reminder that the plugin does not book anybody -- is read once and skipped
+# forever after, while still costing every reader the space.
 HINT_DISCLAIMER = (
     "Preferred times are a hint - matching did not filter on them."
 )
@@ -225,10 +223,11 @@ def compose_body(
             # Its own line: a staff note is free text and can be long.
             lines.append(f"   Note: {note}")
 
-    lines.append("")
     # Only when a preference was actually shown, and only when it did not in fact
-    # constrain the match -- otherwise the caveat would be noise or a lie.
+    # constrain the match -- otherwise the caveat would be noise or a lie. The
+    # blank separator belongs to the caveat: without one the comment would end on
+    # a trailing empty line under the last patient.
     if showed_a_window and not enforce_time_windows:
+        lines.append("")
         lines.append(HINT_DISCLAIMER)
-    lines.append(NO_BOOKING_NOTICE)
     return "\n".join(lines)

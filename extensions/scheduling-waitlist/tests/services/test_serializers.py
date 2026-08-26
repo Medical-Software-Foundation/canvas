@@ -192,3 +192,32 @@ class TestSerializeEntry:
 
     def test_no_viewer_means_no_edit_rights(self):
         assert serialize(make_entry())["can_edit"] is False
+
+
+class TestTheNextAppointment:
+    """Passed in rather than looked up.
+
+    ``services/appointments.py`` answers it for a whole page in one query.
+    Fetching it here would be one query per row, and would make the one place
+    the roster's shape is defined depend on the database.
+    """
+
+    def test_it_is_carried_through_untouched(self):
+        booked = {
+            "start": "2026-08-30T09:00:00+00:00",
+            "type": "Office visit",
+            "provider": "Ada Chen",
+            "state": "upcoming",
+        }
+
+        assert serialize(make_entry(), next_appointment=booked)["next_appointment"] is booked
+
+    def test_a_patient_with_nothing_booked_reports_nothing(self):
+        # None rather than an empty object: having no appointment is the normal
+        # state for somebody waiting, and the roster leaves the cell blank.
+        assert serialize(make_entry())["next_appointment"] is None
+
+    def test_the_field_is_always_present(self):
+        # The roster reads it on every row; an absent key would be a crash
+        # rather than an empty cell.
+        assert "next_appointment" in serialize(make_entry())

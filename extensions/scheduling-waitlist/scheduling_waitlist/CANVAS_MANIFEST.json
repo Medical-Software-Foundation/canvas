@@ -10,7 +10,8 @@
                 "class": "scheduling_waitlist.applications.waitlist_app:WaitlistApp",
                 "name": "Scheduling Waitlist",
                 "description": "Shared roster of patients waiting to be scheduled",
-                "scope": "global",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
                 "icon": "assets/icon.png"
             }
         ],
@@ -40,6 +41,15 @@
                     "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
                     "read": ["Patient"],
                     "write": []
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.quick_add_button:QuickAddToWaitlistButton",
+                "description": "Chart header button that adds the patient to the waitlist for any appointment type, provider and location in a single click",
+                "data_access": {
+                    "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
+                    "read": ["Patient", "Staff", "NoteType", "PracticeLocation"],
+                    "write": ["BannerAlert", "ActionButton"]
                 }
             },
             {

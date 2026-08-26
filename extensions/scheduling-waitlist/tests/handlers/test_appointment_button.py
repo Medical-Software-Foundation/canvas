@@ -263,6 +263,54 @@ class TestLabelReflectsThisSlotsService:
 
         assert AddToWaitlistAppointmentButton.BUTTON_TITLE == "Add to waitlist"
 
+    def _colours(self, waiting):
+        button = _button()
+        with (
+            patch(f"{MODULE}.Appointment", _found(_appointment())),
+            patch(f"{MODULE}.has_live_entry_for_service", return_value=waiting),
+        ):
+            button.visible()
+        return button.BUTTON_BACKGROUND_COLOR, button.BUTTON_TEXT_COLOR
+
+    def test_the_listed_state_is_coloured(self):
+        # This is the surface reviewers called confusing: a note header where a
+        # status and an action were drawn identically.
+        assert self._colours(waiting=True) == ("#0b7285", "#ffffff")
+
+    def test_the_action_state_keeps_the_platforms_own_styling(self):
+        assert self._colours(waiting=False) == (None, None)
+
+    def test_it_is_coloured_the_same_way_as_the_chart_header(self):
+        # The same two states mean the same two things wherever they are drawn.
+        from scheduling_waitlist.handlers.chart_button import AddToWaitlistButton
+
+        chart = AddToWaitlistButton.__new__(AddToWaitlistButton)
+        chart.event = MagicMock()
+        chart.event.target.id = "patient-uuid"
+        with (
+            patch(
+                "scheduling_waitlist.handlers.chart_button.Patient"
+            ) as patient_model,
+            patch(
+                "scheduling_waitlist.handlers.chart_button.has_live_entry",
+                return_value=True,
+            ),
+        ):
+            patient_model.objects.filter.return_value.only.return_value.first.return_value = MagicMock(
+                dbid=55
+            )
+            chart.visible()
+
+        assert self._colours(waiting=True) == (
+            chart.BUTTON_BACKGROUND_COLOR,
+            chart.BUTTON_TEXT_COLOR,
+        )
+
+    def test_the_colour_is_not_written_onto_the_class(self):
+        self._colours(waiting=True)
+
+        assert AddToWaitlistAppointmentButton.BUTTON_BACKGROUND_COLOR is None
+
 
 class TestClickFollowsTheLabel:
     def _click(self, waiting):

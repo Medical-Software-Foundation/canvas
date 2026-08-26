@@ -40,7 +40,12 @@ from canvas_sdk.v1.data import Appointment
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 from canvas_sdk.v1.data.note import NoteStates
 
-from scheduling_waitlist.constants import ROSTER_URL, add_form_url
+from scheduling_waitlist.constants import (
+    LISTED_BUTTON_BACKGROUND,
+    LISTED_BUTTON_TEXT,
+    ROSTER_URL,
+    add_form_url,
+)
 from scheduling_waitlist.services.entries import has_live_entry_for_service
 
 ADD_TITLE = "Add to waitlist"
@@ -153,9 +158,13 @@ class AddToWaitlistAppointmentButton(ActionButton):
         if status not in FREED_STATUSES and self._note_state(appointment) not in FREED_NOTE_STATES:
             return False
 
-        self.BUTTON_TITLE = (
-            LISTED_TITLE if self._already_waiting(appointment) else ADD_TITLE
-        )
+        waiting = self._already_waiting(appointment)
+        self.BUTTON_TITLE = LISTED_TITLE if waiting else ADD_TITLE
+        # Matches the chart-header button rather than styling this surface
+        # separately: the same two states mean the same two things wherever they
+        # are drawn, and a note header is the surface reviewers found ambiguous.
+        self.BUTTON_BACKGROUND_COLOR = LISTED_BUTTON_BACKGROUND if waiting else None
+        self.BUTTON_TEXT_COLOR = LISTED_BUTTON_TEXT if waiting else None
         return True
 
     def handle(self) -> list[Effect]:

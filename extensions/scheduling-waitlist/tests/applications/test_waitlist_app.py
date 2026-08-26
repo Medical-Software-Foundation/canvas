@@ -1,4 +1,4 @@
-"""The app-drawer entry point."""
+"""The provider-menu entry point."""
 
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 
@@ -34,7 +34,7 @@ class TestOnOpen:
 
         assert effect.target == LaunchModalEffect.TargetType.DEFAULT_MODAL
 
-    def test_modal_is_titled_for_the_app_drawer(self):
+    def test_modal_is_titled_for_the_menu_entry(self):
         effect = _open()
 
         assert effect.title == "Scheduling Waitlist"

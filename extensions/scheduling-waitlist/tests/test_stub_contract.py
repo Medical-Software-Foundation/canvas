@@ -162,6 +162,36 @@ class TestEventTypeStub:
         assert subscribed <= set(_EventType._NAMES)
 
 
+class TestActionButtonColourStub:
+    """The two colour attributes must be named as the SDK names them.
+
+    ``ActionButton.compute()`` reads ``self.BUTTON_TEXT_COLOR`` and
+    ``self.BUTTON_BACKGROUND_COLOR`` and hands them to ``ShowButtonEffect`` as
+    ``color`` and ``background``. A misspelling would set an attribute nothing
+    reads -- the suite would still see a value and call the button styled, while
+    the instance drew it plain.
+    """
+
+    def test_both_attributes_exist_on_the_base_class(self):
+        from canvas_sdk.handlers.action_button import ActionButton
+
+        assert ActionButton.BUTTON_TEXT_COLOR is None
+        assert ActionButton.BUTTON_BACKGROUND_COLOR is None
+
+    def test_the_configured_colours_are_seven_character_hex(self):
+        # ShowButtonEffect validates both as exactly seven characters, so a
+        # colour name, three-digit shorthand or rgba() is refused at the effect.
+        from scheduling_waitlist.constants import (
+            LISTED_BUTTON_BACKGROUND,
+            LISTED_BUTTON_TEXT,
+        )
+
+        for colour in (LISTED_BUTTON_BACKGROUND, LISTED_BUTTON_TEXT):
+            assert len(colour) == 7, colour
+            assert colour.startswith("#"), colour
+            int(colour[1:], 16)
+
+
 class TestNoteTypeCategoryStub:
     """The categories the service list excludes must be the stored strings.
 

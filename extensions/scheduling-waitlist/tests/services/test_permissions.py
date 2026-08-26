@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from scheduling_waitlist.services.permissions import (
     can_manage_all,
     can_modify_entry,
+    staff_from_actor,
     staff_from_session,
     staff_id_candidates,
 )
@@ -134,3 +135,47 @@ class TestCanModifyEntry:
 
     def test_absent_staff_is_denied(self):
         assert can_modify_entry(MagicMock(created_by_id=101), None, manages_all=True) is False
+
+
+class TestStaffFromActor:
+    """Who clicked a button.
+
+    A button click carries no request and therefore no session header, which is
+    where every other surface in this plugin gets its actor. The event names a
+    ``CanvasUser`` row instead, and ``Staff.user`` is the way back.
+    """
+
+    def test_it_resolves_the_staff_member_behind_the_user_row(self):
+        with patch("scheduling_waitlist.services.permissions.Staff") as model:
+            model.objects.filter.return_value.first.return_value = MagicMock(dbid=101)
+
+            assert staff_from_actor(7).dbid == 101
+
+    def test_it_looks_up_by_user_rather_than_by_staff_key(self):
+        # The actor id is a CanvasUser dbid; matching it against Staff.id would
+        # silently find nobody.
+        with patch("scheduling_waitlist.services.permissions.Staff") as model:
+            staff_from_actor(7)
+
+        assert model.objects.filter.call_args.kwargs["user_id"] == 7
+
+    def test_only_active_staff_are_accepted(self):
+        with patch("scheduling_waitlist.services.permissions.Staff") as model:
+            staff_from_actor(7)
+
+        assert model.objects.filter.call_args.kwargs["active"] is True
+
+    def test_an_event_naming_nobody_resolves_to_nobody(self):
+        with patch("scheduling_waitlist.services.permissions.Staff") as model:
+            assert staff_from_actor(None) is None
+            assert staff_from_actor("") is None
+
+        model.objects.filter.assert_not_called()
+
+    def test_a_user_with_no_staff_record_resolves_to_nobody(self):
+        # Callers must then refuse to write: an entry created by nobody can be
+        # edited only by a configured manager, never by whoever added it.
+        with patch("scheduling_waitlist.services.permissions.Staff") as model:
+            model.objects.filter.return_value.first.return_value = None
+
+            assert staff_from_actor(7) is None

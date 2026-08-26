@@ -287,10 +287,10 @@ class TestTask:
 
         assert "Jordan Lee" in effects[1].body
 
-    def test_the_comment_says_nobody_has_been_booked(self):
+    def test_the_comment_carries_no_standing_footer(self):
         effects, _ = effects_of(_handler())
 
-        assert "never books anyone into the slot" in effects[1].body
+        assert "never books anyone into the slot" not in effects[1].body
 
     def test_the_comment_says_how_the_slot_came_free(self):
         effects, _ = effects_of(_handler(event_type="APPOINTMENT_NO_SHOWED"))

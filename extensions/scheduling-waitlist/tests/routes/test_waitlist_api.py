@@ -1087,3 +1087,113 @@ class TestChartButtonsAreRefreshedAfterAWrite:
 
         assert responses[0].status_code == 409
         assert self.RELOAD not in responses
+
+
+class TestTheNextAppointmentColumn:
+    """The roster's own answer to a stale list.
+
+    An entry is only closed when a booking satisfies what it asked for, so a
+    patient seen through any other route stays on the list. The column says so.
+    """
+
+    def _entry(self, patient_dbid=55):
+        entry = MagicMock()
+        entry.patient_id = patient_dbid
+        return entry
+
+    def _call(self, api, entries, found=None):
+        with (
+            patch(f"{ROUTES}.staff_from_session", return_value=MOCK_STAFF),
+            patch(f"{ROUTES}.list_entries", return_value=(list(entries), len(entries))),
+            patch(
+                f"{ROUTES}.next_appointment_map", return_value=found or {}
+            ) as lookup,
+            patch(
+                f"{ROUTES}.serialize_entry",
+                side_effect=lambda entry, **kwargs: {
+                    "next_appointment": kwargs.get("next_appointment")
+                },
+            ),
+        ):
+            responses = api.get_entries()
+        return responses, lookup
+
+    def test_each_row_carries_its_own_patients_appointment(
+        self, make_request, mock_staff
+    ):
+        api = _entries_api(make_request, mock_staff)
+        booked = {"state": "upcoming"}
+
+        responses, _ = self._call(
+            api,
+            [self._entry(55), self._entry(56)],
+            found={55: booked},
+        )
+
+        rows = responses[0].data["entries"]
+        assert rows[0]["next_appointment"] is booked
+        assert rows[1]["next_appointment"] is None
+
+    def test_the_whole_page_is_looked_up_in_one_call(
+        self, make_request, mock_staff
+    ):
+        # One query for the page. Per-row lookups would make the most-read page
+        # in the plugin the slowest.
+        api = _entries_api(make_request, mock_staff)
+
+        _, lookup = self._call(api, [self._entry(55), self._entry(56)])
+
+        assert lookup.call_count == 1
+
+    def test_it_asks_about_the_patients_on_the_page(self, make_request, mock_staff):
+        api = _entries_api(make_request, mock_staff)
+
+        _, lookup = self._call(api, [self._entry(55), self._entry(56)])
+
+        assert lookup.call_args.args[0] == [55, 56]
+
+    def test_an_empty_page_asks_about_nobody(self, make_request, mock_staff):
+        api = _entries_api(make_request, mock_staff)
+
+        _, lookup = self._call(api, [])
+
+        assert lookup.call_args.args[0] == []
+
+
+class TestASingleRowCarriesTheSameColumns:
+    """A write returns one row, and the roster paints it into the same table.
+
+    A response that omitted the appointment would blank a column the rest of the
+    table is showing.
+    """
+
+    def _serialized(self, found=None):
+        api = WaitlistAPI.__new__(WaitlistAPI)
+        api.secrets = {}
+        entry = MagicMock()
+        entry.patient_id = 55
+        with (
+            patch(f"{ROUTES}.next_appointment_map", return_value=found or {}),
+            patch(f"{ROUTES}.can_manage_all", return_value=False),
+            patch(
+                f"{ROUTES}.serialize_entry",
+                side_effect=lambda item, **kwargs: {
+                    "next_appointment": kwargs.get("next_appointment")
+                },
+            ),
+        ):
+            from datetime import date
+
+            from scheduling_waitlist.services.config import WaitlistConfig
+
+            return api._serialized(
+                entry, MOCK_STAFF, WaitlistConfig.from_secrets({}), date(2026, 8, 26)
+            )
+
+    def test_the_edited_row_carries_its_appointment(self):
+        booked = {"state": "attended"}
+
+        assert self._serialized(found={55: booked}).data["next_appointment"] is booked
+
+    def test_a_patient_with_nothing_booked_reports_nothing(self):
+        assert self._serialized().data["next_appointment"] is None

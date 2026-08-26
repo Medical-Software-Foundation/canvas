@@ -11,9 +11,9 @@ reacts to cancellations automatically.
 
 ## What it does
 
-**The roster** — a practice-wide page in the app drawer listing everyone waiting, sorted by
-priority then wait time. Filter by service, provider, or location; search by patient name. Each
-row can open the patient's chart, be edited, marked scheduled, or removed.
+**The roster** — a practice-wide page in the **provider (hamburger) menu** listing everyone
+waiting, sorted by priority then wait time. Filter by service, provider, or location; search by
+patient name. Each row can open the patient's chart, be edited, marked scheduled, or removed.
 
 Filtering asks "who could take a slot like this?", so choosing a provider **also** lists the
 patients who said they would see anybody — they are the likeliest candidates for that provider's
@@ -31,6 +31,24 @@ service and location. The roster and the freed-slot matcher share one implementa
   note is tombstoned in the timeline with nothing but `Restore`, so use the chart-header button
   and enter the three fields by hand. See the maintainer note below.
 
+…plus one way that skips the form entirely:
+
+- **"Waitlist: any"** in the chart header adds the patient on the broadest terms — any
+  appointment type, any provider, any location, the configured default priority, no time
+  preference — in a single click. Every one of those is already the form's default, so the modal
+  and the second click were only ever confirming answers that were correct on arrival. It hides
+  itself once the patient has such an entry, since a click that writes immediately has nowhere to
+  report a refusal.
+
+  It still goes through the same `validate_entry` the forms post to (`services/quick_add.py`),
+  rather than assembling model fields of its own — the shelf life, the priority default and the
+  shape of a preferred window all have exactly one implementation.
+
+  If the clicking staff member cannot be resolved from the event, the click **opens the ordinary
+  form instead of writing**. An entry attributed to nobody can be edited or removed only by a
+  configured manager, never by the person who added it, so degrading to two clicks is the
+  cheaper failure. See the maintainer note on button actors.
+
 **From the chart** — the chart carries two things, because it is asked two different questions:
 
 - A **banner** on the chart of anyone already waiting, saying what they are waiting for and
@@ -38,6 +56,13 @@ service and location. The roster and the freed-slot matcher share one implementa
 - An **"Add to waitlist" button** in the chart header, which opens the roster's add dialog with
   the patient already filled in. The label reads "On waitlist" when they are already waiting.
   This answers "put them on the list" — an action, which a passive banner cannot serve.
+
+Both waitlist buttons are **filled in the listed state** and left on the platform's own styling
+otherwise. The two labels do different jobs — "Add to waitlist" is an action, "On waitlist" is a
+statement of fact — and drawn identically the second read as an action too, which reviewers
+reported as confusing. Colouring only the exception means a plain button always means "there is
+something to do here". Both colours live in `constants.py`; `ShowButtonEffect` validates them as
+exactly `#RRGGBB`, so names, shorthand and `rgba()` are refused at the effect.
 
 The button reuses the roster's add dialog rather than shipping a second form, so there is one
 set of validation rules. Only the patient's key travels in the page URL; the name behind it is
@@ -58,6 +83,26 @@ the patient portal, it was no-showed, or the booking was moved to another time. 
 reschedule, the slot announced is the one the booking moved *away* from — the new booking is
 occupied. Duplicate deliveries are harmless: every path fingerprints the same freed slot, so a
 cancellation and a no-show for one booking raise one task between them.
+
+**Next appointment** — each roster row shows what that patient already has booked, and a row for
+somebody who has **already been seen** is tinted so it can be found while scanning.
+
+This is the visible half of a deliberate decision made elsewhere. `AppointmentBookedHandler`
+closes an entry only when a booking satisfies what the entry actually asked for, because a patient
+waiting for Dr Chen who gets booked with somebody else still wants Dr Chen. The cost of that
+strictness is that the entry stays open with nothing to show anything happened — which is how a
+waitlist fills up with people who no longer need the call. The column supplies the missing signal
+and **changes nothing**: a visit for a different service does not satisfy the request, so the
+judgement stays with the person reading the row.
+
+Two states, meaning opposite things. *Booked* is reassurance and is drawn quietly. *Seen* is the
+warning, and is the only one coloured. Only real patient visits count — the same
+`is_patient_visit` exclusion the appointment-type dropdown uses, so a calendar block on a chart is
+not mistaken for an appointment somebody attended — and only appointments that were actually
+attended (`arrived`, `roomed`, `exited`), because one still sitting at `unconfirmed` a week later
+says nothing about whether the patient turned up. History is bounded to
+`RECENT_VISIT_WINDOW_DAYS`; the whole page is answered in one query
+(`services/appointments.py`).
 
 **Housekeeping** — a nightly job ages out entries past their configured shelf life and logs
 wait-time and fill metrics. Ageing marks entries `expired`; it never deletes them, so the backlog
@@ -118,10 +163,11 @@ rather than guessing.
 
 | Class | Kind | Responds to |
 |---|---|---|
-| `applications.waitlist_app:WaitlistApp` | Application (global) | app drawer |
+| `applications.waitlist_app:WaitlistApp` | Application (`provider_menu_item`) | provider (hamburger) menu, pinned to the top |
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
 | `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
 | `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header |
+| `handlers.quick_add_button:QuickAddToWaitlistButton` | ActionButton | chart patient header — one-click add on the broadest terms, hidden once the patient has such an entry |
 | `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only — so in practice the no-show, which is the only one of the two whose note still has a header |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
@@ -144,6 +190,28 @@ the intent explicitly makes a malformed row match nothing instead.
 
 **Slot detection reacts to a freed *booked* slot, not to open availability.** Canvas emits no
 generic "slot opened" event, so scanning arbitrary open availability is out of scope.
+
+**A button click has no request, so its actor comes off the event.** Every other write in this
+plugin arrives on an authenticated request and resolves the acting staff member from the
+`canvas-logged-in-user-id` header. A button click has no such header: the identity is
+`event.actor.id`, which is a **`CanvasUser` dbid**, not a staff key — `Actor.instance` looks it up
+as one — so `services/permissions.py:staff_from_actor` goes through `Staff.user` rather than
+matching `Staff.id`.
+
+Whether that field is populated for `ACTION_BUTTON_CLICKED` is server behaviour a plugin cannot
+see from the SDK source, which is why `QuickAddToWaitlistButton.handle()` treats an unresolved
+actor as a reason to open the form instead of writing. Do not "simplify" that fallback into
+`created_by=None`: `can_modify_entry` keys on the creator, so such an entry becomes untouchable by
+the very scheduler who added it. If the fallback turns out to fire on the instance, the fix is to
+find where the actor really lives — not to write the entry anyway.
+
+**The application's scope decides where its icon lives, not how it opens.** Moving the roster from
+the app drawer to the hamburger menu was a one-word manifest change, `"scope": "global"` →
+`"provider_menu_item"` (plus `menu_position`), with no change to `WaitlistApp`. Note that the other
+`provider_menu_item` apps in this repo launch with `TargetType.PAGE` or `NEW_WINDOW` while this one
+uses `DEFAULT_MODAL`; if the modal ever misbehaves from the menu, `PAGE` is a reasonable swap for a
+full-width table — but the roster's Close button talks to the host modal's `MessagePort`, so it
+would need hiding in that case.
 
 **Being scheduleable does not make a note type an appointment.** Canvas marks calendar blocks —
 "Generic event" and friends, category `schedule_event` — as scheduleable, because staff schedule

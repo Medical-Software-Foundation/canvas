@@ -67,6 +67,12 @@
             <th scope="col">Location</th>
             <th scope="col">Priority</th>
             <th scope="col">Prefers</th>
+            {% comment %}
+              Next to Waiting on purpose: "waiting 40 days" and "seen last week"
+              are the two halves of one question, and a reader comparing them
+              should not have to cross the table to do it.
+            {% endcomment %}
+            <th scope="col">Next appointment</th>
             <th scope="col">Waiting</th>
             <th scope="col">Status</th>
             <th scope="col"><span class="wl-visually-hidden">Actions</span></th>

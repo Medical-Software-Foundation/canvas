@@ -25,6 +25,13 @@
   --wl-priority-3: #3f6f4a;
   --wl-priority-other: #61707d;
 
+  /* A row whose patient has already been seen. Tinted rather than outlined: the
+     point is that it should be findable while scanning a long table, and a
+     border on one cell is not. Kept far lighter than the priority colours so it
+     shades the row without competing with the pill inside it. */
+  --wl-stale-tint: #fdf6e7;
+  --wl-stale-ink: #8a5a00;
+
   --wl-radius: 6px;
   --wl-gap: 12px;
 }
@@ -289,6 +296,22 @@ body {
 }
 
 .wl-expired { color: var(--wl-danger); font-weight: 600; }
+
+/* ---------- next appointment ---------- */
+
+/* Booked is a fact, not a warning: stated in the muted ink the rest of the
+   secondary text uses, so only the already-seen case draws the eye. */
+.wl-pill-quiet { color: var(--wl-ink-muted); }
+.wl-pill-warn { color: var(--wl-stale-ink); }
+
+.wl-next { white-space: nowrap; }
+
+/* Placed after the :hover rule above so hovering a flagged row still shows the
+   flag rather than replacing it with the ordinary hover tint. */
+.wl-table tbody tr[data-appointment-state="attended"],
+.wl-table tbody tr[data-appointment-state="attended"]:hover {
+  background: var(--wl-stale-tint);
+}
 
 /* ---------- pager ---------- */
 

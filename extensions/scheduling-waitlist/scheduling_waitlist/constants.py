@@ -123,6 +123,18 @@ BANNER_KEY = "scheduling_waitlist"
 # Enforced by the SDK effect, which raises above this length.
 BANNER_NARRATIVE_MAX = 90
 
+# --- action button appearance -----------------------------------------------
+# Both waitlist buttons do two jobs: they are an action ("Add to waitlist") when
+# the patient is not listed, and a statement of fact ("On waitlist") when they
+# are. Drawn identically, the second reads as an action too -- reviewers reported
+# the button as confusing for exactly that reason. Filling it only in the listed
+# state makes the plain button mean "there is something to do here".
+#
+# Exactly seven characters each: the SDK's ShowButtonEffect validates the field
+# as #RRGGBB and refuses colour names, three-digit shorthand and rgba().
+LISTED_BUTTON_BACKGROUND = "#0b7285"
+LISTED_BUTTON_TEXT = "#ffffff"
+
 # --- patient search ---------------------------------------------------------
 # Short enough that a two-letter surname still works, long enough that a single
 # keystroke does not scan the whole patient table.
@@ -134,6 +146,14 @@ MAX_NOTE_LENGTH = 500
 MAX_REASON_LENGTH = 200
 MAX_PAGE_SIZE = 500
 DEFAULT_PAGE_SIZE = 100
+
+# --- next appointment -------------------------------------------------------
+# How far back the roster looks for a visit the patient has already attended.
+# The point of showing one is "this row may be stale", and a visit from last
+# spring says nothing about a request made last week. It also bounds the query:
+# without it, one roster page would read every appointment every waiting patient
+# has ever had.
+RECENT_VISIT_WINDOW_DAYS = 90
 
 # --- housekeeping -----------------------------------------------------------
 SLOT_NOTIFICATION_RETENTION_DAYS = 90
