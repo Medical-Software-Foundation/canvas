@@ -11,7 +11,6 @@ from canvas_sdk.effects.payment_processor import (
 from canvas_sdk.handlers.payment_processors.card import (
     CardPaymentProcessor,
 )
-from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data import Patient
 from logger import log
 from paytheory_payment_processor.paytheory.api import PayorInput, PayTheoryAPI, TransactionInput
@@ -22,6 +21,8 @@ from paytheory_payment_processor.paytheory.environment import (
     get_sdk_url,
 )
 from paytheory_payment_processor.paytheory.exceptions import TransactionError
+
+_CARD_FORM_URL = "/plugin-io/api/paytheory_payment_processor/card-form/"
 
 # Statuses PayTheory may return for a charge that should be treated as successful.
 # Settlement happens asynchronously, so PENDING/SETTLED are successes for booking
@@ -54,32 +55,31 @@ class PayTheoryPaymentProcessor(CardPaymentProcessor):
 
     def payment_form(self, patient: Patient | None = None) -> PaymentProcessorForm:
         """Return the payment form for the credit card processor."""
-        content = render_to_string(
-            "templates/form.html",
-            {
-                "intent": self.PaymentIntent.PAY,
-                "public_api_key": self.public_api_key,
-                "sdk_url": self.sdk_url,
-            },
+        return PaymentProcessorForm(
+            content=self._card_fields_html(),
+            intent=self.PaymentIntent.PAY,
         )
-
-        return PaymentProcessorForm(content=content, intent=self.PaymentIntent.PAY)
 
     def add_card_form(self, patient: Patient | None = None) -> PaymentProcessorForm:
         """Return the form for adding a card."""
-        payor_id = self.get_or_create_payor_id(patient)
-
-        content = render_to_string(
-            "templates/form.html",
-            {
-                "payor_id": payor_id,
-                "intent": self.PaymentIntent.ADD_CARD,
-                "public_api_key": self.public_api_key,
-                "sdk_url": self.sdk_url,
-            },
+        return PaymentProcessorForm(
+            content=self._card_fields_html(),
+            intent=self.PaymentIntent.ADD_CARD,
         )
 
-        return PaymentProcessorForm(content=content, intent=self.PaymentIntent.ADD_CARD)
+    def _card_fields_html(self) -> str:
+        """Embed the PayTheory card form in an iframe served from a real URL.
+
+        A separate browsing context gives a fresh CustomElementRegistry each open,
+        avoiding PayTheory's "custom element already defined" re-mount error
+        (KOALA-5882). A real (non-null) origin is required by PayTheory's internal
+        postMessage calls; an srcdoc iframe has a null origin and breaks them.
+        """
+        return (
+            '<iframe title="Add a card" src="%s" '
+            'style="width:100%%;min-height:300px;border:0;background:#fff;display:block;" '
+            'allow="payment"></iframe>'
+        ) % _CARD_FORM_URL
 
     def get_or_create_payor_id(self, patient: Patient | None = None) -> str | None:
         """Retrieve or create a payor_id based on the patient_id."""
