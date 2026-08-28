@@ -74,11 +74,25 @@ class PayTheoryPaymentProcessor(CardPaymentProcessor):
         avoiding PayTheory's "custom element already defined" re-mount error
         (KOALA-5882). A real (non-null) origin is required by PayTheory's internal
         postMessage calls; an srcdoc iframe has a null origin and breaks them.
+
+        The hidden #submit button stays in the host DOM so Canvas's
+        CustomPayment.tsx can find it via querySelector('#submit'). Clicks are
+        forwarded to the iframe via postMessage.
         """
         return (
-            '<iframe title="Add a card" src="%s" '
+            '<iframe id="pt-card-frame" title="Add a card" src="%s" '
             'style="width:100%%;min-height:300px;border:0;background:#fff;display:block;" '
             'allow="payment"></iframe>'
+            '<button type="submit" id="submit" style="display:none"></button>'
+            '<script>'
+            'document.getElementById("submit").addEventListener("click", function(e) {'
+            '  e.preventDefault();'
+            '  var f = document.getElementById("pt-card-frame");'
+            '  if (f && f.contentWindow) {'
+            '    f.contentWindow.postMessage({ type: "pt-submit" }, window.location.origin);'
+            '  }'
+            '});'
+            '</script>'
         ) % _CARD_FORM_URL
 
     def get_or_create_payor_id(self, patient: Patient | None = None) -> str | None:

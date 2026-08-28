@@ -86,6 +86,21 @@
         if (errorEl) errorEl.textContent = '';
       }
 
+      function doTokenize() {
+        clearError();
+        paytheory.tokenizePaymentMethod({}).then(function(result) {
+          if (result.type === 'ERROR') {
+            showError(result.error);
+            return;
+          }
+          if (result.body && result.body.payment_method_id) {
+            try { window.parent.setToken(result.body.payment_method_id); } catch(e) {}
+          } else {
+            showError(result.error);
+          }
+        });
+      }
+
       function setupPayTheory() {
         paytheory.readyObserver(function(ready) {
           try { window.parent.setFormIsReady(ready); } catch(e) {}
@@ -126,20 +141,24 @@
           apiKey: '{{ public_api_key }}'
         });
 
+        // Signal readiness unconditionally after payTheoryFields() is invoked.
+        // The readyObserver callback above fires only when the iframe becomes
+        // visible, but Canvas hides the form until setFormIsReady(true) is called,
+        // creating a deadlock. This breaks the cycle.
+        try { window.parent.setFormIsReady(true); } catch(e) {}
+
+        // Listen for submit forwarded from the host DOM via postMessage.
+        // Canvas's CustomPayment.tsx clicks the host #submit button, which
+        // posts a message into this iframe to trigger tokenization.
+        window.addEventListener('message', function(event) {
+          if (event.origin === window.location.origin && event.data && event.data.type === 'pt-submit') {
+            doTokenize();
+          }
+        });
+
         document.getElementById('submit').addEventListener('click', function(e) {
           e.preventDefault();
-          clearError();
-          paytheory.tokenizePaymentMethod({}).then(function(result) {
-            if (result.type === 'ERROR') {
-              showError(result.error);
-              return;
-            }
-            if (result.body && result.body.payment_method_id) {
-              try { window.parent.setToken(result.body.payment_method_id); } catch(e) {}
-            } else {
-              showError(result.error);
-            }
-          });
+          doTokenize();
         });
       }
 
