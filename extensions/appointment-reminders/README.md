@@ -125,7 +125,9 @@ Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`
 
 When a patient declines by SMS, the plugin opens a follow-up Task. **Settings → Task assignment** chooses which team receives it, from the teams configured on the instance.
 
-Leaving it **Unassigned** is the default and matches what the plugin did before this was configurable: the Task is still created and still carries the `appointment-decline` label, but it lands in no team's queue, so someone has to go looking for it.
+**Give the task a due date** sets it to the end of the day the patient replied, in the instance's own timezone (`INSTALLATION_TIME_ZONE`). Off by default. End of day rather than the reply moment, so the task reads as due today without arriving already overdue; and the instance's timezone rather than UTC because `due` is a timestamp, and end-of-day computed in UTC renders as the *previous* date for any instance behind it. Without a due date the task sorts nowhere, which is how it gets lost in a large queue.
+
+Leaving the team **Unassigned** is the default and matches what the plugin did before this was configurable: the Task is still created and still carries the `appointment-decline` label, but it lands in no team's queue, so someone has to go looking for it.
 
 If the chosen team is later deleted in Canvas, the Task is created unassigned and a warning is logged rather than the effect being risked on a dangling id — losing the Task would mean losing the only signal that this patient wants to reschedule. The dropdown flags a configured team it can no longer find, so a stale setting is visible rather than silently behaving as "Unassigned".
 

@@ -11,12 +11,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+from datetime import datetime, timezone
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from appointment_reminders.handlers.twilio_inbound_api import TwilioInboundAPI
+from appointment_reminders.services.config import CampaignConfig
 from appointment_reminders.services.twilio_inbound import parse_form_body
 
 _MOD = "appointment_reminders.handlers.twilio_inbound_api"
@@ -188,6 +190,7 @@ def test_inbound_decline_opens_followup_task() -> None:
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch.object(api, "_decline_task_team_id", return_value=None), \
+         patch(f"{_MOD}.load_config", return_value=CampaignConfig()), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         api.inbound()
@@ -283,6 +286,7 @@ def test_inbound_replayed_message_sid_is_ignored() -> None:
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch.object(api, "_decline_task_team_id", return_value=None), \
+         patch(f"{_MOD}.load_config", return_value=CampaignConfig()), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.log_inbound_response") as mock_log:
         api.inbound()           # first: acts (opens a Task)
@@ -339,6 +343,7 @@ def test_inbound_cancel_opts_out_without_touching_the_appointment() -> None:
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch.object(api, "_decline_task_team_id", return_value=None), \
+         patch(f"{_MOD}.load_config", return_value=CampaignConfig()), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.Appointment") as mock_appt, \
          patch(f"{_MOD}.sms_consent_effect", return_value=MagicMock()) as mock_consent, \
@@ -580,6 +585,7 @@ def test_decline_task_is_assigned_to_the_configured_team() -> None:
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch.object(api, "_decline_task_team_id", return_value="team-7"), \
+         patch(f"{_MOD}.load_config", return_value=CampaignConfig()), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.log_inbound_response"):
         api.inbound()
@@ -587,30 +593,28 @@ def test_decline_task_is_assigned_to_the_configured_team() -> None:
 
 
 def _bare_with_config(team_id: str):
-    api = _bare_api()
-    return api, patch(f"{_MOD}.load_config", return_value=MagicMock(
-        decline_task_team_id=team_id))
+    return _bare_api(), CampaignConfig(decline_task_team_id=team_id)
 
 
 def test_decline_team_none_when_unconfigured() -> None:
     """Unassigned is the pre-existing behavior and stays the default."""
     api, cfg = _bare_with_config("")
-    with cfg, patch(f"{_MOD}.Team") as mock_team:
-        assert api._decline_task_team_id() is None
+    with patch(f"{_MOD}.Team") as mock_team:
+        assert api._decline_task_team_id(cfg) is None
     mock_team.objects.filter.assert_not_called()  # nothing to verify
 
 
 def test_decline_team_none_when_configured_blank() -> None:
     api, cfg = _bare_with_config("   ")
-    with cfg, patch(f"{_MOD}.Team"):
-        assert api._decline_task_team_id() is None
+    with patch(f"{_MOD}.Team"):
+        assert api._decline_task_team_id(cfg) is None
 
 
 def test_decline_team_returned_when_it_exists() -> None:
     api, cfg = _bare_with_config("team-7")
-    with cfg, patch(f"{_MOD}.Team") as mock_team:
+    with patch(f"{_MOD}.Team") as mock_team:
         mock_team.objects.filter.return_value.exists.return_value = True
-        assert api._decline_task_team_id() == "team-7"
+        assert api._decline_task_team_id(cfg) == "team-7"
     mock_team.objects.filter.assert_called_once_with(id="team-7")
 
 
@@ -622,9 +626,9 @@ def test_decline_team_falls_back_to_unassigned_when_team_deleted() -> None:
     reschedule. An unassigned task beats no task.
     """
     api, cfg = _bare_with_config("team-gone")
-    with cfg, patch(f"{_MOD}.Team") as mock_team:
+    with patch(f"{_MOD}.Team") as mock_team:
         mock_team.objects.filter.return_value.exists.return_value = False
-        assert api._decline_task_team_id() is None
+        assert api._decline_task_team_id(cfg) is None
 
 
 def test_confirm_does_not_read_the_team_config() -> None:
@@ -637,3 +641,93 @@ def test_confirm_does_not_read_the_team_config() -> None:
          patch(f"{_MOD}.log_inbound_response"):
         api.inbound()
     mock_load.assert_not_called()
+
+
+# ---- decline task due date ----
+
+def _bare_with_env(tz_name: str | None) -> TwilioInboundAPI:
+    api = _bare_api()
+    api.environment = {} if tz_name is None else {"INSTALLATION_TIME_ZONE": tz_name}
+    return api
+
+
+def test_decline_task_has_no_due_date_when_toggle_is_off() -> None:
+    """Off is the default and matches how the task was created before."""
+    api = _bare_with_env("America/New_York")
+    assert api._decline_task_due(CampaignConfig()) is None
+
+
+def test_decline_task_due_is_end_of_the_instances_local_day() -> None:
+    """The date must be the instance's, not UTC's.
+
+    `due` is a timestamp, so end-of-day computed in UTC renders as the previous
+    day anywhere behind it — the off-by-one this anchoring exists to avoid.
+    """
+    import zoneinfo
+
+    api = _bare_with_env("America/New_York")
+    due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+
+    assert due is not None
+    local = due.astimezone(zoneinfo.ZoneInfo("America/New_York"))
+    assert (local.hour, local.minute, local.second) == (23, 59, 59)
+    # Same calendar date the instance is currently on.
+    assert local.date() == datetime.now(zoneinfo.ZoneInfo("America/New_York")).date()
+
+
+def test_decline_task_due_is_in_the_future_so_it_is_not_born_overdue() -> None:
+    """`due = now` would render the task as already late the moment it appears."""
+    api = _bare_with_env("America/New_York")
+    due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+    assert due > datetime.now(timezone.utc)
+
+
+def test_decline_task_due_respects_a_different_instance_timezone() -> None:
+    import zoneinfo
+
+    api = _bare_with_env("Australia/Sydney")
+    due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+    local = due.astimezone(zoneinfo.ZoneInfo("Australia/Sydney"))
+    assert (local.hour, local.minute) == (23, 59)
+    assert local.date() == datetime.now(zoneinfo.ZoneInfo("Australia/Sydney")).date()
+
+
+def test_decline_task_due_falls_back_to_utc_without_an_instance_timezone() -> None:
+    """Still produce a due date rather than silently dropping a setting the
+    admin switched on."""
+    for env_tz in (None, "", "Not/AZone"):
+        api = _bare_with_env(env_tz)
+        due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+        assert due is not None, env_tz
+        assert due.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+
+
+def test_decline_task_passes_the_due_date_to_addtask() -> None:
+    api = _api("Body=N&From=%2B14155551234")
+    api.environment = {"INSTALLATION_TIME_ZONE": "America/New_York"}
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch.object(api, "_decline_task_team_id", return_value="team-7"), \
+         patch(f"{_MOD}.load_config",
+               return_value=CampaignConfig(decline_task_due_end_of_day=True)), \
+         patch(f"{_MOD}.AddTask") as mock_task, \
+         patch(f"{_MOD}.log_inbound_response"):
+        api.inbound()
+
+    due = mock_task.call_args.kwargs["due"]
+    assert due is not None and due > datetime.now(timezone.utc)
+
+
+def test_decline_branch_reads_the_config_once() -> None:
+    """Team and due date share one read; other reply paths read nothing."""
+    api = _api("Body=N&From=%2B14155551234")
+    api.environment = {"INSTALLATION_TIME_ZONE": "America/New_York"}
+    with patch.object(api, "_resolve_patient", return_value=_patient()), \
+         patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
+         patch(f"{_MOD}.Team") as mock_team, \
+         patch(f"{_MOD}.load_config", return_value=CampaignConfig()) as mock_load, \
+         patch(f"{_MOD}.AddTask"), \
+         patch(f"{_MOD}.log_inbound_response"):
+        mock_team.objects.filter.return_value.exists.return_value = True
+        api.inbound()
+    mock_load.assert_called_once()

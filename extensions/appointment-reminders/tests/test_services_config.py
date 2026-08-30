@@ -503,3 +503,13 @@ def test_decline_task_team_defaults_to_unassigned() -> None:
     """Matches what the plugin did before this was configurable."""
     assert CampaignConfig().decline_task_team_id == ""
     assert CampaignConfig.from_dict({"reminders_enabled": True}).decline_task_team_id == ""
+
+
+def test_decline_task_due_toggle_round_trips_and_defaults_off() -> None:
+    """Off by default, so an existing install keeps creating undated tasks."""
+    assert CampaignConfig().decline_task_due_end_of_day is False
+    assert CampaignConfig.from_dict({}).decline_task_due_end_of_day is False
+    restored = CampaignConfig.from_dict(
+        CampaignConfig(decline_task_due_end_of_day=True).to_dict()
+    )
+    assert restored.decline_task_due_end_of_day is True
