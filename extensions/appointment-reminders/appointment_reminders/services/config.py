@@ -47,7 +47,8 @@ _CAMPAIGN_CONFIG_FIELDS = {
     "testing_mode_patients",
     "testing_mode_recipients",
     "decline_task_team_id",
-    "decline_task_due_end_of_day",
+    "decline_task_due_days",
+    "decline_task_due_time",
 }
 
 _NOTE_TYPE_FIELDS = {
@@ -202,6 +203,25 @@ class NoteTypeCampaignConfig:
 NoteTypeReminderConfig = NoteTypeCampaignConfig
 
 
+def parse_hhmm(value: str, default: tuple[int, int]) -> tuple[int, int]:
+    """Parse ``HH:MM`` into (hour, minute), falling back to ``default``.
+
+    Shared by the reminder send time and the decline-task due time. Defensive
+    because both come from admin input and both are read inside loops or request
+    handlers, where a raise would cost far more than the bad value itself.
+    """
+    if not value:
+        return default
+    parts = str(value).split(":")
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except (IndexError, ValueError):
+        return default
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return default
+    return hour, minute
+
+
 def _as_token_list(raw: Any) -> list[str]:
     """Normalize an allowlist to a list of trimmed, non-empty tokens.
 
@@ -333,11 +353,16 @@ class CampaignConfig:
     # before this was configurable, so an existing install keeps its behavior.
     decline_task_team_id: str = ""
 
-    # Give the decline follow-up task a due date of the end of the current day,
-    # in the instance's own timezone. Off by default, which is how the task was
-    # created before this existed. Requested because a task with no due date
-    # sorts nowhere and gets lost in a large queue.
-    decline_task_due_end_of_day: bool = False
+    # Due date for the decline follow-up task. ``None`` means no due date, which
+    # is how the task was created before this existed. An integer is a number of
+    # **business days** from the day the patient replied — 0 being that same day,
+    # rolled forward if it lands on a weekend. ``decline_task_due_time`` is the
+    # local time of day, in the instance's timezone.
+    #
+    # Requested because a task with no due date sorts nowhere and gets lost in a
+    # large queue.
+    decline_task_due_days: int | None = None
+    decline_task_due_time: str = "23:59"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -373,13 +398,31 @@ class CampaignConfig:
             "testing_mode_patients": self.testing_mode_patients,
             "testing_mode_recipients": self.testing_mode_recipients,
             "decline_task_team_id": self.decline_task_team_id,
-            "decline_task_due_end_of_day": self.decline_task_due_end_of_day,
+            "decline_task_due_days": self.decline_task_due_days,
+            "decline_task_due_time": self.decline_task_due_time,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CampaignConfig":
         """Create from dictionary with backward compatibility."""
         cleaned = dict(data)
+
+        # 0.12.0 shipped a plain on/off flag before the rule became configurable.
+        # True meant "end of the day the patient replied", i.e. 0 days at 23:59.
+        legacy_due = cleaned.pop("decline_task_due_end_of_day", None)
+        if legacy_due and "decline_task_due_days" not in cleaned:
+            cleaned["decline_task_due_days"] = 0
+
+        # A blank or unparseable offset means "no due date" rather than "today",
+        # so a malformed value cannot silently start dating every task.
+        if "decline_task_due_days" in cleaned:
+            raw_days = cleaned["decline_task_due_days"]
+            try:
+                cleaned["decline_task_due_days"] = (
+                    None if raw_days in (None, "") else max(0, int(raw_days))
+                )
+            except (TypeError, ValueError):
+                cleaned["decline_task_due_days"] = None
 
         # Accept the allowlists as a list or as the comma/newline-separated text
         # the admin textareas post, so a hand-edited record loads either way.

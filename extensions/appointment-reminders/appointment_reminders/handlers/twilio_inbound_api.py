@@ -19,7 +19,7 @@ sender's number and their own reply text — which for an unresolved sender mean
 a number belonging to nobody on file, retained so staff can follow it up.
 """
 import zoneinfo
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from datetime import time as dt_time
 from http import HTTPStatus
 from typing import Any
@@ -36,7 +36,7 @@ from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.team import Team
 from logger import log
 
-from appointment_reminders.services.config import load_config
+from appointment_reminders.services.config import load_config, parse_hhmm
 from appointment_reminders.services.consent import sms_consent_effect
 from appointment_reminders.services.delivery import _normalize_phone
 from appointment_reminders.services.history import (
@@ -51,6 +51,30 @@ from appointment_reminders.services.twilio_inbound import (
 )
 
 _BOOKED_STATUSES = ["unconfirmed", "attempted", "confirmed"]
+
+# Saturday and Sunday, per date.weekday()
+_WEEKEND = (5, 6)
+
+
+def _add_business_days(start: date, days: int) -> date:
+    """Advance ``days`` business days from ``start``, skipping weekends.
+
+    A weekend ``start`` rolls forward first, so an offset of 0 on a Saturday is
+    due Monday rather than the same day nobody is working. Then each step lands
+    on a weekday: Friday + 1 is Monday, Friday + 2 is Tuesday.
+
+    Weekends only. Canvas exposes no holiday calendar a plugin can read, so a
+    task due on a public holiday is left as-is rather than guessed at.
+    """
+    current = start
+    while current.weekday() in _WEEKEND:
+        current += timedelta(days=1)
+    remaining = days
+    while remaining > 0:
+        current += timedelta(days=1)
+        if current.weekday() not in _WEEKEND:
+            remaining -= 1
+    return current
 
 # Ignore a Twilio MessageSid we've already processed — a signed request that is
 # replayed (e.g. from an intercepted log) must not double-act (duplicate decline
@@ -210,38 +234,51 @@ class TwilioInboundAPI(SimpleAPI):
         return effects
 
     def _decline_task_due(self, config: Any) -> datetime | None:
-        """End of today in the instance's timezone, or None when switched off.
+        """When the decline follow-up task is due, or None when unset.
 
-        A task with no due date sorts nowhere and gets lost in a large queue,
-        which is what prompted this. End of day rather than "now" so the task
-        reads as due today without arriving already overdue.
+        ``decline_task_due_days`` is a number of **business days** from the day
+        the patient replied — 0 meaning that same day — and
+        ``decline_task_due_time`` the local time of day. A task with no due date
+        sorts nowhere and gets lost in a large queue, which is what prompted it.
 
-        The date is anchored to the instance's own timezone
-        (``INSTALLATION_TIME_ZONE``), because ``due`` is a timestamp and not a
-        date: end of day computed in UTC would render as the *previous* day for
-        any instance behind it — 23:59 UTC is 19:59 the same evening in Eastern,
-        but midnight UTC is the evening before. Falls back to UTC with a warning
-        if the environment does not supply a zone, which keeps the date right for
-        US instances and merely shifts the hour.
+        Anchored to the instance's timezone (``INSTALLATION_TIME_ZONE``) because
+        ``due`` is a timestamp, not a date: computing it in UTC would render as
+        the *previous* day for any instance behind UTC — midnight UTC is the
+        evening before in Eastern. Falls back to UTC with a warning if the
+        environment has no zone, which keeps the date right for US instances and
+        merely shifts the hour, rather than silently dropping a configured rule.
+
+        Defaults to 23:59 rather than the reply moment so the task reads as due
+        without arriving already overdue.
         """
-        if not getattr(config, "decline_task_due_end_of_day", False):
+        days = getattr(config, "decline_task_due_days", None)
+        if days is None:
             return None
+
+        tz = self._instance_timezone()
+        hour, minute = parse_hhmm(
+            getattr(config, "decline_task_due_time", "") or "", (23, 59)
+        )
+        due_date = _add_business_days(datetime.now(tz).date(), int(days))
+        return datetime.combine(due_date, dt_time(hour, minute), tzinfo=tz)
+
+    def _instance_timezone(self) -> Any:
+        """The instance's configured timezone, or UTC with a warning."""
         tz_name = (self.environment or {}).get("INSTALLATION_TIME_ZONE") or ""
-        try:
-            tz = zoneinfo.ZoneInfo(tz_name) if tz_name else timezone.utc
-        except zoneinfo.ZoneInfoNotFoundError:
-            log.warning(
-                f"[inbound] Unknown INSTALLATION_TIME_ZONE {tz_name!r}; "
-                "using UTC for the decline task due date"
-            )
-            tz = timezone.utc
         if not tz_name:
             log.warning(
                 "[inbound] No INSTALLATION_TIME_ZONE in the environment; "
                 "using UTC for the decline task due date"
             )
-        local_today = datetime.now(tz).date()
-        return datetime.combine(local_today, dt_time(23, 59, 59), tzinfo=tz)
+            return timezone.utc
+        try:
+            return zoneinfo.ZoneInfo(tz_name)
+        except zoneinfo.ZoneInfoNotFoundError:
+            log.warning(
+                f"[inbound] Unknown INSTALLATION_TIME_ZONE {tz_name!r}; "
+                "using UTC for the decline task due date"
+            )
+            return timezone.utc
 
     def _decline_task_team_id(self, config: Any) -> str | None:
         """The configured team for decline follow-ups, or None for unassigned.

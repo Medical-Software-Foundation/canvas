@@ -651,8 +651,8 @@ def _bare_with_env(tz_name: str | None) -> TwilioInboundAPI:
     return api
 
 
-def test_decline_task_has_no_due_date_when_toggle_is_off() -> None:
-    """Off is the default and matches how the task was created before."""
+def test_decline_task_has_no_due_date_when_unset() -> None:
+    """Unset is the default and matches how the task was created before."""
     api = _bare_with_env("America/New_York")
     assert api._decline_task_due(CampaignConfig()) is None
 
@@ -665,41 +665,53 @@ def test_decline_task_due_is_end_of_the_instances_local_day() -> None:
     """
     import zoneinfo
 
+    from appointment_reminders.handlers.twilio_inbound_api import _add_business_days
+
+    tz = zoneinfo.ZoneInfo("America/New_York")
     api = _bare_with_env("America/New_York")
-    due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+    due = api._decline_task_due(CampaignConfig(decline_task_due_days=0))
 
     assert due is not None
-    local = due.astimezone(zoneinfo.ZoneInfo("America/New_York"))
-    assert (local.hour, local.minute, local.second) == (23, 59, 59)
-    # Same calendar date the instance is currently on.
-    assert local.date() == datetime.now(zoneinfo.ZoneInfo("America/New_York")).date()
+    local = due.astimezone(tz)
+    assert (local.hour, local.minute) == (23, 59)
+    # The instance's local date, rolled off a weekend. Comparing against the raw
+    # local date would fail every Saturday and Sunday.
+    assert local.date() == _add_business_days(datetime.now(tz).date(), 0)
 
 
 def test_decline_task_due_is_in_the_future_so_it_is_not_born_overdue() -> None:
     """`due = now` would render the task as already late the moment it appears."""
     api = _bare_with_env("America/New_York")
-    due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+    due = api._decline_task_due(CampaignConfig(decline_task_due_days=0))
     assert due > datetime.now(timezone.utc)
 
 
 def test_decline_task_due_respects_a_different_instance_timezone() -> None:
+    """Anchored to whatever the instance says, not to UTC or a hardcoded zone."""
     import zoneinfo
 
+    from appointment_reminders.handlers.twilio_inbound_api import _add_business_days
+
+    tz = zoneinfo.ZoneInfo("Australia/Sydney")
     api = _bare_with_env("Australia/Sydney")
-    due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
-    local = due.astimezone(zoneinfo.ZoneInfo("Australia/Sydney"))
+    due = api._decline_task_due(CampaignConfig(decline_task_due_days=0))
+    local = due.astimezone(tz)
     assert (local.hour, local.minute) == (23, 59)
-    assert local.date() == datetime.now(zoneinfo.ZoneInfo("Australia/Sydney")).date()
+    assert local.date() == _add_business_days(datetime.now(tz).date(), 0)
 
 
 def test_decline_task_due_falls_back_to_utc_without_an_instance_timezone() -> None:
     """Still produce a due date rather than silently dropping a setting the
     admin switched on."""
+    from appointment_reminders.handlers.twilio_inbound_api import _add_business_days
+
     for env_tz in (None, "", "Not/AZone"):
         api = _bare_with_env(env_tz)
-        due = api._decline_task_due(CampaignConfig(decline_task_due_end_of_day=True))
+        due = api._decline_task_due(CampaignConfig(decline_task_due_days=0))
         assert due is not None, env_tz
-        assert due.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+        assert due.astimezone(timezone.utc).date() == _add_business_days(
+            datetime.now(timezone.utc).date(), 0
+        ), env_tz
 
 
 def test_decline_task_passes_the_due_date_to_addtask() -> None:
@@ -709,7 +721,7 @@ def test_decline_task_passes_the_due_date_to_addtask() -> None:
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch.object(api, "_decline_task_team_id", return_value="team-7"), \
          patch(f"{_MOD}.load_config",
-               return_value=CampaignConfig(decline_task_due_end_of_day=True)), \
+               return_value=CampaignConfig(decline_task_due_days=0)), \
          patch(f"{_MOD}.AddTask") as mock_task, \
          patch(f"{_MOD}.log_inbound_response"):
         api.inbound()
@@ -731,3 +743,58 @@ def test_decline_branch_reads_the_config_once() -> None:
         mock_team.objects.filter.return_value.exists.return_value = True
         api.inbound()
     mock_load.assert_called_once()
+
+
+def test_decline_task_due_honours_the_configured_time_of_day() -> None:
+    import zoneinfo
+
+    api = _bare_with_env("America/New_York")
+    due = api._decline_task_due(
+        CampaignConfig(decline_task_due_days=0, decline_task_due_time="09:00")
+    )
+    local = due.astimezone(zoneinfo.ZoneInfo("America/New_York"))
+    assert (local.hour, local.minute) == (9, 0)
+
+
+def test_decline_task_due_falls_back_to_2359_on_a_malformed_time() -> None:
+    """A bad config string must not raise inside the webhook."""
+    import zoneinfo
+
+    api = _bare_with_env("America/New_York")
+    for bad in ("", "9", "abc", "25:00"):
+        due = api._decline_task_due(
+            CampaignConfig(decline_task_due_days=0, decline_task_due_time=bad)
+        )
+        local = due.astimezone(zoneinfo.ZoneInfo("America/New_York"))
+        assert (local.hour, local.minute) == (23, 59), bad
+
+
+def test_decline_task_due_offsets_by_business_days() -> None:
+    """Weekends are skipped, so an offset is not the same as calendar days."""
+    from datetime import date
+
+    from appointment_reminders.handlers.twilio_inbound_api import _add_business_days
+
+    friday, saturday, sunday = date(2026, 8, 28), date(2026, 8, 29), date(2026, 8, 30)
+    monday = date(2026, 8, 31)
+
+    assert _add_business_days(friday, 0) == friday
+    assert _add_business_days(friday, 1) == monday          # not Saturday
+    assert _add_business_days(friday, 2) == date(2026, 9, 1)
+    # A weekend reply rolls forward before counting, so "same day" is Monday
+    # rather than a day nobody is working.
+    assert _add_business_days(saturday, 0) == monday
+    assert _add_business_days(sunday, 0) == monday
+    assert _add_business_days(monday, 1) == date(2026, 9, 1)
+
+
+def test_decline_task_due_never_lands_on_a_weekend() -> None:
+    from datetime import date, timedelta
+
+    from appointment_reminders.handlers.twilio_inbound_api import _add_business_days
+
+    day = date(2026, 8, 1)
+    for _ in range(60):
+        for offset in range(4):
+            assert _add_business_days(day, offset).weekday() < 5
+        day += timedelta(days=1)
