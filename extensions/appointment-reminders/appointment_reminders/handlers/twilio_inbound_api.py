@@ -18,8 +18,11 @@ no chart is distinguishable from no reply at all. Nothing is stored beyond the
 sender's number and their own reply text — which for an unresolved sender means
 a number belonging to nobody on file, retained so staff can follow it up.
 """
+import zoneinfo
 from datetime import datetime, timezone
+from datetime import time as dt_time
 from http import HTTPStatus
+from typing import Any
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
@@ -167,10 +170,14 @@ class TwilioInboundAPI(SimpleAPI):
             else:
                 status = "confirmed_no_appointment"
         elif intent == "decline":
+            # One read for both task settings; still only on this branch, so
+            # every other reply path stays free of a config query.
+            task_config = load_config()
             effects.append(
                 AddTask(
                     patient_id=str(patient.id),
-                    team_id=self._decline_task_team_id(),
+                    team_id=self._decline_task_team_id(task_config),
+                    due=self._decline_task_due(task_config),
                     title=(
                         "Patient declined an appointment reminder via SMS — "
                         "follow up to reschedule or cancel."
@@ -202,7 +209,41 @@ class TwilioInboundAPI(SimpleAPI):
         effects.append(PlainTextResponse("", status_code=HTTPStatus.OK))
         return effects
 
-    def _decline_task_team_id(self) -> str | None:
+    def _decline_task_due(self, config: Any) -> datetime | None:
+        """End of today in the instance's timezone, or None when switched off.
+
+        A task with no due date sorts nowhere and gets lost in a large queue,
+        which is what prompted this. End of day rather than "now" so the task
+        reads as due today without arriving already overdue.
+
+        The date is anchored to the instance's own timezone
+        (``INSTALLATION_TIME_ZONE``), because ``due`` is a timestamp and not a
+        date: end of day computed in UTC would render as the *previous* day for
+        any instance behind it — 23:59 UTC is 19:59 the same evening in Eastern,
+        but midnight UTC is the evening before. Falls back to UTC with a warning
+        if the environment does not supply a zone, which keeps the date right for
+        US instances and merely shifts the hour.
+        """
+        if not getattr(config, "decline_task_due_end_of_day", False):
+            return None
+        tz_name = (self.environment or {}).get("INSTALLATION_TIME_ZONE") or ""
+        try:
+            tz = zoneinfo.ZoneInfo(tz_name) if tz_name else timezone.utc
+        except zoneinfo.ZoneInfoNotFoundError:
+            log.warning(
+                f"[inbound] Unknown INSTALLATION_TIME_ZONE {tz_name!r}; "
+                "using UTC for the decline task due date"
+            )
+            tz = timezone.utc
+        if not tz_name:
+            log.warning(
+                "[inbound] No INSTALLATION_TIME_ZONE in the environment; "
+                "using UTC for the decline task due date"
+            )
+        local_today = datetime.now(tz).date()
+        return datetime.combine(local_today, dt_time(23, 59, 59), tzinfo=tz)
+
+    def _decline_task_team_id(self, config: Any) -> str | None:
         """The configured team for decline follow-ups, or None for unassigned.
 
         Verifies the team still exists. A configured team can be deleted in
@@ -211,10 +252,10 @@ class TwilioInboundAPI(SimpleAPI):
         one artifact telling staff this patient wants to reschedule. An
         unassigned task in someone's way beats no task at all.
 
-        Read lazily: only a decline reaches this, so the config and team lookups
-        stay off the path of every other inbound reply.
+        Takes the config rather than loading it, so the decline branch pays for
+        one read shared with the due-date lookup.
         """
-        team_id = (load_config().decline_task_team_id or "").strip()
+        team_id = (getattr(config, "decline_task_team_id", "") or "").strip()
         if not team_id:
             return None
         if not Team.objects.filter(id=team_id).exists():

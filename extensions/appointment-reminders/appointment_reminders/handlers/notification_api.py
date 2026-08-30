@@ -1217,6 +1217,14 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                         <select id="decline_task_team_id"><option value="">Unassigned</option></select>
                         <p id="task_routing_note" style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Loading teams...</p>
                     </div>
+                    <div class="form-group" style="max-width:420px;">
+                        <label class="channel-toggle" style="font-weight:600;">
+                            <input type="checkbox" id="decline_task_due_end_of_day">
+                            <span class="channel-check"></span>
+                            Give the task a due date
+                        </label>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Due at the end of the day the patient replied, in this instance's timezone. Without a due date the task sorts nowhere and is easy to lose in a large queue.</p>
+                    </div>
                 </div>
             </div>
             <!-- end task routing -->
@@ -1649,6 +1657,8 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             document.getElementById('testing_mode_recipients').value =
                 (config.testing_mode_recipients || []).join('\\n');
             savedDeclineTaskTeamId = config.decline_task_team_id || '';
+            document.getElementById('decline_task_due_end_of_day').checked =
+                !!config.decline_task_due_end_of_day;
             loadTeams();
             updateTestingModeUI();
         }
@@ -2446,6 +2456,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 note_type_reminders: gatherNoteTypeReminders(),
                 default_attribution: document.getElementById('default_attribution_input').value.trim(),
                 decline_task_team_id: document.getElementById('decline_task_team_id').value,
+                decline_task_due_end_of_day: document.getElementById('decline_task_due_end_of_day').checked,
                 testing_mode: document.getElementById('testing_mode').checked,
                 testing_mode_patients: splitLines('testing_mode_patients'),
                 testing_mode_recipients: splitLines('testing_mode_recipients'),

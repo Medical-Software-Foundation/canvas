@@ -1152,3 +1152,11 @@ def test_team_selection_reaches_the_save_payload() -> None:
     assert 'id="decline_task_team_id"' in html
     assert "decline_task_team_id: document.getElementById('decline_task_team_id').value" in html
     assert "/admin/teams" in html
+
+
+def test_due_date_toggle_is_present_and_wired() -> None:
+    html = _admin_html()
+    assert 'id="decline_task_due_end_of_day"' in html
+    assert ("decline_task_due_end_of_day: document.getElementById("
+            "'decline_task_due_end_of_day').checked") in html
+    assert "!!config.decline_task_due_end_of_day" in html

@@ -47,6 +47,7 @@ _CAMPAIGN_CONFIG_FIELDS = {
     "testing_mode_patients",
     "testing_mode_recipients",
     "decline_task_team_id",
+    "decline_task_due_end_of_day",
 }
 
 _NOTE_TYPE_FIELDS = {
@@ -332,6 +333,12 @@ class CampaignConfig:
     # before this was configurable, so an existing install keeps its behavior.
     decline_task_team_id: str = ""
 
+    # Give the decline follow-up task a due date of the end of the current day,
+    # in the instance's own timezone. Off by default, which is how the task was
+    # created before this existed. Requested because a task with no due date
+    # sorts nowhere and gets lost in a large queue.
+    decline_task_due_end_of_day: bool = False
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -366,6 +373,7 @@ class CampaignConfig:
             "testing_mode_patients": self.testing_mode_patients,
             "testing_mode_recipients": self.testing_mode_recipients,
             "decline_task_team_id": self.decline_task_team_id,
+            "decline_task_due_end_of_day": self.decline_task_due_end_of_day,
         }
 
     @classmethod
