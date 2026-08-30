@@ -70,7 +70,7 @@ Work through these in order. Steps 1–3 are required before enabling any campai
 | --- | --- | --- |
 | `AppointmentEventHandler` | events | Confirmation / cancellation / no-show on appointment events |
 | `ReminderScheduler` | cron `*/5 * * * *` | Reminder + telehealth-join messages for upcoming booked appointments. Skips the appointment scan entirely on ticks where no configured interval can fire |
-| `NotificationAPI` | SimpleAPI | Admin config (role-gated), manual sends, notification history |
+| `NotificationAPI` | SimpleAPI | Admin config (role-gated), manual sends, notification history, integration health |
 | `TwilioInboundAPI` | SimpleAPI | Signature-gated inbound-SMS webhook (`POST /twilio/inbound`) — Y/N confirm/decline, STOP/START consent write-back |
 | `TimelineMessageFilter` | config | Hides "Message" notes from the patient timeline |
 | `NotifyAdminApp` | Application | "Appointment Reminders" — provider-menu admin: configure campaigns, per-line and per-visit-type overrides, and **Settings** (testing mode, task assignment). Refuses staff without an `ADMIN_ROLE_NAMES` role |
@@ -225,6 +225,22 @@ Two consequences worth knowing:
 - **`CANCEL` is an unsubscribe keyword, not an appointment word.** Twilio publishes it as a `STOP` synonym, so it clears consent and nothing more. It is deliberately *not* in the decline set: a patient texting it means "stop texting me", and opening a reschedule Task off the back of that would attribute an intent about the visit that they never expressed. To decline an appointment a patient replies `N`, `NO`, `2`, or `DECLINE`.
 
 The plugin never opts a patient in on its own — only in response to the patient's own opt-in keyword. Staff can still change consent by hand in the chart.
+
+## Integration status, and why credentials aren't enough
+
+The admin app's **Integration Status** panel asks Twilio where inbound messages actually go, rather than inferring health from the presence of an auth token. It reports three states:
+
+| | |
+| --- | --- |
+| ✅ **Configured** | Credentials set, and Twilio posts inbound messages to this plugin |
+| ⚠️ **Outbound only — patient replies are being dropped** | Credentials set, but nothing routes inbound here |
+| ❌ **Not configured** | Credentials missing |
+
+The middle state exists because it really happened: a number's "A message comes in" webhook was cleared, outbound reminders kept sending perfectly, and every `Y`, `N` and `STOP` was discarded for five days with no error, no log line, and no audit row — the request never reached the plugin at all. Credentials were valid the whole time, so the panel said *Configured*.
+
+The check is deliberately reluctant to raise an alarm. **Outbound only** appears only when neither the number's own `sms_url` nor any Messaging Service's `inbound_request_url` points here. Anything Twilio can't settle — an unreachable API, a 401, a number not in this account (hosted numbers and short codes don't appear), or a TwiML app governing the number, which makes Twilio ignore `sms_url` entirely — reports *Configured (inbound routing unverified)* instead. A false "replies are being dropped" would teach people to ignore the warning.
+
+Two limits worth knowing. Only the **global** `twilio-phone-number` is checked, not per-business-line from-numbers. And the result is cached for five minutes, because the SDK's HTTP client enforces a fixed 30-second timeout with no per-request override and the panel loads on every admin page view.
 
 ## Integration with Canvas core — read before enabling
 

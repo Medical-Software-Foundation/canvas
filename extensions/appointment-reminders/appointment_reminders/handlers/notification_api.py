@@ -31,6 +31,11 @@ from appointment_reminders.services.config import (
     templates_locked,
 )
 from appointment_reminders.services.theming import theme_style_block
+from appointment_reminders.services.twilio_routing import (
+    UNKNOWN,
+    describe,
+    inbound_webhook_status,
+)
 from appointment_reminders.services.delivery import is_testing_mode_active
 from appointment_reminders.services.history import get_patient_history as fetch_patient_history
 from appointment_reminders.services.history import (
@@ -850,6 +855,17 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     </div>
                     <div id="integration_fallback_note" style="margin-top:8px;padding:8px;background:var(--warning-bg);border-radius:8px;font-size:13px;display:none;">
                         Direct delivery not fully configured. Add Twilio/SendGrid secrets to enable SMS/email.
+                    </div>
+                    <div id="inbound_routing_note" style="margin-top:8px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
+                        <strong>Inbound replies are not reaching this plugin.</strong> Twilio is not
+                        posting incoming messages to
+                        <code>&hellip;/plugin-io/api/appointment_reminders/twilio/inbound</code>, so
+                        <strong>Y</strong>, <strong>N</strong> and <strong>STOP</strong> are being
+                        discarded with no record. Outbound sending is unaffected. Point the number's
+                        &ldquo;A message comes in&rdquo; webhook (or its Messaging Service's inbound
+                        request URL) at that address, and make sure
+                        <code>twilio-inbound-webhook-url</code> matches it exactly &mdash; the
+                        signature is computed over that string.
                     </div>
                     <div id="broadcast_warning" style="margin-top:8px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
                         <strong>Live sending.</strong> A campaign is enabled and <strong>testing mode</strong> is off, so saved changes reach every patient with a consented phone or email. Before the first live run, confirm Canvas's native <strong>appointmentReminders</strong> organization setting has been cleared — if it is still set, patients receive two reminders.
@@ -2423,8 +2439,19 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 var data = await response.json();
                 document.getElementById('integration_loading').style.display = 'none';
                 document.getElementById('integration_details').style.display = '';
-                document.getElementById('twilio_status_icon').textContent = data.twilio_configured ? '\\u2705' : '\\u274c';
-                document.getElementById('twilio_status_text').textContent = data.twilio_configured ? 'Configured' : 'Not configured';
+                // Three states, not two: credentials present but inbound not
+                // routed is neither "configured" nor "not configured", and
+                // calling it either would mislead.
+                var tw = data.twilio_status || {};
+                var twIcon = !data.twilio_configured ? '\\u274c' : (tw.ok ? '\\u2705' : '\\u26a0\\ufe0f');
+                document.getElementById('twilio_status_icon').textContent = twIcon;
+                document.getElementById('twilio_status_text').textContent =
+                    !data.twilio_configured ? 'Not configured' : (tw.label || 'Configured');
+                var inboundNote = document.getElementById('inbound_routing_note');
+                if (inboundNote) {
+                    inboundNote.style.display =
+                        data.twilio_inbound_routing === 'not_routed' ? '' : 'none';
+                }
                 document.getElementById('sendgrid_status_icon').textContent = data.sendgrid_configured ? '\\u2705' : '\\u274c';
                 document.getElementById('sendgrid_status_text').textContent = data.sendgrid_configured ? 'Configured' : 'Not configured';
                 if (!data.twilio_configured && !data.sendgrid_configured) {
@@ -2679,10 +2706,21 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         sendgrid_keys = ("sendgrid-api-key", "sendgrid-from-email")
         twilio_configured = all(self.secrets.get(k) for k in twilio_keys)
         sendgrid_configured = all(self.secrets.get(k) for k in sendgrid_keys)
+
+        # Credentials alone are not "configured". A number whose inbound webhook
+        # is cleared sends fine and discards every reply silently, so the panel
+        # must not report Twilio as healthy on the strength of an auth token.
+        # Only asked when the credentials exist, since there is nothing to ask
+        # with otherwise.
+        inbound_routing = (
+            inbound_webhook_status(self.secrets) if twilio_configured else UNKNOWN
+        )
         return [
             JSONResponse(
                 {
                     "twilio_configured": twilio_configured,
+                    "twilio_inbound_routing": inbound_routing,
+                    "twilio_status": describe(inbound_routing),
                     "sendgrid_configured": sendgrid_configured,
                     "templates_locked": templates_locked(self.secrets),
                     "testing_mode": is_testing_mode_active(load_config()),

@@ -1170,3 +1170,66 @@ def test_due_date_rule_controls_are_present_and_wired() -> None:
     assert "decline_task_due_time: document.getElementById('decline_task_due_time').value" in html
     assert "config.decline_task_due_days" in html
     assert "updateDueDateUI()" in html
+
+
+# ---- integration status: inbound routing ----
+
+def test_integration_status_reports_inbound_routing() -> None:
+    """Credentials alone must not read as "Configured"."""
+    api = _api(secrets={
+        "twilio-account-sid": "AC", "twilio-auth-token": "tok",
+        "twilio-phone-number": "+1", "sendgrid-api-key": "SG",
+        "sendgrid-from-email": "a@b.com",
+    })
+    with patch(
+        "appointment_reminders.handlers.notification_api.load_config",
+        return_value=CampaignConfig(),
+    ), patch(
+        "appointment_reminders.handlers.notification_api.inbound_webhook_status",
+        return_value="not_routed",
+    ):
+        body = json.loads(api.get_integration_status()[0].content)
+
+    assert body["twilio_configured"] is True     # credentials are fine
+    assert body["twilio_inbound_routing"] == "not_routed"
+    assert body["twilio_status"]["ok"] is False   # but the panel must not say OK
+    assert body["twilio_status"]["label"] != "Configured"
+
+
+def test_integration_status_says_configured_only_when_routed() -> None:
+    api = _api(secrets={
+        "twilio-account-sid": "AC", "twilio-auth-token": "tok",
+        "twilio-phone-number": "+1", "sendgrid-api-key": "SG",
+        "sendgrid-from-email": "a@b.com",
+    })
+    with patch(
+        "appointment_reminders.handlers.notification_api.load_config",
+        return_value=CampaignConfig(),
+    ), patch(
+        "appointment_reminders.handlers.notification_api.inbound_webhook_status",
+        return_value="routed",
+    ):
+        body = json.loads(api.get_integration_status()[0].content)
+    assert body["twilio_status"] == {"ok": True, "label": "Configured"}
+
+
+def test_integration_status_skips_the_twilio_call_without_credentials() -> None:
+    """Nothing to ask Twilio with, and no point slowing the page down to find out."""
+    api = _api(secrets={})
+    with patch(
+        "appointment_reminders.handlers.notification_api.load_config",
+        return_value=CampaignConfig(),
+    ), patch(
+        "appointment_reminders.handlers.notification_api.inbound_webhook_status",
+    ) as mock_check:
+        body = json.loads(api.get_integration_status()[0].content)
+    mock_check.assert_not_called()
+    assert body["twilio_configured"] is False
+
+
+def test_admin_page_carries_the_inbound_routing_banner() -> None:
+    html = _admin_html()
+    assert 'id="inbound_routing_note"' in html
+    assert "data.twilio_inbound_routing === 'not_routed'" in html
+    # The banner has to say outbound is unaffected, or it reads as total failure.
+    assert "Outbound sending is unaffected" in html
