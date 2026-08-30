@@ -125,7 +125,13 @@ Only five are needed to send anything: `twilio-account-sid`, `twilio-auth-token`
 
 When a patient declines by SMS, the plugin opens a follow-up Task. **Settings → Task assignment** chooses which team receives it, from the teams configured on the instance.
 
-**Give the task a due date** sets it to the end of the day the patient replied, in the instance's own timezone (`INSTALLATION_TIME_ZONE`). Off by default. End of day rather than the reply moment, so the task reads as due today without arriving already overdue; and the instance's timezone rather than UTC because `due` is a timestamp, and end-of-day computed in UTC renders as the *previous* date for any instance behind it. Without a due date the task sorts nowhere, which is how it gets lost in a large queue.
+**Give the task a due date** is off by default. Switch it on and you set the rule: an offset in **business days** from the day the patient replied (same day, +1, +2, +3, +5) and a **time of day** (default 23:59). Without a due date the task sorts nowhere, which is how it gets lost in a large queue.
+
+Three things the rule does deliberately:
+
+- **Business days, so weekends are skipped.** A Friday reply with +1 is due Monday, not Saturday. A reply that arrives *on* a weekend rolls forward before counting, so "same day" on a Saturday is due Monday rather than a day nobody is working. **Public holidays are not skipped** — Canvas exposes no holiday calendar a plugin can read, so a task can land on one.
+- **End of day by default, not the reply moment.** `due` is a timestamp; setting it to "now" would render the task as already overdue the instant it appears, which is a different signal from "handle this today."
+- **Anchored to the instance's timezone** (`INSTALLATION_TIME_ZONE`), not UTC. Because `due` is a timestamp and not a date, end-of-day computed in UTC renders as the *previous* date for any instance behind it — midnight UTC is the evening before in Eastern. Falls back to UTC with a warning if the environment supplies no zone, which keeps the date right for US instances and only shifts the hour.
 
 Leaving the team **Unassigned** is the default and matches what the plugin did before this was configurable: the Task is still created and still carries the `appointment-decline` label, but it lands in no team's queue, so someone has to go looking for it.
 

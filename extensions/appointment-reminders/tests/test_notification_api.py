@@ -1154,9 +1154,19 @@ def test_team_selection_reaches_the_save_payload() -> None:
     assert "/admin/teams" in html
 
 
-def test_due_date_toggle_is_present_and_wired() -> None:
+def test_due_date_rule_controls_are_present_and_wired() -> None:
     html = _admin_html()
-    assert 'id="decline_task_due_end_of_day"' in html
-    assert ("decline_task_due_end_of_day: document.getElementById("
-            "'decline_task_due_end_of_day').checked") in html
-    assert "!!config.decline_task_due_end_of_day" in html
+    for element_id in (
+        "decline_task_due_enabled",
+        "decline_task_due_days",
+        "decline_task_due_time",
+        "decline_task_due_fields",
+    ):
+        assert f'id="{element_id}"' in html, element_id
+    # Both halves of the rule must reach the payload, and the checkbox must be
+    # able to clear it back to null rather than only ever setting a value.
+    assert "decline_task_due_days: document.getElementById('decline_task_due_enabled').checked" in html
+    assert ": null," in html
+    assert "decline_task_due_time: document.getElementById('decline_task_due_time').value" in html
+    assert "config.decline_task_due_days" in html
+    assert "updateDueDateUI()" in html

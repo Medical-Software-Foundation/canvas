@@ -505,11 +505,53 @@ def test_decline_task_team_defaults_to_unassigned() -> None:
     assert CampaignConfig.from_dict({"reminders_enabled": True}).decline_task_team_id == ""
 
 
-def test_decline_task_due_toggle_round_trips_and_defaults_off() -> None:
-    """Off by default, so an existing install keeps creating undated tasks."""
-    assert CampaignConfig().decline_task_due_end_of_day is False
-    assert CampaignConfig.from_dict({}).decline_task_due_end_of_day is False
+def test_decline_task_due_defaults_to_no_due_date() -> None:
+    """Absent means undated, so an existing install is unchanged."""
+    assert CampaignConfig().decline_task_due_days is None
+    assert CampaignConfig.from_dict({}).decline_task_due_days is None
+    assert CampaignConfig().decline_task_due_time == "23:59"
+
+
+def test_decline_task_due_rule_round_trips() -> None:
     restored = CampaignConfig.from_dict(
-        CampaignConfig(decline_task_due_end_of_day=True).to_dict()
+        CampaignConfig(decline_task_due_days=2, decline_task_due_time="09:00").to_dict()
     )
-    assert restored.decline_task_due_end_of_day is True
+    assert restored.decline_task_due_days == 2
+    assert restored.decline_task_due_time == "09:00"
+
+
+def test_decline_task_due_migrates_the_0_12_0_boolean() -> None:
+    """That flag meant "end of the day the patient replied" — 0 days at 23:59."""
+    restored = CampaignConfig.from_dict({"decline_task_due_end_of_day": True})
+    assert restored.decline_task_due_days == 0
+    assert restored.decline_task_due_time == "23:59"
+
+    off = CampaignConfig.from_dict({"decline_task_due_end_of_day": False})
+    assert off.decline_task_due_days is None
+
+    # An explicit new-style value wins over the legacy flag.
+    both = CampaignConfig.from_dict(
+        {"decline_task_due_end_of_day": True, "decline_task_due_days": 3}
+    )
+    assert both.decline_task_due_days == 3
+
+
+def test_decline_task_due_days_coerces_and_fails_to_undated() -> None:
+    """A malformed offset must not silently start dating every task."""
+    for raw, expected in (
+        ("2", 2), (0, 0), ("0", 0), (-5, 0),
+        ("", None), (None, None), ("abc", None), ({}, None),
+    ):
+        got = CampaignConfig.from_dict({"decline_task_due_days": raw}).decline_task_due_days
+        assert got == expected, f"{raw!r} -> {got!r}, expected {expected!r}"
+
+
+def test_parse_hhmm_falls_back_rather_than_raising() -> None:
+    from appointment_reminders.services.config import parse_hhmm
+
+    assert parse_hhmm("09:30", (23, 59)) == (9, 30)
+    assert parse_hhmm("", (23, 59)) == (23, 59)
+    assert parse_hhmm("9", (23, 59)) == (23, 59)       # no colon
+    assert parse_hhmm("abc", (23, 59)) == (23, 59)
+    assert parse_hhmm("25:00", (23, 59)) == (23, 59)   # out of range
+    assert parse_hhmm("09:99", (23, 59)) == (23, 59)

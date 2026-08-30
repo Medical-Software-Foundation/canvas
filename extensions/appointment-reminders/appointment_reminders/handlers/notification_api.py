@@ -1217,13 +1217,25 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                         <select id="decline_task_team_id"><option value="">Unassigned</option></select>
                         <p id="task_routing_note" style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Loading teams...</p>
                     </div>
-                    <div class="form-group" style="max-width:420px;">
+                    <div class="form-group" style="max-width:520px;">
                         <label class="channel-toggle" style="font-weight:600;">
-                            <input type="checkbox" id="decline_task_due_end_of_day">
+                            <input type="checkbox" id="decline_task_due_enabled" onchange="updateDueDateUI()">
                             <span class="channel-check"></span>
                             Give the task a due date
                         </label>
-                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">Due at the end of the day the patient replied, in this instance's timezone. Without a due date the task sorts nowhere and is easy to lose in a large queue.</p>
+                        <div id="decline_task_due_fields" style="display:none;margin:8px 0 0 4px;align-items:center;gap:8px;">
+                            <span style="font-size:13px;">Due</span>
+                            <select id="decline_task_due_days" onchange="updateDueDateUI()" style="width:auto;">
+                                <option value="0">Same day</option>
+                                <option value="1">+1 business day</option>
+                                <option value="2">+2 business days</option>
+                                <option value="3">+3 business days</option>
+                                <option value="5">+5 business days</option>
+                            </select>
+                            <span style="font-size:13px;">at</span>
+                            <input type="time" id="decline_task_due_time" value="23:59" onchange="updateDueDateUI()" style="width:auto;">
+                        </div>
+                        <p id="decline_task_due_note" style="color:var(--text-soft);font-size:12px;margin:6px 0 0;">Without a due date the task sorts nowhere and is easy to lose in a large queue.</p>
                     </div>
                 </div>
             </div>
@@ -1657,8 +1669,14 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             document.getElementById('testing_mode_recipients').value =
                 (config.testing_mode_recipients || []).join('\\n');
             savedDeclineTaskTeamId = config.decline_task_team_id || '';
-            document.getElementById('decline_task_due_end_of_day').checked =
-                !!config.decline_task_due_end_of_day;
+            var dueDays = config.decline_task_due_days;
+            document.getElementById('decline_task_due_enabled').checked =
+                dueDays !== null && dueDays !== undefined;
+            document.getElementById('decline_task_due_days').value =
+                String(dueDays === null || dueDays === undefined ? 0 : dueDays);
+            document.getElementById('decline_task_due_time').value =
+                config.decline_task_due_time || '23:59';
+            updateDueDateUI();
             loadTeams();
             updateTestingModeUI();
         }
@@ -1704,6 +1722,25 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 .split(/[\\n,]/)
                 .map(function(s) { return s.trim(); })
                 .filter(function(s) { return s.length > 0; });
+        }
+
+        function updateDueDateUI() {
+            var on = document.getElementById('decline_task_due_enabled').checked;
+            document.getElementById('decline_task_due_fields').style.display =
+                on ? 'flex' : 'none';
+            var note = document.getElementById('decline_task_due_note');
+            if (!on) {
+                note.textContent = 'Without a due date the task sorts nowhere and is easy to lose in a large queue.';
+                return;
+            }
+            var days = document.getElementById('decline_task_due_days');
+            var time = document.getElementById('decline_task_due_time').value || '23:59';
+            // Spell the rule out. "+1 business day at 09:00" is easy to read as
+            // "tomorrow", which is wrong when the patient replies on a Friday.
+            note.textContent = 'Due at ' + time + ' in this instance\\'s timezone, ' +
+                days.options[days.selectedIndex].text.toLowerCase() +
+                ' after the patient replies. Weekends are skipped, so a Friday reply' +
+                ' rolls to Monday. Public holidays are not skipped.';
         }
 
         function updateTestingModeUI() {
@@ -2456,7 +2493,10 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 note_type_reminders: gatherNoteTypeReminders(),
                 default_attribution: document.getElementById('default_attribution_input').value.trim(),
                 decline_task_team_id: document.getElementById('decline_task_team_id').value,
-                decline_task_due_end_of_day: document.getElementById('decline_task_due_end_of_day').checked,
+                decline_task_due_days: document.getElementById('decline_task_due_enabled').checked
+                    ? parseInt(document.getElementById('decline_task_due_days').value, 10)
+                    : null,
+                decline_task_due_time: document.getElementById('decline_task_due_time').value || '23:59',
                 testing_mode: document.getElementById('testing_mode').checked,
                 testing_mode_patients: splitLines('testing_mode_patients'),
                 testing_mode_recipients: splitLines('testing_mode_recipients'),
