@@ -856,16 +856,12 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     <div id="integration_fallback_note" style="margin-top:8px;padding:8px;background:var(--warning-bg);border-radius:8px;font-size:13px;display:none;">
                         Direct delivery not fully configured. Add Twilio/SendGrid secrets to enable SMS/email.
                     </div>
-                    <div id="inbound_routing_note" style="margin-top:8px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
-                        <strong>Inbound replies are not reaching this plugin.</strong> Twilio is not
-                        posting incoming messages to
-                        <code>&hellip;/plugin-io/api/appointment_reminders/twilio/inbound</code>, so
-                        <strong>Y</strong>, <strong>N</strong> and <strong>STOP</strong> are being
-                        discarded with no record. Outbound sending is unaffected. Point the number's
-                        &ldquo;A message comes in&rdquo; webhook (or its Messaging Service's inbound
-                        request URL) at that address, and make sure
-                        <code>twilio-inbound-webhook-url</code> matches it exactly &mdash; the
-                        signature is computed over that string.
+                    <div id="inbound_routing_note" style="margin-top:8px;padding:10px 12px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;line-height:1.55;">
+                        <div style="font-weight:600;margin-bottom:4px;">Patient replies aren't reaching Canvas.</div>
+                        <div>Appointment messages are still going out normally &mdash; this only affects
+                        replies coming back. Right now, when a patient texts to confirm, to cancel, or
+                        to stop receiving messages, nothing happens and no record is kept.</div>
+                        <div id="inbound_routing_fix" style="margin-top:8px;"></div>
                     </div>
                     <div id="broadcast_warning" style="margin-top:8px;padding:8px;background:var(--warning-bg);color:var(--warning-fg);border-radius:8px;font-size:13px;display:none;">
                         <strong>Live sending.</strong> A campaign is enabled and <strong>testing mode</strong> is off, so saved changes reach every patient with a consented phone or email. Before the first live run, confirm Canvas's native <strong>appointmentReminders</strong> organization setting has been cleared — if it is still set, patients receive two reminders.
@@ -2449,8 +2445,33 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     !data.twilio_configured ? 'Not configured' : (tw.label || 'Configured');
                 var inboundNote = document.getElementById('inbound_routing_note');
                 if (inboundNote) {
-                    inboundNote.style.display =
-                        data.twilio_inbound_routing === 'not_routed' ? '' : 'none';
+                    var broken = data.twilio_inbound_routing === 'not_routed';
+                    inboundNote.style.display = broken ? '' : 'none';
+                    if (broken) {
+                        // Show the exact address to paste rather than describing
+                        // it. The setting is non-sensitive precisely so it can be
+                        // read back, and "matches exactly" is the whole problem.
+                        var url = data.twilio_inbound_webhook_url || '';
+                        var fix = document.getElementById('inbound_routing_fix');
+                        if (url) {
+                            fix.innerHTML =
+                                '<div><strong>To fix this in Twilio:</strong> open the phone number you' +
+                                ' send from and set &ldquo;A message comes in&rdquo; to the address below.' +
+                                ' If that number belongs to a Messaging Service, set the service&rsquo;s' +
+                                ' inbound request URL instead.</div>' +
+                                '<div style="margin:6px 0;padding:6px 8px;background:var(--surface-card);' +
+                                'border-radius:6px;word-break:break-all;"><code>' + escapeHtml(url) +
+                                '</code></div>' +
+                                '<div>It has to match this address exactly, character for character.' +
+                                ' Even a small difference means replies are turned away.</div>';
+                        } else {
+                            fix.innerHTML =
+                                '<div><strong>To fix this:</strong> no inbound address has been set for' +
+                                ' this plugin yet. Ask whoever manages the plugin configuration to set' +
+                                ' <code>twilio-inbound-webhook-url</code>, then point the Twilio number&rsquo;s' +
+                                ' &ldquo;A message comes in&rdquo; setting at the same address.</div>';
+                        }
+                    }
                 }
                 document.getElementById('sendgrid_status_icon').textContent = data.sendgrid_configured ? '\\u2705' : '\\u274c';
                 document.getElementById('sendgrid_status_text').textContent = data.sendgrid_configured ? 'Configured' : 'Not configured';
@@ -2721,6 +2742,11 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     "twilio_configured": twilio_configured,
                     "twilio_inbound_routing": inbound_routing,
                     "twilio_status": describe(inbound_routing),
+                    # Non-sensitive by declaration, so the panel can show the
+                    # operator the exact string Twilio has to match.
+                    "twilio_inbound_webhook_url": (
+                        self.secrets.get("twilio-inbound-webhook-url") or ""
+                    ).strip(),
                     "sendgrid_configured": sendgrid_configured,
                     "templates_locked": templates_locked(self.secrets),
                     "testing_mode": is_testing_mode_active(load_config()),
