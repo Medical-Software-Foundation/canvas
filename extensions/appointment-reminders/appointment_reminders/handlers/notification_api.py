@@ -490,6 +490,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             font-weight: 600;
             white-space: nowrap;
         }
+        .status-accepted,
         .status-delivered {
             background: var(--success-bg);
             color: var(--success-fg);
@@ -3515,6 +3516,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             align-items: center;
             gap: 4px;
         }
+        .status-accepted,
         .status-delivered { background: rgba(90,143,107,0.09); color: var(--success-fg); }
         .status-failed { background: var(--danger-bg); color: var(--danger-fg); }
         .status-skipped { background: var(--warning-bg); color: var(--warning-fg); }
@@ -3963,10 +3965,13 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
 
                 // Channel badges color-coded by individual delivery status
                 const badges = g.channels.map(c => {
+                    // "accepted" is the current value; "delivered" is what
+                    // older rows say. Neither ever meant carrier-confirmed.
+                    const ok = c.status === 'accepted' || c.status === 'delivered';
                     let colorCls = 'channel-' + c.channel;
-                    if (c.status === 'delivered') colorCls = 'channel-delivered';
+                    if (ok) colorCls = 'channel-delivered';
                     else if (c.status === 'failed' && !c.error?.startsWith('skipped:')) colorCls = 'channel-failed';
-                    else if (c.status !== 'delivered') colorCls = 'channel-skipped';
+                    else colorCls = 'channel-skipped';
                     return '<span class="channel-badge ' + colorCls + '">' + c.channel.toUpperCase() + '</span>';
                 }).join(' ');
 
@@ -3983,15 +3988,23 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     const chLabel = c.channel === 'sms' ? 'SMS' : 'Email';
                     const recipient = c.recipient || '';
                     const content = c.content || '';
-                    const stClass = 'status-badge status-' + c.status;
+                    // Legacy rows are stored as "delivered"; style both the same.
+                    const stKey = c.status === 'delivered' ? 'accepted' : c.status;
+                    const stClass = 'status-badge status-' + stKey;
+                    // The server supplies the label so wording lives in one place.
+                    const stText = c.status_label || c.status;
 
                     html += '<div class="detail-channel">';
                     html += '<div class="detail-channel-header">';
                     html += '<span class="channel-badge channel-' + c.channel + '">' + chLabel + '</span>';
-                    html += '<span class="' + stClass + '">' + c.status + '</span>';
+                    html += '<span class="' + stClass + '" title="Accepted by the carrier. Canvas is not told whether it was finally delivered.">' + escapeHtml(stText) + '</span>';
                     if (recipient) html += '<span class="detail-recipient">' + escapeHtml(recipient) + '</span>';
                     html += '</div>';
                     if (content) html += '<div class="detail-content">' + escapeHtml(content) + '</div>';
+                    if (c.message_id) {
+                        html += '<div style="font-size:11px;color:var(--text-soft);margin-top:4px">' +
+                            'Carrier reference: <code>' + escapeHtml(c.message_id) + '</code></div>';
+                    }
                     if (c.error && !c.error.startsWith('skipped:')) {
                         var errText = c.error;
                         // Truncate long raw HTTP errors to just the friendly part

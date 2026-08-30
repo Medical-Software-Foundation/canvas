@@ -290,7 +290,8 @@ def _build_metadata_effects(
     for result in results:
         key = f"notify:{campaign_type}:{result.channel}"
         if result.success:
-            status = "delivered"
+            # Accepted by the provider; see log_delivery for why not "delivered".
+            status = "accepted"
         elif result.error and result.error.startswith("skipped:"):
             status = "skipped"
         else:

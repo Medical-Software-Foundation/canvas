@@ -71,7 +71,8 @@ def test_log_delivery_creates_one_row_per_result() -> None:
     sms_call = mock_delivery.objects.create.call_args_list[0]
     email_call = mock_delivery.objects.create.call_args_list[1]
     assert sms_call.kwargs["content"] == "sms body"
-    assert sms_call.kwargs["status"] == "delivered"
+    # "accepted", not "delivered" — a success only means the provider took it.
+    assert sms_call.kwargs["status"] == "accepted"
     assert email_call.kwargs["content"] == "<p>email body</p>"
     assert email_call.kwargs["status"] == "failed"
     assert email_call.kwargs["error"] == "boom"
@@ -284,3 +285,92 @@ def test_every_index_is_explicitly_named_and_unique_when_truncated() -> None:
     assert len(truncated) == len(names), (
         f"names collide once truncated to 63 bytes: {sorted(names)}"
     )
+
+
+# ---- provider message id and honest status wording ----
+
+def test_log_delivery_stores_the_provider_message_id() -> None:
+    """Twilio's MessageSid was captured then thrown away, so "did that actually
+    send?" meant hunting the Twilio console by timestamp."""
+    patient = MagicMock()
+    result = _result()
+    result.message_id = "SM0123456789abcdef"
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_patient_cls.objects.get.return_value = patient
+        log_delivery("appt-1", "patient-1", "reminder", [result])
+    assert mock_delivery.objects.create.call_args.kwargs["message_id"] == "SM0123456789abcdef"
+
+
+def test_log_delivery_tolerates_a_missing_message_id() -> None:
+    patient = MagicMock()
+    result = _result()
+    result.message_id = None
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_patient_cls.objects.get.return_value = patient
+        log_delivery("appt-1", "patient-1", "reminder", [result])
+    assert mock_delivery.objects.create.call_args.kwargs["message_id"] == ""
+
+
+def test_log_delivery_never_claims_delivered() -> None:
+    """The plugin consumes no status callbacks, so it cannot know."""
+    patient = MagicMock()
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_patient_cls.objects.get.return_value = patient
+        log_delivery("a", "p", "reminder", [_result(success=True)])
+    assert mock_delivery.objects.create.call_args.kwargs["status"] != "delivered"
+
+
+def test_history_rows_expose_the_message_id_and_a_label() -> None:
+    row = MagicMock()
+    row.created_at = datetime(2026, 8, 30, 3, 50, tzinfo=timezone.utc)
+    row.appointment_id = "appt-1"
+    row.campaign_type = "confirmation"
+    row.channel = "sms"
+    row.status = "accepted"
+    row.error = ""
+    row.content = "hi"
+    row.recipient = "+1720"
+    row.message_id = "SM123"
+
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_delivery.objects.filter.return_value.order_by.return_value = [row]
+        out = get_patient_history("pat-1")[0]
+    assert out["message_id"] == "SM123"
+    assert out["status_label"] == "Sent"
+
+
+def test_history_coalesces_a_null_message_id_on_older_rows() -> None:
+    """Django defaults are applied by the ORM, not Postgres, so rows written
+    before the column existed read back NULL."""
+    row = MagicMock()
+    row.created_at = None
+    row.appointment_id = ""
+    row.campaign_type = "reminder"
+    row.channel = "sms"
+    row.status = "delivered"      # legacy value
+    row.error = ""
+    row.content = ""
+    row.recipient = ""
+    row.message_id = None
+
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_delivery.objects.filter.return_value.order_by.return_value = [row]
+        out = get_patient_history("pat-1")[0]
+    assert out["message_id"] == ""
+    # Legacy "delivered" never meant more than accepted either, so it reads the same.
+    assert out["status_label"] == "Sent"
+
+
+def test_status_labels_cover_the_inbound_statuses() -> None:
+    from appointment_reminders.services.history import _status_label
+
+    assert _status_label("failed") == "Failed"
+    assert _status_label("unresolved_sender") == "Unmatched number"
+    # Composite inbound statuses are split and labelled on both halves.
+    assert _status_label("opted_out+declined") == "Opted out + Declined"
+    # Anything unrecognised falls through rather than rendering blank.
+    assert _status_label("something_new") == "something_new"
+    assert _status_label("") == ""

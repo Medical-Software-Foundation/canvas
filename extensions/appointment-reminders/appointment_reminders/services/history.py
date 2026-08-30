@@ -40,10 +40,16 @@ def log_delivery(
             appointment_id=appointment_id or "",
             campaign_type=campaign_type,
             channel=result.channel,
-            status="delivered" if result.success else "failed",
+            # "accepted", not "delivered": a successful result means Twilio or
+            # SendGrid took the request, nothing more. No status callback is
+            # consumed, so the plugin never learns whether the carrier delivered
+            # it. Saying "delivered" asserted something we cannot know, and it
+            # misreported a message that Twilio accepted and then dropped.
+            status="accepted" if result.success else "failed",
             error=result.error or "",
             content=sms_content if result.channel == "sms" else email_content,
             recipient=getattr(result, "recipient", "") or "",
+            message_id=getattr(result, "message_id", "") or "",
         )
 
 
@@ -136,7 +142,32 @@ def _row_to_dict(patient_id: str, row: NotificationDelivery) -> dict:
         "error": row.error,
         "content": row.content,
         "recipient": row.recipient,
+        "message_id": row.message_id or "",
+        "status_label": _status_label(row.status),
     }
+
+
+# Legacy rows say "delivered", which never meant more than "accepted" either.
+# Both render the same way so history reads consistently and neither overclaims.
+_STATUS_LABELS = {
+    "accepted": "Sent",
+    "delivered": "Sent",
+    "failed": "Failed",
+    "declined": "Declined",
+    "confirmed": "Confirmed",
+    "opted_out": "Opted out",
+    "opted_in": "Opted back in",
+    "unresolved_sender": "Unmatched number",
+}
+
+
+def _status_label(status: str) -> str:
+    """A human label for a stored status, falling back to the raw value."""
+    if status in _STATUS_LABELS:
+        return _STATUS_LABELS[status]
+    # Composite inbound statuses like "opted_out+declined".
+    parts = [_STATUS_LABELS.get(p, p) for p in (status or "").split("+") if p]
+    return " + ".join(parts) if parts else (status or "")
 
 
 def _iso(value: datetime | None) -> str:
