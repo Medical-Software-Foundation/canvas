@@ -1230,6 +1230,40 @@ def test_integration_status_skips_the_twilio_call_without_credentials() -> None:
 def test_admin_page_carries_the_inbound_routing_banner() -> None:
     html = _admin_html()
     assert 'id="inbound_routing_note"' in html
+    assert 'id="inbound_routing_fix"' in html
     assert "data.twilio_inbound_routing === 'not_routed'" in html
-    # The banner has to say outbound is unaffected, or it reads as total failure.
-    assert "Outbound sending is unaffected" in html
+    # Must say outbound still works, or it reads as total failure.
+    assert "still going out normally" in html
+    # Written for an administrator, not a developer: no HMAC/signature jargon,
+    # no raw endpoint path in the prose.
+    for jargon in ("signature", "HMAC", "plugin-io/api", "webhook url"):
+        assert jargon not in html[html.index('id="inbound_routing_note"'):][:1200], jargon
+
+
+def test_routing_banner_shows_the_exact_url_to_paste() -> None:
+    """"Matches exactly" is the failure mode, so show the string, don't describe it."""
+    html = _admin_html()
+    assert "data.twilio_inbound_webhook_url" in html
+    assert "character for character" in html
+    assert "escapeHtml(url)" in html          # it is rendered into innerHTML
+    # And a distinct message when no address has been configured at all.
+    assert "no inbound address has been set" in html
+
+
+def test_integration_status_exposes_the_inbound_url() -> None:
+    """Declared non-sensitive precisely so the panel can read it back."""
+    api = _api(secrets={
+        "twilio-account-sid": "AC", "twilio-auth-token": "tok",
+        "twilio-phone-number": "+1", "sendgrid-api-key": "SG",
+        "sendgrid-from-email": "a@b.com",
+        "twilio-inbound-webhook-url": "  https://x.example.com/hook  ",
+    })
+    with patch(
+        "appointment_reminders.handlers.notification_api.load_config",
+        return_value=CampaignConfig(),
+    ), patch(
+        "appointment_reminders.handlers.notification_api.inbound_webhook_status",
+        return_value="not_routed",
+    ):
+        body = json.loads(api.get_integration_status()[0].content)
+    assert body["twilio_inbound_webhook_url"] == "https://x.example.com/hook"
