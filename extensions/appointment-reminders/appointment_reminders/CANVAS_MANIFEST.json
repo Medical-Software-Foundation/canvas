@@ -1,6 +1,6 @@
 {
   "sdk_version": "0.95.0",
-  "plugin_version": "0.15.0",
+  "plugin_version": "0.15.1",
   "name": "appointment_reminders",
   "description": "Appointment reminders and confirmations (SMS + email) with per-business-line customization, optional locked message copy, and two-way Y/N confirmation.",
   "components": {

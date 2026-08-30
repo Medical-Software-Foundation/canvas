@@ -3947,7 +3947,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             entries.forEach(e => {
                 const key = e.timestamp + '|' + e.campaign_type;
                 if (!groupMap[key]) {
-                    groupMap[key] = { timestamp: e.timestamp, campaign_type: e.campaign_type, channels: [] };
+                    groupMap[key] = { timestamp: e.timestamp, campaign_type: e.campaign_type, campaign_label: e.campaign_label, channels: [] };
                     groups.push(groupMap[key]);
                 }
                 groupMap[key].channels.push(e);
@@ -3961,7 +3961,11 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             groups.forEach((g, gi) => {
                 const date = new Date(g.timestamp).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
                 const campaign = g.campaign_type || '';
-                const campaignLabel = campaign.charAt(0).toUpperCase() + campaign.slice(1);
+                // Server-supplied, so the wording matches the admin app's
+                // campaign cards. Capitalizing the raw key gave
+                // "Inbound_response".
+                const campaignLabel = g.campaign_label
+                    || campaign.charAt(0).toUpperCase() + campaign.slice(1);
 
                 // Channel badges color-coded by individual delivery status
                 const badges = g.channels.map(c => {
