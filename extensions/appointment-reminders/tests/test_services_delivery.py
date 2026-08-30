@@ -335,7 +335,10 @@ def test_build_metadata_effects_records_status_per_channel() -> None:
     # Inspect the values passed to upsert
     upserts = [c.kwargs.get("value", c.args[0] if c.args else "")
                for c in mock_meta.return_value.upsert.call_args_list]
-    assert any(v.startswith("delivered|") for v in upserts)
+    # "accepted|", not "delivered|" — the metadata records that the provider
+    # took the request, which is all the plugin can observe.
+    assert any(v.startswith("accepted|") for v in upserts)
+    assert not any(v.startswith("delivered|") for v in upserts)
     assert any(v.startswith("failed|") for v in upserts)
     assert any(v.startswith("skipped|") for v in upserts)
 

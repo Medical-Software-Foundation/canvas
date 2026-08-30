@@ -41,6 +41,14 @@ class NotificationDelivery(CustomModel):
     error = TextField(default="")
     content = TextField(default="")
     recipient = TextField(default="")
+    # The provider's own id for this message — Twilio's MessageSid, SendGrid's
+    # x-message-id. Captured at send time and previously discarded, which meant
+    # answering "did that SMS actually arrive?" required hunting Twilio's console
+    # by timestamp. Blank when the send never reached the provider.
+    #
+    # Defaults are applied by Django, not Postgres, so rows written before this
+    # column existed read back as NULL — coalesce on read.
+    message_id = TextField(default="")
     created_at = DateTimeField(auto_now_add=True)
 
     class Meta:

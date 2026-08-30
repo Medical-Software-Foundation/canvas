@@ -1267,3 +1267,32 @@ def test_integration_status_exposes_the_inbound_url() -> None:
     ):
         body = json.loads(api.get_integration_status()[0].content)
     assert body["twilio_inbound_webhook_url"] == "https://x.example.com/hook"
+
+
+def _patient_view_html() -> str:
+    content = _api().get_patient_view_page()[0].content
+    return content.decode() if isinstance(content, bytes) else content
+
+
+def test_history_detail_shows_the_carrier_reference_and_honest_label() -> None:
+    """The provider's message id makes "did it actually send?" a direct lookup.
+
+    Note this lives in the patient-view page, not the admin page — they are
+    separate HTML strings with separate stylesheets.
+    """
+    html = _patient_view_html()
+    assert "c.message_id" in html
+    assert "Carrier reference" in html
+    # Wording comes from the server so it lives in one place.
+    assert "c.status_label" in html
+    # And the badge must not assert delivery it cannot know about.
+    assert "Canvas is not told whether it was finally delivered" in html
+
+
+def test_history_badges_treat_accepted_and_legacy_delivered_alike() -> None:
+    """Rows written before the rename say "delivered"; neither meant confirmed."""
+    html = _patient_view_html()
+    assert "c.status === 'accepted' || c.status === 'delivered'" in html
+    # The badge class must be styled in *this* page's stylesheet, not just the
+    # admin page's — an undefined class renders as nothing at all.
+    assert ".status-accepted," in html
