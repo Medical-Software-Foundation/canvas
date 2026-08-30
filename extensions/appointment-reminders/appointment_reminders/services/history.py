@@ -144,6 +144,7 @@ def _row_to_dict(patient_id: str, row: NotificationDelivery) -> dict:
         "recipient": row.recipient,
         "message_id": row.message_id or "",
         "status_label": _status_label(row.status),
+        "campaign_label": _campaign_label(row.campaign_type),
     }
 
 
@@ -159,6 +160,28 @@ _STATUS_LABELS = {
     "opted_in": "Opted back in",
     "unresolved_sender": "Unmatched number",
 }
+
+
+# Raw keys render badly when merely capitalized — "inbound_response" became
+# "Inbound_response" in the patient panel. Names match the admin app's campaign
+# cards so an operator sees the same wording in both places.
+_CAMPAIGN_LABELS = {
+    "confirmation": "Booking acknowledgement",
+    "reminder": "Reminder",
+    "telehealth": "Telehealth join",
+    "noshow": "No-show",
+    "cancellation": "Cancellation",
+    "inbound_response": "Patient reply",
+    "message_notification": "Message",
+}
+
+
+def _campaign_label(campaign_type: str) -> str:
+    """A human label for a campaign type, falling back to a tidied raw value."""
+    if campaign_type in _CAMPAIGN_LABELS:
+        return _CAMPAIGN_LABELS[campaign_type]
+    tidied = (campaign_type or "").replace("_", " ").strip()
+    return tidied[:1].upper() + tidied[1:] if tidied else ""
 
 
 def _status_label(status: str) -> str:

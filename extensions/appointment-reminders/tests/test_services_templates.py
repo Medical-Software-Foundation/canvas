@@ -88,3 +88,23 @@ def test_tz_abbrev_passes_through_unknown_zones() -> None:
     abbrev = _tz_abbrev(dt)
     assert abbrev in {"BST", "GMT"}
 
+
+
+def test_phone_numbers_render_formatted_for_patients() -> None:
+    """Contact points store bare digits, so "Call 8005550199" reached patients."""
+    from appointment_reminders.services.templates import _format_phone
+
+    assert _format_phone("8005550199") == "(800) 555-0199"
+    assert _format_phone("18005550199") == "(800) 555-0199"
+    assert _format_phone("+18005550199") == "(800) 555-0199"
+    assert _format_phone("(800) 555-0199") == "(800) 555-0199"
+    assert _format_phone("800-555-0199") == "(800) 555-0199"
+
+
+def test_phone_formatting_leaves_anything_unrecognised_alone() -> None:
+    """Better an unformatted number than a mangled international one."""
+    from appointment_reminders.services.templates import _format_phone
+
+    assert _format_phone("+442071234567") == "+442071234567"
+    assert _format_phone("") == ""
+    assert _format_phone("ext 402") == "ext 402"

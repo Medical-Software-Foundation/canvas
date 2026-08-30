@@ -374,3 +374,34 @@ def test_status_labels_cover_the_inbound_statuses() -> None:
     # Anything unrecognised falls through rather than rendering blank.
     assert _status_label("something_new") == "something_new"
     assert _status_label("") == ""
+
+
+def test_campaign_labels_are_readable() -> None:
+    """Capitalizing the raw key produced "Inbound_response" in the panel."""
+    from appointment_reminders.services.history import _campaign_label
+
+    assert _campaign_label("inbound_response") == "Patient reply"
+    assert _campaign_label("confirmation") == "Booking acknowledgement"
+    assert _campaign_label("telehealth") == "Telehealth join"
+    # Unknown types are tidied rather than shown with underscores.
+    assert _campaign_label("some_new_thing") == "Some new thing"
+    assert _campaign_label("") == ""
+
+
+def test_history_rows_carry_a_campaign_label() -> None:
+    row = MagicMock()
+    row.created_at = datetime(2026, 8, 30, 3, 54, tzinfo=timezone.utc)
+    row.appointment_id = ""
+    row.campaign_type = "inbound_response"
+    row.channel = "sms"
+    row.status = "declined"
+    row.error = ""
+    row.content = "N"
+    row.recipient = "+15555550101"
+    row.message_id = ""
+
+    with patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_delivery.objects.filter.return_value.order_by.return_value = [row]
+        out = get_patient_history("pat-1")[0]
+    assert out["campaign_label"] == "Patient reply"
+    assert out["status_label"] == "Declined"

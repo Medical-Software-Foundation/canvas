@@ -137,7 +137,7 @@ def test_get_template_variables_full_appointment(monkeypatch) -> None:
     assert "100 A St" in result["location_address"]
     assert "Suite 5" in result["location_address"]
     assert "Austin, TX 78701" in result["location_address"]
-    assert result["location_phone"] == "+15555550000"
+    assert result["location_phone"] == "(555) 555-0000"  # formatted for the patient
     assert result["telehealth_link"] == "https://meet.example.com/abc"
     assert result["appointment_type"] == "Follow-up"
     assert result["organization_full_name"] == "TestOrg"
@@ -304,7 +304,7 @@ def test_get_org_variables_recomputes_when_cache_miss() -> None:
     assert result["organization_full_name"] == "Real Org"
     assert result["organization_short_name"] == "RO"
     assert "500 Main" in result["organization_address"]
-    assert result["organization_phone"] == "+15555551111"
+    assert result["organization_phone"] == "(555) 555-1111"  # formatted for the patient
     mock_cache.return_value.set.assert_called_once()
 
 

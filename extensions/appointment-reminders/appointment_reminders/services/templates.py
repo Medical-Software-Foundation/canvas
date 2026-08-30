@@ -18,6 +18,21 @@ _ORG_VARS_CACHE_KEY = "appointment_reminders:org_vars"
 _ORG_VARS_CACHE_TTL = 300  # 5 minutes — matches cron interval
 
 
+def _format_phone(raw: str) -> str:
+    """Render a stored phone number for a patient to read.
+
+    Contact points hold bare digits, so an unformatted value reaches the patient
+    as "Call 8005550199". Formats North American numbers and returns anything
+    else unchanged rather than mangling an international number.
+    """
+    digits = "".join(c for c in (raw or "") if c.isdigit())
+    if len(digits) == 11 and digits[0] == "1":
+        digits = digits[1:]
+    if len(digits) != 10:
+        return raw or ""
+    return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+
+
 def _business_line_vars(patient: Patient, config: Any = None) -> dict[str, str]:
     """Business-line placeholders, shared across all campaign variable sets.
 
@@ -254,7 +269,7 @@ def _build_variables(
         "location_full_name": loc_full_name,
         "location_short_name": loc_short_name,
         "location_address": loc_address,
-        "location_phone": loc_phone,
+        "location_phone": _format_phone(loc_phone),
     }
     variables.update(_get_org_variables())
     variables.update(_business_line_vars(patient, config))
@@ -306,7 +321,7 @@ def _get_org_variables() -> dict[str, str]:
         "organization_full_name": org_full_name,
         "organization_short_name": org_short_name,
         "organization_address": org_address,
-        "organization_phone": org_phone,
+        "organization_phone": _format_phone(org_phone),
     }
     try:
         cache.set(_ORG_VARS_CACHE_KEY, json.dumps(result), timeout_seconds=_ORG_VARS_CACHE_TTL)
