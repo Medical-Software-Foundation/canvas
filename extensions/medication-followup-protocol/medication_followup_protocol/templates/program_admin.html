@@ -1,0 +1,2621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+  <link rel="stylesheet" href="{{ base }}/canvas-plugin-ui.css">
+  <script src="{{ base }}/canvas-plugin-ui.js"></script>
+  <style>
+    /* --- The base font, which the design system does not set
+       canvas-plugin-ui.css puts the font family on h1 to h5 and on p, and on every
+       component through its own shadow root. It never sets one on body, so a div, a span
+       or a label falls back to the browser default, which is a serif. Every component on
+       the page looked right and every word around them looked like a different product. */
+    html, body {
+      margin: 0;
+      font-family: var(--font-family);
+      font-size: 14px;
+      color: var(--color-text, rgba(0, 0, 0, 0.87));
+      background: var(--palette-white, #fff);
+    }
+    .page { padding: var(--space-medium); max-width: 1200px; margin: 0 auto; }
+    .muted { color: var(--color-text-muted, #767676); font-size: .92857143em; }
+    .stack { display: flex; flex-direction: column; gap: var(--space-medium); }
+    .heading { display: flex; align-items: center; gap: var(--space-small); }
+    .grow { flex: 1; }
+    .actions { display: flex; gap: var(--space-small); align-items: center; }
+    /* The editor's own layout. One column, because a step is read top to bottom, when it
+       happens, what it is, what it says, and what holds it back. */
+    .fields { display: flex; flex-direction: column; gap: var(--space-medium); }
+    /* The gap between a control and the line under it. One class so every hint on the
+       page sits the same distance from what it describes. */
+    .hint { margin-top: var(--space-small); }
+    /* The count sits a step below the sentence about the recheck, far enough that it reads
+       as its own fact rather than as the end of that sentence. */
+    .enrolled-line { margin-top: var(--space-small); }
+    a { color: var(--color-link, #4183c4); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    /* --- A control that reads as a link
+       It opens a modal rather than going anywhere, so it is a button. An anchor with no
+       address is a link that lies to a screen reader and to a middle click. Styled back down
+       to the link it looks like, since that is what the line beside it reads as. */
+    .link-button {
+      background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+      color: var(--color-link, #4183c4); text-decoration: none;
+    }
+    .link-button:hover { text-decoration: underline; }
+    .link-button:focus-visible { outline: 2px solid var(--color-link, #4183c4); outline-offset: 2px; }
+    /* The second line of a cell, an identifier under a name or a count under a day. Quiet
+       enough that a column scans on its first line alone. */
+    .sub { display: block; color: var(--color-text-muted, #767676); font-size: .92857143em; }
+    .row-actions {
+      display: flex; gap: var(--space-small); align-items: center;
+      flex-wrap: nowrap; white-space: nowrap;
+    }
+    .nw { white-space: nowrap; }
+    /* The table is wider than the modal once nothing wraps, so it scrolls sideways rather
+       than squeezing a date or a progress line into two. The min-width is what makes the
+       overflow happen at all, since the table otherwise shrinks to its container and the
+       scroll never engages. The host keeps its own display, which is what keeps the head
+       and the body columns aligned.
+
+       Twelve hundred rather than max-content, because the seven columns below are sized to
+       add up to exactly that, and a table that renders no narrower than its own content
+       plan is what keeps the columns from ever fighting the space they were given.
+
+       Fixed layout is what makes the seven column widths below hold rather than read as a
+       suggestion. Automatic layout redistributes a table's columns by the content of every
+       row, so the same seven numbers were never actually reaching the screen. Fixed layout
+       takes its column widths from the first row alone, which here is the header, and the
+       header already carries every one of these classes for exactly this reason. */
+    .table-scroll { overflow-x: auto; }
+    /* A direct child selector rather than a descendant one. The panel a row opens now sits
+       inside this wrapper as a plain sibling div rather than as a cell, and its own
+       timeline table lives two levels deeper inside that div. A descendant selector would
+       reach that inner table too, and it must never take on this twelve hundred pixel plan,
+       so only a table that is this wrapper's own direct child gets it. See the note beside
+       col expand below for why the two tables split around the panel in the first place. */
+    .table-scroll > canvas-table { min-width: 1200px; table-layout: fixed; }
+    /* The panel itself gets the same floor through the same child selector, so it never
+       reads narrower than the two tables it sits between. Without this the panel simply
+       fills whatever width the wrapper happens to have, which is fine when the wrapper is
+       wide enough for the full twelve hundred and wrong the moment it is not, since the
+       panel then stops short of the tables' own right edge instead of scrolling with them.
+       The inner timeline table two levels down is a descendant of this div rather than a
+       direct child of table-scroll, so this rule never reaches it, and it keeps sizing
+       itself the way stepsPanelContent expects. */
+    .table-scroll > .steps-panel { min-width: 1200px; }
+    /* The component writes its own padding as an inline style read from a custom property,
+       so an external rule cannot beat it on the padding property itself, but box sizing is
+       a property the component never touches. Border box is what makes a specified width
+       the whole box rather than the content alone, which is what lands every column on its
+       exact number once compact mode adds its own padding on top of it. Scoped the same way
+       as the rule above, so it lands on the two split patient tables and nowhere else. */
+    .table-scroll > canvas-table canvas-table-cell { box-sizing: border-box; }
+    /* The class editor's own step tables need the same sideways scroll for the same reason,
+       an actions column of two buttons that does not wrap, but never the min-width above.
+       Pairing that min-width with this table would force it to overflow at every width
+       rather than only the ones where its content is genuinely too wide for the card, since
+       these tables carry no seven column plan sized to fill it on purpose. A class of its
+       own keeps that rule from ever reaching this table by accident. */
+    .step-table-scroll { overflow-x: auto; }
+    /* --- The seven columns of the patients table, sized to add to twelve hundred
+       An expander, a name, a drug, a date, a progress line, one changing column and the
+       actions, in that order. Written on both the header cell and every body cell of a
+       column, since the header row is what a fixed layout table reads its column widths
+       from, and a width named there only is what a body cell would otherwise disagree
+       with. */
+    .col-expand { width: 44px; min-height: 44px; --canvas-table-cell-padding: 0; position: relative; }
+    .col-patient { width: 210px; }
+    .col-medication { width: 230px; }
+    .col-started { width: 110px; }
+    .col-progress { width: 140px; }
+    .col-next, .col-status { width: 280px; }
+    .col-actions { width: 186px; }
+    /* --- The expander, a caret rather than a button
+       No component covers a control built to fill its entire table cell, so this is level
+       four of the design system's own escalation ladder, novel markup raised on tokens
+       rather than a component. The custom property above is what clears the cell's own
+       padding first, since that padding is the component's own inline style and an external
+       rule cannot beat it on the padding property directly, only on the custom property it
+       reads from. With the cell empty of padding, this bare button reaches every edge of the
+       forty four pixel column, so the whole column is the click target rather than a small
+       control sitting inside it. Positioned rather than sized by a percentage, since a
+       table cell's own height is a used value the table layout hands back after the row is
+       measured, and a percentage height on a child asks for that same value before the
+       browser has necessarily settled on treating it as definite, which read as the
+       control's own unstretched content height rather than the taller row a neighbouring
+       column's own content sets. Absolute against the cell positioned one level up always
+       reads the row's real, final height instead, so a tall row gives the whole cell as the
+       click target rather than only its own top forty four pixels of it. The hover fill and
+       the focus ring both come from tokens rather than a literal colour, and the ring sits
+       inset since a control already flush with the cell's own edge would otherwise draw its
+       ring outside the column entirely. */
+    .row-expander {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: none; margin: 0; padding: 0;
+      color: var(--color-text, rgba(0, 0, 0, 0.87)); cursor: pointer;
+    }
+    .row-expander:hover { background: var(--color-bg, #F5F5F5); }
+    .row-expander:focus-visible {
+      outline: var(--focus-ring, 2px solid #2185D0);
+      outline-offset: calc(var(--focus-ring-offset, 2px) * -1);
+    }
+    /* The medication name is the one column that can run long enough to blow the row onto
+       two lines, so it truncates instead and carries the full name in a title attribute. */
+    .ellipsis { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Read by nobody sighted, and by every screen reader, for a column whose header is a
+       chevron rather than a word. The standard clipped rect offscreen technique, the same
+       one the design system's own components use for a severity word beside a color. */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; white-space: nowrap; border: 0; clip: rect(0, 0, 0, 0);
+    }
+    /* The two lines of the progress cell sit right above the bar, at the same small step
+       every other stacked pair on this page uses. */
+    .progress-cell { display: flex; flex-direction: column; gap: var(--space-mini); }
+    /* --- The panel one row opens beneath itself
+       Never a modal, since this table already lives inside one. A header line naming the
+       drug and the start date, then the full step timeline, one row per step, in the same
+       shape the class editor's own table uses.
+
+       A plain div rather than a cell inside the table, and never a descendant of either of
+       the two split canvas table elements around it. A colspan cell only reads as a full
+       width row when every row of a table is one, since a CSS table has no real column
+       spanning, and a block child dropped among real rows is wrapped in an anonymous cell
+       sized to column one, which is what used to drag every column wide. See splitPatientsTable
+       and rejoinPatientsTable in the script for the two tables this div sits between.
+
+       A small top padding and a larger, equal padding on the other three sides is what
+       reads as tucked up under its own row rather than floating loose. The top value is
+       the tiny token so the panel sits close to the row above it, and the other three
+       carry the large token for room to breathe. Border box here as well as on the cells
+       above, and for the same reason, the min width rule above sets the whole box to
+       twelve hundred and content box would let this padding add itself on top of that
+       number instead of living inside it, which is exactly what would pull the panel past
+       the two tables' own right edge. */
+    .steps-panel { box-sizing: border-box; padding: var(--space-tiny) var(--space-large) var(--space-large); }
+    .steps-panel-header { display: flex; align-items: baseline; gap: var(--space-small); margin-bottom: var(--space-small); }
+    .steps-panel canvas-table { margin-top: var(--space-small); }
+    /* The pager sits under the table and stays put whether a page is full or short, so the
+       control does not move as somebody walks through pages. */
+    .pager {
+      display: flex; align-items: center; justify-content: center;
+      gap: var(--space-medium); padding-top: var(--space-medium);
+    }
+    .empty { padding: var(--space-large) 0; text-align: center; }
+    #patients-totals { margin-bottom: var(--space-medium); }
+    .stop-actions { margin-top: var(--space-medium); justify-content: flex-end; }
+    .choices { display: flex; flex-direction: column; gap: var(--space-small); }
+    /* Two short choices read better side by side than stacked, and wrap rather
+       than overflow when the modal is narrow. Three long ones stay a column, see
+       the section label above each group. */
+    .choices-inline {
+      display: flex; flex-direction: row; flex-wrap: wrap;
+      gap: var(--space-small) var(--space-large);
+    }
+    .section-label {
+      display: block; margin-bottom: .28571429rem;
+      font-size: .92857143em; font-weight: 700; line-height: 1em;
+      color: var(--color-text, rgba(0, 0, 0, 0.87));
+    }
+    .day-field { max-width: 12rem; }
+    /* The editor names the class it is writing into, because a page carrying several
+       programs gives a bare "Add a step" no way to say which one. The name is the only part
+       allowed to run out of room, and the closing quote sits outside the truncating span so
+       it survives the ellipsis. */
+    .modal-title { display: flex; align-items: baseline; min-width: 0; }
+    .modal-title-lead { flex: none; white-space: nowrap; }
+    .modal-title-name {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 2rem;
+    }
+    .modal-title-quote { flex: none; }
+    /* The row just saved settles out of a highlight, so a step that moved to a new place in
+       the chronological order is findable rather than silently somewhere else. */
+    .just-saved { animation: settle 1.2s ease-out; }
+    @keyframes settle {
+      from { background: var(--color-info-background, #f0f6fb); }
+      to { background: transparent; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="heading" style="margin-bottom: var(--space-medium)">
+      <h3 class="grow" style="margin: 0">Follow up programs</h3>
+      <canvas-button id="add-class">Add a medication class</canvas-button>
+    </div>
+    <div id="content"><canvas-loader></canvas-loader></div>
+  </div>
+
+  <canvas-modal id="step-modal" size="medium">
+    <canvas-modal-header dismissable id="step-title">Add a step</canvas-modal-header>
+    <canvas-modal-content><div id="step-body"></div></canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="step-cancel">Cancel</canvas-button>
+      <canvas-button id="step-save">Save the step</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <!-- --- The refusal, as a route rather than as a dead end
+       Removing a class any patient was started on has always been refused, correctly, since
+       an enrolled step reads its wording live off the class and a program a patient was on
+       is part of why they were messaged and booked. What was missing is that the refusal
+       named a count and a remedy and offered a way to neither. This modal is both. -->
+  <canvas-modal id="cannot-remove" size="small">
+    <canvas-modal-header dismissable>This program cannot be removed</canvas-modal-header>
+    <canvas-modal-content>
+      <p id="cannot-remove-text"></p>
+      <p class="muted">
+        Make it inactive instead. No new patient can be started on it and the programs
+        already running finish on their own.
+      </p>
+    </canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="cannot-remove-no">Cancel</canvas-button>
+      <canvas-button variant="ghost" id="cannot-remove-see">See the patients</canvas-button>
+      <canvas-button id="cannot-remove-deactivate">Make it inactive</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <!-- --- Who is on this program
+       A modal rather than a page. The list is unbounded so it pages, and it is wider than any
+       other modal here because a table of six columns in the medium box would wrap every row.
+       See widenPatientsModal in the script for how the width is set, since the component
+       offers no token for it. -->
+  <canvas-modal id="patients" size="medium">
+    <canvas-modal-header dismissable><span id="patients-title">Patients</span></canvas-modal-header>
+    <canvas-modal-content>
+      <div class="muted" id="patients-totals"></div>
+      <div id="patients-problem"></div>
+
+      <!-- The list and the stop confirmation are two states of one body rather than a second
+           modal over this one. A modal opened from a modal fights this one's focus trap, and
+           a row action that replaces the table it came from reads perfectly well. -->
+      <!-- The tabs are built fresh every time the modal opens, see resetPatientsTabs. -->
+      <div id="patients-list"></div>
+
+      <div id="patients-stop" hidden>
+        <h4 id="stop-who"></h4>
+        <p class="muted">
+          Every step still waiting stops happening. Nothing already sent is undone.
+        </p>
+        <canvas-textarea label="Why are you stopping it" id="stop-reason" rows="3"
+          placeholder="e.g. The patient asked us to stop."></canvas-textarea>
+        <div class="actions stop-actions">
+          <canvas-button variant="ghost" size="sm" id="stop-no">Back to the list</canvas-button>
+          <canvas-button variant="danger" size="sm" id="stop-yes">Stop the program</canvas-button>
+        </div>
+      </div>
+    </canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="patients-close">Close</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <canvas-modal id="confirm" size="small">
+    <canvas-modal-header dismissable>Are you sure</canvas-modal-header>
+    <canvas-modal-content><p id="confirm-text"></p></canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="confirm-no">Cancel</canvas-button>
+      <canvas-button variant="danger" id="confirm-yes">Remove</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <canvas-modal id="clone" size="small">
+    <canvas-modal-header dismissable>Clone a program</canvas-modal-header>
+    <canvas-modal-content><div id="clone-body" class="fields"></div></canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="clone-cancel">Cancel</canvas-button>
+      <canvas-button id="clone-save">Create the copy</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <!-- --- One modal, two policies
+       Adding a class and editing one ask for the same five things, a name, the medication
+       group or groups it covers, the recheck appointment type, who messages are sent as
+       and which team owns it, so they get the one form rather than a cramped row at the
+       top of the page and a second copy of the same fields in here. The header text and
+       the save button's own label are set from script per mode, see setClassModalChrome,
+       and classFormFields is what the two modes actually share. -->
+  <canvas-modal id="class-modal" size="medium">
+    <canvas-modal-header dismissable id="class-modal-title">Add a medication class</canvas-modal-header>
+    <canvas-modal-content>
+      <div id="class-modal-problem"></div>
+      <div id="class-modal-body" class="fields"></div>
+    </canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="class-modal-cancel">Cancel</canvas-button>
+      <canvas-button id="class-modal-save">Add the class</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <script>
+    (function () {
+      "use strict";
+      var BASE = "{{ base }}";
+      var CONDITIONS = {{ conditions|safe }};
+      var content = document.getElementById("content");
+
+      var state = {
+        classes: [], teams: [], staff: [], noteTypes: [], questionnaires: [],
+        // The practice wide starting point for a new class. Always an object, so
+        // the create card can read through it before the first load answers.
+        defaults: { sender_staff_id: "", owner_team_id: "" }
+      };
+      var editing = null;
+      var justSaved = null;
+      // The medication group picked in the class modal's create mode before the class it
+      // will cover exists. Read once at Add the class and thrown away by the next call to
+      // wireClassCoverage, which runs again every time the modal body is rebuilt. In edit
+      // mode this is never set, since a coverage pick there posts straight away.
+
+      // Which policy the class modal is currently running, "create" or "edit", and which
+      // class edit mode is running against. Both are set once by openClassModal and read
+      // by everything the modal wires, the save handler, the coverage picker and the
+      // header and button label in setClassModalChrome.
+      var classModalMode = null;
+      var classModalTarget = null;
+
+      var KIND = {
+        message: "Message the patient",
+        questionnaire: "Questionnaire to the patient",
+        task: "Task for a team or a person"
+      };
+
+      // The word the patients table shows for a step's kind, once in the Next column and
+      // once in the expanded panel's timeline. Short on purpose, the long form above is
+      // for the editor where a step is being written rather than scanned.
+      var KIND_SHORT = { message: "Message", questionnaire: "Questionnaire", task: "Task" };
+
+      function esc(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
+
+      function banner(message) {
+        var existing = content.querySelector("canvas-banner");
+        if (existing) { existing.remove(); }
+        content.insertAdjacentHTML("afterbegin",
+          "<canvas-banner variant='error' header='That did not save'><p>" +
+          esc(message) + "</p></canvas-banner>");
+      }
+
+      function same(a, b) {
+        // Identifiers arrive from the DOM as strings and from the payload as numbers, so
+        // every comparison between the two goes through here. A strict comparison between
+        // "1" and 1 is never true, which is exactly how the step editor once failed to open
+        // with nothing anywhere to say why.
+        return String(a) === String(b);
+      }
+
+      function conditionLabel(value) {
+        for (var i = 0; i < CONDITIONS.length; i++) {
+          if (same(CONDITIONS[i][0], value || "")) { return CONDITIONS[i][1]; }
+        }
+        return value;
+      }
+
+      // What the Only if column says, which depends on the class and not only on the step.
+      // A step waiting on the recheck fires on its day regardless when its class names no
+      // recheck appointment type, because an enrolment with no recheck type has no recheck
+      // to be unbooked. Printing the condition alone claimed a programme would wait when it
+      // would not, on the same card whose own line said no appointment type counted.
+      function conditionCell(step, owner) {
+        var label = conditionLabel(step.condition);
+        var waitsOnRecheck = step.condition && !same(step.condition, "");
+        if (waitsOnRecheck && owner && !owner.recheck_note_type_id) {
+          return "Always, no recheck set";
+        }
+        return label;
+      }
+
+      function questionnaireName(id) {
+        for (var i = 0; i < state.questionnaires.length; i++) {
+          if (same(state.questionnaires[i].id, id)) { return state.questionnaires[i].name; }
+        }
+        return "";
+      }
+
+      function contentOf(step) {
+        if (step.kind === "task") {
+          return step.task_title || "Nothing written yet";
+        }
+        if (step.kind === "questionnaire") {
+          return questionnaireName(step.questionnaire_id) || "No questionnaire chosen yet";
+        }
+        return step.message_body;
+      }
+
+      // A step whose kind is not task points at nobody, so this reads as an empty cell
+      // rather than a placeholder sentence. Somebody scanning the table sees at a glance
+      // which steps carry a person or a team behind them and which do not.
+      function assigneeOf(step) {
+        if (step.kind !== "task") { return ""; }
+        return step.assignee_name || "Nobody chosen yet";
+      }
+
+      function options(list, selected) {
+        return list.map(function (pair) {
+          return "<canvas-option value='" + esc(pair[0]) + "'" +
+            (same(pair[0], selected) ? " selected" : "") + ">" +
+            esc(pair[1]) + "</canvas-option>";
+        }).join("");
+      }
+
+      // --- The table
+
+      /* --- The way in to who is on this program
+         A link in the body rather than a badge in the header, because a badge is status and
+         cannot be the control somebody clicks, and putting the count in both places would
+         print the same number twice on one card.
+
+         Two numbers, because they answer two questions. Running says the class is live.
+         The total says whether it can ever be removed, since the refusal counts every
+         enrolment that ever existed rather than only the live ones. Both count programs
+         rather than people, so a patient stopped and started again is two, which is why the
+         words say programs.
+
+         Where nothing has ever been enrolled it is plain text and not a link, because there
+         is no page worth opening. */
+      function enrolledLine(item) {
+        var total = item.total_count || 0;
+        if (!total) {
+          return "<div class='muted enrolled-line'>No patients enrolled</div>";
+        }
+        var running = item.running_count || 0;
+        return "<div class='enrolled-line'>" +
+          "<button type='button' class='link-button' data-patients='" + esc(item.id) + "'>" +
+          "See patients, " + esc(running) + " running of " + esc(total) + " in total" +
+          "</button></div>";
+      }
+
+      function stepRow(step, owner) {
+        return "<canvas-table-row" +
+          (justSaved !== null && same(justSaved, step.id) ? " class='just-saved'" : "") + ">" +
+          "<canvas-table-cell bold>" + esc(step.day_offset) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(KIND[step.kind] || step.kind) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(contentOf(step)) +
+            (step.attach_booking_link ? "<div class='muted'>With the booking address</div>" : "") +
+          "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(assigneeOf(step)) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(conditionCell(step, owner)) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" +
+            "<div class='actions'>" +
+              "<canvas-button variant='ghost' size='sm' data-edit-step='" + esc(step.id) + "'>Edit</canvas-button>" +
+              "<canvas-button variant='ghost' size='sm' data-del-step='" + esc(step.id) + "'>Remove</canvas-button>" +
+            "</div>" +
+          "</canvas-table-cell>" +
+        "</canvas-table-row>";
+      }
+
+      function rowsFor(item) {
+        // Chronological every time rather than in the order rows were written, so a step
+        // whose day was just changed is already in its new place.
+        var steps = item.steps.slice().sort(function (a, b) {
+          return a.day_offset - b.day_offset || a.sequence - b.sequence;
+        });
+        if (!steps.length) {
+          return "<canvas-table-row><canvas-table-cell colspan>" +
+            "No steps yet.</canvas-table-cell></canvas-table-row>";
+        }
+        return steps.map(function (step) { return stepRow(step, item); }).join("");
+      }
+
+      // --- What a coverage entry is called, and what a class with none says
+      //
+      // A group entry is named by its own classification path, the last and most specific
+      // step of it, so a chip reads Statins rather than atorvastatin 20 mg tablet. The
+      // path is what the entry actually covers, and naming it after the one product
+      // somebody happened to search made every chip on the page look like a single
+      // strength while it quietly covered the whole group. Reading the path rather than
+      // the stored name also relabels every row written before this, with nothing to
+      // migrate.
+      //
+      // A product entry is named by its stored display name, since it really does cover
+      // one product and there is no path on it to read. An entry with neither is nameless
+      // and says so, rather than showing a blank chip nobody could act on.
+      function coverageLabel(entry) {
+        if (entry.kind === "group" && entry.etc_path_name && entry.etc_path_name.length) {
+          return entry.etc_path_name[entry.etc_path_name.length - 1];
+        }
+        if (entry.display_name) { return entry.display_name; }
+        return "Unnamed coverage entry";
+      }
+
+      // The steps above the name, which is what tells somebody reading Statins where in
+      // the catalogue it sits. Empty for a product entry and for a path of one step,
+      // where there is nothing above the name to say.
+      function coverageContext(entry) {
+        var path = entry.kind === "group" ? (entry.etc_path_name || []) : [];
+        if (path.length < 2) { return ""; }
+        return path.slice(0, path.length - 1).join(", ");
+      }
+
+      function coverageCount(item) {
+        return (item.coverage || []).length;
+      }
+
+      /* --- What the card says about coverage, and why it names the medications
+         A count alone would say a class covers three things without saying which, and the
+         question a reader has in front of a list of programs is which one follows up the
+         drug they just prescribed. So the names are listed, and the list is cut at three
+         because a class covering a whole formulary would otherwise push the steps off the
+         card. Read from the coverage already loaded onto each class rather than fetched
+         again, so this costs no request. */
+      function coverageSummary(item) {
+        var entries = item.coverage || [];
+        if (!entries.length) {
+          return "This program covers no medication yet, so it is offered on no note. " +
+            "Add a medication group under Edit settings.";
+        }
+        var names = entries.map(coverageLabel);
+        var shown = names.slice(0, 3).map(esc).join(", ");
+        var rest = names.length - 3;
+        return rest > 0
+          ? "Covers " + shown + " and " + rest + " more."
+          : "Covers " + shown + ".";
+      }
+
+      // --- Coverage as one multi value field, the same control in both modes
+      //
+      // Coverage was always a list. The model holds many entries per class, edit mode drew
+      // them as chips beside a search box, and create mode held exactly one because the
+      // coverage endpoint needs a class id that does not exist until the class is saved.
+      // That was a multi select assembled by hand out of a combo box and a row of chips,
+      // and the seam showed, a chosen group sat under the field rather than in it and the
+      // two modes drew the same idea two different ways.
+      //
+      // canvas-multi-select is the component for this. Chips live inside the trigger where
+      // a chosen value belongs, each with its own dismiss, and the menu stays open between
+      // picks. Both modes now render the identical control, and the sequencing difference
+      // survives only in what a pick does next, an immediate write when the class exists
+      // and a held list when it does not.
+      //
+      // What is picked is held here rather than read back off the control, because the
+      // control knows values and this needs the classification path and the server id
+      // behind each one. The control is the mirror.
+      var coveragePicked = [];
+
+      function coverageKey(entry) {
+        if (entry.kind === "product") {
+          return "product-" + (entry.med_medication_id || "");
+        }
+        return "group-" + (entry.etc_path_id || []).join("-");
+      }
+
+      function pickedIndex(key) {
+        for (var i = 0; i < coveragePicked.length; i++) {
+          if (coveragePicked[i].key === key) { return i; }
+        }
+        return -1;
+      }
+
+      // A stored entry and a search result carry the same two path fields, so one shape
+      // serves both and the labelling functions above read either without knowing which it
+      // came from. entryId is what tells them apart in the only way that matters, a stored
+      // entry can be deleted from the server and a held pick has nothing to delete yet.
+      function pickedFrom(entry, entryId) {
+        return {
+          key: coverageKey(entry),
+          label: coverageLabel(entry),
+          context: coverageContext(entry),
+          entryId: entryId === undefined ? null : entryId,
+          payload: {
+            kind: entry.kind || "group",
+            etc_path_id: entry.etc_path_id || [],
+            etc_path_name: entry.etc_path_name || [],
+            display_name: entry.display_name || "",
+            med_medication_id: entry.med_medication_id || ""
+          }
+        };
+      }
+
+      function coverageFieldsSection(mode, item) {
+        var isCreate = mode === "create";
+        return "<div id='class-coverage-section'>" +
+          "<canvas-multi-select label='Medication groups' required " +
+              "placeholder='Search medication groups' id='class-coverage-search' " +
+              "empty-state='Type a few letters of a drug name to search.'>" +
+            coverageOptionsHtml([]) +
+          "</canvas-multi-select>" +
+          "<div class='muted hint'>" +
+            "A prescription counts toward this program when its own medication falls " +
+            "under one of these groups. Search by drug name, the group it belongs to is " +
+            "what gets covered. " +
+            (isCreate
+              ? "A program covering nothing is offered on no note, so at least one is needed."
+              : "Changes here save as you make them, unlike the rest of this form.") +
+          "</div>" +
+        "</div>";
+      }
+
+      function classCard(item) {
+        return "<canvas-card>" +
+          "<canvas-card-body>" +
+            "<div class='heading'>" +
+              "<h4 style='margin:0' class='grow'>" + esc(item.name) + "</h4>" +
+              // Only the absence is badged. A badge on every card would carry no
+              // information, and this one exists so a page of programmes can be scanned for
+              // the ones no step can wait on rather than read line by line.
+              //
+              // It says no recheck rather than no follow up, because these programmes do
+              // follow up, they message the patient and raise tasks for a team. What is
+              // missing is only the appointment a step could wait on.
+              //
+              // Basic rather than a solid colour, which is what the design system reserves
+              // for a de-emphasised neutral status. Nothing here is wrong, a programme with
+              // no recheck is a legitimate one, so it must not read as a warning beside the
+              // active badge it sits next to.
+              (item.recheck_note_type_name
+                ? ""
+                : "<canvas-badge size='mini' basic>No recheck</canvas-badge>") +
+              // --- Why a class covering nothing says so on the card
+              //
+              // Coverage editing moved into the modal, and with it went the only thing on
+              // the page that said which medications a class covers. A class covering
+              // nothing is offered on no note at all, so it looks identical on the page to
+              // one that works, which is exactly the silence a reviewer hit on 2026-08-28
+              // when a prescribe command produced no control and the page gave him nothing
+              // to go on. Basic rather than a colour, the same as No recheck beside it,
+              // because a class part way through being configured is not an error and must
+              // not read as one. The sentence below carries the consequence instead.
+              (coverageCount(item)
+                ? ""
+                : "<canvas-badge size='mini' basic>No coverage</canvas-badge>") +
+              "<canvas-badge color='" + (item.active ? "green" : "grey") + "' size='mini'>" +
+                (item.active ? "Active" : "Inactive") + "</canvas-badge>" +
+            "</div>" +
+            "<div class='muted'>" +
+              (item.recheck_note_type_name
+                // No article in front of the appointment type. It is a practice defined
+                // name, so a hardcoded "a" reads wrong the moment one begins with a vowel,
+                // and choosing between a and an from the first letter is wrong on a name
+                // like "hour long review" anyway.
+                ? esc(item.recheck_note_type_name) +
+                  " is the appointment that counts as this program's recheck, which is what " +
+                  "a step can wait on."
+                : "No appointment type counts as this program's recheck yet, so a step " +
+                  "cannot wait on one.") +
+            "</div>" +
+            "<div class='muted'>" + coverageSummary(item) + "</div>" +
+            enrolledLine(item) +
+          "</canvas-card-body>" +
+          "<canvas-card-body no-padding>" +
+            "<div class='step-table-scroll'>" +
+              "<canvas-table compact aria-label='Steps of " + esc(item.name) + "'>" +
+                "<canvas-table-head><canvas-table-row>" +
+                  "<canvas-table-cell>Day</canvas-table-cell>" +
+                  "<canvas-table-cell>What happens</canvas-table-cell>" +
+                  "<canvas-table-cell>Content</canvas-table-cell>" +
+                  "<canvas-table-cell>Assigned to</canvas-table-cell>" +
+                  "<canvas-table-cell>Only if</canvas-table-cell>" +
+                  "<canvas-table-cell>Actions</canvas-table-cell>" +
+                "</canvas-table-row></canvas-table-head>" +
+                "<canvas-table-body>" + rowsFor(item) + "</canvas-table-body>" +
+              "</canvas-table>" +
+            "</div>" +
+          "</canvas-card-body>" +
+          "<canvas-card-footer>" +
+            "<div class='actions'>" +
+              "<canvas-button size='sm' data-add-step='" + esc(item.id) + "'>Add a step</canvas-button>" +
+              "<canvas-button variant='ghost' size='sm' data-settings='" + esc(item.id) + "'>Edit settings</canvas-button>" +
+              "<canvas-button variant='ghost' size='sm' data-active='" + esc(item.id) + "'>" +
+                (item.active ? "Make inactive" : "Make active") + "</canvas-button>" +
+              "<canvas-button variant='ghost' size='sm' data-clone='" + esc(item.id) + "'>Clone</canvas-button>" +
+              "<canvas-button variant='ghost' size='sm' data-del-class='" + esc(item.id) + "'>Remove</canvas-button>" +
+            "</div>" +
+          "</canvas-card-footer>" +
+        "</canvas-card>";
+      }
+
+      function emptyState() {
+        return "<div style='padding: var(--space-huge); text-align:center'>" +
+          "<h3 style='margin:0 0 var(--space-small); font-weight:700'>No medication classes yet</h3>" +
+          "<p class='muted' style='margin:0'>A class is a name, the appointment type that " +
+          "counts as its recheck, and a list of timed steps.</p></div>";
+      }
+
+      function render() {
+        content.innerHTML = "<div class='stack'>" +
+          (state.classes.length ? state.classes.map(classCard).join("") : emptyState()) +
+        "</div>";
+        wire();
+        justSaved = null;
+      }
+
+      function each(selector, fn) {
+        Array.prototype.forEach.call(content.querySelectorAll(selector), fn);
+      }
+
+      function wire() {
+        each("[data-add-step]", function (b) {
+          b.addEventListener("click", function () {
+            openStepEditor(b.getAttribute("data-add-step"), null);
+          });
+        });
+        each("[data-edit-step]", function (b) {
+          b.addEventListener("click", function () {
+            openStepEditor(null, b.getAttribute("data-edit-step"));
+          });
+        });
+        each("[data-del-step]", function (b) {
+          b.addEventListener("click", function () { removeStep(b.getAttribute("data-del-step")); });
+        });
+        each("[data-clone]", function (b) {
+          b.addEventListener("click", function () { openClone(b.getAttribute("data-clone")); });
+        });
+        each("[data-settings]", function (b) {
+          b.addEventListener("click", function () { openClassModal("edit", b.getAttribute("data-settings")); });
+        });
+        each("[data-active]", function (b) {
+          b.addEventListener("click", function () { flipActive(b.getAttribute("data-active")); });
+        });
+        each("[data-patients]", function (b) {
+          b.addEventListener("click", function () { openPatients(b.getAttribute("data-patients")); });
+        });
+        each("[data-del-class]", function (b) {
+          b.addEventListener("click", function () { removeClass(b.getAttribute("data-del-class")); });
+        });
+      }
+
+      // --- The medication group search, shared by two combo boxes
+      //
+      // Behaviour step 5. Typing searches the ontologies grouped medication catalogue
+      // through the search endpoint, debounced so a search fires once typing pauses
+      // rather than once per keystroke. What picking a result does next is the one thing
+      // that differs between the two callers, the coverage combo on an existing class
+      // posts straight away, the medication group combo on the create card only
+      // remembers the pick until Add class is pressed, so that is the one thing left to
+      // the caller through onPick rather than folded in here.
+      //
+      // --- Reading what was typed without a documented event for it
+      //
+      // canvas-combobox dispatches change only once a value is chosen, nothing on every
+      // keystroke. The input inside its shadow root still fires the native input event,
+      // and that event is composed, so it crosses the shadow boundary and reaches a
+      // listener on the host element the same way a click on a nested button does.
+      // event.composedPath()[0] is that inner input, read directly rather than guessed at,
+      // since the shadow root is open and this is what an open shadow root is for.
+      //
+      // --- Populating the menu mid session
+      //
+      // The component reads its option list from its own light DOM children once, on
+      // connect, and again only when its loading attribute clears. So a fresh set of
+      // canvas-option children written here has no effect by itself. Setting loading
+      // before the fetch closes the menu behind a spinner, exactly the contract
+      // component-usage.md documents for options fetched mid session, and clearing it
+      // after the new children are written is what makes the component read them and, if
+      // the menu was already open from typing, reopen with the fresh list.
+      /* --- The medication group picker, wired fresh every time the section is drawn
+
+         Three things have to hold together here and each is a decision rather than a
+         detail.
+
+         Every picked group stays in the light DOM as a selected option on every rewrite.
+         The component renders a chip only for a selected value whose option it can still
+         find, so a search that replaced the options with results alone would leave the
+         picks selected and their chips silently gone.
+
+         The loading attribute is set and cleared inside one task. It is the only lever
+         that makes the component re read its options, and its documented effect is to
+         swap the input row for a spinner row, which is what flickered. Both halves run
+         before the browser paints, so the spinner is never drawn, the field never moves,
+         and what changes is the menu content underneath it. The work in flight is said in
+         the menu instead, as a row nobody can pick.
+
+         The typed query is put back after each rewrite, since the redraw rebuilds the
+         input row empty. Assigning it fires no input event, so the search is not
+         retriggered and the component does not filter the rows locally, which matters
+         because the server already filtered them and a local pass over group names would
+         hide every group not spelled like the drug that was typed. */
+      /* --- What a row in the picker looks like
+         A row carries the products the query matched, in italics beneath the name. The
+         page's own muted class does nothing here, since this markup is copied into the
+         control's shadow DOM where the page's stylesheet does not reach, which is why the
+         second line is styled inline and why it was not actually grey before. */
+      function coverageRow(key, label, result, picked) {
+        var products = result ? (result.matched_products || []) : [];
+        var matched = products.slice(0, 2).join(", ");
+        if (products.length > 2) {
+          matched += " and " + (products.length - 2) + " more";
+        }
+        return "<canvas-option value='" + esc(key) + "' label='" + esc(label) + "'" +
+            (picked ? " selected" : "") + ">" +
+          "<span style='display:block'>" + esc(label) + "</span>" +
+          (matched
+            ? "<span style='display:block; white-space:normal; font-style:italic; " +
+                "font-size:.9em; color:var(--color-text-secondary, #767676)'>Matches " +
+                esc(matched) + "</span>"
+            : "") +
+        "</canvas-option>";
+      }
+
+      /* --- The list is the search, and nothing is pinned above it
+         Rows come out in the order the search returned them, an already added group among
+         them like any other, ticked, and untickable from there as well as from its chip.
+         What it is not is lifted to the top. A list that puts what you already have above
+         what you asked for answers a question nobody asked, and the chips above the field
+         already say what is added.
+
+         An added group the current search did not return still needs an option here, since
+         the control draws a chip only for a selected value whose option it can still find,
+         so those are emitted after the results and hidden by applyRowVisibility. They are
+         in the list for the control's sake and out of it for the reader's. */
+      function coverageOptionsHtml(results) {
+        var listed = {};
+        var html = (results || []).map(function (result) {
+          var key = coverageKey({ kind: "group", etc_path_id: result.etc_path_id || [] });
+          listed[key] = true;
+          return coverageRow(key, result.display_name || "Unnamed medication group",
+            result, pickedIndex(key) !== -1);
+        }).join("");
+
+        return html + coveragePicked.map(function (item) {
+          if (listed[item.key]) { return ""; }
+          return coverageRow(item.key, item.label, null, true);
+        }).join("");
+      }
+
+      function wireClassCoverage() {
+        var select = classModalBody.querySelector("#class-coverage-search");
+        if (!select) { return; }
+        var timer = null;
+        var resultsByKey = {};
+        var shownHtml = null;
+        var searched = false;
+
+        /* Redrawing costs the whole component, since the only lever that makes it re read
+           its options rebuilds its shadow DOM, so the menu is torn down and built again
+           every time. That is not free to look at, the menu changes height as its content
+           changes, so every redraw is a visible jump.
+
+           So a redraw happens when the rows genuinely change and at no other time. A search
+           that comes back with what is already on screen does nothing at all, and a search
+           in flight leaves the previous rows alone rather than clearing them or showing
+           anything in their place. One search now costs at most one redraw, where it used
+           to cost two, the second of them only to say that a fetch had started. */
+        function refresh(html, query) {
+          if (html === shownHtml) { return; }
+          shownHtml = html;
+          select.innerHTML = html;
+          select.setAttribute("loading", "");
+          select.removeAttribute("loading");
+          var input = select.shadowRoot
+            ? select.shadowRoot.querySelector(".input") || select.shadowRoot.querySelector("input")
+            : null;
+          if (input) { input.value = query; }
+          applyRowVisibility();
+        }
+
+        function runSearch(query) {
+          fetch(BASE + "/medication-search?query=" + encodeURIComponent(query),
+            { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (payload) {
+              var results = payload.results || [];
+              resultsByKey = {};
+              results.forEach(function (result) {
+                resultsByKey[coverageKey({
+                  kind: "group", etc_path_id: result.etc_path_id || []
+                })] = result;
+              });
+              searched = true;
+              refresh(coverageOptionsHtml(results), query);
+            })
+            .catch(function () {
+              // The search failed rather than the page, so the rows go back to what was
+              // already picked and the query stays for another try, instead of a banner
+              // over the whole card for what is still only a search.
+              refresh(coverageOptionsHtml([]), query);
+            });
+        }
+
+        /* --- Which rows are on screen, and undoing the control's own filter
+           Only one kind of row is hidden, an added group the current search did not return.
+           It has to exist, since the control draws a chip only for a selected value whose
+           option it can still find, and it has no business being listed under a search that
+           did not ask for it. Everything the search did return is shown, added or not, and
+           an added one is shown ticked and can be unticked from there.
+
+           The control's own text filter is undone here too. It hides any row whose name
+           does not contain what was typed, which is right for a fixed list and wrong here,
+           since the rows are groups and what gets typed is a drug name. Typing atorvastatin
+           hid Statins on the letter t, so the menu shrank a row at a time and sprang back
+           when the results landed, which was the flicker. The server decides what matches.
+
+           This runs immediately after the control's own handler, in the same event and
+           before anything is painted, because that handler is bound to the field inside the
+           control and this one is on the element around it. */
+        function applyRowVisibility() {
+          var root = select.shadowRoot;
+          if (!root) { return; }
+          var rows = root.querySelectorAll(".option");
+          var showing = 0;
+          for (var i = 0; i < rows.length; i++) {
+            var key = rows[i].dataset.value;
+            var offList = pickedIndex(key) !== -1 &&
+              !Object.prototype.hasOwnProperty.call(resultsByKey, key);
+            rows[i].classList.toggle("hidden", offList);
+            if (!offList) { showing++; }
+          }
+          /* The control's own empty check ran against its text filter, which no longer
+             applies, so the answer is recomputed against what is actually on screen. Its
+             wording is set here too, because an empty list has two different causes and one
+             sentence cannot serve both. Nothing searched yet is an invitation to type. A
+             search that came back with nothing is the opposite, and telling somebody to
+             type a few letters at that moment reads as though they had not. */
+          var empty = root.querySelector(".empty");
+          if (empty) {
+            empty.classList.toggle("visible", showing === 0);
+            if (showing === 0) {
+              empty.textContent = searched
+                ? "No medication group matches that."
+                : "Type a few letters of a drug name to search.";
+            }
+          }
+        }
+
+        /* Half a second of stillness rather than a third, so a search fires once somebody
+           has stopped typing rather than during a pause in the middle of a word. Every
+           search that fires mid word is a redraw nobody asked for and a set of rows nobody
+           will read. */
+        select.addEventListener("input", function (event) {
+          applyRowVisibility();
+          var inner = event.composedPath()[0];
+          var query = inner && typeof inner.value === "string" ? inner.value.trim() : "";
+          window.clearTimeout(timer);
+          if (!query) { return; }
+          timer = window.setTimeout(function () { runSearch(query); }, 500);
+        });
+
+        select.addEventListener("loading-cancel", function () {
+          window.clearTimeout(timer);
+        });
+
+        /* One change event covers both adding and removing, since the control reports the
+           whole selection rather than what moved, so what moved is worked out by comparing
+           it against what is held. Doing it this way means a chip's own dismiss and a
+           second click on a selected row are the same code path rather than two. */
+        select.addEventListener("change", function () {
+          var chosen = (select.value || []).filter(function (key) {
+            return key !== "__searching";
+          });
+          var added = chosen.filter(function (key) { return pickedIndex(key) === -1; });
+          var removed = coveragePicked
+            .filter(function (item) { return chosen.indexOf(item.key) === -1; })
+            .map(function (item) { return item.key; });
+
+          added.forEach(function (key) {
+            var result = resultsByKey[key];
+            if (!result) { return; }
+            addCoverage(pickedFrom({
+              kind: "group",
+              etc_path_id: result.etc_path_id || [],
+              etc_path_name: result.etc_path_name || [],
+              display_name: result.display_name || ""
+            }));
+          });
+          removed.forEach(removeCoverage);
+
+          /* The light DOM has to agree about what is picked, or the next search undoes
+             this. The control reads the selected attribute off these options every time it
+             re reads them, and adds anything carrying it back to its own selection, so a
+             group whose chip was just dismissed would quietly return on the next search.
+             Syncing the attributes rather than rewriting the rows keeps the dismissal free
+             of a rebuild, and clearing the cached markup is what stops the next rebuild
+             being skipped as unchanged when it no longer is. */
+          for (var i = 0; i < select.children.length; i++) {
+            var option = select.children[i];
+            if (pickedIndex(option.getAttribute("value")) !== -1) {
+              option.setAttribute("selected", "");
+            } else {
+              option.removeAttribute("selected");
+            }
+          }
+          shownHtml = null;
+          /* Twice, and the second one is the one that counts. The control dispatches this
+             change from inside its own toggling and then carries on, clearing its text
+             filter, which un hides every row including the added ones this is hiding. So
+             the pass runs again on the microtask after it has finished, which is still
+             before anything is painted. */
+          applyRowVisibility();
+          Promise.resolve().then(applyRowVisibility);
+        });
+
+        /* The options a class opens with are its own coverage, which is exactly the set
+           that has no business being listed until a search asks for it, so the first pass
+           runs here rather than waiting for a keystroke. Once now, in case the control has
+           already drawn itself, and once on the next turn, because it defers its first
+           draw and there would be nothing to hide yet. Neither is visible, the menu is
+           closed until somebody opens it. */
+        applyRowVisibility();
+        window.setTimeout(applyRowVisibility, 0);
+      }
+
+      /* Held first and written second, so the chip is on screen before the round trip
+         rather than after it, and a write that fails takes its own chip back off. Create
+         mode has nothing to write to yet, the class the entry would belong to does not
+         exist until the form is saved, so the list is all there is and submitCreateClass
+         posts it once the class it covers is there. */
+      function addCoverage(item) {
+        coveragePicked.push(item);
+        // The required message is answered by this pick, so it goes now rather than
+        // waiting for the next keystroke. showFieldError clears on input, which a control
+        // whose value changes by clicking a row does not necessarily produce.
+        var select = classModalBody.querySelector("#class-coverage-search");
+        if (select) { select.removeAttribute("error"); }
+        if (classModalMode === "create") { return; }
+        send("POST", "/classes/" + encodeURIComponent(classModalTarget) + "/coverage",
+          item.payload)
+          .then(function (created) {
+            item.entryId = created.id;
+            coverageLanded(created, null);
+          })
+          .catch(function (error) {
+            var at = pickedIndex(item.key);
+            if (at !== -1) { coveragePicked.splice(at, 1); }
+            renderCoverageSection();
+            classModalFail(error.message);
+          });
+      }
+
+      /* --- Why a coverage write does not reload the page any more
+         It used to call load, which refetches the classes, the assignees, the note types,
+         the questionnaires, the defaults and then one coverage request per class, fourteen
+         requests, and rebuilds every card. On every single pick. Nothing in any of that
+         changes except the one class's own coverage, which the response already carries,
+         so it is written straight into the state instead and the cards redraw from memory.
+         The cards are behind the modal while this happens, so what this really buys is that
+         nothing is in flight while somebody is still choosing. */
+      function coverageLanded(created, deletedId) {
+        var owner = classById(classModalTarget);
+        if (!owner) { return; }
+        owner.coverage = owner.coverage || [];
+        if (created) { owner.coverage.push(created); }
+        if (deletedId !== null && deletedId !== undefined) {
+          owner.coverage = owner.coverage.filter(function (entry) {
+            return !same(entry.id, deletedId);
+          });
+        }
+        render();
+      }
+
+      function removeCoverage(key) {
+        var at = pickedIndex(key);
+        if (at === -1) { return; }
+        var item = coveragePicked[at];
+        coveragePicked.splice(at, 1);
+        if (classModalMode === "create" || !item.entryId) { return; }
+        send("DELETE", "/coverage/" + encodeURIComponent(item.entryId), null)
+          .then(function () { coverageLanded(null, item.entryId); })
+          .catch(function (error) {
+            coveragePicked.splice(at, 0, item);
+            renderCoverageSection();
+            classModalFail(error.message);
+          });
+      }
+
+      // --- The step editor
+
+      var stepModal = document.getElementById("step-modal");
+      var stepBody = document.getElementById("step-body");
+
+      function blank() {
+        return {
+          day_offset: 0, kind: "message", condition: "", message_body: "",
+          attach_booking_link: false, questionnaire_id: "", task_title: "", task_body: "",
+          assignee_team_id: "", assignee_staff_id: ""
+        };
+      }
+
+      function classOfStep(stepId) {
+        var owner = null;
+        state.classes.forEach(function (c) {
+          c.steps.forEach(function (step) { if (same(step.id, stepId)) { owner = c; } });
+        });
+        return owner;
+      }
+
+      function classById(classId) {
+        return state.classes.filter(function (c) { return same(c.id, classId); })[0] || null;
+      }
+
+      // The class the open editor belongs to. Adding a step carries the class, editing one
+      // carries only the step, so both routes are resolved here rather than at each caller.
+      function editingClass() {
+        if (editing === null) { return null; }
+        return editing.classId !== null ? classById(editing.classId) : classOfStep(editing.stepId);
+      }
+
+      // The lead is fixed, the name truncates. Built as elements rather than as one string
+      // so the ellipsis lands on the name and never on the words around it.
+      function setStepTitle(lead, className) {
+        document.getElementById("step-title").innerHTML =
+          "<span class='modal-title'>" +
+            "<span class='modal-title-lead'>" + esc(lead) + "&nbsp;</span>" +
+            "<span class='modal-title-quote'>&ldquo;</span>" +
+            "<span class='modal-title-name' title='" + esc(className) + "'>" +
+              esc(className) + "</span>" +
+            "<span class='modal-title-quote'>&rdquo;</span>" +
+          "</span>";
+      }
+
+      function findStep(stepId) {
+        var found = null;
+        state.classes.forEach(function (c) {
+          c.steps.forEach(function (s) { if (same(s.id, stepId)) { found = s; } });
+        });
+        return found;
+      }
+
+      function openStepEditor(classId, stepId) {
+        if (stepId === null) {
+          editing = { classId: classId, stepId: null, draft: blank() };
+          var target = classById(classId);
+          setStepTitle("Add a step to", target ? target.name : "this class");
+        } else {
+          var step = findStep(stepId);
+          if (!step) { return; }
+          editing = { classId: null, stepId: step.id, draft: {
+            day_offset: step.day_offset, kind: step.kind, condition: step.condition,
+            message_body: step.message_body, attach_booking_link: step.attach_booking_link,
+            questionnaire_id: step.questionnaire_id, task_title: step.task_title,
+            task_body: step.task_body, assignee_team_id: step.assignee_team_id,
+            assignee_staff_id: step.assignee_staff_id
+          } };
+          var owner = classOfStep(step.id);
+          setStepTitle("Edit a step in", owner ? owner.name : "this class");
+        }
+        renderStepBody();
+        stepModal.open();
+      }
+
+      // The three kinds ask for genuinely different things, which is why this is not one
+      // content field. A message is wording. A questionnaire is one of the instance's own.
+      // A task is somebody to do it and something for it to say.
+      function kindFields(draft) {
+        if (draft.kind === "questionnaire") {
+          var picked = state.questionnaires.map(function (q) { return [q.id, q.name]; });
+          return "<canvas-dropdown label='Which questionnaire' id='s-questionnaire' " +
+            "placeholder='Choose one of this instance&#39;s questionnaires'>" +
+            options(picked, draft.questionnaire_id) + "</canvas-dropdown>" +
+            (picked.length ? "" :
+              "<div class='muted hint'>This instance has no questionnaires to offer.</div>");
+        }
+        if (draft.kind === "task") {
+          var who = state.teams.map(function (t) { return [t.id, t.name]; })
+            .concat(state.staff.map(function (s) { return [s.id, s.name]; }));
+          return "<canvas-dropdown label='Who does it' id='s-assignee' " +
+              "placeholder='Choose a team or a person'>" +
+              options(who, draft.assignee_team_id || draft.assignee_staff_id) +
+            "</canvas-dropdown>" +
+            "<canvas-input label='What the task says' id='s-task-title' " +
+              "placeholder='e.g. Phone the patient about tolerability' value='" +
+              esc(draft.task_title) + "'></canvas-input>" +
+            "<canvas-textarea label='Any detail for whoever picks it up' id='s-task-body' " +
+              "rows='3' placeholder='Optional'>" + esc(draft.task_body) + "</canvas-textarea>";
+        }
+        return "<canvas-textarea label='What the patient reads' id='s-message' rows='5' " +
+            "placeholder='Type the wording the patient receives'>" +
+            esc(draft.message_body) + "</canvas-textarea>" +
+          "<canvas-checkbox label='Include the address the patient books from' " +
+            "id='s-booking'" + (draft.attach_booking_link ? " checked" : "") + "></canvas-checkbox>";
+      }
+
+      // Two mutually exclusive choices, so both are visible without a click, which is the
+      // rule for a vocabulary of two or three. The label names no verb, because this field
+      // sits under the kind radios and applies to all three, and a task is raised for a
+      // team rather than sent to anybody.
+      //
+      // The condition is offered on a class with no recheck appointment type, because
+      // nothing here disables an entrance. It is inert there though, since an enrolment
+      // carrying no recheck type has no recheck to be unbooked, so the step fires on its
+      // day exactly as Always would. That is what the note says, rather than leaving
+      // somebody to choose it and watch nothing happen.
+      function conditionField(draft) {
+        var owner = editingClass();
+        var noRecheck = owner !== null && !owner.recheck_note_type_id;
+        // A step that already carries the condition keeps the choice on screen even on a
+        // class with no recheck type, because the value is stored and collect preserves it,
+        // and a stored value nobody can see or change is worse than a dead radio.
+        var carriesCondition = !!(draft.condition && String(draft.condition).length);
+
+        // With no recheck type there is nothing to wait on, so the two radios are a choice
+        // between one real option and one that does nothing. The line replacing them says
+        // what happens and how to change it, which is what the radios were there to convey.
+        // Showing nothing at all would hide the capability rather than explain it.
+        if (noRecheck && !carriesCondition) {
+          return "<div>" +
+            "<span class='section-label'>When this step runs</span>" +
+            "<div class='muted'>On its day. " + esc(owner.name) + " has no recheck " +
+              "appointment type, so no step on it can wait for one. Set one under Edit " +
+              "settings on the program and a step can then wait on the recheck.</div>" +
+          "</div>";
+        }
+
+        return "<div>" +
+          "<span class='section-label'>When this step runs</span>" +
+          "<div class='choices-inline'>" +
+            CONDITIONS.map(function (pair) {
+              return "<canvas-radio name='s-condition' value='" + esc(pair[0]) + "' label='" +
+                esc(pair[1]) + "'" +
+                (same(pair[0], draft.condition || "") ? " checked" : "") + "></canvas-radio>";
+            }).join("") +
+          "</div>" +
+          "<div class='muted hint'>A condition is checked on the morning the step is due, " +
+            "so somebody who has already booked is not chased.</div>" +
+          (noRecheck
+            ? "<div class='muted hint'>" + esc(owner.name) + " has no recheck appointment " +
+              "type now, so this step runs on its day until one is set.</div>"
+            : "") +
+        "</div>";
+      }
+
+      function renderStepBody() {
+        var draft = editing.draft;
+        stepBody.innerHTML =
+          "<div class='fields'>" +
+            "<div class='day-field'>" +
+              "<canvas-input label='Day of the program' id='s-day' type='number' " +
+                "placeholder='0' value='" + esc(draft.day_offset) + "'></canvas-input>" +
+              "<div class='muted hint'>Counted from the day the patient is enrolled. Day 0 goes " +
+                "out the same day.</div>" +
+            "</div>" +
+            "<div>" +
+              "<span class='section-label'>What happens</span>" +
+              "<div class='choices'>" +
+                Object.keys(KIND).map(function (k) {
+                  return "<canvas-radio name='s-kind' value='" + k + "' label='" +
+                    esc(KIND[k]) + "'" + (draft.kind === k ? " checked" : "") + "></canvas-radio>";
+                }).join("") +
+              "</div>" +
+            "</div>" +
+            kindFields(draft) +
+            conditionField(draft) +
+          "</div>";
+
+        Array.prototype.forEach.call(
+          stepBody.querySelectorAll("canvas-radio[name='s-kind']"),
+          function (radio) {
+            radio.addEventListener("change", function () {
+              if (!radio.checked) { return; }
+              // Read the open editor back before swapping, or the day and condition already
+              // typed are lost the moment somebody changes their mind about the kind.
+              var kept = collect();
+              kept.kind = radio.value;
+              editing.draft = kept;
+              renderStepBody();
+            });
+          }
+        );
+      }
+
+      function value(id) {
+        var element = document.getElementById(id);
+        return element ? element.value : "";
+      }
+
+      function collect() {
+        // The checked radio decides the kind. Falling back to the draft matters because the
+        // radios only exist while the editor is open.
+        var kind = editing.draft.kind;
+        Array.prototype.forEach.call(
+          stepBody.querySelectorAll("canvas-radio[name='s-kind']"),
+          function (radio) { if (radio.checked) { kind = radio.value; } }
+        );
+
+        // The condition is radios now, so it is read the same way the kind is, by the one
+        // that is checked rather than by an element's value.
+        var condition = editing.draft.condition || "";
+        Array.prototype.forEach.call(
+          stepBody.querySelectorAll("canvas-radio[name='s-condition']"),
+          function (radio) { if (radio.checked) { condition = radio.value; } }
+        );
+
+        var draft = {
+          day_offset: parseInt(value("s-day"), 10) || 0,
+          kind: kind,
+          condition: condition,
+          message_body: "", attach_booking_link: false, questionnaire_id: "",
+          task_title: "", task_body: "", assignee_team_id: "", assignee_staff_id: ""
+        };
+
+        if (kind === "message") {
+          draft.message_body = value("s-message");
+          var booking = document.getElementById("s-booking");
+          draft.attach_booking_link = booking ? !!booking.checked : false;
+        }
+        if (kind === "questionnaire") { draft.questionnaire_id = value("s-questionnaire"); }
+        if (kind === "task") {
+          draft.task_title = value("s-task-title");
+          draft.task_body = value("s-task-body");
+          var who = value("s-assignee");
+          // One picker offers teams and people together, so which column it lands in is
+          // decided by looking the identifier up rather than by asking the user twice.
+          var isTeam = state.teams.some(function (t) { return same(t.id, who); });
+          draft.assignee_team_id = isTeam ? who : "";
+          draft.assignee_staff_id = isTeam ? "" : who;
+        }
+        return draft;
+      }
+
+      document.getElementById("step-cancel").addEventListener("click", function () {
+        editing = null;
+        stepModal.dismiss();
+      });
+
+      document.getElementById("step-save").addEventListener("click", function () {
+        var draft = collect();
+        var isNew = editing.stepId === null;
+        var path = isNew
+          ? "/classes/" + encodeURIComponent(editing.classId) + "/steps"
+          : "/steps/" + encodeURIComponent(editing.stepId);
+
+        send(isNew ? "POST" : "PATCH", path, draft).then(function (payload) {
+          justSaved = payload && payload.id ? payload.id : editing.stepId;
+          editing = null;
+          stepModal.dismiss();
+          load();
+        }).catch(function (error) {
+          stepModal.dismiss();
+          banner(error.message);
+        });
+      });
+
+      // --- Removing, renaming, activating
+
+      function removeStep(stepId) {
+        confirmThen(
+          "This removes the step from the class. Programs already running keep the step they " +
+            "were given when they started.",
+          function () {
+            send("DELETE", "/steps/" + encodeURIComponent(stepId), null)
+              .then(load).catch(function (error) { banner(error.message); });
+          }
+        );
+      }
+
+      /* Asked and answered before the request rather than after the refusal, because the
+         page already knows the count and a refusal a reader could have been spared is worse
+         than a question. The server still refuses on its own, which is what actually guards
+         the data, and this only saves the round trip and offers the two ways forward. */
+      function removeClass(classId) {
+        var item = state.classes.filter(function (c) { return same(c.id, classId); })[0];
+        if (item && (item.total_count || 0) > 0) {
+          openCannotRemove(item);
+          return;
+        }
+        confirmThen(
+          "This removes the class and every step in it.",
+          function () {
+            send("DELETE", "/classes/" + encodeURIComponent(classId), null)
+              .then(load).catch(function (error) { banner(error.message); });
+          }
+        );
+      }
+
+      var cannotRemoveModal = document.getElementById("cannot-remove");
+      var blockedClass = null;
+
+      function openCannotRemove(item) {
+        blockedClass = item;
+        var total = item.total_count || 0;
+        document.getElementById("cannot-remove-text").textContent =
+          total === 1
+            ? "One patient was started on this program, so removing it would leave that " +
+              "program unable to say what was sent."
+            : total + " patients were started on this program, so removing it would leave " +
+              "those programs unable to say what was sent.";
+        cannotRemoveModal.open();
+      }
+
+      document.getElementById("cannot-remove-no").addEventListener("click", function () {
+        blockedClass = null;
+        cannotRemoveModal.dismiss();
+      });
+
+      document.getElementById("cannot-remove-see").addEventListener("click", function () {
+        if (!blockedClass) { return; }
+        var classId = blockedClass.id;
+        blockedClass = null;
+        cannotRemoveModal.dismiss();
+        openPatients(classId);
+      });
+
+      document.getElementById("cannot-remove-deactivate").addEventListener("click", function () {
+        if (!blockedClass) { return; }
+        var classId = blockedClass.id;
+        blockedClass = null;
+        cannotRemoveModal.dismiss();
+        send("PATCH", "/classes/" + encodeURIComponent(classId), { active: false })
+          .then(load).catch(function (error) { banner(error.message); });
+      });
+
+      function flipActive(classId) {
+        var item = state.classes.filter(function (c) { return same(c.id, classId); })[0];
+        if (!item) { return; }
+        send("PATCH", "/classes/" + encodeURIComponent(classId), { active: !item.active })
+          .then(load).catch(function (error) { banner(error.message); });
+      }
+
+      // Creates the class first, exactly as before this moved into the modal, then, when a
+      // medication group was picked, posts it as that class's first coverage entry. The
+      // two writes stay two requests, since the coverage endpoint needs the class's own id
+      // and that id does not exist until the first request answers. A coverage failure
+      // after a successful create is reported rather than swallowed, and the class it
+      // belongs to is never removed over it, load still runs afterwards so the page shows
+      // exactly what is now true, a class that exists and coverage that may or may not
+      // have saved. The modal is dismissed before the request is sent, the same order
+      // every other save in this file already uses, so a slow save never leaves the form
+      // sitting open over a page that is about to change under it.
+      function submitCreateClass() {
+        var name = document.getElementById("class-name").value;
+        // Reported on the field rather than in the banner, because both of these are facts
+        // about the name box and a re render would throw away everything else typed beside
+        // it. Neither returns to load, so nothing is redrawn and nothing is lost, and the
+        // modal stays open so the rest of what was typed is not lost either.
+        if (!String(name).trim()) {
+          return showFieldError("class-name", "A medication class needs a name.");
+        }
+        if (nameTaken(name, null)) {
+          return showFieldError("class-name", duplicateMessage(name));
+        }
+        /* Required on creation and not on editing, deliberately. A new program that covers
+           nothing is offered on no note, so it does nothing at all, and there is no reason
+           to make one. An existing program that covers nothing already exists, and holding
+           its name and its schedule hostage to a coverage decision nobody is ready to make
+           would be worse than letting it stay as it is. The card already says loudly that
+           such a program is offered nowhere. */
+        if (!coveragePicked.length) {
+          return showFieldError("class-coverage-search",
+            "Pick at least one medication group, or this program is offered on no note.");
+        }
+        var senderStaffId = document.getElementById("class-sender").value;
+        var ownerTeamId = document.getElementById("class-owner-team").value;
+        var recheckNoteTypeId = document.getElementById("class-recheck").value;
+        var groups = coveragePicked.slice();
+        var createdClassId = null;
+        classModal.dismiss();
+        send("POST", "/classes", {
+          name: name,
+          recheck_note_type_id: recheckNoteTypeId,
+          sender_staff_id: senderStaffId,
+          owner_team_id: ownerTeamId
+        })
+          .then(function (created) {
+            createdClassId = created.id;
+            return rememberDefaults(senderStaffId, ownerTeamId);
+          })
+          .then(function () {
+            // One after another rather than all at once, so a failure names the group it
+            // failed on. The class itself is already saved and worth keeping either way,
+            // which is why this reports and resolves rather than rejecting.
+            return groups.reduce(function (chain, item) {
+              return chain.then(function () {
+                return send(
+                  "POST",
+                  "/classes/" + encodeURIComponent(createdClassId) + "/coverage",
+                  item.payload
+                ).catch(function (error) {
+                  banner("The class was created. " + item.label +
+                    " did not save as coverage, " + error.message);
+                });
+              });
+            }, Promise.resolve());
+          })
+          .then(load)
+          .catch(function (error) { banner(error.message); });
+      }
+
+      // Storing the practice defaults is a second write, and a class that saved is worth
+      // keeping even when this one fails, so a failure here reports and resolves rather
+      // than rejecting. Losing a remembered default costs one dropdown next time. Losing
+      // the class would cost the work.
+      function rememberDefaults(senderStaffId, ownerTeamId) {
+        return send("PUT", "/defaults", {
+          sender_staff_id: senderStaffId,
+          owner_team_id: ownerTeamId
+        })
+          .then(function (payload) { state.defaults = payload; })
+          .catch(function () {
+            banner("The class saved. Remembering the sender and the team for next time did not.");
+          });
+      }
+
+      var confirmModal = document.getElementById("confirm");
+      var pendingConfirm = null;
+
+      function confirmThen(text, run) {
+        document.getElementById("confirm-text").textContent = text;
+        pendingConfirm = run;
+        confirmModal.open();
+      }
+
+      document.getElementById("confirm-no").addEventListener("click", function () {
+        pendingConfirm = null;
+        confirmModal.dismiss();
+      });
+      document.getElementById("confirm-yes").addEventListener("click", function () {
+        var run = pendingConfirm;
+        pendingConfirm = null;
+        confirmModal.dismiss();
+        if (run) { run(); }
+      });
+
+      // --- Names have to differ, and the form says so before the server has to
+      //
+      // The server is the authority, it refuses a duplicate on the create, the rename and
+      // the clone through one comparison. This is the same question asked locally so the
+      // answer arrives as you type rather than after a round trip, and the two can only
+      // disagree while somebody else is adding a class in another tab, which is exactly
+      // when the server's refusal is the one that should win.
+      function nameTaken(name, exceptClassId) {
+        var wanted = String(name || "").trim().toLowerCase();
+        if (!wanted) { return false; }
+        return state.classes.some(function (c) {
+          if (exceptClassId !== null && exceptClassId !== undefined && same(c.id, exceptClassId)) {
+            return false;
+          }
+          return String(c.name).trim().toLowerCase() === wanted;
+        });
+      }
+
+      // Set on the field rather than in the page banner, because it is a fact about one
+      // input and the banner is for a save that failed as a whole. Cleared on the next
+      // keystroke so it never outlives the value it described.
+      function showFieldError(id, message) {
+        var field = document.getElementById(id);
+        if (!field) { return; }
+        field.setAttribute("error", message);
+        if (field.getAttribute("data-clears") === "yes") { return; }
+        field.setAttribute("data-clears", "yes");
+        field.addEventListener("input", function () { field.removeAttribute("error"); });
+      }
+
+      function duplicateMessage(name) {
+        return "A medication class named " + String(name).trim() + " already exists.";
+      }
+
+      // --- Cloning
+      //
+      // The copy is made by the server in one request, so the page never holds a class
+      // that carries half a programme. All this does is settle the name.
+      var cloneModal = document.getElementById("clone");
+      var pendingClone = null;
+
+      // The proposed name, which is the original with a suffix, and never a name the form
+      // would immediately refuse. Proposing something invalid and then complaining about
+      // it is worse than counting.
+      function proposedCloneName(originalName) {
+        var base = String(originalName).trim();
+        var candidate = base + " (Clone)";
+        var counter = 2;
+        while (nameTaken(candidate, null)) {
+          candidate = base + " (Clone " + counter + ")";
+          counter += 1;
+        }
+        return candidate;
+      }
+
+      function openClone(classId) {
+        var item = classById(classId);
+        if (!item) { return; }
+        pendingClone = classId;
+        var steps = item.steps.length;
+        document.getElementById("clone-body").innerHTML =
+          "<canvas-input label='Name for the copy' id='clone-name' required value='" +
+            esc(proposedCloneName(item.name)) + "'></canvas-input>" +
+          "<div class='muted hint'>Everything on " + esc(item.name) + " is copied, its " +
+            (steps === 1 ? "one step" : steps + " steps") + ", its recheck appointment " +
+            "type, its sender and its owning team. Patients already enrolled stay where " +
+            "they are, on the original.</div>";
+        cloneModal.open();
+        focusAndSelect("clone-name");
+      }
+
+      // The name arrives focused with the whole proposal selected, so typing replaces it and
+      // nobody has to clear a field the page filled in for them.
+      //
+      // Deferred by one frame on purpose. canvas-modal.open defers its own focusFirst into a
+      // requestAnimationFrame, so a focus call made straight after open is undone a frame
+      // later by the modal itself, measured rather than guessed. Registering here means this
+      // callback is queued after the modal's and runs after it in the same frame.
+      //
+      // canvas-input delegates focus, so focusing the host focuses the field inside it.
+      // Selecting the text needs the inner input, which is the one place this page reaches
+      // through a shadow boundary, and it is guarded so a component that stopped exposing
+      // one costs a lost selection rather than a broken modal.
+      function focusAndSelect(id) {
+        requestAnimationFrame(function () {
+          var field = document.getElementById(id);
+          if (!field) { return; }
+          field.focus();
+          var inner = field.shadowRoot ? field.shadowRoot.querySelector("input") : null;
+          if (inner) { inner.select(); }
+        });
+      }
+
+      document.getElementById("clone-cancel").addEventListener("click", function () {
+        pendingClone = null;
+        cloneModal.dismiss();
+      });
+
+      document.getElementById("clone-save").addEventListener("click", function () {
+        var classId = pendingClone;
+        if (!classId) { return; }
+        var name = document.getElementById("clone-name").value;
+        if (!String(name).trim()) {
+          return showFieldError("clone-name", "A medication class needs a name.");
+        }
+        if (nameTaken(name, null)) {
+          return showFieldError("clone-name", duplicateMessage(name));
+        }
+        pendingClone = null;
+        cloneModal.dismiss();
+        send("POST", "/classes/" + encodeURIComponent(classId) + "/clone", { name: name })
+          .then(load)
+          .catch(function (error) { banner(error.message); });
+      });
+
+      // --- The class modal
+      //
+      // One form serving both creating a class and editing one. A class carries a name,
+      // what it covers, the appointment type that counts as its recheck, who its patient
+      // messages are sent as and which team owns the program, and every one of those is
+      // decided the same way whichever mode is open, so classFormFields takes only the
+      // mode and, in edit mode, the class it is editing, and builds every field the same
+      // way regardless. The dropdown options are built fresh on every open, the same way
+      // the step editor builds its own, so a newly loaded staff, team or appointment type
+      // list is always what is offered. Field order matches what the create card used to
+      // read left to right, the name, what the class covers, then the settings around
+      // when and how it messages.
+      function classFormFields(mode, item) {
+        var staffList = state.staff.map(function (s) { return [s.id, s.name]; });
+        var teamList = state.teams.map(function (t) { return [t.id, t.name]; });
+        var types = state.noteTypes.map(function (n) { return [n.id, n.name]; });
+        var isCreate = mode === "create";
+        var name = isCreate ? "" : item.name;
+        var recheckId = isCreate ? "" : item.recheck_note_type_id;
+        var senderId = isCreate ? state.defaults.sender_staff_id : item.sender_staff_id;
+        var ownerTeamId = isCreate ? state.defaults.owner_team_id : item.owner_team_id;
+        return "<canvas-input label='Name' id='class-name' required " +
+            "placeholder='e.g. GLP-1' value='" + esc(name) + "'></canvas-input>" +
+          coverageFieldsSection(mode, item) +
+          "<div>" +
+            "<canvas-dropdown label='Recheck appointment type' id='class-recheck' " +
+              "placeholder='Choose one'>" +
+              options(types, recheckId) +
+            "</canvas-dropdown>" +
+            "<div class='muted hint'>" +
+              (state.noteTypes.length
+                ? (isCreate
+                    ? "The recheck is the appointment a patient books for themselves. "
+                    : "") +
+                  "Reaches new enrolments only, since each keeps the type it started with."
+                : "No appointment type on this instance can be booked by a patient, so " +
+                  "there is nothing to count as a recheck yet.") +
+            "</div>" +
+          "</div>" +
+          "<div>" +
+            "<canvas-dropdown label='Messages sent as' id='class-sender' " +
+              "placeholder='Defaults to the prescriber'>" +
+              options(staffList, senderId) +
+            "</canvas-dropdown>" +
+            "<div class='muted hint'>Empty sends as the prescriber.</div>" +
+          "</div>" +
+          "<div>" +
+            "<canvas-dropdown label='Owning team' id='class-owner-team' " +
+              "placeholder='Defaults to the prescriber'>" +
+              options(teamList, ownerTeamId) +
+            "</canvas-dropdown>" +
+            "<div class='muted hint'>Takes the delivery failure task and any task step " +
+              "naming nobody. Empty falls back to the prescriber.</div>" +
+          "</div>" +
+          "<div class='muted hint'>The sender and the owning team become the default for " +
+            "new classes. Existing classes keep their own.</div>";
+      }
+
+      var classModal = document.getElementById("class-modal");
+      var classModalTitle = document.getElementById("class-modal-title");
+      var classModalBody = document.getElementById("class-modal-body");
+      var classModalSave = document.getElementById("class-modal-save");
+      var classModalProblem = document.getElementById("class-modal-problem");
+
+      // The header and the save button's own label are the only chrome that differs
+      // between the two modes, everything else about the box around the form is shared.
+      function setClassModalChrome(mode) {
+        if (mode === "create") {
+          classModalTitle.textContent = "Add a medication class";
+          classModalSave.textContent = "Add the class";
+        } else {
+          classModalTitle.textContent = "Program settings";
+          classModalSave.textContent = "Save the settings";
+        }
+      }
+
+      // A coverage change made while the modal is open reports here rather than through
+      // the page banner, because the page banner sits in the content area, and that area
+      // is inert while a modal has focus trapped, the same reason the patients modal
+      // carries its own problem area rather than reusing the page one.
+      function classModalFail(message) {
+        classModalProblem.innerHTML =
+          "<canvas-banner variant='error' header='That did not save'><p>" +
+          esc(message) + "</p></canvas-banner>";
+      }
+
+      function classModalClearFailure() { classModalProblem.innerHTML = ""; }
+
+      /* --- Why coverage redraws itself and not the form around it
+         Adding or removing a medication group used to rebuild the whole modal body, which
+         redrew every field from the class as the server holds it. So a name typed but not
+         yet saved, or a changed recheck type, was silently thrown away by the act of
+         adding a group, and the rebuild was visible as the form blinking. Only this one
+         section depends on what a coverage write changed, so only this one section is
+         redrawn, and the rest of the form keeps whatever is in it. */
+      function renderCoverageSection() {
+        var host = document.getElementById("class-coverage-section");
+        if (!host) { return; }
+        var item = classModalMode === "edit" ? classById(classModalTarget) : null;
+        if (classModalMode === "edit" && !item) { return; }
+        host.outerHTML = coverageFieldsSection(classModalMode, item);
+        wireClassCoverage();
+      }
+
+      function renderClassModalBody() {
+        var item = classModalMode === "edit" ? classById(classModalTarget) : null;
+        classModalBody.innerHTML = classFormFields(classModalMode, item);
+        wireClassCoverage();
+      }
+
+      /* --- Landing the caret in Name, and why it takes two frames
+         canvas-modal already moves focus on open. It collects the tabbables inside itself
+         one animation frame after opening and focuses the first, which is the dismiss
+         control in the header, so a form opened for typing arrived with the caret nowhere
+         and the close button lit up instead. The design system asks for the first focusable
+         element and names the first form input as the other reasonable choice, which is the
+         one a form wants.
+
+         So this runs a frame after that, because a focus set before the modal's own pass
+         is simply taken back by it. Two frames rather than a timeout, since a timeout
+         guesses at how long the modal takes and this waits for the thing itself.
+
+         Only on open. The body is rendered again whenever coverage changes in edit mode,
+         and dragging the caret back to Name every time somebody adds a medication group
+         would take it away from the picker they are still using, which the focus rules
+         warn against for exactly this reason. */
+      function focusClassName() {
+        var host = document.getElementById("class-name");
+        if (!host) { return; }
+        // The field the caret belongs in, whether the component keeps it in the light DOM
+        // or behind its own shadow root, falling back to the host so this never throws.
+        var field = host.querySelector("input, textarea") ||
+          (host.shadowRoot ? host.shadowRoot.querySelector("input, textarea") : null) ||
+          host;
+        try { field.focus(); } catch (cannotFocus) { /* nothing to land on, leave it. */ }
+      }
+
+      function openClassModal(mode, classId) {
+        if (mode === "edit" && !classById(classId)) { return; }
+        classModalMode = mode;
+        classModalTarget = classId;
+        // What the class already covers becomes what the control shows as picked, so a
+        // stored entry and one chosen a moment ago are the same thing from here on.
+        var editing = mode === "edit" ? classById(classId) : null;
+        coveragePicked = editing
+          ? (editing.coverage || []).map(function (entry) {
+              return pickedFrom(entry, entry.id);
+            })
+          : [];
+        classModalClearFailure();
+        setClassModalChrome(mode);
+        renderClassModalBody();
+        classModal.open();
+        requestAnimationFrame(function () {
+          requestAnimationFrame(focusClassName);
+        });
+      }
+
+      document.getElementById("add-class").addEventListener("click", function () {
+        openClassModal("create", null);
+      });
+
+      document.getElementById("class-modal-cancel").addEventListener("click", function () {
+        classModalMode = null;
+        classModalTarget = null;
+        classModal.dismiss();
+      });
+
+      // Excluding the class being edited, so saving a class without touching its name is
+      // never refused for clashing with itself. Create mode passes no exception, since
+      // every existing class is a possible clash for a class that does not exist yet.
+      function submitEditClass() {
+        var classId = classModalTarget;
+        var name = document.getElementById("class-name").value;
+        var senderStaffId = document.getElementById("class-sender").value;
+        var ownerTeamId = document.getElementById("class-owner-team").value;
+        var recheckNoteTypeId = document.getElementById("class-recheck").value;
+        if (!String(name).trim()) {
+          return showFieldError("class-name", "A medication class needs a name.");
+        }
+        if (nameTaken(name, classId)) {
+          return showFieldError("class-name", duplicateMessage(name));
+        }
+        classModal.dismiss();
+        if (!classId) { return; }
+        send("PATCH", "/classes/" + encodeURIComponent(classId), {
+          name: name,
+          sender_staff_id: senderStaffId,
+          owner_team_id: ownerTeamId,
+          recheck_note_type_id: recheckNoteTypeId
+        })
+          .then(function () { return rememberDefaults(senderStaffId, ownerTeamId); })
+          .then(load)
+          .catch(function (error) { banner(error.message); });
+      }
+
+      classModalSave.addEventListener("click", function () {
+        if (classModalMode === "create") { submitCreateClass(); return; }
+        submitEditClass();
+      });
+
+      // --- Talking to the plugin
+
+      // --- Who is on this program, in a modal.
+
+      var patientsModal = document.getElementById("patients");
+      var patientsTitle = document.getElementById("patients-title");
+      var patientsTotals = document.getElementById("patients-totals");
+      var patientsProblem = document.getElementById("patients-problem");
+      var patientsList = document.getElementById("patients-list");
+      var patientsStop = document.getElementById("patients-stop");
+      var stopWho = document.getElementById("stop-who");
+      var stopReason = document.getElementById("stop-reason");
+
+      /* One state per tab, so switching to the other tab and back returns to the page it was
+         left on. Both are thrown away when the modal opens, see resetPatientsTabs.
+
+         requested is set the moment a fetch starts rather than when it finishes, because the
+         tabs component fires its change event while it is mounting and a flag that only turns
+         true on arrival lets that event start a second fetch for the same tab.
+
+         openRowId, openPanel and openButton track the one row a tab may have expanded, and
+         openTopTable and openBottomTable are the two tables that one row split the whole
+         table into, see splitPatientsTable. All five are thrown away whenever the tab's
+         table is rebuilt, a page turn, a tab switch or the modal reopening, since the DOM
+         they point at is gone at that point regardless. */
+      var patientsScopes = {
+        running: {
+          page: 1, node: null, requested: false, openRowId: null, openPanel: null,
+          openTopTable: null, openBottomTable: null, openButton: null
+        },
+        ended: {
+          page: 1, node: null, requested: false, openRowId: null, openPanel: null,
+          openTopTable: null, openBottomTable: null, openButton: null
+        }
+      };
+      var patientsClass = null;
+      var patientsScope = "running";
+      var pendingStop = null;
+
+      /* The steps behind an expanded row, keyed by enrolment id, so reopening the same row
+         costs nothing. Thrown away whenever the modal opens on a class, see openPatients,
+         since a page of rows from a different class shares no enrolments with this one and
+         carrying the old entries forward would only hold memory nothing can reach. */
+      var patientsStepsCache = {};
+
+      /* --- The one place the modal's width is set, and why it is set here
+         The table has seven columns and the medium box is 52.5rem, which wraps every row. The
+         component takes a size of small, medium or full and publishes no width token, and full
+         also forces a full height box. So the width is written into the modal's own shadow
+         root, once, from here.
+
+         The number is the page's content width, twelve hundred, plus whatever horizontal
+         padding canvas-modal-content actually renders, read off the element itself rather
+         than assumed. A figure copied from a report and hardcoded here would go stale the
+         day that padding changes, and the failure would be the same content box landing
+         narrower than the table again with nothing on this page saying why. Ceiling left as
+         the component's own, so a narrow window still gets a modal that fits and the table
+         scrolls inside its own wrapper instead. This is the seam. If the design system ever
+         grows a width token, this function is what it replaces. */
+      function widenPatientsModal() {
+        var root = patientsModal.shadowRoot;
+        /* Checked by looking for the rule rather than by remembering that it was added. The
+           component renders its own shadow markup, and a render replaces everything in there,
+           so a flag on the host would say yes while the rule had already been thrown away. */
+        if (!root || root.querySelector("style[data-widened]")) { return; }
+        var content = patientsModal.querySelector("canvas-modal-content");
+        var horizontalPadding = 0;
+        if (content) {
+          var computed = getComputedStyle(content);
+          var left = parseFloat(computed.paddingLeft);
+          var right = parseFloat(computed.paddingRight);
+          horizontalPadding = (isFinite(left) ? left : 0) + (isFinite(right) ? right : 0);
+        }
+        var style = document.createElement("style");
+        style.setAttribute("data-widened", "");
+        style.textContent =
+          ".modal-medium { width: " + (1200 + horizontalPadding) + "px; " +
+          "max-width: calc(100vw - 4rem); }";
+        root.appendChild(style);
+      }
+
+      /* --- Why the tabs are rebuilt rather than reset
+         The component owns which panel is showing and this file owns which tab has been
+         fetched, and two owners of one piece of state is what produced the defect. Reopening
+         the modal left Ended selected from last time while running was the tab being loaded,
+         so the body on screen was the empty one, and switching away and back was what made it
+         correct. The component gives nothing to reset with either. It reads the active
+         attribute once when it mounts, and switching tabs removes that attribute from every
+         one of them, so there is nothing left to put back and no method to call.
+
+         So the markup is written fresh on every open. The component mounts again, reads
+         active off Running, and there is one owner of the state again. It also throws away
+         both page numbers, which is the other half of what was asked for. */
+      function resetPatientsTabs() {
+        patientsList.innerHTML =
+          "<canvas-tabs id='patients-tabs'>" +
+            "<canvas-tab for='panel-running' active>" +
+              "<canvas-tab-label>Running</canvas-tab-label></canvas-tab>" +
+            "<canvas-tab for='panel-ended'>" +
+              "<canvas-tab-label>Ended</canvas-tab-label></canvas-tab>" +
+            "<canvas-tab-panel id='panel-running'><div id='body-running'></div></canvas-tab-panel>" +
+            "<canvas-tab-panel id='panel-ended'><div id='body-ended'></div></canvas-tab-panel>" +
+          "</canvas-tabs>";
+
+        patientsScopes.running = {
+          page: 1, node: document.getElementById("body-running"), requested: false,
+          openRowId: null, openPanel: null, openTopTable: null, openBottomTable: null,
+          openButton: null
+        };
+        patientsScopes.ended = {
+          page: 1, node: document.getElementById("body-ended"), requested: false,
+          openRowId: null, openPanel: null, openTopTable: null, openBottomTable: null,
+          openButton: null
+        };
+        patientsScope = "running";
+
+        /* Bound to the element just built, since the old one and its listener are gone. */
+        document.getElementById("patients-tabs")
+          .addEventListener("tab-change", function (event) {
+            var scope =
+              event.detail && event.detail.panel === "panel-ended" ? "ended" : "running";
+            patientsScope = scope;
+            if (!patientsScopes[scope].requested) { loadPatients(scope); }
+          });
+      }
+
+      function patientsFail(message) {
+        patientsProblem.innerHTML =
+          "<canvas-banner variant='error' header='That did not work'><p>" +
+          esc(message) + "</p></canvas-banner>";
+      }
+
+      function patientsClearFailure() { patientsProblem.innerHTML = ""; }
+
+      /* --- Dates read as days rather than as dates
+         A due date two days out means more to somebody scanning than the date does, and the
+         column is narrow. Parsed as parts rather than through Date, so a plain yyyy mm dd is
+         not read as UTC midnight and shown as the day before in a western timezone. */
+      function dayDifference(iso) {
+        var parts = (iso || "").split("-");
+        if (parts.length !== 3) { return null; }
+        var then = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        var now = new Date();
+        var midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return Math.round((then - midnight) / 86400000);
+      }
+
+      function whenPhrase(iso) {
+        var days = dayDifference(iso);
+        if (days === null) { return ""; }
+        if (days === 0) { return "today"; }
+        if (days === 1) { return "tomorrow"; }
+        if (days === -1) { return "overdue by a day"; }
+        if (days < 0) { return "overdue by " + Math.abs(days) + " days"; }
+        return "in " + days + " days";
+      }
+
+      var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+      function startedPhrase(iso) {
+        var parts = (iso || "").split("-");
+        if (parts.length !== 3) { return ""; }
+        return Number(parts[2]) + " " + MONTHS[Number(parts[1]) - 1] + " " + parts[0];
+      }
+
+      var STATUS_WORDS = { active: "Running", stopped: "Stopped", completed: "Completed" };
+
+      // The word the expanded panel shows for a step's own outcome, in language a reader
+      // who has never seen the column names reads correctly the first time. Every value
+      // StepStatus can hold is named here, so a status the backend adds later prints as
+      // itself rather than through this mapping until the mapping is told about it too.
+      var STEP_STATE_WORDS = {
+        pending: "Waiting", fired: "Sent", skipped: "Skipped", failed: "Failed"
+      };
+
+      /* The chart takes the patient public key and the note beside it takes the note database
+         id. Two kinds of identifier in the one address, which is why the payload names them
+         apart and why they are read apart here. */
+      function chartUrl(row) { return "/patient/" + encodeURIComponent(row.patient_key); }
+
+      /* The name is the link to the chart. A separate Chart control in the actions column was
+         a second door to the same page, and it cost the row enough width that the two controls
+         that are not a duplicate wrapped onto two lines. */
+      function patientCell(row) {
+        return "<a href='" + esc(chartUrl(row)) + "' target='_blank' rel='noopener'>" +
+            esc(row.patient_name) + "</a>" +
+          (row.mrn ? "<span class='sub'>MRN " + esc(row.mrn) + "</span>" : "");
+      }
+
+      function noteUrl(row) {
+        return chartUrl(row) + "#noteId=" + encodeURIComponent(row.start_note_dbid);
+      }
+
+      function progressCell(row) {
+        var line = row.span > 0 ? "Day " + row.day + " of " + row.span : "Day " + row.day;
+        var doneLabel = row.steps_done + " of " + row.steps_total + " done";
+        var percent = row.steps_total > 0
+          ? Math.round((row.steps_done / row.steps_total) * 100)
+          : 0;
+        return "<div class='progress-cell'>" +
+          "<span class='nw'>" + esc(line) + "</span>" +
+          "<span class='sub nw'>" + esc(doneLabel) + "</span>" +
+          "<canvas-progress size='tiny' value='" + percent +
+            "' aria-label='" + esc(doneLabel) + "'></canvas-progress>" +
+        "</div>";
+      }
+
+      // The Next column once printed the whole message body, which is what made this
+      // column the reason the table would not fit. It now names only the kind of step
+      // waiting and when it is due, and the full wording moved to the expanded panel.
+      function nextCell(row) {
+        if (!row.next_due) { return "<span class='muted'>Nothing waiting</span>"; }
+        return esc(KIND_SHORT[row.next_kind] || row.next_kind || "Step") +
+          "<span class='sub'>" + esc(whenPhrase(row.next_due)) + "</span>";
+      }
+
+      function statusCell(row) {
+        var word = STATUS_WORDS[row.status] || row.status;
+        return "<canvas-badge color='" + (row.status === "completed" ? "green" : "grey") +
+            "' size='mini'>" + esc(word) + "</canvas-badge>" +
+          (row.stopped_reason ? "<span class='sub'>" + esc(row.stopped_reason) + "</span>" : "");
+      }
+
+      function actionsCell(row, scope) {
+        var parts = [];
+        /* Only a program started after the note began being recorded can offer this, and an
+           older one gets no link rather than a link to nothing. */
+        if (row.start_note_dbid) {
+          parts.push("<a href='" + esc(noteUrl(row)) + "' target='_blank' rel='noopener'>" +
+            "Starting note</a>");
+        }
+        if (scope === "running") {
+          parts.push("<canvas-button variant='ghost' size='xs' data-stop='" + esc(row.id) +
+            "' data-who='" + esc(row.patient_name + ", " + row.medication_label) +
+            "'>Stop</canvas-button>");
+        }
+        return "<div class='row-actions'>" + parts.join("") + "</div>";
+      }
+
+      // Two chevrons rather than one rotated, since collapsed and expanded are the only two
+      // states this control ever holds and drawing both plainly needs no animation to read
+      // correctly.
+      function chevronSvg(open) {
+        return open
+          ? "<svg width='10' height='10' viewBox='0 0 10 10' fill='none' aria-hidden='true'>" +
+              "<path d='M1.5 3.5l3.5 3.5 3.5-3.5' stroke='currentColor' stroke-width='1.5' " +
+              "stroke-linecap='round' stroke-linejoin='round'/></svg>"
+          : "<svg width='10' height='10' viewBox='0 0 10 10' fill='none' aria-hidden='true'>" +
+              "<path d='M3.5 1.5l3.5 3.5-3.5 3.5' stroke='currentColor' stroke-width='1.5' " +
+              "stroke-linecap='round' stroke-linejoin='round'/></svg>";
+      }
+
+      // The expander always renders collapsed, because the table it sits in is rebuilt
+      // whole on every load, page turn and tab switch, and every one of those already
+      // throws the scope's open row away. See loadPatients.
+      //
+      // A bare button carrying the row-expander class rather than a canvas-button, since
+      // the whole forty four pixel cell is meant to be the click target and no component
+      // offers that shape. It stays a real button element so a keyboard and a screen
+      // reader both treat it as one, and it keeps every attribute the toggle handler and
+      // the delegated listener already read, aria-expanded, data-toggle-row and an
+      // aria-label naming what the control does.
+      function expanderCell(row) {
+        return "<button type='button' class='row-expander' data-toggle-row='" + esc(row.id) +
+          "' data-toggle-who=\"" + esc(row.patient_name + ", " + row.medication_label) + "\"" +
+          " aria-expanded='false' aria-label='Expand " + esc(row.patient_name) + "'>" +
+          chevronSvg(false) + "</button>";
+      }
+
+      function patientsTable(payload, scope) {
+        var statusHead = scope === "running" ? "Next" : "Status";
+        var statusClass = scope === "running" ? "col-next" : "col-status";
+        var rows = payload.rows.map(function (row) {
+          return "<canvas-table-row>" +
+            "<canvas-table-cell class='col-expand'>" + expanderCell(row) + "</canvas-table-cell>" +
+            "<canvas-table-cell class='col-patient' bold>" + patientCell(row) + "</canvas-table-cell>" +
+            "<canvas-table-cell class='col-medication'>" +
+              "<span class='ellipsis' title='" + esc(row.medication_label) + "'>" +
+              esc(row.medication_label) + "</span>" +
+            "</canvas-table-cell>" +
+            "<canvas-table-cell class='col-started'><span class='nw'>" +
+              esc(startedPhrase(row.start_date)) + "</span></canvas-table-cell>" +
+            "<canvas-table-cell class='col-progress'>" + progressCell(row) + "</canvas-table-cell>" +
+            "<canvas-table-cell class='" + statusClass + "'>" +
+              (scope === "running" ? nextCell(row) : statusCell(row)) +
+            "</canvas-table-cell>" +
+            "<canvas-table-cell class='col-actions'>" + actionsCell(row, scope) + "</canvas-table-cell>" +
+          "</canvas-table-row>";
+        }).join("");
+
+        return "<div class='table-scroll'>" +
+          "<canvas-table compact sticky aria-label='Patients on this program'>" +
+          "<canvas-table-head><canvas-table-row>" +
+            "<canvas-table-cell class='col-expand'><span class='sr-only'>Expand row</span></canvas-table-cell>" +
+            "<canvas-table-cell class='col-patient'>Patient</canvas-table-cell>" +
+            "<canvas-table-cell class='col-medication'>Medication</canvas-table-cell>" +
+            "<canvas-table-cell class='col-started'>Started</canvas-table-cell>" +
+            "<canvas-table-cell class='col-progress'>Progress</canvas-table-cell>" +
+            "<canvas-table-cell class='" + statusClass + "'>" + esc(statusHead) + "</canvas-table-cell>" +
+            "<canvas-table-cell class='col-actions'>Actions</canvas-table-cell>" +
+          "</canvas-table-row></canvas-table-head>" +
+          "<canvas-table-body>" + rows + "</canvas-table-body>" +
+          "</canvas-table>" +
+        "</div>";
+      }
+
+      // --- The panel one row opens beneath itself
+
+      function stepsPanelLoading() {
+        return "<div class='muted'>Loading the steps</div>";
+      }
+
+      function stepsPanelError(message) {
+        return "<div class='muted'>" + esc(message) + "</div>";
+      }
+
+      // What one row of the timeline says beneath its kind, a condition it waits on, an
+      // assignee it goes to, both, or neither. The class editor's own table follows the
+      // same rule, a step that carries neither prints no second line.
+      function stepSubLines(step) {
+        var lines = [];
+        if (step.condition) { lines.push(conditionLabel(step.condition)); }
+        if (step.kind === "task" && step.assignee_name) { lines.push(step.assignee_name); }
+        return lines.map(function (line) {
+          return "<span class='sub'>" + esc(line) + "</span>";
+        }).join("");
+      }
+
+      function stepTimelineRow(step) {
+        var kindLabel = KIND_SHORT[step.kind] || step.kind;
+        var stateWord = STEP_STATE_WORDS[step.status] || step.status;
+        return "<canvas-table-row>" +
+          "<canvas-table-cell bold>" + esc("Day " + step.day_offset) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(kindLabel) + stepSubLines(step) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(step.summary) + "</canvas-table-cell>" +
+          "<canvas-table-cell><span class='nw'>" + esc(startedPhrase(step.due_date)) +
+            "</span></canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(stateWord) +
+            (step.status === "failed" && step.failure_reason
+              ? "<span class='sub'>" + esc(step.failure_reason) + "</span>" : "") +
+          "</canvas-table-cell>" +
+        "</canvas-table-row>";
+      }
+
+      // The header line names the drug and when it started, the same two facts the row it
+      // opened from already carries, so the panel reads as that row's own detail rather
+      // than as a second unrelated fact sheet.
+      function stepsPanelContent(detail) {
+        var steps = detail.steps.slice().sort(function (a, b) {
+          return a.day_offset - b.day_offset;
+        });
+        return "<div class='steps-panel-header'>" +
+            "<strong>" + esc(detail.medication_label) + "</strong>" +
+            "<span class='sub'>Started " + esc(startedPhrase(detail.start_date)) + "</span>" +
+          "</div>" +
+          "<canvas-table compact aria-label='Steps for this program'>" +
+            "<canvas-table-head><canvas-table-row>" +
+              "<canvas-table-cell>Day</canvas-table-cell>" +
+              "<canvas-table-cell>What happens</canvas-table-cell>" +
+              "<canvas-table-cell>Content</canvas-table-cell>" +
+              "<canvas-table-cell>Due</canvas-table-cell>" +
+              "<canvas-table-cell>State</canvas-table-cell>" +
+            "</canvas-table-row></canvas-table-head>" +
+            "<canvas-table-body>" + steps.map(stepTimelineRow).join("") + "</canvas-table-body>" +
+          "</canvas-table>";
+      }
+
+      // Read once per enrolment and kept, so opening the same row a second time costs
+      // nothing. A failed fetch is never cached, which is what lets closing and reopening
+      // the row serve as its own retry.
+      function loadStepsPanel(enrollmentId, panelEl) {
+        if (patientsStepsCache[enrollmentId]) {
+          panelEl.innerHTML = stepsPanelContent(patientsStepsCache[enrollmentId]);
+          return;
+        }
+        fetch(BASE + "/enrollments/" + encodeURIComponent(enrollmentId) + "/steps",
+              { credentials: "same-origin" })
+          .then(function (response) {
+            return response.json().then(function (payload) {
+              return { ok: response.ok, payload: payload };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              panelEl.innerHTML = stepsPanelError(
+                (result.payload && result.payload.error) || "The steps could not be loaded."
+              );
+              return;
+            }
+            patientsStepsCache[enrollmentId] = result.payload;
+            panelEl.innerHTML = stepsPanelContent(result.payload);
+          })
+          .catch(function () {
+            panelEl.innerHTML = stepsPanelError("The steps could not be loaded.");
+          });
+      }
+
+      // A CSS table has no real column spanning, only an HTML colspan attribute on a
+      // genuine td, and canvas-table-cell is a custom element with display table-cell, so
+      // a panel cannot be one more row of the same table no matter how it is styled. This
+      // splits the whole table around the row that opened, moving every row after it into
+      // a second table, so the panel can sit between the two as a plain sibling div rather
+      // than inside either one. Reversed by rejoinPatientsTable, which closeStepsPanel
+      // always calls first, so a later toggle on a different row always starts from one
+      // whole table again.
+      function splitPatientsTable(row) {
+        var table = row.closest("canvas-table");
+        var body = table && table.querySelector("canvas-table-body");
+        if (!table || !body) { return null; }
+        var bodyRows = Array.prototype.slice.call(body.children);
+        var index = bodyRows.indexOf(row);
+        if (index === -1) { return null; }
+
+        var afterRows = bodyRows.slice(index + 1);
+        if (afterRows.length === 0) { return { topTable: table, bottomTable: null }; }
+
+        /* No head, since a fixed layout table reads its column widths from its own first
+           row regardless of whether that row is a head or a body row, and every row here
+           already carries the same col star classes the head does. Compact carried across
+           so the two tables' cells share one padding, and the aria-label is named apart so
+           a screen reader never meets two tables reading as the same one. */
+        var bottomTable = document.createElement("canvas-table");
+        bottomTable.setAttribute("compact", "");
+        var label = table.getAttribute("aria-label");
+        if (label) { bottomTable.setAttribute("aria-label", label + ", continued"); }
+        var bottomBody = document.createElement("canvas-table-body");
+        afterRows.forEach(function (r) { bottomBody.appendChild(r); });
+        bottomTable.appendChild(bottomBody);
+        table.insertAdjacentElement("afterend", bottomTable);
+
+        return { topTable: table, bottomTable: bottomTable };
+      }
+
+      // The reverse of the split above. Moves every row of the bottom table back into the
+      // top table's own body, in the order it already carries, then removes the bottom
+      // table, leaving one whole table exactly as patientsTable first rendered it.
+      function rejoinPatientsTable(slot) {
+        if (!slot.openBottomTable) { return; }
+        var topBody = slot.openTopTable && slot.openTopTable.querySelector("canvas-table-body");
+        var bottomBody = slot.openBottomTable.querySelector("canvas-table-body");
+        if (topBody && bottomBody) {
+          Array.prototype.slice.call(bottomBody.children).forEach(function (r) {
+            topBody.appendChild(r);
+          });
+        }
+        slot.openBottomTable.remove();
+      }
+
+      // Closes whichever row a scope currently has open, restoring that row's own chevron
+      // and rejoining the table that row's opening split, before either opening a
+      // different row or leaving nothing open at all. Exactly one row is open per tab at a
+      // time because every opening path runs through here first.
+      function closeStepsPanel(slot) {
+        rejoinPatientsTable(slot);
+        if (slot.openPanel) { slot.openPanel.remove(); }
+        if (slot.openButton) {
+          slot.openButton.setAttribute("aria-expanded", "false");
+          slot.openButton.removeAttribute("aria-controls");
+          slot.openButton.innerHTML = chevronSvg(false);
+          slot.openButton.setAttribute(
+            "aria-label", "Expand " + (slot.openButton.getAttribute("data-toggle-who") || "")
+          );
+        }
+        slot.openRowId = null;
+        slot.openPanel = null;
+        slot.openTopTable = null;
+        slot.openBottomTable = null;
+        slot.openButton = null;
+      }
+
+      function toggleStepsPanel(button, scope) {
+        var enrollmentId = button.getAttribute("data-toggle-row");
+        var slot = patientsScopes[scope];
+        var wasOpen = same(slot.openRowId, enrollmentId);
+        var row = button.closest("canvas-table-row");
+        closeStepsPanel(slot);
+        if (wasOpen || !row) { return; }
+
+        var split = splitPatientsTable(row);
+        if (!split) { return; }
+
+        var panelId = "steps-panel-" + scope + "-" + enrollmentId;
+        var panel = document.createElement("div");
+        panel.className = "steps-panel";
+        panel.id = panelId;
+        panel.innerHTML = stepsPanelLoading();
+        split.topTable.insertAdjacentElement("afterend", panel);
+
+        button.setAttribute("aria-expanded", "true");
+        button.setAttribute("aria-controls", panelId);
+        button.innerHTML = chevronSvg(true);
+        button.setAttribute(
+          "aria-label", "Collapse " + (button.getAttribute("data-toggle-who") || "")
+        );
+
+        slot.openRowId = enrollmentId;
+        slot.openPanel = panel;
+        slot.openTopTable = split.topTable;
+        slot.openBottomTable = split.bottomTable;
+        slot.openButton = button;
+
+        loadStepsPanel(enrollmentId, panel);
+      }
+
+      /* --- The pager says where you are rather than how many pages there are
+         A page count asks a reader to divide. The first and last row of the window against the
+         total is the same fact already worked out. */
+      function patientsPager(payload) {
+        var first = (payload.page - 1) * payload.page_size + 1;
+        var last = Math.min(payload.page * payload.page_size, payload.total);
+        var hasPrevious = payload.page > 1;
+        var hasNext = payload.page * payload.page_size < payload.total;
+        if (!hasPrevious && !hasNext) { return ""; }
+        return "<div class='pager'>" +
+          "<canvas-button variant='ghost' size='sm' data-page-step='-1'" +
+            (hasPrevious ? "" : " disabled") + ">Previous</canvas-button>" +
+          "<span class='muted'>" + esc(first + " to " + last + " of " + payload.total) + "</span>" +
+          "<canvas-button variant='ghost' size='sm' data-page-step='1'" +
+            (hasNext ? "" : " disabled") + ">Next</canvas-button>" +
+        "</div>";
+      }
+
+      function patientsEmpty(scope) {
+        return "<div class='empty muted'>" +
+          (scope === "running"
+            ? "No programs are running on this class."
+            : "No programs on this class have ended yet.") +
+        "</div>";
+      }
+
+      function wirePatients(node, scope) {
+        Array.prototype.forEach.call(node.querySelectorAll("[data-page-step]"), function (b) {
+          b.addEventListener("click", function () {
+            if (b.hasAttribute("disabled")) { return; }
+            patientsScopes[scope].page += Number(b.getAttribute("data-page-step"));
+            if (patientsScopes[scope].page < 1) { patientsScopes[scope].page = 1; }
+            loadPatients(scope);
+          });
+        });
+        Array.prototype.forEach.call(node.querySelectorAll("[data-stop]"), function (b) {
+          b.addEventListener("click", function () {
+            showStop(b.getAttribute("data-stop"), b.getAttribute("data-who"));
+          });
+        });
+        Array.prototype.forEach.call(node.querySelectorAll("[data-toggle-row]"), function (b) {
+          b.addEventListener("click", function () { toggleStepsPanel(b, scope); });
+        });
+      }
+
+      function loadPatients(scope) {
+        var slot = patientsScopes[scope];
+        // The table this replaces is thrown away below, and any row it had open goes with
+        // it, so the record of what was open is cleared here rather than left to point at
+        // a row that no longer exists.
+        slot.openRowId = null;
+        slot.openPanel = null;
+        slot.openTopTable = null;
+        slot.openBottomTable = null;
+        slot.openButton = null;
+        slot.requested = true;
+        slot.node.innerHTML = "<div class='empty muted'>Loading</div>";
+        var query = "?class_id=" + encodeURIComponent(patientsClass) +
+          "&scope=" + encodeURIComponent(scope) +
+          "&page=" + encodeURIComponent(slot.page);
+
+        fetch(BASE + "/class-enrollments" + query, { credentials: "same-origin" })
+          .then(function (response) {
+            return response.json().then(function (payload) {
+              return { ok: response.ok, payload: payload };
+            });
+          })
+          .then(function (result) {
+            if (!result.ok) {
+              slot.node.innerHTML = "";
+              patientsFail((result.payload && result.payload.error) ||
+                "This list could not be loaded.");
+              return;
+            }
+            patientsClearFailure();
+            var payload = result.payload;
+            patientsTitle.textContent = payload.class_name;
+            patientsTotals.textContent = payload.running_count + " running, " +
+              (payload.running_count + payload.ended_count) + " in total";
+            document.querySelector("canvas-tab[for='panel-running']")
+              .setAttribute("badge", String(payload.running_count));
+            document.querySelector("canvas-tab[for='panel-ended']")
+              .setAttribute("badge", String(payload.ended_count));
+
+            /* A page emptied by somebody else's change walks back rather than showing a blank
+               table under a pager that says otherwise. */
+            if (payload.rows.length === 0 && payload.page > 1 && payload.total > 0) {
+              slot.page = 1;
+              loadPatients(scope);
+              return;
+            }
+
+            slot.node.innerHTML = payload.rows.length
+              ? patientsTable(payload, scope) + patientsPager(payload)
+              : patientsEmpty(scope);
+            wirePatients(slot.node, scope);
+          })
+          .catch(function () {
+            slot.node.innerHTML = "";
+            patientsFail("This list could not be loaded.");
+          });
+      }
+
+      function openPatients(classId) {
+        patientsClass = classId;
+        // Thrown away on every open, since a page of rows from a different class shares no
+        // enrolments with whatever this cache was holding.
+        patientsStepsCache = {};
+        patientsClearFailure();
+        showList();
+
+        /* The name is put up before the fetch answers, so the modal never opens under a
+           heading left over from the last class it was opened on. */
+        var item = state.classes.filter(function (c) { return same(c.id, classId); })[0];
+        patientsTitle.textContent = item ? item.name : "Patients";
+        patientsTotals.textContent = "";
+
+        /* Opened before the tabs are built, and that order matters. The component measures its
+           own labels on mount to reserve the width the bold state needs, and inside a modal
+           that has not opened yet every measurement comes back zero, so the tabs would jump as
+           the selection moved. */
+        patientsModal.open();
+        widenPatientsModal();
+        resetPatientsTabs();
+        loadPatients("running");
+      }
+
+      function showList() {
+        patientsStop.setAttribute("hidden", "");
+        patientsStop.style.display = "none";
+        patientsList.style.display = "";
+      }
+
+      function showStop(id, who) {
+        pendingStop = id;
+        stopWho.textContent = who || "";
+        stopReason.value = "";
+        patientsList.style.display = "none";
+        patientsStop.removeAttribute("hidden");
+        patientsStop.style.display = "";
+        focusStopReason();
+      }
+
+      /* The reason field arrives focused, so typing starts without a click first. Deferred
+         by a frame since canvas-textarea delegates focus only once its shadow root exists,
+         and a component that has not upgraded yet at that point tries again on the next
+         frame rather than focusing nothing. */
+      function focusStopReason() {
+        requestAnimationFrame(function tryFocus() {
+          if (!stopReason.shadowRoot) { requestAnimationFrame(tryFocus); return; }
+          stopReason.focus();
+        });
+      }
+
+      document.getElementById("stop-no").addEventListener("click", function () {
+        pendingStop = null;
+        showList();
+      });
+
+      document.getElementById("stop-yes").addEventListener("click", function () {
+        if (!pendingStop) { return; }
+        var id = pendingStop;
+        pendingStop = null;
+        send("POST", "/enrollments/" + encodeURIComponent(id) + "/stop",
+             { reason: stopReason.value || "" })
+          .then(function () {
+            showList();
+            /* Both tabs change, since the program leaves running and appears under ended, so
+               the tab that is not on screen is marked unfetched rather than left stale. The
+               cards behind the modal carry the counts, so they are reloaded too. */
+            patientsScopes.ended.requested = false;
+            loadPatients("running");
+            load();
+          })
+          .catch(function (error) { showList(); patientsFail(error.message); });
+      });
+
+      document.getElementById("patients-close").addEventListener("click", function () {
+        patientsModal.dismiss();
+      });
+
+      function send(method, path, body) {
+        var init = { method: method, credentials: "same-origin" };
+        if (body !== null && body !== undefined) {
+          init.headers = { "Content-Type": "application/json" };
+          init.body = JSON.stringify(body);
+        }
+        return fetch(BASE + path, init).then(function (response) {
+          return response.text().then(function (text) {
+            var payload = null;
+            try { payload = text ? JSON.parse(text) : null; } catch (error) { payload = null; }
+            if (!response.ok) {
+              throw new Error(
+                (payload && payload.error) || "The server answered " + response.status
+              );
+            }
+            return payload;
+          });
+        });
+      }
+
+      // Coverage lives on its own endpoint rather than inline on the class, since the
+      // class listing already batches its steps in two queries and folding a variable
+      // number of coverage rows into that same shape would have made the batching
+      // pointless. Fetched once per class, in parallel, once the classes themselves are
+      // known, and kept on the class object under its own key so coverageFieldsSection
+      // reads it the same way rowsFor reads item.steps.
+      function loadCoverage() {
+        return Promise.all(state.classes.map(function (item) {
+          return fetch(BASE + "/classes/" + encodeURIComponent(item.id) + "/coverage",
+            { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (payload) { item.coverage = payload.coverage || []; });
+        }));
+      }
+
+      /* Returning the promise is what lets a caller render once the data is actually here.
+         Without the return, load answered undefined, so a send().then(load).then(render)
+         chain ran its render immediately against the state from before the write. That is
+         what made adding a medication group rebuild the form and show the old coverage,
+         the entry was on the server and the page redrew itself from what it already had.
+         Every other caller uses this as the last link and only lost the chance to see a
+         failure in its catch, which the return fixes as well. */
+      function load() {
+        return Promise.all([
+          fetch(BASE + "/classes", { credentials: "same-origin" }),
+          fetch(BASE + "/assignees", { credentials: "same-origin" }),
+          fetch(BASE + "/note-types", { credentials: "same-origin" }),
+          fetch(BASE + "/questionnaires", { credentials: "same-origin" }),
+          fetch(BASE + "/defaults", { credentials: "same-origin" })
+        ])
+          .then(function (responses) {
+            return Promise.all(responses.map(function (r) { return r.json(); }));
+          })
+          .then(function (payloads) {
+            state.classes = payloads[0].classes;
+            state.teams = payloads[1].teams;
+            state.staff = payloads[1].staff;
+            state.noteTypes = payloads[2].note_types;
+            state.questionnaires = payloads[3].questionnaires;
+            state.defaults = payloads[4];
+            return loadCoverage();
+          })
+          .then(render)
+          .catch(function (error) { banner(error.message); });
+      }
+
+      load();
+    })();
+  </script>
+</body>
+</html>

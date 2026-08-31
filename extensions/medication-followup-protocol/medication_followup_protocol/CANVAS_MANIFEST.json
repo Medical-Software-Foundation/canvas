@@ -1,0 +1,79 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.22",
+    "name": "medication_followup_protocol",
+    "description": "Enrols a patient onto a practice configured medication follow up program and runs its timed steps.",
+    "components": {
+        "applications": [
+            {
+                "class": "medication_followup_protocol.applications.program_admin:ProgramAdmin",
+                "name": "Follow Up Programs",
+                "description": "Create and edit medication classes and their follow up programs.",
+                "icon": "assets/icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 50
+            }
+        ],
+        "handlers": [
+            {
+                "class": "medication_followup_protocol.handlers.enrollment_button:EnrollmentButton",
+                "description": "Shows the enrolment control in the note header when a committed prescription on the note matches a configured class, and opens the enrolment form in the right chart pane."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.all_programs_button:AllProgramsButton",
+                "description": "Shows the all programs control in the patient header on the chart when the patient has at least one enrolment, and opens the patient scoped pane of every program they are on."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.prescribe_reload:PrescribeCommandReload",
+                "description": "Reloads a note's action buttons after a prescribe command commits, so the header control's eligibility recomputes without a page reload."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.program_walker:ProgramWalker",
+                "description": "Daily walk over active enrollments, firing every step that is due."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.interview_router:InterviewRouter",
+                "description": "Turns a submitted programme questionnaire into a task on the prescribing provider."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.portal_forms:PortalForms",
+                "description": "Offers a programme questionnaire to the patient in the portal when a questionnaire step is live."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.appointment_watcher:AppointmentWatcher",
+                "description": "Closes or reopens scheduling steps when a recheck appointment is booked or cancelled."
+            },
+            {
+                "class": "medication_followup_protocol.handlers.delivery_watcher:DeliveryWatcher",
+                "description": "Records a message transmission failure against the step that sent it."
+            },
+            {
+                "class": "medication_followup_protocol.api.program_api:ProgramAPI",
+                "description": "Reads and writes medication classes, coverage entries, programme steps and enrollments for the applications and both panes."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "questionnaires/tolerability_check_in.yml"
+            }
+        ]
+    },
+    "secrets": [
+        "namespace_read_access_key",
+        "namespace_read_write_access_key"
+    ],
+    "custom_data": {
+        "namespace": "vicert__medication_followup_protocol",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

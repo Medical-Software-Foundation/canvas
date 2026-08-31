@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+  <link rel="stylesheet" href="{{ base }}/canvas-plugin-ui.css">
+  <script src="{{ base }}/canvas-plugin-ui.js"></script>
+  <script src="{{ base }}/chart-note-scroll.js"></script>
+  <style>
+    /* The chat widget floats over the bottom right of every right chart pane, so the
+       scrollable container has to clear it or the last row cannot be reached. */
+    /* --- The base font, which the design system does not set
+       canvas-plugin-ui.css puts the font family on h1 to h5 and on p, and on every
+       component through its own shadow root. It never sets one on body, so a div, a span
+       or a label falls back to the browser default, which is a serif. Every component on
+       the page looked right and every word around them looked like a different product. */
+    html, body {
+      margin: 0;
+      font-family: var(--font-family);
+      font-size: 14px;
+      color: var(--color-text, rgba(0, 0, 0, 0.87));
+      background: var(--palette-white, #fff);
+    }
+    .pane { padding: var(--space-medium); padding-bottom: 120px; }
+    .programme { margin-bottom: var(--space-medium); }
+    .heading { display: flex; align-items: center; gap: var(--space-small); }
+    .muted { color: var(--color-text-muted, #767676); font-size: .92857143em; }
+    /* The link back to the starting note, styled the same way the note scoped pane
+       styles its own note name link, so the two read as one pattern rather than two. */
+    .heading a {
+      color: var(--color-secondary, #2185D0);
+      text-decoration: underline;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-mini, .25rem);
+    }
+    .note-link-icon { width: 14px; height: 14px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="pane" id="pane">
+    <canvas-loader id="loading"></canvas-loader>
+  </div>
+
+  <!-- The reason a program was stopped is typed here rather than into window.prompt.
+       A browser dialog is not part of the design system, it cannot be styled, it reads as
+       the browser interrupting rather than as the product asking, and it is the one control
+       on a page that no screenshot of that page can show. The configuration page was moved
+       off dialogs already and this was the last one left. -->
+  <canvas-modal id="stop" size="small">
+    <canvas-modal-header dismissable>Stop this program</canvas-modal-header>
+    <canvas-modal-content>
+      <p class="muted" style="margin:0 0 var(--space-small)">
+        Every step still to run is halted. The reason is kept against the program so anybody
+        reading the chart later can see why it ended.
+      </p>
+      <canvas-textarea label="Why are you stopping it" id="stop-reason" rows="3"
+        placeholder="e.g. The patient asked us to stop."></canvas-textarea>
+    </canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="stop-no">Cancel</canvas-button>
+      <canvas-button variant="danger" id="stop-yes">Stop the program</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <script>
+    (function () {
+      "use strict";
+      var BASE = "{{ base }}";
+      var PATIENT_ID = "{{ patient_id }}";
+      var pane = document.getElementById("pane");
+
+      var STATUS = {
+        fired: { color: "green", label: "Sent" },
+        skipped: { color: "grey", label: "Skipped" },
+        failed: { color: "red", label: "Not delivered" },
+        pending: { color: "blue", label: "To come" }
+      };
+      var PROGRAMME = {
+        active: { color: "green", label: "Running" },
+        stopped: { color: "red", label: "Stopped" },
+        completed: { color: "grey", label: "Finished" }
+      };
+
+      function esc(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
+
+      // The chain icon after a note link, the same mark enrollment_form.html draws after
+      // its own, written inline here since this page builds every card as one string
+      // rather than as elements it clones a template into.
+      var NOTE_LINK_ICON =
+        "<svg class='note-link-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' " +
+        "stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "<path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/>" +
+        "<path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/>" +
+        "</svg>";
+
+      // Scrolling the chart to a section's own starting note is shared with the note
+      // scoped pane, since both sit over the same same origin chart and both are
+      // finding and expanding the same kind of note wrapper on it. See
+      // static/chart-note-scroll.js for the read and the reasoning behind it.
+
+      // The note a section started on, in the shape window.mfpChartNote.scrollTo reads,
+      // or null when the enrolment recorded none. program_pane.py hands over the moment
+      // and the provider beside the link now, so this builds the same descriptor the
+      // note scoped pane already carries rather than parsing anything back out of a url.
+      function startingNote(section) {
+        if (!section || !section.start_note_dbid) { return null; }
+        return {
+          dbid: section.start_note_dbid,
+          at: section.start_note_at,
+          provider_name: section.start_note_provider_name
+        };
+      }
+
+      function dueLabel(step) {
+        if (step.status !== "pending") { return esc(step.failure_reason || STATUS[step.status].label); }
+        return "Due " + esc(step.due_date);
+      }
+
+      function stepRow(step) {
+        var state = STATUS[step.status] || STATUS.pending;
+        return "<canvas-table-row>" +
+          "<canvas-table-cell bold>Day " + esc(step.day_offset) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(step.summary || step.kind) +
+            (step.condition ? "<div class='muted'>Only if the recheck is not booked</div>" : "") +
+          "</canvas-table-cell>" +
+          "<canvas-table-cell><canvas-badge color='" + state.color + "' size='mini'>" +
+            state.label + "</canvas-badge>" +
+            "<div class='muted'>" + dueLabel(step) + "</div>" +
+          "</canvas-table-cell>" +
+        "</canvas-table-row>";
+      }
+
+      // The title names the program and, where the enrolment carries a starting note,
+      // doubles as the way back to it. A section whose note_link is null renders no link
+      // at all, per behaviour step 39, rather than one that leads nowhere. The index
+      // rather than the note's own identifier is what the link carries, because it is
+      // what render below reads the section itself back out of, and building the
+      // starting note descriptor from the actual JSON values, rather than from an HTML
+      // attribute round trip, is what keeps a provider name carrying a quote intact.
+      function programmeTitle(enrolment, index) {
+        var name = esc(enrolment.medication_label || enrolment.medication_class);
+        if (!enrolment.note_link) {
+          return "<h4 style='margin:0'>" + name + "</h4>";
+        }
+        return "<h4 style='margin:0'>" +
+          "<a href='" + esc(enrolment.note_link) + "' target='_top' " +
+              "data-note-index='" + index + "' " +
+              "title='Show the starting note in the chart'>" +
+            name + NOTE_LINK_ICON +
+          "</a>" +
+        "</h4>";
+      }
+
+      function programmeCard(enrolment, index) {
+        var state = PROGRAMME[enrolment.status] || PROGRAMME.active;
+        return "<canvas-card class='programme'>" +
+          "<canvas-card-body>" +
+            "<div class='heading'>" +
+              programmeTitle(enrolment, index) +
+              "<canvas-badge color='" + state.color + "' size='mini'>" + state.label + "</canvas-badge>" +
+            "</div>" +
+            "<div class='muted'>Started " + esc(enrolment.start_date) + "</div>" +
+            (enrolment.stopped_reason
+              ? "<div class='muted'>" + esc(enrolment.stopped_reason) + "</div>" : "") +
+          "</canvas-card-body>" +
+          "<canvas-card-body no-padding>" +
+            "<canvas-table compact aria-label='Steps of " +
+              esc(enrolment.medication_label) + "'>" +
+              "<canvas-table-head><canvas-table-row>" +
+                "<canvas-table-cell>Day</canvas-table-cell>" +
+                "<canvas-table-cell>What happens</canvas-table-cell>" +
+                "<canvas-table-cell>Where it got to</canvas-table-cell>" +
+              "</canvas-table-row></canvas-table-head>" +
+              "<canvas-table-body>" + enrolment.steps.map(stepRow).join("") + "</canvas-table-body>" +
+            "</canvas-table>" +
+          "</canvas-card-body>" +
+          (enrolment.status === "active"
+            ? "<canvas-card-footer>" +
+                "<canvas-button variant='ghost' size='sm' data-stop='" + esc(enrolment.id) +
+                "'>Stop this program</canvas-button>" +
+              "</canvas-card-footer>"
+            : "") +
+        "</canvas-card>";
+      }
+
+      function emptyState() {
+        return "<div style='padding: var(--space-huge); text-align: center'>" +
+          "<h3 style='margin:0 0 var(--space-small); font-weight:700'>No follow up program</h3>" +
+          "<p style='margin:0 0 var(--space-medium)' class='muted'>" +
+            "This patient is not on a medication follow up program yet. Start one from the " +
+            "header of a note carrying the prescription.</p>" +
+        "</div>";
+      }
+
+      function render(enrolments) {
+        pane.innerHTML = enrolments.length ? enrolments.map(programmeCard).join("") : emptyState();
+        Array.prototype.forEach.call(pane.querySelectorAll("[data-stop]"), function (button) {
+          button.addEventListener("click", function () { stop(button.getAttribute("data-stop")); });
+        });
+        // The same scroll and expand the note scoped pane runs, on the section this
+        // particular link belongs to. preventDefault happens inside scrollTo itself,
+        // and only once it actually moved something, so a chart it could not read, or
+        // a note it could not find on it, still falls through to the anchor's own
+        // target _top rather than the click going nowhere.
+        Array.prototype.forEach.call(pane.querySelectorAll("[data-note-index]"), function (link) {
+          link.addEventListener("click", function (event) {
+            var section = enrolments[Number(link.getAttribute("data-note-index"))];
+            window.mfpChartNote.scrollTo(startingNote(section), event);
+          });
+        });
+      }
+
+      function failed(message) {
+        pane.innerHTML = "<canvas-banner variant='error' header='Could not load the programs'>" +
+          "<p>" + esc(message) + "</p></canvas-banner>";
+      }
+
+      function load() {
+        fetch(BASE + "/enrollments?patient_id=" + encodeURIComponent(PATIENT_ID), {
+          credentials: "same-origin"
+        })
+          .then(function (response) {
+            if (!response.ok) { throw new Error("The server answered " + response.status); }
+            return response.json();
+          })
+          .then(function (data) { render(data.enrollments); })
+          .catch(function (error) { failed(error.message); });
+      }
+
+      var stopModal = document.getElementById("stop");
+      var pendingStop = null;
+
+      function stop(id) {
+        pendingStop = id;
+        document.getElementById("stop-reason").value = "";
+        stopModal.open();
+      }
+
+      document.getElementById("stop-no").addEventListener("click", function () {
+        pendingStop = null;
+        stopModal.dismiss();
+      });
+
+      document.getElementById("stop-yes").addEventListener("click", function () {
+        var id = pendingStop;
+        var reason = document.getElementById("stop-reason").value;
+        pendingStop = null;
+        stopModal.dismiss();
+        if (!id) { return; }
+        stopProgramme(id, reason);
+      });
+
+      function stopProgramme(id, reason) {
+        fetch(BASE + "/enrollments/" + encodeURIComponent(id) + "/stop", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reason })
+        })
+          .then(function (response) {
+            if (!response.ok) { throw new Error("The server answered " + response.status); }
+            load();
+          })
+          .catch(function (error) { failed(error.message); });
+      }
+
+      load();
+    })();
+  </script>
+</body>
+</html>
