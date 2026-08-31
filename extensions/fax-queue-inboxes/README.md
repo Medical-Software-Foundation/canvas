@@ -125,6 +125,18 @@ uv run pytest
   suggest or set a native document type, deliberately, because a wrong
   categorisation on a clinical document is worse than none.
 
+## Screenshots or screen recordings
+
+![The fax queue dashboard](screenshots/dashboard.png)
+
+The All tab, showing the whole pending queue. Each row leads with who the fax
+came from and how long it has been waiting, then its labels as chips with a
+plus that offers only the ones it does not already carry, who it is assigned
+to, whether somebody has written a note on it, and the link into the native
+Data Integration screen where the document is actually read and filed. A fax
+whose sender Canvas could not resolve reads as Unknown Provider, matching the
+native screen rather than inventing a lookup of its own.
+
 ## Info
 
 *This plugin was developed and contributed by [Vicert](https://vicert.com).*
