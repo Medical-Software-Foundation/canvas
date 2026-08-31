@@ -1,0 +1,129 @@
+:root {
+  /* Raw palette (named by color, not by role) */
+  --palette-green: #22BA45;
+  --palette-blue: #2185D0;
+  --palette-red: #BD0B00;
+  --palette-orange: #ED4A0B;
+  --palette-yellow: #fbbd08;
+  --palette-olive: #b5cc18;
+  --palette-teal: #00b5ad;
+  --palette-violet: #6435c9;
+  --palette-purple: #a333c8;
+  --palette-pink: #e03997;
+  --palette-brown: #935330;
+  --palette-grey: #767676;
+  --palette-black: #1b1c1d;
+  --palette-white: #FFFFFF;
+
+  /* Surfaces and backgrounds */
+  --palette-bg: #F5F5F5;
+  --palette-border: rgba(34, 36, 38, 0.15);
+
+  /* Text */
+  --palette-text: rgba(0, 0, 0, 0.87);
+  --palette-text-active: rgba(0, 0, 0, 0.95);
+  --palette-text-muted: #767676;
+
+  /* Error state */
+  --palette-error-bg: #fff6f6;
+  --palette-error-border: #e0b4b4;
+  --palette-error-text: #9f3a38;
+
+  /* Semantic aliases (named by role, resolve through palette) */
+  --color-primary: var(--palette-green, #22BA45);
+  --color-secondary: var(--palette-blue, #2185D0);
+  --color-danger: var(--palette-red, #BD0B00);
+  --color-warning: var(--palette-orange, #ED4A0B);
+  --color-text: var(--palette-text, rgba(0, 0, 0, 0.87));
+  --color-text-active: var(--palette-text-active, rgba(0, 0, 0, 0.95));
+  --color-text-muted: var(--palette-text-muted, #767676);
+  --color-bg: var(--palette-bg, #F5F5F5);
+  --color-border: var(--palette-border, rgba(34, 36, 38, 0.15));
+  --color-surface: var(--palette-white, #FFFFFF);
+
+  /* Typography */
+  --font-family: lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-base: 16px;
+  --font-size-label: .92857143em;
+  --font-weight-bold: 700;
+  --line-height-base: 1.4285em;
+
+  /* Spacing (4px grid) */
+  --space-mini: 4px;
+  --space-tiny: 8px;
+  --space-small: 12px;
+  --space-medium: 16px;
+  --space-large: 20px;
+  --space-huge: 24px;
+
+  /* Shape */
+  --radius: .28571429rem;
+  --border-width: 1px;
+
+  /* Transitions */
+  --transition-fast: 200ms;
+  --transition-base: 250ms;
+
+  /* Shadow */
+  --shadow: 0 1px 2px 0 rgba(34, 36, 38, 0.15);
+
+  /* Focus */
+  --focus-ring: 2px solid var(--color-secondary, #2185D0);
+  --focus-ring-offset: 2px;
+}
+
+/* Typography rules matching Canvas heading and paragraph styles.
+   Plugin iframes do not inherit the parent page's fonts.
+   Lato is loaded via a <link> tag in head.html. */
+
+h1, h2, h3, h4, h5 {
+  margin: calc(2rem - .14285714em) 0 1rem;
+  font-family: var(--font-family, lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  line-height: 1.28571429em;
+  font-weight: 700;
+  padding: 0;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.71428571rem; }
+h3 { font-size: 1.28571429rem; }
+h4 { font-size: 1.07142857rem; }
+h5 { font-size: 1rem; }
+
+h1:first-child, h2:first-child, h3:first-child,
+h4:first-child, h5:first-child { margin-top: 0; }
+
+h1:last-child, h2:last-child, h3:last-child,
+h4:last-child, h5:last-child { margin-bottom: 0; }
+
+p {
+  margin: 0 0 1em;
+  line-height: 1.4285em;
+}
+
+p:first-child { margin-top: 0; }
+p:last-child { margin-bottom: 0; }
+
+/* Nested accordion indent.
+   canvas-accordion-item carries no horizontal padding of its own, the
+   container supplies outer inset the same way it does for headings and
+   paragraphs. When an item appears inside another accordion's content,
+   apply a left step so the hierarchy is visible. Applies to any depth
+   because the selector matches every descendant item inside a content. */
+
+canvas-accordion-content canvas-accordion-item {
+  padding-left: var(--canvas-accordion-nested-indent, var(--space-small, 12px));
+}
+
+/* Sortable list tokens and placeholder.
+   The placeholder element is created in light DOM by the list component, so
+   its rules live here rather than inside the shadow root. */
+
+canvas-sortable-list {
+  --canvas-sortable-min-height: calc(var(--space-medium, 16px) * 2);
+}
+
+.canvas-sortable-placeholder {
+  pointer-events: none;
+  box-sizing: border-box;
+}
