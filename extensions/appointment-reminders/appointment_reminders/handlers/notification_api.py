@@ -2383,19 +2383,23 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     if ((document.getElementById(prefix + '_channel_sms') || {}).checked) ntChannels.push('sms');
                     if ((document.getElementById(prefix + '_channel_email') || {}).checked) ntChannels.push('email');
 
-                    // Explicit true/false: false means "opt out for this visit type."
-                    // When global is off, the per-type toggles are visually forced off
-                    // by the UI; preserve the user's existing opt-out rather than
-                    // silently converting every type into an opt-out.
+                    // Only ever persist `false`. The backend is three-state — absent
+                    // and true both mean "inherit the global", and only an explicit
+                    // false opts a visit type out (services/config.py, `is False`).
+                    // Writing a hard true made "inherit" a state the UI could show
+                    // but never store: the first Save pinned every visit type, and
+                    // because Save gathers this tab whichever tab you were on, it
+                    // rewrote records nobody had opened. Omitting the key keeps
+                    // stored state legible and matches what the resolver expects.
+                    //
+                    // When global is off the per-type toggles are visually forced
+                    // off, so an existing opt-out is preserved rather than read off
+                    // the UI — otherwise turning a campaign off and saving would
+                    // convert every visit type into a permanent opt-out.
                     var priorSaved = (savedNoteTypeReminders[nt.id] || {})[enabledKey];
-                    var enabledValue;
-                    if (globalEnabled) {
-                        enabledValue = enabledEl.checked ? true : false;
-                    } else {
-                        enabledValue = priorSaved === false ? false : true;
-                    }
-                    entry[enabledKey] = enabledValue;
-                    entry[overrideKey] = enabledValue === false ? false : isOverride;
+                    var optedOut = globalEnabled ? !enabledEl.checked : priorSaved === false;
+                    if (optedOut) entry[enabledKey] = false;
+                    entry[overrideKey] = optedOut ? false : isOverride;
                     entry[smsTplKey] = (document.getElementById(prefix + '_sms_tpl') || {}).value || '';
                     entry[emailTplKey] = (document.getElementById(prefix + '_email_tpl') || {}).value || '';
                     entry[channelsKey] = ntChannels;

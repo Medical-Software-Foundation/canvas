@@ -183,158 +183,181 @@ class ReminderScheduler(CronTask):
         reminders_sent = 0
 
         for appointment in appointments:
-            note_type_id = str(appointment.note_type.id) if appointment.note_type else None
-            business_line = get_business_line_name(appointment.patient)
-            bl_from_number = get_business_line_from_number(config, business_line)
-            enabled, channels, sms_template, email_template, intervals, send_time, send_tz = (
-                get_effective_campaign_config(
-                    config, note_type_id, "reminder", business_line=business_line
+            # Appointment.patient is a nullable FK: admin blocks, provider
+            # availability blocks and imported calendar holds are real rows with
+            # patient_id NULL. They carry a real note_type, so they resolve to the
+            # global config and come back enabled, and the first thing the send path
+            # does is read patient.first_name. The sibling patient_communications
+            # plugins all carry this guard; it was dropped when this plugin was
+            # split out of that one.
+            if not appointment.patient:
+                continue
+
+            # Per-appointment isolation. CLAUDE.md says not to wrap handler logic in
+            # a bare except, and that is right for a request handler — but this is a
+            # batch loop, and without it one bad row takes out every appointment
+            # after it in iteration order. The day-out path makes that expensive: it
+            # gets one grace window per day, so a single failure costs a whole day of
+            # reminders. log.exception keeps the traceback, so nothing is hidden.
+            try:
+                note_type_id = str(appointment.note_type.id) if appointment.note_type else None
+                business_line = get_business_line_name(appointment.patient)
+                bl_from_number = get_business_line_from_number(config, business_line)
+                enabled, channels, sms_template, email_template, intervals, send_time, send_tz = (
+                    get_effective_campaign_config(
+                        config, note_type_id, "reminder", business_line=business_line
+                    )
                 )
-            )
 
-            time_until = appointment.start_time - now
-            minutes_until = int(time_until.total_seconds() / 60)
+                time_until = appointment.start_time - now
+                minutes_until = int(time_until.total_seconds() / 60)
 
-            # Reminder campaign — telehealth is configured independently below
-            # and must run regardless of whether reminders are enabled for this
-            # appointment's note type.
-            if enabled:
-                for interval_minutes in intervals:
-                    if interval_minutes >= DAY_OUT_THRESHOLD:
-                        # Day-out: date-relative with configured send time
-                        if not _is_day_out_window(
-                            now, appointment.start_time, interval_minutes, send_time, send_tz
-                        ):
+                # Reminder campaign — telehealth is configured independently below
+                # and must run regardless of whether reminders are enabled for this
+                # appointment's note type.
+                if enabled:
+                    for interval_minutes in intervals:
+                        if interval_minutes >= DAY_OUT_THRESHOLD:
+                            # Day-out: date-relative with configured send time
+                            if not _is_day_out_window(
+                                now, appointment.start_time, interval_minutes, send_time, send_tz
+                            ):
+                                continue
+                        else:
+                            # Short interval: time-relative. Fire on the first scan
+                            # at or after the target moment, never before it.
+                            overdue = interval_minutes - minutes_until
+                            if overdue < 0 or overdue > GRACE_MINUTES:
+                                continue
+
+                        cache_key = f"cr:reminder_sent:{appointment.id}:{interval_minutes}"
+                        if cache.get(cache_key):
                             continue
-                    else:
-                        # Short interval: time-relative. Fire on the first scan
-                        # at or after the target moment, never before it.
-                        overdue = interval_minutes - minutes_until
-                        if overdue < 0 or overdue > GRACE_MINUTES:
-                            continue
 
-                    cache_key = f"cr:reminder_sent:{appointment.id}:{interval_minutes}"
-                    if cache.get(cache_key):
+                        # Render both templates with per-type content
+                        variables = get_template_variables(
+                            appointment.patient, appointment, config.reminder_timezone,
+                            config=config,
+                        )
+
+                        sms_content = render_template(sms_template, variables)
+                        email_content = render_template(email_template, variables)
+
+                        log.info(
+                            f"Sending {interval_minutes}-minute reminder for appointment {appointment.id}"
+                        )
+
+                        effects, results = deliver_to_patient(
+                            appointment.patient,
+                            sms_content,
+                            email_content,
+                            channels,
+                            "reminder",
+                            self.secrets,
+                            str(appointment.id),
+                            from_number=bl_from_number,
+                            config=config,
+                        )
+                        all_effects.extend(effects)
+
+                        log_delivery(
+                            str(appointment.id),
+                            str(appointment.patient.id),
+                            "reminder",
+                            results,
+                            sms_content=sms_content,
+                            email_content=email_content,
+                        )
+
+                        # Mark as sent
+                        ttl_seconds = (max_interval_minutes + 1440) * 60
+                        cache.set(cache_key, "1", timeout_seconds=ttl_seconds)
+
+                        reminders_sent += 1
+
+                # --- Telehealth join campaign (alongside reminders) ---
+                if not (appointment.note_type and appointment.note_type.is_telehealth):
+                    continue
+
+                th_enabled, th_channels, th_sms_tpl, th_email_tpl, th_intervals, _th_st, _th_tz = (
+                    get_effective_campaign_config(
+                        config, note_type_id, "telehealth", business_line=business_line
+                    )
+                )
+                if not th_enabled or not th_intervals:
+                    continue
+
+                for interval_minutes in th_intervals:
+                    # Same first-scan-at-or-after rule as reminders above.
+                    overdue = interval_minutes - minutes_until
+                    if overdue < 0 or overdue > GRACE_MINUTES:
                         continue
 
-                    # Render both templates with per-type content
-                    variables = get_template_variables(
+                    th_cache_key = f"cr:telehealth_sent:{appointment.id}:{interval_minutes}"
+                    if cache.get(th_cache_key):
+                        continue
+
+                    th_variables = get_template_variables(
                         appointment.patient, appointment, config.reminder_timezone,
                         config=config,
                     )
 
-                    sms_content = render_template(sms_template, variables)
-                    email_content = render_template(email_template, variables)
+                    # Skip if no telehealth link — log failure
+                    if not th_variables.get("telehealth_link"):
+                        log.warning(
+                            f"[notify] Telehealth link missing for appointment "
+                            f"{appointment.id} — skipping send"
+                        )
+                        log_delivery(
+                            str(appointment.id),
+                            str(appointment.patient.id),
+                            "telehealth",
+                            [_TelehealthFailure()],
+                        )
+                        ttl_seconds = (max_interval_minutes + 1440) * 60
+                        cache.set(th_cache_key, "1", timeout_seconds=ttl_seconds)
+                        continue
+
+                    th_sms = render_template(th_sms_tpl, th_variables)
+                    th_email = render_template(th_email_tpl, th_variables)
 
                     log.info(
-                        f"Sending {interval_minutes}-minute reminder for appointment {appointment.id}"
+                        f"Sending telehealth join for appointment {appointment.id} "
+                        f"({interval_minutes}-min interval)"
                     )
 
-                    effects, results = deliver_to_patient(
+                    th_effects, th_results = deliver_to_patient(
                         appointment.patient,
-                        sms_content,
-                        email_content,
-                        channels,
-                        "reminder",
+                        th_sms,
+                        th_email,
+                        th_channels,
+                        "telehealth",
                         self.secrets,
                         str(appointment.id),
                         from_number=bl_from_number,
                         config=config,
                     )
-                    all_effects.extend(effects)
+                    all_effects.extend(th_effects)
 
-                    log_delivery(
-                        str(appointment.id),
-                        str(appointment.patient.id),
-                        "reminder",
-                        results,
-                        sms_content=sms_content,
-                        email_content=email_content,
-                    )
-
-                    # Mark as sent
-                    ttl_seconds = (max_interval_minutes + 1440) * 60
-                    cache.set(cache_key, "1", timeout_seconds=ttl_seconds)
-
-                    reminders_sent += 1
-
-            # --- Telehealth join campaign (alongside reminders) ---
-            if not (appointment.note_type and appointment.note_type.is_telehealth):
-                continue
-
-            th_enabled, th_channels, th_sms_tpl, th_email_tpl, th_intervals, _th_st, _th_tz = (
-                get_effective_campaign_config(
-                    config, note_type_id, "telehealth", business_line=business_line
-                )
-            )
-            if not th_enabled or not th_intervals:
-                continue
-
-            for interval_minutes in th_intervals:
-                # Same first-scan-at-or-after rule as reminders above.
-                overdue = interval_minutes - minutes_until
-                if overdue < 0 or overdue > GRACE_MINUTES:
-                    continue
-
-                th_cache_key = f"cr:telehealth_sent:{appointment.id}:{interval_minutes}"
-                if cache.get(th_cache_key):
-                    continue
-
-                th_variables = get_template_variables(
-                    appointment.patient, appointment, config.reminder_timezone,
-                    config=config,
-                )
-
-                # Skip if no telehealth link — log failure
-                if not th_variables.get("telehealth_link"):
-                    log.warning(
-                        f"[notify] Telehealth link missing for appointment "
-                        f"{appointment.id} — skipping send"
-                    )
                     log_delivery(
                         str(appointment.id),
                         str(appointment.patient.id),
                         "telehealth",
-                        [_TelehealthFailure()],
+                        th_results,
+                        sms_content=th_sms,
+                        email_content=th_email,
                     )
+
                     ttl_seconds = (max_interval_minutes + 1440) * 60
                     cache.set(th_cache_key, "1", timeout_seconds=ttl_seconds)
-                    continue
+                    reminders_sent += 1
 
-                th_sms = render_template(th_sms_tpl, th_variables)
-                th_email = render_template(th_email_tpl, th_variables)
-
-                log.info(
-                    f"Sending telehealth join for appointment {appointment.id} "
-                    f"({interval_minutes}-min interval)"
+            except Exception:
+                log.exception(
+                    f"Failed to process appointment {appointment.id}; "
+                    "skipping it and continuing the scan"
                 )
-
-                th_effects, th_results = deliver_to_patient(
-                    appointment.patient,
-                    th_sms,
-                    th_email,
-                    th_channels,
-                    "telehealth",
-                    self.secrets,
-                    str(appointment.id),
-                    from_number=bl_from_number,
-                    config=config,
-                )
-                all_effects.extend(th_effects)
-
-                log_delivery(
-                    str(appointment.id),
-                    str(appointment.patient.id),
-                    "telehealth",
-                    th_results,
-                    sms_content=th_sms,
-                    email_content=th_email,
-                )
-
-                ttl_seconds = (max_interval_minutes + 1440) * 60
-                cache.set(th_cache_key, "1", timeout_seconds=ttl_seconds)
-                reminders_sent += 1
-
+                continue
         log.info(f"Sent {reminders_sent} reminders")
         return all_effects
 
