@@ -782,3 +782,120 @@ def test_horizon_takes_the_widest_across_mixed_intervals() -> None:
     now = _utc(2026, 8, 25, 14, 0)
     horizon_hours = (_end_window(config, now) - now).total_seconds() / 3600
     assert horizon_hours >= 48
+
+
+# ---- patient-less appointments and per-row isolation ----
+
+def _appt(dbid, start, patient=True, note_type_id="nt-1"):
+    """An appointment in the scan window, with or without a patient."""
+    a = MagicMock()
+    a.id = f"appt-{dbid}"
+    a.start_time = start
+    a.note_type = MagicMock()
+    a.note_type.id = note_type_id
+    if patient:
+        a.patient = MagicMock()
+        a.patient.id = f"pat-{dbid}"
+        a.patient.business_line = None
+    else:
+        a.patient = None          # admin block / availability hold / imported hold
+    return a
+
+
+def _run_scan(appointments, now, config):
+    """Drive execute() over a fixed appointment list, capturing deliveries."""
+    scheduler = _scheduler()
+    sent = []
+
+    def _deliver(patient, *a, **kw):
+        sent.append(getattr(patient, "id", None))
+        return ([], [])
+
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.datetime"
+    ) as mock_dt, patch(
+        "appointment_reminders.handlers.reminder_scheduler.Appointment"
+    ) as mock_appt, patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
+        return_value={"patient_first_name": "X"},
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.render_template",
+        return_value="body",
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient",
+        side_effect=_deliver,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.log_delivery"
+    ):
+        mock_dt.now.return_value = now
+        mock_dt.combine = datetime.combine
+        mock_cache.return_value.get.return_value = None
+        (mock_appt.objects.filter.return_value
+            .select_related.return_value
+            .prefetch_related.return_value
+            .iterator.return_value) = appointments
+        result = scheduler.execute()
+    return sent, result
+
+
+_SHORT_CFG = CampaignConfig(
+    reminders_enabled=True, reminder_intervals=[45], telehealth_enabled=False,
+    reminder_send_time="09:00", reminder_timezone="America/New_York",
+)
+
+
+def test_patientless_appointment_does_not_raise_and_does_not_send() -> None:
+    """Appointment.patient is nullable: admin blocks and availability holds are
+    real rows with patient_id NULL, and they resolve to the global config."""
+    now = _utc(2026, 9, 1, 14, 0)
+    due = now + timedelta(minutes=45)
+    sent, _ = _run_scan([_appt(1, due, patient=False)], now, _SHORT_CFG)
+    assert sent == []
+
+
+def test_a_patientless_row_does_not_suppress_a_later_valid_one() -> None:
+    """The regression that matters.
+
+    Without the guard the loop raised AttributeError on patient.first_name and
+    the whole tick died, losing every appointment after it in iteration order.
+    A test that only asserted "does not raise" would pass once a guard existed
+    but would not have caught the original failure.
+    """
+    now = _utc(2026, 9, 1, 14, 0)
+    due = now + timedelta(minutes=45)
+    appointments = [_appt(1, due, patient=False), _appt(2, due, patient=True)]
+    sent, _ = _run_scan(appointments, now, _SHORT_CFG)
+    assert sent == ["pat-2"], "the valid appointment after the bad row must still send"
+
+
+def test_a_row_that_raises_for_any_other_reason_is_isolated() -> None:
+    """Per-row isolation, not just a patient guard.
+
+    The guard closes the one hole we found; this closes the class. A day-out
+    interval gets one grace window per day, so losing the rest of a tick costs
+    a whole day of reminders.
+    """
+    now = _utc(2026, 9, 1, 14, 0)
+    due = now + timedelta(minutes=45)
+    exploding = _appt(1, due, patient=True)
+    type(exploding).note_type = property(
+        lambda self: (_ for _ in ()).throw(RuntimeError("bad row"))
+    )
+    appointments = [exploding, _appt(2, due, patient=True)]
+    sent, _ = _run_scan(appointments, now, _SHORT_CFG)
+    assert sent == ["pat-2"]
+
+
+def test_scan_completes_and_still_returns_effects_after_a_bad_row() -> None:
+    now = _utc(2026, 9, 1, 14, 0)
+    due = now + timedelta(minutes=45)
+    sent, result = _run_scan(
+        [_appt(1, due, patient=False), _appt(2, due, patient=True)], now, _SHORT_CFG
+    )
+    assert isinstance(result, list)
+    assert sent == ["pat-2"]

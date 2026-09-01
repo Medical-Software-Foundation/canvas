@@ -1296,3 +1296,33 @@ def test_history_badges_treat_accepted_and_legacy_delivered_alike() -> None:
     # The badge class must be styled in *this* page's stylesheet, not just the
     # admin page's — an undefined class renders as nothing at all.
     assert ".status-accepted," in html
+
+
+# ---- visit-type "inherit" must be persistable ----
+
+def test_save_only_ever_persists_a_false_enabled_flag() -> None:
+    """The backend is three-state; the UI used to collapse it to two.
+
+    Absent and true both mean inherit — only an explicit false opts a visit type
+    out. Writing a hard true made inherit unstorable: the first Save pinned every
+    visit type, and Save gathers this tab whichever tab you were on, so it
+    rewrote records nobody had opened.
+
+    The executable version of this lives in tests/js/test_note_type_save.mjs,
+    which runs the extracted logic under node. This asserts the shipped shape.
+    """
+    html = _admin_html()
+    assert "if (optedOut) entry[enabledKey] = false;" in html
+    # No hard true anywhere in the enabled-flag decision.
+    assert "enabledValue = enabledEl.checked ? true : false" not in html
+    assert "entry[enabledKey] = enabledValue" not in html
+
+
+def test_save_preserves_an_opt_out_when_the_global_is_off() -> None:
+    """Global-off forces the toggles off visually, so the stored value wins.
+
+    Reading the DOM here would convert every visit type into a permanent opt-out
+    the moment someone toggled a campaign off and saved.
+    """
+    html = _admin_html()
+    assert "globalEnabled ? !enabledEl.checked : priorSaved === false" in html
