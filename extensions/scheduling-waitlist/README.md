@@ -9,6 +9,37 @@ reacts to cancellations automatically.
 
 **The plugin never books anyone.** It recommends; staff schedule from the task.
 
+## Problem it solves
+
+A cancellation is a slot that is already paid for in staff time and is about to go to waste.
+Someone almost always wants it — but who was waiting lives in a spreadsheet, a sticky note, or
+one scheduler's memory, and nobody reconstructs that list under time pressure. So the slot goes
+unfilled while the patient who wanted it waits another three weeks.
+
+Three things have to be true at once for a waitlist to actually get used, and this plugin is
+built around them:
+
+- **Adding someone has to be nearly free.** It is one click from the chart header, on the
+  broadest terms; narrowing it to "only Dr Chen, Tuesday mornings" is a second click on the
+  same button. A form nobody has time to fill in is a waitlist nobody uses.
+- **The list has to come to you.** When a slot frees up, the plugin raises one task to the
+  scheduling team naming the patients who match it, ordered by priority and how long they have
+  waited. Nobody has to remember to go and look.
+- **It must never quietly act on a patient's behalf.** The plugin recommends and staff decide;
+  it books nothing.
+
+## Who it's for
+
+- **Schedulers and front-desk staff** — the people who field "call me if anything opens up" and
+  are the ones the freed-slot task is addressed to.
+- **Practice and clinic managers** — priority bands, appointment types and shelf life are
+  configurable, and the nightly job logs wait-time and fill metrics.
+- **Any specialty where demand outruns supply** and cancellations are frequent enough to be
+  worth recovering: primary care, behavioral health, dermatology, physical therapy, imaging.
+
+Providers do not need to interact with it at all, beyond seeing a banner on the chart of a
+patient who is already waiting.
+
 ## What it does
 
 **The roster** — a practice-wide page in the **provider (hamburger) menu** listing everyone
@@ -167,7 +198,7 @@ waiting ⇄ offered  →  scheduled | removed | expired
 them booking it. All three terminal states can be reinstated. An entry that was auto-marked
 `scheduled` returns to `waiting` on its own if that appointment is later cancelled.
 
-## Installation
+## How to install
 
 ```bash
 canvas install extensions/scheduling-waitlist/scheduling_waitlist
@@ -176,7 +207,7 @@ canvas install extensions/scheduling-waitlist/scheduling_waitlist
 The plugin's Custom Data namespace (`custom_data__scheduling_waitlist`) is created on install.
 Writes require the platform-supplied `namespace_read_write_access_key`.
 
-## Configuration
+## Configuration options
 
 Set as plugin secrets. Anything marked **required** fails closed — the plugin declines to act
 rather than guessing.
@@ -263,7 +294,7 @@ empty the list entirely it falls back to everything scheduleable and logs an err
 empty form teaches a scheduler nothing.
 
 **A UI no-show emits no `APPOINTMENT_NO_SHOWED` event, so button refreshes hang off the note
-state instead.** Observed on `vicert-testing`: clicking No show moved the note to `NSW` and
+state instead.** Observed on a test instance: clicking No show moved the note to `NSW` and
 `SlotFreedHandler` — which does subscribe to `APPOINTMENT_NO_SHOWED` — never ran at all. Whether
 the platform writes `Appointment.status` for a UI no-show is server behaviour a plugin cannot see,
 which is why `handlers/appointment_button.py` consults both records and treats either as enough.

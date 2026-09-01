@@ -6,7 +6,7 @@ waitlist" stayed absent until the page was reloaded -- which is exactly the mome
 a scheduler wants it, standing in front of a slot that has just gone to waste.
 
 **Subscribed to the note state change, not to ``APPOINTMENT_NO_SHOWED``.** Marking
-no-show in the UI does not emit the appointment event at all: on ``vicert-testing``,
+no-show in the UI does not emit the appointment event at all: on a test instance,
 a UI no-show moved the note to ``NSW`` while ``SlotFreedHandler`` -- which does
 subscribe to ``APPOINTMENT_NO_SHOWED`` -- never ran. The state change is the only
 signal that arrives, which is the same asymmetry ``handlers/appointment_button.py``
