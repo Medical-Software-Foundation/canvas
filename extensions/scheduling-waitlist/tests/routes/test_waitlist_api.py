@@ -394,7 +394,12 @@ def _entry(created_by_id=101, status="waiting"):
 
 
 class TestWriteAuthorization:
-    """Every write route resolves the entry and checks ownership the same way."""
+    """Every write route resolves the entry and checks ownership the same way.
+
+    ``get_one_entry`` is in the list although it writes nothing: it is the load of
+    the edit form, and a caller who may not save the result should be refused
+    before they retype the entry rather than after.
+    """
 
     def _call(self, api, method, entry=None, manages_all=False):
         with (
@@ -413,12 +418,12 @@ class TestWriteAuthorization:
             return getattr(api, method)()
 
     def test_a_missing_entry_is_reported_as_not_found(self, make_request):
-        for method in ("update", "change_status", "remove"):
+        for method in ("get_one_entry", "update", "change_status", "remove"):
             responses = self._call(_write_api(make_request), method, entry=None)
             assert responses[0].status_code == 404, method
 
     def test_a_non_creator_without_a_manager_role_is_refused(self, make_request):
-        for method in ("update", "change_status", "remove"):
+        for method in ("get_one_entry", "update", "change_status", "remove"):
             responses = self._call(
                 _write_api(make_request), method, entry=_entry(created_by_id=999)
             )
@@ -428,7 +433,7 @@ class TestWriteAuthorization:
         with patch(
             "scheduling_waitlist.routes.waitlist_api.staff_from_session", return_value=None
         ):
-            for method in ("update", "change_status", "remove"):
+            for method in ("get_one_entry", "update", "change_status", "remove"):
                 responses = getattr(_write_api(make_request), method)()
                 assert responses[0].status_code == 401, method
 
@@ -598,6 +603,77 @@ class TestUpdate:
 
         assert responses[0].status_code == 400
         update.assert_not_called()
+
+
+class TestGetOneEntry:
+    """One entry, as the compact edit form loads it.
+
+    The roster needs no such route -- it already holds every row it can edit. The
+    form the chart button opens starts from nothing but an entry key, and reading
+    the practice-wide list to find one row would be an odd way to fill six fields.
+    """
+
+    def _call(self, make_request, entry=None, manages_all=False, row=None):
+        api = _write_api(make_request)
+        with (
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.staff_from_session",
+                return_value=MOCK_STAFF,
+            ),
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.get_entry", return_value=entry
+            ),
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.can_manage_all",
+                return_value=manages_all,
+            ),
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.next_appointment_map",
+                return_value={},
+            ),
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.serialize_entry",
+                return_value=row if row is not None else {"dbid": 42},
+            ),
+        ):
+            return api.get_one_entry()
+
+    def test_it_returns_the_addressed_entry(self, make_request):
+        responses = self._call(make_request, entry=_entry())
+
+        assert responses[0].status_code == 200
+        assert responses[0].data["dbid"] == 42
+
+    def test_the_entry_is_shaped_exactly_like_a_roster_row(self, make_request):
+        # The same serializer, so the form reads the stored preferences the same
+        # way the roster's own edit dialog does -- including ``is_any``, without
+        # which "any provider" and "a provider who has gone inactive" look alike.
+        row = {"dbid": 42, "provider": {"dbid": None, "name": "Any provider", "is_any": True}}
+        responses = self._call(make_request, entry=_entry(), row=row)
+
+        assert responses[0].data["provider"]["is_any"] is True
+
+    def test_it_reads_the_entry_key_from_the_path(self, make_request):
+        api = _write_api(make_request, entry_dbid="99")
+        with (
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.staff_from_session",
+                return_value=MOCK_STAFF,
+            ),
+            patch(
+                "scheduling_waitlist.routes.waitlist_api.get_entry", return_value=None
+            ) as lookup,
+        ):
+            api.get_one_entry()
+
+        assert lookup.call_args.args[0] == "99"
+
+    def test_it_writes_nothing(self, make_request):
+        # A GET that emitted a banner effect or a button reload would be a write
+        # in everything but name.
+        responses = self._call(make_request, entry=_entry())
+
+        assert len(responses) == 1
 
 
 ROUTES = "scheduling_waitlist.routes.waitlist_api"

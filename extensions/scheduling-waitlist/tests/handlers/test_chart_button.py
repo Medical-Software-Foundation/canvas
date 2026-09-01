@@ -44,6 +44,12 @@ def _patient_model(found=True, patient_id="patient-uuid", dbid=55):
     return model
 
 
+def _two_entries(first="Nikola", last="Tesla"):
+    """Two live entries for one patient -- nothing single to edit."""
+    patient = MagicMock(first_name=first, last_name=last)
+    return [MagicMock(dbid=1, patient=patient), MagicMock(dbid=2, patient=patient)]
+
+
 def _for_button(button):
     return _patient_model(patient_id=button.event.target.id)
 
@@ -60,15 +66,23 @@ def _click(
     button,
     *,
     listed=False,
+    live_entries=None,
     staff=UNSET,
     error=None,
     patient=None,
 ):
-    """Run the click with every collaborator stubbed, returning the effects."""
+    """Run the click with every collaborator stubbed, returning the effects.
+
+    ``listed`` is the ordinary case -- one live entry, which is what a quick add
+    leaves behind. ``live_entries`` states the list outright for the cases where
+    how many there are is the behaviour under test.
+    """
     entry = MagicMock(dbid=900)
+    if live_entries is None:
+        live_entries = [MagicMock(dbid=777)] if listed else []
     with (
         patch(f"{MODULE}.Patient", patient or _for_button(button)),
-        patch(f"{MODULE}.has_live_entry", return_value=listed),
+        patch(f"{MODULE}.live_entries_for_patient", return_value=live_entries),
         patch(
             f"{MODULE}.staff_from_actor",
             return_value=MagicMock(dbid=101) if staff is UNSET else staff,
@@ -222,12 +236,31 @@ class TestClickingToAdd:
 
 
 class TestClickingWhenAlreadyListed:
-    def test_it_opens_the_roster(self):
-        # Editing, marking scheduled and removing all live there.
+    """The second click on the same button.
+
+    The quick add commits the broadest possible entry -- any service, any
+    provider, any location -- so this is where a scheduler says "actually, only Dr
+    Chen". Before this it opened the practice-wide roster, which meant searching
+    for the patient whose chart was already on screen.
+    """
+
+    def test_it_opens_the_entrys_own_form(self):
         effects, _ = _click(_button(), listed=True)
 
         assert len(effects) == 1
-        assert effects[0].url.startswith("/plugin-io/api/scheduling_waitlist/app/?")
+        assert "/app/edit?" in effects[0].url
+
+    def test_the_form_is_opened_on_the_entry_that_is_waiting(self):
+        # Not the patient, and not whichever row the roster happened to sort
+        # first: the entry the chart just said this patient has.
+        effects, _ = _click(_button(), live_entries=[MagicMock(dbid=777)])
+
+        assert "entry=777" in effects[0].url
+
+    def test_the_modal_is_titled_as_an_edit(self):
+        effects, _ = _click(_button(), listed=True)
+
+        assert effects[0].title == "Edit waitlist entry"
 
     def test_nothing_is_written(self):
         # The duplicate guard would refuse it, and a scheduler who wants a
@@ -236,11 +269,47 @@ class TestClickingWhenAlreadyListed:
 
         assert writer.call_count == 0
 
-    def test_the_roster_is_not_narrowed_to_one_patient(self):
-        # It is the practice-wide list; a patient-scoped roster was reverted.
-        effects, _ = _click(_button(), listed=True)
+    def test_several_live_entries_open_the_roster_instead(self):
+        # There is no single entry to edit, and guessing one would edit the wrong
+        # want. The roster can tell the rows apart.
+        effects, _ = _click(_button(), live_entries=_two_entries())
+
+        assert len(effects) == 1
+        assert effects[0].url.startswith("/plugin-io/api/scheduling_waitlist/app/?")
+
+    def test_the_roster_opens_with_the_patients_name_in_the_search(self):
+        # Otherwise "open the roster" means searching a table that can run to
+        # thousands for the patient whose chart is already on screen.
+        effects, _ = _click(_button(), live_entries=_two_entries())
+
+        assert "q=Nikola%20Tesla" in effects[0].url
+
+    def test_the_roster_is_still_not_keyed_to_a_patient(self):
+        # The reverted patient-scoped roster filtered on a dbid the UI never
+        # showed. This uses the roster's own keyword search, which is visible in
+        # the box and cleared by Reset.
+        effects, _ = _click(_button(), live_entries=_two_entries())
 
         assert "patient=" not in effects[0].url
+
+    def test_a_patient_whose_name_cannot_be_read_opens_the_whole_roster(self):
+        # "Unnamed patient" as a search term matches nobody, and an empty table
+        # presented as this patient's rows is worse than the practice-wide list.
+        entries = _two_entries()
+        for entry in entries:
+            entry.patient = None
+
+        effects, _ = _click(_button(), live_entries=entries)
+
+        assert "q=" not in effects[0].url
+
+    def test_an_entry_that_vanished_between_render_and_click_adds_instead(self):
+        # visible() said "On waitlist" from a separate invocation. If the entry is
+        # gone by the time the click lands, the honest thing is the add the label
+        # would have offered a moment earlier.
+        _, writer = _click(_button(), live_entries=[])
+
+        assert writer.call_count == 1
 
 
 class TestWhenTheClickCannotBeAttributed:

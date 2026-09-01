@@ -8,6 +8,11 @@ from scheduling_waitlist.handlers.appointment_button import (
 
 MODULE = "scheduling_waitlist.handlers.appointment_button"
 
+# Distinguishes "the test did not care" from "the test means None". An entry
+# that has gone between the render and the click is the interesting case, so it
+# cannot be the default.
+UNSET = object()
+
 
 def _button(note_id=536, target_id=None):
     button = AddToWaitlistAppointmentButton.__new__(AddToWaitlistAppointmentButton)
@@ -313,11 +318,13 @@ class TestLabelReflectsThisSlotsService:
 
 
 class TestClickFollowsTheLabel:
-    def _click(self, waiting):
+    def _click(self, waiting, entry=UNSET):
         button = _button()
+        found = MagicMock(dbid=777) if entry is UNSET else entry
         with (
             patch(f"{MODULE}.Appointment", _found(_appointment())),
             patch(f"{MODULE}.has_live_entry_for_service", return_value=waiting),
+            patch(f"{MODULE}.find_live_entry", return_value=found),
         ):
             return button.handle()[0].url
 
@@ -327,10 +334,27 @@ class TestClickFollowsTheLabel:
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/add?")
         assert "service=7" in url
 
-    def test_already_waiting_opens_the_roster(self):
+    def test_already_waiting_opens_that_entrys_own_form(self):
         # Offering an add form for a service they already want would only earn a
-        # 409 from the duplicate guard.
+        # 409 from the duplicate guard. Editing the want they already stated is
+        # the useful thing to do with the slot in front of them -- and it is what
+        # the chart-header button's "On waitlist" does, which matters because the
+        # two buttons wear the same label.
         url = self._click(waiting=True)
+
+        assert "/app/edit?" in url
+        assert "entry=777" in url
+
+    def test_the_form_is_not_asked_to_add_for_a_patient(self):
+        # An edit cannot reassign the patient, and naming one would say otherwise.
+        url = self._click(waiting=True)
+
+        assert "patient=" not in url
+
+    def test_an_entry_that_vanished_falls_back_to_the_roster(self):
+        # visible() is a separate invocation; the entry it saw can be gone by the
+        # time the click lands. The roster is the honest answer to "it was here".
+        url = self._click(waiting=True, entry=None)
 
         assert url.startswith("/plugin-io/api/scheduling_waitlist/app/?")
         assert "patient=" not in url

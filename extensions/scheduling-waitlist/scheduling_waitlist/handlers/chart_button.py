@@ -14,12 +14,16 @@ was worse than either: a chart header truncates labels at roughly twelve
 characters, so "Add to waitlist" and "Waitlist: any" both rendered as an
 ellipsis and became impossible to tell apart.
 
-What is lost is stating a *specific* want from the chart -- "she'll only see Dr
-Chen". Two other surfaces still do that: the roster's own add form, which names
-the patient by search, and the button on a freed appointment's note, which opens
-the form pre-filled from the slot that just came free. The chart is the one
-surface with no slot to copy, so it is the one with the least to gain from a
-form and the most from a single click.
+Stating a *specific* want from the chart -- "she'll only see Dr Chen" -- is the
+second click, on the same button. Once the patient is listed the button reads "On
+waitlist" and opens the compact form on the entry that was just written, so the
+broad add can be narrowed in place. That is deliberately the order: the patient is
+on the list before anything can go wrong, and the detail is optional.
+
+It opens a form about one entry rather than the roster because a full-width table
+is not a dialog -- the same reason the add form has its own page. The roster is
+still where a patient with *several* live entries goes, because there is no single
+entry to edit there, and it is still reachable in one click from the chart banner.
 
 The write goes through ``services/quick_add.py`` and therefore through the same
 ``validate_entry`` the two forms post to, rather than assembling model fields
@@ -43,21 +47,25 @@ from scheduling_waitlist.constants import (
     BUTTON_LISTED_TITLE,
     LISTED_BUTTON_BACKGROUND,
     LISTED_BUTTON_TEXT,
-    ROSTER_URL,
     add_form_url,
+    edit_form_url,
+    roster_url_for_search,
 )
 from scheduling_waitlist.services.banner import banner_effects, banner_effects_for_entry
 from scheduling_waitlist.services.chart_buttons import reload_chart_buttons
 from scheduling_waitlist.services.config import WaitlistConfig
+from scheduling_waitlist.services.display import UNNAMED_PATIENT, patient_name
 from scheduling_waitlist.services.entries import (
     DuplicateEntryError,
     get_entry,
     has_live_entry,
+    live_entries_for_patient,
 )
 from scheduling_waitlist.services.permissions import staff_from_actor
 from scheduling_waitlist.services.quick_add import QuickAddRefused, quick_add
 
 ADD_MODAL_TITLE = "Add to waitlist"
+EDIT_MODAL_TITLE = "Edit waitlist entry"
 LISTED_MODAL_TITLE = "Scheduling Waitlist"
 
 
@@ -104,27 +112,75 @@ class AddToWaitlistButton(ActionButton):
         return True
 
     def handle(self) -> list[Effect]:
-        """Add them, or -- if they are already listed -- show the list.
+        """Add them, or -- if they are already listed -- open what they asked for.
 
         The label promised one of two things and this has to deliver whichever it
         was, so the lookup is repeated: ``visible()`` is a separate invocation
         with no state to carry over.
 
-        "On waitlist" opens the roster, where editing, marking scheduled and
-        removing already live. It deliberately does not offer to add again: the
-        duplicate guard would refuse it, and a scheduler who wants a *second*,
-        differently-specified entry for the same patient is doing something
-        deliberate enough to belong on the roster.
+        The entries themselves are fetched here, not just the yes/no
+        ``visible()`` needs, because "On waitlist" now has to name one of them.
+        One query either way.
+
+        Neither branch offers to add again: the duplicate guard would refuse it,
+        and a scheduler who wants a *second*, differently-specified entry for the
+        same patient is doing something deliberate enough to belong on the
+        roster's own add form.
         """
         patient = self._patient()
         if patient is None:
             return []
 
-        patient_id = str(getattr(patient, "id", "") or "")
-        if has_live_entry(getattr(patient, "dbid", None)):
-            return [self._open(ROSTER_URL, LISTED_MODAL_TITLE)]
+        entries = live_entries_for_patient(getattr(patient, "dbid", None))
+        if entries:
+            return [self._open_listed(entries)]
 
-        return self._add(patient, patient_id)
+        return self._add(patient, str(getattr(patient, "id", "") or ""))
+
+    def _open_listed(self, entries: list[Any]) -> Effect:
+        """Where "On waitlist" goes.
+
+        One live entry -- the ordinary case, and what the quick add leaves behind
+        -- opens that entry's own form. This is the click reviewers were really
+        asking about: the add commits the broadest possible entry, so narrowing it
+        to "only Dr Chen" has to be reachable from the chart rather than by
+        opening the practice-wide roster and searching for the patient whose chart
+        is already on screen.
+
+        Several live entries have no single subject, so those open the roster,
+        where the rows can be told apart, edited, marked scheduled or removed --
+        with the patient's name already in the search box, because a thousand-row
+        table is no easier to search from a chart than it was before.
+
+        That is the roster's own keyword search, pre-typed: visible in the box,
+        cleared by Reset, and counted as a filtered view. It is not the
+        patient-scoped roster reverted in cf94418, which added a dbid filter the
+        UI did not show, a "Show everyone" control to escape it, and a count line
+        that reported the narrowed total as the practice-wide one.
+        """
+        if len(entries) == 1:
+            return self._open(
+                edit_form_url(getattr(entries[0], "dbid", None)), EDIT_MODAL_TITLE
+            )
+
+        return self._open(
+            roster_url_for_search(self._search_term(entries[0])), LISTED_MODAL_TITLE
+        )
+
+    @staticmethod
+    def _search_term(entry: Any) -> str:
+        """The patient's name to pre-type, or nothing.
+
+        ``patient_name`` answers "Unnamed patient" for a record it cannot read,
+        which as a search term matches nobody and would present an empty roster
+        as this patient's rows. An empty term opens the practice-wide list
+        instead, which is at least true.
+        """
+        patient = getattr(entry, "patient", None)
+        if patient is None:
+            return ""
+        name = patient_name(patient)
+        return "" if name == UNNAMED_PATIENT else name
 
     def _add(self, patient: Any, patient_id: str) -> list[Effect]:
         """Write the entry, or fall back to the form if we cannot attribute it.

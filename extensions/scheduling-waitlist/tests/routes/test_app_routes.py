@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from scheduling_waitlist import CACHE_BUST
+from scheduling_waitlist.constants import edit_form_url
 from scheduling_waitlist.routes.app_routes import WaitlistAppAPI
 
 
@@ -44,16 +45,42 @@ class TestRosterPage:
         assert json.loads(rendered_context()["config_json"]) == {
             "apiBase": "/plugin-io/api/scheduling_waitlist",
             "cacheBust": CACHE_BUST,
+            "search": "",
         }
 
     def test_the_roster_ignores_a_patient_parameter(self, rendered_context):
-        # The roster is the practice-wide list. Narrowing it to one patient was a
-        # decision that got reverted; the ticket's filters are service, provider
-        # and location.
+        # The roster is the practice-wide list. Narrowing it to one patient by key
+        # was a decision that got reverted; the ticket's filters are service,
+        # provider, location and keyword search.
         _api(query_params={"patient": "abc-123"}).get_roster_page()
 
         config = json.loads(rendered_context()["config_json"])
-        assert set(config) == {"apiBase", "cacheBust"}
+        assert set(config) == {"apiBase", "cacheBust", "search"}
+        assert config["search"] == ""
+
+    def test_a_search_term_reaches_the_page(self, rendered_context):
+        # Pre-typed into the box the roster already has, so a patient with several
+        # entries opens with their rows at the top instead of somewhere in a table
+        # that can run to thousands.
+        _api(query_params={"q": "Nikola Tesla"}).get_roster_page()
+
+        assert json.loads(rendered_context()["config_json"])["search"] == "Nikola Tesla"
+
+    def test_a_blank_search_term_is_treated_as_absent(self, rendered_context):
+        _api(query_params={"q": "   "}).get_roster_page()
+
+        assert json.loads(rendered_context()["config_json"])["search"] == ""
+
+    def test_the_search_term_is_the_only_thing_baked_into_the_page(
+        self, rendered_context
+    ):
+        # Everything else the roster shows arrives over the authenticated API. The
+        # term is the caller's own text and is shown in the search box, so it has
+        # to be in the document.
+        _api(query_params={"q": "Tesla"}).get_roster_page()
+
+        config = json.loads(rendered_context()["config_json"])
+        assert set(config) == {"apiBase", "cacheBust", "search"}
 
 
 class TestAddForm:
@@ -74,7 +101,7 @@ class TestAddForm:
     def test_renders_the_compact_template_not_the_roster(self):
         responses = _api(query_params={"patient": "abc-123"}).get_add_form()
 
-        assert "templates/add_patient.html" in responses[0].body
+        assert "templates/entry_form.html" in responses[0].body
 
     def test_the_response_is_not_cached(self):
         responses = _api(query_params={"patient": "abc-123"}).get_add_form()
@@ -103,7 +130,263 @@ class TestAddForm:
         _api(query_params={"patient": "abc-123"}).get_add_form()
 
         config = json.loads(rendered_context()["config_json"])
-        assert set(config) == {"apiBase", "cacheBust", "patientId", "prefill"}
+        assert set(config) == {"apiBase", "cacheBust", "mode", "patientId", "prefill"}
+
+    def test_the_page_is_told_it_is_adding(self, rendered_context):
+        # One template serves both, and it chooses its verb from this.
+        _api(query_params={"patient": "abc-123"}).get_add_form()
+
+        assert json.loads(rendered_context()["config_json"])["mode"] == "add"
+
+
+class TestEditForm:
+    """The same compact form, opened on an entry that already exists.
+
+    Where the chart button's "On waitlist" goes. The quick add commits the
+    broadest possible entry, so this is how a scheduler narrows it to "only Dr
+    Chen" without opening the practice-wide roster and searching for the patient
+    whose chart is already on screen.
+    """
+
+    def test_returns_a_single_html_response(self):
+        responses = _api(query_params={"entry": "42"}).get_edit_form()
+
+        assert len(responses) == 1
+        assert responses[0].content_type == "text/html"
+        assert responses[0].status_code == 200
+
+    def test_renders_the_same_compact_template_as_the_add_form(self):
+        # Two templates asking for the same six fields would drift, and the pair
+        # that drifted last time disagreed about whether "any" was on offer.
+        responses = _api(query_params={"entry": "42"}).get_edit_form()
+
+        assert "templates/entry_form.html" in responses[0].body
+
+    def test_the_response_is_not_cached(self):
+        responses = _api(query_params={"entry": "42"}).get_edit_form()
+
+        assert responses[0].headers["Cache-Control"] == "no-cache"
+
+    def test_the_entry_key_reaches_the_page(self, rendered_context):
+        _api(query_params={"entry": "42"}).get_edit_form()
+
+        assert json.loads(rendered_context()["config_json"])["entryId"] == "42"
+
+    def test_the_page_is_told_it_is_editing(self, rendered_context):
+        _api(query_params={"entry": "42"}).get_edit_form()
+
+        assert json.loads(rendered_context()["config_json"])["mode"] == "edit"
+
+    def test_a_blank_entry_parameter_is_treated_as_absent(self, rendered_context):
+        # The form then refuses to start rather than PUTting to an empty key.
+        _api(query_params={"entry": "   "}).get_edit_form()
+
+        assert json.loads(rendered_context()["config_json"])["entryId"] == ""
+
+    def test_a_missing_entry_parameter_is_treated_as_absent(self, rendered_context):
+        _api().get_edit_form()
+
+        assert json.loads(rendered_context()["config_json"])["entryId"] == ""
+
+    def test_the_page_carries_only_wiring_and_the_entry_key(self, rendered_context):
+        # Whose entry it is, and whether the caller may change it, are decided by
+        # the API the page then calls -- not by having been handed this document.
+        _api(query_params={"entry": "42"}).get_edit_form()
+
+        config = json.loads(rendered_context()["config_json"])
+        assert set(config) == {"apiBase", "cacheBust", "mode", "entryId"}
+
+    def test_the_url_the_button_builds_is_the_url_this_route_reads(
+        self, rendered_context
+    ):
+        # The two halves are written in different files and agree only by the name
+        # of one query parameter. A rename on either side would leave the form
+        # opening with no entry, which looks exactly like a broken page.
+        from urllib.parse import parse_qs, urlparse
+
+        url = edit_form_url(777)
+        _api(
+            query_params={k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+        ).get_edit_form()
+
+        assert json.loads(rendered_context()["config_json"])["entryId"] == "777"
+
+    def test_the_entry_key_is_escaped_into_the_url(self):
+        # Defensive: a dbid is an integer today. An unescaped value would truncate
+        # the query string and take the cache-bust token with it.
+        assert "entry=7%267" in edit_form_url("7&7")
+
+    def test_no_patient_is_named(self, rendered_context):
+        # An edit cannot reassign the patient, so naming one here could only
+        # disagree with the entry.
+        _api(query_params={"entry": "42", "patient": "abc-123"}).get_edit_form()
+
+        assert "patientId" not in json.loads(rendered_context()["config_json"])
+
+
+class TestTheFormLooksLikeTheRostersOwnDialog:
+    """The compact form and the roster's dialogs are the same form.
+
+    They were not: the compact form inlined its own styles, its own spacing and
+    sentence-case labels, and had no action bar, so opening one from a chart and
+    one from the roster showed two visibly different dialogs. Reviewers compared
+    them side by side and rejected it.
+
+    Pinned by reading the source, because there is no browser here. Each of these
+    is something that has to hold for the two to look alike.
+    """
+
+    FORM = Path("scheduling_waitlist/templates/entry_form.html")
+    CSS = Path("scheduling_waitlist/static/css/roster.css")
+
+    def test_the_form_wears_the_rosters_stylesheet_rather_than_a_copy(self):
+        text = self.FORM.read_text()
+
+        assert "roster.css" in text
+        # A third copy of the tokens is exactly what drifted.
+        assert "--wl-accent:" not in text, "the form is redefining the palette"
+
+    def test_the_form_uses_the_dialogs_own_class_names(self):
+        text = self.FORM.read_text()
+
+        for name in (
+            "wl-dialog-body",
+            "wl-form-grid",
+            "wl-field",
+            "wl-field-full",
+            "wl-dialog-actions",
+            "wl-btn",
+            "wl-btn-primary",
+            "wl-dialog-sub",
+        ):
+            assert name in text, f"the form does not use {name}"
+
+    def test_every_class_the_form_borrows_is_defined_in_that_stylesheet(self):
+        # A class name that only the form uses is an unstyled element, and one
+        # that looks fine locally because the browser fell back to defaults.
+        css = self.CSS.read_text()
+
+        for name in ("wl-modal-page", "wl-modal-note", "wl-dialog-body", "wl-form-grid"):
+            assert "." + name in css, f"{name} has no rule in roster.css"
+
+    def test_the_page_level_classes_reach_the_form_outside_a_dialog(self):
+        # .wl-dialog h2 and .wl-dialog textarea only match inside <dialog>. The
+        # form is a page, so those rules have to name it too or its heading and
+        # note box fall back to browser defaults.
+        css = self.CSS.read_text()
+
+        assert ".wl-modal-page h2" in css
+        assert ".wl-modal-page textarea" in css
+
+    def test_the_fields_are_in_the_rosters_order(self):
+        # Service, Provider, Location, Priority, Preferred time, Note -- the order
+        # in the screenshot reviewers approved, and the order roster.js builds.
+        text = self.FORM.read_text()
+        positions = [
+            text.index('id="wl-service"'),
+            text.index('id="wl-provider"'),
+            text.index('id="wl-location"'),
+            text.index('id="wl-priority"'),
+            text.index('id="wl-window"'),
+            text.index('id="wl-note"'),
+        ]
+
+        assert positions == sorted(positions)
+
+    def test_the_note_spans_both_columns(self):
+        text = self.FORM.read_text()
+        note_field = text[text.index('id="wl-note"') - 400 : text.index('id="wl-note"')]
+
+        assert "wl-field-full" in note_field
+
+    def test_labels_are_sentence_case_and_uppercased_by_the_stylesheet(self):
+        # Two places deciding the case is how the pair diverged. The stylesheet
+        # decides.
+        text = self.FORM.read_text()
+
+        assert ">Preferred time<" in text
+        assert "PREFERRED TIME" not in text
+        assert "text-transform: uppercase" in self.CSS.read_text()
+
+    def test_there_is_no_patient_field(self):
+        # The chart already knows who this is about, and an edit cannot reassign
+        # the patient. The roster's add dialog is the one that has to ask.
+        text = self.FORM.read_text()
+
+        assert "wl-picker" not in text
+        assert "Search by name" not in text
+
+    def test_the_actions_are_cancel_and_one_primary_button(self):
+        text = self.FORM.read_text()
+        actions = text[text.index("wl-dialog-actions") :][:400]
+
+        assert 'id="wl-cancel"' in actions
+        assert 'id="wl-save"' in actions
+        assert actions.index('id="wl-cancel"') < actions.index('id="wl-save"')
+
+    def test_the_hidden_attribute_outranks_the_layout_rules(self):
+        # .wl-modal-page and .wl-pager both set a display, which the browser's own
+        # [hidden] rule loses to -- so the form would be on screen while it was
+        # still loading its options.
+        assert "[hidden] { display: none !important; }" in self.CSS.read_text()
+
+    def test_the_modal_asks_for_the_dialogs_own_width(self):
+        # 520px is .wl-dialog's width. A wider modal makes the same markup look
+        # like a different form.
+        assert "width: 520" in self.FORM.read_text()
+        assert "width: min(520px, 92vw)" in self.CSS.read_text()
+
+
+class TestTheFormServesBothModes:
+    """The one template that adds and edits.
+
+    There is no JS harness here, so these read the source. They pin the three
+    things that differ between the modes -- and that would each fail silently: a
+    PUT sent as a POST creates a duplicate rather than an edit, a patient key sent
+    on an edit suggests the patient can be reassigned, and a stored time window
+    that is not matched back to its named option silently clears a preference the
+    patient gave.
+    """
+
+    FORM = Path("scheduling_waitlist/templates/entry_form.html")
+
+    def test_editing_puts_to_the_entry_rather_than_posting_a_new_one(self):
+        text = self.FORM.read_text()
+
+        assert 'method: isEdit ? "PUT" : "POST"' in text
+        assert '"/waitlist/entries/" + window.encodeURIComponent(entryId)' in text
+
+    def test_the_patient_is_named_only_when_adding(self):
+        text = self.FORM.read_text()
+
+        assert "if (!isEdit) body.patient_id = patientId;" in text
+
+    def test_a_stored_time_window_is_matched_back_to_its_named_option(self):
+        text = self.FORM.read_text()
+
+        assert "storedWindowValue" in text
+        for shape in ("weekday_am", "weekday_pm", "weekend"):
+            assert shape in text, f"{shape} has no shape to match against"
+
+    def test_the_window_shapes_agree_with_the_rosters_own(self):
+        # Two copies, because the two forms share no script. They describe the
+        # same server-side TIME_WINDOWS, so a disagreement means one of them
+        # reconstructs the wrong window.
+        pattern = re.compile(
+            r"weekday_am:\s*\"([^\"]+)\",\s*weekday_pm:\s*\"([^\"]+)\",\s*weekend:\s*\"([^\"]+)\""
+        )
+        form = pattern.search(re.sub(r"\s+", " ", self.FORM.read_text()))
+        roster = pattern.search(
+            re.sub(r"\s+", " ", Path("scheduling_waitlist/static/js/roster.js").read_text())
+        )
+
+        assert form is not None and roster is not None
+        assert form.groups() == roster.groups()
+
+    def test_an_unknown_mode_is_treated_as_adding(self):
+        # A typo in a URL must not leave the form PUTting to an entry key it never
+        # read.
+        assert 'var isEdit = config.mode === "edit";' in self.FORM.read_text()
 
 
 class TestAssets:
@@ -258,7 +541,7 @@ class TestEveryFormOffersAnyForAllThreeMatchedFields:
     """
 
     SOURCES = (
-        Path("scheduling_waitlist/templates/add_patient.html"),
+        Path("scheduling_waitlist/templates/entry_form.html"),
         Path("scheduling_waitlist/static/js/roster.js"),
     )
 
@@ -286,7 +569,7 @@ class TestEveryFormOffersAnyForAllThreeMatchedFields:
     # the whole file, because the roster also populates a service *filter*, which
     # legitimately mentions the instance's types earlier and is not a default.
     SERVICE_SELECTS = (
-        (Path("scheduling_waitlist/templates/add_patient.html"), "els.service,"),
+        (Path("scheduling_waitlist/templates/entry_form.html"), "els.service,"),
         (Path("scheduling_waitlist/static/js/roster.js"), '"wl-add-type"'),
         (Path("scheduling_waitlist/static/js/roster.js"), '"wl-edit-type"'),
     )

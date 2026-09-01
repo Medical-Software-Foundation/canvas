@@ -22,6 +22,32 @@ ROSTER_URL = f"{API_BASE}/app/?v={CACHE_BUST}"
 # The query parameter naming the patient an add form is for.
 ADD_FOR_PATIENT_PARAM = "patient"
 
+# The roster's keyword search, as both its query parameter and its filter key.
+# Named once because three things have to agree on it: the URL a chart button
+# builds, the page that reads it, and the entries endpoint the page then calls.
+ROSTER_SEARCH_PARAM = "q"
+
+
+def roster_url_for_search(term: str) -> str:
+    """The practice-wide roster with its search box already filled in.
+
+    Where "On waitlist" goes for a patient with several live entries: there is no
+    single entry to open, so the roster opens with their name typed into the
+    search it already has, and the rows are at the top instead of somewhere in a
+    list that can run to thousands.
+
+    Distinct from the patient-scoped roster reverted in cf94418 in the way that
+    revert asked for: this adds no filter the roster does not already offer, no
+    "Show everyone" control and no dbid. It is the keyword search from the
+    ticket's own acceptance criteria, pre-typed -- visible in the box, clearable
+    with Reset, and counted as a filtered view rather than reported as the
+    practice-wide total.
+    """
+    cleaned = (term or "").strip()
+    if not cleaned:
+        return ROSTER_URL
+    return f"{ROSTER_URL}&{ROSTER_SEARCH_PARAM}={quote(cleaned, safe='')}"
+
 # What the freed slot already told us, so the scheduler does not re-enter it.
 # Keys rather than names: the form matches them against its own dropdowns.
 PREFILL_SERVICE_PARAM = "service"
@@ -64,6 +90,31 @@ def add_form_url(
             params.append(f"{name}={quote(str(value), safe='')}")
 
     return f"{API_BASE}/app/add?" + "&".join(params)
+
+
+# The query parameter naming the entry an edit form is for.
+EDIT_FOR_ENTRY_PARAM = "entry"
+
+
+def edit_form_url(entry_dbid: Any) -> str:
+    """The compact edit form for one existing entry.
+
+    Where "On waitlist" goes when there is exactly one entry to talk about. The
+    quick add commits the broadest possible entry, so the second click on the
+    same button is how a scheduler narrows it to "only Dr Chen" -- and that is a
+    dialog about one record, not a table.
+
+    Note this is *not* the patient-scoped roster that was reverted in cf94418.
+    The roster itself is untouched and still opens practice-wide and unfiltered;
+    this is a form about one entry, which is a different thing from a list
+    narrowed to one patient -- the same distinction that commit drew for the add
+    form.
+    """
+    return (
+        f"{API_BASE}/app/edit?"
+        f"{EDIT_FOR_ENTRY_PARAM}={quote(str(entry_dbid), safe='')}"
+        f"&v={CACHE_BUST}"
+    )
 
 
 

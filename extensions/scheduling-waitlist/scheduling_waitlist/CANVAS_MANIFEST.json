@@ -36,7 +36,7 @@
             },
             {
                 "class": "scheduling_waitlist.handlers.chart_button:AddToWaitlistButton",
-                "description": "Chart header button that adds the patient in front of you to the waitlist for any appointment type, provider and location in one click, or opens the roster when they are already waiting",
+                "description": "Chart header button that adds the patient in front of you to the waitlist for any appointment type, provider and location in one click, then opens that entry's form on a second click so the broad entry can be narrowed",
                 "data_access": {
                     "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
                     "read": ["Patient", "Staff", "NoteType", "PracticeLocation"],
@@ -45,7 +45,7 @@
             },
             {
                 "class": "scheduling_waitlist.handlers.appointment_button:AddToWaitlistAppointmentButton",
-                "description": "Adds a 'Waitlist' button to a cancelled or no-showed appointment's note, opening the form pre-filled from the freed slot",
+                "description": "Adds a 'Waitlist' button to a cancelled or no-showed appointment's note, opening the form pre-filled from the freed slot, or that patient's existing entry for the same service when they are already waiting",
                 "data_access": {
                     "event": "",
                     "read": ["Appointment", "Note", "Patient", "NoteType", "PracticeLocation", "Staff"],

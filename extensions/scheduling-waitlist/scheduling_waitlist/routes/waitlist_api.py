@@ -336,6 +336,33 @@ class WaitlistAPI(StaffSessionAuthMixin, SimpleAPI):
             status_code=HTTPStatus.OK,
         )
 
+    @api.get("/entries/<entry_dbid>")
+    def get_one_entry(self) -> list[Response | Effect]:
+        """One entry, as its own edit form loads it.
+
+        The roster needs no such route -- it already holds every row it can edit,
+        so its dialog is filled from memory. The compact edit form the chart
+        button opens starts from nothing but an entry key, and reading the whole
+        practice-wide list to find one row would be an odd way to fill six
+        fields.
+
+        Gated by the write check rather than by read access: this is a form's own
+        load, and telling someone they may not save only after they have retyped
+        the entry is worse than refusing it now. That makes the refusal identical
+        to the one ``PUT`` would give, which is the point.
+        """
+        staff = self._acting_staff()
+        if staff is None:
+            return [self._unauthenticated()]
+
+        config = self._config()
+        entry, refusal = self._entry_for_write(staff, config)
+        if refusal is not None:
+            return [refusal]
+
+        today = datetime.now(timezone.utc).date()
+        return [self._serialized(entry, staff, config, today)]
+
     @api.put("/entries/<entry_dbid>")
     def update(self) -> list[Response | Effect]:
         """Edit an entry. The patient is fixed and cannot be reassigned."""

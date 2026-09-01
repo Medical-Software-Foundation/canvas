@@ -40,6 +40,10 @@ SORT_PRIORITY = "priority"
 SORT_WAIT = "wait"
 SORT_PATIENT = "patient"
 
+# How many words of a search term are honoured. Each one is another predicate on
+# the patient join, and the term comes from a query string.
+SEARCH_TERM_WORD_LIMIT = 5
+
 _SORT_FIELDS: dict[str, tuple[str, ...]] = {
     # Priority band first, then longest waiting inside the band. dbid last so
     # equal rows keep a stable order between requests.
@@ -119,10 +123,21 @@ def build_queryset(
         # out until someone asks for them by status.
         queryset = queryset.filter(status__in=list(MATCHABLE_STATUSES))
 
-    term = (search or "").strip()
-    if term:
+    # Every word has to match a name part, rather than the whole string having to
+    # match one part.
+    #
+    # The box says "Patient name", and a full name typed into it used to find
+    # nothing: no single column holds both words, so "Nikola Tesla" was tested
+    # against first_name and last_name entire and matched neither. One word still
+    # behaves exactly as before -- "lee" matches either part -- so this only adds
+    # the case that was broken. It also lets the chart hand the roster a display
+    # name to filter by, which is where the defect surfaced.
+    #
+    # Capped, because each word is another join predicate and the term arrives
+    # from a query string. Five is well past any real name.
+    for word in (search or "").split()[:SEARCH_TERM_WORD_LIMIT]:
         queryset = queryset.filter(
-            Q(patient__first_name__icontains=term) | Q(patient__last_name__icontains=term)
+            Q(patient__first_name__icontains=word) | Q(patient__last_name__icontains=word)
         )
 
     # Each of these three asks the question the user is really asking: "who could

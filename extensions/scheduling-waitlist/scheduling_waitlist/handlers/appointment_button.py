@@ -47,10 +47,15 @@ from scheduling_waitlist.constants import (
     LISTED_BUTTON_TEXT,
     ROSTER_URL,
     add_form_url,
+    edit_form_url,
 )
-from scheduling_waitlist.services.entries import has_live_entry_for_service
+from scheduling_waitlist.services.entries import (
+    find_live_entry,
+    has_live_entry_for_service,
+)
 
 ADD_MODAL_TITLE = "Add to waitlist"
+EDIT_MODAL_TITLE = "Edit waitlist entry"
 LISTED_MODAL_TITLE = "Scheduling Waitlist"
 
 # A slot can be given up in two records, and only one of them is certain to move.
@@ -177,6 +182,15 @@ class AddToWaitlistAppointmentButton(ActionButton):
         writes immediately. "On waitlist" opens the roster instead, the same as the
         chart-header button does: offering an add form for a service they are
         already waiting for would only earn a 409 from the duplicate guard.
+        Instead it opens that entry's own compact form, so the want they already
+        stated can be changed while the freed slot is in front of them -- the same
+        thing the chart-header button's "On waitlist" does. Two buttons with one
+        label behaving two ways would be a defect, whichever way each behaved.
+
+        Which entry is not a guess here: ``visible()`` only says "On waitlist" for
+        a live entry matching *this slot's service*, so there is exactly one to
+        open. It falls back to the roster if that entry has gone between the
+        render and the click.
 
         The lookups are repeated rather than carried over from ``visible()``,
         which is a separate invocation with no state to reuse.
@@ -190,8 +204,24 @@ class AddToWaitlistAppointmentButton(ActionButton):
         if not patient_id:
             return []
 
+        # Gated on ``_already_waiting`` rather than on ``find_live_entry`` alone,
+        # which would be one query fewer. A slot with no service reads as "not
+        # waiting" there, whereas ``find_live_entry(dbid, None)`` would filter on
+        # a null service and match the *general* entries a quick add creates --
+        # turning "add for this slot" into "edit something else". The extra query
+        # happens only on a click, never on a render.
         if self._already_waiting(appointment):
-            url, title = ROSTER_URL, LISTED_MODAL_TITLE
+            entry = find_live_entry(
+                getattr(patient, "dbid", None),
+                getattr(appointment, "note_type_id", None),
+            )
+            if entry is None:
+                url, title = ROSTER_URL, LISTED_MODAL_TITLE
+            else:
+                url, title = (
+                    edit_form_url(getattr(entry, "dbid", None)),
+                    EDIT_MODAL_TITLE,
+                )
         else:
             url, title = (
                 add_form_url(

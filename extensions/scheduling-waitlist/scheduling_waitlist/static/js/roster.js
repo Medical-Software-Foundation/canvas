@@ -43,7 +43,12 @@
   var state = {
     apiBase: config.apiBase || "",
     filters: {
-      q: "",
+      // Pre-typed when a chart button opened the roster for a patient with
+      // several live entries: there is no single entry to edit, so their rows
+      // are brought to the top of a list that can run to thousands. It is the
+      // ordinary search filter, shown in the box and cleared by Reset -- not a
+      // hidden narrowing of the list, which is what got reverted before.
+      q: config.search || "",
       status: "",
       appointment_type_id: "",
       provider_id: "",
@@ -374,6 +379,21 @@
     ]);
   }
 
+  /* What the count line says, which depends on whether anything is filtered.
+   *
+   * "1 patient waiting." is a statement about the practice, and saying it about
+   * a filtered total makes the whole waitlist look like it holds one person --
+   * the exact misreading that sank the earlier patient-scoped roster. A filtered
+   * view counts matches instead and claims nothing about the rest, which needs
+   * no second query to be true.
+   */
+  function countLine(total) {
+    if (anyFilterApplied()) {
+      return total === 1 ? "1 matching patient." : total + " matching patients.";
+    }
+    return total === 1 ? "1 patient waiting." : total + " patients waiting.";
+  }
+
   function anyFilterApplied() {
     return Object.keys(state.filters).some(function (key) {
       return state.filters[key] !== "";
@@ -442,9 +462,7 @@
         state.canManageAll = !!data.can_manage_all;
         state.currentStaffDbid = data.current_staff_dbid;
         render();
-        setStatus(
-          state.total === 1 ? "1 patient waiting." : state.total + " patients waiting."
-        );
+        setStatus(countLine(state.total));
       })
       .catch(function (error) {
         if (seq !== state.requestSeq) return;
@@ -1113,6 +1131,11 @@
     setStatus("The waitlist could not start: its configuration is missing.", "error");
     return;
   }
+
+  // The box has to show what the list is filtered by. A short list with an empty
+  // search box reads as "the practice has two people waiting", not as a filtered
+  // view -- and the reader has nothing to clear.
+  if (els.q && state.filters.q) els.q.value = state.filters.q;
 
   bind();
   loadOptions()

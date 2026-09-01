@@ -38,6 +38,17 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute has to win.
+ *
+ * The browser's own rule for it is `display: none`, which any author `display`
+ * declaration outranks -- so `.wl-pager { display: flex }` kept the pager on
+ * screen with `hidden` set, and the same would happen to the form page, which is
+ * hidden until its options load. Every element in this plugin that toggles
+ * `hidden` is one whose visibility is a statement about state, so none of them
+ * may be talked out of it by a layout rule.
+ */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: var(--wl-font);
@@ -343,7 +354,8 @@ body {
 
 .wl-dialog-body { padding: 18px 20px; }
 
-.wl-dialog h2 {
+.wl-dialog h2,
+.wl-modal-page h2 {
   font-size: 16px;
   margin: 0 0 4px;
 }
@@ -361,6 +373,44 @@ body {
 }
 
 .wl-form-grid .wl-field-full { grid-column: 1 / -1; }
+
+/* ---------- the form served as its own modal page ---------- */
+
+/* The compact add/edit form the chart and note buttons open is a page in a host
+ * modal rather than a <dialog> inside the roster, but it is the same form and has
+ * to look like it -- reviewers compared the two side by side. So it wears the
+ * dialog's own classes (wl-dialog-body, wl-form-grid, wl-field, wl-dialog-actions)
+ * and this block supplies only what the dialog got from being a dialog: the white
+ * ground, and an action bar held at the bottom of the viewport.
+ *
+ * Serving this stylesheet to that page rather than inlining a copy is deliberate.
+ * The inline copy drifted -- it had its own spacing, its own sentence-case labels
+ * and no action bar -- which is exactly what "the same form" must not do.
+ */
+.wl-modal-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--wl-surface);
+}
+
+/* Takes the slack, so the actions sit against the bottom edge on a short form
+   and scroll with the content on a long one. */
+.wl-modal-page .wl-dialog-body {
+  flex: 1 1 auto;
+}
+
+/* The page's own ground, so the form does not sit on the roster's grey. */
+body.wl-modal { background: var(--wl-surface); }
+
+/* Loading and fatal states, before there is a form to show. */
+.wl-modal-note {
+  padding: 28px;
+  text-align: center;
+  color: var(--wl-ink-muted);
+}
+
+.wl-modal-note[data-tone="error"] { color: var(--wl-danger); }
 
 /* ---------- patient picker ---------- */
 
@@ -409,7 +459,8 @@ body {
   font-weight: 600;
 }
 
-.wl-dialog textarea {
+.wl-dialog textarea,
+.wl-modal-page textarea {
   font: inherit;
   color: inherit;
   padding: 7px 9px;
@@ -456,4 +507,16 @@ body {
   #wl-app { padding: 14px; }
   .wl-form-grid { grid-template-columns: 1fr; }
   .wl-field-actions { margin-left: 0; }
+
+  /* The form page *is* the dialog's width, so the breakpoint above -- written for
+     a grid sitting inside a wide page -- would collapse it to one column at
+     exactly the width the roster's dialog shows two. The form then looked nothing
+     like the dialog it is meant to be, which is the whole point of sharing this
+     stylesheet. It keeps both columns until the viewport is narrower than the
+     dialog itself. */
+  .wl-modal-page .wl-form-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 480px) {
+  .wl-modal-page .wl-form-grid { grid-template-columns: 1fr; }
 }

@@ -14,6 +14,7 @@ from scheduling_waitlist.services.entries import (
     get_entry,
     has_live_entry_for_service,
     live_entries_for_patient,
+    SEARCH_TERM_WORD_LIMIT,
     update_entry,
     SORT_PRIORITY,
     build_queryset,
@@ -180,6 +181,43 @@ class TestBuildQueryset:
         recorder = self._build(search="   ")
 
         assert _filter_args(recorder) == []
+
+    def test_a_full_name_matches_a_patient_whose_two_names_are_the_two_words(self):
+        # The box says "Patient name" and used to find nobody when given one: no
+        # column holds both words, so "Nikola Tesla" was tested against
+        # first_name and last_name entire and matched neither. Every word now has
+        # to match a name part, which is also what lets a chart button hand the
+        # roster a display name to filter by.
+        conditions = _filter_args(self._build(search="Nikola Tesla"))
+
+        assert len(conditions) == 2
+        assert conditions[0].leaves() == [
+            {"patient__first_name__icontains": "Nikola"},
+            {"patient__last_name__icontains": "Nikola"},
+        ]
+        assert conditions[1].leaves() == [
+            {"patient__first_name__icontains": "Tesla"},
+            {"patient__last_name__icontains": "Tesla"},
+        ]
+
+    def test_the_words_are_required_together_rather_than_either_or(self):
+        # Separate filter() calls, so they AND. One combined Q would return every
+        # Nikola and every Tesla in the practice.
+        recorder = self._build(search="Nikola Tesla")
+
+        assert len(_filter_args(recorder)) == 2
+
+    def test_extra_whitespace_between_names_does_not_add_a_condition(self):
+        conditions = _filter_args(self._build(search="  Nikola   Tesla  "))
+
+        assert len(conditions) == 2
+
+    def test_a_pathological_term_is_capped(self):
+        # Each word is another predicate on the patient join, and the term arrives
+        # from a query string.
+        conditions = _filter_args(self._build(search="a b c d e f g h i j"))
+
+        assert len(conditions) == SEARCH_TERM_WORD_LIMIT
 
     def test_a_named_type_also_keeps_entries_that_accept_any_type(self):
         # Filtering the roster by a service asks "who could take a slot like

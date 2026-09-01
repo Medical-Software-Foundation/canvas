@@ -26,7 +26,10 @@ service and location. The roster and the freed-slot matcher share one implementa
 - **From the patient chart header**, in one click. The **"Waitlist"** button adds them on the
   broadest terms — any appointment type, any provider, any location, the configured default
   priority, no time preference — with no modal in between. It reads **"On waitlist"** once they
-  are listed, and opens the roster instead.
+  are listed, and a second click on it opens that entry's own form, which is where the broad
+  entry gets narrowed to "only Dr Chen, Tuesday mornings". A patient with *several* live entries
+  has no single entry to open, so that opens the roster with their name already typed into the
+  search box.
 - **From the roster**, searching for the patient by name. This is the full form, and the way to
   state a *specific* want: this service, that provider, Tuesday mornings.
 - **From a no-showed appointment's note**, pre-filled with the service, provider and location
@@ -42,10 +45,44 @@ characters, so "Add to waitlist" and "Waitlist: any" both rendered as an ellipsi
 impossible to tell apart. (That truncation had been mangling "Add to waitlist" all along —
 "On waitlist" is eleven characters and always fitted, which is why it is unchanged.)
 
-What the chart gives up is stating a specific want, and it is the right surface to give it up on:
-it is the only one with no slot to copy, so it had the least to gain from a form. The write goes
-through the same `validate_entry` the two forms post to (`services/quick_add.py`), so the shelf
-life, the priority default and the shape of a preferred window have exactly one implementation.
+The write goes through the same `validate_entry` the forms post to (`services/quick_add.py`), so
+the shelf life, the priority default and the shape of a preferred window have exactly one
+implementation.
+
+**Stating a specific want from the chart is the second click.** The first click is deliberately
+not the one that asks questions: the patient is on the list before anything can go wrong, and the
+detail is optional. Clicking "On waitlist" opens `/app/edit?entry=<dbid>` — the same compact form
+the add uses, in edit mode, loaded from `GET /waitlist/entries/<dbid>`. It is a form about one
+entry, not the roster: a full-width table is not a dialog, which is the same reason the add form
+has its own page.
+
+The form is the roster's own dialog: it links `roster.css` and uses the dialog's classes rather
+than inlining a copy of them, so the two cannot look like two different forms. The only field it
+leaves out is the patient picker — the chart already knows who this is about, and an edit cannot
+reassign the patient.
+
+**A patient with several live entries opens the roster, searched for their name.** There is no
+single entry to edit, and guessing one would edit the wrong want — but "open the roster" used to
+mean searching a table that can run to thousands for the patient whose chart was already on
+screen. So the URL carries `?q=<name>`, which lands in the search box the roster already has.
+
+That is **not** the patient-scoped roster reverted in `cf94418`, and the difference is what that
+revert asked for: no filter the UI does not show, no `patient_id` key, no "Show everyone" control
+to escape it. It is the keyword search from the ticket's own acceptance criteria, pre-typed — the
+term is visible in the box, `Reset` clears it, and the count line says "2 matching patients."
+rather than reporting a filtered total as the practice-wide one, which is the misreading that sank
+the earlier attempt.
+
+One consequence worth naming: a patient's **display name travels in that query string**, so it
+lands in browser history where a dbid would not. Judged acceptable because the page it opens lists
+that name and every other waiting patient's anyway, and the URL is same-origin and
+staff-authenticated. If that stops being acceptable, the fix is for the button to pass a key and
+the roster route to resolve the name — which means `WaitlistAppAPI` starts reading patients and its
+manifest `data_access` stops being empty.
+
+The **"On waitlist"** button on a freed appointment's note does the same thing, opening the entry
+for *that slot's service* — the one `visible()` checked before it chose the label. Two buttons
+wearing one label had to behave one way.
 
 If the clicking staff member cannot be resolved from the event, the click **opens the old form
 instead of writing**. An entry attributed to nobody can be edited or removed only by a configured
@@ -267,11 +304,59 @@ covers it. It does not: the **task** names *other* waiting patients and delibera
 one who cancelled, whereas the **button** exists to put *that* patient on the list — someone who
 cancels usually wants a different time rather than nothing at all. The chart-header button serves
 that, and is one click away since you are already in the patient's chart. The only thing lost
-against the note button is the pre-fill of the freed slot's service, provider and location.
+against the note button is the pre-fill of the freed slot's service, provider and location — and
+since the chart button's second click now opens the entry's own form, re-entering it is a
+correction rather than a re-add.
 
 If the manual re-entry becomes annoying, the fix is to pre-fill the chart-header button from the
 patient's most recent cancelled or no-showed appointment — which needs no note surface at all.
 That is a behaviour change and deliberately not done yet.
+
+**One template serves both the add and the edit form, and wears the roster's stylesheet.**
+`templates/entry_form.html` (formerly `add_patient.html`) chooses its verb from `config.mode`:
+`add` fetches the patient and POSTs to `/waitlist/entries`, `edit` fetches the entry from
+`GET /waitlist/entries/<dbid>` and PUTs back to it.
+
+It links `roster.css` and uses the roster dialog's own classes — `wl-dialog-body`, `wl-form-grid`,
+`wl-field`, `wl-dialog-actions` — rather than the inline copy it used to carry. The copy had its
+own spacing, its own sentence-case labels and no action bar, so the form opened from a chart and
+the form opened from the roster were visibly two different dialogs; reviewers compared them side by
+side and rejected it. `.wl-modal-page` in `roster.css` supplies the two things the dialog got from
+being a `<dialog>`: the white ground and an action bar at the bottom of the viewport. Because
+`.wl-dialog h2` and `.wl-dialog textarea` only match inside a `<dialog>`, both selectors name
+`.wl-modal-page` too — `TestTheFormLooksLikeTheRostersOwnDialog` fails if either is dropped.
+
+While doing that: `[hidden] { display: none !important; }` is now in `roster.css`. The browser's
+own rule for the attribute is `display: none`, which any author `display` outranks — so
+`.wl-pager { display: flex }` had been keeping the pager on screen with `hidden` set, and the form
+page would have flashed before its options loaded. They ask for the same six fields against the same validator, so a second template would be the
+same form twice — and the last pair that drifted disagreed about whether "any appointment type" was
+on offer at all, which is how entries got created for services nobody books. Anything other than
+the literal `"edit"` is treated as `add`, so a mistyped URL cannot leave the form PUTting to an
+entry key it never read.
+
+The one duplication left is `WINDOW_SHAPES`, the table that matches a stored window (days plus a
+start time) back to the named option it was chosen under. It exists in both the template and
+`roster.js` because the two forms share no script, and `test_the_window_shapes_agree_with_the_rosters_own`
+fails if the copies drift. Without that reconstruction an edit silently clears a time preference
+the patient gave, which is the kind of bug nobody reports because nothing looks broken.
+
+`GET /waitlist/entries/<dbid>` is gated by the **write** check, not by read access: it is a form's
+own load, and refusing someone after they have retyped an entry is worse than refusing them now.
+That is why it sits in the write section of `routes/waitlist_api.py` alongside the routes it shares
+`_entry_for_write` with, and why `TestWriteAuthorization` iterates over it.
+
+**The roster's search requires every word, not the whole term.** `build_queryset` filters once per
+whitespace-separated word, each matching `patient__first_name` or `patient__last_name`. Before that
+a full name typed into the box — which is what the box's own placeholder invites — matched nothing,
+because no single column holds both words. One word behaves exactly as it did. The term is capped
+at `SEARCH_TERM_WORD_LIMIT` words, since each one is another predicate on the patient join and the
+value arrives from a query string.
+
+The count line distinguishes the two cases: unfiltered it says "128 patients waiting", filtered it
+says "3 matching patients". Reporting a filtered total as a statement about the practice is what
+made a narrowed roster look like a waitlist holding one person, and the honest wording needs no
+second query to be true.
 
 **The chart banner is emitted from the write paths, not from `apply_transition`.** Banner effects
 have to be *returned* by a handler or route to take effect, and `services/transitions.py` writes

@@ -17,6 +17,8 @@ from scheduling_waitlist import CACHE_BUST
 from scheduling_waitlist.constants import (
     ADD_FOR_PATIENT_PARAM,
     API_BASE,
+    EDIT_FOR_ENTRY_PARAM,
+    ROSTER_SEARCH_PARAM,
     PREFILL_LOCATION_PARAM,
     PREFILL_PROVIDER_PARAM,
     PREFILL_SERVICE_PARAM,
@@ -42,13 +44,30 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
             {
                 "asset_base": ASSET_BASE,
                 "cache_bust": CACHE_BUST,
-                # Wiring only, nothing identifiable: the roster fetches its rows
-                # over the authenticated API rather than having them baked into a
-                # document that may be cached or copied out of the browser.
+                # Wiring, plus whatever was typed into the search: the roster
+                # fetches its rows over the authenticated API rather than having
+                # them baked into a document that may be cached or copied out of
+                # the browser.
+                #
+                # The search term is the one exception, and it is the caller's
+                # own text. When a chart button supplies it, it is a patient's
+                # display name -- so that name travels in a query string and
+                # lands in browser history, which a dbid would not. Judged
+                # acceptable because the page it opens lists that name and every
+                # other waiting patient's anyway, and the URL is same-origin and
+                # staff-authenticated. If that trade stops being acceptable, the
+                # fix is for the button to pass a key and this route to resolve
+                # the name -- which means this class starts reading patients, so
+                # its manifest data_access stops being empty.
                 "config_json": safe_json(
                     {
                         "apiBase": API_BASE,
                         "cacheBust": CACHE_BUST,
+                        # A search term to start from, not a filter of its own:
+                        # it lands in the box the roster already has, shows in
+                        # it, and clears with Reset. Empty for the provider-menu
+                        # roster, which is the practice-wide list.
+                        "search": self._param(ROSTER_SEARCH_PARAM),
                     }
                 ),
             },
@@ -75,12 +94,17 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
         fetched over the authenticated API, so this document holds only wiring.
         """
         html = render_to_string(
-            "templates/add_patient.html",
+            "templates/entry_form.html",
             {
+                # The form wears the roster's stylesheet rather than a copy of it,
+                # so it needs the same asset wiring the roster page gets.
+                "asset_base": ASSET_BASE,
+                "cache_bust": CACHE_BUST,
                 "config_json": safe_json(
                     {
                         "apiBase": API_BASE,
                         "cacheBust": CACHE_BUST,
+                        "mode": "add",
                         "patientId": self._add_for_patient_id(),
                         # Keys only, and only the ones supplied. The form matches
                         # them against dropdowns it fetches itself, so an unknown
@@ -91,6 +115,45 @@ class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
                             "provider": self._param(PREFILL_PROVIDER_PARAM),
                             "location": self._param(PREFILL_LOCATION_PARAM),
                         },
+                    }
+                ),
+            },
+        )
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/edit")
+    def get_edit_form(self) -> list[Response | Effect]:
+        """The same compact form, opened on an entry that already exists.
+
+        Where the chart button's "On waitlist" goes: the quick add commits the
+        broadest possible entry, and this is how a scheduler narrows it without
+        going to the roster and finding the row. Reviewers asked for the clicks
+        back on the way in; this keeps them on the way back out.
+
+        Like the add form it reads nothing itself -- the entry, the patient's
+        name and the dropdown choices all arrive over the authenticated API, so
+        this document holds only the entry key. That key is also the whole of the
+        authorisation story here: whether the caller may see or change that entry
+        is decided by ``GET``/``PUT /waitlist/entries/<dbid>``, not by having been
+        handed this page.
+        """
+        html = render_to_string(
+            "templates/entry_form.html",
+            {
+                "asset_base": ASSET_BASE,
+                "cache_bust": CACHE_BUST,
+                "config_json": safe_json(
+                    {
+                        "apiBase": API_BASE,
+                        "cacheBust": CACHE_BUST,
+                        "mode": "edit",
+                        "entryId": self._param(EDIT_FOR_ENTRY_PARAM),
                     }
                 ),
             },
