@@ -11,10 +11,12 @@ from canvas_sdk.v1.data import NoteType
 
 from medication_followup_protocol.api.program_api import ProgramAPI
 from medication_followup_protocol.models import (
+    CoverageKind,
     EnrolledStep,
     Enrollment,
     EnrollmentStatus,
     MedicationClass,
+    MedicationClassCoverage,
     ProgramDefaults,
     ProgramStep,
     StepKind,
@@ -48,6 +50,44 @@ def call(method: str, path: str, body: dict | None = None, caller=None):
     return json.loads(effects[0].payload)
 
 
+def _effects(method: str, path: str, body: dict | None = None, caller=None) -> list:
+    """Every effect one request produced, rather than only the response call() returns.
+
+    call() reads the first item back as the response, which is all most of these tests
+    need. The two below are about what rides along beside it, so they drive the same
+    request and keep the whole list.
+    """
+    headers = {"Content-Type": "application/json"}
+    if caller is not None:
+        headers["canvas-logged-in-user-id"] = str(caller.id)
+        headers["canvas-logged-in-user-type"] = "Staff"
+    full_path, _, query_string = path.partition("?")
+    event = make_event(
+        "SIMPLE_API_REQUEST",
+        context={
+            "method": method,
+            "path": f"{PREFIX}{full_path}",
+            "query_string": query_string,
+            "body": base64.b64encode(json.dumps(body or {}).encode()).decode(),
+            "headers": headers,
+        },
+    )
+    return ProgramAPI(event).compute()
+
+
+def _reload_targets(effects) -> list[str]:
+    """The patient each action button reload effect in this list was aimed at."""
+    targets = []
+    for effect in effects:
+        payload = json.loads(effect.payload) if isinstance(effect.payload, str) else effect.payload
+        # The reload effect carries its subject under data rather than at the top level,
+        # which is how every effect in this list is shaped and not special to this one.
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if isinstance(data, dict) and data.get("patient_id") and "note_id" in data:
+            targets.append(data["patient_id"])
+    return targets
+
+
 def json_body(response) -> dict:
     """The JSON a response carries."""
     return json.loads(base64.b64decode(response["body"]))
@@ -56,6 +96,11 @@ def json_body(response) -> dict:
 def status_of(response) -> int:
     """The status code a response carries."""
     return response["status_code"]
+
+
+def html_body(response) -> str:
+    """The raw markup an HTMLResponse carries, for a page rather than a JSON body."""
+    return base64.b64decode(response["body"]).decode()
 
 
 @pytest.fixture
@@ -258,7 +303,7 @@ def test_enrolling_a_patient_schedules_every_step_of_the_class(medication_class,
 def test_a_patient_is_not_enrolled_twice_on_the_same_medication(
     medication_class, patient, staff, enrolment
 ):
-    """Covers scenario: AC5, a patient is not enrolled twice on the same medication. Covers criterion: AC5."""
+    """Covers scenario: AC5, enrolling twice under the same class is refused but a different class on the same medication succeeds. Covers criterion: AC5."""
     response = call("POST", "/enrollments", {
         "patient_id": patient.id,
         "medication_class_id": medication_class.dbid,
@@ -277,7 +322,7 @@ def test_a_patient_is_not_enrolled_twice_on_the_same_medication(
 def test_the_chart_panel_shows_every_program_a_patient_is_on(
     medication_class, patient, staff, enrolment, add_step
 ):
-    """Covers scenario: AC15, the all programs control shows every program a patient is on. Covers criterion: AC15."""
+    """Covers scenario: AC15, the Follow ups control opens the Ongoing tab showing every program a patient is on. Covers criterion: AC15."""
     add_step(kind=StepKind.MESSAGE, day_offset=0, message_body="Day zero")
     add_step(kind=StepKind.MESSAGE, day_offset=7, message_body="Day seven")
     second = Enrollment.objects.create(
@@ -297,7 +342,7 @@ def test_the_chart_panel_shows_every_program_a_patient_is_on(
 
 
 def test_the_chart_panel_offers_to_enrol_a_patient_who_has_no_program(patient, staff):
-    """Covers scenario: AC16, a patient with no enrolment shows no banner and no all programs control. Covers criterion: AC16."""
+    """Covers scenario: AC16, a patient with no enrolment and no eligible prescription shows no banner and no Follow ups control. Covers criterion: AC16."""
     shown = json_body(call("GET", f"/enrollments?patient_id={patient.id}", caller=staff))
 
     # The empty state itself is drawn by the panel, and this is what tells it to draw one.
@@ -888,7 +933,7 @@ def test_the_prescriber_falls_back_to_the_selected_prescriptions_own_prescriber(
 
 
 def test_the_panel_summarises_a_step_of_every_kind(staff, enrolment, add_step):
-    """Covers scenario: AC15, the all programs control shows every program a patient is on. Covers criterion: AC15."""
+    """Covers scenario: AC15, the Follow ups control opens the Ongoing tab showing every program a patient is on. Covers criterion: AC15."""
     add_step(kind=StepKind.MESSAGE, day_offset=0, message_body="Day zero, how are you finding it")
     add_step(kind=StepKind.TASK, day_offset=7, sequence=1, task_title="Phone the patient")
     add_step(kind=StepKind.QUESTIONNAIRE, day_offset=14, sequence=2, message_body="")
@@ -1637,14 +1682,46 @@ def test_the_note_line_carries_both_identifiers_the_chart_permalink_needs(patien
 # note header control ultimately stands on.
 
 
-def _search_returning(results):
-    """Patch the ontologies search to answer with these rows."""
+def _search_returning(results, taxonomy=None, catalogue=None):
+    """Patch the ontologies catalogue to answer each of the search's three reads.
+
+    The endpoint reads up to three routes per query, the product search, the class
+    path taxonomy, and, only when the taxonomy is empty, the whole grouped table as
+    the fallback the group name match folds candidates from. One patch routing on the
+    url keeps a test honest about which read produced which row, where a single
+    return value would feed the product rows to every call.
+    """
+    from unittest.mock import MagicMock, patch
+
+    from medication_followup_protocol.api import program_api
+
+    def answer(url):
+        response = MagicMock()
+        if url.startswith("/fdb/class-path/"):
+            response.json.return_value = taxonomy or []
+        elif "search=" in url:
+            response.json.return_value = {"results": results}
+        else:
+            response.json.return_value = {"results": catalogue or []}
+        return response
+
+    return patch.object(program_api.ontologies_http, "get_json", side_effect=answer)
+
+
+def _matching_path(path):
+    """Patch the ontologies classification lookup to answer with this path.
+
+    program_api.py and services/eligibility.py both import the one ontologies_http
+    singleton, so patching it here through program_api reaches eligibility.py's own
+    _classification_path too, which is what the criteria below that drive matching
+    through this API, rather than through eligibility.py directly, need patched.
+    """
     from unittest.mock import MagicMock, patch
 
     from medication_followup_protocol.api import program_api
 
     response = MagicMock()
-    response.json.return_value = {"results": results}
+    response.json.return_value = {"etc_path_id": path}
     return patch.object(program_api.ontologies_http, "get_json", return_value=response)
 
 
@@ -1784,6 +1861,118 @@ def test_an_empty_query_searches_nothing(lead):
     assert body["results"] == []
 
 
+#: The slice of the ETC taxonomy the class path route answers with, ids and the node's
+#: own name only, ancestor names resolved by joining rows the way the endpoint does.
+STATIN_TAXONOMY = [
+    {"name": "Cardiovascular Agents", "path_ids": [2549]},
+    {"name": "Antihyperlipidemics", "path_ids": [2549, 2545]},
+    {"name": "HMG CoA Reductase Inhibitors", "path_ids": [2549, 2545, 2546]},
+    {"name": "Statins", "path_ids": [2549, 2545, 2546, 2547]},
+]
+
+
+def test_a_group_name_finds_the_group(lead):
+    """Covers criterion: AC29.
+
+    The catalogue's own search runs over a product search term table, so typing
+    statins returns no products, and a person setting up a statin program thinks in
+    the group before the drug. The group name match against the class path taxonomy is
+    what answers, with the path resolved by joining taxonomy rows on their ids.
+    """
+    with _search_returning([], taxonomy=STATIN_TAXONOMY):
+        body = json_body(call("GET", "/medication-search?query=statins", caller=lead))
+
+    assert len(body["results"]) == 1
+    assert body["results"][0]["display_name"] == "Statins"
+    assert body["results"][0]["etc_path_id"] == [2549, 2545, 2546, 2547]
+    assert body["results"][0]["etc_path_name"] == [
+        "Cardiovascular Agents",
+        "Antihyperlipidemics",
+        "HMG CoA Reductase Inhibitors",
+        "Statins",
+    ]
+    assert body["results"][0]["matched_products"] == []
+
+
+def test_the_group_name_match_is_a_containment_not_a_prefix(lead):
+    """Covers criterion: AC29.
+
+    Statin has to find Statins and coagul has to find Anticoagulants, since nobody
+    types a taxonomy name exactly, so the match is case insensitive containment
+    against each node's own name.
+    """
+    with _search_returning([], taxonomy=STATIN_TAXONOMY):
+        body = json_body(call("GET", "/medication-search?query=STATIN", caller=lead))
+
+    assert [result["display_name"] for result in body["results"]] == ["Statins"]
+
+
+def test_a_group_found_both_ways_is_one_row_carrying_its_products(lead):
+    """Covers criterion: AC29.
+
+    A drug name whose group name also contains the query must not list the group
+    twice. The product row wins the merge because it carries the matched products, the
+    evidence line that tells somebody they found the right group.
+    """
+    taxonomy = [
+        {"name": "Cardiovascular Agents", "path_ids": [2549]},
+        {"name": "ACE Inhibitors", "path_ids": [2549, 3050]},
+        {"name": "Antihypertensives", "path_ids": [2549, 3050, 24]},
+        {"name": "ACE Inhibitors", "path_ids": [2549, 3050, 24, 3064]},
+    ]
+    with _search_returning(LISINOPRIL_ROWS, taxonomy=taxonomy):
+        body = json_body(call("GET", "/medication-search?query=ace", caller=lead))
+
+    named_ace = [r for r in body["results"] if r["display_name"] == "ACE Inhibitors"]
+    assert named_ace[0]["matched_products"] == [
+        "lisinopril 10 mg tablet",
+        "lisinopril 20 mg tablet",
+    ]
+
+
+def test_a_name_repeated_down_one_branch_is_offered_once_at_the_top(lead):
+    """Covers criterion: AC29.
+
+    The FDB tree repeats a name where a leaf is the only member of its own class, so
+    matching antiarrhythmics naively offers Class III Antiarrhythmics twice at two
+    depths. The shallower node wins because the coverage prefix rule makes it cover
+    everything the deeper one covers.
+    """
+    taxonomy = [
+        {"name": "Cardiovascular Agents", "path_ids": [2549]},
+        {"name": "Antiarrhythmic Agents", "path_ids": [2549, 700]},
+        {"name": "Class III Antiarrhythmics", "path_ids": [2549, 700, 701]},
+        {"name": "Class III Antiarrhythmics", "path_ids": [2549, 700, 701, 702]},
+    ]
+    with _search_returning([], taxonomy=taxonomy):
+        body = json_body(call("GET", "/medication-search?query=class iii", caller=lead))
+
+    assert [result["etc_path_id"] for result in body["results"]] == [[2549, 700, 701]]
+
+
+def test_an_empty_taxonomy_falls_back_to_folding_the_grouped_table(lead):
+    """Covers criterion: AC29.
+
+    A local instance carries the class path table empty, a fixture gap, while its
+    grouped medication rows still carry their paths. The fallback folds every prefix
+    of every distinct path into a candidate group, so typing an ancestor's name offers
+    the ancestor, here Antihypertensives truncated out of the lisinopril path.
+    """
+    with _search_returning([], taxonomy=[], catalogue=LISINOPRIL_ROWS):
+        body = json_body(
+            call("GET", "/medication-search?query=antihypertensives", caller=lead)
+        )
+
+    assert len(body["results"]) == 1
+    assert body["results"][0]["display_name"] == "Antihypertensives"
+    assert body["results"][0]["etc_path_id"] == [2549, 3050, 24]
+    assert body["results"][0]["etc_path_name"] == [
+        "Cardiovascular Agents",
+        "ACE Inhibitors",
+        "Antihypertensives",
+    ]
+
+
 def test_a_picked_group_stores_its_classification_path(lead, medication_class):
     """Covers scenario: AC29, the coverage combo box lists medication groups and a picked group stores its classification path. Covers criterion: AC29."""
     from medication_followup_protocol.models import MedicationClassCoverage
@@ -1918,3 +2107,854 @@ def test_cloning_a_class_copies_its_coverage(lead, medication_class):
     copied = MedicationClassCoverage.objects.filter(medication_class__dbid=clone["id"])
     assert copied.count() == 1
     assert copied.first().etc_path_id == [2549, 3050, 24, 3064]
+
+
+# --- AC31 through AC50, the widened patient scoped eligibility and what it unlocks
+#
+# Every criterion below either depends on services/eligibility.py's patient scoped
+# query or on a write path no earlier test drove with a real prescription_id, per
+# 04-delivery/WORK-LEDGER.md's own reconciliation notes for spec version 3.
+
+
+def test_two_classes_may_both_run_on_the_same_medication_at_once(
+    medication_class, patient, staff, enrolment
+):
+    """Covers scenario: AC31, two classes may both run on the same medication at once. Covers criterion: AC31.
+
+    enrolment already carries an active Enrollment on medication_class for this patient
+    and this medication_label, per the conftest fixture. A second class covering the
+    same medication is what this criterion says may run alongside it.
+    """
+    second_class = MedicationClass.objects.create(
+        name="Second GLP-1 program",
+        active=True,
+        recheck_note_type_id=medication_class.recheck_note_type_id,
+    )
+
+    response = call(
+        "POST",
+        "/enrollments",
+        {
+            "patient_id": patient.id,
+            "medication_class_id": second_class.dbid,
+            "medication_label": enrolment.medication_label,
+            "prescriber_staff_id": staff.id,
+        },
+        caller=staff,
+    )
+
+    assert status_of(response) == HTTPStatus.CREATED, json_body(response)
+    active = Enrollment.objects.filter(
+        patient__dbid=patient.dbid,
+        medication_label=enrolment.medication_label,
+        status=EnrollmentStatus.ACTIVE,
+    )
+    assert active.count() == 2
+    assert set(active.values_list("medication_class_id", flat=True)) == {
+        medication_class.dbid,
+        second_class.dbid,
+    }
+
+
+def test_the_note_scoped_pane_shows_one_card_per_matched_class_ordered_by_name(patient, staff):
+    """Covers scenario: AC32, the note scoped pane shows one card per matched class with no dropdown. Covers criterion: AC32.
+
+    Whether the page draws a dropdown or a row of cards, and whether one arrives
+    preselected, are rendering facts the AC32 browser spec confirms live. What this
+    proves is the data contract that rendering reads from, one classes entry per
+    matched class, ordered by class name.
+    """
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from tests.conftest import make
+
+    beta = MedicationClass.objects.create(name="Beta class", active=True)
+    alpha = MedicationClass.objects.create(name="Alpha class", active=True)
+    path = [2549, 3050, 24, 3064]
+    for medication_class in (beta, alpha):
+        MedicationClassCoverage.objects.create(
+            medication_class=medication_class,
+            kind=CoverageKind.GROUP,
+            etc_path_id=path,
+            etc_path_name=["a", "b", "c", "d"],
+            display_name="lisinopril 10 mg tablet",
+        )
+
+    note = NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display="lisinopril 20 mg tablet",
+        system="http://www.fdbhealth.com/", code="fdb-lisinopril-20",
+    )
+    PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(),
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/prescriptions?note_id={note.id}", caller=staff))
+
+    names = [c["name"] for c in shown["prescriptions"][0]["classes"]]
+    assert names == ["Alpha class", "Beta class"]
+
+
+def test_an_overlapping_coverage_entry_is_not_refused(lead, medication_class):
+    """Covers scenario: AC33, an overlapping coverage entry is warned about rather than refused. Covers criterion: AC33.
+
+    The warning itself is drawn client side, confirmed live by the AC33 browser spec.
+    What a pytest can prove is the server half of this criterion, that saving a
+    coverage entry whose classification path overlaps a different class's own entry
+    succeeds rather than being refused.
+    """
+    path = [2549, 3050, 24, 3064]
+    other_class = MedicationClass.objects.create(name="Other class", active=True)
+    call(
+        "POST", f"/classes/{other_class.dbid}/coverage",
+        {
+            "kind": "group", "display_name": "lisinopril 10 mg tablet",
+            "etc_path_id": path, "etc_path_name": ["a", "b", "c", "d"],
+        },
+        caller=lead,
+    )
+
+    response = call(
+        "POST", f"/classes/{medication_class.dbid}/coverage",
+        {
+            "kind": "group", "display_name": "lisinopril 10 mg tablet",
+            "etc_path_id": path, "etc_path_name": ["a", "b", "c", "d"],
+        },
+        caller=lead,
+    )
+
+    assert status_of(response) == HTTPStatus.CREATED
+
+
+def test_a_card_names_another_program_already_running_on_the_medication(
+    medication_class, patient, staff, enrolment
+):
+    """Covers scenario: AC34, a card names another program already running on the same medication. Covers criterion: AC34."""
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from tests.conftest import make
+
+    second_class = MedicationClass.objects.create(name="Second class", active=True)
+    path = [2549, 3050, 24, 3064]
+    for target in (medication_class, second_class):
+        MedicationClassCoverage.objects.create(
+            medication_class=target, kind=CoverageKind.GROUP,
+            etc_path_id=path, etc_path_name=["a", "b", "c", "d"],
+            display_name="semaglutide",
+        )
+
+    note = NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    # Labelled to match enrolment.medication_label exactly, since it is that match, one
+    # patient already running semaglutide under medication_class, that makes second_class's
+    # own card need to say so.
+    make(
+        MedicationCoding, medication=medication, display=enrolment.medication_label,
+        system="http://www.fdbhealth.com/", code="fdb-semaglutide",
+    )
+    PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(),
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/prescriptions?note_id={note.id}", caller=staff))
+
+    second_card = next(
+        c for c in shown["prescriptions"][0]["classes"] if c["id"] == second_class.dbid
+    )
+    assert second_card.get("already_running"), (
+        "the second class's own card carries nothing naming that a program is already "
+        f"running on this medication under {medication_class.name}"
+    )
+
+
+def test_a_late_enrolment_offers_and_applies_the_catch_up_choice(medication_class, staff):
+    """Covers scenario: AC38, a late enrolment lists its already due steps for the practitioner to tick. Covers criterion: AC38.
+
+    No earlier test in this suite ever passed a real prescription_id whose written_date
+    falls before the day of submission, so the catch up branch in create_enrollment,
+    behaviour steps 22 to 24, has never actually run. This drives both halves, ticked
+    and left unticked, against a prescription written ten days before it is enrolled.
+    """
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PatientFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from medication_followup_protocol.services.practice_time import today as plugin_today
+    from tests.conftest import make
+
+    due_step = ProgramStep.objects.create(
+        medication_class=medication_class, sequence=0, day_offset=0, kind=StepKind.MESSAGE,
+        message_body="Welcome",
+    )
+    future_step = ProgramStep.objects.create(
+        medication_class=medication_class, sequence=1, day_offset=30, kind=StepKind.MESSAGE,
+        message_body="Later",
+    )
+    path = [2549, 3050, 24, 3064]
+    MedicationClassCoverage.objects.create(
+        medication_class=medication_class, kind=CoverageKind.GROUP,
+        etc_path_id=path, etc_path_name=["a", "b", "c", "d"],
+        display_name="lisinopril 10 mg tablet",
+    )
+
+    def _late_prescription(owner):
+        note = NoteFactory(patient=owner)
+        medication = MedicationFactory(patient=owner)
+        make(
+            MedicationCoding, medication=medication, display="lisinopril 20 mg tablet",
+            system="http://www.fdbhealth.com/", code="fdb-lisinopril-20",
+        )
+        written = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=10)
+        prescription = PrescriptionFactory(
+            patient=owner, prescriber=staff, medication=medication, note=note,
+            committer=CanvasUserFactory(), written_date=written,
+        )
+        return note, prescription
+
+    # --- First half, the preview lists the already due step unticked, then it is ticked
+    ticked_patient = PatientFactory(active=True, deceased=False)
+    note, prescription = _late_prescription(ticked_patient)
+
+    with _matching_path(path):
+        preview = json_body(call("GET", f"/prescriptions?note_id={note.id}", caller=staff))
+    card = preview["prescriptions"][0]["classes"][0]
+    assert due_step.dbid in card["due_step_ids"]
+    assert future_step.dbid not in card["due_step_ids"]
+
+    response = call(
+        "POST", "/enrollments",
+        {
+            "patient_id": ticked_patient.id,
+            "medication_class_id": medication_class.dbid,
+            "medication_label": "lisinopril 20 mg tablet",
+            "prescription_id": str(prescription.id),
+            "prescriber_staff_id": str(staff.id),
+            "catch_up_step_ids": [due_step.dbid],
+        },
+        caller=staff,
+    )
+    assert status_of(response) == HTTPStatus.CREATED, json_body(response)
+    enrolled = Enrollment.objects.get(patient__dbid=ticked_patient.dbid)
+    ticked_row = enrolled.steps.get(program_step=due_step)
+    assert ticked_row.due_date == plugin_today()
+    assert ticked_row.day_offset == 0
+    assert ticked_row.status == StepStatus.PENDING
+
+    # --- Second half, the same due step left unticked is written skipped instead
+    skipped_patient = PatientFactory(active=True, deceased=False)
+    _note2, prescription2 = _late_prescription(skipped_patient)
+
+    response = call(
+        "POST", "/enrollments",
+        {
+            "patient_id": skipped_patient.id,
+            "medication_class_id": medication_class.dbid,
+            "medication_label": "lisinopril 20 mg tablet",
+            "prescription_id": str(prescription2.id),
+            "prescriber_staff_id": str(staff.id),
+        },
+        caller=staff,
+    )
+    assert status_of(response) == HTTPStatus.CREATED, json_body(response)
+    enrolled2 = Enrollment.objects.get(patient__dbid=skipped_patient.dbid)
+    skipped_row = enrolled2.steps.get(program_step=due_step)
+    assert skipped_row.status == StepStatus.SKIPPED
+    assert "was not selected" in skipped_row.failure_reason
+
+
+def test_the_ongoing_tab_lists_history_when_none_are_active(patient, staff, medication_class):
+    """Covers scenario: AC39, the Ongoing tab lists finished and stopped enrolments as history when none are active. Covers criterion: AC39."""
+    stopped = Enrollment.objects.create(
+        patient_id=patient.dbid, medication_class=medication_class,
+        medication_label="warfarin", sender_staff_id=staff.dbid, prescriber_staff_id=staff.dbid,
+        start_date=datetime.date(2026, 7, 1), status=EnrollmentStatus.STOPPED,
+        stopped_reason="No longer needed",
+    )
+
+    shown = json_body(call("GET", f"/enrollments?patient_id={patient.id}", caller=staff))
+
+    assert not any(e["status"] == "active" for e in shown["enrollments"])
+    assert any(
+        e["id"] == stopped.dbid and e["status"] == "stopped" for e in shown["enrollments"]
+    )
+
+
+def test_an_uncovered_prescriptions_card_names_its_therapeutic_group(patient, staff):
+    """Covers scenario: AC44, an uncovered prescription's card names its therapeutic group. Covers criterion: AC44."""
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from tests.conftest import make
+
+    note = NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display="warfarin 2.5 mg tablet",
+        system="http://www.fdbhealth.com/", code="fdb-warfarin",
+    )
+    PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(),
+    )
+    path = [2549, 3054, 28, 3068]
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/prescriptions?note_id={note.id}", caller=staff))
+
+    card = shown["prescriptions"][0]
+    assert card["classes"] == []
+    assert card.get("therapeutic_group"), (
+        "the card for an uncovered prescription carries nothing naming its therapeutic "
+        "group, so the note scoped pane has no group name left to show beside it"
+    )
+
+
+def test_a_new_class_has_no_coverage_and_an_existing_one_lists_its_entries(lead, medication_class):
+    """Covers scenario: AC45, a new class shows a bare picker and an existing class shows its coverage as removable chips. Covers criterion: AC45.
+
+    Whether the picker renders bare or the chips render at all is the client's own
+    concern, confirmed live by the AC45 browser spec. What this proves is the data
+    contract that rendering choice reads from, an empty coverage list for a freshly
+    created class and, for one already carrying entries, the full list, each row
+    carrying its own id, which is what a removable chip needs to call DELETE.
+    """
+    created = json_body(call("POST", "/classes", {"name": "Fresh class"}, caller=lead))
+    fresh_coverage = json_body(call("GET", f"/classes/{created['id']}/coverage", caller=lead))
+    assert fresh_coverage["coverage"] == []
+
+    call(
+        "POST", f"/classes/{medication_class.dbid}/coverage",
+        {
+            "kind": "group", "display_name": "lisinopril 10 mg tablet",
+            "etc_path_id": [1, 2, 3], "etc_path_name": ["a", "b", "c"],
+        },
+        caller=lead,
+    )
+    call(
+        "POST", f"/classes/{medication_class.dbid}/coverage",
+        {"kind": "product", "display_name": "atorvastatin 40 mg tablet", "med_medication_id": "fdb-atorva-40"},
+        caller=lead,
+    )
+
+    existing_coverage = json_body(
+        call("GET", f"/classes/{medication_class.dbid}/coverage", caller=lead)
+    )
+    assert len(existing_coverage["coverage"]) == 2
+    assert all(entry["id"] for entry in existing_coverage["coverage"])
+
+
+def _admin_template_source() -> str:
+    """The raw markup of the configuration page template, read off disk.
+
+    GET /admin runs render_to_string, and render_to_string calls a plugin runner
+    utility that raises outside a real plugin context, which is what every other test
+    in this suite avoids by never driving a page route at all. Reading the template
+    file directly proves the same content with no such dependency, and it is what the
+    page actually serves, since render_to_string performs no templating on this file
+    beyond the two Django variables substituted at its very top.
+    """
+    from pathlib import Path
+
+    import medication_followup_protocol as package
+
+    return (
+        Path(package.__file__).parent / "templates" / "program_admin.html"
+    ).read_text()
+
+
+def test_the_admin_page_ships_the_name_field_the_focus_rule_targets(lead):
+    """Covers scenario: AC46, opening the class form focuses the Name field and a coverage pick does not move it. Covers criterion: AC46.
+
+    Focus is a runtime fact only a browser can observe, which the AC46 browser spec
+    drives live. Pytest runs no DOM at all, so what this checks is the one thing it can,
+    that the page served to that browser still carries the element the focus rule
+    targets, id class-name, so a rename of that field fails here first rather than only
+    inside a browser trace months later.
+    """
+    assert "id='class-name'" in _admin_template_source()
+
+
+def test_the_admin_page_ships_the_searching_rows_own_wording(lead):
+    """Covers scenario: AC47, the coverage search field keeps typed text and shows a loading row while a search is in flight. Covers criterion: AC47.
+
+    Typed text staying in the field during a live search is a runtime fact only a
+    browser can observe, which the AC47 browser spec drives live. What a pytest can
+    check on its own is whether the page it is served even carries the loading row's
+    own wording, since a page that never mentions it cannot show it no matter what the
+    browser does.
+    """
+    assert "Searching medication groups" in _admin_template_source()
+
+
+def test_a_class_card_names_its_coverage_or_shows_no_coverage(lead, medication_class):
+    """Covers scenario: AC49, a class card names its coverage or shows a No coverage badge when it has none. Covers criterion: AC49.
+
+    The badge and the sentence are drawn client side off exactly this data, one fetch of
+    GET /classes and one of GET /classes/<id>/coverage per card, per program_admin.html's
+    own loadCoverage. What this proves is that data, both entries' display_name for a
+    class carrying two, and an empty list for a class carrying none.
+    """
+    call(
+        "POST", f"/classes/{medication_class.dbid}/coverage",
+        {
+            "kind": "group", "display_name": "lisinopril 10 mg tablet",
+            "etc_path_id": [1, 2, 3], "etc_path_name": ["a", "b", "c"],
+        },
+        caller=lead,
+    )
+    call(
+        "POST", f"/classes/{medication_class.dbid}/coverage",
+        {"kind": "product", "display_name": "atorvastatin 40 mg tablet", "med_medication_id": "fdb-atorva-40"},
+        caller=lead,
+    )
+
+    covered = json_body(call("GET", f"/classes/{medication_class.dbid}/coverage", caller=lead))
+    names = {entry["display_name"] for entry in covered["coverage"]}
+    assert names == {"lisinopril 10 mg tablet", "atorvastatin 40 mg tablet"}
+
+    bare = MedicationClass.objects.create(name="Nothing covered yet", active=True)
+    bare_coverage = json_body(call("GET", f"/classes/{bare.dbid}/coverage", caller=lead))
+    assert bare_coverage["coverage"] == []
+
+
+def test_the_enrolment_anchors_to_the_prescriptions_written_date(medication_class, patient, staff):
+    """Covers scenario: AC50, the enrolment start date and every step's due date anchor to the prescription's written date. Covers criterion: AC50.
+
+    Both program steps carry a positive day offset, matching this criterion's own Given
+    of no step already due, so nothing here exercises the late enrolment catch up branch
+    AC38 owns. Every earlier enrolling test in this suite either passed no prescription_id
+    at all, which falls back to today() and never exercises
+    to_practice_date(selected_prescription.written_date), or reused the enrolment
+    fixture's own hardcoded start date, so this is the first to drive that branch with a
+    real prescription end to end.
+
+    written_date is set five days in the past rather than to the moment the test runs.
+    A prescription written today makes written_date and the submission day the same
+    value, so a test built on today would still pass if the code quietly fell back to
+    start_date = today() instead of reading the prescription's own written_date, which
+    is exactly the defect this criterion exists to rule out. Anchoring the assertion to
+    a written_date that provably differs from today is what tells the two apart, and
+    five days keeps every offset below well clear of due, so no step already due still
+    holds.
+    """
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+
+    for offset in (7, 14):
+        ProgramStep.objects.create(
+            medication_class=medication_class, sequence=offset, day_offset=offset,
+            kind=StepKind.MESSAGE, message_body=f"Day {offset}",
+        )
+
+    note = NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    written = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=5)
+    prescription = PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(), written_date=written,
+    )
+
+    response = call(
+        "POST", "/enrollments",
+        {
+            "patient_id": patient.id,
+            "medication_class_id": medication_class.dbid,
+            "medication_label": "semaglutide",
+            "prescription_id": str(prescription.id),
+            "prescriber_staff_id": str(staff.id),
+        },
+        caller=staff,
+    )
+
+    assert status_of(response) == HTTPStatus.CREATED, json_body(response)
+    enrolled = Enrollment.objects.get(patient__dbid=patient.dbid, medication_label="semaglutide")
+    expected_start = written.date()
+    assert enrolled.start_date == expected_start
+    for step in enrolled.steps.all():
+        assert step.due_date == expected_start + datetime.timedelta(days=step.day_offset)
+
+
+# --- The follow ups pane, one answer in two scopes
+#
+# GET /followups is what both the note header control and the chart header control read,
+# the note scope filtering to one note and the patient scope carrying every note the
+# patient has. The pane draws groups and cards straight out of this, so what a card says
+# and which group it lands in are settled here rather than in the page.
+
+
+def _covered_prescription(patient, staff, class_names, path, display, note=None, written=None):
+    """One committed prescription, and one class per name covering its classification."""
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from tests.conftest import make
+
+    classes = []
+    for name in class_names:
+        medication_class = MedicationClass.objects.create(name=name, active=True)
+        MedicationClassCoverage.objects.create(
+            medication_class=medication_class,
+            kind=CoverageKind.GROUP,
+            etc_path_id=path,
+            etc_path_name=["a", "b", "c", "d"],
+            display_name=display,
+        )
+        classes.append(medication_class)
+
+    note = note or NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display=display,
+        system="http://www.fdbhealth.com/", code=f"fdb-{display}",
+    )
+    extra = {"written_date": written} if written is not None else {}
+    prescription = PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(), **extra,
+    )
+    return note, prescription, classes
+
+
+def test_the_followups_pane_lists_one_card_per_matched_class_under_its_note(patient, staff):
+    """Covers scenario: AC32, the note scoped pane shows one card per matched class with no dropdown. Covers criterion: AC32.
+
+    The pane the note header control opens has no chooser on a card any more, so the
+    thing it draws has to arrive already split, one card per prescription and class
+    pair, ordered by class name. This is that contract.
+    """
+    path = [2549, 3050, 24, 3064]
+    note, _, _ = _covered_prescription(
+        patient, staff, ["Beta class", "Alpha class"], path, "lisinopril 20 mg tablet"
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/followups?note_id={note.id}", caller=staff))
+
+    assert len(shown["notes"]) == 1
+    group = shown["notes"][0]
+    assert group["dbid"] == note.dbid
+    assert [card["class_name"] for card in group["programs"]] == ["Alpha class", "Beta class"]
+    assert {card["state"] for card in group["programs"]} == {"startable"}
+    assert all(card["medication_label"] == "lisinopril 20 mg tablet" for card in group["programs"])
+
+
+def test_the_followups_pane_groups_the_patients_cards_by_note(patient, staff):
+    """Covers scenario: AC15, the Follow ups control shows every program a patient is on. Covers criterion: AC15.
+
+    The chart wide scope is the note scope repeated, one group per note carrying that
+    note's own cards, which is what lets one page serve both controls.
+    """
+    from canvas_sdk.test_utils.factories import NoteFactory
+
+    # One class covering the path both prescriptions classify to, so what this proves is
+    # the grouping rather than the matching. Two classes over one path would put both of
+    # them on both cards, which is correct and would say nothing about which note a card
+    # landed under.
+    path = [2549, 3050, 24, 3064]
+    first_note, _, _ = _covered_prescription(
+        patient, staff, ["Alpha class"], path, "lisinopril 20 mg tablet"
+    )
+    second_note = NoteFactory(patient=patient)
+    _covered_prescription(
+        patient, staff, [], path, "ramipril 5 mg capsule", note=second_note
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/followups?patient_id={patient.id}", caller=staff))
+
+    by_dbid = {group["dbid"]: group for group in shown["notes"]}
+    assert set(by_dbid) == {first_note.dbid, second_note.dbid}
+    assert [c["medication_label"] for c in by_dbid[first_note.dbid]["programs"]] == [
+        "lisinopril 20 mg tablet"
+    ]
+    assert [c["medication_label"] for c in by_dbid[second_note.dbid]["programs"]] == [
+        "ramipril 5 mg capsule"
+    ]
+    assert [c["class_name"] for c in by_dbid[first_note.dbid]["programs"]] == ["Alpha class"]
+    assert [c["class_name"] for c in by_dbid[second_note.dbid]["programs"]] == ["Alpha class"]
+
+
+def test_a_startable_card_carries_the_steps_already_due_on_its_own_start_date(patient, staff):
+    """Covers scenario: AC38, a late enrolment lists its already due steps for the practitioner to tick. Covers criterion: AC38.
+
+    The pane asks about these in a dialog before it writes anything, so each one has to
+    arrive naming what it actually does rather than only when it falls due.
+    """
+    path = [2549, 3050, 24, 3064]
+    written = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+    note, _, classes = _covered_prescription(
+        patient, staff, ["Late class"], path, "amiodarone 200 mg tablet", written=written
+    )
+    ProgramStep.objects.create(
+        medication_class=classes[0], sequence=0, day_offset=0, kind=StepKind.MESSAGE,
+        message_body="Check in on how it is going",
+    )
+    ProgramStep.objects.create(
+        medication_class=classes[0], sequence=1, day_offset=90, kind=StepKind.MESSAGE,
+        message_body="Book the bloods",
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/followups?note_id={note.id}", caller=staff))
+
+    card = shown["notes"][0]["programs"][0]
+    assert card["state"] == "startable"
+    assert card["step_count"] == 2
+    assert [step["summary"] for step in card["due_steps"]] == ["Check in on how it is going"]
+
+
+def test_a_card_names_another_class_already_running_on_the_same_medication(patient, staff):
+    """Covers scenario: AC34, a card names another program already running on the same medication. Covers criterion: AC34."""
+    path = [2549, 3050, 24, 3064]
+    note, prescription, classes = _covered_prescription(
+        patient, staff, ["Alpha class", "Beta class"], path, "lisinopril 20 mg tablet"
+    )
+    alpha = [c for c in classes if c.name == "Alpha class"][0]
+    Enrollment.objects.create(
+        patient=patient, medication_class=alpha, medication_label="lisinopril 20 mg tablet",
+        prescription_id=str(prescription.id), start_date=datetime.date.today(),
+        status=EnrollmentStatus.ACTIVE, start_note_dbid=note.dbid,
+        prescriber_staff_id=staff.dbid,
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/followups?note_id={note.id}", caller=staff))
+
+    by_name = {card["class_name"]: card for card in shown["notes"][0]["programs"]}
+    assert by_name["Alpha class"]["state"] == "running"
+    assert by_name["Beta class"]["state"] == "startable"
+    assert by_name["Beta class"]["already_running"] == "Alpha class"
+
+
+def test_an_uncovered_prescription_gets_one_card_naming_its_therapeutic_group(patient, staff):
+    """Covers scenario: AC44, an uncovered prescription's card names its therapeutic group. Covers criterion: AC44."""
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from tests.conftest import make
+
+    note = NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display="warfarin 2.5 mg tablet",
+        system="http://www.fdbhealth.com/", code="fdb-warfarin",
+    )
+    PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(),
+    )
+
+    with _matching_path([2549, 3054, 28, 3068]):
+        shown = json_body(call("GET", f"/followups?note_id={note.id}", caller=staff))
+
+    card = shown["notes"][0]["programs"][0]
+    assert card["state"] == "uncovered"
+    assert card["class_id"] is None
+    assert card["therapeutic_group"]
+
+
+def test_a_running_cards_enrollment_carries_its_steps(patient, staff):
+    """Covers scenario: AC42, the note scoped and patient scoped panes render the same section for one enrolment. Covers criterion: AC42.
+
+    One renderer answers both scopes now because there is one page, so a running card
+    carries the same section shape whichever query parameter asked for it.
+    """
+    path = [2549, 3050, 24, 3064]
+    note, prescription, classes = _covered_prescription(
+        patient, staff, ["Alpha class"], path, "lisinopril 20 mg tablet"
+    )
+    program_step = ProgramStep.objects.create(
+        medication_class=classes[0], sequence=0, day_offset=7, kind=StepKind.MESSAGE,
+        message_body="Check in on how it is going",
+    )
+    enrollment = Enrollment.objects.create(
+        patient=patient, medication_class=classes[0],
+        medication_label="lisinopril 20 mg tablet", prescription_id=str(prescription.id),
+        start_date=datetime.date.today(), status=EnrollmentStatus.ACTIVE,
+        start_note_dbid=note.dbid, prescriber_staff_id=staff.dbid,
+    )
+    EnrolledStep.objects.create(
+        enrollment=enrollment, program_step=program_step, sequence=0, day_offset=7,
+        kind=StepKind.MESSAGE, due_date=datetime.date.today() + datetime.timedelta(days=7),
+        status=StepStatus.PENDING,
+    )
+
+    with _matching_path(path):
+        by_note = json_body(call("GET", f"/followups?note_id={note.id}", caller=staff))
+        by_patient = json_body(call("GET", f"/followups?patient_id={patient.id}", caller=staff))
+
+    note_card = by_note["notes"][0]["programs"][0]
+    patient_card = by_patient["notes"][0]["programs"][0]
+    assert note_card["state"] == "running"
+    assert note_card["enrollment"] == patient_card["enrollment"]
+    assert [step["status_label"] for step in note_card["enrollment"]["steps"]] == ["To come"]
+
+
+def test_the_followups_pane_is_empty_when_nothing_was_named(staff):
+    """Covers criterion: AC15."""
+    assert json_body(call("GET", "/followups", caller=staff))["notes"] == []
+
+
+# --- A program with no steps is never running
+#
+# A class is created before it has a step or a coverage entry, so at the moment it exists
+# it does nothing. Created active it spent that window looking like a program the practice
+# was relying on, and activating one that still has no step produces an enrolment that
+# schedules nothing and says nothing on the chart. Both are refused here rather than only
+# in the configuration page, since the rule belongs to the state change.
+
+
+def test_a_new_class_starts_inactive(lead):
+    """Covers criterion: AC1."""
+    created = json_body(call("POST", "/classes", {"name": "Fresh and empty"}, caller=lead))
+
+    assert created["active"] is False
+    assert MedicationClass.objects.get(dbid=created["id"]).active is False
+
+
+def test_a_class_with_no_steps_cannot_be_activated(lead):
+    """Covers criterion: AC1."""
+    created = json_body(call("POST", "/classes", {"name": "Still empty"}, caller=lead))
+
+    refused = call("PATCH", f"/classes/{created['id']}", {"active": True}, caller=lead)
+
+    assert status_of(refused) == HTTPStatus.BAD_REQUEST
+    assert "step" in json_body(refused)["error"].lower()
+    assert MedicationClass.objects.get(dbid=created["id"]).active is False
+
+
+def test_a_class_carrying_a_step_may_be_activated(lead):
+    """Covers criterion: AC1."""
+    created = json_body(call("POST", "/classes", {"name": "Has a step"}, caller=lead))
+    call(
+        "POST", f"/classes/{created['id']}/steps",
+        {"day_offset": 0, "kind": "message", "message_body": "Welcome."},
+        caller=lead,
+    )
+
+    activated = call("PATCH", f"/classes/{created['id']}", {"active": True}, caller=lead)
+
+    assert status_of(activated) == HTTPStatus.OK
+    assert MedicationClass.objects.get(dbid=created["id"]).active is True
+
+
+def test_an_active_class_may_always_be_deactivated(lead, medication_class):
+    """Covers criterion: AC1.
+
+    The refusal is one directional on purpose. Turning a program off is what a staff member
+    reaches for when it is misconfigured, so a rule about its steps must never stand in the
+    way of stopping it.
+    """
+    MedicationClass.objects.filter(dbid=medication_class.dbid).update(active=True)
+    ProgramStep.objects.filter(medication_class__dbid=medication_class.dbid).delete()
+
+    stopped = call("PATCH", f"/classes/{medication_class.dbid}", {"active": False}, caller=lead)
+
+    assert status_of(stopped) == HTTPStatus.OK
+    assert MedicationClass.objects.get(dbid=medication_class.dbid).active is False
+
+
+# --- The chart keeps up with the pane
+#
+# A banner reaches the chart on its own, because saving a BannerAlert broadcasts on the
+# patient's chart subscription. An action button does not. The chart asks the plugin for
+# its button set when it mounts and after that only reacts to a pushed reload, so without
+# these the Follow ups control showed whatever it showed when the chart was opened.
+
+
+def test_starting_a_program_pushes_a_chart_button_reload(patient, staff, medication_class):
+    """Covers criterion: AC26."""
+    from canvas_sdk.test_utils.factories import MedicationFactory, PrescriptionFactory
+
+    medication = MedicationFactory(patient=patient)
+    prescription = PrescriptionFactory(patient=patient, prescriber=staff, medication=medication)
+
+    effects = _effects(
+        "POST", "/enrollments",
+        {
+            "patient_id": str(patient.id), "prescription_id": str(prescription.id),
+            "prescriber_staff_id": str(staff.id), "medication_class_id": medication_class.dbid,
+            "medication_label": "apixaban",
+        },
+        caller=staff,
+    )
+
+    assert _reload_targets(effects) == [str(patient.id)]
+
+
+def test_stopping_a_program_pushes_a_chart_button_reload(patient, staff, medication_class):
+    """Covers criterion: AC26."""
+    enrollment = Enrollment.objects.create(
+        patient=patient, medication_class=medication_class, medication_label="apixaban",
+        prescriber_staff_id=staff.dbid, start_date=datetime.date.today(),
+        status=EnrollmentStatus.ACTIVE,
+    )
+
+    effects = _effects(
+        "POST", f"/enrollments/{enrollment.dbid}/stop", {"reason": "Done"}, caller=staff
+    )
+
+    assert _reload_targets(effects) == [str(patient.id)]
+
+
+def test_a_stopped_program_reads_as_stopped_and_can_be_started_again(patient, staff):
+    """Covers criterion: AC17.
+
+    A stopped enrolment is what the pane has to show and it is also what a practitioner
+    may want to run again. Reading the enrolment lookup as the answer to both questions
+    left a stopped card carrying the Running badge with no way to start it.
+    """
+    path = [2549, 3050, 24, 3064]
+    note, prescription, classes = _covered_prescription(
+        patient, staff, ["Alpha class"], path, "lisinopril 20 mg tablet"
+    )
+    Enrollment.objects.create(
+        patient=patient, medication_class=classes[0],
+        medication_label="lisinopril 20 mg tablet", prescription_id=str(prescription.id),
+        start_date=datetime.date.today(), status=EnrollmentStatus.STOPPED,
+        stopped_reason="The patient asked us to stop.", start_note_dbid=note.dbid,
+        prescriber_staff_id=staff.dbid,
+    )
+
+    with _matching_path(path):
+        shown = json_body(call("GET", f"/followups?note_id={note.id}", caller=staff))
+
+    card = shown["notes"][0]["programs"][0]
+    assert card["state"] == "startable"
+    assert card["enrollment"]["status"] == "stopped"
+    assert card["enrollment"]["stopped_reason"] == "The patient asked us to stop."

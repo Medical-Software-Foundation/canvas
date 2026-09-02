@@ -10,6 +10,7 @@ path, which is what makes the group matching case a real one rather than a fixtu
 arranged to pass.
 """
 
+import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,7 +35,7 @@ def committed_prescription(patient, staff):
     )
     from canvas_sdk.v1.data import MedicationCoding
 
-    def _make(fdb_code="fdb-lisinopril-20", coded=True):
+    def _make(fdb_code="fdb-lisinopril-20", coded=True, written_date=None):
         note = NoteFactory(patient=patient)
         medication = MedicationFactory(patient=patient)
         if coded:
@@ -45,13 +46,20 @@ def committed_prescription(patient, staff):
                 system="http://www.fdbhealth.com/",
                 code=fdb_code,
             )
-        PrescriptionFactory(
+        prescription_kwargs = dict(
             patient=patient,
             prescriber=staff,
             medication=medication,
             note=note,
             committer=CanvasUserFactory(),
         )
+        # written_date defaults to now on the factory itself, so this is left out of
+        # the call entirely rather than passed as None, which behaviour steps 45 and 9
+        # need control over to place a prescription inside or outside a class's own
+        # eligibility window.
+        if written_date is not None:
+            prescription_kwargs["written_date"] = written_date
+        PrescriptionFactory(**prescription_kwargs)
         return note
 
     return _make
@@ -306,3 +314,84 @@ def test_one_code_costs_the_catalogue_one_lookup(medication_class, patient, staf
         eligibility.matching_classes(note.dbid)
 
     assert get_json.call_count == 1
+
+
+def test_the_eligible_tab_lists_a_matching_prescription_within_its_window(
+    medication_class, patient, staff
+):
+    """Covers scenario: AC36, the Eligible tab lists a matching unenrolled prescription within its window. Covers criterion: AC36."""
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from medication_followup_protocol.models import CoverageKind
+    from medication_followup_protocol.services import eligibility
+    from medication_followup_protocol.services.practice_time import today
+
+    medication_class.eligibility_window_days = 30
+    medication_class.save()
+    _coverage(
+        medication_class, CoverageKind.GROUP,
+        etc_path_id=ACE_PATH, etc_path_name=["a", "b", "c", "d"],
+        display_name="lisinopril 10 mg tablet",
+    )
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display="lisinopril 20 mg tablet",
+        system="http://www.fdbhealth.com/", code="fdb-lisinopril-20",
+    )
+    written = datetime.datetime.combine(
+        today() - datetime.timedelta(days=10), datetime.time(9, 0), tzinfo=datetime.timezone.utc
+    )
+    prescription = PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication,
+        committer=CanvasUserFactory(), written_date=written,
+    )
+
+    with _with_path(ACE_PATH):
+        matches = eligibility.eligible_unenrolled_matches(patient.id)
+
+    assert any(
+        m.prescription.id == prescription.id and m.medication_class.dbid == medication_class.dbid
+        for m in matches
+    )
+
+
+def test_a_prescription_outside_its_window_shows_no_row(medication_class, patient, staff):
+    """Covers scenario: AC37, a prescription outside its eligibility window shows no row on the Eligible tab. Covers criterion: AC37."""
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from medication_followup_protocol.models import CoverageKind
+    from medication_followup_protocol.services import eligibility
+    from medication_followup_protocol.services.practice_time import today
+
+    medication_class.eligibility_window_days = 30
+    medication_class.save()
+    _coverage(
+        medication_class, CoverageKind.GROUP,
+        etc_path_id=ACE_PATH, etc_path_name=["a", "b", "c", "d"],
+        display_name="lisinopril 10 mg tablet",
+    )
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display="lisinopril 20 mg tablet",
+        system="http://www.fdbhealth.com/", code="fdb-lisinopril-20",
+    )
+    written = datetime.datetime.combine(
+        today() - datetime.timedelta(days=40), datetime.time(9, 0), tzinfo=datetime.timezone.utc
+    )
+    PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication,
+        committer=CanvasUserFactory(), written_date=written,
+    )
+
+    with _with_path(ACE_PATH):
+        matches = eligibility.eligible_unenrolled_matches(patient.id)
+
+    assert matches == []

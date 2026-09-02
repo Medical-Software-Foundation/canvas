@@ -1,5 +1,5 @@
 /* Scrolling the same origin chart to one of its own notes, shared by the note scoped
-   pane, enrollment_form.html, and the patient scoped pane, program_panel.html.
+   pane and the patient scoped pane, which are one page now, program_panel.html.
 
    Both panes sit in a same origin iframe over the chart and both carry a link back to a
    note. Left as two copies, the note wrapper's markup, its data-test attribute, its
@@ -161,7 +161,7 @@
     return scrolled;
   }
 
-  // noteMoment rides along on the same global, since enrollment_form.html's own note line
+  // noteMoment rides along on the same global, since program_panel.html's own note line
   // builds the identical sentence for display and would otherwise need a second copy of
   // the same two formatters just to print what this file already knows how to print.
   window.mfpChartNote = { scrollTo: scrollTo, noteMoment: noteMoment };

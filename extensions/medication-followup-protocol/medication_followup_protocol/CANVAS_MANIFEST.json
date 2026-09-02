@@ -18,11 +18,11 @@
         "handlers": [
             {
                 "class": "medication_followup_protocol.handlers.enrollment_button:EnrollmentButton",
-                "description": "Shows the enrolment control in the note header when a committed prescription on the note matches a configured class, and opens the enrolment form in the right chart pane."
+                "description": "Shows the Follow ups control in the note header when a committed prescription on the note matches a configured class, and opens the follow ups pane in the right chart pane scoped to that note."
             },
             {
                 "class": "medication_followup_protocol.handlers.all_programs_button:AllProgramsButton",
-                "description": "Shows the all programs control in the patient header on the chart when the patient has at least one enrolment, and opens the patient scoped pane of every program they are on."
+                "description": "Shows the Follow ups control in the patient header on the chart when the patient has at least one enrolment or one eligible unenrolled prescription, and opens the same follow ups pane scoped to every note of theirs."
             },
             {
                 "class": "medication_followup_protocol.handlers.prescribe_reload:PrescribeCommandReload",

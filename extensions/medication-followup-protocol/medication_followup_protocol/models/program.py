@@ -52,6 +52,15 @@ class MedicationClass(CustomModel):
     # recheck_note_type_id above.
     sender_staff_id = CharField(max_length=64, default="", blank=True)
     owner_team_id = CharField(max_length=64, default="", blank=True)
+    # How many days after a prescription's own written_date it still counts as eligible
+    # for this class, per behaviour step 9. Left null on purpose rather than defaulted,
+    # both because a class configured before this field existed has to read the same
+    # way a class whose staff member left it blank does, and because the platform adds
+    # a field to an existing custom data table as a nullable column with no default
+    # applied to the rows already there, so a default declared here would never reach
+    # them anyway. When null, services/eligibility.py falls back to the class's own
+    # program span, the largest day_offset among its ProgramStep rows.
+    eligibility_window_days = IntegerField(null=True, blank=True)
 
     def __str__(self) -> str:
         return self.name

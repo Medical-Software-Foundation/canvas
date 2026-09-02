@@ -23,14 +23,14 @@ def show_event(patient_id):
 
 
 def test_the_control_shows_for_a_patient_with_a_running_program(enrolment, patient):
-    """Covers scenario: AC25, the all programs control shows only for a patient with an active enrolment. Covers criterion: AC25."""
+    """Covers scenario: AC25, the Follow ups control shows for an active enrolment or an eligible unenrolled prescription and hides for neither. Covers criterion: AC25."""
     from medication_followup_protocol.handlers.all_programs_button import AllProgramsButton
 
     assert AllProgramsButton(show_event(patient.id)).visible() is True
 
 
 def test_the_control_stays_hidden_for_a_patient_with_none(patient):
-    """Covers scenario: AC25, the all programs control shows only for a patient with an active enrolment. Covers criterion: AC25.
+    """Covers scenario: AC25, the Follow ups control shows for an active enrolment or an eligible unenrolled prescription and hides for neither. Covers criterion: AC25.
 
     No control at all rather than one opening onto an empty pane, which is what removes
     the empty state as something anybody has to design.
@@ -41,7 +41,7 @@ def test_the_control_stays_hidden_for_a_patient_with_none(patient):
 
 
 def test_a_stopped_program_does_not_keep_the_control_showing(enrolment, patient):
-    """Covers scenario: AC16, a patient with no enrolment shows no banner and no all programs control. Covers criterion: AC16.
+    """Covers scenario: AC16, a patient with no enrolment and no eligible prescription shows no banner and no Follow ups control. Covers criterion: AC16.
 
     Only an active enrolment counts. A patient whose only program was stopped is back to
     having nothing running, and the chart says nothing about them again.
@@ -67,7 +67,7 @@ def test_the_control_emits_nothing_when_it_is_not_visible(patient):
 
 
 def test_the_control_is_emitted_when_it_is_visible(enrolment, patient):
-    """Covers scenario: AC15, the all programs control shows every program a patient is on. Covers criterion: AC15."""
+    """Covers scenario: AC15, the Follow ups control opens the Ongoing tab showing every program a patient is on. Covers criterion: AC15."""
     from medication_followup_protocol.handlers.all_programs_button import AllProgramsButton
 
     effects = AllProgramsButton(show_event(patient.id)).compute()
@@ -89,7 +89,7 @@ def test_the_control_sits_in_the_patient_header(enrolment, patient):
 
 
 def test_clicking_opens_the_pane_in_the_right_chart_pane(enrolment, patient):
-    """Covers scenario: AC26, clicking the all programs control opens the patient scoped pane. Covers criterion: AC26."""
+    """Covers scenario: AC26, clicking the Follow ups control opens the patient scoped pane. Covers criterion: AC26."""
     from medication_followup_protocol.handlers.all_programs_button import AllProgramsButton
 
     event = make_event(
@@ -104,7 +104,7 @@ def test_clicking_opens_the_pane_in_the_right_chart_pane(enrolment, patient):
 
 
 def test_the_pane_it_opens_is_scoped_to_that_patient(enrolment, patient):
-    """Covers scenario: AC26, clicking the all programs control opens the patient scoped pane. Covers criterion: AC26.
+    """Covers scenario: AC26, clicking the Follow ups control opens the patient scoped pane. Covers criterion: AC26.
 
     The patient arrives as the click event's own target, since the chart carries no note
     to read one off, and the url has to carry it or the pane would not know whose
@@ -146,3 +146,46 @@ def test_a_second_running_program_still_shows_one_control(
     )
 
     assert len(AllProgramsButton(show_event(patient.id)).compute()) == 1
+
+
+def test_the_control_shows_for_an_eligible_prescription_with_no_enrolment_ever(
+    medication_class, patient, staff
+):
+    """Covers scenario: AC40, the Follow ups control shows for an eligible prescription even with no enrolment ever. Covers criterion: AC40."""
+    from unittest.mock import MagicMock, patch
+
+    from canvas_sdk.test_utils.factories import (
+        CanvasUserFactory,
+        MedicationFactory,
+        NoteFactory,
+        PrescriptionFactory,
+    )
+    from canvas_sdk.v1.data import MedicationCoding
+    from medication_followup_protocol.handlers.all_programs_button import AllProgramsButton
+    from medication_followup_protocol.models import CoverageKind, MedicationClassCoverage
+    from medication_followup_protocol.services import eligibility
+    from tests.conftest import make
+
+    path = [2549, 3050, 24, 3064]
+    MedicationClassCoverage.objects.create(
+        medication_class=medication_class, kind=CoverageKind.GROUP,
+        etc_path_id=path, etc_path_name=["a", "b", "c", "d"],
+        display_name="lisinopril 10 mg tablet",
+    )
+    note = NoteFactory(patient=patient)
+    medication = MedicationFactory(patient=patient)
+    make(
+        MedicationCoding, medication=medication, display="lisinopril 20 mg tablet",
+        system="http://www.fdbhealth.com/", code="fdb-lisinopril-20",
+    )
+    PrescriptionFactory(
+        patient=patient, prescriber=staff, medication=medication, note=note,
+        committer=CanvasUserFactory(),
+    )
+
+    response = MagicMock()
+    response.json.return_value = {"etc_path_id": path}
+    with patch.object(eligibility.ontologies_http, "get_json", return_value=response):
+        visible = AllProgramsButton(show_event(patient.id)).visible()
+
+    assert visible is True

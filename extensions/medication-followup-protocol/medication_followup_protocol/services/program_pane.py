@@ -17,9 +17,27 @@ from typing import Any, Sequence
 
 from canvas_sdk.v1.data import Note
 
-from medication_followup_protocol.models.enrollment import EnrolledStep, Enrollment
+from medication_followup_protocol.models.enrollment import (
+    EnrolledStep,
+    Enrollment,
+    StepStatus,
+)
 from medication_followup_protocol.models.program import StepKind
 from medication_followup_protocol.services.practice_time import today
+
+#: The word a step's own status reads as on screen, colour included, kept in the one
+#: renderer both panes call rather than in either template's own copy of the same
+#: mapping. AC41, a fired step reads as Done here rather than as Sent, the word
+#: StepStatus.CHOICES still carries for its own, unrelated, Django facing purpose.
+#: AC42, the note scoped pane and the patient scoped pane can only ever show one badge
+#: for the same status once neither of them is left to decide the word or the colour
+#: for itself.
+STEP_STATUS_DISPLAY: dict[str, dict[str, str]] = {
+    StepStatus.PENDING: {"label": "To come", "color": "blue"},
+    StepStatus.FIRED: {"label": "Done", "color": "green"},
+    StepStatus.SKIPPED: {"label": "Skipped", "color": "grey"},
+    StepStatus.FAILED: {"label": "Not delivered", "color": "red"},
+}
 
 
 def _step_summary(step: EnrolledStep) -> str:
@@ -37,7 +55,16 @@ def _step_summary(step: EnrolledStep) -> str:
 
 
 def _step_row(step: EnrolledStep, as_of: datetime.date) -> dict[str, Any]:
-    """One row of a section's step table, its own timing, its wording and its outcome."""
+    """One row of a section's step table, its own timing, its wording and its outcome.
+
+    Behaviour step 47. status_label and status_color are decided here, once, rather
+    than by either template reading the bare status and mapping it for itself, which is
+    what let the note scoped pane and the patient scoped pane drift onto two different
+    words for the same status. A status this table has never seen falls back to the
+    status string itself and the default badge colour, printing something honest rather
+    than raising on a value neither template has been told about yet.
+    """
+    display = STEP_STATUS_DISPLAY.get(step.status, {"label": step.status, "color": "grey"})
     return {
         "day_offset": step.day_offset,
         "kind": step.kind,
@@ -46,6 +73,8 @@ def _step_row(step: EnrolledStep, as_of: datetime.date) -> dict[str, Any]:
         "due_date": step.due_date.isoformat(),
         "days_until_due": (step.due_date - as_of).days,
         "status": step.status,
+        "status_label": display["label"],
+        "status_color": display["color"],
         "failure_reason": step.failure_reason,
     }
 

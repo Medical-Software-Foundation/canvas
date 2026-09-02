@@ -26,6 +26,7 @@ from medication_followup_protocol.models import (
     StepKind,
     StepStatus,
 )
+from medication_followup_protocol.services.banner import remove_banner
 from medication_followup_protocol.services.conditions import UnknownCondition, holds
 from medication_followup_protocol.services.practice_time import to_practice_date
 
@@ -231,7 +232,14 @@ class ProgramWalker(CronTask):
                 f"medication follow up, stopped enrolment {enrollment.dbid}, "
                 f"{enrollment.stopped_reason}"
             )
-            return []
+            # Behaviour step 49. Every route off active status removes the chart
+            # banner, and this guard is one of them, so it takes the same
+            # remove_banner call the staff initiated stop path already applies.
+            # Skipped when the enrolment never carried a banner_key at all, the
+            # same way an enrolment with no recorded start_note_dbid renders its
+            # note name with no link rather than one to nothing, since there is
+            # nothing on the chart for an empty key to remove.
+            return [remove_banner(enrollment)] if enrollment.banner_key else []
 
         effects: list[Effect] = []
         # The content of every due step is read live off the class, so join it rather
@@ -304,10 +312,16 @@ class ProgramWalker(CronTask):
 
         enrollment.status = EnrollmentStatus.COMPLETED
         enrollment.save()
+        # Behaviour step 49. Completing is one of the routes off active status, so the
+        # banner comes down here too, whether or not a failure task follows below.
+        # Skipped when the enrolment never carried a banner_key, the same guard the
+        # deceased and inactive path above applies, since there is nothing on the
+        # chart for an empty key to remove.
+        effects: list[Effect] = [remove_banner(enrollment)] if enrollment.banner_key else []
 
         failed = [step for step in steps if step.status == StepStatus.FAILED]
         if not failed:
-            return []
+            return effects
 
         patient = Patient.objects.filter(dbid=enrollment.patient_id).first()
         task_id = str(uuid.uuid4())
@@ -318,19 +332,22 @@ class ProgramWalker(CronTask):
         # to the enrolment's prescriber. Exactly one of the two, the same rule a task step
         # follows, because a task assigned to both is a task nobody owns.
         owner_team_id = enrollment.medication_class.owner_team_id or None
-        return [
-            AddTask(
-                id=task_id,
-                title=(
-                    "Follow up programme finished with steps that never delivered, "
-                    f"{enrollment.medication_label}"
-                ),
-                patient_id=patient.id if patient else None,
-                team_id=owner_team_id,
-                assignee_id=(None if owner_team_id else enrollment.prescriber_staff.id),
-            ).apply(),
-            AddTaskComment(
-                task_id=task_id,
-                body=f"These steps never reached the patient.\n{lines}",
-            ).apply(),
-        ]
+        effects.extend(
+            [
+                AddTask(
+                    id=task_id,
+                    title=(
+                        "Follow up programme finished with steps that never delivered, "
+                        f"{enrollment.medication_label}"
+                    ),
+                    patient_id=patient.id if patient else None,
+                    team_id=owner_team_id,
+                    assignee_id=(None if owner_team_id else enrollment.prescriber_staff.id),
+                ).apply(),
+                AddTaskComment(
+                    task_id=task_id,
+                    body=f"These steps never reached the patient.\n{lines}",
+                ).apply(),
+            ]
+        )
+        return effects

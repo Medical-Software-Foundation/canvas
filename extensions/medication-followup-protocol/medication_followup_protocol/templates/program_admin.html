@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
-  <link rel="stylesheet" href="{{ base }}/canvas-plugin-ui.css">
-  <script src="{{ base }}/canvas-plugin-ui.js"></script>
+  <link rel="stylesheet" href="{{ base }}/canvas-plugin-ui.css?v={{ cache_bust }}">
+  <script src="{{ base }}/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
   <style>
     /* --- The base font, which the design system does not set
        canvas-plugin-ui.css puts the font family on h1 to h5 and on p, and on every
@@ -24,7 +24,23 @@
     .stack { display: flex; flex-direction: column; gap: var(--space-medium); }
     .heading { display: flex; align-items: center; gap: var(--space-small); }
     .grow { flex: 1; }
-    .actions { display: flex; gap: var(--space-small); align-items: center; }
+    /* --- Why the footer has two groups rather than one row
+       Everything on the left edits the program. The one control on the right changes
+       whether the practice is using it at all, which is a different kind of decision and
+       the only one on the card with a consequence outside this page. Separating them by
+       space rather than by a divider is what stops it being read as the fifth in a row of
+       edits. */
+    .actions {
+      display: flex;
+      gap: var(--space-small);
+      align-items: center;
+      width: 100%;
+    }
+    .actions-edit { display: flex; gap: var(--space-small); align-items: center; }
+    .actions-state { margin-left: auto; }
+    /* The icon inside a state button, sized to the small button's own text rather than to
+       a fixed pixel value, so the two stay on one baseline if the type scale moves. */
+    .state-icon { width: 1em; height: 1em; flex-shrink: 0; }
     /* The editor's own layout. One column, because a step is read top to bottom, when it
        happens, what it is, what it says, and what holds it back. */
     .fields { display: flex; flex-direction: column; gap: var(--space-medium); }
@@ -222,6 +238,10 @@
   </style>
 </head>
 <body>
+  <!-- The tooltip system, placed once for the whole page rather than per element. Every
+       [data-canvas-tooltip] on the page is picked up by it, including the ones the class
+       cards write on every render, since it watches for elements added later. -->
+  <canvas-tooltip></canvas-tooltip>
   <div class="page">
     <div class="heading" style="margin-bottom: var(--space-medium)">
       <h3 class="grow" style="margin: 0">Follow up programs</h3>
@@ -249,14 +269,14 @@
     <canvas-modal-content>
       <p id="cannot-remove-text"></p>
       <p class="muted">
-        Make it inactive instead. No new patient can be started on it and the programs
+        Deactivate it instead. No new patient can be started on it and the programs
         already running finish on their own.
       </p>
     </canvas-modal-content>
     <canvas-modal-footer>
       <canvas-button variant="ghost" id="cannot-remove-no">Cancel</canvas-button>
       <canvas-button variant="ghost" id="cannot-remove-see">See the patients</canvas-button>
-      <canvas-button id="cannot-remove-deactivate">Make it inactive</canvas-button>
+      <canvas-button id="cannot-remove-deactivate">Deactivate it</canvas-button>
     </canvas-modal-footer>
   </canvas-modal>
 
@@ -539,6 +559,60 @@
         return (item.coverage || []).length;
       }
 
+      function stepCount(item) {
+        return (item.steps || []).length;
+      }
+
+      // --- The two state icons
+      //
+      // A power symbol for activate and the same symbol with its stroke cut for
+      // deactivate, so the pair reads as one control in two states rather than as two
+      // unrelated actions. Drawn with currentColor so each one takes its own button's text
+      // colour rather than carrying a colour of its own.
+      var ICON_ACTIVATE =
+        "<svg class='state-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' " +
+        "stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "<path d='M12 2v10'/><path d='M18.4 6.6a9 9 0 1 1-12.8 0'/></svg>";
+      var ICON_DEACTIVATE =
+        "<svg class='state-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' " +
+        "stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>" +
+        "<circle cx='12' cy='12' r='9'/><path d='M6 6l12 12'/></svg>";
+
+      /* --- Activate and Deactivate, and why one of them is sometimes not offered
+         A program with no steps enrols patients and then does nothing to them, silently,
+         which is worse than a program nobody can start. So the Activate control is dead
+         until the class has at least one step. It is disabled rather than hidden, because
+         a control that is not there says nothing about why, and the design system's own
+         disabled state keeps the button in the focus order so its tooltip reaches a
+         keyboard as well as a mouse.
+
+         Green for Activate, because the design system reserves green for a clinical state
+         transition and this is the one control on the card that changes whether the
+         practice is using the program at all.
+
+         Grey for Deactivate rather than red. Deactivating stops new enrolments and leaves
+         every running program alone, so it is reversible, and red on this card belongs to
+         Remove, which is not. Two red controls side by side would make the reversible one
+         look as permanent as the other. */
+      function stateButton(item) {
+        if (item.active) {
+          return "<canvas-button variant='ghost' size='sm' data-active='" + esc(item.id) +
+              "' data-canvas-tooltip='No new patient can be started on it. Every program " +
+              "already running carries on.'>" +
+            ICON_DEACTIVATE + "Deactivate</canvas-button>";
+        }
+        if (!stepCount(item)) {
+          return "<canvas-button variant='primary' size='sm' disabled " +
+              "data-canvas-tooltip='Add at least one step first. A program with no steps " +
+              "would enrol a patient and then do nothing.' data-canvas-tooltip-inverted>" +
+            ICON_ACTIVATE + "Activate</canvas-button>";
+        }
+        return "<canvas-button variant='primary' size='sm' data-active='" + esc(item.id) +
+            "' data-canvas-tooltip='Patients can be started on it from a note carrying a " +
+            "prescription it covers.'>" +
+          ICON_ACTIVATE + "Activate</canvas-button>";
+      }
+
       /* --- What the card says about coverage, and why it names the medications
          A count alone would say a class covers three things without saying which, and the
          question a reader has in front of a list of programs is which one follows up the
@@ -619,13 +693,13 @@
         return "<div id='class-coverage-section'>" +
           "<canvas-multi-select label='Medication groups' required " +
               "placeholder='Search medication groups' id='class-coverage-search' " +
-              "empty-state='Type a few letters of a drug name to search.'>" +
+              "empty-state='Type a few letters of a drug or group name to search.'>" +
             coverageOptionsHtml([]) +
           "</canvas-multi-select>" +
           "<div class='muted hint'>" +
             "A prescription counts toward this program when its own medication falls " +
-            "under one of these groups. Search by drug name, the group it belongs to is " +
-            "what gets covered. " +
+            "under one of these groups. Search by drug name or by group name, the " +
+            "group is what gets covered either way. " +
             (isCreate
               ? "A program covering nothing is offered on no note, so at least one is needed."
               : "Changes here save as you make them, unlike the rest of this form.") +
@@ -666,6 +740,17 @@
               (coverageCount(item)
                 ? ""
                 : "<canvas-badge size='mini' basic>No coverage</canvas-badge>") +
+              // --- Why a class with no steps says so here as well as on its button
+              //
+              // The Activate control is disabled until a class has one, and its reason
+              // lives in a tooltip. A tooltip is hover and focus only, so a person on a
+              // tablet never sees it, and the design system's own rule is that nothing a
+              // trigger has to convey on its own may live in a tooltip alone. So the fact
+              // is on the card in text, beside the two other things a class can be part
+              // way through configuring, and the tooltip only carries the consequence.
+              (stepCount(item)
+                ? ""
+                : "<canvas-badge size='mini' basic>No steps</canvas-badge>") +
               "<canvas-badge color='" + (item.active ? "green" : "grey") + "' size='mini'>" +
                 (item.active ? "Active" : "Inactive") + "</canvas-badge>" +
             "</div>" +
@@ -701,12 +786,13 @@
           "</canvas-card-body>" +
           "<canvas-card-footer>" +
             "<div class='actions'>" +
-              "<canvas-button size='sm' data-add-step='" + esc(item.id) + "'>Add a step</canvas-button>" +
-              "<canvas-button variant='ghost' size='sm' data-settings='" + esc(item.id) + "'>Edit settings</canvas-button>" +
-              "<canvas-button variant='ghost' size='sm' data-active='" + esc(item.id) + "'>" +
-                (item.active ? "Make inactive" : "Make active") + "</canvas-button>" +
-              "<canvas-button variant='ghost' size='sm' data-clone='" + esc(item.id) + "'>Clone</canvas-button>" +
-              "<canvas-button variant='ghost' size='sm' data-del-class='" + esc(item.id) + "'>Remove</canvas-button>" +
+              "<div class='actions-edit'>" +
+                "<canvas-button size='sm' data-add-step='" + esc(item.id) + "'>Add a step</canvas-button>" +
+                "<canvas-button variant='ghost' size='sm' data-settings='" + esc(item.id) + "'>Edit settings</canvas-button>" +
+                "<canvas-button variant='ghost' size='sm' data-clone='" + esc(item.id) + "'>Clone</canvas-button>" +
+                "<canvas-button variant='ghost' size='sm' data-del-class='" + esc(item.id) + "'>Remove</canvas-button>" +
+              "</div>" +
+              "<div class='actions-state'>" + stateButton(item) + "</div>" +
             "</div>" +
           "</canvas-card-footer>" +
         "</canvas-card>";
@@ -816,21 +902,47 @@
          A row carries the products the query matched, in italics beneath the name. The
          page's own muted class does nothing here, since this markup is copied into the
          control's shadow DOM where the page's stylesheet does not reach, which is why the
-         second line is styled inline and why it was not actually grey before. */
+         second line is styled inline and why it was not actually grey before.
+
+         A row the group name search found carries no matched products, since no product
+         search produced it, so its second line is the classification path above the
+         group instead, which is honest about how it was found and says where in the
+         taxonomy the group sits. */
       function coverageRow(key, label, result, picked) {
         var products = result ? (result.matched_products || []) : [];
         var matched = products.slice(0, 2).join(", ");
         if (products.length > 2) {
           matched += " and " + (products.length - 2) + " more";
         }
+        var context = matched ? "Matches " + matched : "";
+        if (!context && result && (result.etc_path_name || []).length > 1) {
+          context = result.etc_path_name.slice(0, -1).join(", ");
+        }
         return "<canvas-option value='" + esc(key) + "' label='" + esc(label) + "'" +
             (picked ? " selected" : "") + ">" +
           "<span style='display:block'>" + esc(label) + "</span>" +
-          (matched
+          (context
             ? "<span style='display:block; white-space:normal; font-style:italic; " +
-                "font-size:.9em; color:var(--color-text-secondary, #767676)'>Matches " +
-                esc(matched) + "</span>"
+                "font-size:.9em; color:var(--color-text-secondary, #767676)'>" +
+                esc(context) + "</span>"
             : "") +
+        "</canvas-option>";
+      }
+
+      /* --- The one row shown while a search is in flight
+         Behaviour step 7. The field itself keeps whatever the staff member is typing rather
+         than being replaced by a spinner, refresh() only ever touches the menu below it, so
+         this is the menu's own answer while nothing has come back yet, a small loader beside
+         the words a person is meant to read rather than pick. Disabled, and carrying the
+         same __searching value the change listener already strips out of what it reads as
+         chosen, so a row nobody can pick stays nobody can pick even if a stray click reaches
+         it. */
+      function searchingRowHtml() {
+        return "<canvas-option value='__searching' disabled label='Searching medication groups'>" +
+          "<span style='display:flex; align-items:center; gap:var(--space-mini)'>" +
+            "<canvas-loader size='mini' aria-hidden='true'></canvas-loader>" +
+            "Searching medication groups" +
+          "</span>" +
         "</canvas-option>";
       }
 
@@ -892,6 +1004,10 @@
         }
 
         function runSearch(query) {
+          // Behaviour step 7. The debounce already settled, so the request is genuinely
+          // starting now, which is the moment the busy row belongs on screen rather than
+          // whatever the last query's rows were.
+          refresh(searchingRowHtml(), query);
           fetch(BASE + "/medication-search?query=" + encodeURIComponent(query),
             { credentials: "same-origin" })
             .then(function (r) { return r.json(); })
@@ -1438,6 +1554,11 @@
       function flipActive(classId) {
         var item = state.classes.filter(function (c) { return same(c.id, classId); })[0];
         if (!item) { return; }
+        // The disabled Activate control carries no data-active at all, so this cannot be
+        // reached from it. Checked here anyway, because the rule that a program with no
+        // steps is never active belongs to the state change rather than to one button's
+        // markup, and the server would otherwise take a write this page refuses to offer.
+        if (!item.active && !stepCount(item)) { return; }
         send("PATCH", "/classes/" + encodeURIComponent(classId), { active: !item.active })
           .then(load).catch(function (error) { banner(error.message); });
       }

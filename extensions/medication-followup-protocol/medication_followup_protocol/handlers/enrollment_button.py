@@ -1,9 +1,15 @@
-"""Puts the enrolment button in the note header and opens the enrolment form.
+"""Puts the Follow ups control in the note header and opens the pane scoped to that note.
 
 The header rather than the footer, so the control sits inline with the note's own
 title, and it shows only once a committed prescription on the note in front of the
 provider matches a configured class's coverage, the eligibility check eligibility.py
 owns.
+
+It carries the same name and opens the same page as the chart wide control in
+all_programs_button.py. The two differ only in what they scope that page to, this one to
+the note in front of the provider and that one to every note of the patient, which is
+the whole reason there is one page rather than an enrolment form and a panel that drifted
+into showing different things about the same prescription.
 """
 
 from __future__ import annotations
@@ -17,9 +23,9 @@ from medication_followup_protocol.services.eligibility import has_matching_presc
 
 
 class EnrollmentButton(ActionButton):
-    """The one action a provider takes to start a patient on a programme."""
+    """The note scoped door into the follow ups pane."""
 
-    BUTTON_TITLE = "Start a follow up program"
+    BUTTON_TITLE = "Follow ups"
     BUTTON_KEY = "mfp_enroll"
     BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_HEADER
 
@@ -38,7 +44,7 @@ class EnrollmentButton(ActionButton):
         return has_matching_prescription(note_dbid)
 
     def handle(self) -> list[Effect]:
-        """Open the enrolment form in the right chart pane, beside the note.
+        """Open the follow ups pane in the right chart pane, scoped to this note.
 
         A button on the note opening the right pane is the pairing the design system names as
         standard, for the reason that applies here exactly, the provider has to read the note
@@ -62,8 +68,8 @@ class EnrollmentButton(ActionButton):
         note_id = (self.event.context or {}).get("note_id", "")
         return [
             LaunchModalEffect(
-                url=page(f"/enrol?note_id={note_id}"),
+                url=page(f"/panel?note_id={note_id}"),
                 target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,
-                title="Start a follow up program",
+                title="Follow ups",
             ).apply()
         ]

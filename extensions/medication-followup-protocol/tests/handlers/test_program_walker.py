@@ -501,3 +501,49 @@ def test_a_conditional_step_fires_when_the_class_names_no_recheck_type(enrolment
     assert len(walk()) == 1
     step.refresh_from_db()
     assert step.status == StepStatus.FIRED
+
+
+def test_two_overlapping_programs_both_send_their_day_zero_message(
+    enrolment, add_step, patient, staff, medication_class
+):
+    """Covers scenario: AC35, overlapping programs both send their day zero message with nothing deduplicated. Covers criterion: AC35.
+
+    Two separate Enrollment rows on the same patient and the same medication, one under
+    medication_class through the shared fixture and one under a second class created
+    here, each carrying its own day zero message step due today. The walk owns no
+    notion of two enrolments overlapping on one medication, that decision belongs to
+    the write this criterion's sibling, AC31, covers, so this only has to prove the
+    walk fires both steps rather than treating the second as a duplicate of the first.
+    """
+    from medication_followup_protocol.models import (
+        EnrolledStep,
+        Enrollment,
+        MedicationClass,
+        ProgramStep,
+    )
+
+    add_step(kind=StepKind.MESSAGE, due_date=WALK_DAY, message_body="Welcome to the first program.")
+
+    second_class = MedicationClass.objects.create(
+        name="Second program", active=True,
+        recheck_note_type_id=medication_class.recheck_note_type_id,
+    )
+    second_enrolment = Enrollment.objects.create(
+        patient_id=patient.dbid, medication_class=second_class,
+        medication_label=enrolment.medication_label, sender_staff_id=staff.dbid,
+        prescriber_staff_id=staff.dbid, start_date=enrolment.start_date,
+        recheck_note_type_id=second_class.recheck_note_type_id,
+    )
+    second_step = ProgramStep.objects.create(
+        medication_class=second_class, sequence=0, day_offset=0, kind=StepKind.MESSAGE,
+        message_body="Welcome to the second program.",
+    )
+    EnrolledStep.objects.create(
+        enrollment=second_enrolment, program_step=second_step, sequence=0, day_offset=0,
+        kind=StepKind.MESSAGE, due_date=WALK_DAY,
+    )
+
+    effects = walk()
+
+    bodies = {payload(e)["content"] for e in effects}
+    assert bodies == {"Welcome to the first program.", "Welcome to the second program."}

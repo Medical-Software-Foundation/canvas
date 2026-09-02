@@ -10,7 +10,9 @@ from urllib.parse import urlencode
 
 from django.db.models import Count
 
+from canvas_sdk.commands.constants import CodeSystems
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.action_button import ReloadPatientActionButtonsEffect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
@@ -48,9 +50,19 @@ from medication_followup_protocol.services.conditions import (
     CHOICES as CONDITION_CHOICES,
     CONDITIONS,
 )
-from medication_followup_protocol.services.eligibility import prescription_matches
-from medication_followup_protocol.services.practice_time import today
+from medication_followup_protocol.services.eligibility import (
+    eligible_unenrolled_matches,
+    patient_matches,
+    prescription_matches,
+)
+from medication_followup_protocol.services.practice_time import to_practice_date, today
 from medication_followup_protocol.services.program_pane import render_sections
+
+#: One value for the life of this deployed build, computed once at import rather than
+#: per request, so the pages this module renders stay cacheable within a build and
+#: only change across a redeploy. Handed to every template as cache_bust so its
+#: external stylesheet, script and plugin served asset URLs can carry ?v= on each one.
+_CACHE_BUST = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp()))
 
 #: The clinical privilege level a staff member needs to build or edit a programme.
 #:
@@ -108,8 +120,12 @@ def _class_payload(
     once, which is what keeps the listing to two queries rather than one per class.
     """
     if steps is None:
+        # Filtered by dbid rather than by the class instance itself, the same rule every
+        # other relation lookup against MedicationClass in this file follows, since handing
+        # the instance itself into a relation lookup is the shape confirmed live to raise
+        # ValueError: Cannot query "<name>": Must be "MedicationClass" instance.
         steps = list(
-            ProgramStep.objects.filter(medication_class=medication_class).order_by(
+            ProgramStep.objects.filter(medication_class__dbid=medication_class.dbid).order_by(
                 "day_offset", "sequence"
             )
         )
@@ -352,6 +368,219 @@ def _blocked_reason(prescription: Prescription, label: str) -> str:
     return ""
 
 
+def _therapeutic_group(prescription: Prescription) -> str:
+    """The name of the therapeutic group this prescription's own classification falls under.
+
+    Behaviour step 17. Read only for a prescription no active class already matched, so the
+    note scoped pane's card for it can still name what the drug is rather than saying nothing
+    at all. This runs the same classification lookup eligibility.py's own _classification_path
+    already calls for this exact FDB code, called again here because that function keeps only
+    the path ids for matching and throws the names away, and a card needs a name rather than a
+    list of ids. The path runs most general first, so its first name is the broad group a
+    prescriber would recognise. `Proposed`. A response carrying no name array at all, which the
+    catalogue is not expected to do but which nothing rules out, falls back to naming the path
+    by its own ids so a card is never left with nothing to say.
+
+    The catalogue call itself is wrapped rather than left to raise, on the same footing as
+    a response carrying no name array or no coding at all. A developer machine ordinarily
+    runs with no reachable ontologies service, and a listing render is not the place an
+    unreachable dependency should ever be fatal, so a card that cannot resolve a group name
+    reads the same as a prescription that never had one, empty rather than a broken page.
+    """
+    if not prescription.medication_id:
+        return ""
+    coding = MedicationCoding.objects.filter(
+        medication_id=prescription.medication_id, system=CodeSystems.FDB.value
+    ).first()
+    if coding is None or not coding.code:
+        return ""
+    try:
+        payload = ontologies_http.get_json(f"/fdb/grouped-medication/{coding.code}/").json()
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    names = [str(name).strip() for name in (payload.get("etc_path_name") or []) if str(name).strip()]
+    if names:
+        return names[0]
+    path_id = payload.get("etc_path_id") or []
+    return " / ".join(str(step) for step in path_id) if path_id else ""
+
+
+def _taxonomy_nodes() -> list[tuple[list[int], list[str]]]:
+    """Every classification group the catalogue knows, as a path of ids and its names.
+
+    The door for searching by group name. The catalogue's own search runs over a
+    product search term table, product names and their synonyms only, confirmed in the
+    ontologies source, so no query sent there can ever match a class name. The taxonomy
+    itself is exposed at GET /fdb/class-path/, the whole ETC tree unpaginated, one row
+    per class carrying its own name and the full path of ids above it. That is the
+    primary read, and the names for a path are resolved by joining rows on their own
+    last id, since the serializer sends ids and the node's own name but not the
+    ancestor names.
+
+    A local instance carries that table empty, a fixture gap rather than a fact about
+    the taxonomy, while its grouped medication rows still carry their paths. So an
+    empty taxonomy falls back to folding candidate groups out of the grouped table
+    itself, every prefix of every distinct classification path, which locally is a
+    handful of rows. The fallback caps its read at a limit that would be wrong against
+    a production sized table, and that is accepted because production is exactly where
+    the class path table is populated and the fallback never runs.
+
+    Both reads are wrapped rather than left to raise, the same footing every other
+    catalogue call in this module stands on, an unreachable service means no group
+    name matches rather than a broken search.
+    """
+    try:
+        payload = ontologies_http.get_json("/fdb/class-path/").json()
+    except Exception:
+        payload = None
+
+    nodes: list[tuple[list[int], list[str]]] = []
+    if isinstance(payload, list) and payload:
+        name_by_id: dict[int, str] = {}
+        for row in payload:
+            if isinstance(row, dict) and row.get("path_ids") and row.get("name"):
+                name_by_id[int(row["path_ids"][-1])] = str(row["name"])
+        for row in payload:
+            if not isinstance(row, dict):
+                continue
+            path_ids = [int(step) for step in (row.get("path_ids") or [])]
+            if not path_ids or not row.get("name"):
+                continue
+            names = [name_by_id.get(step, "") for step in path_ids]
+            names[-1] = str(row["name"])
+            nodes.append((path_ids, names))
+        return nodes
+
+    try:
+        payload = ontologies_http.get_json(
+            f"/fdb/grouped-medication/?{urlencode({'limit': 10000})}"
+        ).json()
+    except Exception:
+        return []
+    rows = payload.get("results") if isinstance(payload, dict) else None
+    seen: set[tuple[int, ...]] = set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        path_ids = [int(step) for step in (row.get("etc_path_id") or [])]
+        names = [str(name) for name in (row.get("etc_path_name") or [])]
+        if not path_ids or len(names) != len(path_ids):
+            continue
+        for depth in range(1, len(path_ids) + 1):
+            key = tuple(path_ids[:depth])
+            if key in seen:
+                continue
+            seen.add(key)
+            nodes.append((path_ids[:depth], names[:depth]))
+    return nodes
+
+
+def _group_name_matches(query: str) -> list[dict[str, Any]]:
+    """Every taxonomy group whose own name contains what was typed, shallowest first.
+
+    Case insensitive containment rather than a prefix, so statin finds Statins and
+    coagul finds Anticoagulants. The match runs against each node's own name only,
+    never an ancestor's, because every ancestor is a node of its own and matching it
+    there is what offers the broader group as its own row.
+
+    The FDB tree repeats a name where a leaf is the only member of its own class,
+    Class III Antiarrhythmics sits at two depths, so a match whose name already
+    matched on a shallower node it descends from is folded away, and the shallower
+    node wins because the coverage prefix rule makes it cover everything the deeper
+    one covers.
+
+    Capped, because a one letter query against the whole taxonomy is hundreds of rows
+    and the combo box is a menu rather than a browser.
+    """
+    needle = query.lower()
+    matched = [
+        (path_ids, names)
+        for path_ids, names in _taxonomy_nodes()
+        if names[-1] and needle in names[-1].lower()
+    ]
+    matched.sort(key=lambda node: (len(node[0]), node[1][-1].lower()))
+
+    kept: list[tuple[list[int], list[str]]] = []
+    for path_ids, names in matched:
+        if any(
+            names[-1] == kept_names[-1] and path_ids[: len(kept_ids)] == kept_ids
+            for kept_ids, kept_names in kept
+        ):
+            continue
+        kept.append((path_ids, names))
+
+    return [
+        {
+            "etc_path_id": path_ids,
+            "etc_path_name": names,
+            "display_name": names[-1],
+            "matched_products": [],
+            "med_medication_id": "",
+        }
+        for path_ids, names in kept[:20]
+    ]
+
+
+def _program_step_summary(program_step: ProgramStep) -> str:
+    """What one configured step of a class does, in the words the practice wrote.
+
+    The same sentence program_pane.py prints for a step already scheduled against a
+    patient, said here for a step that has not been scheduled yet, so the catch up
+    question a card asks before it starts a program reads in the same words the steps
+    table will read in afterwards.
+    """
+    if program_step.kind == StepKind.TASK:
+        return program_step.task_title
+    if program_step.kind == StepKind.QUESTIONNAIRE:
+        return program_step.message_body or "Questionnaire to the patient"
+    return program_step.message_body
+
+
+def _step_is_due(start_date: datetime.date, day_offset: int, as_of: datetime.date) -> bool:
+    """Whether a step's ordinary due date falls on or before as_of.
+
+    Behaviour step 22. A step's ordinary due date is start_date plus its own day_offset,
+    and it is already due when that computed date falls on or before the day an
+    enrolment would be submitted. Kept as its own function and called from both the
+    read below that previews a catch up choice and the write that later decides one,
+    so the two can never compute a different answer for the same class on the same day.
+    """
+    return start_date + datetime.timedelta(days=day_offset) <= as_of
+
+
+def _steps_by_class(classes: list[MedicationClass]) -> dict[int, list[tuple[int, int]]]:
+    """Every class's ProgramStep ids and their day offsets, batched for a listing.
+
+    Behaviour steps 21, 22 and 24. One query for every class the enrolment form is about
+    to offer rather than one query per class, the same batching rule every other listing
+    in this file follows. Each prescription on a note can carry its own written_date, so
+    which of a class's steps already count as due is a per prescription question rather
+    than a per class one, and this function stops short of answering it. It only groups
+    the raw steps, and the caller pairs them with each prescription's own start_date
+    through _step_is_due, the same function the write below reruns at the moment it
+    actually writes, so a step this call's caller names as due is exactly the step the
+    write will offer a choice for.
+
+    Filtered by dbid rather than by the class instances themselves, the same rule
+    _enrollment_counts above already follows. classes here is assembled by merging
+    matches gathered across more than one prescription, and hitting ProgramStep with
+    medication_class__in=classes had this raise ValueError: Cannot query "<name>": Must
+    be "MedicationClass" instance, confirmed live against this exact call on 2026-09-01,
+    for a class whose row was perfectly real but whose Python instance the ORM would not
+    accept in that lookup. A plain list of dbids sidesteps whatever produced that
+    mismatch rather than depending on understanding it.
+    """
+    if not classes:
+        return {}
+    class_dbids = [c.dbid for c in classes]
+    steps: dict[int, list[tuple[int, int]]] = {dbid: [] for dbid in class_dbids}
+    for step in ProgramStep.objects.filter(medication_class__dbid__in=class_dbids):
+        steps[step.medication_class_id].append((step.dbid, step.day_offset))
+    return steps
+
+
 def _note_filter(note_id: str) -> dict[str, Any]:
     """The lookup for a note identifier that may be a database id or a public key.
 
@@ -576,42 +805,41 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             HTMLResponse(
                 render_to_string(
                     "templates/program_admin.html",
-                    {"base": page(""), "conditions": json.dumps(CONDITION_CHOICES)},
+                    {
+                        "base": page(""),
+                        "cache_bust": _CACHE_BUST,
+                        "conditions": json.dumps(CONDITION_CHOICES),
+                    },
                 )
             )
         ]
 
     @api.get("/panel")
     def panel_page(self) -> list[Response | Effect]:
-        """The chart panel for one patient, its own programs each as one section.
+        """The follow ups pane, in whichever of its two scopes the address asks for.
 
-        Behaviour step 39. The section shape, its steps with their due dates and
-        statuses and the link back to the note a program started from, is
-        program_pane.render_sections, the same renderer the note scoped read at
-        GET /prescriptions builds on above, so this pane and that one can never drift
-        into showing two different ideas of what a program looks like. Handed to the
-        template as context here, and the page currently reads the same shape again
-        over the wire at GET /enrollments below rather than straight out of what it was
-        served, which is the template's own concern rather than this route's.
+        One page rather than two. Given a patient it lists every note of theirs that
+        carries a prescription with a program on it or a program it could start, and
+        given a note it lists that one note. The note header control and the chart
+        header control therefore open the same thing, which is what the two panes
+        drifting apart cost, and the whole of the difference between them is which
+        query parameter arrives here.
+
+        This route renders and nothing else. Every fact on the page comes from
+        GET /followups, so the page a provider is looking at refreshes itself on its own
+        timer without this route being asked again.
         """
         patient_id = self.request.query_params.get("patient_id", "")
-        enrollments = (
-            list(
-                Enrollment.objects.filter(patient__id=patient_id).select_related(
-                    "medication_class"
-                )
-            )
-            if patient_id
-            else []
-        )
+        note_id = self.request.query_params.get("note_id", "")
         return [
             HTMLResponse(
                 render_to_string(
                     "templates/program_panel.html",
                     {
                         "base": page(""),
+                        "cache_bust": _CACHE_BUST,
                         "patient_id": patient_id,
-                        "sections": render_sections(enrollments),
+                        "note_id": note_id,
                     },
                 )
             )
@@ -619,13 +847,33 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/enrol")
     def enrol_page(self) -> list[Response | Effect]:
-        """The enrolment form, opened over the note."""
+        """The same pane under its older address, so an open pane keeps working.
+
+        The enrolment form used to be a page of its own, with a chooser on each card
+        instead of a card per program. It is the follow ups pane now, scoped to one
+        note, so this address renders that pane rather than a second idea of the same
+        screen. A prescription_id still arriving here has a note behind it, which the
+        pane resolves for itself, so the parameter is carried through as a note scope
+        rather than as a second shape this page has to understand.
+        """
         note_id = self.request.query_params.get("note_id", "")
+        prescription_id = self.request.query_params.get("prescription_id", "")
+        if not note_id and prescription_id:
+            prescription = (
+                Prescription.objects.filter(id=prescription_id).select_related("note").first()
+            )
+            if prescription is not None and prescription.note_id:
+                note_id = str(prescription.note_id)
         return [
             HTMLResponse(
                 render_to_string(
-                    "templates/enrollment_form.html",
-                    {"base": page(""), "note_id": note_id},
+                    "templates/program_panel.html",
+                    {
+                        "base": page(""),
+                        "cache_bust": _CACHE_BUST,
+                        "patient_id": "",
+                        "note_id": note_id,
+                    },
                 )
             )
         ]
@@ -682,8 +930,17 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         # Every step of every class in one query, grouped here, rather than one query per
         # class. Reverse accessors are unavailable in the sandbox, so the grouping is done
         # by hand rather than with prefetch_related.
+        #
+        # Filtered by dbid rather than by the class instances themselves, the same rule
+        # _enrollment_counts and _steps_by_class already follow. Handing medication_class__in
+        # a list of MedicationClass instances is exactly the shape that raised ValueError:
+        # Cannot query "<name>": Must be "MedicationClass" instance elsewhere in this same
+        # file for rows that were perfectly real, confirmed live on 2026-09-01. A plain list
+        # of dbids sidesteps whatever produced that mismatch rather than depending on
+        # understanding it.
+        class_dbids = [c.dbid for c in classes]
         steps_by_class: dict[int, list[ProgramStep]] = {}
-        for step in ProgramStep.objects.filter(medication_class__in=classes).order_by(
+        for step in ProgramStep.objects.filter(medication_class__dbid__in=class_dbids).order_by(
             "day_offset", "sequence"
         ):
             steps_by_class.setdefault(step.medication_class_id, []).append(step)
@@ -735,10 +992,17 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         if _name_taken(name):
             return [_duplicate_name_response(name)]
 
+        # --- Why a new class starts inactive
+        #
+        # A class is created before it has a step or a coverage entry, so at the moment it
+        # exists it covers nothing and does nothing. Created active, it spent that window
+        # as a program the practice believed was running, and the only signal was a badge
+        # nobody had a reason to read. It starts inactive instead, and the configuration
+        # page's own Activate control is what a staff member presses once it has steps.
         medication_class = MedicationClass.objects.create(
             name=name,
             description=body.get("description", ""),
-            active=bool(body.get("active", True)),
+            active=bool(body.get("active", False)),
             recheck_note_type_id=body.get("recheck_note_type_id", ""),
             sender_staff_id=body.get("sender_staff_id", ""),
             owner_team_id=body.get("owner_team_id", ""),
@@ -796,8 +1060,10 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         if medication_class is None:
             return [JSONResponse({"error": "No such medication class."}, status_code=HTTPStatus.NOT_FOUND)]
 
+        # Filtered by dbid rather than by the instance, the same rule every other relation
+        # lookup against MedicationClass in this file follows.
         entries = MedicationClassCoverage.objects.filter(
-            medication_class=medication_class
+            medication_class__dbid=medication_class.dbid
         ).order_by("dbid")
         return [JSONResponse({"coverage": [_coverage_payload(e) for e in entries]})]
 
@@ -914,10 +1180,14 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         drug name that they found the right group, and the page shows them as the
         reason the row is there.
 
-        The search is still by drug name, since the catalogue exposes no way to search
-        the classification taxonomy itself, only these product rows. That is the right
-        door anyway, a practice thinks in terms of the drug it just prescribed rather
-        than in terms of the taxonomy above it.
+        The product search is by drug name, since this endpoint of the catalogue
+        exposes no way to search the classification taxonomy, only these product rows.
+        That is one right door, a practice often thinks in terms of the drug it just
+        prescribed. The other door is the group name itself, statins typed by somebody
+        setting up a statin program, and the catalogue's search term table carries no
+        class names, so that match runs here instead, against the taxonomy
+        _taxonomy_nodes reads, and the two result sets merge deduped by classification
+        path with the product matches first because they carry the evidence line.
 
         --- Why this reads results rather than the bare object eligibility.py reads
 
@@ -977,7 +1247,12 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             if product and product not in group["matched_products"]:
                 group["matched_products"].append(product)
 
-        return [JSONResponse({"results": list(groups.values())})]
+        by_name = [
+            match
+            for match in _group_name_matches(query)
+            if tuple(match["etc_path_id"]) not in groups
+        ]
+        return [JSONResponse({"results": list(groups.values()) + by_name})]
 
     @api.post("/classes/<class_id>/clone")
     def clone_class(self) -> list[Response | Effect]:
@@ -1032,7 +1307,9 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             sender_staff_id=original.sender_staff_id,
             owner_team_id=original.owner_team_id,
         )
-        for step in ProgramStep.objects.filter(medication_class=original).order_by(
+        # Filtered by dbid rather than by the instance, the same rule every other relation
+        # lookup against MedicationClass in this file follows.
+        for step in ProgramStep.objects.filter(medication_class__dbid=original.dbid).order_by(
             "day_offset", "sequence"
         ):
             ProgramStep.objects.create(
@@ -1050,7 +1327,9 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
                 assignee_team_id=step.assignee_team_id,
             )
 
-        for entry in MedicationClassCoverage.objects.filter(medication_class=original):
+        # Filtered by dbid rather than by the instance, the same rule every other relation
+        # lookup against MedicationClass in this file follows.
+        for entry in MedicationClassCoverage.objects.filter(medication_class__dbid=original.dbid):
             MedicationClassCoverage.objects.create(
                 medication_class=copy,
                 kind=entry.kind,
@@ -1094,7 +1373,31 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             medication_class.name = name
 
         if "active" in body:
-            medication_class.active = bool(body.get("active"))
+            # --- The one thing this endpoint refuses
+            #
+            # A class with no step enrols a patient and then does nothing to them, with no
+            # message, no task and nothing on the chart to say so, which is worse than a
+            # class nobody can start. The configuration page already disables its own
+            # Activate control for exactly this, and the rule lives here as well because it
+            # belongs to the state change rather than to one button's markup, and a second
+            # caller reaching this endpoint would otherwise not know about it.
+            wanted_active = bool(body.get("active"))
+            if wanted_active and not ProgramStep.objects.filter(
+                medication_class__dbid=medication_class.dbid
+            ).exists():
+                return [
+                    JSONResponse(
+                        {
+                            "error": (
+                                "Add at least one step before activating this program. A "
+                                "program with no steps would enrol a patient and then do "
+                                "nothing."
+                            )
+                        },
+                        status_code=HTTPStatus.BAD_REQUEST,
+                    )
+                ]
+            medication_class.active = wanted_active
 
         if "recheck_note_type_id" in body:
             medication_class.recheck_note_type_id = body.get("recheck_note_type_id") or ""
@@ -1125,7 +1428,9 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         if medication_class is None:
             return [JSONResponse({"error": "No such medication class."}, status_code=HTTPStatus.NOT_FOUND)]
 
-        enrolled = Enrollment.objects.filter(medication_class=medication_class).count()
+        # Filtered by dbid rather than by the instance, the same rule every other relation
+        # lookup against MedicationClass in this file follows.
+        enrolled = Enrollment.objects.filter(medication_class__dbid=medication_class.dbid).count()
         if enrolled:
             return [
                 JSONResponse(
@@ -1140,7 +1445,7 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        ProgramStep.objects.filter(medication_class=medication_class).delete()
+        ProgramStep.objects.filter(medication_class__dbid=medication_class.dbid).delete()
         medication_class.delete()
         return [JSONResponse({"deleted": True})]
 
@@ -1217,7 +1522,11 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         if step is None:
             return [JSONResponse({"error": "No such step."}, status_code=HTTPStatus.NOT_FOUND)]
 
-        scheduled = EnrolledStep.objects.filter(program_step=step).count()
+        # Filtered by dbid rather than by the instance. services/banner.py already carries
+        # the live confirmation of this exact shape failing on Enrollment, Cannot query,
+        # Must be Enrollment instance, for a foreign key declared to_field dbid, which
+        # ProgramStep's own foreign keys are too.
+        scheduled = EnrolledStep.objects.filter(program_step__dbid=step.dbid).count()
         if scheduled:
             return [
                 JSONResponse(
@@ -1336,6 +1645,61 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
 
     # Enrolment.
 
+    @api.get("/eligible")
+    def list_eligible(self) -> list[Response | Effect]:
+        """Every prescription of this patient still open to enrol on, for the Eligible tab.
+
+        Behaviour steps 45 and 46. One row per prescription rather than one per
+        prescription and class pair, since a single prescription can still match more
+        than one class and the Start action against it opens one chooser rather than
+        several rows that would all lead to the same place. The classes named on a row
+        are only the ones eligibility.py's own eligible_unenrolled_matches still counts
+        as open for that exact prescription, so a prescription already running under
+        one class and still eligible for a second keeps only that second class listed.
+        """
+        patient_id = self.request.query_params.get("patient_id", "")
+        if not patient_id:
+            return [JSONResponse({"eligible": []})]
+
+        open_matches = eligible_unenrolled_matches(patient_id)
+        if not open_matches:
+            return [JSONResponse({"eligible": []})]
+
+        # One prescription may appear in several pairs, one per class still open on it,
+        # so the rows are grouped here rather than emitted one per pair.
+        prescriptions_by_id: dict[str, Prescription] = {}
+        classes_by_prescription_id: dict[str, list[MedicationClass]] = {}
+        for match in open_matches:
+            prescription_id = match.prescription.id
+            prescriptions_by_id.setdefault(prescription_id, match.prescription)
+            classes_by_prescription_id.setdefault(prescription_id, []).append(
+                match.medication_class
+            )
+
+        labels = _medication_labels(
+            [p.medication for p in prescriptions_by_id.values() if p.medication]
+        )
+
+        rows: list[dict[str, Any]] = [
+            {
+                "prescription_id": str(prescription.id),
+                "label": _prescription_label(prescription, labels),
+                # The day the program would start, per behaviour step 45, which is the
+                # prescription's own written_date rather than the day the Eligible tab
+                # happens to be read.
+                "written_date": to_practice_date(prescription.written_date).isoformat(),
+                "classes": [
+                    {"id": c.dbid, "name": c.name}
+                    for c in sorted(
+                        classes_by_prescription_id[prescription.id], key=lambda c: c.name
+                    )
+                ],
+            }
+            for prescription in prescriptions_by_id.values()
+        ]
+        rows.sort(key=lambda row: str(row["label"]))
+        return [JSONResponse({"eligible": rows})]
+
     @api.get("/prescriptions")
     def list_prescriptions(self) -> list[Response | Effect]:
         """The prescriptions committed on this note, and which classes each one matched.
@@ -1356,36 +1720,94 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         them, which is what actually answers step 14, the dropdown never offers a
         choice the write would reject. A prescription eligibility matched nothing
         carries an empty list rather than every class on the instance.
+
+        --- Behaviour step 46, a chooser scoped to one prescription rather than a note
+
+        A prescription_id query param, carried by the Eligible tab's Start action, is
+        an alternative to note_id rather than a second endpoint, since both roads end
+        at the same card chooser and it should not have two shapes to speak. Given one,
+        this resolves exactly the named prescription and matches it against
+        eligibility.py's patient scoped query, since the door being opened here has no
+        note in front of a provider to scope a note-scoped match from. note stays None
+        on this road, which is the same "no note to name" a prescription resolved with
+        neither param already produces below.
         """
         note_id = self.request.query_params.get("note_id", "")
-        if not note_id:
+        prescription_id = self.request.query_params.get("prescription_id", "")
+
+        if prescription_id:
+            note = None
+            prescription = (
+                Prescription.objects.filter(id=prescription_id)
+                .select_related("patient", "prescriber", "medication")
+                .first()
+            )
+            if prescription is None or not prescription.patient_id:
+                return [JSONResponse({"note": None, "prescriptions": []})]
+            prescriptions = [prescription]
+            classes_by_prescription_id = {
+                match.prescription.id: match.classes
+                for match in patient_matches(str(prescription.patient.id))
+                if match.prescription.id == prescription.id
+            }
+        elif note_id:
+            # Whichever shape arrived, resolved by the one helper so this read and the
+            # enrolment write below it cannot disagree. The same filter answers the note
+            # lookup and the prescription lookup, prefixed with note__ for the second.
+            note_filter = _note_filter(note_id)
+            note = (
+                Note.objects.filter(**note_filter)
+                .select_related("note_type_version", "provider", "location", "patient")
+                .first()
+            )
+
+            prescriptions = list(
+                Prescription.objects.filter(
+                    **{f"note__{key}": value for key, value in note_filter.items()}
+                ).select_related("patient", "prescriber", "medication")
+            )
+
+            # eligibility.py's own read of this note, only for which classes it matched
+            # per prescription. Its query carries none of the relations this endpoint
+            # needs, so the prescriptions above are read again through the batched query
+            # this endpoint already had rather than through what eligibility.py returns.
+            classes_by_prescription_id = {
+                match.prescription.id: match.classes for match in prescription_matches(note.dbid)
+            } if note is not None else {}
+        else:
             return [JSONResponse({"note": None, "prescriptions": []})]
 
-        # Whichever shape arrived, resolved by the one helper so this read and the enrolment
-        # write below it cannot disagree. The same filter answers the note lookup and the
-        # prescription lookup, prefixed with note__ for the second.
-        note_filter = _note_filter(note_id)
-        note = (
-            Note.objects.filter(**note_filter)
-            .select_related("note_type_version", "provider", "location", "patient")
-            .first()
-        )
-
-        prescriptions = list(
-            Prescription.objects.filter(
-                **{f"note__{key}": value for key, value in note_filter.items()}
-            ).select_related("patient", "prescriber", "medication")
-        )
-
-        # eligibility.py's own read of this note, only for which classes it matched per
-        # prescription. Its query carries none of the relations this endpoint needs, so
-        # the prescriptions above are read again through the batched query this endpoint
-        # already had rather than through what eligibility.py returns.
-        classes_by_prescription_id = {
-            match.prescription.id: match.classes for match in prescription_matches(note.dbid)
-        } if note is not None else {}
-
         labels = _medication_labels([p.medication for p in prescriptions if p.medication])
+
+        # --- Behaviour steps 21, 22 and 24, the catch up choice previewed before it is
+        # written
+        #
+        # Every class any prescription on this page matched, read once as a batch rather
+        # than once per prescription, the same rule every other listing in this file
+        # follows. create_enrollment anchors start_date to the selected prescription's
+        # own written_date rather than to today, so this preview resolves each
+        # prescription's own written_date the same way and asks _step_is_due per
+        # prescription, per class, rather than once for the whole note against a single
+        # date. Two prescriptions on the same note written on different days can
+        # therefore see different steps already due for the same class, which is the
+        # correct answer, and a step this preview calls due for one prescription is
+        # exactly the step the write will offer a catch up choice for when that same
+        # prescription is the one submitted.
+        classes_needing_due_ids = {
+            c.dbid: c
+            for classes in classes_by_prescription_id.values()
+            for c in classes
+        }
+        steps_by_class = _steps_by_class(list(classes_needing_due_ids.values()))
+        submission_day = today()
+
+        def _due_step_ids(prescription: Prescription, class_dbid: int) -> list[int]:
+            prescription_start_date = to_practice_date(prescription.written_date)
+            return [
+                step_id
+                for step_id, day_offset in steps_by_class.get(class_dbid, [])
+                if _step_is_due(prescription_start_date, day_offset, submission_day)
+            ]
 
         # --- Which of these already has a program running
         #
@@ -1405,15 +1827,45 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             label for label in (_prescription_label(p, labels) for p in prescriptions) if label
         }
         running_by_patient_and_label: dict[tuple[int, str], Enrollment] = {}
+        # Every active class already running against a given patient and label, not only the
+        # one running_by_patient_and_label happens to keep. Section 1 now allows two classes
+        # to run on the same medication at once, so a class's own card needs to know about a
+        # different class's enrolment even when it is not the one running_by_patient_and_label
+        # would render below.
+        running_classes_by_patient_and_label: dict[tuple[int, str], list[MedicationClass]] = {}
         if patient_dbids and running_labels:
-            running_by_patient_and_label = {
-                (enrollment.patient_id, enrollment.medication_label): enrollment
-                for enrollment in Enrollment.objects.filter(
-                    patient__dbid__in=list(patient_dbids),
-                    medication_label__in=list(running_labels),
-                    status=EnrollmentStatus.ACTIVE,
-                ).select_related("medication_class")
-            }
+            for enrollment in Enrollment.objects.filter(
+                patient__dbid__in=list(patient_dbids),
+                medication_label__in=list(running_labels),
+                status=EnrollmentStatus.ACTIVE,
+            ).select_related("medication_class"):
+                key = (enrollment.patient_id, enrollment.medication_label)
+                running_by_patient_and_label[key] = enrollment
+                running_classes_by_patient_and_label.setdefault(key, []).append(
+                    enrollment.medication_class
+                )
+
+        def _already_running_elsewhere(prescription: Prescription, class_dbid: int) -> str:
+            """The name of another class already running on this prescription's medication.
+
+            Behaviour step 17. Named per card rather than shown once for the prescription,
+            since a prescription can offer several class cards at once and it is the card for
+            the class that is not yet running that needs to say so. Empty when no other class
+            is running against this exact patient and label, which is the ordinary case.
+            """
+            if not prescription.patient:
+                return ""
+            label = _prescription_label(prescription, labels)
+            if not label:
+                return ""
+            others = [
+                c
+                for c in running_classes_by_patient_and_label.get(
+                    (prescription.patient.dbid, label), []
+                )
+                if c.dbid != class_dbid
+            ]
+            return others[0].name if others else ""
 
         # One render_sections call for every running enrolment this note's prescriptions
         # point at, rather than one per prescription, so program_pane.py is the only
@@ -1460,11 +1912,39 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
                             ),
                             # Every active class this prescription's own classification
                             # matched, so the form picks among only these rather than
-                            # every class the practice has ever defined.
+                            # every class the practice has ever defined. Ordered by class
+                            # name, per behaviour step 17, the same ordering GET /eligible
+                            # already carries so the two never disagree about what "in
+                            # order" means. due_step_ids names, per behaviour step 22,
+                            # exactly which of that class's steps the enrolment form must
+                            # list unticked before it lets the practitioner submit, rather
+                            # than firing them straight away. already_running names another
+                            # class already running on this same medication, per behaviour
+                            # step 17's own warning rather than hiding rule, empty when
+                            # none is.
                             "classes": [
-                                {"id": c.dbid, "name": c.name}
-                                for c in classes_by_prescription_id.get(p.id, [])
+                                {
+                                    "id": c.dbid,
+                                    "name": c.name,
+                                    "due_step_ids": _due_step_ids(p, c.dbid),
+                                    "already_running": _already_running_elsewhere(p, c.dbid),
+                                }
+                                for c in sorted(
+                                    classes_by_prescription_id.get(p.id, []),
+                                    key=lambda cls: cls.name,
+                                )
                             ],
+                            # The therapeutic group this prescription's own classification
+                            # falls under, named only when no active class matched it at
+                            # all, per behaviour step 17's card for a prescription no
+                            # configured class covers. Empty when at least one class
+                            # matched, since that class's own name is what the card shows
+                            # instead.
+                            "therapeutic_group": (
+                                _therapeutic_group(p)
+                                if not classes_by_prescription_id.get(p.id)
+                                else ""
+                            ),
                             # Why this prescription cannot be enrolled, empty when it can.
                             # Decided here rather than in the panel, so one place holds the
                             # rule and the panel only draws what it is told.
@@ -1476,6 +1956,311 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
                 }
             )
         ]
+
+    @api.get("/followups")
+    def list_followups(self) -> list[Response | Effect]:
+        """Every follow up program a patient is on or could start, grouped by note.
+
+        One endpoint for both panes rather than one each. The chart wide Follow ups
+        control asks with a patient and gets every note that carries a matched
+        prescription. The note header control asks with a note and gets the same shape
+        filtered to that one note. Two scopes of one answer rather than two answers,
+        which is what stops the two panes drifting into showing different things about
+        the same prescription.
+
+        A group is a note. It carries the note's own type name, which doubles as the way
+        back to the note on the chart, the moment and the provider under it, and one card
+        per program beneath that. A card is one prescription paired with one class, per
+        behaviour step 17 and AC32, so a prescription matching two classes renders two
+        cards rather than one card carrying a chooser. A prescription no class covers
+        renders a single card naming its therapeutic group instead, per AC44.
+
+        Every card carries a state the pane draws rather than decides. running when an
+        enrolment already exists for that exact pair, blocked when the prescription
+        cannot be enrolled at all, and startable otherwise. A startable card also carries
+        the steps that would already be due on the day the program would start, which is
+        the prescription's own written_date, so the pane can ask about them before it
+        submits rather than after.
+        """
+        note_id = self.request.query_params.get("note_id", "")
+        patient_id = self.request.query_params.get("patient_id", "")
+
+        scope = "note" if note_id else "patient"
+        scope_note_dbid: int | None = None
+
+        if note_id:
+            # Whichever shape the note identifier arrived in, resolved by the one helper
+            # every other read here uses, so the pane cannot be pointed at a note this
+            # endpoint resolves differently from the enrolment write.
+            scoped_note = (
+                Note.objects.filter(**_note_filter(note_id)).select_related("patient").first()
+            )
+            if scoped_note is None or not scoped_note.patient_id:
+                return [JSONResponse({"scope": scope, "notes": []})]
+            scope_note_dbid = scoped_note.dbid
+            patient_id = str(scoped_note.patient.id)
+
+        if not patient_id:
+            return [JSONResponse({"scope": scope, "notes": []})]
+
+        # The note scope reads the note's own prescriptions and the patient scope reads
+        # every active one the patient carries, the same two entry points eligibility.py
+        # already exposes over its single matching engine. Asking the patient scoped
+        # query and filtering it down to one note would silently drop a prescription
+        # sitting on the note that is no longer active, which the note pane has always
+        # shown with a reason attached rather than hidden.
+        matches = (
+            prescription_matches(scope_note_dbid)
+            if scope_note_dbid is not None
+            else patient_matches(patient_id)
+        )
+
+        enrollments = list(
+            Enrollment.objects.filter(patient__id=patient_id).select_related("medication_class")
+        )
+        sections_by_dbid = {section["id"]: section for section in render_sections(enrollments)}
+
+        # --- Which prescriptions get a card, which is not the same question as which ones
+        # matched
+        #
+        # eligibility.py drops a prescription that matched nothing, since its callers ask
+        # it what to offer. This pane also has to say what it is not offering and why, per
+        # AC44, so it reads the prescriptions itself and uses the matches only for which
+        # classes to attach. The note scope reads that one note's committed prescriptions,
+        # the same read the note pane has always done. The patient scope reads every note
+        # that produced a match or carries a program, then every committed prescription on
+        # those notes, so the two scopes show one note identically and the wide one is the
+        # narrow one repeated rather than a different rule.
+        classes_by_prescription_id = {
+            match.prescription.id: match.classes for match in matches
+        }
+
+        if scope_note_dbid is not None:
+            note_dbids = [scope_note_dbid]
+        else:
+            note_dbids = list(
+                {match.prescription.note_id for match in matches if match.prescription.note_id}
+                | {e.start_note_dbid for e in enrollments if e.start_note_dbid}
+            )
+
+        prescriptions = (
+            list(
+                Prescription.objects.committed()
+                .filter(note__dbid__in=note_dbids)
+                .select_related("patient", "prescriber", "medication")
+            )
+            if note_dbids
+            else []
+        )
+        labels = _medication_labels([p.medication for p in prescriptions if p.medication])
+
+        classes_by_dbid = {c.dbid: c for match in matches for c in match.classes}
+        # The steps of every class any card on this page names, read once as a batch and
+        # carrying their own wording, since a card that is about to ask which already due
+        # steps to run has to name each one in the words the practice wrote rather than by
+        # its day offset alone. _steps_by_class next door answers a narrower question and
+        # is left alone for the callers that only need the timing.
+        steps_by_class: dict[int, list[dict[str, Any]]] = {
+            dbid: [] for dbid in classes_by_dbid
+        }
+        if classes_by_dbid:
+            for program_step in ProgramStep.objects.filter(
+                medication_class__dbid__in=list(classes_by_dbid.keys())
+            ).order_by("day_offset", "sequence"):
+                steps_by_class[program_step.medication_class_id].append(
+                    {
+                        "id": program_step.dbid,
+                        "day_offset": program_step.day_offset,
+                        "kind": program_step.kind,
+                        "condition": program_step.condition or "",
+                        "summary": _program_step_summary(program_step),
+                    }
+                )
+        submission_day = today()
+
+        # --- Which enrolment answers for which card
+        #
+        # Keyed on the exact prescription and class first, since that is the pair a card
+        # is, and on the patient's medication label and class second, which is what
+        # catches a program started from a different prescription of the same drug. The
+        # second key is the refusal key create_enrollment already widened to, so a card
+        # calling itself startable here is one that write would actually accept.
+        by_prescription_and_class: dict[tuple[str, int], Enrollment] = {
+            (e.prescription_id or "", e.medication_class_id): e
+            for e in enrollments
+            if e.prescription_id
+        }
+        active_by_label_and_class: dict[tuple[str, int], Enrollment] = {
+            (e.medication_label, e.medication_class_id): e
+            for e in enrollments
+            if e.status == EnrollmentStatus.ACTIVE
+        }
+        active_classes_by_label: dict[str, list[str]] = {}
+        for enrollment in enrollments:
+            if enrollment.status == EnrollmentStatus.ACTIVE:
+                active_classes_by_label.setdefault(enrollment.medication_label, []).append(
+                    enrollment.medication_class.name
+                )
+
+        def _program_card(
+            prescription: Prescription, medication_class: MedicationClass
+        ) -> dict[str, Any]:
+            label = _prescription_label(prescription, labels)
+            # --- A stopped program is history, not a running one
+            #
+            # by_prescription_and_class holds every enrolment this pair has ever had,
+            # stopped and finished ones included, because the card has to show what
+            # happened rather than pretend it did not. Whether it is running is a separate
+            # question, and only an active enrolment answers it yes. Reading the first
+            # lookup as the answer to both made a card that had been stopped keep the
+            # Running badge and lose its Start action, so a program the practice had
+            # deliberately ended could never be started again from the pane.
+            enrollment = by_prescription_and_class.get(
+                (str(prescription.id), medication_class.dbid)
+            ) or active_by_label_and_class.get((label, medication_class.dbid))
+            running = (
+                enrollment
+                if enrollment is not None and enrollment.status == EnrollmentStatus.ACTIVE
+                else None
+            )
+            start_date = to_practice_date(prescription.written_date)
+            due_steps = [
+                step
+                for step in steps_by_class.get(medication_class.dbid, [])
+                if _step_is_due(start_date, step["day_offset"], submission_day)
+            ]
+            others = [
+                name
+                for name in active_classes_by_label.get(label, [])
+                if name != medication_class.name
+            ]
+            blocked_reason = _blocked_reason(prescription, label)
+            if running is not None:
+                state = "running"
+            elif blocked_reason:
+                state = "blocked"
+            else:
+                # Startable whether or not this pair has been enrolled before. A stopped
+                # or finished program is exactly the one a practitioner might want to run
+                # again, and create_enrollment already refuses only an active duplicate,
+                # so a card that hid the action here would be refusing what the write
+                # would have accepted. The past enrolment still rides along below, so the
+                # card shows what happened last time beside the offer to do it again.
+                state = "startable"
+            return {
+                "key": f"{prescription.id}:{medication_class.dbid}",
+                "prescription_id": str(prescription.id),
+                "medication_label": label,
+                "patient_id": str(prescription.patient.id) if prescription.patient else "",
+                "prescriber_id": (
+                    str(prescription.prescriber.id) if prescription.prescriber else ""
+                ),
+                "class_id": medication_class.dbid,
+                "class_name": medication_class.name,
+                "state": state,
+                "blocked_reason": blocked_reason,
+                "therapeutic_group": "",
+                "already_running": others[0] if others else "",
+                "start_date": start_date.isoformat(),
+                "written_date": start_date.isoformat(),
+                "due_steps": due_steps,
+                "step_count": len(steps_by_class.get(medication_class.dbid, [])),
+                # The enrolment this pair carries, running or not, so a stopped card can
+                # still show its steps table and the reason it was stopped.
+                "enrollment": (
+                    sections_by_dbid.get(enrollment.dbid) if enrollment is not None else None
+                ),
+            }
+
+        def _uncovered_card(prescription: Prescription) -> dict[str, Any]:
+            """The card for a prescription no configured class covers at all, per AC44."""
+            label = _prescription_label(prescription, labels)
+            return {
+                "key": f"{prescription.id}:none",
+                "prescription_id": str(prescription.id),
+                "medication_label": label,
+                "patient_id": str(prescription.patient.id) if prescription.patient else "",
+                "prescriber_id": "",
+                "class_id": None,
+                "class_name": "",
+                "state": "uncovered",
+                "blocked_reason": "",
+                "therapeutic_group": _therapeutic_group(prescription),
+                "already_running": "",
+                "start_date": to_practice_date(prescription.written_date).isoformat(),
+                "written_date": to_practice_date(prescription.written_date).isoformat(),
+                "due_steps": [],
+                "step_count": 0,
+                "enrollment": None,
+            }
+
+        # --- The groups, one per note, in the order a chart reads
+        #
+        # Cards are collected against the note their own prescription sits on. An
+        # enrolment whose prescription is no longer among the matches, because the
+        # prescription was discontinued or its class lost the coverage entry that
+        # matched it, still has a program running against this patient, so it is added
+        # under the note it started from rather than dropped off a pane whose whole job
+        # is to say what this patient is on.
+        cards_by_note: dict[int, list[dict[str, Any]]] = {}
+
+        for prescription in prescriptions:
+            note_dbid = prescription.note_id
+            if note_dbid is None:
+                continue
+            matched = classes_by_prescription_id.get(prescription.id, [])
+            cards = [
+                _program_card(prescription, medication_class)
+                for medication_class in sorted(matched, key=lambda c: c.name)
+            ] or [_uncovered_card(prescription)]
+            cards_by_note.setdefault(note_dbid, []).extend(cards)
+
+        rendered_keys = {
+            card["key"] for cards in cards_by_note.values() for card in cards
+        }
+        for enrollment in enrollments:
+            key = f"{enrollment.prescription_id or ''}:{enrollment.medication_class_id}"
+            if key in rendered_keys or not enrollment.start_note_dbid:
+                continue
+            if scope_note_dbid is not None and enrollment.start_note_dbid != scope_note_dbid:
+                continue
+            section = sections_by_dbid.get(enrollment.dbid)
+            cards_by_note.setdefault(enrollment.start_note_dbid, []).append(
+                {
+                    "key": f"enrollment-{enrollment.dbid}",
+                    "prescription_id": enrollment.prescription_id or "",
+                    "medication_label": enrollment.medication_label,
+                    "patient_id": patient_id,
+                    "prescriber_id": "",
+                    "class_id": enrollment.medication_class_id,
+                    "class_name": enrollment.medication_class.name,
+                    "state": "running",
+                    "blocked_reason": "",
+                    "therapeutic_group": "",
+                    "already_running": "",
+                    "start_date": enrollment.start_date.isoformat(),
+                    "written_date": enrollment.start_date.isoformat(),
+                    "due_steps": [],
+                    "step_count": len(section["steps"]) if section else 0,
+                    "enrollment": section,
+                }
+            )
+
+        notes = (
+            Note.objects.filter(dbid__in=list(cards_by_note.keys()))
+            .select_related("note_type_version", "provider", "location", "patient")
+            if cards_by_note
+            else []
+        )
+        groups = [
+            dict(_note_payload(note) or {}, programs=cards_by_note.get(note.dbid, []))
+            for note in notes
+        ]
+        # Newest note first, so the note a provider just signed is the one at the top of
+        # the chart wide pane rather than the one they have to scroll to.
+        groups.sort(key=lambda group: group.get("at") or "", reverse=True)
+
+        return [JSONResponse({"scope": scope, "notes": groups})]
 
     #: How many rows the enrolled patients page asks for at once, and the ceiling on what a
     #: caller may ask for. Twenty five fills a screen without paging becoming the interaction.
@@ -1522,10 +2307,12 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         )
 
         # Both tab counts in one grouped query, so the tabs are right without a second read
-        # and without the page having to ask twice.
+        # and without the page having to ask twice. Filtered by dbid rather than by the
+        # instance, the same rule every other relation lookup against MedicationClass in
+        # this file follows.
         by_status = {
             row["status"]: row["n"]
-            for row in Enrollment.objects.filter(medication_class=medication_class)
+            for row in Enrollment.objects.filter(medication_class__dbid=medication_class.dbid)
             .values("status")
             .annotate(n=Count("dbid"))
         }
@@ -1536,7 +2323,7 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         # sorting them apart reads the status column. Ordered newest first with the database
         # id as the tiebreak, because offset paging over a non unique ordering can show one
         # row twice and skip another.
-        rows = Enrollment.objects.filter(medication_class=medication_class)
+        rows = Enrollment.objects.filter(medication_class__dbid=medication_class.dbid)
         rows = (
             rows.filter(status=EnrollmentStatus.ACTIVE)
             if scope == "running"
@@ -1656,6 +2443,18 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         if patient is None:
             return [JSONResponse({"error": "No such patient."}, status_code=HTTPStatus.NOT_FOUND)]
 
+        # The selected prescription, read once here rather than twice, since the
+        # prescriber fallback below and the enrolment's own start_date, per behaviour
+        # step 21, both resolve from it.
+        selected_prescription = None
+        prescription_id = body.get("prescription_id")
+        if prescription_id:
+            selected_prescription = (
+                Prescription.objects.filter(id=prescription_id)
+                .select_related("prescriber")
+                .first()
+            )
+
         # Who a fired step is sent as is now a decision the medication class makes, read
         # live each time a step goes out, so this write no longer takes a sender at all.
         # The prescriber still has to be named here, because the questionnaire answers
@@ -1664,16 +2463,8 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         # when the body names none, from the prescriber already recorded on the
         # prescription being enrolled.
         prescriber = Staff.objects.filter(id=body.get("prescriber_staff_id")).first()
-        if prescriber is None:
-            prescription_id = body.get("prescription_id")
-            if prescription_id:
-                selected_prescription = (
-                    Prescription.objects.filter(id=prescription_id)
-                    .select_related("prescriber")
-                    .first()
-                )
-                if selected_prescription is not None:
-                    prescriber = selected_prescription.prescriber
+        if prescriber is None and selected_prescription is not None:
+            prescriber = selected_prescription.prescriber
         if prescriber is None:
             return [
                 JSONResponse(
@@ -1688,11 +2479,15 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        # One running programme per medication. Two racing each other on one medication is
-        # a failure that stays invisible until the patient gets two messages.
+        # The widened refusal key from section 2, patient, medication_label and
+        # medication_class all matching an active Enrollment. Two enrolments racing each
+        # other on the same class is what this guards against, and per behaviour step 20
+        # a second class whose coverage also matches the same medication is deliberately
+        # not caught here, so two programmes may run on one medication at once.
         already = Enrollment.objects.filter(
             patient__dbid=patient.dbid,
             medication_label=medication_label,
+            medication_class__dbid=medication_class.dbid,
             status=EnrollmentStatus.ACTIVE,
         ).first()
         if already is not None:
@@ -1721,7 +2516,18 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             if start_note is not None:
                 start_note_dbid = start_note.dbid
 
-        start_date = today()
+        # Behaviour step 21. start_date anchors to the selected prescription's own
+        # written_date, taken as a date in the practice timezone, rather than to the day
+        # the enrolment happens to be submitted, since a late enrolment relative to that
+        # written_date is exactly what the catch up choice in steps 22 to 24 exists to
+        # handle. A submission naming no prescription this call can resolve, which the
+        # form itself never produces since every road into this endpoint carries one,
+        # falls back to the submission day itself rather than leaving start_date unset.
+        start_date = (
+            to_practice_date(selected_prescription.written_date)
+            if selected_prescription is not None
+            else today()
+        )
         enrollment = Enrollment.objects.create(
             patient_id=patient.dbid,
             medication_class=medication_class,
@@ -1738,19 +2544,80 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
             banner_key=new_banner_key(),
         )
 
+        # --- Behaviour steps 22 to 24, the late enrolment catch up choice
+        #
+        # catch_up_step_ids names every already due step the practitioner ticked to send
+        # now. Absent, or carrying an id this call does not itself find due, it is read
+        # as nothing ticked for that step, the same outcome as a practitioner who saw the
+        # choice and left every row unticked. This is read once here, at the one moment
+        # this choice is ever allowed to act, per behaviour step 24, whether the caller
+        # reached this endpoint through the note header or through the Eligible tab.
+        # ProgramWalker's own OVERDUE_DAYS rule plays no part in this decision and is not
+        # touched here, since that rule only ever governs a step going stale on an
+        # enrolment already running.
+        ticked_step_ids: set[int] = set()
+        for raw_step_id in body.get("catch_up_step_ids") or []:
+            try:
+                ticked_step_ids.add(int(raw_step_id))
+            except (TypeError, ValueError):
+                continue
+
+        submission_day = today()
+
         # The timing and the shape are copied now, the content stays live on the class.
+        # Filtered by dbid rather than by the instance, the same rule every other relation
+        # lookup against MedicationClass in this file follows.
         for program_step in ProgramStep.objects.filter(
-            medication_class=medication_class
+            medication_class__dbid=medication_class.dbid
         ).order_by("day_offset", "sequence"):
-            EnrolledStep.objects.create(
-                enrollment=enrollment,
-                program_step=program_step,
-                sequence=program_step.sequence,
-                day_offset=program_step.day_offset,
-                kind=program_step.kind,
-                condition=program_step.condition,
-                due_date=start_date + datetime.timedelta(days=program_step.day_offset),
-            )
+            ordinary_due_date = start_date + datetime.timedelta(days=program_step.day_offset)
+
+            if not _step_is_due(start_date, program_step.day_offset, submission_day):
+                # Not yet due, so this is an ordinary step with no catch up choice
+                # offered for it, per behaviour step 23's own closing sentence.
+                EnrolledStep.objects.create(
+                    enrollment=enrollment,
+                    program_step=program_step,
+                    sequence=program_step.sequence,
+                    day_offset=program_step.day_offset,
+                    kind=program_step.kind,
+                    condition=program_step.condition,
+                    due_date=ordinary_due_date,
+                )
+            elif program_step.dbid in ticked_step_ids:
+                # Behaviour step 23. Ticked, so it is written due today rather than on
+                # the day it actually fell due, with day_offset kept exactly as the
+                # programme step itself carries, so the record can later show a day
+                # fourteen step that went out on day twenty four.
+                EnrolledStep.objects.create(
+                    enrollment=enrollment,
+                    program_step=program_step,
+                    sequence=program_step.sequence,
+                    day_offset=program_step.day_offset,
+                    kind=program_step.kind,
+                    condition=program_step.condition,
+                    due_date=submission_day,
+                    status=StepStatus.PENDING,
+                )
+            else:
+                # Left unticked, so it is written straight to skipped rather than left
+                # pending for the daily walk to find. due_date keeps the date it was
+                # actually due, which is what tells a later reader it was already in
+                # the past the day this program started.
+                EnrolledStep.objects.create(
+                    enrollment=enrollment,
+                    program_step=program_step,
+                    sequence=program_step.sequence,
+                    day_offset=program_step.day_offset,
+                    kind=program_step.kind,
+                    condition=program_step.condition,
+                    due_date=ordinary_due_date,
+                    status=StepStatus.SKIPPED,
+                    failure_reason=(
+                        "This step was due before the program started and was not "
+                        "selected to send now."
+                    ),
+                )
 
         # Behaviour step 17. A text only banner naming the class, keyed on this
         # enrolment's own banner_key, so a patient with two enrolments carries two
@@ -1758,9 +2625,20 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         # response leads the list, since this project's own test harness reads the
         # first item back as the response and nothing here needs the banner effect to
         # land before it.
+        # --- Why a reload rides along with the banner
+        #
+        # The banner reaches the chart on its own. Saving a BannerAlert broadcasts on the
+        # patient's own chart subscription in the home app, so the chart redraws it without
+        # anybody asking. An action button does not work that way. The chart asks the
+        # plugin for its button set once, when it mounts, and after that only reacts to a
+        # pushed reload, which is the same reason handlers/prescribe_reload.py exists for
+        # the note header. So a program started here left the Follow ups control showing
+        # whatever it showed when the chart was opened, and on a patient who had neither a
+        # program nor an eligible prescription at that moment it stayed absent entirely.
         return [
             JSONResponse(_enrollment_payload(enrollment), status_code=HTTPStatus.CREATED),
             apply_banner(enrollment),
+            ReloadPatientActionButtonsEffect(id=str(patient.id)).apply(),
         ]
 
     @api.post("/enrollments/<enrollment_id>/stop")
@@ -1785,9 +2663,15 @@ class ProgramAPI(StaffSessionAuthMixin, SimpleAPI):
         # what keeps a second running enrolment's banner for the same patient standing
         # when this one stops. The response leads the list for the same reason it does
         # on the write above.
+        # The same reload the write emits, for the same reason and in the other
+        # direction. Stopping the last program on a patient who has no eligible
+        # prescription left is what takes the Follow ups control away, and without this
+        # it stayed on the chart until the page was reloaded, offering a pane with
+        # nothing on it.
         return [
             JSONResponse(_enrollment_payload(enrollment)),
             remove_banner(enrollment),
+            ReloadPatientActionButtonsEffect(id=str(enrollment.patient.id)).apply(),
         ]
 
     # Shared.

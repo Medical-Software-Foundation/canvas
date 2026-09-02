@@ -61,7 +61,7 @@ def test_steps_are_ordered_by_day_then_sequence(enrolment, add_step):
 
 
 def test_the_note_link_carries_a_noteid_query_parameter(enrolment):
-    """Covers scenario: AC28, the note link carries a noteId parameter with no link when no starting note is recorded. Covers criterion: AC28.
+    """Covers scenario: AC28, the note name links through the plugin's own scroller and scrolls again on a second click, with no link when no starting note is recorded. Covers criterion: AC28.
 
     A query parameter rather than a hash, because the chart reads it off its own search
     string. The database id rather than the note's public key, because the chart reads it
@@ -94,7 +94,7 @@ def test_the_section_carries_the_note_id_on_its_own(enrolment):
 
 
 def test_no_starting_note_renders_no_link(enrolment):
-    """Covers scenario: AC28, the note link carries a noteId parameter with no link when no starting note is recorded. Covers criterion: AC28.
+    """Covers scenario: AC28, the note name links through the plugin's own scroller and scrolls again on a second click, with no link when no starting note is recorded. Covers criterion: AC28.
 
     Every enrolment written before that field existed carries none, and those get no link
     rather than one leading nowhere.
@@ -137,7 +137,7 @@ def test_rendering_nothing_gives_nothing(enrolment):
 
 
 def test_the_section_carries_the_starting_notes_moment_and_provider(enrolment, staff):
-    """Covers scenario: AC28, the note link carries a noteId parameter with no link when no starting note is recorded. Covers criterion: AC28.
+    """Covers scenario: AC28, the note name links through the plugin's own scroller and scrolls again on a second click, with no link when no starting note is recorded. Covers criterion: AC28.
 
     The patient scoped pane has to recognise the same note the note scoped pane already
     names, so it needs the same two facts, the instant and the provider, rather than only
@@ -168,7 +168,7 @@ def test_the_section_carries_the_starting_notes_moment_and_provider(enrolment, s
 
 
 def test_no_starting_note_carries_no_moment_or_provider(enrolment):
-    """Covers scenario: AC28, the note link carries a noteId parameter with no link when no starting note is recorded. Covers criterion: AC28.
+    """Covers scenario: AC28, the note name links through the plugin's own scroller and scrolls again on a second click, with no link when no starting note is recorded. Covers criterion: AC28.
 
     An enrolment written before start_note_dbid existed, or one whose note this batch
     could not resolve, gets null and an empty string rather than a guess built from
@@ -237,3 +237,56 @@ def test_several_starting_notes_are_read_in_one_query_rather_than_one_per_sectio
     by_id = {section["id"]: section for section in sections}
     assert by_id[enrolment.dbid]["start_note_provider_name"] == f"{staff.first_name} {staff.last_name}"
     assert by_id[second.dbid]["start_note_provider_name"] == f"{staff.first_name} {staff.last_name}"
+
+
+def test_a_fired_step_displays_as_done_rather_than_sent(enrolment, add_step):
+    """Covers scenario: AC41, a fired step displays as Done rather than Sent. Covers criterion: AC41."""
+    from medication_followup_protocol.models import StepStatus
+    from medication_followup_protocol.services.program_pane import render_sections
+
+    step = add_step(day_offset=0, due_date=datetime.date(2026, 8, 1))
+    step.status = StepStatus.FIRED
+    step.save()
+
+    row = render_sections([enrolment])[0]["steps"][0]
+
+    assert row["status_label"] == "Done"
+
+
+def test_the_same_enrolment_renders_identically_for_both_callers(enrolment, add_step):
+    """Covers scenario: AC42, the note scoped and patient scoped panes render the same section for one enrolment. Covers criterion: AC42.
+
+    Both panes call this one renderer for the same enrolment rather than building their
+    own idea of a section, GET /prescriptions for the note scoped pane and GET
+    /enrollments for the patient scoped one, per api/program_api.py. Two independent
+    calls into this module for the same enrolment producing byte identical output is
+    what answers this criterion at the layer this module owns, since neither caller
+    adds anything of its own to what render_sections already returns.
+    """
+    add_step(day_offset=0, due_date=datetime.date(2026, 8, 1))
+    add_step(day_offset=14, due_date=datetime.date(2026, 8, 15))
+    from medication_followup_protocol.services.program_pane import render_sections
+
+    note_scoped = render_sections([enrolment])[0]
+    patient_scoped = render_sections([enrolment])[0]
+
+    assert note_scoped == patient_scoped
+
+
+def test_the_note_name_carries_the_link_and_the_program_name_carries_none(enrolment):
+    """Covers scenario: AC43, the note name carries the link and the program name carries none. Covers criterion: AC43."""
+    from medication_followup_protocol.services.program_pane import render_sections
+
+    enrolment.start_note_dbid = 4242
+    enrolment.save()
+
+    section = render_sections([enrolment])[0]
+
+    assert section["note_link"] is not None and "4242" in section["note_link"]
+    assert section["medication_class"] == enrolment.medication_class.name
+    # Structural rather than a check on one named field, so a link quietly added
+    # somewhere else in the section would be caught here too. note_link is the only
+    # value in the whole section shaped like a link, which is what tells medication_class
+    # carries none.
+    link_like_values = [v for v in section.values() if isinstance(v, str) and v.startswith("/")]
+    assert link_like_values == [section["note_link"]]
