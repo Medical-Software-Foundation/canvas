@@ -156,11 +156,15 @@ disappearing from a list they had already read. It asks for typed confirmation.
 as already shared and not duplicated. The response distinguishes what was newly
 sent, what was already there, and what has since been archived.
 
-**The picker closes itself once it has done what was asked.** Sharing is the only
-thing that window does, so a send that went out cleanly ends the task rather than
-leaving a summary to dismiss. The summary stays for a send that needs explaining
-— something already in the patient's list, or something archived since the page
-was drawn.
+**The picker confirms the send, then closes itself.** Sharing is the only thing
+that window does, so a send that went out cleanly ends the task rather than
+leaving a summary to dismiss. It shows a brief notice in the corner — "Shared 2
+resources." — and closes behind it, because closing without one would take the
+only confirmation with it. The host protocol carries no notification of its own,
+so the notice lives on the page and the close waits for it.
+
+The summary dialog stays for a send that needs explaining — something already in
+the patient's list, or something archived since the page was drawn.
 
 **Nothing is emailed or texted.** Delivery is the portal, only. The portal menu
 entry carries a count of resources the patient has not looked at yet, which is

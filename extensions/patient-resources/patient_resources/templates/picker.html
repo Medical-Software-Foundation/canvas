@@ -60,6 +60,11 @@
   </div>
 </div>
 
+<!-- The confirmation for a send that closes the window behind it. Positioned
+     over the page rather than in it, so it neither moves the list nor changes
+     the height this page asks the host for. -->
+<div class="pr-toast" id="pr-toast" role="status" aria-live="polite" hidden></div>
+
 <dialog id="pr-result-dialog">
   <form method="dialog">
     <div class="pr-dialog-body">
