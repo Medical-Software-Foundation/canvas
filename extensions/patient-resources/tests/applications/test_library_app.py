@@ -22,8 +22,13 @@ def test_opens_the_library_by_url_not_inline_content():
     assert effect.content is None
 
 
-def test_opens_in_the_default_modal():
-    assert _app().on_open().target == LaunchModalEffect.TargetType.DEFAULT_MODAL
+def test_opens_as_a_full_page():
+    """It is reached from the provider menu, where there is no modal host.
+
+    Every other menu-item application in this repo opens a page or a window;
+    none of them launches the default modal from a menu entry.
+    """
+    assert _app().on_open().target == LaunchModalEffect.TargetType.PAGE
 
 
 def test_url_carries_the_cache_bust_token():

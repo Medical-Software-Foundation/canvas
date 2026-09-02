@@ -43,7 +43,7 @@ After install, three things appear:
 
 | Surface | Where | Who sees it |
 |---|---|---|
-| **Patient Resources** | Global app drawer | All staff (read-only for non-administrators) |
+| **Patient Resources** | Provider menu (the ☰ menu, top group) | All staff (read-only for non-administrators) |
 | **Resources** | Button in the patient chart header | All staff |
 | **My Resources** | Patient portal menu | Patients |
 
@@ -74,6 +74,17 @@ default.
 **The library is a real table, not a setting.** Resources live in this plugin's
 own Custom Data namespace, so they survive plugin upgrades and can be searched
 and paged rather than parsed out of a configuration string.
+
+**Both staff lists are paged.** The library page shows 50 rows at a time and the
+chart picker 25, each with a range ("Showing 51–100 of 137 resources.") and
+Previous/Next. The listing endpoint takes `limit` and `offset` and caps a page at
+200. Search and the label filter always return to the first page, because the
+result set changes underneath the offset.
+
+Selecting in the picker survives a page change, and anything selected that is no
+longer on screen is named in the footer, so a resource picked on page one cannot
+go out unnoticed. One send carries at most 25 resources — the API enforces it,
+and the picker holds the same limit so the feedback arrives before the click.
 
 **Labels are internal; notes are patient-facing.** A label is how staff file and
 filter a growing library — "Diabetes", "Post-op", "Spanish" — and it is never
@@ -145,6 +156,12 @@ disappearing from a list they had already read. It asks for typed confirmation.
 as already shared and not duplicated. The response distinguishes what was newly
 sent, what was already there, and what has since been archived.
 
+**The picker closes itself once it has done what was asked.** Sharing is the only
+thing that window does, so a send that went out cleanly ends the task rather than
+leaving a summary to dismiss. The summary stays for a send that needs explaining
+— something already in the patient's list, or something archived since the page
+was drawn.
+
 **Nothing is emailed or texted.** Delivery is the portal, only. The portal menu
 entry carries a count of resources the patient has not looked at yet, which is
 how they notice new ones.
@@ -176,7 +193,7 @@ Each of these was considered and left out. They are decisions, not omissions.
 
 | Class | Kind | Purpose |
 |---|---|---|
-| `applications.library_app:PatientResourcesAdminApp` | Application (global) | Opens the library |
+| `applications.library_app:PatientResourcesAdminApp` | Application (provider menu) | Opens the library as a full page |
 | `applications.portal_app:MyResourcesPortalApp` | Application (portal menu) | Opens the patient's list, and carries the unread badge |
 | `handlers.chart_button:ShareResourcesButton` | ActionButton (chart patient header) | Opens the picker for the open chart |
 | `routes.staff_pages:StaffPagesAPI` | SimpleAPI (staff) | Serves the library and picker pages and their assets |

@@ -35,7 +35,24 @@
   <div class="pr-empty" id="pr-empty" hidden></div>
   <p class="pr-error" id="pr-error" role="alert"></p>
 
+  <!-- The library is paged here too. Without this the picker showed the
+       server's default first 50 rows and, unlike the library, printed no total
+       -- so past fifty resources a provider could not reach the rest and was
+       not told anything was missing. -->
+  <nav class="pr-pager" id="pr-pager" aria-label="Resource pages" hidden>
+    <span class="pr-range" id="pr-range" role="status" aria-live="polite"></span>
+    <div class="pr-pager-buttons">
+      <button type="button" id="pr-prev">Previous</button>
+      <button type="button" id="pr-next">Next</button>
+    </div>
+  </nav>
+
   <div class="pr-footer">
+    <!-- Selection survives a page change, so it can outlive what is on screen.
+         The design drops the visible counter, which was fine while everything
+         selected was also rendered; a resource selected on another page would
+         otherwise go out unannounced. -->
+    <span class="pr-offscreen-note" id="pr-offscreen" hidden></span>
     <!-- The design shows no selection counter, but the count is still worth
          announcing, so the live region stays and is only visually hidden. -->
     <span class="pr-visually-hidden" id="pr-selection" role="status" aria-live="polite"></span>

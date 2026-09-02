@@ -761,3 +761,145 @@ def test_a_note_typed_in_the_picker_survives_a_search():
     block = block[: block.index("function summarize")]
     assert "state.notes[id]" in block
     assert "getElementById" not in block
+
+
+# --- paging -----------------------------------------------------------------
+
+
+def test_both_staff_lists_ask_for_a_page():
+    """The API has taken limit/offset from the start; the front ends did not.
+
+    Without them every list silently showed the server's default first 50 rows,
+    and the picker did not even print a total -- so on an instance with more
+    than fifty resources a provider could not reach the rest of the library and
+    was not told anything was missing.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert "limit=" in source, name
+        assert "offset=" in source, name
+        assert "state.offset" in source, name
+
+
+def test_both_staff_lists_offer_page_controls_and_a_range():
+    for name in ("library.html", "picker.html"):
+        source = (PACKAGE / "templates" / name).read_text()
+        assert 'id="pr-prev"' in source, name
+        assert 'id="pr-next"' in source, name
+        assert 'id="pr-range"' in source, name
+
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        # Both ends disabled at the ends of the list, or the control lies about
+        # what it will do.
+        assert "els.prev.disabled" in source, name
+        assert "els.next.disabled" in source, name
+
+
+def test_narrowing_a_list_returns_to_the_first_page():
+    """A search run from page three otherwise lands on an empty page.
+
+    The result set changes under the offset, so anything that changes the
+    filters has to reset it.
+    """
+    for name in ("library.js", "picker.js"):
+        source = _js_code(PACKAGE / "static" / "js" / name)
+        assert "function reload()" in source, name
+        block = source[source.index("function reload()") :]
+        block = block[: block.index("\n  }") + 4]
+        assert "state.offset = 0" in block, name
+
+
+def test_emptying_the_last_page_steps_back():
+    """Deleting the only row on the last page otherwise shows an empty table.
+
+    The total says there are rows, the page says there are none, and the reader
+    has no control that explains the difference.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    assert "state.offset > 0" in source
+    assert "PAGE_SIZE" in source
+
+
+def test_the_picker_says_what_is_selected_out_of_view():
+    """Selection survives a page change, so it can outlive what is on screen.
+
+    The visible counter is deliberately absent from the design, which is fine
+    while everything selected is also rendered. Once the list pages, a resource
+    selected on page one is invisible and would go out unannounced.
+    """
+    source = (PACKAGE / "templates" / "picker.html").read_text()
+    assert 'id="pr-offscreen"' in source
+
+    code = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    assert "offscreen" in code
+
+
+def test_the_picker_holds_the_send_cap_in_the_front_end():
+    """The API refuses more than MAX_SHARE_BATCH, and the picker can now select
+    across pages -- so without this the only feedback is a 400 after the click."""
+    from patient_resources.constants import MAX_SHARE_BATCH
+
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    assert f"MAX_SHARE_BATCH = {MAX_SHARE_BATCH}" in source
+
+    # And re-checked on the send path, not left to a disabled attribute that is
+    # one stale render away from not being there.
+    block = source[source.index("function send()") :]
+    block = block[: block.index("function summarize")]
+    assert "MAX_SHARE_BATCH" in block
+
+
+# --- where the library lives ------------------------------------------------
+
+
+def test_the_library_is_a_provider_menu_item():
+    """Curation belongs in the provider menu, not the app drawer.
+
+    Every other admin surface in this repo that lives behind the menu declares
+    this scope, and the drawer is for things a user opens against what is in
+    front of them.
+    """
+    apps = {entry["name"]: entry for entry in MANIFEST["components"]["applications"]}
+    library = apps["Patient Resources"]
+    assert library["scope"] == "provider_menu_item"
+    assert library["menu_position"] in ("top", "bottom")
+
+
+def test_the_close_control_is_revealed_only_by_a_modal_host():
+    """The library opens as a full page, where there is no modal to close.
+
+    The plumbing stays -- the page is still correct inside a modal -- but the
+    control has to wait for the host to offer a port, or it renders a button
+    whose only possible action is a window.close() the browser ignores.
+    """
+    template = (PACKAGE / "templates" / "library.html").read_text()
+    close_line = next(
+        line for line in template.splitlines() if 'id="pr-close"' in line
+    )
+    assert "hidden" in close_line
+
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    block = source[source.index("INIT_CHANNEL") :]
+    block = block[: block.index("function closeModal")]
+    assert "hidden = false" in block
+
+    # The picker is still launched into a modal, so its control is unconditional.
+    picker = (PACKAGE / "templates" / "picker.html").read_text()
+    picker_line = next(line for line in picker.splitlines() if 'id="pr-close"' in line)
+    assert "hidden" not in picker_line
+
+
+def test_the_picker_closes_itself_after_a_clean_send():
+    """Sharing is multi-select and terminal: once it is sent, the modal is done.
+
+    Kept conditional on a clean result, because the summary dialog is the only
+    place a partial outcome -- something already shared, something archived
+    since the list was drawn -- is reported.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    block = source[source.index("function send()") :]
+    block = block[: block.index("function summarize")]
+    assert "closeModal()" in block
+    assert "already_shared" in block
+    assert "skipped_unavailable" in block

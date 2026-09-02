@@ -272,6 +272,32 @@ a:focus-visible {
   color: var(--pr-ink-muted);
 }
 
+/* ---------- pages ---------- */
+
+/* Hidden with the `hidden` attribute when the whole list fits on one page, so
+   the display rule below is the author-level declaration the [hidden] guard at
+   the top of this file exists to beat. */
+.pr-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pr-gap);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.pr-range { color: var(--pr-ink-muted); }
+
+.pr-pager-buttons { display: flex; gap: 8px; }
+
+/* Pushed to the far side of the picker footer, which is otherwise right
+   aligned around the send button. */
+.pr-offscreen-note {
+  margin-right: auto;
+  color: var(--pr-ink-muted);
+  font-size: 13px;
+}
+
 .pr-status { margin-top: 12px; color: var(--pr-ink-muted); }
 .pr-error { margin-top: 12px; color: var(--pr-danger); }
 
