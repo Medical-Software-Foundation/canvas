@@ -96,7 +96,17 @@ LABEL_MAX_CHARS = 100
 # not disagree about what fits.
 NOTE_MAX_CHARS = 1000
 
-DEFAULT_PAGE_SIZE = 50
+# 25, matching the other paginated tables in this repo (encounter_list,
+# custom-observation-management). A library row carries three action buttons, so
+# fifty of them is a long enough scroll that the pager below the table leaves
+# the screen -- and the picker is a modal, where it is worse.
+DEFAULT_PAGE_SIZE = 25
+
+# What the library's page-size control offers. Every value has to stay at or
+# under MAX_PAGE_SIZE or the API clamps it and the control lies; a test pins
+# that. The picker offers no choice: it is for finding two or three things.
+PAGE_SIZE_OPTIONS = (25, 50, 100)
+
 MAX_PAGE_SIZE = 200
 MIN_SEARCH_LENGTH = 2
 

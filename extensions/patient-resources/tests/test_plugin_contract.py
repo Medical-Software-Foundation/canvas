@@ -769,10 +769,10 @@ def test_a_note_typed_in_the_picker_survives_a_search():
 def test_both_staff_lists_ask_for_a_page():
     """The API has taken limit/offset from the start; the front ends did not.
 
-    Without them every list silently showed the server's default first 50 rows,
-    and the picker did not even print a total -- so on an instance with more
-    than fifty resources a provider could not reach the rest of the library and
-    was not told anything was missing.
+    Without them every list silently showed one server-default page, and the
+    picker did not even print a total -- so on an instance with more resources
+    than that a provider could not reach the rest of the library and was not
+    told anything was missing.
     """
     for name in ("library.js", "picker.js"):
         source = _js_code(PACKAGE / "static" / "js" / name)
@@ -808,6 +808,64 @@ def test_narrowing_a_list_returns_to_the_first_page():
         block = source[source.index("function reload()") :]
         block = block[: block.index("\n  }") + 4]
         assert "state.offset = 0" in block, name
+
+
+def test_a_page_is_twenty_five_rows_like_every_other_list_here():
+    """The repo's two other paginated tables -- encounter_list and
+    custom-observation-management -- both default to 25 and let the reader raise
+    it. 50 was this plugin taking the API's fallback as a design decision: the
+    library row carries three action buttons, so fifty of them is a scroll long
+    enough that the pager below the table goes off screen.
+    """
+    from patient_resources.constants import DEFAULT_PAGE_SIZE
+
+    assert DEFAULT_PAGE_SIZE == 25
+
+    library = _js_code(PACKAGE / "static" / "js" / "library.js")
+    picker = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    assert "DEFAULT_PAGE_SIZE = 25" in library
+    assert "PAGE_SIZE = 25" in picker
+
+
+def test_the_library_lets_the_reader_choose_the_page_size():
+    """The pattern both other paginated tables in this repo use.
+
+    A curator scanning a large library wants more rows than someone picking two
+    resources in a modal, and no single number is right for both.
+    """
+    from patient_resources.constants import MAX_PAGE_SIZE, PAGE_SIZE_OPTIONS
+
+    template = (PACKAGE / "templates" / "library.html").read_text()
+    assert 'id="pr-page-size"' in template
+    for option in PAGE_SIZE_OPTIONS:
+        assert f'value="{option}"' in template, option
+        # Anything above the API cap would be silently clamped, so the control
+        # would not do what it says.
+        assert option <= MAX_PAGE_SIZE, option
+
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    assert "state.limit" in source
+    # Changing the size changes which rows a given offset names, so it has to
+    # start again from the top.
+    block = source[source.index('els.pageSize.addEventListener') :]
+    block = block[: block.index("});") + 3]
+    assert "reload()" in block
+
+    # The picker keeps one size: it is a modal for finding two or three things,
+    # not a screen for scanning.
+    assert "pr-page-size" not in (PACKAGE / "templates" / "picker.html").read_text()
+
+
+def test_the_page_size_control_cannot_strand_itself():
+    """It lives in the pager, which hides when everything fits on one page.
+
+    Set 100 with 30 resources and a naive rule hides the row that holds the only
+    way back to 25.
+    """
+    source = _js_code(PACKAGE / "static" / "js" / "library.js")
+    block = source[source.index("function renderPager(") :]
+    block = block[: block.index("\n  }") + 4]
+    assert "SMALLEST_PAGE" in block
 
 
 def test_emptying_the_last_page_steps_back():
