@@ -900,6 +900,41 @@ def test_the_picker_closes_itself_after_a_clean_send():
     source = _js_code(PACKAGE / "static" / "js" / "picker.js")
     block = source[source.index("function send()") :]
     block = block[: block.index("function summarize")]
-    assert "closeModal()" in block
+    assert "confirmAndClose(" in block
     assert "already_shared" in block
     assert "skipped_unavailable" in block
+
+
+def test_a_clean_send_is_confirmed_before_the_window_goes():
+    """Closing on success took the confirmation with it.
+
+    The host protocol carries INIT_CHANNEL, CLOSE_MODAL and RESIZE and nothing
+    else, and no SDK effect raises a transient notice, so the confirmation has
+    to be shown here and the close deferred until it has been read.
+    """
+    template = (PACKAGE / "templates" / "picker.html").read_text()
+    assert 'id="pr-toast"' in template
+    toast_line = next(line for line in template.splitlines() if 'id="pr-toast"' in line)
+    # Announced, because nothing moves focus to it before the window closes.
+    assert 'role="status"' in toast_line
+    assert "hidden" in toast_line
+
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    block = source[source.index("function confirmAndClose(") :]
+    block = block[: block.index("\n  }") + 4]
+    assert "els.toast.hidden = false" in block
+    assert "TOAST_MS" in block
+    assert "closeModal" in block
+
+    # The picker is the only page that closes itself, so the notice belongs to
+    # the staff stylesheet and nowhere near the patient's.
+    assert "pr-toast" in _css_code(PACKAGE / "static" / "css" / "library.css")
+    assert "pr-toast" not in _css_code(PACKAGE / "static" / "css" / "portal.css")
+
+
+def test_the_confirmation_reuses_the_summary_wording():
+    """"Shared 2 resources." is already the tested phrasing for this outcome."""
+    source = _js_code(PACKAGE / "static" / "js" / "picker.js")
+    block = source[source.index("function send()") :]
+    block = block[: block.index("function summarize")]
+    assert "confirmAndClose(summarize(payload))" in block

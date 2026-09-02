@@ -57,6 +57,11 @@
 
   var NOTE_MAX_CHARS = 1000;
 
+  // Long enough to read a short sentence, short enough that the window does not
+  // feel stuck. The send is already done when this starts: nothing is waiting
+  // on it but the close.
+  var TOAST_MS = 1500;
+
   var els = {
     patientName: document.getElementById("pr-patient-name"),
     patientMeta: document.getElementById("pr-patient-meta"),
@@ -69,6 +74,7 @@
     prev: document.getElementById("pr-prev"),
     next: document.getElementById("pr-next"),
     offscreen: document.getElementById("pr-offscreen"),
+    toast: document.getElementById("pr-toast"),
     selection: document.getElementById("pr-selection"),
     send: document.getElementById("pr-send"),
     resultDialog: document.getElementById("pr-result-dialog"),
@@ -536,7 +542,7 @@
           (payload.already_shared || 0) === 0 &&
           (payload.skipped_unavailable || 0) === 0;
         if (clean) {
-          closeModal();
+          confirmAndClose(summarize(payload));
           return;
         }
 
@@ -549,6 +555,19 @@
         els.error.textContent = error.message;
         refreshFooter();
       });
+  }
+
+  function confirmAndClose(message) {
+    // Closing on success took the confirmation with it: the summary dialog was
+    // the only thing that said the send had worked. The host protocol carries
+    // no notification of its own, so the notice is shown here and the close
+    // waits for it to have been read.
+    els.toast.textContent = message;
+    els.toast.hidden = false;
+    // Nothing is selected any more and the window is going: a second click on
+    // Send while the notice is up must not fire another request.
+    els.send.disabled = true;
+    window.setTimeout(closeModal, TOAST_MS);
   }
 
   function summarize(payload) {

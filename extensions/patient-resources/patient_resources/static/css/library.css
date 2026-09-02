@@ -478,6 +478,36 @@ a:focus-visible {
   justify-content: flex-end;
 }
 
+/* ---------- the send confirmation ---------- */
+
+/* Fixed, so it sits in the corner of the modal viewport rather than at the end
+   of a list that may be scrolled. On the accent rather than a new success
+   colour: the palette has one accent, and a second one for this would be the
+   start of a sweep. */
+.pr-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  max-width: min(320px, calc(100% - 32px));
+  padding: 12px 16px;
+  border-radius: var(--pr-radius);
+  background: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.24);
+  animation: pr-toast-in 140ms ease-out;
+}
+
+@keyframes pr-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-toast { animation: none; }
+}
+
 /* ---------- dialogs ---------- */
 
 /* A <dialog>, never window.confirm: this page is itself inside a host modal,
