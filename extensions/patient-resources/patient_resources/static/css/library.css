@@ -288,7 +288,20 @@ a:focus-visible {
 
 .pr-range { color: var(--pr-ink-muted); }
 
-.pr-pager-buttons { display: flex; gap: 8px; }
+.pr-pager-buttons { display: flex; gap: 8px; align-items: center; }
+
+/* The label wraps its select, so the two move together and clicking the words
+   focuses the control. Smaller padding than the filter row's selects: this one
+   sits beside buttons, not among other inputs. */
+.pr-page-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pr-ink-muted);
+  white-space: nowrap;
+}
+
+.pr-page-size select { padding: 6px 8px; font-size: 14px; }
 
 /* Pushed to the far side of the picker footer, which is otherwise right
    aligned around the send button. */

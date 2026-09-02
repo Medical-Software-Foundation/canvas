@@ -75,11 +75,12 @@ default.
 own Custom Data namespace, so they survive plugin upgrades and can be searched
 and paged rather than parsed out of a configuration string.
 
-**Both staff lists are paged.** The library page shows 50 rows at a time and the
-chart picker 25, each with a range ("Showing 51–100 of 137 resources.") and
-Previous/Next. The listing endpoint takes `limit` and `offset` and caps a page at
-200. Search and the label filter always return to the first page, because the
-result set changes underneath the offset.
+**Both staff lists are paged, 25 rows at a time**, each with a range ("Showing
+26–50 of 137 resources.") and Previous/Next. The library adds a per-page control
+offering 25, 50 or 100, because a curator scanning a large library wants more
+rows than someone picking two resources in a modal. The listing endpoint takes
+`limit` and `offset` and caps a page at 200. Search and the label filter always
+return to the first page, because the result set changes underneath the offset.
 
 Selecting in the picker survives a page change, and anything selected that is no
 longer on screen is named in the footer, so a resource picked on page one cannot

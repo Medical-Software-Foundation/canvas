@@ -23,18 +23,28 @@
 
   var apiBase = config.apiBase || "";
 
-  // One page of the library. The listing endpoint has accepted limit/offset
-  // from the start and returns the matching total; this page never sent them,
-  // so it silently showed the server's default first 50 rows and offered no way
-  // to reach row 51.
-  var PAGE_SIZE = 50;
+  // The listing endpoint has accepted limit/offset from the start and returns
+  // the matching total; this page never sent them, so it silently showed one
+  // server-default page and offered no way to reach the row after it.
+  //
+  // 25 by default, like the other paginated tables in this repo -- a row here
+  // carries three action buttons, so fifty of them push the pager below the
+  // table off the screen. The reader can raise it; see PAGE_SIZE_OPTIONS in
+  // constants.py, which the control in the template mirrors.
+  var DEFAULT_PAGE_SIZE = 25;
+
+  // The smallest size on offer. What the pager row is shown for, rather than
+  // the current size: at 100 rows per page with 30 resources there is nothing
+  // to page through, and hiding the row would strand the only way back to 25.
+  var SMALLEST_PAGE = 25;
 
   var state = {
     canEdit: false,
     requestSeq: 0,
     editing: null,
     offset: 0,
-    total: 0
+    total: 0,
+    limit: DEFAULT_PAGE_SIZE
   };
 
   var els = {
@@ -51,6 +61,7 @@
     range: document.getElementById("pr-range"),
     prev: document.getElementById("pr-prev"),
     next: document.getElementById("pr-next"),
+    pageSize: document.getElementById("pr-page-size"),
     status: document.getElementById("pr-status"),
     error: document.getElementById("pr-error"),
     editDialog: document.getElementById("pr-edit-dialog"),
@@ -417,8 +428,10 @@
 
   function renderPager(shown) {
     var total = state.total;
-    // A single page needs no controls, and an empty library needs no range.
-    els.pager.hidden = total <= PAGE_SIZE;
+    // Measured against the smallest size on offer, not the current one, so
+    // choosing 100 for a 30-row library does not hide the control that chose
+    // it. A library that fits in the smallest page needs nothing here.
+    els.pager.hidden = total <= SMALLEST_PAGE;
     if (els.pager.hidden) {
       els.range.textContent = "";
       return;
@@ -452,7 +465,7 @@
     if (els.showArchived && els.showArchived.checked) {
       parts.push("include_archived=true");
     }
-    parts.push("limit=" + PAGE_SIZE);
+    parts.push("limit=" + state.limit);
     parts.push("offset=" + state.offset);
     return "?" + parts.join("&");
   }
@@ -475,7 +488,7 @@
           (payload.resources || []).length === 0 &&
           (payload.total || 0) > 0
         ) {
-          state.offset = Math.max(0, state.offset - PAGE_SIZE);
+          state.offset = Math.max(0, state.offset - state.limit);
           load();
           return;
         }
@@ -661,7 +674,7 @@
   }
 
   function turnPage(delta) {
-    var next = state.offset + delta * PAGE_SIZE;
+    var next = state.offset + delta * state.limit;
     if (next < 0 || next >= state.total) {
       return;
     }
@@ -683,6 +696,13 @@
   });
   els.next.addEventListener("click", function () {
     turnPage(1);
+  });
+  els.pageSize.addEventListener("change", function () {
+    // A given offset names different rows once the size changes, so this starts
+    // again from the top rather than landing somewhere the reader did not pick.
+    var chosen = Number(els.pageSize.value);
+    state.limit = chosen > 0 ? chosen : DEFAULT_PAGE_SIZE;
+    reload();
   });
   els.add.addEventListener("click", function () {
     openEditDialog(null);

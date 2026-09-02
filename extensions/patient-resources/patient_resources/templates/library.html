@@ -73,6 +73,14 @@
   <nav class="pr-pager" id="pr-pager" aria-label="Library pages" hidden>
     <span class="pr-range" id="pr-range" role="status" aria-live="polite"></span>
     <div class="pr-pager-buttons">
+      <label class="pr-page-size" for="pr-page-size">
+        Per page
+        <select id="pr-page-size">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
       <button type="button" id="pr-prev">Previous</button>
       <button type="button" id="pr-next">Next</button>
     </div>
