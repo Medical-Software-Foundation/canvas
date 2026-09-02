@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.200.2",
-    "plugin_version": "0.4.0",
+    "plugin_version": "0.5.0",
     "name": "patient_resources",
     "description": "Admin-curated library of patient-facing resource links that staff can share to a patient's portal",
     "url_permissions": [],
@@ -10,7 +10,9 @@
                 "class": "patient_resources.applications.library_app:PatientResourcesAdminApp",
                 "name": "Patient Resources",
                 "description": "Curate the library of resources staff can share with patients",
-                "scope": "global",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 120,
                 "icon": "assets/icon.png"
             },
             {

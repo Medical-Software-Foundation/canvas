@@ -25,8 +25,21 @@
   var apiBase = config.apiBase || "";
   var patientId = config.patientId || "";
 
+  // A page of 25 is deliberately the send cap below, so a full page is exactly
+  // one sendable batch. The library page uses the server's default 50; this is
+  // a modal with a note textarea per selected row, where 50 is a long scroll.
+  var PAGE_SIZE = 25;
+
+  // Mirrors MAX_SHARE_BATCH in constants.py, which the API enforces. Held here
+  // too because selection now survives a page change: without it the only
+  // feedback for a 26th pick is a 400 after the click.
+  var MAX_SHARE_BATCH = 25;
+
   var state = {
     selected: {},
+    // Titles of what is selected, so the footer can name a count that is no
+    // longer all on screen without re-fetching a page the reader has left.
+    selectedTitles: {},
     alreadyShared: {},
     // What will actually be sent with each resource, seeded from the library's
     // default and overwritten as the sender types. Held here rather than read
@@ -34,7 +47,12 @@
     // a note typed before a search must survive it.
     notes: {},
     requestSeq: 0,
-    patientResolved: false
+    patientResolved: false,
+    offset: 0,
+    total: 0,
+    // Ids rendered by the current page, so the footer can tell a selection that
+    // is on screen from one the reader would have to page back to see.
+    visible: []
   };
 
   var NOTE_MAX_CHARS = 1000;
@@ -46,6 +64,11 @@
     list: document.getElementById("pr-list"),
     empty: document.getElementById("pr-empty"),
     error: document.getElementById("pr-error"),
+    pager: document.getElementById("pr-pager"),
+    range: document.getElementById("pr-range"),
+    prev: document.getElementById("pr-prev"),
+    next: document.getElementById("pr-next"),
+    offscreen: document.getElementById("pr-offscreen"),
     selection: document.getElementById("pr-selection"),
     send: document.getElementById("pr-send"),
     resultDialog: document.getElementById("pr-result-dialog"),
@@ -232,15 +255,52 @@
       .map(Number);
   }
 
+  var CAP_MESSAGE =
+    "Send at most " +
+    MAX_SHARE_BATCH +
+    " resources at a time. Clear some, or send these and pick the rest afterwards.";
+
   function refreshFooter() {
-    var count = selectedIds().length;
+    var ids = selectedIds();
+    var count = ids.length;
     els.selection.textContent =
       count === 0
         ? "Nothing selected"
         : count === 1
           ? "1 resource selected"
           : count + " resources selected";
-    els.send.disabled = count === 0 || !state.patientResolved;
+
+    var overCap = count > MAX_SHARE_BATCH;
+    els.send.disabled = count === 0 || overCap || !state.patientResolved;
+
+    // Only ever touches the message it owns, so an unrelated failure showing
+    // there is not silently wiped by ticking a checkbox.
+    if (overCap) {
+      els.error.textContent = CAP_MESSAGE;
+    } else if (els.error.textContent === CAP_MESSAGE) {
+      els.error.textContent = "";
+    }
+
+    renderOffscreenNote(ids);
+  }
+
+  function renderOffscreenNote(ids) {
+    var offscreen = ids.filter(function (id) {
+      return state.visible.indexOf(id) === -1;
+    });
+    els.offscreen.hidden = offscreen.length === 0;
+    if (offscreen.length === 0) {
+      return;
+    }
+    var titles = offscreen
+      .map(function (id) {
+        return state.selectedTitles[id] || "Untitled";
+      })
+      .join(", ");
+    els.offscreen.textContent =
+      (offscreen.length === 1
+        ? "1 more selected on another page: "
+        : offscreen.length + " more selected on other pages: ") + titles;
   }
 
   function renderNoteField(resource) {
@@ -284,6 +344,9 @@
     checkbox.disabled = shared;
     checkbox.addEventListener("change", function () {
       state.selected[resource.id] = checkbox.checked;
+      if (checkbox.checked) {
+        state.selectedTitles[resource.id] = resource.title || "Untitled";
+      }
       // The note only appears once a resource is going out. Showing every note
       // at once turns a list of ten resources into a wall of textareas.
       noteField.hidden = !checkbox.checked;
@@ -326,6 +389,9 @@
   function render(payload) {
     els.list.textContent = "";
     var resources = payload.resources || [];
+    state.visible = resources.map(function (resource) {
+      return resource.id;
+    });
     resources.forEach(function (resource) {
       els.list.appendChild(renderItem(resource));
     });
@@ -337,8 +403,30 @@
         ? "No resources match that search."
         : "The resource library is empty. An administrator can add resources from the Patient Resources app.";
     }
+
+    state.total = payload.total || 0;
+    renderPager(resources.length);
     refreshFooter();
     requestResize();
+  }
+
+  function renderPager(shown) {
+    var total = state.total;
+    // A library that fits on one page needs no controls.
+    els.pager.hidden = total <= PAGE_SIZE;
+    if (els.pager.hidden) {
+      els.range.textContent = "";
+      return;
+    }
+
+    var first = state.offset + 1;
+    var last = state.offset + shown;
+    els.range.textContent =
+      shown === 0
+        ? total + " resources."
+        : "Showing " + first + "\u2013" + last + " of " + total + " resources.";
+    els.prev.disabled = state.offset <= 0;
+    els.next.disabled = state.offset + shown >= total;
   }
 
   function hasFilters() {
@@ -351,7 +439,9 @@
     if (term) {
       parts.push("q=" + encodeURIComponent(term));
     }
-    return parts.length ? "?" + parts.join("&") : "";
+    parts.push("limit=" + PAGE_SIZE);
+    parts.push("offset=" + state.offset);
+    return "?" + parts.join("&");
   }
 
   function load() {
@@ -407,6 +497,14 @@
     if (!ids.length) {
       return;
     }
+    // Re-checked here rather than trusting the disabled button. The API refuses
+    // the batch anyway, so without this the reader's only feedback for a 26th
+    // pick is a 400 -- and a disabled attribute is one stale render away from
+    // not being there.
+    if (ids.length > MAX_SHARE_BATCH) {
+      els.error.textContent = CAP_MESSAGE;
+      return;
+    }
     els.send.disabled = true;
     els.error.textContent = "";
 
@@ -426,6 +524,22 @@
           state.alreadyShared[id] = true;
         });
         state.selected = {};
+        state.selectedTitles = {};
+
+        // Sharing is the only thing this modal does, so a send that did exactly
+        // what was asked is the end of the task -- leaving the window open cost
+        // an extra click on every share. The summary dialog stays for anything
+        // that needs explaining: something already in the patient's list, or
+        // something archived since this page drew it.
+        var clean =
+          (payload.created || 0) > 0 &&
+          (payload.already_shared || 0) === 0 &&
+          (payload.skipped_unavailable || 0) === 0;
+        if (clean) {
+          closeModal();
+          return;
+        }
+
         els.resultMessage.textContent = summarize(payload);
         els.resultDialog.showModal();
         requestResize();
@@ -464,10 +578,32 @@
     return parts.join(" ");
   }
 
+  // Searching changes the result set under the offset, so a search run from
+  // page two would otherwise land on a page that no longer exists.
+  function reload() {
+    state.offset = 0;
+    load();
+  }
+
+  function turnPage(delta) {
+    var next = state.offset + delta * PAGE_SIZE;
+    if (next < 0 || next >= state.total) {
+      return;
+    }
+    state.offset = next;
+    load();
+  }
+
   var searchTimer = null;
   els.search.addEventListener("input", function () {
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(load, 200);
+    searchTimer = window.setTimeout(reload, 200);
+  });
+  els.prev.addEventListener("click", function () {
+    turnPage(-1);
+  });
+  els.next.addEventListener("click", function () {
+    turnPage(1);
   });
   els.send.addEventListener("click", send);
   els.resultDialog.addEventListener("close", requestResize);

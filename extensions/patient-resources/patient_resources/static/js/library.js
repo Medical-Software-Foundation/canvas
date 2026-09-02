@@ -23,14 +23,23 @@
 
   var apiBase = config.apiBase || "";
 
+  // One page of the library. The listing endpoint has accepted limit/offset
+  // from the start and returns the matching total; this page never sent them,
+  // so it silently showed the server's default first 50 rows and offered no way
+  // to reach row 51.
+  var PAGE_SIZE = 50;
+
   var state = {
     canEdit: false,
     requestSeq: 0,
-    editing: null
+    editing: null,
+    offset: 0,
+    total: 0
   };
 
   var els = {
     add: document.getElementById("pr-add"),
+    close: document.getElementById("pr-close"),
     readonly: document.getElementById("pr-readonly"),
     search: document.getElementById("pr-search"),
     labelFilter: document.getElementById("pr-label-filter"),
@@ -38,6 +47,10 @@
     showArchived: document.getElementById("pr-show-archived"),
     rows: document.getElementById("pr-rows"),
     empty: document.getElementById("pr-empty"),
+    pager: document.getElementById("pr-pager"),
+    range: document.getElementById("pr-range"),
+    prev: document.getElementById("pr-prev"),
+    next: document.getElementById("pr-next"),
     status: document.getElementById("pr-status"),
     error: document.getElementById("pr-error"),
     editDialog: document.getElementById("pr-edit-dialog"),
@@ -75,6 +88,12 @@
     if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
       messagePort = event.ports[0];
       messagePort.start();
+      // Only now is there something to close. Opened from the provider menu
+      // this is a full page and no port arrives, so the control stays hidden
+      // rather than offering an action the browser will ignore.
+      if (els.close) {
+        els.close.hidden = false;
+      }
       requestResize();
     }
   });
@@ -390,13 +409,29 @@
         : "The library is empty. Add the first resource to get started.";
     }
 
-    var total = payload.total || 0;
-    els.status.textContent =
-      total > resources.length
-        ? "Showing " + resources.length + " of " + total + " resources."
-        : "";
+    state.total = payload.total || 0;
+    renderPager(resources.length);
 
     requestResize();
+  }
+
+  function renderPager(shown) {
+    var total = state.total;
+    // A single page needs no controls, and an empty library needs no range.
+    els.pager.hidden = total <= PAGE_SIZE;
+    if (els.pager.hidden) {
+      els.range.textContent = "";
+      return;
+    }
+
+    var first = state.offset + 1;
+    var last = state.offset + shown;
+    els.range.textContent =
+      shown === 0
+        ? total + " resources."
+        : "Showing " + first + "\u2013" + last + " of " + total + " resources.";
+    els.prev.disabled = state.offset <= 0;
+    els.next.disabled = state.offset + shown >= total;
   }
 
   function hasFilters() {
@@ -417,7 +452,9 @@
     if (els.showArchived && els.showArchived.checked) {
       parts.push("include_archived=true");
     }
-    return parts.length ? "?" + parts.join("&") : "";
+    parts.push("limit=" + PAGE_SIZE);
+    parts.push("offset=" + state.offset);
+    return "?" + parts.join("&");
   }
 
   function load() {
@@ -426,9 +463,23 @@
     request("/library/resources" + query())
       .then(function (payload) {
         // A slower earlier response must not paint over a newer one.
-        if (seq === state.requestSeq) {
-          render(payload);
+        if (seq !== state.requestSeq) {
+          return;
         }
+        // Archiving or deleting the last row on the last page leaves the offset
+        // past the end of a list that still has rows. Without this the table is
+        // empty while the total says otherwise, and nothing on screen explains
+        // the difference.
+        if (
+          state.offset > 0 &&
+          (payload.resources || []).length === 0 &&
+          (payload.total || 0) > 0
+        ) {
+          state.offset = Math.max(0, state.offset - PAGE_SIZE);
+          load();
+          return;
+        }
+        render(payload);
       })
       .catch(function (error) {
         if (seq === state.requestSeq) {
@@ -601,15 +652,38 @@
 
   // ---------- wiring ----------
 
+  // Every filter change goes through here rather than straight to load(). The
+  // result set changes under the offset, so a search run from page three would
+  // otherwise land on a page that no longer exists.
+  function reload() {
+    state.offset = 0;
+    load();
+  }
+
+  function turnPage(delta) {
+    var next = state.offset + delta * PAGE_SIZE;
+    if (next < 0 || next >= state.total) {
+      return;
+    }
+    state.offset = next;
+    load();
+  }
+
   var searchTimer = null;
   els.search.addEventListener("input", function () {
     window.clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(load, 200);
+    searchTimer = window.setTimeout(reload, 200);
   });
-  els.labelFilter.addEventListener("change", load);
+  els.labelFilter.addEventListener("change", reload);
   if (els.showArchived) {
-    els.showArchived.addEventListener("change", load);
+    els.showArchived.addEventListener("change", reload);
   }
+  els.prev.addEventListener("click", function () {
+    turnPage(-1);
+  });
+  els.next.addEventListener("click", function () {
+    turnPage(1);
+  });
   els.add.addEventListener("click", function () {
     openEditDialog(null);
   });
@@ -629,9 +703,8 @@
     dialog.addEventListener("close", requestResize);
   });
 
-  var closeButton = document.getElementById("pr-close");
-  if (closeButton) {
-    closeButton.addEventListener("click", closeModal);
+  if (els.close) {
+    els.close.addEventListener("click", closeModal);
   }
 
   loadLabels();
