@@ -13,7 +13,9 @@ from appointment_reminders.services.business_line import (
     get_business_line_name,
     resolve_attribution,
 )
+from appointment_reminders.services.timezones import zone_for_address
 
+_DEFAULT_TZ_NAME = "America/New_York"
 _ORG_VARS_CACHE_KEY = "appointment_reminders:org_vars"
 _ORG_VARS_CACHE_TTL = 300  # 5 minutes — matches cron interval
 
@@ -76,19 +78,72 @@ def unresolved_placeholders(text: str) -> list[str]:
     return found
 
 
+def _patient_address_timezone(patient: Patient) -> str:
+    """The zone implied by the patient's address, or ``""`` if none resolves.
+
+    Filters the addresses in Python rather than with ``.filter()`` so the
+    reminder cron's prefetch still pays off, the same reason the location block
+    in ``_build_variables`` does. Prefers an active home address, then any
+    active one, then whatever is on file — a patient whose only address is
+    marked inactive still lives somewhere.
+    """
+    addresses = getattr(patient, "addresses", None)
+    if addresses is None:
+        return ""
+
+    rows = list(addresses.all())
+    ordered = (
+        [a for a in rows if a.use == "home" and a.state == "active"]
+        + [a for a in rows if a.state == "active"]
+        + rows
+    )
+    for address in ordered:
+        zone = zone_for_address(
+            getattr(address, "state_code", "") or "",
+            getattr(address, "postal_code", "") or "",
+            getattr(address, "country", "") or "",
+        )
+        if zone:
+            return zone
+    return ""
+
+
+def resolve_timezone_name(patient: Patient, clinic_timezone: str = "") -> str:
+    """The IANA zone name a patient's times should be rendered and sent in.
+
+    Order: the timezone explicitly recorded on the patient, then the zone
+    implied by their address, then the configured clinic default, then Eastern.
+    The address step is what makes this resolve at all in practice — see
+    ``services/timezones.py`` for why ``last_known_timezone`` is almost always
+    empty.
+
+    Each candidate is type-checked before ``ZoneInfo`` sees it, because
+    ``last_known_timezone`` is free text and a non-string would raise a
+    ``TypeError`` the loop is not otherwise catching.
+    """
+    # Each candidate is a callable so the address lookup is skipped entirely
+    # when the patient already carries an explicit zone.
+    candidates = (
+        lambda: getattr(patient, "last_known_timezone", None),
+        lambda: _patient_address_timezone(patient),
+        lambda: clinic_timezone,
+        lambda: _DEFAULT_TZ_NAME,
+    )
+    for candidate in candidates:
+        tz_str = candidate()
+        if not tz_str or not isinstance(tz_str, str):
+            continue
+        try:
+            zoneinfo.ZoneInfo(tz_str)
+        except (KeyError, ValueError):
+            continue
+        return tz_str
+    return _DEFAULT_TZ_NAME
+
+
 def _resolve_timezone(patient: Patient, clinic_timezone: str = "") -> zoneinfo.ZoneInfo:
-    """Resolve display timezone: patient → clinic config → Eastern."""
-    for tz_str in (
-        getattr(patient, "last_known_timezone", None),
-        clinic_timezone,
-        "America/New_York",
-    ):
-        if tz_str:
-            try:
-                return zoneinfo.ZoneInfo(tz_str)
-            except (KeyError, ValueError):
-                continue
-    return zoneinfo.ZoneInfo("America/New_York")
+    """Resolve display timezone: patient → patient address → clinic → Eastern."""
+    return zoneinfo.ZoneInfo(resolve_timezone_name(patient, clinic_timezone))
 
 
 def _tz_abbrev(dt: datetime) -> str:
