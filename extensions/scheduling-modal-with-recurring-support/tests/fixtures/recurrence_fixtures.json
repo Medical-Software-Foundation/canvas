@@ -1,0 +1,206 @@
+[
+  {
+    "name": "day_interval_1_count_1_single_visit",
+    "rule": {
+      "interval": {"value": 1, "unit": "day"},
+      "end": {"kind": "count", "count": 1}
+    },
+    "start": "2026-05-04",
+    "expected": ["2026-05-04"]
+  },
+  {
+    "name": "day_interval_17_count_5_meeting_example",
+    "rule": {
+      "interval": {"value": 17, "unit": "day"},
+      "end": {"kind": "count", "count": 5}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-21",
+      "2026-06-07",
+      "2026-06-24",
+      "2026-07-11"
+    ]
+  },
+  {
+    "name": "weekly_count_1",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "end": {"kind": "count", "count": 1}
+    },
+    "start": "2026-05-04",
+    "expected": ["2026-05-04"]
+  },
+  {
+    "name": "weekly_count_4",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "end": {"kind": "count", "count": 4}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-11",
+      "2026-05-18",
+      "2026-05-25"
+    ]
+  },
+  {
+    "name": "weekly_count_at_max_caps_at_52",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "end": {"kind": "count", "count": 52}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04", "2026-05-11", "2026-05-18", "2026-05-25",
+      "2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22",
+      "2026-06-29", "2026-07-06", "2026-07-13", "2026-07-20",
+      "2026-07-27", "2026-08-03", "2026-08-10", "2026-08-17",
+      "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14",
+      "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12",
+      "2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09",
+      "2026-11-16", "2026-11-23", "2026-11-30", "2026-12-07",
+      "2026-12-14", "2026-12-21", "2026-12-28", "2027-01-04",
+      "2027-01-11", "2027-01-18", "2027-01-25", "2027-02-01",
+      "2027-02-08", "2027-02-15", "2027-02-22", "2027-03-01",
+      "2027-03-08", "2027-03-15", "2027-03-22", "2027-03-29",
+      "2027-04-05", "2027-04-12", "2027-04-19", "2027-04-26"
+    ]
+  },
+  {
+    "name": "biweekly_count_6",
+    "rule": {
+      "interval": {"value": 2, "unit": "week"},
+      "end": {"kind": "count", "count": 6}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-18",
+      "2026-06-01",
+      "2026-06-15",
+      "2026-06-29",
+      "2026-07-13"
+    ]
+  },
+  {
+    "name": "monthly_count_6_clamps_short_months",
+    "rule": {
+      "interval": {"value": 1, "unit": "month"},
+      "end": {"kind": "count", "count": 6}
+    },
+    "start": "2026-01-31",
+    "expected": [
+      "2026-01-31",
+      "2026-02-28",
+      "2026-03-31",
+      "2026-04-30",
+      "2026-05-31",
+      "2026-06-30"
+    ]
+  },
+  {
+    "name": "weekly_with_mo_we_count_6",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "weekdays": ["MO", "WE"],
+      "end": {"kind": "count", "count": 6}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-06",
+      "2026-05-11",
+      "2026-05-13",
+      "2026-05-18",
+      "2026-05-20"
+    ]
+  },
+  {
+    "name": "weekly_th_only_starting_tuesday_count_4",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "weekdays": ["TH"],
+      "end": {"kind": "count", "count": 4}
+    },
+    "start": "2026-05-05",
+    "expected": [
+      "2026-05-07",
+      "2026-05-14",
+      "2026-05-21",
+      "2026-05-28"
+    ]
+  },
+  {
+    "name": "biweekly_with_mo_fr_count_4",
+    "rule": {
+      "interval": {"value": 2, "unit": "week"},
+      "weekdays": ["MO", "FR"],
+      "end": {"kind": "count", "count": 4}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-08",
+      "2026-05-18",
+      "2026-05-22"
+    ]
+  },
+  {
+    "name": "until_lands_on_candidate",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "end": {"kind": "until", "until": "2026-05-25"}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-11",
+      "2026-05-18",
+      "2026-05-25"
+    ]
+  },
+  {
+    "name": "until_one_day_before_candidate",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "end": {"kind": "until", "until": "2026-05-24"}
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-11",
+      "2026-05-18"
+    ]
+  },
+  {
+    "name": "exclusions_remove_one_date",
+    "rule": {
+      "interval": {"value": 1, "unit": "week"},
+      "end": {"kind": "count", "count": 4},
+      "exclusions": ["2026-05-18"]
+    },
+    "start": "2026-05-04",
+    "expected": [
+      "2026-05-04",
+      "2026-05-11",
+      "2026-05-25"
+    ]
+  },
+  {
+    "name": "monthly_until_with_clamp",
+    "rule": {
+      "interval": {"value": 1, "unit": "month"},
+      "end": {"kind": "until", "until": "2026-08-31"}
+    },
+    "start": "2026-05-31",
+    "expected": [
+      "2026-05-31",
+      "2026-06-30",
+      "2026-07-31",
+      "2026-08-31"
+    ]
+  }
+]
