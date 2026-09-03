@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+:root {
+  --bg: #f8f9fb;
+  --surface: #fff;
+  --border: #e2e5ea;
+  --text: #1a1d23;
+  --text-secondary: #5f6876;
+  --text-muted: #99a1ad;
+  --primary: #4A6FA5;
+  --primary-hover: #3d5f8f;
+  --success: #5A8F6B;
+  --success-hover: #4a7a5a;
+  --success-bg: #ecfdf3;
+  --radius: 6px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px; color: var(--text); background: var(--bg); padding: 16px;
+}
+
+.pi-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pi-title { font-size: 16px; font-weight: 600; }
+
+.pi-toolbar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.pi-search {
+  flex: 1; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-size: 12px; background: #fafbfc; outline: none;
+}
+.pi-search:focus { border-color: var(--primary); background: #fff; }
+.pi-filter {
+  padding: 7px 10px; border: 1.5px solid var(--border); border-radius: var(--radius);
+  font-size: 12px; background: #fafbfc; outline: none; min-width: 130px;
+}
+
+/* Tag pills */
+.pi-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 500; margin: 1px 3px 1px 0;
+  background: #e0e7ff; color: #3730a3;
+}
+
+.pi-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  transition: border-color 0.15s; margin-bottom: 4px;
+}
+.pi-row:hover { border-color: #93b4f5; }
+.pi-row.selected { border-color: var(--success); background: var(--success-bg); }
+
+.pi-check {
+  width: 16px; height: 16px; cursor: pointer; accent-color: var(--success);
+  flex-shrink: 0;
+}
+.pi-row-info { flex: 1; min-width: 0; }
+.pi-row-name { font-size: 13px; font-weight: 500; }
+.pi-row-detail { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+.pi-row-meta { margin-top: 3px; }
+.pi-row-code { font-size: 10px; color: var(--text-muted); font-family: monospace; display: inline; margin-right: 6px; }
+
+/* Actions bar */
+.pi-actions {
+  position: sticky; bottom: 0; padding: 12px 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--border); margin-top: 12px;
+}
+.pi-actions-left { font-size: 12px; color: var(--text-muted); }
+.pi-add-btn {
+  padding: 8px 20px; border-radius: var(--radius); border: none;
+  background: var(--success); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.pi-add-btn:hover:not(:disabled) { background: var(--success-hover); }
+.pi-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pi-empty { font-size: 13px; color: var(--text-muted); padding: 24px 0; text-align: center; }
+
+.pi-toast {
+  position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+  padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  z-index: 200; opacity: 0; transition: opacity 0.3s;
+}
+.pi-toast.success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.pi-toast.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.pi-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="toast" class="pi-toast"></div>
+
+<div class="pi-header">
+  <div class="pi-title">Patient Instructions</div>
+</div>
+
+<div class="pi-toolbar">
+  <input type="text" class="pi-search" id="searchInput" placeholder="Search instructions..." oninput="renderList()">
+  <select class="pi-filter" id="tagFilter" onchange="renderList()">
+    <option value="">All Tags</option>
+  </select>
+</div>
+
+<div id="list"></div>
+
+<div class="pi-actions">
+  <div class="pi-actions-left" id="selectionInfo">0 selected</div>
+  <button class="pi-add-btn" id="addBtn" disabled onclick="addToNote()">Add to Note (0)</button>
+</div>
+
+<script>
+(function() {
+  var BASE = "/plugin-io/api/patient_instructions";
+  var NOTE_UUID = "{{ note_uuid|default:'' }}";
+  var instructions = [];
+  var selected = new Set();
+
+  function toast(msg, type) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "pi-toast " + type + " show";
+    setTimeout(function() { t.classList.remove("show"); }, 2500);
+  }
+
+  function api(path, opts) {
+    return fetch(BASE + path, opts).then(function(r) { return r.json(); });
+  }
+
+  function esc(s) {
+    var d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function loadAll() {
+    api("/library").then(function(data) {
+      instructions = data.instructions || [];
+      loadTags();
+      renderList();
+    });
+  }
+
+  function loadTags() {
+    var seen = {};
+    var tags = [];
+    instructions.forEach(function(i) {
+      (i.tags || []).forEach(function(t) {
+        if (!seen[t]) { seen[t] = true; tags.push(t); }
+      });
+    });
+    tags.sort();
+    var sel = document.getElementById("tagFilter");
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All Tags</option>';
+    tags.forEach(function(t) {
+      sel.innerHTML += '<option value="' + esc(t) + '">' + esc(t) + '</option>';
+    });
+    sel.value = current;
+  }
+
+  window.renderList = function() {
+    var search = document.getElementById("searchInput").value.toLowerCase();
+    var tagFilter = document.getElementById("tagFilter").value;
+    var listEl = document.getElementById("list");
+
+    var filtered = instructions.filter(function(i) {
+      if (tagFilter && (i.tags || []).indexOf(tagFilter) === -1) return false;
+      if (search && i.display.toLowerCase().indexOf(search) === -1 &&
+          (i.comment || "").toLowerCase().indexOf(search) === -1 &&
+          (i.tags || []).join(" ").toLowerCase().indexOf(search) === -1) return false;
+      return true;
+    });
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div class="pi-empty">' + (instructions.length ? 'No matching instructions' : 'No instructions in the library yet.') + '</div>';
+      return;
+    }
+
+    var html = "";
+    filtered.forEach(function(i) {
+      var isSelected = selected.has(i.id);
+      html += '<div class="pi-row' + (isSelected ? ' selected' : '') + '">';
+      html += '<input type="checkbox" class="pi-check" ' + (isSelected ? 'checked' : '') + ' onchange="toggleSelect(' + i.id + ', this.checked)">';
+      html += '<div class="pi-row-info">';
+      html += '<div class="pi-row-name">' + esc(i.display) + '</div>';
+      if (i.comment) html += '<div class="pi-row-detail">' + esc(i.comment) + '</div>';
+      html += '<div class="pi-row-meta">';
+      html += '<span class="pi-row-code">' + i.coding_system + (i.coding_system === "SNOMED" ? ": " + i.code : "") + '</span>';
+      (i.tags || []).forEach(function(t) {
+        html += '<span class="pi-tag">' + esc(t) + '</span>';
+      });
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    });
+
+    listEl.innerHTML = html;
+  };
+
+  window.toggleSelect = function(id, checked) {
+    if (checked) selected.add(id); else selected.delete(id);
+    updateActions();
+    renderList();
+  };
+
+  function updateActions() {
+    var count = selected.size;
+    document.getElementById("selectionInfo").textContent = count + " selected";
+    var btn = document.getElementById("addBtn");
+    btn.textContent = "Add to Note (" + count + ")";
+    btn.disabled = count === 0;
+  }
+
+  window.addToNote = function() {
+    if (!NOTE_UUID) {
+      toast("No note context available", "error");
+      return;
+    }
+
+    var toAdd = instructions.filter(function(i) { return selected.has(i.id); });
+    if (!toAdd.length) return;
+
+    var payload = {
+      note_uuid: NOTE_UUID,
+      instructions: toAdd.map(function(i) {
+        return {
+          coding_system: i.coding_system,
+          code: i.code,
+          display: i.display,
+          comment: i.comment || "",
+        };
+      }),
+    };
+
+    document.getElementById("addBtn").disabled = true;
+    document.getElementById("addBtn").textContent = "Adding...";
+
+    api("/add-to-note", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload),
+    }).then(function(data) {
+      if (data.status === "ok") {
+        toast(data.added + " instruction(s) added to note", "success");
+        selected.clear();
+        updateActions();
+        renderList();
+      } else {
+        toast(data.message || "Error adding instructions", "error");
+      }
+    }).catch(function(err) {
+      toast("Network error: " + err.message, "error");
+    }).finally(function() {
+      updateActions();
+    });
+  };
+
+  loadAll();
+})();
+</script>
+</body>
+</html>
