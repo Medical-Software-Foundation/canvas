@@ -76,3 +76,28 @@ def test_compute_swallows_recompute_errors(monkeypatch: pytest.MonkeyPatch) -> N
     p = PatientFactory.create()
     handler = PanelStatsOnTaskCreated(event=_Ev(context={"patient_id": str(p.id)}))
     assert handler.compute() == []
+
+
+def test_debounce_coalesces_repeat_recomputes(monkeypatch: pytest.MonkeyPatch) -> None:
+    import patient_panel.handlers.panel_stats_sync as mod
+
+    class _FakeCache:
+        def __init__(self) -> None:
+            self.store: dict[str, Any] = {}
+
+        def get(self, key: str) -> Any:
+            return self.store.get(key)
+
+        def set(self, key: str, value: Any, timeout_seconds: int | None = None) -> None:
+            self.store[key] = value
+
+    fake = _FakeCache()
+    monkeypatch.setattr(mod, "get_cache", lambda: fake)
+    calls: list[str] = []
+    monkeypatch.setattr(mod, "recompute_stats_for_patient_uuid", lambda uuid: calls.append(uuid))
+
+    ev = _Ev(context={"patient_id": "same-uuid"})
+    PanelStatsOnTaskCreated(event=ev).compute()
+    PanelStatsOnTaskCreated(event=ev).compute()
+
+    assert calls == ["same-uuid"]
