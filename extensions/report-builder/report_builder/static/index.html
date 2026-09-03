@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report Builder</title>
+  <link rel="stylesheet" href="/plugin-io/api/report_builder/static/app.css?v={{ cache_bust }}" />
+</head>
+<body>
+  <div id="app"></div>
+  <script id="rb-initial-data" type="application/json">{{ initial_data | safe }}</script>
+  <script>
+    (function() {
+      var messagePort = null;
+      var resizeTimer = null;
+
+      function sendResize() {
+        if (!messagePort) return;
+        var appEl = document.getElementById('app');
+        messagePort.postMessage({
+          type: 'RESIZE',
+          width: appEl.scrollWidth,
+          height: appEl.scrollHeight
+        });
+      }
+
+      window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+          messagePort = event.ports[0];
+          messagePort.start();
+          sendResize();
+        }
+      });
+
+      window.__canvasPort = function() { return messagePort; };
+
+      function sendResizeDebounced() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(sendResize, 100);
+      }
+
+      var observer = new ResizeObserver(sendResizeDebounced);
+      observer.observe(document.getElementById('app'));
+    })();
+  </script>
+  <script type="module">
+    import { h, render } from 'https://esm.sh/preact@10.25.4';
+    import { App } from '/plugin-io/api/report_builder/static/app.js?v={{ cache_bust }}';
+    const initialDataEl = document.getElementById('rb-initial-data');
+    const initialData = initialDataEl ? JSON.parse(initialDataEl.textContent) : {};
+    render(h(App, { initialData }), document.getElementById('app'));
+  </script>
+</body>
+</html>
