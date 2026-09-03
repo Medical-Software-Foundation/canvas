@@ -1,0 +1,359 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  background: #ffffff;
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+#root {
+  max-width: 720px;
+  margin: 0 auto;
+  /* Bottom padding leaves room for the fixed form-actions bar (see below). */
+  padding: 12px 12px 80px;
+}
+
+@media (min-width: 600px) {
+  #root { padding: 16px 16px 80px; }
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: #444;
+}
+
+.loading {
+  text-align: center;
+  color: #777;
+  padding: 32px 0;
+}
+
+.banner {
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.banner.error { background: #fde7e9; color: #8a1c2b; }
+.banner.success { background: #e6f4ea; color: #1f6630; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #c8c8d0;
+  background: #fff;
+  color: #1a1a1a;
+}
+
+button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+button.danger {
+  background: #fff;
+  border-color: #c44;
+  color: #c44;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.coverage-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.coverage-card {
+  background: #fff;
+  border: 1px solid #e1e3e8;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.coverage-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.coverage-card-title { font-weight: 600; }
+.coverage-card-meta { color: #777; font-size: 13px; }
+
+.coverage-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; position: relative; min-width: 0; }
+.field label { font-size: 13px; color: #555; }
+.field input,
+.field select,
+.field textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #c8c8d0;
+  background: #fff;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.field textarea { resize: vertical; min-height: 70px; }
+
+.field-has-error input,
+.field-has-error select,
+.field-has-error textarea {
+  border-color: #c44;
+  background: #fff5f6;
+}
+
+.field-error {
+  font-size: 12px;
+  color: #8a1c2b;
+}
+
+/* Payer search */
+.payer-search { grid-column: 1 / -1; }
+
+.payer-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #c8c8d0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  margin-top: 2px;
+}
+
+.payer-result {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 1px solid #f0f1f4;
+}
+.payer-result:last-child { border-bottom: none; }
+.payer-result:hover { background: #f0f5ff; }
+
+.payer-selected {
+  font-size: 12px;
+  color: #1f6630;
+  margin-top: 2px;
+}
+
+.card-photos {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.card-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+}
+
+.card-photo label { font-size: 13px; color: #555; font-weight: 600; }
+.card-photo .preview {
+  width: 100%;
+  aspect-ratio: 1.6 / 1;
+  background: #f0f1f4;
+  border: 1px dashed #c8c8d0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  font-size: 13px;
+  overflow: hidden;
+}
+.card-photo .preview img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Preview is the click target — hide the native <input type="file"> and
+ * let the dashed box launch the file picker / camera. */
+.visually-hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+.preview-clickable {
+  cursor: pointer;
+}
+.preview-clickable:hover {
+  border-color: #2563eb;
+  background: #f0f5ff;
+  color: #2563eb;
+}
+
+/* Anchored to the iframe viewport bottom so Cancel / Save (and the list
+ * view's "Add" button) stay reachable no matter how long the form is. */
+.form-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #ffffff;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #e1e3e8;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+  z-index: 20;
+}
+@media (min-width: 600px) {
+  .form-actions { padding: 10px 16px; }
+}
+
+.empty {
+  text-align: center;
+  color: #777;
+  padding: 32px 0;
+}
+
+/* Mode selector */
+.selector-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (min-width: 600px) {
+  .selector-grid { grid-template-columns: 1fr 1fr; }
+}
+.selector-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e1e3e8;
+  background: #ffffff;
+  cursor: pointer;
+  min-height: 140px;
+}
+.selector-tile:hover {
+  border-color: #2563eb;
+  background: #f0f5ff;
+}
+.selector-tile-title {
+  font-weight: 600;
+  font-size: 18px;
+  color: #1a1a1a;
+  text-align: center;
+}
+
+/* Back button row above each list / form */
+.back-row {
+  margin-bottom: 8px;
+}
+.back-row button {
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #555;
+  border-color: transparent;
+  background: transparent;
+}
+.back-row button:hover {
+  background: #f0f1f4;
+  border-color: #c8c8d0;
+}
+
+/* ID card list thumbnails */
+.id-card-thumb {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  border-radius: 6px;
+  margin-top: 8px;
+  border: 1px solid #e1e3e8;
+}
+
+/* Coverage list thumbnails (front + back side-by-side) */
+.coverage-thumbs {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.coverage-thumb {
+  width: 140px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid #e1e3e8;
+}
+
+/* ID card image upload block (single image, full-width) */
+.id-card-image {
+  margin: 12px 0;
+}
+.id-card-image .preview {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1.6 / 1;
+  background: #f0f1f4;
+  border: 1px dashed #c8c8d0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  font-size: 13px;
+  overflow: hidden;
+}
+.id-card-image .preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
