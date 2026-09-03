@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.141.0",
+    "plugin_version": "0.0.1",
+    "name": "disable_delegate_on_image_and_refer",
+    "description": "Removes the Delegate action from the Image (Imaging Order) and Refer commands so providers can only Sign them.",
+    "components": {
+        "protocols": [
+            {
+                "class": "disable_delegate_on_image_and_refer.handlers.disable_delegate_actions:DisableImagingOrderDelegate",
+                "description": "Removes the Delegate action from the Image command's available actions, leaving Sign only"
+            },
+            {
+                "class": "disable_delegate_on_image_and_refer.handlers.disable_delegate_actions:DisableReferDelegate",
+                "description": "Removes the Delegate action from the Refer command's available actions, leaving Sign only"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
