@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from django.db import DatabaseError
 
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 
@@ -2348,7 +2347,7 @@ class TestParseAndValidateDirectoryFailureDegrades:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory",
-                   side_effect=DatabaseError("Staff ORM exploded")):
+                   side_effect=type("DatabaseError", (Exception,), {"__module__": "django.db.utils"})("Staff ORM exploded")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
@@ -2370,7 +2369,7 @@ class TestParseAndValidateDirectoryFailureDegrades:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory",
-                   side_effect=DatabaseError("Staff ORM exploded")):
+                   side_effect=type("DatabaseError", (Exception,), {"__module__": "django.db.utils"})("Staff ORM exploded")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
@@ -2383,6 +2382,30 @@ class TestParseAndValidateDirectoryFailureDegrades:
         msg = upload_warnings[0]["message"].lower()
         assert "duplicate detection unavailable" in msg
         assert "review existing staff" in msg
+
+
+class TestSandboxImportSafety:
+    """The plugin-runner sandbox disallows importing django. If the API module
+    does, the whole BulkUploadAPI handler fails to load and every /bulk-upload
+    route 404s — the application handler still loads, so the modal opens but its
+    fetches fail. Guard against reintroduction."""
+
+    def test_api_module_does_not_import_django(self):
+        """A django import would unregister the handler and 404 its routes."""
+        import re
+        from pathlib import Path
+
+        import practitioner_bulk_loader.api.bulk_upload_api as mod
+
+        source = Path(mod.__file__).read_text()
+        django_imports = re.findall(
+            r"^[ \t]*(?:from|import)[ \t]+django\b.*$", source, re.MULTILINE
+        )
+        assert not django_imports, (
+            f"bulk_upload_api imports django ({django_imports}); the plugin "
+            "sandbox blocks django imports, so the SimpleAPI handler will not "
+            "register and its routes 404"
+        )
 
 
 class TestMergeReadOrWriteFailure:
