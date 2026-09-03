@@ -551,3 +551,69 @@ def test_unresolved_placeholders_empty_for_fully_rendered_text() -> None:
 def test_unresolved_placeholders_ignores_unterminated_braces() -> None:
     """An unclosed '{{' is not a placeholder and must not loop forever."""
     assert unresolved_placeholders("literal {{ braces with no close") == []
+
+
+# ---- end to end: the rendered time follows the patient, not the clinic ----
+
+def test_appointment_time_renders_in_the_patients_own_zone(monkeypatch) -> None:
+    """The whole point of the change: a Seattle patient booked by an Eastern
+    clinic reads 12:40 PM PT, not 3:40 PM ET."""
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+
+    address = MagicMock()
+    address.state_code = "WA"
+    address.postal_code = "98101"
+    address.country = "US"
+    address.use = "home"
+    address.state = "active"
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.preferred_first_name = "Janie"
+    patient.last_known_timezone = None
+    patient.addresses.all.return_value = [address]
+
+    appointment = MagicMock()
+    appointment.start_time = datetime(2026, 8, 5, 19, 40, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    appointment.provider = None
+    appointment.location = None
+    appointment.description = "Follow-up"
+    appointment.meeting_link = ""
+
+    result = get_template_variables(
+        patient, appointment, clinic_timezone="America/New_York"
+    )
+
+    assert result["appointment_time"] == "12:40 PM PT"
+    assert result["appointment_date"] == "August 5, 2026"
+
+
+def test_appointment_time_falls_back_to_the_clinic_zone_without_an_address(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "appointment_reminders.services.templates._get_org_variables", lambda: {}
+    )
+
+    patient = MagicMock()
+    patient.first_name = "Jane"
+    patient.last_name = "Doe"
+    patient.preferred_first_name = "Janie"
+    patient.last_known_timezone = None
+    patient.addresses.all.return_value = []
+
+    appointment = MagicMock()
+    appointment.start_time = datetime(2026, 8, 5, 19, 40, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    appointment.provider = None
+    appointment.location = None
+    appointment.description = "Follow-up"
+    appointment.meeting_link = ""
+
+    result = get_template_variables(
+        patient, appointment, clinic_timezone="America/New_York"
+    )
+
+    assert result["appointment_time"] == "3:40 PM ET"

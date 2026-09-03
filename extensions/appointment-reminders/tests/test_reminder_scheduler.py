@@ -656,6 +656,13 @@ def test_gate_respects_a_per_visit_type_send_time() -> None:
 
 
 def test_gate_still_skips_when_no_configured_send_time_matches() -> None:
+    """`now` must miss both send times in *every* resolvable zone.
+
+    14:00 Eastern is 18:00 UTC, which is 09:00 and 17:00 in none of them. The
+    earlier version of this test used 13:00 Eastern, which is 09:00 in Alaska —
+    a tick the gate is now right to open, since an Alaskan patient's day-out
+    reminder fires at 09:00 Alaska time.
+    """
     config = CampaignConfig(
         reminders_enabled=True, reminder_intervals=[1440],
         telehealth_enabled=False, reminder_send_time="09:00",
@@ -664,7 +671,7 @@ def test_gate_still_skips_when_no_configured_send_time_matches() -> None:
             "nt-1": {"note_type_id": "nt-1", "reminder_send_time": "17:00"},
         },
     )
-    mock_appt = _run_gate(config, _utc(2026, 9, 9, 13, 0))
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 14, 0))
     mock_appt.objects.filter.assert_not_called()
 
 
@@ -704,7 +711,7 @@ def test_day_out_scan_reaches_the_end_of_the_target_date() -> None:
     1-day interval, so only appointments in the first few hours of the target
     date were ever seen.
 
-    Measured on a test instance at the 09:00 ET window on 2026-08-25 with
+    Measured on a live instance at the 09:00 ET window on 2026-08-25 with
     reminder_intervals [1440]: three appointments on 2026-08-26, all
     date-eligible. 01:30 ET (16.5h out) fired; 14:00 ET (29h) and 20:00 ET (35h)
     produced no rows at all.
@@ -899,3 +906,99 @@ def test_scan_completes_and_still_returns_effects_after_a_bad_row() -> None:
     )
     assert isinstance(result, list)
     assert sent == ["pat-2"]
+
+
+# ---- day-out reminders fire at the patient's local send time ----
+#
+# Before this, a 09:00 America/New_York send reached a Pacific patient at 06:00
+# their time. The send time is now measured in the same zone the message is
+# rendered in.
+
+def _pacific_patient_appointment(appt_start_utc: datetime) -> MagicMock:
+    appt = _appointment()
+    appt.start_time = appt_start_utc
+    address = MagicMock()
+    address.state_code = "CA"
+    address.postal_code = "94105"
+    address.country = "US"
+    address.use = "home"
+    address.state = "active"
+    appt.patient.last_known_timezone = None
+    appt.patient.addresses.all.return_value = [address]
+    return appt
+
+
+def _run_day_out(now_utc: datetime, appt: MagicMock) -> MagicMock:
+    """Run one scan at `now_utc` with a single 1-day reminder at 09:00 Eastern."""
+    scheduler = _scheduler()
+    config = CampaignConfig(
+        reminders_enabled=True,
+        reminder_intervals=[1440],
+        reminder_channels=["sms"],
+        reminder_sms_template="Reminder: {{appointment_date}}",
+        reminder_email_template="Reminder",
+        reminder_send_time="09:00",
+        reminder_timezone="America/New_York",
+        telehealth_enabled=False,
+    )
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.datetime"
+    ) as mock_dt, patch(
+        "appointment_reminders.handlers.reminder_scheduler.Appointment"
+    ) as mock_appt_cls, patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
+        return_value={"appointment_date": "June 8"},
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient",
+        return_value=([MagicMock()], [MagicMock(channel="sms", success=True, error=None)]),
+    ) as mock_deliver, patch(
+        "appointment_reminders.handlers.reminder_scheduler.log_delivery"
+    ):
+        mock_dt.now.return_value = now_utc
+        mock_dt.combine = datetime.combine
+        mock_cache.return_value.get.return_value = None
+        chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
+        chain.return_value.iterator.return_value = [appt]
+        scheduler.execute()
+    return mock_deliver
+
+
+_PT = zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def test_day_out_reminder_fires_at_nine_in_the_patients_zone() -> None:
+    appt = _pacific_patient_appointment(
+        datetime(2026, 6, 8, 14, 0, tzinfo=_PT).astimezone(timezone.utc)
+    )
+    now = datetime(2026, 6, 7, 9, 0, tzinfo=_PT).astimezone(timezone.utc)
+    assert _run_day_out(now, appt).call_count == 1
+
+
+def test_day_out_reminder_does_not_fire_at_nine_in_the_clinic_zone() -> None:
+    """09:00 Eastern is 06:00 for this patient. Sending then is the behavior
+    that prompted the change, and TCPA quiet hours start at 08:00 local."""
+    appt = _pacific_patient_appointment(
+        datetime(2026, 6, 8, 14, 0, tzinfo=_PT).astimezone(timezone.utc)
+    )
+    now = datetime(
+        2026, 6, 7, 9, 0, tzinfo=zoneinfo.ZoneInfo("America/New_York")
+    ).astimezone(timezone.utc)
+    _run_day_out(now, appt).assert_not_called()
+
+
+def test_gate_opens_for_a_tick_that_is_the_send_time_only_in_another_zone() -> None:
+    """The scan gate has to admit 09:00 Pacific even though the configured zone
+    is Eastern, or a Pacific patient's day-out reminder never fires at all."""
+    config = CampaignConfig(
+        reminders_enabled=True, reminder_intervals=[1440],
+        telehealth_enabled=False, reminder_send_time="09:00",
+        reminder_timezone="America/New_York",
+    )
+    now = datetime(2026, 6, 7, 9, 0, tzinfo=_PT).astimezone(timezone.utc)
+    mock_appt = _run_gate(config, now)
+    mock_appt.objects.filter.assert_called_once()

@@ -20,7 +20,12 @@ from appointment_reminders.services.config import (
 )
 from appointment_reminders.services.delivery import deliver_to_patient
 from appointment_reminders.services.history import log_delivery
-from appointment_reminders.services.templates import get_template_variables, render_template
+from appointment_reminders.services.templates import (
+    get_template_variables,
+    render_template,
+    resolve_timezone_name,
+)
+from appointment_reminders.services.timezones import RESOLVABLE_ZONES
 
 class _TelehealthFailure:
     """Minimal result object for logging a telehealth link-missing failure."""
@@ -108,15 +113,24 @@ class ReminderScheduler(CronTask):
         # tick. Every telehealth interval and every sub-day reminder interval is
         # time-relative, so those can fire at any tick and force the scan. But a
         # day-out reminder can only fire in the grace window after its send time,
-        # which is a property of `now` alone — so with only day-out intervals
-        # configured (a single daily reminder, the common case) this turns 288
-        # scans a day into one. Business-line overrides cannot set a send time or
-        # interval, so these two sources are the complete set.
+        # which is a property of `now` and a timezone alone. Business-line
+        # overrides cannot set a send time or interval, so the global setting
+        # plus per-visit-type overrides are the complete set of send times.
+        #
+        # The timezone half of that is per patient: a day-out reminder fires at
+        # its send time in the *patient's* zone, so the gate has to ask whether
+        # that instant is passing in any zone a patient can resolve to, not only
+        # in the configured default. That is a fixed set of about nine US zones,
+        # so with only day-out intervals configured (a single daily reminder,
+        # the common case) this turns 288 scans a day into roughly nine — still
+        # the large majority of ticks skipped, and _is_day_out_window below
+        # still makes the exact per-appointment decision.
         time_relative = [i for i in reminder_intervals if i < DAY_OUT_THRESHOLD]
         time_relative.extend(telehealth_intervals)
         if not time_relative and not any(
-            _in_send_window(now, send_time, send_tz)
+            _in_send_window(now, send_time, zone)
             for send_time, send_tz in send_windows
+            for zone in ({send_tz} | RESOLVABLE_ZONES)
         ):
             log.info("No interval can fire on this tick; skipping the scan")
             return []
@@ -132,7 +146,7 @@ class ReminderScheduler(CronTask):
         # the raw interval therefore dropped every eligible appointment past
         # interval_minutes + grace, silently: no log line, no error.
         #
-        # Measured on a test instance with reminder_intervals [1440] and a 09:00 ET
+        # Measured on a live instance with reminder_intervals [1440] and a 09:00 ET
         # send. Three appointments on the next local date, all date-eligible:
         # 16.5h out fired, 29h and 35h out were dropped. The old 24.1h horizon
         # admitted only the first.
@@ -172,6 +186,9 @@ class ReminderScheduler(CronTask):
             )
             .prefetch_related(
                 "patient__telecom",
+                # The timezone resolver reads the patient's address to work out
+                # their local time; without this it is one extra query per row.
+                "patient__addresses",
                 "provider__roles",
                 "location__addresses",
                 "location__telecom",
@@ -212,6 +229,14 @@ class ReminderScheduler(CronTask):
                 time_until = appointment.start_time - now
                 minutes_until = int(time_until.total_seconds() / 60)
 
+                # The zone the message will be rendered in is also the zone its
+                # send time is measured in, so "9:00 AM" means 9:00 AM where the
+                # patient is. Resolved once per appointment and reused by both
+                # the firing check and the template variables below. The
+                # configured zone stays as the fallback for a patient whose own
+                # is unknown.
+                patient_tz = resolve_timezone_name(appointment.patient, send_tz)
+
                 # Reminder campaign — telehealth is configured independently below
                 # and must run regardless of whether reminders are enabled for this
                 # appointment's note type.
@@ -220,7 +245,11 @@ class ReminderScheduler(CronTask):
                         if interval_minutes >= DAY_OUT_THRESHOLD:
                             # Day-out: date-relative with configured send time
                             if not _is_day_out_window(
-                                now, appointment.start_time, interval_minutes, send_time, send_tz
+                                now,
+                                appointment.start_time,
+                                interval_minutes,
+                                send_time,
+                                patient_tz,
                             ):
                                 continue
                         else:
@@ -235,8 +264,12 @@ class ReminderScheduler(CronTask):
                             continue
 
                         # Render both templates with per-type content
+                        # Rendered in the same zone the send fired in. Passing
+                        # the already-resolved zone rather than the configured
+                        # default is what keeps the two from disagreeing when a
+                        # visit type overrides the timezone.
                         variables = get_template_variables(
-                            appointment.patient, appointment, config.reminder_timezone,
+                            appointment.patient, appointment, patient_tz,
                             config=config,
                         )
 

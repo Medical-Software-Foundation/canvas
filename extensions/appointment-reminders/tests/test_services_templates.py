@@ -18,6 +18,24 @@ from appointment_reminders.services.templates import (
 )
 
 
+def _address(state_code="", postal_code="", country="", use="home", state="active"):
+    address = MagicMock()
+    address.state_code = state_code
+    address.postal_code = postal_code
+    address.country = country
+    address.use = use
+    address.state = state
+    return address
+
+
+def _patient_with_addresses(*addresses, last_known_timezone=None):
+    """A patient stub whose `addresses` behaves like a prefetched relation."""
+    patient = MagicMock()
+    patient.last_known_timezone = last_known_timezone
+    patient.addresses.all.return_value = list(addresses)
+    return patient
+
+
 # ---- render_template ----
 
 def test_render_template_replaces_double_brace_placeholders() -> None:
@@ -108,3 +126,76 @@ def test_phone_formatting_leaves_anything_unrecognised_alone() -> None:
     assert _format_phone("+442071234567") == "+442071234567"
     assert _format_phone("") == ""
     assert _format_phone("ext 402") == "ext 402"
+
+
+# ---- _resolve_timezone: the patient's address ----
+#
+# `last_known_timezone` is NULL on effectively every patient in the fleet, so
+# before the address step every message rendered in the one configured clinic
+# zone. These cover the step that actually resolves.
+
+def test_resolve_timezone_uses_the_patient_address_when_no_explicit_zone() -> None:
+    patient = _patient_with_addresses(_address("WA", "98101"))
+    tz = _resolve_timezone(patient, clinic_timezone="America/New_York")
+    assert tz == zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def test_explicit_patient_timezone_still_beats_the_address() -> None:
+    """A zone set through the FHIR tz-code extension is a deliberate statement
+    about where the patient is, and outranks an address that may be stale."""
+    patient = _patient_with_addresses(
+        _address("WA", "98101"), last_known_timezone="America/Denver"
+    )
+    tz = _resolve_timezone(patient, clinic_timezone="America/New_York")
+    assert tz == zoneinfo.ZoneInfo("America/Denver")
+
+
+def test_resolve_timezone_falls_back_to_clinic_for_an_unresolvable_address() -> None:
+    patient = _patient_with_addresses(_address("ON", "M5H 2N2", country="Canada"))
+    tz = _resolve_timezone(patient, clinic_timezone="America/Chicago")
+    assert tz == zoneinfo.ZoneInfo("America/Chicago")
+
+
+def test_resolve_timezone_falls_back_to_clinic_when_there_are_no_addresses() -> None:
+    patient = _patient_with_addresses()
+    tz = _resolve_timezone(patient, clinic_timezone="America/Chicago")
+    assert tz == zoneinfo.ZoneInfo("America/Chicago")
+
+
+def test_resolve_timezone_prefers_an_active_home_address() -> None:
+    """A patient with a work address in another state is still at home when the
+    reminder lands."""
+    patient = _patient_with_addresses(
+        _address("NY", "10001", use="work"),
+        _address("CA", "94105", use="home"),
+    )
+    assert _resolve_timezone(patient) == zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def test_resolve_timezone_skips_an_inactive_address_for_an_active_one() -> None:
+    patient = _patient_with_addresses(
+        _address("NY", "10001", state="inactive"),
+        _address("CA", "94105", use="work"),
+    )
+    assert _resolve_timezone(patient) == zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def test_resolve_timezone_uses_an_inactive_address_rather_than_nothing() -> None:
+    """An address marked inactive is weak evidence, but it beats defaulting a
+    Pacific patient onto Eastern."""
+    patient = _patient_with_addresses(_address("CA", "94105", state="inactive"))
+    assert _resolve_timezone(patient) == zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def test_resolve_timezone_ignores_a_non_string_explicit_zone() -> None:
+    """`last_known_timezone` is free text; a non-string would raise a TypeError
+    that the ZoneInfo guard does not catch."""
+    patient = _patient_with_addresses(_address("WA", "98101"), last_known_timezone=17)
+    assert _resolve_timezone(patient) == zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def test_resolve_timezone_ignores_a_garbage_explicit_zone_and_uses_the_address() -> None:
+    patient = _patient_with_addresses(
+        _address("WA", "98101"), last_known_timezone="Not/A/Real/Zone"
+    )
+    assert _resolve_timezone(patient) == zoneinfo.ZoneInfo("America/Los_Angeles")

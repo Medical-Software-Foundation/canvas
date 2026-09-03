@@ -653,10 +653,11 @@ def test_patient_allowlisted_accepts_an_mrn() -> None:
 
     It used to match nothing, and the failure was silent: every send skipped
     with `skipped:testing_mode`, indistinguishable from a gate working as
-    configured. Real case on a test instance: patient id
-    00000000000000000000000000000000 carries MRN 900000001.
+    configured. Reproduced against a live instance, where a patient's undashed
+    32-character id and their 9-digit MRN are different strings and only the id
+    matched. The values below are synthetic and carry that same shape.
     """
-    p = _allowlist_patient(pid="00000000000000000000000000000000", mrn="900000001")
+    p = _allowlist_patient(pid="0" * 32, mrn="900000001")
     assert _patient_allowlisted(p, {"900000001"}) is True
 
 

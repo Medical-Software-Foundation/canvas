@@ -954,7 +954,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                                 <option value="Pacific/Honolulu">Hawaii (HT)</option>
                             </select>
                         </div>
-                        <div class="interval-hint">Reminders 1 day or longer will be sent at this time. Shorter intervals are sent relative to the appointment.</div>
+                        <div class="interval-hint">Reminders 1 day or longer are sent at this time <strong>in each patient's own timezone</strong>, resolved from the timezone on their chart or, failing that, their address. The zone picked here applies only to patients whose timezone cannot be resolved. Shorter intervals are sent relative to the appointment.</div>
                     </div>
                     <div class="channel-card" id="reminder_sms_card">
                         <div class="channel-header">
@@ -2287,7 +2287,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                                     '<option value="Pacific/Honolulu"' + (ntTimezone === 'Pacific/Honolulu' ? ' selected' : '') + '>Hawaii (HT)</option>' +
                                 '</select>' +
                             '</div>' +
-                            '<div class="interval-hint">Leave blank to inherit global send time.</div>' +
+                            '<div class="interval-hint">Leave blank to inherit global send time. The time is applied in each patient&#39;s own timezone; the zone here is the fallback for patients whose timezone cannot be resolved.</div>' +
                         '</div>';
                     }
 
@@ -3008,7 +3008,13 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             try:
                 # business_line is selected because the template renderer resolves
                 # {{business_line}} / {{business_line_attribution}} off the patient.
-                patient = Patient.objects.select_related("business_line").get(id=patient_id)
+                # `addresses` feeds the timezone resolver, so the previewed and
+                # the sent message both carry the patient's local time.
+                patient = (
+                    Patient.objects.select_related("business_line")
+                    .prefetch_related("addresses")
+                    .get(id=patient_id)
+                )
             except Patient.DoesNotExist:
                 return (JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND), {})
 
@@ -3139,7 +3145,8 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             patient = (
                 Patient.objects.select_related("business_line")
-                .prefetch_related("telecom")
+                # `addresses` feeds the timezone resolver; `telecom` feeds delivery.
+                .prefetch_related("telecom", "addresses")
                 .get(id=patient_id)
             )
         except Patient.DoesNotExist:

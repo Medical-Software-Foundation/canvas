@@ -517,7 +517,8 @@ def test_preview_template_returns_404_when_patient_missing() -> None:
         "canvas_sdk.v1.data.patient.Patient"
     ) as mock_patient_cls:
         mock_patient_cls.DoesNotExist = DNE
-        mock_patient_cls.objects.select_related.return_value.get.side_effect = DNE
+        (mock_patient_cls.objects.select_related.return_value
+            .prefetch_related.return_value.get.side_effect) = DNE
         result = api.preview_template()
     assert result[0].status_code == HTTPStatus.NOT_FOUND
 
