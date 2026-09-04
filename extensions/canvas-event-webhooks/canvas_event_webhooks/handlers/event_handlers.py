@@ -10,6 +10,8 @@ kept deliberately thin — all dispatch logic lives in
 
 from __future__ import annotations
 
+from canvas_sdk.effects import Effect
+
 from canvas_event_webhooks.events_catalog import event_type_names
 from canvas_event_webhooks.handlers.base import WebhookDispatcherBase
 
@@ -19,7 +21,7 @@ class PatientWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("patients")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -28,7 +30,7 @@ class AppointmentWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("appointments")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -37,7 +39,7 @@ class NoteWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("notes")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -46,7 +48,7 @@ class ClinicalWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("clinical")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -55,7 +57,7 @@ class MedicationWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("medications")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -64,7 +66,7 @@ class PrescriptionWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("prescriptions")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -73,7 +75,7 @@ class LabWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("labs")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -82,7 +84,7 @@ class TaskWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("tasks")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -91,7 +93,7 @@ class StaffWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("staff")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -100,7 +102,7 @@ class DocumentWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("documents")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -109,7 +111,7 @@ class MessageWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("messages")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -118,7 +120,7 @@ class CareTeamWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("care_teams")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()
 
 
@@ -127,5 +129,5 @@ class BillingWebhookHandler(WebhookDispatcherBase):
 
     RESPONDS_TO = event_type_names("billing")
 
-    def compute(self):
+    def compute(self) -> list[Effect]:
         return self._dispatch()

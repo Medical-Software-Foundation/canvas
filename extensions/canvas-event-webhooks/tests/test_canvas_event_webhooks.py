@@ -69,7 +69,7 @@ def _make_handler(
     event_type: int,
     *,
     webhook_url: str | None = WEBHOOK_URL,
-    webhook_secret: str | None = None,
+    webhook_secret: str | None = WEBHOOK_SECRET,
     target_id: str = "rec-abc-123",
     context: dict | None = None,
 ):
@@ -230,12 +230,14 @@ def test_signature_is_correct_hmac_sha256():
     assert headers[SIGNATURE_HEADER] == sign_body(WEBHOOK_SECRET, raw_body, ts)
 
 
-def test_no_signature_header_when_secret_not_set():
-    """X-Canvas-Signature is absent when webhook-secret is not configured."""
-    handler = _make_handler(PatientWebhookHandler, EventType.PATIENT_CREATED)
-    headers = _headers(handler.compute())
-
-    assert "X-Canvas-Signature" not in headers
+def test_skips_delivery_when_secret_not_set():
+    """Unsigned webhooks are not delivered."""
+    handler = _make_handler(
+        PatientWebhookHandler,
+        EventType.PATIENT_CREATED,
+        webhook_secret=None,
+    )
+    assert handler.compute() == []
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +292,6 @@ def test_full_context_forwarded_when_opted_in():
     handler = _make_handler(
         DocumentWebhookHandler,
         EventType.DOCUMENT_REVIEWED,
-        webhook_secret=None,
         context=ctx,
     )
     # inject include-context opt-in

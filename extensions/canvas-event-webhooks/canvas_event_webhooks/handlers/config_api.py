@@ -42,6 +42,15 @@ def _error(message: str, status: HTTPStatus) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
 
+def _list_payload(api: WebhookConfigAPI) -> dict:
+    items = _store(api).list()
+    return {
+        "webhooks": [wh.to_dict() for wh in items],
+        "max": MAX_WEBHOOKS,
+        "count": len(items),
+    }
+
+
 class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
     """CRUD + test endpoints for webhook configuration. Staff session required."""
 
@@ -57,16 +66,7 @@ class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @get("/webhooks")
     def list_webhooks(self) -> list[Response]:
-        webhooks = _store(self).list()
-        return [
-            JSONResponse(
-                {
-                    "webhooks": [wh.to_dict() for wh in webhooks],
-                    "max": MAX_WEBHOOKS,
-                    "count": len(webhooks),
-                }
-            )
-        ]
+        return [JSONResponse(_list_payload(self))]
 
     @post("/webhooks")
     def create_webhook(self) -> list[Response]:
@@ -90,7 +90,7 @@ class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
         except WebhookConfigError as exc:
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
-        payload: dict = {"webhook": webhook.to_dict()}
+        payload: dict = {"webhook": webhook.to_dict(), **_list_payload(self)}
         if warning:
             payload["warning"] = warning
         return [JSONResponse(payload, status_code=HTTPStatus.CREATED)]
@@ -123,7 +123,7 @@ class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
         except WebhookConfigError as rec:
             return [_error(str(rec), HTTPStatus.BAD_REQUEST)]
-        payload = {"webhook": webhook.to_dict()}
+        payload = {"webhook": webhook.to_dict(), **_list_payload(self)}
         if warning:
             payload["warning"] = warning
         return [JSONResponse(payload)]
@@ -137,7 +137,7 @@ class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
             return [_error(str(exc), HTTPStatus.NOT_FOUND)]
         except WebhookConfigError as exc:
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
-        return [JSONResponse({"ok": True})]
+        return [JSONResponse({"ok": True, **_list_payload(self)})]
 
     @post("/webhooks/<webhook_id>/regenerate")
     def regenerate(self) -> list[Response]:
@@ -148,7 +148,7 @@ class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
             return [_error(str(exc), HTTPStatus.NOT_FOUND)]
         except WebhookConfigError as exc:
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
-        return [JSONResponse({"webhook": webhook.to_dict()})]
+        return [JSONResponse({"webhook": webhook.to_dict(), **_list_payload(self)})]
 
     @post("/webhooks/import-legacy")
     def import_legacy(self) -> list[Response]:
@@ -158,7 +158,7 @@ class WebhookConfigAPI(StaffSessionAuthMixin, SimpleAPI):
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
         except WebhookConfigError as exc:
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
-        return [JSONResponse({"webhook": webhook.to_dict()}, status_code=HTTPStatus.CREATED)]
+        return [JSONResponse({"webhook": webhook.to_dict(), **_list_payload(self)}, status_code=HTTPStatus.CREATED)]
 
     @post("/webhooks/<webhook_id>/test")
     def test_webhook(self) -> list[Response]:

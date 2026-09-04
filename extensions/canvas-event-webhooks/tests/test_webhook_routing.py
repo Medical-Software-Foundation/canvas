@@ -152,7 +152,7 @@ def test_one_webhook_construction_failure_does_not_block_others(monkeypatch):
 
     def boom(webhook, body):
         if webhook.name == "bad":
-            raise RuntimeError("network down")
+            raise TypeError("network down")
         return original(webhook, body)
 
     monkeypatch.setattr(handler, "_effect_for_webhook", boom)

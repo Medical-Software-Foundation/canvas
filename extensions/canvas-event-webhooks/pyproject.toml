@@ -1,6 +1,6 @@
 [project]
 authors = [
-  {email = "talha.irshad@kodexolabs.com", name = "Rejuva Meds Team"}
+  {email = "engineering@canvasmedical.com", name = "Canvas Medical, Inc."}
 ]
 dependencies = [
   "canvas[test-utils]"
@@ -8,9 +8,9 @@ dependencies = [
 description = "Canvas plugin that forwards EHR events to up to three configurable webhook URLs."
 license = "MIT"
 name = "canvas-event-webhooks"
-readme = "canvas_event_webhooks/README.md"
+readme = "README.md"
 requires-python = ">=3.11"
-version = "0.2.0"
+version = "0.4.3"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]

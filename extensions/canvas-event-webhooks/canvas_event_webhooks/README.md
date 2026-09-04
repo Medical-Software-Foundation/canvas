@@ -36,17 +36,20 @@ Without this plugin, every Canvas → external-system integration is its own plu
 
 ## Who it's for
 
-Integration engineers connecting Canvas to an external API, queue, or warehouse, and operations staff who need appointment, task, or billing events in Slack or Zapier and want to manage the destinations themselves. No specialty assumptions.
+| Role | Primary use |
+|---|---|
+| Integration engineer | Connect Canvas to an external API, queue, or warehouse |
+| Practice operations / RevOps | Send appointment, task, or billing events to Slack or Zapier |
+| Analytics / data engineer | Stream clinical and scheduling events into a warehouse |
+
+Not specialty-specific.
 
 ---
 
-## Install
+## How to install
 
 ```bash
-uv sync
-uv run pytest
-uv run canvas validate canvas_event_webhooks
-uv run canvas install canvas_event_webhooks --host <your-subdomain>
+canvas install canvas_event_webhooks --host <your-instance>
 ```
 
 Bump `plugin_version` in `CANVAS_MANIFEST.json` before each reinstall.
@@ -54,7 +57,7 @@ Bump `plugin_version` in `CANVAS_MANIFEST.json` before each reinstall.
 Optional, only if you have not saved anything in the UI yet:
 
 ```bash
-uv run canvas install canvas_event_webhooks --host <your-subdomain> \
+canvas install canvas_event_webhooks --host <your-instance> \
     --secret webhook-url=https://your-endpoint.example.com/canvas \
     --secret webhook-secret=$(openssl rand -hex 32)
 ```

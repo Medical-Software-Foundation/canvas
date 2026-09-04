@@ -222,7 +222,7 @@ class WebhookDispatcherBase(BaseHandler):
         include_context = (
             (self.secrets.get("include-context") or "").strip().lower() == "true"
         )
-        raw_ctx: dict = self.event.context or {}
+        raw_ctx = self.event.context if isinstance(self.event.context, dict) else {}
         context_block = raw_ctx if include_context else self._safe_context(raw_ctx)
 
         payload: dict = {
@@ -303,6 +303,13 @@ class WebhookDispatcherBase(BaseHandler):
                     event_name,
                 )
                 continue
+            if not (webhook.secret or "").strip():
+                log.warning(
+                    "[Webhooks] Skipping unsigned webhook=%s event=%s",
+                    webhook.name,
+                    event_name,
+                )
+                continue
             log.info(
                 "[Webhooks] Delivery started webhook=%s event=%s retries=%s",
                 webhook.name,
@@ -316,8 +323,8 @@ class WebhookDispatcherBase(BaseHandler):
                     body_payload.update(details)
                 body = json.dumps(body_payload, default=str)
                 effects.append(self._effect_for_webhook(webhook, body))
-            except Exception:
-                # Never let one webhook's construction failure block the rest.
+            except (TypeError, ValueError, OverflowError):
+                # Never let one webhook's JSON encoding failure block the rest.
                 log.exception(
                     "[Webhooks] Delivery failed webhook=%s event=%s",
                     webhook.name,

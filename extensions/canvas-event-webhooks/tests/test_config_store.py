@@ -225,6 +225,39 @@ def test_saving_legacy_materializes_ui_config():
     assert listed[0].legacy is False
 
 
+def test_create_alongside_legacy_keeps_cli_card_addressable():
+    """First UI create rematerializes the CLI webhook; id 'legacy' still works."""
+    store = _store(
+        secrets={
+            "webhook-url": "https://legacy.example.com/canvas",
+            "webhook-secret": "cli-secret",
+        }
+    )
+    created = _create(store, name="New destination")
+    listed = store.list()
+    assert len(listed) == 2
+    assert created.id != LEGACY_WEBHOOK_ID
+    assert all(wh.id != LEGACY_WEBHOOK_ID for wh in listed)
+    assert all(wh.legacy is False for wh in listed)
+
+    stale = store.get(LEGACY_WEBHOOK_ID)
+    assert stale.url == "https://legacy.example.com/canvas"
+    assert stale.id != LEGACY_WEBHOOK_ID
+
+    updated, _ = store.update(LEGACY_WEBHOOK_ID, name="CLI imported")
+    assert updated.name == "CLI imported"
+    assert updated.url == "https://legacy.example.com/canvas"
+
+    rotated = store.regenerate_secret(LEGACY_WEBHOOK_ID)
+    assert rotated.secret != "cli-secret"
+    assert rotated.url == "https://legacy.example.com/canvas"
+
+    store.delete(LEGACY_WEBHOOK_ID)
+    remaining = store.list()
+    assert len(remaining) == 1
+    assert remaining[0].id == created.id
+
+
 def test_delete_missing_webhook():
     with pytest.raises(WebhookNotFoundError):
         _store(data=[]).delete("nope")

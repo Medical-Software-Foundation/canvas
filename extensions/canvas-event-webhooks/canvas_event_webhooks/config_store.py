@@ -207,7 +207,10 @@ class AttributeHubBackend:
         if value is None:
             return None
         if isinstance(value, str):
-            value = json.loads(value)
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                return None
         if not isinstance(value, list):
             return None
         return value
@@ -237,10 +240,11 @@ class WebhookConfigStore:
         return self._legacy_fallback()
 
     def get(self, webhook_id: str) -> WebhookConfig:
-        for webhook in self.list():
-            if webhook.id == webhook_id:
-                return webhook
-        raise WebhookNotFoundError(f"Webhook {webhook_id!r} was not found.")
+        items = self.list()
+        index = self._resolve_index(items, webhook_id)
+        if index is None:
+            raise WebhookNotFoundError(f"Webhook {webhook_id!r} was not found.")
+        return items[index]
 
     def active_webhooks_for_event(self, event_name: str) -> list[WebhookConfig]:
         return [wh for wh in self.list() if wh.accepts(event_name)]
@@ -287,7 +291,7 @@ class WebhookConfigStore:
         include_details: bool | None = None,
     ) -> tuple[WebhookConfig, str | None]:
         items = self._working_copy()
-        index = next((i for i, wh in enumerate(items) if wh.id == webhook_id), None)
+        index = self._resolve_index(items, webhook_id)
         if index is None:
             raise WebhookNotFoundError(f"Webhook {webhook_id!r} was not found.")
         current = items[index]
@@ -319,14 +323,15 @@ class WebhookConfigStore:
 
     def delete(self, webhook_id: str) -> None:
         items = self._working_copy()
-        remaining = [wh for wh in items if wh.id != webhook_id]
-        if len(remaining) == len(items):
+        index = self._resolve_index(items, webhook_id)
+        if index is None:
             raise WebhookNotFoundError(f"Webhook {webhook_id!r} was not found.")
+        remaining = [wh for i, wh in enumerate(items) if i != index]
         self._save(remaining)
 
     def regenerate_secret(self, webhook_id: str) -> WebhookConfig:
         items = self._working_copy()
-        index = next((i for i, wh in enumerate(items) if wh.id == webhook_id), None)
+        index = self._resolve_index(items, webhook_id)
         if index is None:
             raise WebhookNotFoundError(f"Webhook {webhook_id!r} was not found.")
         current = items[index]
@@ -371,10 +376,27 @@ class WebhookConfigStore:
             return list(stored)
         return list(self._legacy_fallback())
 
+    def _resolve_index(self, items: list[WebhookConfig], webhook_id: str) -> int | None:
+        """Find a webhook, including a stale UI id of ``legacy`` after first save.
+
+        Creating another destination rematerializes the CLI card under a new
+        UUID. The config page may still hold ``id="legacy"``. Map that sentinel
+        to the persisted row that still matches the CLI ``webhook-url``.
+        """
+        index = next((i for i, wh in enumerate(items) if wh.id == webhook_id), None)
+        if index is not None:
+            return index
+        if webhook_id != LEGACY_WEBHOOK_ID:
+            return None
+        cli_url = (self.secrets.get("webhook-url") or "").strip()
+        if not cli_url:
+            return None
+        return next((i for i, wh in enumerate(items) if wh.url == cli_url), None)
+
     def _load_stored(self) -> list[WebhookConfig] | None:
         try:
             raw = self.backend.load()
-        except Exception as exc:
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
             log.warning(
                 "[Webhooks] Failed to load webhook configuration (%s); "
                 "falling back to CLI secrets if present.",

@@ -50,8 +50,7 @@ tests/
 ├── test_webhook_routing.py
 ├── test_patient_id.py
 ├── test_events_catalog.py
-├── test_event_details.py
-└── test_event_handlers.py
+└── test_event_details.py
 ```
 
 `WebhookDispatcherBase` is **not** in the manifest. Canvas warns about that on validate. That is expected — it is a base class, not a loaded handler.
@@ -122,7 +121,7 @@ API routes (staff session, prefix `/config`):
 | POST | `/webhooks/<id>/test` | Signed `webhook.test` |
 | POST | `/webhooks/import-legacy` | Persist CLI webhook |
 
-Persistence: AttributeHub `type=plugin_config`, `id=canvas_event_webhooks`, attribute `webhooks`. Namespace in the manifest: `rejuva__webhooks` `read_write`.
+Persistence: AttributeHub `type=plugin_config`, `id=canvas_event_webhooks`, attribute `webhooks`. Namespace in the manifest: `canvas__event_webhooks` `read_write`.
 
 ---
 
@@ -153,8 +152,7 @@ uv run pytest tests/test_canvas_event_webhooks.py \
     tests/test_webhook_routing.py \
     tests/test_patient_id.py \
     tests/test_events_catalog.py \
-    tests/test_event_details.py \
-    tests/test_event_handlers.py -q
+    tests/test_event_details.py -q
 ```
 
 Worth covering when you touch behavior:
@@ -178,7 +176,7 @@ uv run canvas install canvas_event_webhooks --host <subdomain>
 uv run canvas logs --host <subdomain>   # lines prefixed [Webhooks]
 ```
 
-Install to a host is a remote write. Confirm the subdomain (`rejuvameds-dev`, production, …) before running it.
+Install to a host is a remote write. Confirm the subdomain (`<your-instance>`) before running it.
 
 The validate warning about `WebhookDispatcherBase` not being in the manifest is normal.
 

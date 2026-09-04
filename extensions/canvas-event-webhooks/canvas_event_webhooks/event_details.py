@@ -22,6 +22,18 @@ from logger import log
 
 from canvas_event_webhooks.events_catalog import event_label
 
+# Best-effort lookups must not block webhook delivery. Catch only expected
+# attribute/type failures from optional Canvas models — never bare Exception.
+_SAFE_ERRORS = (AttributeError, TypeError, ValueError)
+
+
+def _is_safe_lookup_error(exc: BaseException) -> bool:
+    if isinstance(exc, _SAFE_ERRORS):
+        return True
+    # Django RelatedObjectDoesNotExist / Model.DoesNotExist — do not import django
+    # (blocked in the Canvas sandbox).
+    return getattr(exc.__class__, "__name__", "").endswith("DoesNotExist")
+
 _MOCK_TYPES = frozenset(
     {"Mock", "MagicMock", "NonCallableMock", "NonCallableMagicMock", "AsyncMock"}
 )
@@ -47,6 +59,8 @@ def enrich_event(event, event_name: str, patient_id: str | None) -> dict:
             extra["data"] = data
         return extra
     except Exception as exc:
+        if not _is_safe_lookup_error(exc):
+            raise
         log.warning(
             "[Webhooks] Failed to attach event details (%s).",
             exc.__class__.__name__,
@@ -85,11 +99,11 @@ def _plain(value):
             text = iso()
             if text:
                 return text
-        except Exception:
+        except _SAFE_ERRORS:
             pass
     try:
         text = str(value).strip()
-    except Exception:
+    except _SAFE_ERRORS:
         return None
     if not text or text.startswith("<Mock"):
         return None
@@ -118,7 +132,7 @@ def _target_instance(event):
     try:
         target = getattr(event, "target", None)
         instance = getattr(target, "instance", None) if target is not None else None
-    except Exception:
+    except _SAFE_ERRORS:
         return None
     if _is_mock(instance):
         return None
@@ -182,7 +196,7 @@ def _load_actor(event) -> dict | None:
     try:
         actor = getattr(event, "actor", None)
         user = getattr(actor, "instance", None) if actor is not None else None
-    except Exception:
+    except _SAFE_ERRORS:
         return None
     if user is None or _is_mock(user):
         return None
@@ -190,7 +204,7 @@ def _load_actor(event) -> dict | None:
     person = None
     try:
         person = getattr(user, "person_subclass", None)
-    except Exception:
+    except _SAFE_ERRORS:
         person = None
     if person is None or _is_mock(person):
         try:
@@ -198,7 +212,7 @@ def _load_actor(event) -> dict | None:
                 person = getattr(user, "staff", None)
             else:
                 person = getattr(user, "patient", None)
-        except Exception:
+        except _SAFE_ERRORS:
             person = None
     if person is None or _is_mock(person):
         person = user if _plain(getattr(user, "first_name", None)) else None
@@ -209,7 +223,7 @@ def _load_actor(event) -> dict | None:
     try:
         if getattr(user, "is_staff", None) is False:
             role = "patient"
-    except Exception:
+    except _SAFE_ERRORS:
         pass
     cls = _class_name(person)
     if cls == "Patient":
@@ -228,7 +242,7 @@ def _load_patient(patient_id: str | None, instance) -> dict | None:
         related = None
         try:
             related = getattr(instance, "patient", None)
-        except Exception:
+        except _SAFE_ERRORS:
             related = None
         summary = person_summary(related, role="patient")
         if summary:
@@ -240,7 +254,7 @@ def _load_patient(patient_id: str | None, instance) -> dict | None:
         from canvas_sdk.v1.data.patient import Patient
 
         found = Patient.objects.filter(id=patient_id).first()
-    except Exception:
+    except _SAFE_ERRORS:
         found = None
     return person_summary(found, role="patient")
 
@@ -271,7 +285,7 @@ def _codings(instance) -> list[str] | None:
         if related is None:
             return None
         rows = related.all()[:5]
-    except Exception:
+    except _SAFE_ERRORS:
         return None
     displays: list[str] = []
     for row in rows:
@@ -379,7 +393,7 @@ def _from_lab_order(instance) -> dict:
             name = _plain(getattr(test, "ontology_test_name", None))
             if name:
                 tests.append(name)
-    except Exception:
+    except _SAFE_ERRORS:
         tests = []
     return {
         "record_type": "lab_order",
@@ -576,7 +590,7 @@ def _extract_data(instance) -> dict | None:
     handler = _BY_CLASS.get(_class_name(instance), _generic)
     try:
         data = handler(instance)
-    except Exception:
+    except _SAFE_ERRORS:
         data = _generic(instance)
     packed = _compact(data)
     return packed or None

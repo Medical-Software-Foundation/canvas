@@ -151,6 +151,14 @@
       return data;
     }
 
+    function applyList(data) {
+      if (Array.isArray(data && data.webhooks)) {
+        webhooks = data.webhooks;
+        return true;
+      }
+      return false;
+    }
+
     function allEventNames() {
       return catalog.flatMap((c) => c.events.map((e) => e.name));
     }
@@ -320,7 +328,7 @@
         if (!confirm("Generate a new secret? Your receiver must be updated to the new value.")) return;
         try {
           const data = await api("webhooks/" + encodeURIComponent(wh.id) + "/regenerate", { method: "POST" });
-          replaceWebhook(wh, data.webhook);
+          if (!applyList(data)) replaceWebhook(wh, data.webhook);
           flash("ok", "Secret regenerated.");
           render();
         } catch (err) { flash("error", err.message); }
@@ -345,10 +353,10 @@
           if (!wh.id) {
             data = await api("webhooks", { method: "POST", body: JSON.stringify(payload) });
             drafts = drafts.filter((d) => d !== wh);
-            webhooks.push(data.webhook);
+            if (!applyList(data)) webhooks.push(data.webhook);
           } else {
             data = await api("webhooks/" + encodeURIComponent(wh.id), { method: "PUT", body: JSON.stringify(payload) });
-            replaceWebhook(wh, data.webhook);
+            if (!applyList(data)) replaceWebhook(wh, data.webhook);
           }
           flash(data.warning ? "warn" : "ok", data.warning || "Webhook saved.");
           render();
@@ -359,8 +367,8 @@
         if (!confirm("Remove this webhook? It will stop receiving events.")) return;
         try {
           if (wh.id && !String(wh.id).startsWith("draft")) {
-            await api("webhooks/" + encodeURIComponent(wh.id), { method: "DELETE" });
-            webhooks = webhooks.filter((w) => w.id !== wh.id);
+            const data = await api("webhooks/" + encodeURIComponent(wh.id), { method: "DELETE" });
+            if (!applyList(data)) webhooks = webhooks.filter((w) => w.id !== wh.id);
           } else {
             drafts = drafts.filter((d) => d !== wh);
           }
