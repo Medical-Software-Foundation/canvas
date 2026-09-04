@@ -236,8 +236,8 @@ rather than guessing.
 | `applications.waitlist_app:WaitlistApp` | Application (`provider_menu_item`) | provider (hamburger) menu, pinned to the top |
 | `routes.app_routes:WaitlistAppAPI` | SimpleAPI | serves the roster page and assets |
 | `routes.waitlist_api:WaitlistAPI` | SimpleAPI | entry CRUD, patient search, dropdown options |
-| `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header — one-click add on the broadest terms, or the roster once they are listed |
-| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only — so in practice the no-show, which is the only one of the two whose note still has a header |
+| `handlers.chart_button:AddToWaitlistButton` | ActionButton | chart patient header — one-click add on the broadest terms; once they are listed, opens that entry's own form to narrow it, or the roster searched for their name if they have several |
+| `handlers.appointment_button:AddToWaitlistAppointmentButton` | ActionButton | note header, cancelled/no-showed appointments only — so in practice the no-show, which is the only one of the two whose note still has a header. Opens the form pre-filled from the freed slot, or that slot's existing entry when the patient is already waiting for it |
 | `handlers.slot_freed:SlotFreedHandler` | Handler | `APPOINTMENT_CANCELED`, `APPOINTMENT_NO_SHOWED`, `APPOINTMENT_RESCHEDULED`, `PATIENT_PORTAL__APPOINTMENT_CANCELED`, `PATIENT_PORTAL__APPOINTMENT_RESCHEDULED` |
 | `handlers.appointment_booked:AppointmentBookedHandler` | Handler | `APPOINTMENT_CREATED` |
 | `handlers.note_buttons:NoteButtonsRefreshHandler` | Handler | `NOTE_STATE_CHANGE_EVENT_CREATED` |
