@@ -78,6 +78,55 @@ def test_log_delivery_creates_one_row_per_result() -> None:
     assert email_call.kwargs["error"] == "boom"
 
 
+def test_log_delivery_reuses_a_passed_patient_instead_of_re_reading_it() -> None:
+    """The hot path: the caller already holds the row, so no lookup should run.
+
+    The FK targets ``dbid``, so writing the row needs that integer and nothing
+    else. In the reminder cron this lookup ran once per delivery against the
+    same table the scan had already joined.
+    """
+    patient = MagicMock()
+    patient.dbid = 4242
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        log_delivery(
+            "appt-1", "patient-1", "reminder", [_result()], patient=patient
+        )
+
+    mock_patient_cls.objects.get.assert_not_called()
+    kwargs = mock_delivery.objects.create.call_args.kwargs
+    assert kwargs["patient_id"] == 4242
+    # The FK is set by id, so no patient *object* is handed to create().
+    assert "patient" not in kwargs
+
+
+def test_log_delivery_still_looks_the_patient_up_when_not_passed() -> None:
+    """Callers without the row in hand keep working unchanged."""
+    fetched = MagicMock()
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        mock_patient_cls.objects.get.return_value = fetched
+        log_delivery("appt-1", "patient-1", "reminder", [_result()])
+
+    mock_patient_cls.objects.get.assert_called_once_with(id="patient-1")
+    assert mock_delivery.objects.create.call_args.kwargs["patient"] is fetched
+
+
+def test_log_inbound_response_reuses_a_passed_patient() -> None:
+    """The webhook resolved the patient from the sender's number to get here."""
+    patient = MagicMock()
+    patient.dbid = 77
+    with patch(f"{_HIST}.CustomPatient") as mock_patient_cls, \
+         patch(f"{_HIST}.NotificationDelivery") as mock_delivery:
+        log_inbound_response(
+            patient_id="pat-1", appointment_id="appt-1", status="confirmed",
+            body="Y", from_number="+1", patient=patient,
+        )
+
+    mock_patient_cls.objects.get.assert_not_called()
+    assert mock_delivery.objects.create.call_args.kwargs["patient_id"] == 77
+
+
 def test_log_delivery_uses_empty_string_when_appointment_id_falsy() -> None:
     patient = MagicMock()
     with patch(

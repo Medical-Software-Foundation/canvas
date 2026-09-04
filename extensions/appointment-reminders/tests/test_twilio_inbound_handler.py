@@ -35,20 +35,34 @@ def _sign(url: str, params: dict[str, str], token: str) -> str:
     ).decode()
 
 
-class _FakeCache:
+class _FakeClaims:
+    """Stand-in for the SendClaim table used by the replay guard.
+
+    ``claim`` refuses every caller after the first, which is the property the
+    guard rests on: a replayed request and a Twilio retry both lose to the
+    original. The markers moved out of the plugins cache because that cache
+    culls past 300 entries and this one had the longest lifetime in the plugin.
+    """
+
     def __init__(self) -> None:
-        self.store: dict = {}
+        self.held: set[tuple[str, str]] = set()
 
-    def get(self, key):
-        return self.store.get(key)
+    def already_claimed(self, scope, key):
+        return (scope, key) in self.held
 
-    def set(self, key, value, timeout_seconds=None):
-        self.store[key] = value
+    def claim(self, scope, key):
+        if (scope, key) in self.held:
+            return False
+        self.held.add((scope, key))
+        return True
+
+    def release(self, scope, key):
+        self.held.discard((scope, key))
 
 
 @pytest.fixture(autouse=True)
-def _mock_cache():
-    with patch(f"{_MOD}.get_cache", return_value=_FakeCache()):
+def _mock_claims():
+    with patch(f"{_MOD}.claim_store", return_value=_FakeClaims()):
         yield
 
 

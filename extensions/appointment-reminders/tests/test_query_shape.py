@@ -17,14 +17,17 @@ def _select_clause(qs) -> str:
     return str(qs.query).split(" FROM ")[0]
 
 
-def _patient_appointments_notes_qs():
+def _patient_appointments_notes_qs(linked_note_dbids=None):
     """Mirrors get_patient_appointments' notes query."""
-    return (
+    qs = (
         Note.objects.filter(patient__id=_PID)
         .select_related("provider", "note_type_version")
         .defer("body", "related_data")
         .order_by("-datetime_of_service")
     )
+    if linked_note_dbids:
+        qs = qs.exclude(dbid__in=linked_note_dbids)
+    return qs
 
 
 def _patient_appointments_appt_qs():
@@ -67,6 +70,43 @@ def test_notes_query_still_selects_every_field_the_serializer_reads() -> None:
     # Related fields come from the joins, so the join must still be there.
     sql = str(_patient_appointments_notes_qs().query)
     assert "JOIN" in sql
+
+
+def test_appointment_note_fk_holds_a_dbid_not_a_uuid() -> None:
+    """The premise the dedup below rests on, asserted rather than assumed.
+
+    `Appointment.note` declares no `to_field`, so it targets Note's primary key.
+    On an SDK model that is `dbid`; `id` is a separate UUID column that is merely
+    unique. So `appt.note_id` is an integer.
+    """
+    target = Appointment._meta.get_field("note").target_field
+    assert target.name == "dbid"
+    assert Note._meta.pk.name == "dbid"
+    assert Note._meta.get_field("id").get_internal_type() == "UUIDField"
+
+
+def test_linked_note_dedup_excludes_on_dbid() -> None:
+    """The exclude must name `dbid`, the column `appt.note_id` actually holds.
+
+    Excluding by `id` does not raise: UUIDField coerces an int through
+    `uuid.UUID(int=...)`, so a dbid becomes a zero-padded UUID that matches no
+    real note. The dedup then silently no-ops and every note already shown as an
+    appointment is listed a second time. Assert on the rendered SQL, because
+    that is the only place the wrong column is visible.
+    """
+    sql = str(_patient_appointments_notes_qs(linked_note_dbids={12345, 6789}).query)
+    where = sql.split(" WHERE ")[1]
+    assert "dbid" in where
+    # The zero-padded UUID an int silently coerces into. Its presence means the
+    # exclude went through the UUID column and matches nothing.
+    assert "00000000000000000000000000003039" not in where
+    assert "12345" in where
+
+
+def test_notes_query_has_no_exclude_when_nothing_is_linked() -> None:
+    """No appointments carrying a note means no exclude clause at all."""
+    sql = str(_patient_appointments_notes_qs().query)
+    assert "NOT" not in sql.split(" WHERE ")[1]
 
 
 def test_deferring_blobs_measurably_shrinks_the_row() -> None:

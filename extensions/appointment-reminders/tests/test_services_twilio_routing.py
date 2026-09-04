@@ -8,12 +8,16 @@ warning is worth.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from unittest.mock import MagicMock, patch
 
 from appointment_reminders.services.twilio_routing import (
     NOT_ROUTED,
     ROUTED,
     UNKNOWN,
+    _cache_key,
     describe,
     inbound_webhook_status,
 )
@@ -181,3 +185,68 @@ def test_describe_never_claims_configured_when_replies_are_dropped() -> None:
     assert "Configured" != describe(NOT_ROUTED)["label"]
     # Unverified is not an alarm — it must not read as a failure.
     assert describe(UNKNOWN)["ok"] is True
+
+
+# ---- the cache key ----------------------------------------------------------
+#
+# This check exists because the original key used `hash((url, number))`, and a
+# same-process test cannot see what is wrong with that: `hash()` is stable
+# within one interpreter run and only varies *between* runs. So the bug was
+# invisible to any ordinary assertion while costing real work in production —
+# the entry was written under a new key by every plugin-runner process, so the
+# admin page called Twilio on nearly every load and each process added rows to
+# a plugins cache that culls past 300 entries.
+
+_KEY_PROBE = (
+    "from appointment_reminders.services.twilio_routing import _cache_key;"
+    "print(_cache_key({"
+    "'twilio-inbound-webhook-url': 'https://x.example.com/hook',"
+    "'twilio-phone-number': '+15550001111'}))"
+)
+
+
+def _key_from_subprocess(hash_seed: str) -> str:
+    """Compute the cache key in a fresh interpreter with a given hash seed."""
+    env = {**os.environ, "PYTHONHASHSEED": hash_seed}
+    done = subprocess.run(
+        [sys.executable, "-c", _KEY_PROBE],
+        capture_output=True, text=True, env=env, cwd=os.getcwd(),
+    )
+    assert done.returncode == 0, done.stderr
+    return done.stdout.strip()
+
+
+def test_cache_key_is_identical_across_processes() -> None:
+    """The regression guard. Seed 0 disables hash randomization while 1 and
+    12345 enable it differently, so a `hash()`-derived key yields at least two
+    distinct values here and a digest yields exactly one."""
+    keys = {_key_from_subprocess(seed) for seed in ("0", "1", "12345")}
+    assert len(keys) == 1, f"cache key varies by process: {keys}"
+
+
+def test_cache_key_is_stable_within_a_process() -> None:
+    secrets = {
+        "twilio-inbound-webhook-url": _URL,
+        "twilio-phone-number": "+15550001111",
+    }
+    assert _cache_key(secrets) == _cache_key(dict(secrets))
+
+
+def test_cache_key_changes_when_either_input_changes() -> None:
+    """Keyed on the inputs so re-pointing a webhook re-checks instead of
+    serving a stale verdict."""
+    base = {"twilio-inbound-webhook-url": _URL, "twilio-phone-number": "+15550001111"}
+    other_url = {**base, "twilio-inbound-webhook-url": _URL + "/v2"}
+    other_num = {**base, "twilio-phone-number": "+15550002222"}
+    assert _cache_key(base) != _cache_key(other_url)
+    assert _cache_key(base) != _cache_key(other_num)
+
+
+def test_cache_key_does_not_embed_the_url_or_number() -> None:
+    """The key is readable by anything that can see the cache table, so the
+    webhook URL and outbound number are digested rather than interpolated."""
+    key = _cache_key(
+        {"twilio-inbound-webhook-url": _URL, "twilio-phone-number": "+15550001111"}
+    )
+    assert _URL not in key
+    assert "5550001111" not in key

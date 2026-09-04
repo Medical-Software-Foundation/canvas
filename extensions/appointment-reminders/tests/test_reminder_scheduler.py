@@ -9,11 +9,46 @@ from unittest.mock import MagicMock, patch
 
 from appointment_reminders.handlers.reminder_scheduler import (
     ReminderScheduler,
-    _in_send_window,
+    _any_send_time_passing,
     _is_day_out_window,
     _parse_send_time,
+    _send_should_be_retried,
+    _send_time_passing_at_offset,
+    _utc_offsets_in_effect,
 )
 from appointment_reminders.services.config import CampaignConfig
+
+
+class _FakeClaims:
+    """Stand-in for the SendClaim table, backed by a set.
+
+    ``claim`` mirrors the semantics the real one gets from the unique
+    constraint: the first caller wins and every later caller is refused. That
+    property is the entire point of the mechanism, and a bare ``MagicMock``
+    cannot express it — every call would return a fresh truthy mock, so no claim
+    would ever look lost.
+    """
+
+    def __init__(self, everything_claimed: bool = False) -> None:
+        self._held: set[tuple[str, str]] = set()
+        self._everything = everything_claimed
+        self.pruned_with: list[int] = []
+
+    def already_claimed(self, scope, key):
+        return self._everything or (scope, key) in self._held
+
+    def claim(self, scope, key):
+        if self._everything or (scope, key) in self._held:
+            return False
+        self._held.add((scope, key))
+        return True
+
+    def release(self, scope, key):
+        self._held.discard((scope, key))
+
+    def prune(self, max_interval_minutes, limit=500):
+        self.pruned_with.append(max_interval_minutes)
+        return 0
 
 
 def _scheduler() -> ReminderScheduler:
@@ -56,13 +91,149 @@ def test_execute_returns_empty_when_all_intervals_disabled() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
     ):
         result = scheduler.execute()
     assert result == []
 
 
 # ---- execute() — full path ----
+
+def _run_reminder_scan(claims, deliver_return, appt=None, deliver_side_effect=None):
+    """Run one scan against a shared claim store, returning the deliver mock.
+
+    Sharing the store across calls is the point: it is how two overlapping
+    invocations are simulated.
+    """
+    config = CampaignConfig(
+        reminders_enabled=True,
+        reminder_intervals=[60],
+        reminder_channels=["sms"],
+        reminder_sms_template="Reminder: {{appointment_date}}",
+        reminder_email_template="Reminder",
+    )
+    appt = appt if appt is not None else _appointment(minutes_until=60)
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store",
+        return_value=claims,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.Appointment"
+    ) as mock_appt_cls, patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
+        return_value={"appointment_date": "June 1"},
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient",
+        return_value=deliver_return,
+        side_effect=deliver_side_effect,
+    ) as mock_deliver, patch(
+        "appointment_reminders.handlers.reminder_scheduler.log_delivery"
+    ):
+        chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
+        chain.return_value.iterator.return_value = [appt]
+        _scheduler().execute()
+    return mock_deliver
+
+
+_SENT = ([MagicMock()], [MagicMock(channel="sms", success=True, error=None)])
+_CARRIER_FAILURE = (
+    [],
+    [MagicMock(channel="sms", success=False, error="SMS failed: carrier down")],
+)
+_SKIPPED = (
+    [],
+    [MagicMock(channel="sms", success=False, error="skipped:no_phone_on_file")],
+)
+
+
+def test_a_scan_starting_mid_send_does_not_re_send_the_same_reminder() -> None:
+    """The duplicate-send case, and the reason the marker moved before the send.
+
+    A scan that outruns its own 5-minute tick is still working when the next
+    invocation starts over the same eligible set. Reproduced by starting the
+    second scan from inside the first one's send, which is exactly the window
+    that mattered: with the marker written afterwards the second scan saw
+    nothing and sent the reminder again.
+
+    Sequential scans would not catch this — the first one has finished and
+    written its marker by then, so it passes either way.
+    """
+    claims = _FakeClaims()
+    appt = _appointment(minutes_until=60)
+    overlap: dict[str, int] = {}
+
+    def a_second_scan_starts_while_this_send_is_in_flight(*args, **kwargs):
+        overlap["sends"] = _run_reminder_scan(claims, _SENT, appt).call_count
+        return _SENT
+
+    outer = _run_reminder_scan(
+        claims, _SENT, appt,
+        deliver_side_effect=a_second_scan_starts_while_this_send_is_in_flight,
+    )
+
+    assert outer.call_count == 1
+    assert overlap["sends"] == 0, "the overlapping scan re-sent the reminder"
+
+
+def test_a_failed_send_releases_the_claim_so_a_later_tick_retries() -> None:
+    """The other half of the trade: claiming up front must not strand a patient.
+
+    A carrier failure is not a decision that the patient should go unmessaged,
+    so the claim is released and the next tick inside the grace window sends.
+    """
+    claims = _FakeClaims()
+    appt = _appointment(minutes_until=60)
+
+    assert _run_reminder_scan(claims, _CARRIER_FAILURE, appt).call_count == 1
+    assert _run_reminder_scan(claims, _SENT, appt).call_count == 1
+
+
+def test_a_skipped_send_keeps_its_claim() -> None:
+    """"No phone on file" resolves the same way every tick.
+
+    Releasing here would re-attempt and re-log an identical failure row every 5
+    minutes for the life of the window.
+    """
+    claims = _FakeClaims()
+    appt = _appointment(minutes_until=60)
+
+    assert _run_reminder_scan(claims, _SKIPPED, appt).call_count == 1
+    assert _run_reminder_scan(claims, _SKIPPED, appt).call_count == 0
+
+
+def test_the_scan_prunes_expired_claims_even_when_nothing_can_fire() -> None:
+    """Claims no longer expire on their own, so housekeeping must not be
+    conditional on the scan actually running. Both early returns are past the
+    prune call, so a gated tick and a disabled campaign still clear old rows."""
+    claims = _FakeClaims()
+    config = CampaignConfig(reminders_enabled=False, telehealth_enabled=False)
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store",
+        return_value=claims,
+    ):
+        assert _scheduler().execute() == []
+
+    assert claims.pruned_with, "a disabled campaign skipped housekeeping entirely"
+
+
+def test_send_should_be_retried_only_when_nothing_went_out() -> None:
+    ok = MagicMock(success=True, error=None)
+    carrier = MagicMock(success=False, error="SMS failed: carrier down")
+    skipped = MagicMock(success=False, error="skipped:no_phone_on_file")
+
+    assert _send_should_be_retried([carrier]) is True
+    assert _send_should_be_retried([skipped]) is False
+    assert _send_should_be_retried([ok]) is False
+    # A partial success must not retry: re-sending would duplicate the channel
+    # that already went out.
+    assert _send_should_be_retried([ok, carrier]) is False
+    assert _send_should_be_retried([]) is False
+
 
 def test_execute_sends_reminder_for_matching_interval() -> None:
     scheduler = _scheduler()
@@ -79,8 +250,8 @@ def test_execute_sends_reminder_for_matching_interval() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
@@ -91,7 +262,7 @@ def test_execute_sends_reminder_for_matching_interval() -> None:
     ) as mock_deliver, patch(
         "appointment_reminders.handlers.reminder_scheduler.log_delivery"
     ):
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         result = scheduler.execute()
@@ -115,13 +286,13 @@ def test_execute_skips_already_sent_reminders() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient"
     ) as mock_deliver:
-        mock_cache.return_value.get.return_value = "1"  # already sent
+        mock_claims.return_value = _FakeClaims(everything_claimed=True)  # already sent
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         result = scheduler.execute()
@@ -146,13 +317,13 @@ def test_execute_skips_appointments_outside_interval_window() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient"
     ) as mock_deliver:
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         result = scheduler.execute()
@@ -179,8 +350,8 @@ def test_execute_sends_telehealth_when_appointment_is_telehealth() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
@@ -191,7 +362,7 @@ def test_execute_sends_telehealth_when_appointment_is_telehealth() -> None:
     ) as mock_deliver, patch(
         "appointment_reminders.handlers.reminder_scheduler.log_delivery"
     ):
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         scheduler.execute()
@@ -223,8 +394,8 @@ def test_execute_sends_telehealth_when_reminders_globally_disabled() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
@@ -235,7 +406,7 @@ def test_execute_sends_telehealth_when_reminders_globally_disabled() -> None:
     ) as mock_deliver, patch(
         "appointment_reminders.handlers.reminder_scheduler.log_delivery"
     ):
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         scheduler.execute()
@@ -264,8 +435,8 @@ def test_execute_logs_telehealth_failure_when_no_link() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
@@ -275,7 +446,7 @@ def test_execute_logs_telehealth_failure_when_no_link() -> None:
     ) as mock_deliver, patch(
         "appointment_reminders.handlers.reminder_scheduler.log_delivery"
     ) as mock_log:
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         scheduler.execute()
@@ -366,8 +537,8 @@ def test_execute_sends_reminder_that_came_due_within_the_grace_window() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
@@ -378,7 +549,7 @@ def test_execute_sends_reminder_that_came_due_within_the_grace_window() -> None:
     ) as mock_deliver, patch(
         "appointment_reminders.handlers.reminder_scheduler.log_delivery"
     ):
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         result = scheduler.execute()
@@ -405,13 +576,13 @@ def test_execute_skips_reminder_staler_than_the_grace_window() -> None:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
     ) as mock_appt_cls, patch(
         "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient"
     ) as mock_deliver:
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         result = scheduler.execute()
@@ -475,7 +646,7 @@ def test_execute_never_writes_the_config() -> None:
     ), patch(
         "appointment_reminders.services.config.save_config"
     ) as mock_save, patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
     ):
         scheduler.execute()
     mock_save.assert_not_called()
@@ -549,17 +720,74 @@ def test_malformed_send_time_falls_back_instead_of_raising() -> None:
 
 # ---- the day-out gate ----
 
-def test_in_send_window_true_only_within_grace() -> None:
-    assert _in_send_window(_utc(2026, 9, 9, 9, 0), "09:00", "America/New_York") is True
-    assert _in_send_window(_utc(2026, 9, 9, 9, 7), "09:00", "America/New_York") is True
-    assert _in_send_window(_utc(2026, 9, 9, 9, 8), "09:00", "America/New_York") is False
-    assert _in_send_window(_utc(2026, 9, 9, 8, 59), "09:00", "America/New_York") is False
+_ET_SUMMER = timedelta(hours=-4)   # America/New_York on 2026-09-09
 
 
-def test_in_send_window_covers_the_midnight_spill() -> None:
-    """Yesterday's instant counts, or the gate would block the very tick that
-    _is_day_out_window needs for a late send time."""
-    assert _in_send_window(_utc(2026, 9, 10, 0, 0), "23:58", "America/New_York") is True
+def _at_utc(hh, mm, day=9) -> datetime:
+    return datetime(2026, 9, day, hh, mm, tzinfo=timezone.utc)
+
+
+def test_send_time_passing_at_offset_only_within_grace() -> None:
+    # 13:00 UTC is 09:00 at -4.
+    assert _send_time_passing_at_offset(_at_utc(13, 0), "09:00", _ET_SUMMER) is True
+    assert _send_time_passing_at_offset(_at_utc(13, 7), "09:00", _ET_SUMMER) is True
+    assert _send_time_passing_at_offset(_at_utc(13, 8), "09:00", _ET_SUMMER) is False
+    assert _send_time_passing_at_offset(_at_utc(12, 59), "09:00", _ET_SUMMER) is False
+
+
+def test_send_time_passing_covers_the_midnight_spill() -> None:
+    """A send time near the end of the local day has a grace window that crosses
+    midnight. Matching on a same-date subtraction would miss the very ticks
+    _is_day_out_window needs."""
+    # 03:59 UTC is 23:59 the previous day at -4; one minute into 23:58's window.
+    assert _send_time_passing_at_offset(_at_utc(3, 59, day=10), "23:58", _ET_SUMMER) is True
+
+
+def test_offsets_in_effect_cover_the_whole_tz_database() -> None:
+    """The gate is only complete if the offset set is."""
+    at = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
+    offsets = _utc_offsets_in_effect(at)
+    assert len(offsets) > 20, "suspiciously few offsets; the walk probably failed"
+    for zone in ("Europe/London", "Asia/Tokyo", "Australia/Eucla", "Pacific/Chatham"):
+        assert zoneinfo.ZoneInfo(zone).utcoffset(at) in offsets
+
+
+def test_gate_opens_for_a_patient_zone_outside_the_us_address_set() -> None:
+    """The regression this replaced.
+
+    The gate used to ask only about zones derivable from a US address. But
+    `resolve_timezone_name` reads `Patient.last_known_timezone` first, a
+    free-text field accepting any IANA name, so a patient could sit on a zone
+    the gate never considered. On the tick their reminder was due the gate
+    returned early, the appointment query never ran, and the reminder was
+    dropped with nothing in the log but a routine "nothing can fire" line.
+
+    Asia/Kolkata is deliberately chosen: +05:30, an offset no US zone has.
+    """
+    from appointment_reminders.services.timezones import RESOLVABLE_ZONES
+
+    zone = "Asia/Kolkata"
+    assert zone not in RESOLVABLE_ZONES, "pick a zone the old gate really missed"
+
+    # A moment when it is exactly 09:00 in Kolkata and 09:00 in no US zone.
+    now = datetime(2026, 9, 9, 3, 30, tzinfo=timezone.utc)
+    assert now.astimezone(zoneinfo.ZoneInfo(zone)).strftime("%H:%M") == "09:00"
+
+    assert _any_send_time_passing(now, {("09:00", "America/New_York")}) is True
+
+
+def test_gate_still_closes_when_no_clock_reads_the_send_time() -> None:
+    """Completeness must not collapse into "always scan", or the gate is dead
+    weight. Offsets are 15 minutes apart at the finest, and the grace window is
+    7, so an off-grid moment leaves every offset outside its window."""
+    # 09:08 at every whole/half/three-quarter hour offset is past the grace of
+    # a 09:00 send, and short of the next day's.
+    now = datetime(2026, 9, 9, 12, 8, tzinfo=timezone.utc)
+    assert _any_send_time_passing(now, {("09:00", "America/New_York")}) is False
+
+
+def test_gate_closes_when_there_are_no_send_windows() -> None:
+    assert _any_send_time_passing(_utc(2026, 9, 9, 13, 0), set()) is False
 
 
 def _run_gate(config: CampaignConfig, now: datetime):
@@ -569,7 +797,7 @@ def _run_gate(config: CampaignConfig, now: datetime):
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.datetime"
     ) as mock_dt, patch(
@@ -656,12 +884,16 @@ def test_gate_respects_a_per_visit_type_send_time() -> None:
 
 
 def test_gate_still_skips_when_no_configured_send_time_matches() -> None:
-    """`now` must miss both send times in *every* resolvable zone.
+    """`now` must miss both send times at *every UTC offset*, not merely in
+    every US zone.
 
-    14:00 Eastern is 18:00 UTC, which is 09:00 and 17:00 in none of them. The
-    earlier version of this test used 13:00 Eastern, which is 09:00 in Alaska —
-    a tick the gate is now right to open, since an Alaskan patient's day-out
-    reminder fires at 09:00 Alaska time.
+    Real offsets have minute-parts of :00, :30 and :45 only, so a send time on
+    the hour is reachable at UTC minutes 00, 15 and 30. With a 7-minute grace
+    that leaves windows of [00,07], [15,22] and [30,37]; minute 50 sits outside
+    all three. Earlier versions of this test picked 13:00 and then 14:00
+    Eastern, each of which the gate is right to open once it stops asking only
+    about US zones — 18:00 UTC is 09:00 at -09:00, which Pacific/Gambier keeps
+    year-round.
     """
     config = CampaignConfig(
         reminders_enabled=True, reminder_intervals=[1440],
@@ -671,7 +903,7 @@ def test_gate_still_skips_when_no_configured_send_time_matches() -> None:
             "nt-1": {"note_type_id": "nt-1", "reminder_send_time": "17:00"},
         },
     )
-    mock_appt = _run_gate(config, _utc(2026, 9, 9, 14, 0))
+    mock_appt = _run_gate(config, _utc(2026, 9, 9, 14, 50))
     mock_appt.objects.filter.assert_not_called()
 
 
@@ -684,7 +916,7 @@ def _end_window(config: CampaignConfig, now: datetime):
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
     ), patch(
         "appointment_reminders.handlers.reminder_scheduler.datetime"
     ) as mock_dt, patch(
@@ -822,8 +1054,8 @@ def _run_scan(appointments, now, config):
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.datetime"
     ) as mock_dt, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
@@ -841,7 +1073,7 @@ def _run_scan(appointments, now, config):
     ):
         mock_dt.now.return_value = now
         mock_dt.combine = datetime.combine
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         (mock_appt.objects.filter.return_value
             .select_related.return_value
             .prefetch_related.return_value
@@ -945,8 +1177,8 @@ def _run_day_out(now_utc: datetime, appt: MagicMock) -> MagicMock:
         "appointment_reminders.handlers.reminder_scheduler.load_config",
         return_value=config,
     ), patch(
-        "appointment_reminders.handlers.reminder_scheduler.get_cache"
-    ) as mock_cache, patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store"
+    ) as mock_claims, patch(
         "appointment_reminders.handlers.reminder_scheduler.datetime"
     ) as mock_dt, patch(
         "appointment_reminders.handlers.reminder_scheduler.Appointment"
@@ -961,7 +1193,7 @@ def _run_day_out(now_utc: datetime, appt: MagicMock) -> MagicMock:
     ):
         mock_dt.now.return_value = now_utc
         mock_dt.combine = datetime.combine
-        mock_cache.return_value.get.return_value = None
+        mock_claims.return_value = _FakeClaims()
         chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
         chain.return_value.iterator.return_value = [appt]
         scheduler.execute()

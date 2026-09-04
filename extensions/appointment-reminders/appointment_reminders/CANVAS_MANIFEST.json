@@ -1,6 +1,6 @@
 {
   "sdk_version": "0.95.0",
-  "plugin_version": "0.17.0",
+  "plugin_version": "0.18.0",
   "name": "appointment_reminders",
   "description": "Appointment reminders and confirmations (SMS + email) with per-business-line customization, optional locked message copy, and two-way Y/N confirmation.",
   "components": {
@@ -119,17 +119,50 @@
     "views": []
   },
   "variables": [
-    {"name": "namespace_read_write_access_key", "sensitive": true},
-    {"name": "twilio-account-sid", "sensitive": true},
-    {"name": "twilio-auth-token", "sensitive": true},
-    {"name": "twilio-api-key-sid", "sensitive": true},
-    {"name": "twilio-api-key-secret", "sensitive": true},
-    {"name": "twilio-phone-number", "sensitive": false},
-    {"name": "twilio-inbound-webhook-url", "sensitive": false},
-    {"name": "sendgrid-api-key", "sensitive": true},
-    {"name": "sendgrid-from-email", "sensitive": false},
-    {"name": "LOCK_MESSAGE_TEMPLATES", "sensitive": false},
-    {"name": "ADMIN_ROLE_NAMES", "sensitive": false}
+    {
+      "name": "namespace_read_write_access_key",
+      "sensitive": true
+    },
+    {
+      "name": "twilio-account-sid",
+      "sensitive": true
+    },
+    {
+      "name": "twilio-auth-token",
+      "sensitive": true
+    },
+    {
+      "name": "twilio-api-key-sid",
+      "sensitive": true
+    },
+    {
+      "name": "twilio-api-key-secret",
+      "sensitive": true
+    },
+    {
+      "name": "twilio-phone-number",
+      "sensitive": false
+    },
+    {
+      "name": "twilio-inbound-webhook-url",
+      "sensitive": false
+    },
+    {
+      "name": "sendgrid-api-key",
+      "sensitive": true
+    },
+    {
+      "name": "sendgrid-from-email",
+      "sensitive": false
+    },
+    {
+      "name": "LOCK_MESSAGE_TEMPLATES",
+      "sensitive": false
+    },
+    {
+      "name": "ADMIN_ROLE_NAMES",
+      "sensitive": false
+    }
   ],
   "custom_data": {
     "namespace": "canvas__appointment_reminders",

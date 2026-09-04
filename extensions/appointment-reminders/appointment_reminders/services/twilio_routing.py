@@ -17,6 +17,7 @@ check" instead of alarming an install that is fine.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from canvas_sdk.caching.plugins import get_cache
@@ -44,9 +45,21 @@ def _expected_url(secrets: dict[str, str]) -> str:
 
 
 def _cache_key(secrets: dict[str, str]) -> str:
-    """Keyed on the inputs, so changing either re-checks instead of serving stale."""
+    """Keyed on the inputs, so changing either re-checks instead of serving stale.
+
+    Digested rather than passed through ``hash()``. Python randomizes string
+    hashing per process (PEP 456), so the built-in produced a different key in
+    every plugin-runner process: the entry was almost never read back, the admin
+    page called Twilio on nearly every load anyway, and each process kept adding
+    fresh keys to a plugins cache that culls once it passes 300 rows. A digest is
+    stable across processes, so one entry is written and reused.
+
+    Also hashed rather than interpolated raw because the webhook URL and the
+    outbound number would otherwise sit in a cache key in plain text.
+    """
     number = (secrets.get("twilio-phone-number") or "").strip()
-    return f"cr:inbound_route:{hash((_expected_url(secrets), number))}"
+    digest = hashlib.sha256(f"{_expected_url(secrets)}|{number}".encode()).hexdigest()
+    return f"cr:inbound_route:{digest[:16]}"
 
 
 def inbound_webhook_status(secrets: dict[str, str]) -> str:

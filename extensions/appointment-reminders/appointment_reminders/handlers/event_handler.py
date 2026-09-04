@@ -131,6 +131,7 @@ class AppointmentEventHandler(BaseHandler):
         log_delivery(
             str(appointment_id), str(patient_id), campaign_type, results,
             sms_content=sms_content, email_content=email_content,
+            patient=patient,
         )
 
         return effects

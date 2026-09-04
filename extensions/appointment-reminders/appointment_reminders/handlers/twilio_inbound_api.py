@@ -24,7 +24,6 @@ from datetime import time as dt_time
 from http import HTTPStatus
 from typing import Any
 
-from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.note.appointment import Appointment
 from canvas_sdk.effects.simple_api import PlainTextResponse, Response
@@ -36,6 +35,7 @@ from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.team import Team
 from logger import log
 
+from appointment_reminders.services.claims import INBOUND, claim_store
 from appointment_reminders.services.config import load_config, parse_hhmm
 from appointment_reminders.services.consent import sms_consent_effect
 from appointment_reminders.services.delivery import _normalize_phone
@@ -75,12 +75,6 @@ def _add_business_days(start: date, days: int) -> date:
         if current.weekday() not in _WEEKEND:
             remaining -= 1
     return current
-
-# Ignore a Twilio MessageSid we've already processed — a signed request that is
-# replayed (e.g. from an intercepted log) must not double-act (duplicate decline
-# Tasks / re-confirm). TTL is generous since legitimate SIDs are never reused.
-_INBOUND_DEDUP_TTL = 7 * 24 * 60 * 60  # 7 days, in seconds
-
 
 class TwilioInboundAPI(SimpleAPI):
     """Public, signature-gated webhook for inbound patient SMS replies."""
@@ -132,14 +126,21 @@ class TwilioInboundAPI(SimpleAPI):
             return [PlainTextResponse("unauthorized", status_code=HTTPStatus.UNAUTHORIZED)]
 
         # Replay guard: never act twice on the same Twilio MessageSid.
+        #
+        # Persisted as a row rather than a cache entry. The plugins cache culls
+        # once it passes 300 entries, and this marker had the longest TTL in the
+        # plugin (7 days), so it was both the likeliest to be evicted and the
+        # most costly to lose: acting twice re-applies the appointment status,
+        # re-writes consent, and opens a second follow-up task. Claiming is a
+        # single atomic insert, so a genuine Twilio retry and a replayed capture
+        # are both refused by the same check.
+        # ``claim`` also consults the legacy cache key for one release, so a
+        # retry of a message the pre-table version handled is still refused.
         message_sid = params.get("MessageSid", "")
-        cache = get_cache()
-        dedup_key = f"cr:inbound_seen:{message_sid}" if message_sid else ""
-        if dedup_key and cache.get(dedup_key):
+        claims = claim_store()
+        if message_sid and not claims.claim(INBOUND, message_sid):
             log.info("[inbound] Duplicate MessageSid; ignoring replayed request")
             return [PlainTextResponse("", status_code=HTTPStatus.OK)]
-        if dedup_key:
-            cache.set(dedup_key, "1", timeout_seconds=_INBOUND_DEDUP_TTL)
 
         from_number = _normalize_phone(params.get("From", ""))
         body = params.get("Body", "")
@@ -229,6 +230,8 @@ class TwilioInboundAPI(SimpleAPI):
             status=status,
             body=body,
             from_number=from_number,
+            # Resolved from the sender's number earlier in this request.
+            patient=patient,
         )
         effects.append(PlainTextResponse("", status_code=HTTPStatus.OK))
         return effects

@@ -112,9 +112,15 @@ _SPLIT_STATE_PREFIXES: dict[str, dict[str, str]] = {
     },
 }
 
-# Every zone this module can return. The reminder cron uses it to decide whether
-# any patient's local send time could be firing right now, before it runs the
-# appointment query.
+# Every zone *this module* can return, which is not every zone a patient can
+# resolve to: `resolve_timezone_name` consults `Patient.last_known_timezone`
+# before the address, and that field accepts any IANA name.
+#
+# The reminder cron's pre-query gate used to be built from this set, and that
+# gap is exactly what made it drop day-out reminders for a patient on any other
+# zone. The gate now works in UTC offsets, which cover every zone. Kept here as
+# a tested statement of what `zone_for_address` can produce; do not reach for it
+# as "the zones a patient can be in".
 RESOLVABLE_ZONES: frozenset[str] = frozenset(_STATE_ZONES.values()) | {
     zone for prefixes in _SPLIT_STATE_PREFIXES.values() for zone in prefixes.values()
 }

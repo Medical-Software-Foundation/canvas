@@ -3,12 +3,16 @@ import zoneinfo
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dt_time
 
-from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.handlers.cron_task import CronTask
 from canvas_sdk.v1.data.appointment import Appointment
 from logger import log
 
+from appointment_reminders.services.claims import (
+    REMINDER,
+    TELEHEALTH,
+    claim_store,
+)
 from appointment_reminders.services.business_line import (
     get_business_line_from_number,
     get_business_line_name,
@@ -25,7 +29,6 @@ from appointment_reminders.services.templates import (
     render_template,
     resolve_timezone_name,
 )
-from appointment_reminders.services.timezones import RESOLVABLE_ZONES
 
 class _TelehealthFailure:
     """Minimal result object for logging a telehealth link-missing failure."""
@@ -68,8 +71,8 @@ class ReminderScheduler(CronTask):
         # admin's concurrent save with its own stale copy.
         config = load_config()
 
-        cache = get_cache()
         now = datetime.now(timezone.utc)
+        claims = claim_store()
 
         # Compute dynamic end_window from every interval that might fire.
         # Global acts as the master switch; per-type records can extend the
@@ -105,6 +108,15 @@ class ReminderScheduler(CronTask):
                 telehealth_intervals.extend(nt_cfg.telehealth_intervals)
 
         all_intervals = reminder_intervals + telehealth_intervals
+
+        # Housekeeping runs before either early return below. Claims have no
+        # automatic expiry now that they are rows rather than cache entries, so
+        # a prune that only ran on ticks which reach the send loop would stop
+        # entirely whenever the gate skipped the scan or campaigns were turned
+        # off — leaving the table to grow with nothing left to clear it. Bounded
+        # per run, and a no-op query on the ticks with nothing to delete.
+        claims.prune(max(all_intervals, default=DAY_OUT_THRESHOLD))
+
         if not all_intervals:
             log.info("Reminders and telehealth globally disabled, skipping")
             return []
@@ -119,25 +131,29 @@ class ReminderScheduler(CronTask):
         #
         # The timezone half of that is per patient: a day-out reminder fires at
         # its send time in the *patient's* zone, so the gate has to ask whether
-        # that instant is passing in any zone a patient can resolve to, not only
-        # in the configured default. That is a fixed set of about nine US zones,
-        # so with only day-out intervals configured (a single daily reminder,
-        # the common case) this turns 288 scans a day into roughly nine — still
-        # the large majority of ticks skipped, and _is_day_out_window below
-        # still makes the exact per-appointment decision.
+        # that instant is passing anywhere a patient can resolve to.
+        #
+        # This asked it of RESOLVABLE_ZONES, the eleven zones `timezones.py` can
+        # derive from a US address. That is narrower than what the resolver can
+        # return: `resolve_timezone_name` reads `Patient.last_known_timezone`
+        # first, a free-text CharField accepted on nothing but `ZoneInfo()`
+        # parsing it, so any of the ~600 IANA zones can come back. A patient on
+        # a zone outside the eleven had their day-out reminder dropped on the
+        # tick it was due — the gate returned early, the query never ran, and
+        # the only trace was a log line that reads like a normal quiet tick.
+        #
+        # Asking about UTC offsets instead makes the gate complete: what decides
+        # whether a local clock reads the send time is the offset, not the zone
+        # name, and there are 38 distinct offsets against 598 zones. Day-out-only
+        # instances still skip ~82% of ticks rather than ~96%, and the gate is
+        # only an optimization — _is_day_out_window still makes the exact
+        # per-appointment decision, so a wider gate changes how many ticks run
+        # the query, never which reminders fire. Under-inclusion was the bug.
         time_relative = [i for i in reminder_intervals if i < DAY_OUT_THRESHOLD]
         time_relative.extend(telehealth_intervals)
-        if not time_relative and not any(
-            _in_send_window(now, send_time, zone)
-            for send_time, send_tz in send_windows
-            for zone in ({send_tz} | RESOLVABLE_ZONES)
-        ):
+        if not time_relative and not _any_send_time_passing(now, send_windows):
             log.info("No interval can fire on this tick; skipping the scan")
             return []
-
-        # Kept as-is for the dedup cache TTLs further down, which want the raw
-        # interval rather than the scan horizon.
-        max_interval_minutes = max(all_intervals)
 
         # A day-out interval does not fire on a duration. It fires at `send_time`
         # on (appointment's local date - interval_days), and the appointment can
@@ -259,8 +275,11 @@ class ReminderScheduler(CronTask):
                             if overdue < 0 or overdue > GRACE_MINUTES:
                                 continue
 
-                        cache_key = f"cr:reminder_sent:{appointment.id}:{interval_minutes}"
-                        if cache.get(cache_key):
+                        claim_key = f"{appointment.id}:{interval_minutes}"
+                        # Cheap pre-check to skip the render work for an interval
+                        # already handled. The authoritative, race-safe claim is
+                        # `claim` below, immediately before the send.
+                        if claims.already_claimed(REMINDER, claim_key):
                             continue
 
                         # Render both templates with per-type content
@@ -275,6 +294,11 @@ class ReminderScheduler(CronTask):
 
                         sms_content = render_template(sms_template, variables)
                         email_content = render_template(email_template, variables)
+
+                        # Claimed after rendering, so a template failure does not
+                        # burn the claim on a send that never happened.
+                        if not claims.claim(REMINDER, claim_key):
+                            continue
 
                         log.info(
                             f"Sending {interval_minutes}-minute reminder for appointment {appointment.id}"
@@ -300,13 +324,21 @@ class ReminderScheduler(CronTask):
                             results,
                             sms_content=sms_content,
                             email_content=email_content,
+                            # Already loaded by the scan's select_related; without
+                            # this the audit write re-reads the same patient row
+                            # once per delivery.
+                            patient=appointment.patient,
                         )
 
-                        # Mark as sent
-                        ttl_seconds = (max_interval_minutes + 1440) * 60
-                        cache.set(cache_key, "1", timeout_seconds=ttl_seconds)
-
-                        reminders_sent += 1
+                        if _send_should_be_retried(results):
+                            claims.release(REMINDER, claim_key)
+                            log.warning(
+                                f"[notify] Nothing delivered for appointment "
+                                f"{appointment.id} at {interval_minutes} minutes; "
+                                "releasing the claim so a later tick retries"
+                            )
+                        else:
+                            reminders_sent += 1
 
                 # --- Telehealth join campaign (alongside reminders) ---
                 if not (appointment.note_type and appointment.note_type.is_telehealth):
@@ -326,8 +358,9 @@ class ReminderScheduler(CronTask):
                     if overdue < 0 or overdue > GRACE_MINUTES:
                         continue
 
-                    th_cache_key = f"cr:telehealth_sent:{appointment.id}:{interval_minutes}"
-                    if cache.get(th_cache_key):
+                    th_claim_key = f"{appointment.id}:{interval_minutes}"
+                    # Cheap pre-check; the race-safe claim is `claim` below.
+                    if claims.already_claimed(TELEHEALTH, th_claim_key):
                         continue
 
                     th_variables = get_template_variables(
@@ -337,6 +370,13 @@ class ReminderScheduler(CronTask):
 
                     # Skip if no telehealth link — log failure
                     if not th_variables.get("telehealth_link"):
+                        # Claimed too, and deliberately never released: a missing
+                        # link does not resolve itself within the window, so
+                        # without the claim this would re-log the same failure
+                        # row every tick. The claim also keeps an overlapping
+                        # invocation from logging it a second time.
+                        if not claims.claim(TELEHEALTH, th_claim_key):
+                            continue
                         log.warning(
                             f"[notify] Telehealth link missing for appointment "
                             f"{appointment.id} — skipping send"
@@ -346,13 +386,15 @@ class ReminderScheduler(CronTask):
                             str(appointment.patient.id),
                             "telehealth",
                             [_TelehealthFailure()],
+                            patient=appointment.patient,
                         )
-                        ttl_seconds = (max_interval_minutes + 1440) * 60
-                        cache.set(th_cache_key, "1", timeout_seconds=ttl_seconds)
                         continue
 
                     th_sms = render_template(th_sms_tpl, th_variables)
                     th_email = render_template(th_email_tpl, th_variables)
+
+                    if not claims.claim(TELEHEALTH, th_claim_key):
+                        continue
 
                     log.info(
                         f"Sending telehealth join for appointment {appointment.id} "
@@ -379,11 +421,18 @@ class ReminderScheduler(CronTask):
                         th_results,
                         sms_content=th_sms,
                         email_content=th_email,
+                        patient=appointment.patient,
                     )
 
-                    ttl_seconds = (max_interval_minutes + 1440) * 60
-                    cache.set(th_cache_key, "1", timeout_seconds=ttl_seconds)
-                    reminders_sent += 1
+                    if _send_should_be_retried(th_results):
+                        claims.release(TELEHEALTH, th_claim_key)
+                        log.warning(
+                            f"[notify] Nothing delivered for telehealth join on "
+                            f"appointment {appointment.id} at {interval_minutes} "
+                            "minutes; releasing the claim so a later tick retries"
+                        )
+                    else:
+                        reminders_sent += 1
 
             except Exception:
                 log.exception(
@@ -393,6 +442,28 @@ class ReminderScheduler(CronTask):
                 continue
         log.info(f"Sent {reminders_sent} reminders")
         return all_effects
+
+
+def _send_should_be_retried(results: list) -> bool:
+    """Whether a claim should be released so a later tick can try again.
+
+    Claiming up front trades duplicate sends for missed ones: a claim that is
+    never released means nothing retries. Releasing when the send genuinely
+    failed keeps that trade from costing a patient their reminder, and the
+    remaining ticks inside the grace window are the retries.
+
+    Released only when *nothing* went out. If one channel succeeded, retrying
+    would re-send it, which is the duplicate this whole mechanism exists to
+    prevent. A ``skipped:`` result is not a failure to retry either — no phone
+    on file, no configured keys, and testing mode all resolve to the same answer
+    on the next tick, so releasing would just re-log the same row every 5
+    minutes for the life of the window.
+    """
+    if not results:
+        return False
+    if any(r.success for r in results):
+        return False
+    return any(not str(r.error or "").startswith("skipped:") for r in results)
 
 
 def _parse_send_time(send_time: str) -> tuple[int, int]:
@@ -451,21 +522,61 @@ def _is_day_out_window(
     return 0 <= elapsed <= GRACE_MINUTES * 60
 
 
-def _in_send_window(now: datetime, send_time: str, send_tz: str) -> bool:
-    """Could a day-out reminder on this (send_time, tz) fire right now?
+def _utc_offsets_in_effect(at: datetime) -> set[timedelta]:
+    """Every UTC offset in force somewhere in the world at ``at``.
 
-    Appointment-independent, which is what makes it usable as a gate before the
-    query runs: the firing instants for a given send time are "that time on some
-    local date", so being inside one is a property of ``now`` alone.
+    Enumerated from the tz database rather than hardcoded, because the set is
+    seasonal: a zone's offset changes at its DST transitions, so a static list
+    would be wrong for part of the year. About 38 distinct offsets fall out of
+    598 zones, and the walk costs ~30ms — paid only on ticks where the gate is
+    actually consulted, and cheap against the appointment query it decides
+    whether to skip.
 
-    Checks yesterday's instant as well as today's, because a send time near the
-    end of the local day has a grace window that spills past midnight — the same
-    case ``_is_day_out_window`` handles.
+    A zone that fails to load is skipped rather than raised on. The gate must
+    not be the thing that takes down a scan.
     """
-    now_local = now.astimezone(zoneinfo.ZoneInfo(send_tz or _DEFAULT_TZ))
-    for days_back in (0, 1):
-        day = (now_local - timedelta(days=days_back)).date()
-        elapsed = (now - _scheduled_moment(day, send_time, send_tz)).total_seconds()
-        if 0 <= elapsed <= GRACE_MINUTES * 60:
-            return True
-    return False
+    offsets: set[timedelta] = set()
+    for name in zoneinfo.available_timezones():
+        try:
+            offset = zoneinfo.ZoneInfo(name).utcoffset(at)
+        except Exception:
+            continue
+        if offset is not None:
+            offsets.add(offset)
+    return offsets
+
+
+def _send_time_passing_at_offset(
+    now: datetime, send_time: str, offset: timedelta
+) -> bool:
+    """Whether a clock at ``offset`` currently reads within grace of ``send_time``."""
+    hour, minute = _parse_send_time(send_time)
+    local = now + offset
+    local_seconds = local.hour * 3600 + local.minute * 60 + local.second
+    target_seconds = hour * 3600 + minute * 60
+    # Modulo rather than a same-date subtraction, so a send time near the end of
+    # the day whose grace window spills past midnight is still matched — the same
+    # case ``_is_day_out_window`` handles by anchoring to the target date.
+    return 0 <= (local_seconds - target_seconds) % 86400 <= GRACE_MINUTES * 60
+
+
+def _any_send_time_passing(
+    now: datetime, send_windows: set[tuple[str, str]]
+) -> bool:
+    """Could a day-out reminder fire right now, for a patient in any timezone?
+
+    Appointment-independent, which is what makes it usable before the query
+    runs: the firing instants for a send time are "that time on some local
+    clock", so being inside one is a property of ``now`` and an offset alone.
+
+    The configured zone in each window is ignored on purpose. It is one zone
+    among the ones patients resolve to, and its offset is already in the set.
+    """
+    if not send_windows:
+        return False
+    offsets = _utc_offsets_in_effect(now)
+    return any(
+        _send_time_passing_at_offset(now, send_time, offset)
+        for send_time, _send_tz in send_windows
+        for offset in offsets
+    )

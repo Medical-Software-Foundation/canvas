@@ -2915,10 +2915,17 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         )
 
         result = []
-        linked_note_ids = set()
+        # `appt.note_id` is the FK column, and Appointment.note targets Note's
+        # primary key — which on an SDK model is `dbid`, not the `id` UUID. So
+        # these are integers and must be excluded by `dbid` below. Named for the
+        # column they hold, because the mismatch is invisible at the call site:
+        # UUIDField.to_python(12345) does not raise, it returns
+        # 00000000-0000-0000-0000-000000003039, so excluding by `id` silently
+        # matched nothing and every linked note was listed twice.
+        linked_note_dbids = set()
         for appt in appointments:
             if appt.note_id:
-                linked_note_ids.add(appt.note_id)
+                linked_note_dbids.add(appt.note_id)
             result.append({
                 "type": "appointment",
                 "appointment_id": str(appt.id),
@@ -2945,8 +2952,8 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             .defer("body", "related_data")
             .order_by("-datetime_of_service")
         )
-        if linked_note_ids:
-            notes_qs = notes_qs.exclude(id__in=linked_note_ids)
+        if linked_note_dbids:
+            notes_qs = notes_qs.exclude(dbid__in=linked_note_dbids)
         notes_qs = notes_qs[:20]
 
         for note in notes_qs:
@@ -3223,6 +3230,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         log_delivery(
             log_key, str(patient_id), campaign_type, results,
             sms_content=sms_content, email_content=email_content,
+            patient=patient,
         )
 
         result_list = []

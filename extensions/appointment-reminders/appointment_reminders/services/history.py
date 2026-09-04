@@ -1,5 +1,6 @@
 """Notification delivery history — persisted as CustomModel rows."""
 from datetime import datetime, timezone
+from typing import Any
 
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
@@ -10,6 +11,28 @@ from appointment_reminders.models.delivery import (
 )
 
 
+def _patient_fk_kwargs(patient_id: str, patient: Any) -> dict | None:
+    """Resolve the ``NotificationDelivery.patient`` FK, avoiding a re-read.
+
+    ``NotificationDelivery.patient`` targets ``dbid``, so writing the row needs
+    that integer and nothing else. Every hot caller already holds the patient —
+    ``appointment.patient`` in the reminder cron, the loaded row in the event
+    handler, the manual send, and the inbound webhook — and ``CustomPatient``
+    is the same table as ``Patient`` (``canvas_sdk_data_api_patient_001``), so
+    looking it up again re-reads the identical row purely to satisfy the FK.
+    Inside the cron loop that is one full-row SELECT per delivery.
+
+    Returns the kwargs to splat into ``create()``, or ``None`` when the patient
+    could not be resolved and the caller should skip the write.
+    """
+    if patient is not None:
+        return {"patient_id": patient.dbid}
+    try:
+        return {"patient": CustomPatient.objects.get(id=patient_id)}
+    except Patient.DoesNotExist:
+        return None
+
+
 def log_delivery(
     appointment_id: str,
     patient_id: str,
@@ -17,18 +40,21 @@ def log_delivery(
     results: list,
     sms_content: str = "",
     email_content: str = "",
+    patient: Any = None,
 ) -> None:
     """Insert one NotificationDelivery row per DeliveryResult.
 
     `results` is a list of DeliveryResult-like objects with `channel`,
     `success`, `error`, and optionally `recipient` attributes.
+
+    Pass ``patient`` when the caller already has the row loaded; it skips a
+    redundant lookup. See ``_patient_fk_kwargs``.
     """
     if not results:
         return
 
-    try:
-        patient = CustomPatient.objects.get(id=patient_id)
-    except Patient.DoesNotExist:
+    patient_fk = _patient_fk_kwargs(patient_id, patient)
+    if patient_fk is None:
         log.warning(
             f"[notify] log_delivery skipped — patient {patient_id} not found"
         )
@@ -36,7 +62,7 @@ def log_delivery(
 
     for result in results:
         NotificationDelivery.objects.create(
-            patient=patient,
+            **patient_fk,
             appointment_id=appointment_id or "",
             campaign_type=campaign_type,
             channel=result.channel,
@@ -59,23 +85,26 @@ def log_inbound_response(
     status: str,
     body: str,
     from_number: str,
+    patient: Any = None,
 ) -> None:
     """Record a patient's inbound SMS reply (confirm/decline/unrecognized).
 
     Stored as a ``NotificationDelivery`` row with campaign_type
     ``inbound_response`` so it surfaces in the same activity log / patient
     history as outbound sends — and powers the "needs outreach" view.
+
+    Pass ``patient`` when the caller already has the row loaded; the inbound
+    webhook resolved it to get here. See ``_patient_fk_kwargs``.
     """
-    try:
-        patient = CustomPatient.objects.get(id=patient_id)
-    except Patient.DoesNotExist:
+    patient_fk = _patient_fk_kwargs(patient_id, patient)
+    if patient_fk is None:
         log.warning(
             f"[inbound] log_inbound_response skipped — patient {patient_id} not found"
         )
         return
 
     NotificationDelivery.objects.create(
-        patient=patient,
+        **patient_fk,
         appointment_id=appointment_id or "",
         campaign_type="inbound_response",
         channel="sms",
