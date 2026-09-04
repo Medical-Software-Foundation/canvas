@@ -1,0 +1,167 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.4.3",
+    "name": "canvas_event_webhooks",
+    "description": "Forwards Canvas EHR events to up to three HTTPS webhooks as signed JSON. For integration engineers, practice operations / RevOps, and analytics teams who need appointments, tasks, billing, and clinical events outside the EHR.",
+    "components": {
+        "handlers": [
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:PatientWebhookHandler",
+                "description": "Forwards patient-record events to matching webhooks.",
+                "data_access": {
+                    "event": "PATIENT_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:AppointmentWebhookHandler",
+                "description": "Forwards appointment lifecycle events to matching webhooks.",
+                "data_access": {
+                    "event": "APPOINTMENT_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Appointment"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:NoteWebhookHandler",
+                "description": "Forwards note, note-state, and encounter events to matching webhooks.",
+                "data_access": {
+                    "event": "NOTE_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Note", "Encounter"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:ClinicalWebhookHandler",
+                "description": "Forwards clinical record events to matching webhooks.",
+                "data_access": {
+                    "event": "CONDITION_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Condition", "AllergyIntolerance", "Immunization", "Observation", "VitalSign"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:MedicationWebhookHandler",
+                "description": "Forwards medication-list events to matching webhooks.",
+                "data_access": {
+                    "event": "MEDICATION_LIST_ITEM_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Medication"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:PrescriptionWebhookHandler",
+                "description": "Forwards the e-prescribing lifecycle to matching webhooks.",
+                "data_access": {
+                    "event": "PRESCRIPTION_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Prescription", "Medication"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:LabWebhookHandler",
+                "description": "Forwards lab, imaging, and referral-report events to matching webhooks.",
+                "data_access": {
+                    "event": "LAB_ORDER_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "LabOrder", "LabReport", "ImagingOrder", "ImagingReport", "ReferralReport"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:TaskWebhookHandler",
+                "description": "Forwards task lifecycle events to matching webhooks.",
+                "data_access": {
+                    "event": "TASK_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Task"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:StaffWebhookHandler",
+                "description": "Forwards staff created/updated/activated/deactivated events to matching webhooks.",
+                "data_access": {
+                    "event": "STAFF_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:DocumentWebhookHandler",
+                "description": "Forwards inbound document lifecycle events to matching webhooks.",
+                "data_access": {
+                    "event": "DOCUMENT_RECEIVED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "DocumentReference"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:MessageWebhookHandler",
+                "description": "Forwards patient-provider message and letter events to matching webhooks.",
+                "data_access": {
+                    "event": "MESSAGE_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Message", "Letter"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:CareTeamWebhookHandler",
+                "description": "Forwards care-team and patient-group events to matching webhooks.",
+                "data_access": {
+                    "event": "CARE_TEAM_MEMBERSHIP_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "CareTeamMembership", "PatientGroup"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.event_handlers:BillingWebhookHandler",
+                "description": "Forwards billing, claim, coverage, and consent events to matching webhooks.",
+                "data_access": {
+                    "event": "CLAIM_CREATED",
+                    "read": ["Patient", "Staff", "CanvasUser", "AttributeHub", "Claim", "Coverage", "Consent"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas_event_webhooks.handlers.config_api:WebhookConfigAPI",
+                "description": "Staff configuration API and UI for managing up to three webhooks."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "canvas_event_webhooks.handlers.config_app:WebhookConfigApplication",
+                "name": "Event Webhooks",
+                "description": "Configure where Canvas events should be sent.",
+                "icon": "assets/icon.png",
+                "scope": "global"
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "webhook-url",
+            "sensitive": true
+        },
+        {
+            "name": "webhook-secret",
+            "sensitive": true
+        },
+        {
+            "name": "include-context",
+            "sensitive": false
+        }
+    ],
+    "custom_data": {
+        "namespace": "canvas__event_webhooks",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
