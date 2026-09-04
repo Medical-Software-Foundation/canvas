@@ -1,0 +1,138 @@
+/* Patient Resources: the patient-facing "My Resources" page.
+ *
+ * A separate stylesheet from the staff one, deliberately. This page is read by
+ * patients on their own devices, so it uses larger type and generous tap
+ * targets, and it must not inherit changes made for a dense staff table.
+ */
+
+:root {
+  --prp-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --prp-bg: #f7f8fa;
+  --prp-surface: #ffffff;
+  --prp-ink: #1f2933;
+  --prp-ink-muted: #5b6874;
+  --prp-line: #dde3e9;
+  --prp-line-soft: #eef1f4;
+  --prp-accent: #0b5f70;
+  --prp-focus: #0b5f70;
+  --prp-radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+/* The templates hide the Add button, the read-only notice and the archived
+   toggle with the `hidden` attribute and reveal them from JavaScript. The
+   browser's own `[hidden] { display: none }` lives in the user-agent
+   stylesheet, so any author `display` rule below -- `.pr-toggle { display:
+   flex }`, for one -- outranks it and the element stays visible whatever the
+   attribute says. Restating it here as an author rule, and marking it
+   important because the two rules are then at the same level. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: var(--prp-font);
+  /* 16px, not the staff page's 14px: this is consumer-facing reading text. */
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--prp-ink);
+  background: var(--prp-bg);
+}
+
+#prp-app {
+  padding: 24px 20px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+h1 { font-size: 24px; margin: 0 0 4px; }
+
+.prp-intro { color: var(--prp-ink-muted); margin: 0 0 24px; }
+
+.prp-list { list-style: none; margin: 0; padding: 0; }
+
+.prp-item {
+  background: var(--prp-surface);
+  border: 1px solid var(--prp-line);
+  border-radius: var(--prp-radius);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+
+.prp-item-title { font-size: 18px; font-weight: 600; margin: 0 0 4px; overflow-wrap: anywhere; }
+
+.prp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  color: var(--prp-ink-muted);
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+/* What the care team wrote for this patient about this resource. Set apart from
+   the metadata above it: this is a message from a person, not a field. The rule
+   on the left reads as a quotation without needing quotation marks around
+   free text somebody typed. `white-space: pre-line` keeps the line breaks they
+   typed, and nothing else -- the text is inserted with textContent, so it can
+   never be markup. */
+.prp-note {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 3px solid var(--prp-line);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.prp-open {
+  display: inline-block;
+  /* A comfortable tap target on a phone. */
+  min-height: 44px;
+  line-height: 1.4;
+  padding: 10px 16px;
+  border-radius: var(--prp-radius);
+  background: var(--prp-accent);
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.prp-open:hover { filter: brightness(1.08); }
+
+a:focus-visible {
+  outline: 2px solid var(--prp-focus);
+  outline-offset: 2px;
+}
+
+/* A stored link that no longer passes validation is shown as text, never as a
+   clickable anchor. */
+.prp-unavailable { color: var(--prp-ink-muted); font-style: italic; }
+
+.prp-empty {
+  background: var(--prp-surface);
+  border: 1px dashed var(--prp-line);
+  border-radius: var(--prp-radius);
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--prp-ink-muted);
+}
+
+/* Withdrawn resources. Named and dated rather than removed: a patient who was
+   counselled on a handout should not find their list quietly one item shorter. */
+.prp-withdrawn-heading {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--prp-ink-muted);
+  margin: 32px 0 8px;
+}
+
+.prp-withdrawn {
+  border: 1px dashed var(--prp-line);
+  border-radius: var(--prp-radius);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  color: var(--prp-ink-muted);
+}
+
+.prp-error { color: #8a2b33; }
