@@ -82,10 +82,11 @@ class AppointmentEventHandler(BaseHandler):
         try:
             patient = (
                 Patient.objects.select_related("business_line")
-                # `addresses` is read by the timezone resolver, which renders the
+                # Both are read by the timezone resolver, which renders the
                 # appointment time in the patient's own zone rather than the
-                # clinic's.
-                .prefetch_related("telecom", "addresses")
+                # clinic's: `settings` carries the chart's chosen scheduling
+                # timezone, `addresses` the fallback when none is set.
+                .prefetch_related("telecom", "addresses", "settings")
                 .get(id=patient_id)
             )
         except Patient.DoesNotExist:

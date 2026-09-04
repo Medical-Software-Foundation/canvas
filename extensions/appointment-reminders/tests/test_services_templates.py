@@ -15,6 +15,7 @@ from appointment_reminders.services.templates import (
     _resolve_timezone,
     _tz_abbrev,
     render_template,
+    resolve_timezone_name,
 )
 
 
@@ -86,6 +87,119 @@ def test_resolve_timezone_skips_invalid_strings() -> None:
     patient.last_known_timezone = "Not/A/Real/Zone"
     tz = _resolve_timezone(patient, clinic_timezone="America/Chicago")
     assert tz == zoneinfo.ZoneInfo("America/Chicago")
+
+
+# ---- preferredSchedulingTimezone ----
+#
+# The field the practice actually maintains. A customer reported messages
+# "normalized to EST" because the resolver read last_known_timezone, which holds
+# a value on five rows fleet-wide, while their chart preference was set on
+# 140,028 patients of whom 52,382 are not Eastern.
+
+
+def _setting(name, value):
+    s = MagicMock()
+    s.name = name
+    s.value = value
+    return s
+
+
+def _patient_with(settings=None, last_known=None):
+    patient = MagicMock()
+    patient.settings.all.return_value = settings or []
+    patient.last_known_timezone = last_known
+    patient.addresses.all.return_value = []
+    return patient
+
+
+def test_the_chart_preference_wins() -> None:
+    patient = _patient_with(
+        [_setting("preferredSchedulingTimezone", "America/Chicago")]
+    )
+    assert resolve_timezone_name(patient, "America/New_York") == "America/Chicago"
+
+
+def test_the_chart_preference_beats_last_known_timezone() -> None:
+    """Staff chose the preference; last_known is observed, and is set by a FHIR
+    extension rather than by anyone looking at the chart."""
+    patient = _patient_with(
+        [_setting("preferredSchedulingTimezone", "America/Chicago")],
+        last_known="America/Los_Angeles",
+    )
+    assert resolve_timezone_name(patient, "America/New_York") == "America/Chicago"
+
+
+def test_falls_back_to_last_known_when_no_preference_is_set() -> None:
+    patient = _patient_with([], last_known="America/Los_Angeles")
+    assert resolve_timezone_name(patient, "America/New_York") == "America/Los_Angeles"
+
+
+def test_other_settings_are_ignored() -> None:
+    """The store is shared: pharmacy, lab and contactMethod live beside it."""
+    patient = _patient_with([
+        _setting("pharmacy", [{"pharmacy_name": "X"}]),
+        _setting("contactMethod", "phone"),
+        _setting("preferredSchedulingTimezone", "America/Denver"),
+    ])
+    assert resolve_timezone_name(patient, "America/New_York") == "America/Denver"
+
+
+def test_a_non_string_preference_does_not_raise() -> None:
+    """It is a JSONField, so nothing at the database level guarantees a string,
+    and ZoneInfo raises TypeError rather than the ValueError the loop catches."""
+    for junk in ({"zone": "America/Chicago"}, ["America/Chicago"], 42, None):
+        patient = _patient_with([_setting("preferredSchedulingTimezone", junk)])
+        assert resolve_timezone_name(patient, "America/New_York") == "America/New_York"
+
+
+def test_an_unparseable_preference_falls_through() -> None:
+    patient = _patient_with(
+        [_setting("preferredSchedulingTimezone", "Not/A/Zone")],
+        last_known="America/Los_Angeles",
+    )
+    assert resolve_timezone_name(patient, "America/New_York") == "America/Los_Angeles"
+
+
+def test_zones_no_address_can_produce_still_resolve() -> None:
+    """Real values from one production instance. None of these is in
+    RESOLVABLE_ZONES, the eleven zones a US mailing address maps to, so the
+    address heuristic could never have produced them."""
+    for zone in (
+        "America/Detroit",
+        "America/Indiana/Indianapolis",
+        "America/Kentucky/Louisville",
+        "America/Menominee",
+        "America/Indianapolis",          # deprecated alias, still in use
+    ):
+        patient = _patient_with([_setting("preferredSchedulingTimezone", zone)])
+        assert resolve_timezone_name(patient, "America/New_York") == zone
+
+
+def test_the_preference_read_uses_the_prefetch_cache() -> None:
+    """The N+1 guard.
+
+    Django serves a prefetch cache for `.all()` alone. A filtered `.get()` or
+    `.filter()` re-queries even when `settings` was prefetched, which inside the
+    reminder cron is one query per patient across the whole scan window.
+    `Patient.get_setting()` is exactly that shape, so this path must not call it
+    either. Same reason `telecom` and `addresses` are filtered in Python.
+    """
+    patient = _patient_with(
+        [_setting("preferredSchedulingTimezone", "America/Chicago")]
+    )
+    assert resolve_timezone_name(patient, "America/New_York") == "America/Chicago"
+
+    patient.settings.all.assert_called()
+    patient.settings.get.assert_not_called()
+    patient.settings.filter.assert_not_called()
+    patient.get_setting.assert_not_called()
+
+
+def test_a_patient_without_settings_does_not_raise() -> None:
+    patient = MagicMock(spec=["last_known_timezone", "addresses"])
+    patient.last_known_timezone = None
+    patient.addresses.all.return_value = []
+    assert resolve_timezone_name(patient, "America/Chicago") == "America/Chicago"
 
 
 # ---- _tz_abbrev ----

@@ -55,6 +55,44 @@ _DEFAULT_SEND_HOUR = 9
 _DEFAULT_SEND_MINUTE = 0
 
 
+def scan_queryset(now: datetime, end_window: datetime):
+    """The appointments a scan considers, bounded to the window.
+
+    Module level so tests assert against the real query rather than a copy of
+    it. A test that rebuilds this by hand drifts the moment someone edits one
+    and not the other, and then guards nothing — which is exactly the failure it
+    would be there to prevent.
+
+    Only booked statuses: canceled and no-showed appointments are excluded here
+    rather than skipped in the loop.
+
+    Every prefetch below is read per appointment inside the loop and filtered in
+    Python, so a dropped lookup does not fail, it silently becomes one query per
+    row across the whole window.
+    """
+    return (
+        Appointment.objects.filter(
+            start_time__gte=now,
+            start_time__lte=end_window,
+            status__in=["unconfirmed", "attempted", "confirmed"],
+        )
+        .select_related(
+            "patient", "patient__business_line", "provider", "location", "note_type"
+        )
+        .prefetch_related(
+            # Delivery picks the phone and email off this.
+            "patient__telecom",
+            # The timezone resolver reads the chart's chosen scheduling timezone
+            # first and falls back to the address, so both are needed.
+            "patient__settings",
+            "patient__addresses",
+            "provider__roles",
+            "location__addresses",
+            "location__telecom",
+        )
+    )
+
+
 class ReminderScheduler(CronTask):
     """Check for appointments needing reminders every 5 minutes."""
 
@@ -135,12 +173,13 @@ class ReminderScheduler(CronTask):
         #
         # This asked it of RESOLVABLE_ZONES, the eleven zones `timezones.py` can
         # derive from a US address. That is narrower than what the resolver can
-        # return: `resolve_timezone_name` reads `Patient.last_known_timezone`
-        # first, a free-text CharField accepted on nothing but `ZoneInfo()`
-        # parsing it, so any of the ~600 IANA zones can come back. A patient on
-        # a zone outside the eleven had their day-out reminder dropped on the
-        # tick it was due — the gate returned early, the query never ran, and
-        # the only trace was a log line that reads like a normal quiet tick.
+        # return, and not by a little: the chart's preferredSchedulingTimezone
+        # holds any IANA name, and one production instance has patients on
+        # America/Detroit, America/Indiana/Indianapolis, America/Kentucky/
+        # Louisville and America/Menominee, none of which an address resolves
+        # to. A patient on a zone outside the eleven had their day-out reminder
+        # dropped on the tick it was due, and the only trace was a log line that
+        # reads like a normal quiet tick.
         #
         # Asking about UTC offsets instead makes the gate complete: what decides
         # whether a local clock reads the send time is the offset, not the zone
@@ -186,31 +225,11 @@ class ReminderScheduler(CronTask):
         )
         end_window = now + timedelta(minutes=scan_horizon_minutes + GRACE_MINUTES)
 
-        # Only query booked appointments (excludes canceled, no-showed, etc.).
         # Single pass, so .iterator() bounds peak memory over a window that held
         # ~3.4k appointments on the busiest instance measured. chunk_size is
-        # large on purpose: every chunk re-runs all four prefetches, and a small
+        # large on purpose: every chunk re-runs all the prefetches, and a small
         # chunk measured ~200ms/scan slower for memory that was never scarce.
-        appointments = (
-            Appointment.objects.filter(
-                start_time__gte=now,
-                start_time__lte=end_window,
-                status__in=["unconfirmed", "attempted", "confirmed"],
-            )
-            .select_related(
-                "patient", "patient__business_line", "provider", "location", "note_type"
-            )
-            .prefetch_related(
-                "patient__telecom",
-                # The timezone resolver reads the patient's address to work out
-                # their local time; without this it is one extra query per row.
-                "patient__addresses",
-                "provider__roles",
-                "location__addresses",
-                "location__telecom",
-            )
-            .iterator(chunk_size=1000)
-        )
+        appointments = scan_queryset(now, end_window).iterator(chunk_size=1000)
 
         all_effects: list[Effect] = []
         reminders_sent = 0

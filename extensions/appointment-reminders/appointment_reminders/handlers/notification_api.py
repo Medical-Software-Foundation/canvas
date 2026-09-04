@@ -3019,7 +3019,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                 # the sent message both carry the patient's local time.
                 patient = (
                     Patient.objects.select_related("business_line")
-                    .prefetch_related("addresses")
+                    .prefetch_related("addresses", "settings")
                     .get(id=patient_id)
                 )
             except Patient.DoesNotExist:
@@ -3153,7 +3153,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             patient = (
                 Patient.objects.select_related("business_line")
                 # `addresses` feeds the timezone resolver; `telecom` feeds delivery.
-                .prefetch_related("telecom", "addresses")
+                .prefetch_related("telecom", "addresses", "settings")
                 .get(id=patient_id)
             )
         except Patient.DoesNotExist:

@@ -7,7 +7,7 @@ from typing import Any
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.v1.data.appointment import Appointment
 from canvas_sdk.v1.data.organization import Organization
-from canvas_sdk.v1.data.patient import Patient
+from canvas_sdk.v1.data.patient import Patient, PatientSettingConstants
 
 from appointment_reminders.services.business_line import (
     get_business_line_name,
@@ -16,6 +16,11 @@ from appointment_reminders.services.business_line import (
 from appointment_reminders.services.timezones import zone_for_address
 
 _DEFAULT_TZ_NAME = "America/New_York"
+
+# Taken from the SDK rather than spelled out, so a rename upstream surfaces as
+# an ImportError here instead of a resolver that silently stops matching and
+# quietly puts every patient back on the clinic zone.
+_PREFERRED_TZ_SETTING = PatientSettingConstants.PREFERRED_SCHEDULING_TIMEZONE
 _ORG_VARS_CACHE_KEY = "appointment_reminders:org_vars"
 _ORG_VARS_CACHE_TTL = 300  # 5 minutes — matches cron interval
 
@@ -78,6 +83,36 @@ def unresolved_placeholders(text: str) -> list[str]:
     return found
 
 
+def _preferred_scheduling_timezone(patient: Patient) -> str:
+    """The zone staff chose in the chart's Preferences, or ``""`` if unset.
+
+    This is the field the practice actually maintains. Across one production
+    instance it carries a value on 140,028 patients, of which 52,382 are not
+    Eastern, where ``last_known_timezone`` holds a value on five patient rows in
+    the entire fleet. Reading only the latter meant every one of those patients
+    fell through to the configured clinic zone, which is what a customer
+    reported as messages "normalized to EST".
+
+    Filtered in Python rather than with ``.get(name=...)``. Django serves a
+    prefetch cache for ``.all()`` alone, so a filtered lookup re-queries even
+    when ``settings`` was prefetched, which inside the reminder cron is one
+    query per patient. ``Patient.get_setting()`` is exactly that shape, so it is
+    deliberately not used here. Same reason ``telecom`` and ``addresses`` are
+    filtered in Python.
+
+    The value is a JSONField, so it arrives as whatever was stored. It is
+    type-checked before the caller hands it to ``ZoneInfo``.
+    """
+    settings = getattr(patient, "settings", None)
+    if settings is None:
+        return ""
+    for setting in settings.all():
+        if getattr(setting, "name", "") == _PREFERRED_TZ_SETTING:
+            value = getattr(setting, "value", None)
+            return value if isinstance(value, str) else ""
+    return ""
+
+
 def _patient_address_timezone(patient: Patient) -> str:
     """The zone implied by the patient's address, or ``""`` if none resolves.
 
@@ -111,19 +146,27 @@ def _patient_address_timezone(patient: Patient) -> str:
 def resolve_timezone_name(patient: Patient, clinic_timezone: str = "") -> str:
     """The IANA zone name a patient's times should be rendered and sent in.
 
-    Order: the timezone explicitly recorded on the patient, then the zone
-    implied by their address, then the configured clinic default, then Eastern.
-    The address step is what makes this resolve at all in practice — see
-    ``services/timezones.py`` for why ``last_known_timezone`` is almost always
-    empty.
+    Order: the scheduling timezone chosen in the chart, then the timezone
+    recorded on the patient record, then the zone implied by their address, then
+    the configured clinic default, then Eastern.
+
+    The chart preference leads because it is the field a practice actually
+    maintains and the one they expect to govern outbound times. It is also by
+    far the best populated: 140,028 patients on one production instance against
+    five rows fleet-wide for ``last_known_timezone``, and it is finer-grained
+    than the address heuristic, which can only produce the eleven zones a US
+    mailing address maps to. Address resolution stays as the fallback for a
+    patient with no preference recorded.
 
     Each candidate is type-checked before ``ZoneInfo`` sees it, because
-    ``last_known_timezone`` is free text and a non-string would raise a
-    ``TypeError`` the loop is not otherwise catching.
+    ``last_known_timezone`` is free text and the preference is a JSONField, so
+    either could hand the loop a non-string and raise a ``TypeError`` it does
+    not otherwise catch.
     """
-    # Each candidate is a callable so the address lookup is skipped entirely
-    # when the patient already carries an explicit zone.
+    # Each candidate is a callable so the later lookups are skipped entirely
+    # when an earlier one already answers.
     candidates = (
+        lambda: _preferred_scheduling_timezone(patient),
         lambda: getattr(patient, "last_known_timezone", None),
         lambda: _patient_address_timezone(patient),
         lambda: clinic_timezone,
