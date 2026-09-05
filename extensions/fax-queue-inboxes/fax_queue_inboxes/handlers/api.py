@@ -18,7 +18,7 @@ from http import HTTPStatus
 from typing import Any
 from uuid import UUID
 
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch
 
 # django.utils.timezone is not importable inside the plugin sandbox, only
 # django.utils.functional is on its allow list, so the current moment comes
@@ -471,20 +471,54 @@ class FaxQueueAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/labels")
     def list_labels(self) -> list[Response | Effect]:
-        """Return every PracticeLabel, seeding the five starter labels first call."""
+        """Return every PracticeLabel, seeding the five starter labels first call.
+
+        Each label also carries fax_count, per Behaviour step 24, the number of
+        FaxLabel rows pointing at it, so a deletion confirmation in the modal
+        can state its consequence before anybody touches the delete control.
+        The count is read in one grouped query over every label id rather than
+        one query per label read in a loop, which is the shape the database
+        performance gate already made the task list learn once, and id and
+        name keep the exact shape criterion 8 already covers.
+        """
         if not PracticeLabel.objects.exists():
             for name in STARTER_LABELS:
                 PracticeLabel.objects.get_or_create(name=name)
-        labels = PracticeLabel.objects.order_by("name")
+        labels = list(PracticeLabel.objects.order_by("name"))
+        counts = {
+            row["label_id"]: row["fax_count"]
+            for row in FaxLabel.objects.filter(label_id__in=[label.dbid for label in labels])
+            .values("label_id")
+            .annotate(fax_count=Count("label_id"))
+        }
         return [
             JSONResponse(
-                {"labels": [{"id": label.dbid, "name": label.name} for label in labels]}
+                {
+                    "labels": [
+                        {
+                            "id": label.dbid,
+                            "name": label.name,
+                            "fax_count": counts.get(label.dbid, 0),
+                        }
+                        for label in labels
+                    ]
+                }
             )
         ]
 
     @api.post("/labels")
     def create_label(self) -> list[Response | Effect]:
-        """Create a practice defined label, with no categorisation effect of any kind."""
+        """Create a practice defined label, with no categorisation effect of any kind.
+
+        Matches an existing PracticeLabel case insensitively before creating, per
+        criterion 31 of the 2026-09-04 change request. get_or_create used to match
+        the submitted name exactly, so referral typed through the row picker's new
+        create offer would sit beside Referral as a second row, the near duplicate
+        defect the change request's own reversal section names as the one risk
+        still worth guarding against now that a row anybody can grow gets a create
+        trigger back. A genuine miss is the only case that reaches create, so the
+        practice's own capitalisation on the first row survives untouched.
+        """
         name = self._json_body().get("name", "").strip()
         if not name:
             return [
@@ -492,7 +526,9 @@ class FaxQueueAPI(StaffSessionAuthMixin, SimpleAPI):
                     {"error": "A label name is required"}, status_code=HTTPStatus.BAD_REQUEST
                 )
             ]
-        label, _ = PracticeLabel.objects.get_or_create(name=name)
+        label = PracticeLabel.objects.filter(name__iexact=name).first()
+        if label is None:
+            label = PracticeLabel.objects.create(name=name)
         return [
             JSONResponse({"id": label.dbid, "name": label.name}, status_code=HTTPStatus.CREATED)
         ]

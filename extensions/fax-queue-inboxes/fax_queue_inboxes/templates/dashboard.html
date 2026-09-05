@@ -30,8 +30,155 @@
     .page-header {
       margin-bottom: var(--space-large);
     }
+    /* The control lives on the h1 line rather than under it, so the row wraps
+       the heading and the button together and the subtitle stays a sibling
+       underneath, on its own line, exactly where it already was. */
+    .page-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-medium);
+    }
     .page-header p {
       color: var(--color-text-muted, #767676);
+    }
+    /* The field that adds a label sits above the table it grows, so it reads
+       as one small form rather than as a row belonging to the table below.
+       The two still have to compute to the same shape, since a reader scans
+       this row's input and the table's own label inputs as one continuous
+       column rather than as a form stacked over a table. canvas-table-cell
+       pads itself with --canvas-table-cell-padding, 0.5rem 1rem by default
+       here since this table carries no compact attribute, so every label
+       input below sits a rem in from the table's own left and right edges.
+       This row sits directly in canvas-modal-content with no cell of its
+       own to pad it, so a rem of padding on each side is given to it here
+       instead, bringing its own left and right edges to where the table
+       cell edges already sit. That outer rem is untouched by anything
+       below and is what keeps the add row lined up with the rows beneath
+       it.
+
+       The gap held open in the middle is a smaller number now than the
+       two rem it used to be, a rem from the name cell's own right edge
+       meeting a rem from the actions cell's own left edge. The actions
+       cell's left edge is narrowed further down to --space-tiny, so the
+       two edges now meet across --space-huge instead, and this row's own
+       --canvas-inline-row-gap is set to that same --space-huge so the add
+       row and the table row still read as one gap rather than two
+       different ones stacked over each other. */
+    .add-label-row {
+      margin-bottom: var(--space-medium);
+      padding: 0;
+      --canvas-inline-row-gap: var(--space-tiny, 8px);
+    }
+    /* Add label pairs with the input beside it rather than with any button
+       a label row shows, which is why their colours correctly stay apart,
+       yet a reader still reads every one of them as the same kind of
+       button doing a row's one action. A button with no size attribute is
+       naturally as wide as its own word, which leaves Add label wider than
+       a four letter Edit or Save purely because its own word is longer.
+       Nothing in the design system hands a button a minimum width of its
+       own, buttons stay sized to content by default, so this page supplies
+       one, long enough for the nine characters of Add label plus twice
+       whatever side padding these buttons carry, so no button a label row
+       shows in any of its three states reads narrower once every one of
+       them shares the rule.
+
+       The side padding itself is narrowed here too, from the base
+       button's own 1.5em down to 1.125em, the side number the skill
+       already documents for its own --canvas-button-padding-sm rather
+       than a guessed figure. The vertical number stays the base button's
+       own .67857143em, unchanged, since a plain canvas-input already runs
+       its own height at that same number and Cancel and Save still have
+       to line up with Add label as a box of that same height, which is
+       the whole reason these three states keep the base button rather
+       than the shorter size a table's own action buttons usually take.
+       Both the button's own padding and the min-width formula below
+       borrow the same 1.125em, so Add label still renders at exactly the
+       width the formula names rather than spilling past a floor that
+       stopped matching what the button itself carries, which is what
+       keeps every button the same box as the row changes state. */
+    #add-label-button,
+    .label-edit-button,
+    .label-delete-button,
+    .label-cancel-button,
+    .label-save-button,
+    .label-confirm-delete-button {
+      --canvas-button-padding: .67857143em 1.125em;
+    }
+    /* Add label keeps a width of its own, wide enough for its own nine
+       characters plus the side padding above, because it pairs with the
+       field beside it rather than with anything a label row shows. The
+       five buttons a row shows are capped at a flat 96 pixels instead,
+       which is wider than the longest of Edit, Save, Cancel and Delete
+       and narrow enough that a row reads as a name with two small actions
+       rather than as a name crowded by two slabs. The number is flat
+       rather than derived, since what matters here is that all five stay
+       the same box as a row moves between its three states, and a formula
+       in character widths would let the box move the moment a word
+       changed. */
+    #add-label-button {
+      min-width: calc(9ch + 2.25em);
+    }
+    .label-edit-button,
+    .label-delete-button,
+    .label-cancel-button,
+    .label-save-button,
+    .label-confirm-delete-button {
+      min-width: 96px;
+    }
+    /* The one wrapper a label row's actions cell reaches for in every one
+       of its three states, Edit paired with Delete, Cancel paired with
+       Save, or Cancel paired with Delete again. canvas-table-cell forces
+       its own text-align to right only when it carries the actions
+       attribute, per the comment on row-inline further down, and that
+       alignment reaches a block level child only through a flex wrapper's
+       own justify-content, which is what this supplies rather than
+       restating the same three rules in three different places. */
+    .label-row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-tiny);
+    }
+    /* The actions cell's own left inset, narrowed to match the smaller gap
+       the add row above now keeps. canvas-table-cell reads its whole
+       padding from --canvas-table-cell-padding as one pair, top and
+       bottom then left and right, so touching only the side that faces
+       the name column means restating all four sides here rather than
+       the pair the default uses, with the top, the bottom and the right
+       kept exactly as the default already sets them so the row's own
+       height and its own right edge never move. Scoped to this one
+       table's body so no other table on the page inherits a narrower
+       actions inset than its own rows were built for. */
+    #labels-table-body canvas-table-cell[actions] {
+      --canvas-table-cell-padding: 0.5rem 0 0.5rem 0;
+    }
+    /* The name cell's own right inset, the other half of that middle gap.
+       The two insets used to meet across a rem and a half and now meet
+       across --space-tiny alone, which is the same number the add row's
+       own gap above carries, so the field and the button beside it sit as
+       close in the add row as a name and its actions do in every row
+       below. The left inset stays exactly as the default sets it, since
+       that is the edge every row lines up on. */
+    #labels-table-body canvas-table-cell:not([actions]) {
+      --canvas-table-cell-padding: 0.5rem var(--space-tiny, 8px) 0.5rem 0;
+    }
+    /* A label row's read state and delete state both put a line of plain
+       text where the edit state puts a field, the label's own name at
+       rest and the sentence naming the deletion's consequence once Delete
+       is activated, so the two share this rather than each declaring its
+       own block level span. */
+    /* The left inset here is the one a canvas-input carries inside its
+       own border, the 1em side of --canvas-input-padding, and it is
+       repeated on this span deliberately. A row at rest shows the name as
+       text and a row being edited shows the same name inside a field, so
+       without this the words would jump sideways by that 1em the moment
+       Edit is activated and jump back when it is saved. Matching the
+       field's own inset is what makes the swap read as the same text
+       gaining a box around it rather than as the row rearranging itself. */
+    .label-name-text {
+      display: block;
+      padding-left: 1em;
     }
     .tab-meta {
       color: var(--color-text-muted, #767676);
@@ -315,12 +462,52 @@
       margin: 0;
       color: var(--color-text-muted, #767676);
     }
+    /* --- The row picker's own empty row ---
+       canvas-combobox owns no single attribute that can carry two different
+       messages depending on what has been typed, an attribute always wins
+       over slot content per the design system's own reference, so the
+       empty-state attribute is left unset on the picker and this slot is the
+       one thing left to decide what shows. The default text matches the
+       attribute's old wording exactly, since nothing changes while the
+       search box is empty, and wireLabelCreateOffer rewrites it into the
+       create offer below the moment a typed name stops matching anything,
+       per Behaviour step 26. */
+    .label-empty-slot {
+      display: block;
+      width: 100%;
+      color: var(--color-text-muted, #767676);
+    }
+    /* A full width control rather than a menu item, so activating it reads
+       as its own action and not as a sixth option beside the labels above
+       it. Coloured like the other links on this page rather than like the
+       muted sentence it replaces, since this one is something to click. */
+    .label-create-offer {
+      appearance: none;
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      font: inherit;
+      font-family: inherit;
+      text-align: left;
+      color: var(--color-secondary, #2185D0);
+      cursor: pointer;
+    }
+    .label-create-offer:hover,
+    .label-create-offer:focus-visible {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="page-header">
-      <h1>Fax queue inboxes</h1>
+      <div class="page-header-row">
+        <h1>Fax queue inboxes</h1>
+        <canvas-button id="manage-labels-button" variant="secondary" size="sm">Manage labels</canvas-button>
+      </div>
       <p>Faxes waiting for review, split by who owns them. Viewing a fax and filing it to a patient still happens in Canvas, one link away from every row.</p>
     </div>
 
@@ -362,6 +549,33 @@
       </canvas-tab-panel>
     </canvas-tabs>
   </div>
+
+  <!-- Behaviour step 23. A sibling of .page rather than nested inside it, so
+       opening it puts the whole page behind it, the same reach the design
+       system's own inert handling expects of a modal's parent. -->
+  <canvas-modal id="labels-modal" size="medium">
+    <!-- dismissable rather than a footer button, since nothing here is a form
+         to cancel out of, every row change already saves itself as it lands,
+         so the header X is the one visible way out per component-usage.md
+         Modal Patterns, Header dismiss button. -->
+    <canvas-modal-header dismissable>Manage labels</canvas-modal-header>
+    <canvas-modal-content>
+      <div id="labels-modal-error"></div>
+      <canvas-inline-row class="add-label-row">
+        <canvas-input id="new-label-input" placeholder="New label name" aria-label="New label name"></canvas-input>
+        <canvas-button id="add-label-button" variant="secondary">Add label</canvas-button>
+      </canvas-inline-row>
+      <canvas-table aria-label="Practice labels, name order">
+        <canvas-table-head>
+          <canvas-table-row>
+            <canvas-table-cell width="100%">Name</canvas-table-cell>
+            <canvas-table-cell width="1%">&nbsp;</canvas-table-cell>
+          </canvas-table-row>
+        </canvas-table-head>
+        <canvas-table-body id="labels-table-body"></canvas-table-body>
+      </canvas-table>
+    </canvas-modal-content>
+  </canvas-modal>
 
   <script>
     (function () {
@@ -1230,38 +1444,54 @@
          whose name could change under us. The shadow root is built in
          connectedCallback behind a timeout, so this retries briefly rather than
          assuming the input is there on the next tick. */
-      function openPicker(el, attempt) {
+      /* onReady is optional and carries the input once found, for a caller
+         that needs to wire something onto it beyond the open itself, which
+         is why it is a third argument rather than a second return path, the
+         open still happens on its own with nobody asking for the callback. */
+      function openPicker(el, attempt, onReady) {
         var tries = attempt || 0;
         var inner = el.shadowRoot ? el.shadowRoot.querySelector("input") : null;
         if (!inner) {
           if (tries < 10) {
             setTimeout(function () {
-              openPicker(el, tries + 1);
+              openPicker(el, tries + 1, onReady);
             }, 30);
           }
           return;
         }
         inner.focus();
         inner.click();
+        if (onReady) {
+          onReady(inner);
+        }
       }
 
       /* Both cells edit in place the same way, a control takes the place of the
          thing it shows and puts it back when nothing was chosen, so the swap,
          the immediate open, the escape and the click away all live here once
-         rather than twice. */
-      function swapInEditor(anchor, className, innerHtml, onChosen) {
+         rather than twice. onReady is the same optional hook openPicker takes,
+         threaded through with the control and the restore closure alongside
+         the input, since a caller wiring something onto the input usually
+         needs both of those too and restore is declared below rather than
+         reached for from outside. */
+      function swapInEditor(anchor, className, innerHtml, onChosen, onReady) {
         var wrapper = document.createElement("div");
         wrapper.className = className;
         wrapper.innerHTML = innerHtml;
         anchor.replaceWith(wrapper);
         var control = wrapper.firstElementChild;
-        openPicker(control);
 
         function restore() {
           if (wrapper.isConnected) {
             wrapper.replaceWith(anchor);
           }
         }
+
+        openPicker(control, 0, function (inner) {
+          if (onReady) {
+            onReady(control, inner, restore);
+          }
+        });
 
         /* Escape and clicking away both put the value back, because a cell left
            as an open editor nobody chose anything in reads as a row mid edit for
@@ -1410,19 +1640,20 @@
         });
       }
 
-      /* --- Why this popover has no create control any more
+      /* --- Why the row picker lost its create control, and why it is back
 
-         The label set is administered rather than invented mid triage. POST
-         /labels still exists and is still tested, alongside the put for a
-         rename and the delete, and all three are now an administrative API
-         with no trigger on this page, which is the status the specification
-         had already given the last two. Creation carrying a trigger while a
-         correction carried none was the real inconsistency, because a list
-         anybody can grow from a row popover and nobody can correct collects
-         Prior auth beside Prior Authorization beside PA. The practice still
-         defines its own set through those routes, which is what the agreed
-         scope asked for, it just no longer happens by accident while somebody
-         is working a queue.
+         Spec version 3 removed creation from this exact picker. A list
+         anybody can grow from a row and nobody can correct collects Prior
+         auth beside Prior Authorization beside PA, and that reasoning was
+         sound at the time, it rested on there being no correction path. The
+         manage labels modal is that correction path, a label invented in a
+         hurry can now be renamed or removed by somebody who notices, which is
+         what the original objection was actually about, so the 2026-09-04
+         change request restores the control on that basis. The case
+         insensitive match POST /labels now runs is what keeps referral from
+         sitting beside Referral the moment creation is back on a row, per
+         criterion 31. The list can still grow faster than anybody tidies it,
+         which is accepted deliberately here rather than argued away.
 
          The rest of the label design is unchanged and was not a mistake. A
          practice defined label cannot live in Canvas at all, findings block
@@ -1441,10 +1672,17 @@
         var editor = swapInEditor(
           button,
           "label-editor",
+          /* No empty-state attribute here any more. Behaviour step 26 needs
+             the empty row to carry one of two different things depending on
+             what has been typed, and the design system's own reference is
+             plain that the attribute always wins over a slot when both are
+             set, so the fixed string has to give way for the slot to be able
+             to say anything else. wireLabelCreateOffer owns everything the
+             slot shows from here on. */
           '<canvas-combobox size="sm" placeholder="Search labels" ' +
-            'aria-label="Add a label to this fax" ' +
-            'empty-state="Every label is already on this fax">' +
+            'aria-label="Add a label to this fax">' +
             options +
+            '<div slot="empty" class="label-empty-slot">Every label is already on this fax</div>' +
             '</canvas-combobox>',
           function (picker, restore) {
             var id = String(picker.value == null ? "" : picker.value);
@@ -1467,9 +1705,116 @@
               restore();
               showPageError("Could not add the label. Try again in a moment.");
             });
+          },
+          function (control, inner, restore) {
+            wireLabelCreateOffer(control, inner, taskId, restore);
           }
         );
         return editor;
+      }
+
+      /* --- Criteria 29 and 30, the create offer inside the picker's empty row
+
+         canvas-combobox exposes no public event for what somebody has typed,
+         change fires only once a value is chosen, so the typed text is read
+         straight off the component's own input inside its shadow root, the
+         same reach openPicker already makes to open the menu in the first
+         place. Filtering itself is entirely the component's own, a
+         case-insensitive substring match per the skill's reference, so this
+         never decides for itself whether something matches, it only repaints
+         the slot on every keystroke and lets the component's own empty row
+         decide when that repaint is the thing showing.
+
+         Two ways to activate, matching Behaviour step 26 exactly. A click on
+         the offer is wired once, delegated on the slot so one listener
+         survives the offer's own content being replaced on every keystroke.
+         Enter is the vendor's own selection key and does nothing once nothing
+         is highlighted, which is exactly the state the offer shows in, so a
+         second keydown listener on the same input covers it. offsetParent is
+         a plain layout read rather than a check on the component's own
+         visibility class, since the slot is this page's own element and that
+         is the ordinary way to ask whether an element is actually on screen,
+         nothing here depends on a class name the component did not document. */
+      function wireLabelCreateOffer(control, inner, taskId, restore) {
+        var slot = control.querySelector('[slot="empty"]');
+        if (!slot) {
+          return;
+        }
+
+        function paint(typed) {
+          if (!typed) {
+            slot.textContent = "Every label is already on this fax";
+            slot.classList.remove("is-offer");
+            return;
+          }
+          slot.innerHTML = "";
+          slot.classList.add("is-offer");
+          var offer = document.createElement("button");
+          offer.type = "button";
+          offer.className = "label-create-offer";
+          offer.textContent = 'Create "' + typed + '"';
+          slot.appendChild(offer);
+        }
+
+        function typedValue() {
+          return (inner.value || "").trim();
+        }
+
+        function activate() {
+          var typed = typedValue();
+          if (!typed) {
+            return;
+          }
+          createLabelAndApply(typed, taskId, restore);
+        }
+
+        slot.addEventListener("click", function (event) {
+          if (event.target.closest(".label-create-offer")) {
+            activate();
+          }
+        });
+
+        inner.addEventListener("input", function () {
+          paint(typedValue());
+        });
+
+        inner.addEventListener("keydown", function (event) {
+          if (event.key !== "Enter") {
+            return;
+          }
+          if (slot.offsetParent === null || !slot.classList.contains("is-offer")) {
+            return;
+          }
+          activate();
+        });
+      }
+
+      /* Behaviour step 26, one action rather than two. POST /labels then
+         POST /tasks/<id>/label are the same two routes the manage labels
+         modal and the picker's own selection already call, nothing new is
+         added to the server side of this. patchTaskEverywhere repaints this
+         row from the second route's own answer exactly like an ordinary
+         label add does, and refreshLabelsEverywhere is the same reread
+         addLabel already relies on so every other row's picker offers the
+         new label the moment it next opens, with no page reload either
+         place. */
+      function createLabelAndApply(name, taskId, restore) {
+        request("/labels", {
+          method: "POST",
+          body: JSON.stringify({ name: name })
+        }).then(function (label) {
+          return request("/tasks/" + encodeURIComponent(taskId) + "/label", {
+            method: "POST",
+            body: JSON.stringify({ label_id: label.id })
+          });
+        }).then(function (data) {
+          patchTaskEverywhere(taskId, { labels: (data && data.labels) || [] });
+          restore();
+          return refreshLabelsEverywhere();
+        }).catch(function () {
+          restore();
+          showPageError("Could not create the label. Try again in a moment.");
+        });
       }
 
       /* Taking a label off is the chip's own X and needs no surface of its
@@ -1565,6 +1910,282 @@
         );
       }
 
+      /* --- Behaviour step 23, the Manage labels modal ---
+
+         Restores the surface spec version 2 withdrew for a presentation
+         reason rather than a scope one, per the change request. The three
+         routes underneath were already built and tested, so this is the one
+         page that finally calls them, plus the count GET /labels now carries
+         so a deletion can say what it costs before it happens. */
+
+      function showModalError(message) {
+        var region = document.getElementById("labels-modal-error");
+        region.innerHTML =
+          '<canvas-banner variant="error" header="' + escapeHtml(message) + '"></canvas-banner>';
+      }
+
+      function clearModalError() {
+        document.getElementById("labels-modal-error").innerHTML = "";
+      }
+
+      /* A label row's read state, read by the first paint of the modal table
+         and by every repaint after an add, a rename or a delete, so the
+         three paths cannot drift into building a row two different ways.
+         The name renders as plain text rather than as a field, per
+         Behaviour step 27, and Edit is what turns it into one. The two
+         controls share the class the shared minimum width rule already
+         reads, so a read state row lines up with the add row above the
+         same way the row's other two states do. */
+      function labelReadRowMarkup(label) {
+        var id = escapeHtml(label.id);
+        var name = escapeHtml(label.name);
+        return '<canvas-table-row data-label-id="' + id + '">' +
+          '<canvas-table-cell>' +
+          '<span class="label-name-text">' + name + '</span>' +
+          '</canvas-table-cell>' +
+          '<canvas-table-cell actions>' +
+          '<div class="label-row-actions">' +
+          '<canvas-button variant="ghost" class="label-edit-button" ' +
+          'data-label-id="' + id + '">Edit</canvas-button>' +
+          '<canvas-button variant="ghost" class="label-delete-button" ' +
+          'data-label-id="' + id + '" data-label-name="' + name + '" ' +
+          'data-fax-count="' + escapeHtml(label.fax_count) + '">Delete</canvas-button>' +
+          '</div>' +
+          '</canvas-table-cell>' +
+          '</canvas-table-row>';
+      }
+
+      /* The two cells a row swaps to on Edit, per Behaviour step 27. The
+         input carries the stored name rather than an empty one, since Save
+         commits whatever is in it and Cancel is what throws it away, and a
+         plain canvas-input runs roughly forty three pixels tall, which is
+         why its two buttons keep the base size the add row already uses
+         rather than the shorter size a table's own action buttons usually
+         take, so Cancel and Save line up with Add label as the same box
+         rather than a table sized button beside a form sized one. */
+      function labelEditCellsMarkup(label) {
+        var id = escapeHtml(label.id);
+        var name = escapeHtml(label.name);
+        return '<canvas-table-cell>' +
+          '<canvas-input class="label-name-input" data-label-id="' + id + '" ' +
+          'aria-label="Label name" value="' + name + '"></canvas-input>' +
+          '</canvas-table-cell>' +
+          '<canvas-table-cell actions>' +
+          '<div class="label-row-actions">' +
+          '<canvas-button variant="ghost" class="label-cancel-button" ' +
+          'data-label-id="' + id + '">Cancel</canvas-button>' +
+          '<canvas-button variant="secondary" class="label-save-button" ' +
+          'data-label-id="' + id + '">Save</canvas-button>' +
+          '</div>' +
+          '</canvas-table-cell>';
+      }
+
+      /* The sentence a row's delete state names, per Behaviour step 27 and
+         the change request's own third sketch. The count travels on the
+         button that asked for this state as data-fax-count, read straight
+         off GET /labels rather than asked for again, so entering the state
+         costs nothing beyond what painting the read row already paid for.
+         Deliberately singular or plural rather than the sketch's own bare
+         plural, since a label carried by exactly one fax reading as one
+         faxes would be wrong on the one row where the number is smallest
+         and easiest to notice. */
+      function deleteRowPhrase(name, faxCount) {
+        var count = parseInt(faxCount, 10) || 0;
+        var noun = count === 1 ? "fax" : "faxes";
+        return 'Delete "' + name + '", carried by ' + count + ' ' + noun;
+      }
+
+      /* The two cells a row swaps to on Delete, per Behaviour step 27. No
+         second modal opens over the manage labels modal for this, the row
+         itself becomes the confirmation, which is what the change request
+         settled and what makes Delete here a danger button rather than the
+         ghost one the read state carries, since a row already asking to
+         confirm is the confirmation the design system otherwise wants
+         standing between a person and a danger button. */
+      function labelDeleteCellsMarkup(labelId, name, faxCount) {
+        var id = escapeHtml(labelId);
+        return '<canvas-table-cell>' +
+          '<span class="label-name-text">' + escapeHtml(deleteRowPhrase(name, faxCount)) + '</span>' +
+          '</canvas-table-cell>' +
+          '<canvas-table-cell actions>' +
+          '<div class="label-row-actions">' +
+          '<canvas-button variant="ghost" class="label-cancel-button" ' +
+          'data-label-id="' + id + '">Cancel</canvas-button>' +
+          '<canvas-button variant="danger" class="label-confirm-delete-button" ' +
+          'data-label-id="' + id + '">Delete</canvas-button>' +
+          '</div>' +
+          '</canvas-table-cell>';
+      }
+
+      function findLabelRow(labelId) {
+        return document.querySelector(
+          'canvas-table-row[data-label-id="' + labelId + '"]'
+        );
+      }
+
+      /* labelsCache already arrives in name order from GET /labels, so this
+         sort costs nothing on the ordinary path and is what keeps the table
+         in order regardless, since the cache is patched in place by
+         fetchLabels rather than reread by this function. Every row this
+         paints is in its read state, which is also how Behaviour step 27's
+         one row at a time rule is kept, entering the edit or the delete
+         state always starts from this full repaint rather than from
+         whatever a row happened to be showing before, so there is never a
+         second state left over from an earlier click to track by hand. */
+      function renderLabelsModalTable() {
+        var body = document.getElementById("labels-table-body");
+        var ordered = labelsCache.slice().sort(function (a, b) {
+          return a.name.localeCompare(b.name);
+        });
+        body.innerHTML = ordered.map(labelReadRowMarkup).join("");
+        wireLabelsModalRows(body);
+      }
+
+      function wireLabelsModalRows(root) {
+        root.querySelectorAll(".label-edit-button").forEach(function (button) {
+          button.addEventListener("click", function () {
+            enterLabelEditState(button.getAttribute("data-label-id"));
+          });
+        });
+        root.querySelectorAll(".label-delete-button").forEach(function (button) {
+          button.addEventListener("click", function () {
+            enterLabelDeleteState(
+              button.getAttribute("data-label-id"),
+              button.getAttribute("data-label-name"),
+              button.getAttribute("data-fax-count")
+            );
+          });
+        });
+      }
+
+      /* Every row returns to its read state first, per Behaviour step 27's
+         one row at a time rule, and the full repaint renderLabelsModalTable
+         already does is what proves that rather than a second place
+         tracking which row was left open. The row this call is about then
+         has its own two cells swapped for the editor, keeping the same
+         canvas-table-row element and its data-label-id rather than
+         rebuilding the row itself. */
+      function enterLabelEditState(labelId) {
+        renderLabelsModalTable();
+        var label = labelsCache.find(function (entry) {
+          return String(entry.id) === String(labelId);
+        });
+        var row = findLabelRow(labelId);
+        if (!label || !row) {
+          return;
+        }
+        row.innerHTML = labelEditCellsMarkup(label);
+        wireLabelEditRow(row);
+      }
+
+      function wireLabelEditRow(row) {
+        var input = row.querySelector(".label-name-input");
+        row.querySelector(".label-cancel-button").addEventListener("click", function () {
+          // Cancel writes nothing and the stored name is what the next
+          // repaint reads, so returning to the read state is the whole of
+          // restoring it.
+          renderLabelsModalTable();
+        });
+        row.querySelector(".label-save-button").addEventListener("click", function () {
+          renameLabel(row.getAttribute("data-label-id"), input, input.value);
+        });
+      }
+
+      /* The mirror of enterLabelEditState for Delete, per Behaviour step 27.
+         The name and the count travel as arguments rather than a second
+         cache read, since the button that asked for this state already
+         carried both on its own data attributes. */
+      function enterLabelDeleteState(labelId, name, faxCount) {
+        renderLabelsModalTable();
+        var row = findLabelRow(labelId);
+        if (!row) {
+          return;
+        }
+        row.innerHTML = labelDeleteCellsMarkup(labelId, name, faxCount);
+        wireLabelDeleteRow(row);
+      }
+
+      function wireLabelDeleteRow(row) {
+        row.querySelector(".label-cancel-button").addEventListener("click", function () {
+          renderLabelsModalTable();
+        });
+        row.querySelector(".label-confirm-delete-button").addEventListener("click", function () {
+          deleteLabelRow(row.getAttribute("data-label-id"));
+        });
+      }
+
+      /* The one place a change inside the modal turns into what the rest of
+         the page shows. labelsCache is what the row level pickers read, so it
+         is refetched here, and refreshEveryTab is the existing quiet reread
+         the assignment editor already relies on for the same reason, a fax
+         label can be renamed or removed on any of the three tabs at once and
+         only the server knows which rows those are. */
+      function refreshLabelsEverywhere() {
+        return fetchLabels().then(function () {
+          renderLabelsModalTable();
+          return refreshEveryTab();
+        });
+      }
+
+      function openLabelsModal() {
+        clearModalError();
+        renderLabelsModalTable();
+        document.getElementById("labels-modal").open();
+      }
+
+      function addLabel() {
+        var input = document.getElementById("new-label-input");
+        var name = input.value.trim();
+        clearModalError();
+        request("/labels", { method: "POST", body: JSON.stringify({ name: name }) })
+          .then(function () {
+            input.value = "";
+            return refreshLabelsEverywhere();
+          })
+          .catch(function () {
+            showModalError("Could not add the label. Try again in a moment.");
+          });
+      }
+
+      /* Driven by Save now rather than by an input's own change event,
+         since the row no longer carries a field at rest for that event to
+         fire from. A failure leaves the input on screen with the error
+         attribute set rather than returning to the read state, so the
+         stored name a Cancel would restore is never confused with a name
+         that failed to commit. */
+      function renameLabel(labelId, input, name) {
+        var trimmed = name.trim();
+        if (!trimmed) {
+          input.setAttribute("error", "A label name is required");
+          return;
+        }
+        input.removeAttribute("error");
+        request("/labels/" + encodeURIComponent(labelId), {
+          method: "PUT",
+          body: JSON.stringify({ name: trimmed })
+        }).then(function () {
+          return refreshLabelsEverywhere();
+        }).catch(function () {
+          input.setAttribute("error", "Could not rename this label. Try again in a moment.");
+        });
+      }
+
+      /* Behaviour step 27's Delete commit. A failure returns the row to its
+         read state rather than leaving the delete confirmation standing,
+         since nothing about a failed request needs the row held open the
+         way a failed rename needs the input held open, there is no second
+         value waiting to be retried against the same field. */
+      function deleteLabelRow(labelId) {
+        request("/labels/" + encodeURIComponent(labelId), { method: "DELETE" })
+          .then(function () {
+            return refreshLabelsEverywhere();
+          })
+          .catch(function () {
+            renderLabelsModalTable();
+            showModalError("Could not delete the label. Try again in a moment.");
+          });
+      }
+
       document.addEventListener("DOMContentLoaded", function () {
         /* Changing tab dismisses any cue. canvas-tabs raises tab-change from
            its own activation path, so this catches a tab clicked by a person
@@ -1573,6 +2194,9 @@
         if (tabsEl) {
           tabsEl.addEventListener("tab-change", clearEveryCue);
         }
+
+        document.getElementById("manage-labels-button").addEventListener("click", openLabelsModal);
+        document.getElementById("add-label-button").addEventListener("click", addLabel);
 
         clearPageError();
         fetchLabels();

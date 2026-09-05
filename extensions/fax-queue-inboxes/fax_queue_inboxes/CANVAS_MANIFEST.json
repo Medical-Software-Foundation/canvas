@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.195.2",
-    "plugin_version": "0.3.0",
+    "plugin_version": "0.4.0",
     "name": "fax_queue_inboxes",
     "description": "A team organised dashboard over the native inbound fax queue, with practice defined labels, notes and assignment held in the plugin's own store.",
     "components": {
