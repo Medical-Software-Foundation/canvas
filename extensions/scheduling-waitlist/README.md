@@ -280,7 +280,8 @@ the app drawer to the hamburger menu was a one-word manifest change, `"scope": "
 `provider_menu_item` apps in this repo launch with `TargetType.PAGE` or `NEW_WINDOW` while this one
 uses `DEFAULT_MODAL`; if the modal ever misbehaves from the menu, `PAGE` is a reasonable swap for a
 full-width table — but the roster's Close button talks to the host modal's `MessagePort`, so it
-would need hiding in that case.
+would need hiding in that case. (On modal sizing, see the note below — neither surface asks for a
+size any more.)
 
 **Being scheduleable does not make a note type an appointment.** Canvas marks calendar blocks —
 "Generic event" and friends, category `schedule_event` — as scheduleable, because staff schedule
@@ -388,6 +389,39 @@ The count line distinguishes the two cases: unfiltered it says "128 patients wai
 says "3 matching patients". Reporting a filtered total as a statement about the practice is what
 made a narrowed roster look like a waitlist holding one person, and the honest wording needs no
 second query to be true.
+
+**The two surfaces ask the host for different things, and the asymmetry is the point.**
+
+The roster asks for nothing. It used to post `RESIZE 1200x800` over the `MessagePort`; narrow the
+browser to 900px and the host still made it 1200 wide, centred and clipped about 150px each side,
+taking the row action buttons off one edge and the roster's own header — Close included — off the
+top. Nothing inside could scroll to recover, because the clipping happens *outside* the iframe.
+Clamping the request cannot help: from a cross-origin iframe there is no way to measure the host
+window (`window.parent.innerWidth` throws, `window.innerWidth` is only the iframe's own box, and
+`screen.avail*` is the physical display, which does not change when a window is resized). A clamp
+against `screen.avail*` was written, tested and reverted — it helped small *displays* and did
+nothing for small *windows*, which was the complaint. Beware verifying this in headless Chrome,
+which reports `screen.availWidth === window.innerWidth` and so makes such a clamp look correct.
+With no `RESIZE` the host opens its default full size, which follows the window by construction —
+and a wide table wants that anyway, with `.wl-table-wrap` scrolling horizontally so the page never
+does.
+
+The entry form asks for `520x640`, and dropping that was a mistake worth recording: the host then
+gave it full size and a 520px card floated in a screen-sized empty modal, which is what the chart's
+"On waitlist" button showed for a patient with a single entry. 520 is narrower than any window
+anyone works in, so naming it is safe in a way the roster's 1200 was not. `.wl-modal-page` fills
+that modal edge to edge in plain white — no grey ground, no border, nothing that reads as an inset
+frame — while still centring at `max-width: 520px` so a larger surface degrades quietly instead of
+stretching form fields across a screen.
+
+**Heights are bounded against the viewport, never against a parent.** `.wl-dialog` is capped at
+`88vh` with only `.wl-dialog-body` scrolling and `.wl-dialog-actions` outside that scroll area, so
+**Save changes** stays reachable; unbounded, the edit dialog grew past the bottom edge on a short
+window. `.wl-modal-page` uses `calc(100vh - (var(--wl-modal-pad) * 2))` for the same reason —
+`max-height: 100%` was tried and measured at 560×420, where it left the card 577px tall in a 420px
+window with the actions off-screen, because the parent's height is driven by the card's own content
+and so 100% of it constrains nothing. Verified across nine window sizes from 1920×1080 down to
+480×700.
 
 **The chart banner is emitted from the write paths, not from `apply_transition`.** Banner effects
 have to be *returned* by a handler or route to take effect, and `services/transitions.py` writes

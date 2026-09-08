@@ -117,18 +117,32 @@
       };
 
       // ---- the host modal ---------------------------------------------------
-      // Canvas hands the page a MessagePort. Without the RESIZE the modal opens
-      // at its default full size, which is what made this form look like a whole
-      // page rather than a dialog; without CLOSE_MODAL a saved entry leaves the
-      // form sitting open.
+      // Canvas hands the page a MessagePort, and the only thing this page needs
+      // it for is CLOSE_MODAL -- without that, a saved entry leaves the form
+      // sitting open.
+      //
+      // This one *does* ask for a size, unlike the roster, and the difference is
+      // the point.
+      //
+      // The roster asked for 1200 wide, which is wider than a narrowed window --
+      // so the host clipped it and the row buttons and Close went off the edges.
+      // 520 is narrower than any window anyone works in, so the same request is
+      // safe here. Dropping it was tried and reverted: the host then opens this
+      // at full size and a 520px card floats in a screen-sized empty modal,
+      // which is what a one-entry patient's "On waitlist" button showed.
+      //
+      // The height is the part that can still be wrong -- a window can be
+      // shorter than 640 -- so `.wl-modal-page` caps itself against the viewport
+      // and scrolls its body. That keeps Cancel and Save reachable whatever the
+      // host actually gives us, which is the guarantee that matters.
+      var FORM_WIDTH = 520;   // matches .wl-dialog's own width
+      var FORM_HEIGHT = 640;
       var port = null;
       window.addEventListener("message", function (event) {
         if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
           port = event.ports[0];
           port.start();
-          // Matches .wl-dialog's own width, so the form is the size it is in the
-          // roster rather than a wider variant of it.
-          port.postMessage({ type: "RESIZE", width: 520, height: 640 });
+          port.postMessage({ type: "RESIZE", width: FORM_WIDTH, height: FORM_HEIGHT });
         }
       });
 

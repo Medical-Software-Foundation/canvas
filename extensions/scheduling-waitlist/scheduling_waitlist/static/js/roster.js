@@ -4,6 +4,26 @@
  * as a decision (sort order, expiry, priority rank, display names) is computed
  * server-side in a Python service where the test suite can reach it. This file
  * fetches, renders, and dispatches.
+ *
+ * **It never asks the host to resize the modal, and that is the fix for a real
+ * bug.** It used to post RESIZE 1200x800. Narrow the browser window to 900px and
+ * the host still made the modal 1200 wide: it was centred and clipped ~150px on
+ * each side, taking the row action buttons off one edge and this page's own
+ * header -- with the Close button in it -- off the top. Nothing inside could
+ * scroll to reveal them, because the clipping happens outside the iframe.
+ *
+ * Clamping the request does not help. From a cross-origin iframe there is no way
+ * to measure the host's window: `window.parent.innerWidth` throws,
+ * `window.innerWidth` is only this iframe's own box, and `screen.avail*` is the
+ * physical display, which does not change when a window is resized. An attempt
+ * to clamp against `screen.avail*` was tried and reverted -- it fixed small
+ * displays and did nothing at all for small windows, which is the actual
+ * complaint.
+ *
+ * With no RESIZE the host opens the modal at its default full size, which tracks
+ * the window by construction. The roster is a wide table and full size is what
+ * it wants anyway; `roster.css` already handles narrow widths by scrolling
+ * `.wl-table-wrap` rather than the page.
  */
 (function () {
   "use strict";
@@ -1110,7 +1130,7 @@
     if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
       port = event.ports[0];
       port.start();
-      port.postMessage({ type: "RESIZE", width: 1200, height: 800 });
+      // Deliberately no RESIZE. See the note at the top of this file.
 
       // Only now is closing possible, so only now does the button exist. The
       // roster had no way out at all except whatever chrome the host drew around

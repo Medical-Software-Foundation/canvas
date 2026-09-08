@@ -345,6 +345,48 @@ body {
   width: min(520px, 92vw);
   color: var(--wl-ink);
   background: var(--wl-surface);
+
+  /* Height was unbounded. The edit dialog carries six fields, a textarea and a
+     footer, so on a short viewport -- a 768px laptop, or a modal the host has
+     already clamped -- it grew past the bottom edge and took "Save changes" with
+     it. Capping the dialog and scrolling only its body keeps the actions
+     reachable at any height, which matters more than seeing every field at once. */
+  max-height: 88vh;
+}
+
+/* The flex layout that cap needs, scoped to [open] -- and the scoping is the
+   whole point.
+ *
+ * A closed <dialog> is hidden by the browser's own `dialog:not([open])
+ * { display: none }`, which any author `display` outranks. Declaring
+ * `display: flex` on `.wl-dialog` therefore left all three dialogs permanently
+ * on screen, in normal flow rather than the top layer: no backdrop, the table's
+ * sticky header drawing over them, and Cancel appearing to do nothing because
+ * `dialog.close()` removes `open` while the author rule kept them displayed.
+ *
+ * Same trap as `[hidden]` above, one selector further along. Any `display` added
+ * to a dialog belongs on `[open]`. */
+.wl-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The part that gives way when there is not enough room. The actions bar is a
+   sibling, so it stays pinned below rather than scrolling out of reach. */
+.wl-dialog[open] form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+}
+
+.wl-dialog[open] .wl-dialog-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.wl-dialog[open] .wl-dialog-actions {
+  flex-shrink: 0;
 }
 
 .wl-dialog::backdrop { background: rgba(31, 41, 51, .45); }
@@ -386,22 +428,54 @@ body {
  * Serving this stylesheet to that page rather than inlining a copy is deliberate.
  * The inline copy drifted -- it had its own spacing, its own sentence-case labels
  * and no action bar -- which is exactly what "the same form" must not do.
+ *
+ * The page asks the host for a 520-wide modal (see the note in
+ * entry_form.html), so at the size it actually gets the card fills the modal
+ * edge to edge: plain white, no inset frame, no border, nothing to give away
+ * that it is a page in an iframe.
+ *
+ * Everything below is nonetheless written so a *larger* surface degrades
+ * quietly, with the card centring rather than stretching -- a form field
+ * stretched across a screen-width modal is unusable. A no-RESIZE version was
+ * tried and reverted: the host then gave full size and this card floated in a
+ * screen-sized empty modal, which is what the chart's "On waitlist" button
+ * showed for a patient with a single entry.
  */
+body.wl-modal {
+  background: var(--wl-surface);
+  min-height: 100vh;
+  display: flex;
+}
+
 .wl-modal-page {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  background: var(--wl-surface);
+
+  /* `width: 100%` before the max so it shrinks on a narrow modal instead of
+     overflowing it; `max-width` so it stops at dialog width on a wide one. */
+  width: 100%;
+  max-width: 520px;
+  margin: auto;
+
+  /* Bounded against the viewport, never the parent. `max-height: 100%` was tried
+     and measured: on a 560x420 window it left the card 577px tall with "Save
+     changes" off the bottom, because the parent's height is driven by this card's
+     own content, so 100% of it constrains nothing. This is the guarantee that
+     holds whatever size the host actually hands over. */
+  max-height: 100vh;
 }
 
-/* Takes the slack, so the actions sit against the bottom edge on a short form
-   and scroll with the content on a long one. */
+/* Takes the slack and gives way first, so the actions bar stays on screen on a
+   short window instead of being pushed off the bottom. */
 .wl-modal-page .wl-dialog-body {
   flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-/* The page's own ground, so the form does not sit on the roster's grey. */
-body.wl-modal { background: var(--wl-surface); }
+.wl-modal-page .wl-dialog-actions {
+  flex-shrink: 0;
+}
 
 /* Loading and fatal states, before there is a form to show. */
 .wl-modal-note {

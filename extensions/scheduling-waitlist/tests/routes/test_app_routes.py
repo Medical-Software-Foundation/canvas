@@ -10,6 +10,16 @@ from scheduling_waitlist.constants import edit_form_url
 from scheduling_waitlist.routes.app_routes import WaitlistAppAPI
 
 
+def _without_comments(css: str) -> str:
+    """CSS with its comments removed.
+
+    These tests assert on declarations, and the comments in `roster.css` explain
+    the very traps being asserted against -- so they contain the words a naive
+    substring check is looking for.
+    """
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+
+
 def _api(query_params=None) -> WaitlistAppAPI:
     api = WaitlistAppAPI.__new__(WaitlistAppAPI)
     api.request = MagicMock(query_params=query_params or {})
@@ -330,11 +340,14 @@ class TestTheFormLooksLikeTheRostersOwnDialog:
         # still loading its options.
         assert "[hidden] { display: none !important; }" in self.CSS.read_text()
 
-    def test_the_modal_asks_for_the_dialogs_own_width(self):
-        # 520px is .wl-dialog's width. A wider modal makes the same markup look
-        # like a different form.
-        assert "width: 520" in self.FORM.read_text()
-        assert "width: min(520px, 92vw)" in self.CSS.read_text()
+    def test_the_form_is_the_dialogs_own_width(self):
+        # 520px is .wl-dialog's width; a wider form makes the same markup look
+        # like a different one. Now expressed as a max-width on the card rather
+        # than a pixel size demanded of the host.
+        css = self.CSS.read_text()
+
+        assert "max-width: 520px" in css[css.index(".wl-modal-page {") :][:700]
+        assert "width: min(520px, 92vw)" in css
 
 
 class TestTheFormServesBothModes:
@@ -387,6 +400,147 @@ class TestTheFormServesBothModes:
         # A typo in a URL must not leave the form PUTting to an entry key it never
         # read.
         assert 'var isEdit = config.mode === "edit";' in self.FORM.read_text()
+
+
+class TestTheTwoSurfacesAskForDifferentThings:
+    """The roster must not name a size; the form must.
+
+    The roster asked for 1200 wide. Narrow the browser to 900px and the host
+    still made it 1200: centred and clipped about 150px each side, taking the row
+    action buttons off one edge and the roster's own header -- Close included --
+    off the top, with nothing inside able to scroll to recover, because the
+    clipping happens outside the iframe. A cross-origin iframe cannot measure the
+    host window to pick a better number (``window.parent.innerWidth`` throws,
+    ``window.innerWidth`` is only its own box, ``screen.avail*`` is the physical
+    display and does not move when a window is resized), so a clamp was tried and
+    reverted: it helped small displays and did nothing for small windows.
+
+    The form is the opposite case. 520 is narrower than any window anyone works
+    in, so naming it is safe -- and *not* naming it was measurably worse: the host
+    gave full size and a 520px card floated in a screen-sized empty modal, which
+    is what the chart's "On waitlist" button showed for a patient with one entry.
+
+    So: no size for the wide table, a modest size for the small dialog, and CSS
+    that survives whatever the host actually hands over.
+    """
+
+    ROSTER_JS = Path("scheduling_waitlist/static/js/roster.js")
+    FORM = Path("scheduling_waitlist/templates/entry_form.html")
+    ROSTER_HTML = Path("scheduling_waitlist/templates/roster.html")
+    CSS = Path("scheduling_waitlist/static/css/roster.css")
+
+    def test_the_roster_never_posts_a_resize(self):
+        text = self.ROSTER_JS.read_text()
+
+        assert 'postMessage({ type: "RESIZE"' not in text, (
+            "the roster asks the host for a size again; a narrowed window will "
+            "clip it and nothing inside can scroll to recover"
+        )
+        for literal in ("width: 1200", "height: 800"):
+            assert literal not in text, f"roster.js still hardcodes {literal}"
+
+    def test_the_form_asks_for_a_dialog_sized_modal(self):
+        text = self.FORM.read_text()
+
+        assert 'postMessage({ type: "RESIZE", width: FORM_WIDTH, height: FORM_HEIGHT })' in text
+        assert "FORM_WIDTH = 520" in text
+
+    def test_the_form_never_asks_for_a_roster_sized_modal(self):
+        # 520 is safe because no one works in a window narrower than that. The
+        # roster's 1200 was not, and must not migrate here. Checked as a
+        # declaration, not a substring -- the comment explaining this necessarily
+        # mentions the number.
+        text = self.FORM.read_text()
+
+        assert "FORM_WIDTH = 1200" not in text
+        assert "width: 1200" not in text
+
+    def test_the_port_is_still_captured_for_closing(self):
+        # CLOSE_MODAL is the only way out of a modal, so the roster losing its
+        # RESIZE must not cost it the port.
+        for source in (self.ROSTER_JS, self.FORM):
+            text = source.read_text()
+            assert "INIT_CHANNEL" in text and "CLOSE_MODAL" in text, source.name
+
+    def test_the_form_centres_rather_than_stretching_on_a_wide_surface(self):
+        # If the host gives more room than asked for, a form field stretched
+        # across a screen-width modal is unusable.
+        css = _without_comments(self.CSS.read_text())
+        page = css[css.index(".wl-modal-page {") :][:400]
+
+        assert "max-width: 520px" in page
+        assert "margin: auto" in page
+        assert "width: 100%" in page, (
+            "without width:100% before the max, the card overflows a narrow modal"
+        )
+
+    def test_the_forms_height_is_bounded_against_the_viewport(self):
+        # max-height: 100% was measured failing: on a 560x420 window it left the
+        # card 577px tall with the actions off the bottom.
+        css = _without_comments(self.CSS.read_text())
+        page = css[css.index(".wl-modal-page {") :][:400]
+
+        assert "max-height: 100vh" in page
+
+    def test_the_form_surface_is_plain_white(self):
+        # At the size it asks for, the card fills the modal edge to edge, so a
+        # grey ground or a border would read as an odd inset frame.
+        css = _without_comments(self.CSS.read_text())
+        body = css[css.index("body.wl-modal {") :][:200]
+
+        assert "background: var(--wl-surface)" in body
+
+    def test_the_forms_actions_stay_on_screen_on_a_short_window(self):
+        css = self.CSS.read_text()
+        body = css[css.index(".wl-modal-page .wl-dialog-body {") :][:200]
+
+        assert "overflow-y: auto" in body
+        assert "flex: 1 1 auto" in body
+
+    def test_a_dialogs_layout_is_scoped_to_its_open_state(self):
+        """A closed <dialog> is hidden by the browser, and any `display` beats that.
+
+        Declaring `display: flex` on `.wl-dialog` -- added to make the height cap
+        work -- left all three dialogs permanently on screen, in normal flow
+        rather than the top layer: no backdrop, the table's sticky header drawing
+        over them, and Cancel appearing to do nothing, because `dialog.close()`
+        removes `open` while the author rule kept them displayed.
+
+        The same trap as `[hidden]`, one selector further along.
+        """
+        # Declarations only -- the comment above the rule necessarily says the word.
+        css = _without_comments(self.CSS.read_text())
+
+        assert ".wl-dialog[open] {" in css
+        base = css[css.index(".wl-dialog {") : css.index(".wl-dialog[open] {")]
+        assert "display:" not in base, (
+            "display on .wl-dialog overrides dialog:not([open]){display:none} and "
+            "leaves every dialog on screen"
+        )
+
+    def test_no_display_rule_outranks_the_hidden_attribute(self):
+        # .wl-pager and .wl-modal-page both set a display and both ship hidden.
+        css = self.CSS.read_text()
+
+        assert "[hidden] { display: none !important; }" in css
+
+    def test_the_dialogs_are_also_height_capped(self):
+        # Unbounded height put "Save changes" below the bottom edge. vh is
+        # measured inside the iframe, so this one is safe to rely on.
+        css = _without_comments(self.CSS.read_text())
+        dialog = css[css.index(".wl-dialog {") :]
+
+        assert "max-height: 88vh" in dialog[:400]
+        body = css[css.index(".wl-dialog[open] .wl-dialog-body {") :][:140]
+        assert "overflow-y: auto" in body
+
+    def test_the_table_still_scrolls_instead_of_the_page(self):
+        # The one piece that makes a narrow surface usable, whatever size the
+        # host gives us.
+        css = self.CSS.read_text()
+        wrap = css[css.index(".wl-table-wrap {") :][:220]
+
+        assert "overflow-x: auto" in wrap
 
 
 class TestAssets:
