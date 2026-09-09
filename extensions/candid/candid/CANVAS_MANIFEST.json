@@ -75,7 +75,9 @@
     "variables": [
         {"name": "CANDID_CLIENT_ID", "sensitive": true},
         {"name": "CANDID_CLIENT_SECRET", "sensitive": true},
-        {"name": "CANDID_BASE_URL", "sensitive": false}
+        {"name": "CANDID_BASE_URL", "sensitive": false},
+        {"name": "CANDID_DASHBOARD_ALLOWED_STAFF_KEYS", "sensitive": false},
+        {"name": "CANDID_DASHBOARD_ALLOWED_ROLES", "sensitive": false}
     ],
     "tags": {},
     "references": [],
