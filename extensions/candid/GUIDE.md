@@ -195,7 +195,34 @@ The plugin requires three secrets to be configured per instance:
 | `CANDID_CLIENT_SECRET` | Your Candid Health OAuth2 client secret |
 | `CANDID_BASE_URL` | Candid API URL — `https://api.joincandidhealth.com` for production, `https://api-staging.joincandidhealth.com` for staging |
 
-No other configuration is needed. The plugin automatically detects the Canvas instance URL and uses the Candid credentials for internal authentication.
+The plugin automatically detects the Canvas instance URL and uses the Candid credentials for internal authentication.
+
+### Restricting who can open the Candid Dashboard
+
+The Candid Dashboard lists every claim submitted to Candid, so some practices want it limited to their billing staff. Two optional variables do that:
+
+| Variable | Description |
+|----------|-------------|
+| `CANDID_DASHBOARD_ALLOWED_STAFF_KEYS` | Comma-separated staff keys allowed to open the dashboard. A staff key is the 32-character ID in that staff member's Canvas admin URL, `/admin/api/staff/<staff key>/change/`. |
+| `CANDID_DASHBOARD_ALLOWED_ROLES` | Comma-separated roles allowed to open the dashboard. Each token is matched, ignoring case, against every role the staff member holds, by internal code, public abbreviation, and name, so `BILL`, `Biller`, and `MD` all resolve. |
+
+**Leaving both unset changes nothing.** The dashboard stays open to every staff member, exactly as it behaves today, so moving to this version locks nobody out. Access narrows only once you set at least one of the two.
+
+Once either variable is set:
+
+- A staff member gets in if their key is listed, or if any role they hold is listed. Everyone else is denied.
+- A denied staff member still sees **Candid Dashboard** in the provider menu, and clicking it does nothing. Canvas gives provider-menu apps no way to hide themselves from individual users, so the enforced boundary is the dashboard itself rather than the menu.
+- A variable holding only commas or spaces counts as unset, and access stays open to everyone.
+- A typo denies the person you meant to allow rather than admitting someone you did not. If an allowlist accidentally excludes everyone, correct or clear the variable to restore access.
+
+Both variables cover the dashboard and nothing else. Claim submission, adjudication sync, patient-payment reporting, and the nightly sync run without a logged-in user and are never gated. The Candid Activity panel on an individual claim also stays available to all staff.
+
+Example, allowing two named staff plus everyone holding the biller role:
+
+```
+CANDID_DASHBOARD_ALLOWED_STAFF_KEYS = 5a3c9f2e8b7d4a1c6e0f3b8d2a5c7e91,7f1b4d6a9c2e5081b3d7f0a4c6e28d15
+CANDID_DASHBOARD_ALLOWED_ROLES = BILL
+```
 
 ## Troubleshooting
 
