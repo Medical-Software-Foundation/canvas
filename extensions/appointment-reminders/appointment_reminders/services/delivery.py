@@ -23,6 +23,22 @@ class DeliveryResult:
     recipient: str = ""
 
 
+NO_MEETING_LINK_ERROR = "No meeting link on appointment or provider"
+
+
+def telehealth_link_missing() -> DeliveryResult:
+    """Result for a telehealth send skipped because no join link resolved.
+
+    Shared by the reminder cron and by manual send so the same condition writes
+    the same history row from either path. An empty ``{{telehealth_link}}``
+    substitutes cleanly into the template, so a rendered body carries no trace
+    of the missing link and both paths have to test the resolved value instead.
+    """
+    return DeliveryResult(
+        success=False, channel="telehealth", error=NO_MEETING_LINK_ERROR
+    )
+
+
 def _normalize_phone(number: str) -> str:
     """Normalize a phone number to E.164 format for Twilio."""
     digits = "".join(ch for ch in number if ch.isdigit())

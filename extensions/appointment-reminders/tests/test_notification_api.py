@@ -807,7 +807,7 @@ def test_manual_send_ignores_client_copy_while_locked() -> None:
             "sms_content": "approved sms",
             "email_content": "approved email",
             "channels": ["sms", "email"],
-        }),
+        }, {}),
     ) as mock_render, patch(
         "appointment_reminders.services.delivery.deliver_to_patient",
         return_value=([], [MagicMock(channel="sms", success=True, error=None)]),
@@ -991,7 +991,17 @@ def test_manual_send_refuses_body_with_unresolved_placeholders() -> None:
 
     with patch(
         "canvas_sdk.v1.data.patient.Patient"
-    ) as mock_patient_cls, patch(
+    ) as mock_patient_cls, patch.object(
+        NotificationAPI,
+        "_render_campaign_message",
+        # A link that did resolve, so the send clears the missing-link guard and
+        # reaches the placeholder check this test is about.
+        return_value=(None, {
+            "sms_content": "Join: https://meet.example.com/x now",
+            "email_content": "",
+            "channels": ["sms"],
+        }, {"telehealth_link": "https://meet.example.com/x"}),
+    ), patch(
         "appointment_reminders.services.delivery.deliver_to_patient"
     ) as mock_deliver, patch(
         "appointment_reminders.services.history.log_delivery"
@@ -1005,6 +1015,194 @@ def test_manual_send_refuses_body_with_unresolved_placeholders() -> None:
     assert result[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert "telehealth_link" in json.loads(result[0].content)["error"]
     mock_deliver.assert_not_called()
+
+
+# ---- manual send: telehealth with no join link ----
+#
+# The bug these cover: an unresolved {{telehealth_link}} renders as an empty
+# string, which is a complete substitution, so the placeholder check above sees
+# nothing wrong and "Join: {{telehealth_link}}" ships as "Join: " with no link
+# in it. The reminder cron has always tested the resolved value instead
+# (ReminderScheduler); these assert manual send now does the same.
+
+
+def _telehealth_send(secrets: dict | None = None, channels: list | None = None):
+    return _api(
+        path_params={"patient_id": "patient-1"},
+        json_body={
+            "channels": channels or ["sms"],
+            # Already-rendered copy, exactly what the unlocked panel posts. The
+            # link is simply absent; there is no template syntax left to catch.
+            "sms_content": "Join:  Reply STOP to opt out.",
+            "appointment_id": "appt-1",
+            "campaign_type": "telehealth",
+        },
+        secrets=secrets,
+    )
+
+
+def _run_manual_send(api, variables: dict):
+    """Run manual_send with the renderer stubbed to yield `variables`."""
+    patient = MagicMock()
+
+    class DNE(Exception):
+        pass
+
+    with patch(
+        "canvas_sdk.v1.data.patient.Patient"
+    ) as mock_patient_cls, patch.object(
+        NotificationAPI,
+        "_render_campaign_message",
+        return_value=(None, {
+            "sms_content": "Join: " + variables.get("telehealth_link", ""),
+            "email_content": "",
+            "channels": ["sms"],
+        }, variables),
+    ), patch(
+        "appointment_reminders.services.delivery.deliver_to_patient",
+        return_value=([], [MagicMock(channel="sms", success=True, error=None)]),
+    ) as mock_deliver, patch(
+        "appointment_reminders.services.history.log_delivery"
+    ) as mock_log, patch(
+        "appointment_reminders.handlers.notification_api.load_config", return_value=MagicMock()
+    ), patch(
+        "appointment_reminders.handlers.notification_api.get_business_line_name", return_value=""
+    ), patch(
+        "appointment_reminders.handlers.notification_api.get_business_line_from_number",
+        return_value="",
+    ):
+        mock_patient_cls.DoesNotExist = DNE
+        mock_patient_cls.objects.select_related.return_value.prefetch_related.return_value.get.return_value = patient
+        result = api.manual_send()
+    return result, mock_deliver, mock_log
+
+
+def test_manual_send_refuses_telehealth_when_the_link_did_not_resolve() -> None:
+    """The defect: a linkless join message used to send successfully."""
+    result, mock_deliver, _ = _run_manual_send(
+        _telehealth_send(), {"telehealth_link": ""}
+    )
+
+    assert result[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    error = json.loads(result[0].content)["error"]
+    assert "no telehealth join link" in error
+    assert "Nothing was sent" in error
+    mock_deliver.assert_not_called()
+
+
+def test_manual_send_records_the_refused_telehealth_send() -> None:
+    """The skip is written to history, matching what the reminder cron logs, so
+    the pattern is visible in the delivery table rather than only in the panel.
+    """
+    _, _, mock_log = _run_manual_send(_telehealth_send(), {"telehealth_link": ""})
+
+    mock_log.assert_called_once()
+    args = mock_log.call_args.args
+    assert args[2] == "telehealth"
+    (logged,) = args[3]
+    assert logged.success is False
+    assert logged.error == "No meeting link on appointment or provider"
+
+
+def test_manual_send_refuses_linkless_telehealth_while_locked_too() -> None:
+    """Locked copy is re-rendered from the stored template, which does not make
+    the link appear; the guard has to fire on both sides of the lock.
+    """
+    result, mock_deliver, _ = _run_manual_send(
+        _telehealth_send(secrets=_LOCKED), {"telehealth_link": ""}
+    )
+
+    assert result[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    mock_deliver.assert_not_called()
+
+
+def test_manual_send_delivers_telehealth_when_the_link_resolves() -> None:
+    """The guard must not block the normal case."""
+    result, mock_deliver, _ = _run_manual_send(
+        _telehealth_send(), {"telehealth_link": "https://meet.example.com/x"}
+    )
+
+    assert result[0].status_code == HTTPStatus.OK
+    mock_deliver.assert_called_once()
+
+
+def test_manual_send_surfaces_a_render_error_for_telehealth() -> None:
+    """Resolving the link can fail on its own — an appointment id that is not
+    this patient's, say. That error is returned rather than swallowed into a
+    missing-link refusal, which would misreport the reason.
+    """
+    api = _telehealth_send()
+    patient = MagicMock()
+
+    class DNE(Exception):
+        pass
+
+    # Stands in for the renderer's own JSONResponse; manual_send passes it
+    # straight back, so only its identity matters here.
+    not_found = MagicMock(status_code=HTTPStatus.NOT_FOUND)
+
+    with patch(
+        "canvas_sdk.v1.data.patient.Patient"
+    ) as mock_patient_cls, patch.object(
+        NotificationAPI, "_render_campaign_message", return_value=(not_found, {}, {})
+    ), patch(
+        "appointment_reminders.services.delivery.deliver_to_patient"
+    ) as mock_deliver, patch(
+        "appointment_reminders.services.history.log_delivery"
+    ) as mock_log, patch(
+        "appointment_reminders.handlers.notification_api.load_config", return_value=MagicMock()
+    ):
+        mock_patient_cls.DoesNotExist = DNE
+        mock_patient_cls.objects.select_related.return_value.prefetch_related.return_value.get.return_value = patient
+        result = api.manual_send()
+
+    assert result[0].status_code == HTTPStatus.NOT_FOUND
+    mock_deliver.assert_not_called()
+    # No history row: nothing was refused for a missing link, the lookup failed.
+    mock_log.assert_not_called()
+
+
+def test_manual_send_leaves_other_campaigns_unrendered_when_unlocked() -> None:
+    """Only telehealth pays for the extra resolve. An unlocked reminder send has
+    no link to check, so it must not fetch the appointment to render one.
+    """
+    api = _api(
+        path_params={"patient_id": "patient-1"},
+        json_body={
+            "channels": ["sms"],
+            "sms_content": "Your visit is August 5, 2026.",
+            "appointment_id": "appt-1",
+            "campaign_type": "reminder",
+        },
+    )
+    patient = MagicMock()
+
+    class DNE(Exception):
+        pass
+
+    with patch(
+        "canvas_sdk.v1.data.patient.Patient"
+    ) as mock_patient_cls, patch.object(
+        NotificationAPI, "_render_campaign_message"
+    ) as mock_render, patch(
+        "appointment_reminders.services.delivery.deliver_to_patient",
+        return_value=([], [MagicMock(channel="sms", success=True, error=None)]),
+    ), patch(
+        "appointment_reminders.services.history.log_delivery"
+    ), patch(
+        "appointment_reminders.handlers.notification_api.load_config", return_value=MagicMock()
+    ), patch(
+        "appointment_reminders.handlers.notification_api.get_business_line_name", return_value=""
+    ), patch(
+        "appointment_reminders.handlers.notification_api.get_business_line_from_number",
+        return_value="",
+    ):
+        mock_patient_cls.DoesNotExist = DNE
+        mock_patient_cls.objects.select_related.return_value.prefetch_related.return_value.get.return_value = patient
+        result = api.manual_send()
+
+    assert result[0].status_code == HTTPStatus.OK
+    mock_render.assert_not_called()
 
 
 def test_manual_send_ignores_placeholders_in_unselected_channel() -> None:

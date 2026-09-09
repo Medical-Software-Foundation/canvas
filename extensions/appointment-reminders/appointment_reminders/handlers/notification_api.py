@@ -2984,7 +2984,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         note_id: str,
         campaign_type: str,
         patient: Patient | None = None,
-    ) -> tuple[Response | None, dict]:
+    ) -> tuple[Response | None, dict, dict]:
         """Render a campaign's SMS and email body from the stored templates.
 
         Shared by the preview endpoint and by manual send while
@@ -2995,8 +2995,11 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         needs the same row with ``telecom`` prefetched for delivery, so handing
         it over avoids fetching the patient twice for one send.
 
-        Returns ``(error_response, {})`` on failure, ``(None, payload)`` on
-        success.
+        Returns ``(error_response, {}, {})`` on failure, ``(None, payload,
+        variables)`` on success. The resolved ``variables`` are returned
+        separately rather than inside ``payload`` so a caller has to ask for
+        them: manual send inspects them to catch a value that resolved empty,
+        while the preview response must not grow a dump of every variable.
         """
         from canvas_sdk.v1.data.appointment import Appointment
         from canvas_sdk.v1.data.note import Note
@@ -3009,7 +3012,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         )
 
         if (not appointment_id and not note_id) or not campaign_type:
-            return (JSONResponse({"error": "campaign_type and either appointment_id or note_id are required"}, status_code=HTTPStatus.BAD_REQUEST), {})
+            return (JSONResponse({"error": "campaign_type and either appointment_id or note_id are required"}, status_code=HTTPStatus.BAD_REQUEST), {}, {})
 
         if patient is None:
             try:
@@ -3023,7 +3026,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     .get(id=patient_id)
                 )
             except Patient.DoesNotExist:
-                return (JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND), {})
+                return (JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND), {}, {})
 
         config = load_config()
 
@@ -3041,7 +3044,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     "provider__roles", "location__addresses", "location__telecom"
                 ).get(id=appointment_id)
             except Appointment.DoesNotExist:
-                return (JSONResponse({"error": "Appointment not found"}, status_code=HTTPStatus.NOT_FOUND), {})
+                return (JSONResponse({"error": "Appointment not found"}, status_code=HTTPStatus.NOT_FOUND), {}, {})
 
             note_type_id = str(appointment.note_type.id) if appointment.note_type else None
             variables = get_template_variables(
@@ -3058,7 +3061,7 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     "provider__roles", "location__addresses", "location__telecom"
                 ).get(id=note_id)
             except Note.DoesNotExist:
-                return (JSONResponse({"error": "Note not found"}, status_code=HTTPStatus.NOT_FOUND), {})
+                return (JSONResponse({"error": "Note not found"}, status_code=HTTPStatus.NOT_FOUND), {}, {})
 
             note_type_id = str(note.note_type_version.id) if note.note_type_version else None
             variables = get_note_template_variables(
@@ -3088,13 +3091,13 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             "sms_content": sms_content,
             "email_content": email_content,
             "channels": channels,
-        })
+        }, variables)
 
     @api.post("/patient/<patient_id>/preview")
     def preview_template(self) -> list[Response | Effect]:
         """Preview rendered template for a campaign + appointment or note."""
         body = self.request.json()
-        error, payload = self._render_campaign_message(
+        error, payload, _variables = self._render_campaign_message(
             self.request.path_params["patient_id"],
             body.get("appointment_id", ""),
             body.get("note_id", ""),
@@ -3112,7 +3115,11 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         """Manually send a notification to a patient."""
         from canvas_sdk.v1.data.patient import Patient
 
-        from appointment_reminders.services.delivery import deliver_to_patient
+        from appointment_reminders.services.delivery import (
+            NO_MEETING_LINK_ERROR,
+            deliver_to_patient,
+            telehealth_link_missing,
+        )
         from appointment_reminders.services.history import log_delivery
         from appointment_reminders.services.templates import unresolved_placeholders
 
@@ -3159,16 +3166,55 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
         except Patient.DoesNotExist:
             return [JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
 
-        if locked:
+        # Rendered for two different reasons: a locked send has to deliver the
+        # stored copy rather than the client's, and a telehealth send has to be
+        # checked for a join link that resolved empty (below) whatever the lock
+        # state, since an unlocked panel posts already-rendered text in which an
+        # empty link is indistinguishable from copy that never had one. Gated on
+        # the pair so a locked telehealth send still renders exactly once.
+        variables: dict = {}
+        if locked or campaign_type == "telehealth":
             # Reuse the patient just loaded: the renderer needs the same row and
             # would otherwise fetch it a second time for one send.
-            error, rendered = self._render_campaign_message(
+            error, rendered, variables = self._render_campaign_message(
                 patient_id, appointment_id, note_id, campaign_type, patient=patient
             )
             if error is not None:
                 return [error]
-            sms_content = rendered["sms_content"]
-            email_content = rendered["email_content"]
+            if locked:
+                sms_content = rendered["sms_content"]
+                email_content = rendered["email_content"]
+
+        # A telehealth message whose join link did not resolve is refused, the
+        # same rule the reminder cron applies in ReminderScheduler. This check
+        # cannot be folded into the placeholder check below: render_template
+        # substitutes an empty string for an unresolved link, which is a
+        # complete replacement, so "Join: {{telehealth_link}}" becomes "Join: "
+        # and leaves no template syntax for unresolved_placeholders to catch.
+        if campaign_type == "telehealth" and not variables.get("telehealth_link"):
+            log.warning(
+                "Refusing manual telehealth send for patient %s: %s",
+                patient_id,
+                NO_MEETING_LINK_ERROR,
+            )
+            log_delivery(
+                appointment_id,
+                patient_id,
+                "telehealth",
+                [telehealth_link_missing()],
+                patient=patient,
+            )
+            return [JSONResponse(
+                {
+                    "error": (
+                        "This appointment has no telehealth join link, and the "
+                        "provider has no personal meeting room set. Nothing was "
+                        "sent, because the message would have gone out without a "
+                        "link to join."
+                    )
+                },
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )]
 
         # Refuse to deliver a message that still carries template syntax. A
         # placeholder the renderer could not fill would otherwise reach the

@@ -456,6 +456,9 @@ def test_execute_logs_telehealth_failure_when_no_link() -> None:
     log_results = mock_log.call_args.args[3]
     assert log_results[0].channel == "telehealth"
     assert log_results[0].success is False
+    # Same wording the manual-send guard writes, from the shared factory in
+    # services/delivery.py, so one condition reads the same from either path.
+    assert log_results[0].error == "No meeting link on appointment or provider"
 
 
 # ---- _is_day_out_window ----

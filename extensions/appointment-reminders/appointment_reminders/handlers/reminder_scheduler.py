@@ -22,22 +22,16 @@ from appointment_reminders.services.config import (
     get_effective_campaign_config,
     load_config,
 )
-from appointment_reminders.services.delivery import deliver_to_patient
+from appointment_reminders.services.delivery import (
+    deliver_to_patient,
+    telehealth_link_missing,
+)
 from appointment_reminders.services.history import log_delivery
 from appointment_reminders.services.templates import (
     get_template_variables,
     render_template,
     resolve_timezone_name,
 )
-
-class _TelehealthFailure:
-    """Minimal result object for logging a telehealth link-missing failure."""
-
-    channel = "telehealth"
-    success = False
-    error = "No meeting link on appointment or provider"
-    recipient = ""
-
 
 # Intervals >= 1 day are "day-out" and sent at a configured time of day
 DAY_OUT_THRESHOLD = 1440  # minutes
@@ -404,7 +398,7 @@ class ReminderScheduler(CronTask):
                             str(appointment.id),
                             str(appointment.patient.id),
                             "telehealth",
-                            [_TelehealthFailure()],
+                            [telehealth_link_missing()],
                             patient=appointment.patient,
                         )
                         continue
