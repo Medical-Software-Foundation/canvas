@@ -13,6 +13,7 @@ intentionally omitted — they are not useful as outbound webhooks.
 from __future__ import annotations
 
 from canvas_sdk.events import EventType
+from logger import log
 
 
 def _resolve(name: str) -> int | None:
@@ -297,6 +298,22 @@ CATEGORIES: list[dict] = [
     }
     for category in _RAW_CATEGORIES
 ]
+
+# Say so at load time. Without this an event silently disappears from the UI and
+# stops firing, which looks identical to a broken webhook from the admin's side.
+_UNAVAILABLE: list[str] = [
+    name
+    for category in _RAW_CATEGORIES
+    for name, _label in category["events"]
+    if _resolve(name) is None
+]
+if _UNAVAILABLE:
+    log.info(
+        "[Webhooks] %d catalogued event(s) are not available on this Canvas "
+        "version and were left out of the catalog: %s",
+        len(_UNAVAILABLE),
+        ", ".join(_UNAVAILABLE),
+    )
 
 
 # Events that are not about a specific patient. Everything else in the catalog

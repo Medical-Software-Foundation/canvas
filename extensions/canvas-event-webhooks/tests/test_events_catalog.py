@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+
+import pytest
+from canvas_sdk import events as sdk_events
 from canvas_sdk.events import EventType
 
 from canvas_event_webhooks.events_catalog import (
@@ -133,3 +137,58 @@ def test_catalog_skips_unavailable_event_types(monkeypatch):
     assert "PATIENT_CREATED" not in names
     assert "PATIENT_UPDATED" in names
     assert catalog._n(None) is None
+
+
+class _OlderSdkEventType:
+    """EventType from a Canvas version that predates PATIENT_PAYMENT_PROCESSED.
+
+    ``strict=False`` mimics the plugin sandbox, whose ``_safe_getattr`` returns
+    ``None`` for an unknown attribute instead of raising -- the behaviour that
+    turned a missing event into ``EventType.Name(None)`` and took down the
+    import of every module downstream of this one.
+    """
+
+    ABSENT = "PATIENT_PAYMENT_PROCESSED"
+
+    def __init__(self, *, strict: bool) -> None:
+        self._strict = strict
+
+    def __getattr__(self, name: str):
+        if name == self.ABSENT:
+            if self._strict:
+                raise AttributeError(name)
+            return None
+        return getattr(EventType, name)
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_catalog_imports_when_the_host_lacks_an_event(monkeypatch, strict):
+    """An older instance loses that event, not the whole plugin."""
+    import canvas_event_webhooks.events_catalog as catalog
+
+    monkeypatch.setattr(sdk_events, "EventType", _OlderSdkEventType(strict=strict))
+    try:
+        reloaded = importlib.reload(catalog)
+        names = reloaded.all_event_names()
+        assert _OlderSdkEventType.ABSENT not in names
+        assert "PATIENT_CREATED" in names
+        assert _OlderSdkEventType.ABSENT in reloaded._UNAVAILABLE
+        assert not reloaded.known_event(_OlderSdkEventType.ABSENT)
+        assert _OlderSdkEventType.ABSENT not in reloaded.PATIENT_RELATED
+        assert _OlderSdkEventType.ABSENT not in reloaded.event_type_names("patients")
+        ui_names = [e["name"] for cat in reloaded.catalog_for_ui() for e in cat["events"]]
+        assert _OlderSdkEventType.ABSENT not in ui_names
+    finally:
+        monkeypatch.undo()
+        importlib.reload(catalog)
+
+
+def test_nothing_is_skipped_against_the_pinned_sdk():
+    """Guards against a typo quietly dropping an event on every instance."""
+    import canvas_event_webhooks.events_catalog as catalog
+
+    assert catalog._UNAVAILABLE == [], (
+        "These catalogued events do not resolve against the SDK in this "
+        f"environment: {catalog._UNAVAILABLE}. Either fix the name or "
+        "align the installed canvas version with uv.lock."
+    )

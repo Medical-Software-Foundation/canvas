@@ -10,7 +10,7 @@ license = "MIT"
 name = "canvas-event-webhooks"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.5.0"
+version = "0.5.2"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
