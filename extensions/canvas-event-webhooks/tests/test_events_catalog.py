@@ -114,3 +114,22 @@ def test_event_type_names_rejects_unknown_category():
         assert "not_a_category" in str(exc)
     else:
         raise AssertionError("expected KeyError for an unknown category")
+
+
+def test_catalog_skips_unavailable_event_types(monkeypatch):
+    """Host EventType members that are None must not crash import / catalog build."""
+    import canvas_event_webhooks.events_catalog as catalog
+
+    original = catalog._resolve
+
+    def fake_resolve(name: str):
+        if name == "PATIENT_CREATED":
+            return None
+        return original(name)
+
+    monkeypatch.setattr(catalog, "_resolve", fake_resolve)
+    events = catalog._events([("PATIENT_CREATED", "Patient Created"), ("PATIENT_UPDATED", "Patient Updated")])
+    names = [catalog._n(value) for value, _ in events]
+    assert "PATIENT_CREATED" not in names
+    assert "PATIENT_UPDATED" in names
+    assert catalog._n(None) is None

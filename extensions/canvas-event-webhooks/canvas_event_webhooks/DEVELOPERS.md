@@ -22,7 +22,7 @@ EventType fires
                   HttpRequestEffect (async, retries)
 ```
 
-`events_catalog.py` is the source of truth for event names. The UI, `RESPONDS_TO`, and the README catalog should all come from it. Do not add a string that cannot resolve on `canvas_sdk.events.EventType`.
+`events_catalog.py` is the source of truth for event names (string names in `_RAW_CATEGORIES`). The UI, `RESPONDS_TO`, and the README catalog should all come from it. Names that do not resolve to an int on the host `EventType` are skipped at import so older Canvas versions still load.
 
 ---
 
@@ -87,8 +87,8 @@ Do not log secrets or patient names.
    EventType.Name(EventType.YOUR_EVENT)
    ```
 
-2. Add `(EventType.YOUR_EVENT, "Human Label")` to the right category in `events_catalog.py`.
-3. If it is **not** about a patient, add the name to `_NON_PATIENT_EVENTS`.
+2. Add `("YOUR_EVENT", "Human Label")` to the right category in `_RAW_CATEGORIES` in `events_catalog.py`.
+3. If it is **not** about a patient, add the name to `_NON_PATIENT_EVENT_NAMES`.
 4. If it needs a new category, add a handler class in `event_handlers.py` with `RESPONDS_TO = event_type_names("your_key")`, register it in `CANVAS_MANIFEST.json`, and map it in `tests/test_events_catalog.py`.
 5. If details enrichment should know the model, add a `_from_*` helper in `event_details.py` and list the model under that handler’s `data_access.read`.
 6. Bump `plugin_version`. Run tests + `uv run canvas validate canvas_event_webhooks`.

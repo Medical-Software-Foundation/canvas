@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.212.1",
-    "plugin_version": "0.5.0",
+    "sdk_version": "0.225.0",
+    "plugin_version": "0.5.2",
     "name": "canvas_event_webhooks",
     "description": "Forwards Canvas EHR events to up to three HTTPS webhooks as signed JSON. For integration engineers, practice operations / RevOps, and analytics teams who need appointments, tasks, billing, and clinical events outside the EHR.",
     "components": {
