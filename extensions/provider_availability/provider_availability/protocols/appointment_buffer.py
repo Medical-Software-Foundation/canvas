@@ -30,7 +30,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event as EventEffect
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
-from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data.calendar import Event as EventModel
 from logger import log
 
@@ -42,7 +42,6 @@ from provider_availability.engine.admin_calendar import (
 from provider_availability.engine.storage import get_rules_for_provider
 
 BUFFER_TITLE = "Buffer"
-CANCELLED_STATUS = "cancelled"
 
 
 class OnAppointmentCreated(BaseProtocol):
@@ -141,7 +140,7 @@ def _delete_buffer_effects(appt: Appointment) -> list[Effect]:
 
 def _create_buffer_effects(appt: Appointment) -> list[Effect]:
     """Draw the pre/post buffer events for this one appointment."""
-    if not appt.provider or appt.status == CANCELLED_STATUS:
+    if not appt.provider or appt.status == AppointmentProgressStatus.CANCELLED:
         return []
 
     provider_id = str(appt.provider.id)

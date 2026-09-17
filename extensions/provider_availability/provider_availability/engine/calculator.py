@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data import Event
 
 from provider_availability.engine.models import (
@@ -267,17 +267,27 @@ def _get_appointments(
     end: datetime,
     location_id: str = "",
 ) -> list[tuple[datetime, int]]:
-    """Fetch existing appointments from Canvas data."""
-    filters = {
+    """Fetch the appointments that genuinely occupy the provider's time.
+
+    A cancelled appointment no longer occupies its slot, and one staff marked
+    entered-in-error never should have existed, so neither blocks booking.
+    This result is what slot calculation subtracts from the provider's
+    schedule, so counting either one leaves time permanently unbookable with
+    no visible cause.
+    """
+    filters: dict[str, object] = {
         "provider__id": provider_id,
         "start_time__gte": start,
         "start_time__lte": end,
+        "entered_in_error__isnull": True,
     }
     if location_id:
         filters["location__id"] = location_id
 
-    appointments = Appointment.objects.filter(**filters).values_list(
-        "start_time", "duration_minutes"
+    appointments = (
+        Appointment.objects.filter(**filters)
+        .exclude(status=AppointmentProgressStatus.CANCELLED)
+        .values_list("start_time", "duration_minutes")
     )
     return [(to_provider_naive(appt_start, provider_id), duration) for appt_start, duration in appointments]
 
