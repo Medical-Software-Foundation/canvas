@@ -33,6 +33,7 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
 )
+from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
 from provider_availability.engine.roles import (
     get_available_roles,
     get_schedulable_provider_ids,
@@ -251,6 +252,29 @@ def _reconcile_availability_to_roles() -> list[Effect]:
     return effects
 
 
+def _signed_in_staff_id(request: object) -> str:
+    """The staff id of whoever is viewing, or "" when it cannot be determined."""
+    return str(getattr(request, "staff_id", None) or "")
+
+
+def _sort_providers_you_first(providers: list[dict], staff_id: str) -> list[dict]:
+    """Alphabetical by name, with the viewer's own row pinned to the top.
+
+    Pinning is deliberately independent of any saved view: a provider must not
+    be able to hide their own availability by saving a view that omits them,
+    which is the confusing outcome the pin exists to prevent. ``is_you`` is set
+    on every row so the UI can mark the pinned one.
+    """
+    for p in providers:
+        p["is_you"] = bool(staff_id) and p.get("provider_id") == staff_id
+
+    def sort_key(p: dict) -> tuple[int, str]:
+        name = p["provider_name"].lower() if p["provider_name"] else "zzz"
+        return (0 if p["is_you"] else 1, name)
+
+    return sorted(providers, key=sort_key)
+
+
 class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     """API endpoints for availability queries and rule management."""
 
@@ -386,10 +410,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 continue
             providers[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
-        # Sort providers alphabetically by name
-        sorted_providers = sorted(
-            providers.values(),
-            key=lambda p: p["provider_name"].lower() if p["provider_name"] else "zzz",
+        # Alphabetical, with the viewer's own row pinned first.
+        sorted_providers = _sort_providers_you_first(
+            list(providers.values()), _signed_in_staff_id(self.request)
         )
 
         return [JSONResponse({"providers": sorted_providers})]
@@ -1458,6 +1481,50 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }),
         ]
 
+    # ── Per-staff saved view ──────────────────────────────────────────
+
+    @api.get("/my-view")
+    def get_saved_view(self) -> list[Response | Effect]:
+        """Return the provider ids this viewer saved as their default view."""
+        return [JSONResponse({"provider_ids": get_my_view(_signed_in_staff_id(self.request))})]
+
+    @api.put("/my-view")
+    def save_saved_view(self) -> list[Response | Effect]:
+        """Save the viewer's default view.
+
+        The staff id comes from the session, never from the request body, so one
+        person cannot overwrite another's saved view. There is no write-access
+        check because this changes only what the viewer sees, not any shared
+        configuration.
+        """
+        staff_id = _signed_in_staff_id(self.request)
+        if not staff_id:
+            return [
+                JSONResponse(
+                    {"error": "Could not identify the signed-in user"},
+                    status_code=HTTPStatus.FORBIDDEN,
+                )
+            ]
+
+        body = self.request.json()
+        provider_ids = body.get("provider_ids")
+        if not isinstance(provider_ids, list):
+            return [
+                JSONResponse(
+                    {"error": "provider_ids must be a list of provider ids"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        cleaned = [str(pid).strip() for pid in provider_ids if str(pid).strip()]
+        if cleaned:
+            set_my_view(staff_id, cleaned)
+        else:
+            # An empty selection means "show everyone", not "show nobody".
+            clear_my_view(staff_id)
+        log.info("my_view: saved %d providers", len(cleaned))
+        return [JSONResponse({"provider_ids": cleaned})]
+
     # ── Per-provider timezone ─────────────────────────────────────────
 
     @api.get("/provider-timezone")
@@ -1650,9 +1717,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 continue
             overview[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
-        sorted_overview = sorted(
-            overview.values(),
-            key=lambda p: p["provider_name"].lower() if p["provider_name"] else "zzz",
+        sorted_overview = _sort_providers_you_first(
+            list(overview.values()), _signed_in_staff_id(self.request)
         )
 
         return {
@@ -1661,6 +1727,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "visit_types": {"visit_types": visit_types, "count": len(visit_types)},
             "timezone": {"timezone": tz, "available": COMMON_TIMEZONES},
             "overview": {"providers": sorted_overview},
+            "my_view": {"provider_ids": get_my_view(_signed_in_staff_id(self.request))},
             "csv_template": generate_template_csv(),
         }
 

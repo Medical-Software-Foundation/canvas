@@ -15,9 +15,12 @@ from datetime import date, datetime, time
 from http import HTTPStatus
 from unittest.mock import MagicMock, call, patch
 
+import pytest
+
 from provider_availability.api.availability_api import (
     AvailabilityAPI,
     _check_write_access,
+    _sort_providers_you_first,
 )
 from provider_availability.engine.models import (
     AdminBlock,
@@ -1341,6 +1344,12 @@ class TestFormBlockHelpers:
 
 
 class TestBuildPreloadedDataWithData:
+    @pytest.fixture(autouse=True)
+    def _no_saved_view(self):
+        """The saved view reads the plugin cache, which tests have no context for."""
+        with patch(f"{MODULE}.get_my_view", return_value=[]):
+            yield
+
     @patch(f"{MODULE}.generate_template_csv", return_value="csv")
     @patch(f"{MODULE}.get_all_provider_timezones", return_value={PROVIDER_ID: "US/Pacific"})
     @patch(f"{MODULE}.get_provider_displays", return_value={PROVIDER_ID: {"name": "Dr. Smith"}})
@@ -1502,3 +1511,122 @@ class TestSchedulableRolesEndpoints:
         assert code == HTTPStatus.BAD_REQUEST
         assert mock_set.mock_calls == []
         assert mock_reconcile.mock_calls == []
+
+
+class TestProviderSortOrder:
+    def test_viewer_is_pinned_first_and_flagged(self):
+        """A provider should not have to hunt the list for their own row."""
+        rows = [
+            {"provider_id": "p-zed", "provider_name": "Zed Adams"},
+            {"provider_id": "staff-1", "provider_name": "Wendy Yandura"},
+            {"provider_id": "p-amy", "provider_name": "Amy Brooks"},
+        ]
+
+        result = _sort_providers_you_first(rows, "staff-1")
+
+        assert [r["provider_id"] for r in result] == ["staff-1", "p-amy", "p-zed"]
+        assert [r["is_you"] for r in result] == [True, False, False]
+
+    def test_others_stay_alphabetical_when_the_viewer_is_not_a_provider(self):
+        rows = [
+            {"provider_id": "p-zed", "provider_name": "Zed Adams"},
+            {"provider_id": "p-amy", "provider_name": "Amy Brooks"},
+        ]
+
+        result = _sort_providers_you_first(rows, "staff-99")
+
+        assert [r["provider_id"] for r in result] == ["p-amy", "p-zed"]
+        assert all(r["is_you"] is False for r in result)
+
+    def test_unidentified_viewer_pins_nobody(self):
+        rows = [{"provider_id": "p-amy", "provider_name": "Amy Brooks"}]
+
+        result = _sort_providers_you_first(rows, "")
+
+        assert result[0]["is_you"] is False
+
+    def test_blank_names_sort_last(self):
+        rows = [
+            {"provider_id": "p-blank", "provider_name": ""},
+            {"provider_id": "p-amy", "provider_name": "Amy Brooks"},
+        ]
+
+        result = _sort_providers_you_first(rows, "")
+
+        assert [r["provider_id"] for r in result] == ["p-amy", "p-blank"]
+
+
+class TestSavedView:
+    @patch(f"{MODULE}.get_my_view", return_value=["p1", "p2"])
+    def test_get_returns_the_viewers_saved_providers(self, mock_get):
+        handler = _make_handler(staff_id="staff-1")
+
+        result = handler.get_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["provider_ids"] == ["p1", "p2"]
+        assert mock_get.mock_calls == [call("staff-1")]
+
+    @patch(f"{MODULE}.clear_my_view")
+    @patch(f"{MODULE}.set_my_view")
+    def test_save_uses_the_session_staff_id_not_the_body(self, mock_set, mock_clear):
+        """One person must not be able to overwrite another person's saved view."""
+        handler = _make_handler(
+            json_body={"provider_ids": ["p1"], "staff_id": "someone-else"},
+            staff_id="staff-1",
+        )
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert mock_set.mock_calls == [call("staff-1", ["p1"])]
+        assert mock_clear.mock_calls == []
+
+    @patch(f"{MODULE}.clear_my_view")
+    @patch(f"{MODULE}.set_my_view")
+    def test_empty_selection_means_show_everyone(self, mock_set, mock_clear):
+        handler = _make_handler(json_body={"provider_ids": []}, staff_id="staff-1")
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["provider_ids"] == []
+        assert mock_set.mock_calls == []
+        assert mock_clear.mock_calls == [call("staff-1")]
+
+    @patch(f"{MODULE}.clear_my_view")
+    @patch(f"{MODULE}.set_my_view")
+    def test_blank_entries_are_dropped(self, mock_set, mock_clear):
+        handler = _make_handler(
+            json_body={"provider_ids": ["p1", "", "  ", "p2"]}, staff_id="staff-1"
+        )
+
+        result = handler.save_saved_view()
+
+        data, _ = _parse(result[0])
+        assert data["provider_ids"] == ["p1", "p2"]
+        assert mock_set.mock_calls == [call("staff-1", ["p1", "p2"])]
+
+    @patch(f"{MODULE}.set_my_view")
+    def test_rejects_a_non_list(self, mock_set):
+        handler = _make_handler(json_body={"provider_ids": "p1,p2"}, staff_id="staff-1")
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "must be a list" in data["error"]
+        assert mock_set.mock_calls == []
+
+    @patch(f"{MODULE}.set_my_view")
+    def test_rejects_when_the_viewer_cannot_be_identified(self, mock_set):
+        handler = _make_handler(json_body={"provider_ids": ["p1"]}, staff_id="")
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert mock_set.mock_calls == []

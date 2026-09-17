@@ -19,6 +19,8 @@ SCHEDULABLE_ROLES_KEY = "pa:schedulable_roles"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
+MY_VIEW_PREFIX = "pa:my_view:"
+MY_VIEW_INDEX_KEY = "pa:my_view:index"
 INSTALL_SENTINEL_KEY = "pa:installed"
 SYNCED_VERSION_KEY = "pa:synced_version"
 LAST_TTL_REFRESH_KEY = "pa:last_ttl_refresh"
@@ -502,6 +504,16 @@ def refresh_all_ttls() -> int:
                 cache.set(tz_key, tz_data, timeout_seconds=CACHE_TTL_SECONDS)
         cache.set(PROVIDER_TZ_INDEX_KEY, tz_index, timeout_seconds=CACHE_TTL_SECONDS)
 
+    # Refresh saved per-staff views
+    view_index = _get_my_view_index()
+    if view_index:
+        for sid in view_index:
+            view_key = f"{MY_VIEW_PREFIX}{sid}"
+            view_data = cache.get(view_key)
+            if view_data is not None:
+                cache.set(view_key, view_data, timeout_seconds=CACHE_TTL_SECONDS)
+        cache.set(MY_VIEW_INDEX_KEY, view_index, timeout_seconds=CACHE_TTL_SECONDS)
+
     # Refresh install sentinel
     sentinel = cache.get(INSTALL_SENTINEL_KEY)
     if sentinel is not None:
@@ -653,6 +665,68 @@ def _remove_from_provider_tz_index(provider_id: str) -> None:
     if provider_id in index:
         index.remove(provider_id)
         cache.set(PROVIDER_TZ_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+# ── Per-staff saved view ──────────────────────────────────────────────
+#
+# The set of providers a staff member chose to see by default in the admin UI.
+# Per-staff rather than global: two people managing different providers should
+# not overwrite each other. An empty or absent list means "show everyone",
+# which is the behavior before anyone saves a view.
+
+
+def get_my_view(staff_id: str) -> list[str]:
+    """Get the provider ids this staff member saved as their default view."""
+    if not staff_id:
+        return []
+    cache = _get_cache()
+    data = cache.get(f"{MY_VIEW_PREFIX}{staff_id}")
+    return list(data) if data else []
+
+
+def set_my_view(staff_id: str, provider_ids: list[str]) -> None:
+    """Save this staff member's default view and index it for TTL refresh."""
+    if not staff_id:
+        return
+    cache = _get_cache()
+    cache.set(f"{MY_VIEW_PREFIX}{staff_id}", provider_ids, timeout_seconds=CACHE_TTL_SECONDS)
+    _add_to_my_view_index(staff_id)
+
+
+def clear_my_view(staff_id: str) -> None:
+    """Remove this staff member's saved view, reverting them to seeing everyone."""
+    if not staff_id:
+        return
+    cache = _get_cache()
+    cache.delete(f"{MY_VIEW_PREFIX}{staff_id}")
+    _remove_from_my_view_index(staff_id)
+
+
+def _get_my_view_index() -> list[str]:
+    """Get the list of staff ids that have a saved view."""
+    cache = _get_cache()
+    index = cache.get(MY_VIEW_INDEX_KEY)
+    if index is None:
+        return []
+    return list(index)
+
+
+def _add_to_my_view_index(staff_id: str) -> None:
+    """Add a staff id to the saved-view index."""
+    cache = _get_cache()
+    index = _get_my_view_index()
+    if staff_id not in index:
+        index.append(staff_id)
+    cache.set(MY_VIEW_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def _remove_from_my_view_index(staff_id: str) -> None:
+    """Remove a staff id from the saved-view index."""
+    cache = _get_cache()
+    index = _get_my_view_index()
+    if staff_id in index:
+        index.remove(staff_id)
+        cache.set(MY_VIEW_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
 
 
 # ── Install sentinel ──────────────────────────────────────────────────

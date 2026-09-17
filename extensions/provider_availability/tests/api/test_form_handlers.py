@@ -492,6 +492,12 @@ class TestGroupOperations:
 
 
 class TestHandleFormAction:
+    @pytest.fixture(autouse=True)
+    def _no_saved_view(self):
+        """The saved view reads the plugin cache, which tests have no context for."""
+        with patch(f"{MODULE}.get_my_view", return_value=[]):
+            yield
+
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.set_practice_timezone")
     @patch(f"{MODULE}.get_all_rules", return_value=[])
@@ -555,6 +561,12 @@ class TestDispatchWriteError:
 
 
 class TestAdminUI:
+    @pytest.fixture(autouse=True)
+    def _no_saved_view(self):
+        """The saved view reads the plugin cache, which tests have no context for."""
+        with patch(f"{MODULE}.get_my_view", return_value=[]):
+            yield
+
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.render_admin_page", return_value="<html>admin</html>")
     @patch(f"{MODULE}.get_active_providers", return_value=[])

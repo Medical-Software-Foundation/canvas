@@ -319,6 +319,27 @@ function parseTimeTo24(str) {
   return _pad2(h) + ':' + _pad2(min);
 }
 
+// 15-minute suggestions for the time fields. Options carry the same 12-hour
+// display text the visible input uses, so picking one flows through the
+// existing parse-on-input handler with no special casing. A datalist only
+// suggests, so typing an off-grid time such as "9:07 AM" still works exactly
+// as before. Order is plain chronological from 12:00 AM: a datalist cannot be
+// told where to scroll, so reordering it would only move the oddity around.
+var TIME_OPTIONS_ID = 'pa-time-options';
+
+function buildTimeOptions() {
+  if (document.getElementById(TIME_OPTIONS_ID)) return;
+  var dl = document.createElement('datalist');
+  dl.id = TIME_OPTIONS_ID;
+  var html = '';
+  for (var mins = 0; mins < 24 * 60; mins += 15) {
+    var canon = _pad2(Math.floor(mins / 60)) + ':' + _pad2(mins % 60);
+    html += '<option value="' + _fmt12(canon) + '"></option>';
+  }
+  dl.innerHTML = html;
+  document.body.appendChild(dl);
+}
+
 // A plain typed time field. The user types any time (e.g. "9:07 AM"); it is
 // parsed and normalized on blur. The canonical HH:MM value lives on the hidden
 // `.time-input` so existing read sites keep working unchanged.
@@ -327,7 +348,7 @@ function timeFieldHtml(val, id) {
   var idAttr = id ? ' id="' + id + '"' : '';
   var display = val ? _fmt12(val) : '';
   return '<span class="time-combo">' +
-    '<input type="text" class="time-combo-input" autocomplete="off" placeholder="e.g. 9:00 AM" value="' + display + '">' +
+    '<input type="text" class="time-combo-input" autocomplete="off" list="' + TIME_OPTIONS_ID + '" placeholder="e.g. 9:00 AM" value="' + display + '">' +
     '<input type="hidden" class="time-input"' + idAttr + ' value="' + val + '">' +
     '</span>';
 }
@@ -368,6 +389,30 @@ document.addEventListener('focusout', function (e) {
   span.querySelector('.time-input').value = canon || '';
   input.value = canon ? _fmt12(canon) : '';
 });
+
+/* ---------- Saved default view ---------- */
+
+// Store whichever providers are selected in the filter as this user's default
+// view. Saved per staff member on the server, so two people managing different
+// providers do not overwrite each other. An empty selection clears the saved
+// view, which means "show everyone" rather than "show nobody".
+async function saveMyView() {
+  var ids = msFilterProvider ? msFilterProvider.getValue() : [];
+  var data = await apiCall('/my-view', { method: 'PUT', body: JSON.stringify({ provider_ids: ids }) });
+  if (data && data.error) { showMsg(data.error, 'error'); return; }
+  if (ids.length) {
+    showMsg('Saved ' + ids.length + ' provider' + (ids.length === 1 ? '' : 's') + ' as your default view', 'success');
+  } else {
+    showMsg('Default view cleared. You will see every provider.', 'success');
+  }
+}
+
+// Clear the filter so every provider shows. Deliberately not persisted: the
+// next page load returns to the saved view.
+function showAllProviders() {
+  if (msFilterProvider) msFilterProvider.setValue([]);
+  renderAccordion();
+}
 
 /* ---------- Daily mode flat time-windows editor ---------- */
 
@@ -1155,7 +1200,10 @@ function renderAccordion() {
 
   let providers = _overviewData;
   if (selectedIds.length > 0) {
-    providers = providers.filter(p => selectedIds.includes(p.provider_id));
+    // The viewer's own row survives the filter. A provider saving a view that
+    // omits themselves would otherwise hide their own availability, which is
+    // the confusing outcome the pin exists to prevent.
+    providers = providers.filter(p => p.is_you || selectedIds.includes(p.provider_id));
   }
 
   if (providers.length === 0) {
@@ -1168,6 +1216,8 @@ function renderAccordion() {
   }
 
   providers = providers.slice().sort(function(a, b) {
+    // Viewer first whatever their name sorts to; everyone else by last name.
+    if (!!a.is_you !== !!b.is_you) return a.is_you ? -1 : 1;
     var aLast = (a.provider_name || '').split(' ').slice(-1)[0].toLowerCase();
     var bLast = (b.provider_name || '').split(' ').slice(-1)[0].toLowerCase();
     return aLast.localeCompare(bLast);
@@ -1201,7 +1251,8 @@ function renderAccordion() {
     var pTz = p.provider_timezone || _practiceTz;
     var pTzExplicit = p.provider_timezone_explicit;
     html += '<div class="provider-name-col">';
-    html += '<span class="provider-name">' + name + '</span>';
+    html += '<span class="provider-name">' + name +
+      (p.is_you ? '<span class="you-tag">you</span>' : '') + '</span>';
     if (!_viewTz) {
       html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' (default)') + '</div>';
     }
@@ -3341,6 +3392,8 @@ msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter 
 msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
 // msSettingsStaff removed — access control now via plugin secret
 
+buildTimeOptions();
+
 // Template-defined time fields (Single Event / Blocked start & end)
 initTimeField('single_start_time_wrap', 'single_start_time');
 initTimeField('single_end_time_wrap', 'single_end_time');
@@ -3392,6 +3445,11 @@ try {
 
     _overviewData = (P.overview && P.overview.providers) || [];
     _syncProviderTzMapFromOverview();
+
+    // Land on the saved default view. Empty means show everyone.
+    var savedView = (P.my_view && P.my_view.provider_ids) || [];
+    if (savedView.length && msFilterProvider) msFilterProvider.setValue(savedView.map(String));
+
     renderAccordion();
 
     // Show flash message from form-action redirect

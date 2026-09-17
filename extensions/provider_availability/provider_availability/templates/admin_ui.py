@@ -41,6 +41,8 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
   <canvas-tab-panel id="panel-availability">
     <div class="filter-bar">
       <div id="ms-filter-provider" class="multi-select" style="flex:1;max-width:400px;"></div>
+      <button class="btn" onclick="saveMyView()" title="Remember this selection as the providers you see by default">Save as my view</button>
+      <button class="btn" onclick="showAllProviders()" title="Clear the filter and show every provider">Show all</button>
       <button class="btn btn-expand-collapse" onclick="toggleAllCards()">Expand All</button>
     </div>
     <div id="legend-bar-container" class="legend-bar"></div>
