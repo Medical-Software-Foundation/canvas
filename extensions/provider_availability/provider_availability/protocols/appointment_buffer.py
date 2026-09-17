@@ -29,17 +29,6 @@ from provider_availability.engine.storage import get_rules_for_provider
 BUFFER_TITLE = "Buffer"
 
 
-def _buffer_title(appointment_id: str) -> str:
-    """Buffer event title tagged with the appointment id.
-
-    Encoding the id lets reschedule/cancel find and remove exactly this
-    appointment's buffers without re-scanning every appointment (the id is
-    stable across reschedules, and Event effects carry no separate metadata
-    field, so the title is the only durable link).
-    """
-    return f"{BUFFER_TITLE}:{appointment_id}"
-
-
 class OnAppointmentCreated(BaseProtocol):
     """Create buffer events when an appointment is booked."""
 
@@ -68,12 +57,14 @@ class OnAppointmentCanceled(BaseProtocol):
 
 
 def _reconcile_buffers(appointment_id: str, action: str) -> list[Effect]:
-    """Reconcile buffer events for ONE appointment.
+    """Rebuild the provider's buffer events from their current appointments.
 
-    Only this appointment's buffers are touched (found by the id-tagged title),
-    so booking/rescheduling N appointments is O(N) total rather than O(N^2) —
-    the previous implementation deleted and rebuilt every future appointment's
-    buffers on each event.
+    On any appointment event we delete every buffer event on the provider's
+    Admin calendars and recreate them for the provider's future, non-cancelled
+    appointments. This self-heals reschedules and cancellations (Canvas
+    reschedule issues a new appointment id, so per-appointment tracking would
+    orphan the old buffer). Buffers here are only for calendar visibility — the
+    slot calculator already enforces buffer time independently.
     """
     try:
         appt = Appointment.objects.get(id=appointment_id)
@@ -99,68 +90,57 @@ def _reconcile_buffers(appointment_id: str, action: str) -> list[Effect]:
         return []
 
     provider_name = resolve_provider_name(provider_id)
-    title = _buffer_title(appointment_id)
 
     effects: list[Effect] = []
 
-    # 1. Delete THIS appointment's existing buffer events (at most a couple).
+    # 1. Delete all existing buffer events on the provider's Admin calendars.
+    #    startswith catches both the plain "Buffer" title and any legacy
+    #    id-tagged "Buffer:<id>" events from an earlier build.
     delete_count = 0
     for cal in get_admin_calendars(provider_id, provider_name):
         for evt in EventModel.objects.filter(
-            calendar__id=cal.id, title=title, is_cancelled=False
+            calendar__id=cal.id, title__startswith=BUFFER_TITLE, is_cancelled=False
         ):
             effects.append(EventEffect(event_id=str(evt.id)).delete())
             delete_count += 1
 
-    # 2. On cancel, removing the buffers is all that's needed.
-    if action == "canceled":
-        log.info(
-            "BUFFER: canceled appt %s for provider %s — deleted %d buffer events",
-            appointment_id, provider_id, delete_count,
-        )
-        return effects
-
-    # 3. Don't (re)create buffers for a cancelled or past appointment.
-    now = datetime.now(UTC)
-    apt_start = appt.start_time
-    apt_start_cmp = apt_start if apt_start.tzinfo is not None else apt_start.replace(tzinfo=UTC)
-    if getattr(appt, "status", None) == "cancelled" or apt_start_cmp < now:
-        log.info(
-            "BUFFER: %s appt %s not active/future — deleted %d, created 0",
-            action, appointment_id, delete_count,
-        )
-        return effects
-
-    # 4. Create this appointment's pre/post buffers.
+    # 2. Rebuild buffers for the provider's future, non-cancelled appointments.
     calendar_id, cal_effects = get_admin_calendar_id(provider_id, provider_name=provider_name)
     if not calendar_id:
         log.warning("BUFFER: could not resolve Admin calendar for provider %s", provider_id)
         return effects
     effects.extend(cal_effects)
 
-    apt_end = apt_start + timedelta(minutes=appt.duration_minutes)
-    create_count = 0
-    if pre_buffer > 0:
-        effects.append(
-            EventEffect(
-                calendar_id=calendar_id,
-                title=title,
-                starts_at=apt_start - timedelta(minutes=pre_buffer),
-                ends_at=apt_start,
-            ).create()
-        )
-        create_count += 1
+    now = datetime.now(UTC)
+    appointments = Appointment.objects.filter(
+        provider__id=provider_id,
+        start_time__gte=now,
+    ).exclude(status="cancelled")
 
-    if post_buffer > 0:
-        effects.append(
-            EventEffect(
-                calendar_id=calendar_id,
-                title=title,
-                starts_at=apt_end,
-                ends_at=apt_end + timedelta(minutes=post_buffer),
-            ).create()
-        )
-        create_count += 1
+    create_count = 0
+    for apt in appointments:
+        apt_start = apt.start_time
+        apt_end = apt_start + timedelta(minutes=apt.duration_minutes)
+        if pre_buffer > 0:
+            effects.append(
+                EventEffect(
+                    calendar_id=calendar_id,
+                    title=BUFFER_TITLE,
+                    starts_at=apt_start - timedelta(minutes=pre_buffer),
+                    ends_at=apt_start,
+                ).create()
+            )
+            create_count += 1
+        if post_buffer > 0:
+            effects.append(
+                EventEffect(
+                    calendar_id=calendar_id,
+                    title=BUFFER_TITLE,
+                    starts_at=apt_end,
+                    ends_at=apt_end + timedelta(minutes=post_buffer),
+                ).create()
+            )
+            create_count += 1
 
     log.info(
         "BUFFER: %s appt %s for provider %s — deleted %d, created %d buffer events",

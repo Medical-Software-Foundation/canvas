@@ -278,7 +278,10 @@ class TestOnPluginInstalled:
         mock_rb = MagicMock()
         mock_rb.provider_id = "p1"
 
-        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
+        sched_staff = MagicMock()
+        sched_staff.id = "p1"
+
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[sched_staff]), \
              patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
@@ -299,7 +302,7 @@ class TestOnPluginInstalled:
             assert mock_delete_all.mock_calls == [call()]
             assert mock_mark.mock_calls == [call()]
             assert mock_set_ver.mock_calls == [call("1.0")]
-            assert mock_sync.mock_calls == [call("p1")]
+            assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1"})]
             assert mock_lead.mock_calls == [call(mock_rule)]
             assert mock_block_fx.mock_calls == [call(mock_block)]
             assert mock_rb_fx.mock_calls == [call(mock_rb)]
@@ -354,7 +357,10 @@ class TestOnPluginInstalled:
         mock_rb.id = "rb1"
         mock_rb.provider_id = "p1"
 
-        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
+        sched_staff = MagicMock()
+        sched_staff.id = "p1"
+
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[sched_staff]), \
              patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
@@ -373,7 +379,7 @@ class TestOnPluginInstalled:
 
             mock_delete.assert_called_once()
             mock_set_ver.assert_called_once_with("0.0.2")
-            mock_sync.assert_called_once_with("p1")
+            mock_sync.assert_called_once_with("p1", schedulable_ids={"p1"})
             mock_lead.assert_called_once_with(mock_rule)
             mock_block_fx.assert_called_once_with(mock_block)
             mock_rb_fx.assert_called_once_with(mock_rb)

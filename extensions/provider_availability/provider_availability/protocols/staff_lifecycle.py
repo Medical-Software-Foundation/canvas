@@ -246,15 +246,24 @@ class OnPluginInstalled(BaseProtocol):
         if first_install:
             mark_installed()
 
-        # Step 3: Full sync of all rules, blocks, and recurring blocks
+        # Step 3: Full sync of all rules, blocks, and recurring blocks.
+        # Only currently-schedulable providers get availability (re)generated;
+        # others' events stay cleared (they were removed by delete_all above).
+        schedulable_ids = {str(s.id) for s in active_staff}
         provider_ids_synced: set[str] = set()
         for rule in rules:
             try:
                 if rule.provider_id not in provider_ids_synced:
-                    effects.extend(sync_provider_availability(rule.provider_id))
+                    effects.extend(
+                        sync_provider_availability(rule.provider_id, schedulable_ids=schedulable_ids)
+                    )
                     provider_ids_synced.add(rule.provider_id)
                 rules_synced += 1
-                if rule.is_active and rule.booking_interval.min_lead_hours > 0:
+                if (
+                    rule.is_active
+                    and rule.booking_interval.min_lead_hours > 0
+                    and rule.provider_id in schedulable_ids
+                ):
                     effects.extend(build_lead_time_block_effects(rule))
                     lead_time_count += 1
             except Exception:

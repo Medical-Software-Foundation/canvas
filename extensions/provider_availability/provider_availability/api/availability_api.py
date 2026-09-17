@@ -33,7 +33,11 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
 )
-from provider_availability.engine.roles import get_available_roles
+from provider_availability.engine.roles import (
+    get_available_roles,
+    get_schedulable_provider_ids,
+    get_schedulable_staff,
+)
 from provider_availability.engine.models import (
     AdminBlock,
     BookingInterval,
@@ -226,6 +230,27 @@ def _check_write_access(request: object, secrets: dict | None = None) -> list[Re
     ]
 
 
+def _reconcile_availability_to_roles() -> list[Effect]:
+    """Re-sync every provider-with-rules against the current schedulable set.
+
+    Schedulable providers get their availability events (re)generated;
+    non-schedulable providers get theirs cleared. ``sync_provider_availability``
+    is gated on the same set, so it clears (and does not recreate) events for
+    providers who are no longer schedulable. Rule definitions are untouched, so
+    re-adding a role restores availability automatically.
+    """
+    schedulable_ids = get_schedulable_provider_ids()
+    provider_ids = {r.provider_id for r in get_all_rules()}
+    effects: list[Effect] = []
+    for pid in provider_ids:
+        effects.extend(sync_provider_availability(pid, schedulable_ids=schedulable_ids))
+    log.info(
+        "reconcile_availability_to_roles: reconciled %d providers (%d schedulable)",
+        len(provider_ids), len(schedulable_ids),
+    )
+    return effects
+
+
 class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     """API endpoints for availability queries and rule management."""
 
@@ -297,14 +322,23 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
 
-        # Collect all provider IDs
+        # Only show providers who are currently in a schedulable role. A provider
+        # who was de-scheduled (their role removed) drops off this screen, but
+        # their saved rules/blocks are kept (non-destructive) — re-adding the
+        # role brings them back with their configuration intact.
+        schedulable_ids = {str(s.id) for s in get_schedulable_staff()}
+
+        # Collect all provider IDs (restricted to currently-schedulable staff)
         provider_ids = set()
         for r in rules:
-            provider_ids.add(r.provider_id)
+            if r.provider_id in schedulable_ids:
+                provider_ids.add(r.provider_id)
         for b in blocks:
-            provider_ids.add(b.provider_id)
+            if b.provider_id in schedulable_ids:
+                provider_ids.add(b.provider_id)
         for rb in recurring_blocks:
-            provider_ids.add(rb.provider_id)
+            if rb.provider_id in schedulable_ids:
+                provider_ids.add(rb.provider_id)
 
         displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
 
@@ -335,15 +369,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }
 
         for r in rules:
+            if r.provider_id not in providers:
+                continue
             d = r.to_dict()
             d["location_names"] = [locations.get(lid, lid) for lid in r.location_ids]
             d["visit_type_names"] = [visit_types.get(vt, vt) for vt in r.visit_types]
             providers[r.provider_id]["rules"].append(d)
 
         for b in blocks:
+            if b.provider_id not in providers:
+                continue
             providers[b.provider_id]["blocks"].append(b.to_dict())
 
         for rb in recurring_blocks:
+            if rb.provider_id not in providers:
+                continue
             providers[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
         # Sort providers alphabetically by name
@@ -388,6 +428,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         location_id = params.get("location_id", "")
         visit_type = params.get("visit_type", "")
+
+        # A provider no longer in a schedulable role is not bookable.
+        if provider_id not in get_schedulable_provider_ids():
+            log.info("available-slots: provider=%s not schedulable, returning no slots", provider_id)
+            return [JSONResponse({"slots": [], "count": 0})]
 
         rules = get_rules_for_provider(provider_id)
         log.info(
@@ -435,10 +480,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         visit_type = params.get("visit_type", "")
 
         all_rules = get_all_rules()
+        schedulable_ids = get_schedulable_provider_ids()
 
         # Group by provider
         providers_with_slots: dict[str, int] = {}
         for rule in all_rules:
+            # De-scheduled providers are not bookable.
+            if rule.provider_id not in schedulable_ids:
+                continue
             if location_id:
                 if rule.location_ids and location_id not in rule.location_ids:
                     continue
@@ -1383,13 +1432,30 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
         normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        if not normalized:
+            # An empty set would de-schedule every provider at once, clearing
+            # availability instance-wide on one click. Reject rather than store it.
+            return [
+                JSONResponse(
+                    {"error": "At least one schedulable role is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
         set_schedulable_roles(normalized)
         log.info("set_roles: set %d schedulable roles", len(normalized))
+
+        # Reconcile availability against the new role set so the change takes
+        # effect immediately: providers who are no longer schedulable have their
+        # availability events cleared (no longer bookable), and providers who
+        # became schedulable have theirs (re)generated from their saved rules.
+        effects = _reconcile_availability_to_roles()
+
         return [
+            *effects,
             JSONResponse({
                 "message": "Schedulable roles updated",
                 "schedulable_roles": normalized,
-            })
+            }),
         ]
 
     # ── Per-provider timezone ─────────────────────────────────────────
@@ -1531,13 +1597,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
 
+        # Restrict the overview to currently-schedulable providers (the
+        # `providers` list above is already the schedulable set). De-scheduled
+        # providers drop off the screen; their saved rules are kept.
+        schedulable_ids = {str(p["id"]) for p in providers}
+
         provider_ids = set()
         for r in rules:
-            provider_ids.add(r.provider_id)
+            if r.provider_id in schedulable_ids:
+                provider_ids.add(r.provider_id)
         for b in blocks:
-            provider_ids.add(b.provider_id)
+            if b.provider_id in schedulable_ids:
+                provider_ids.add(b.provider_id)
         for rb in recurring_blocks:
-            provider_ids.add(rb.provider_id)
+            if rb.provider_id in schedulable_ids:
+                provider_ids.add(rb.provider_id)
 
         displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
 
@@ -1559,15 +1633,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }
 
         for r in rules:
+            if r.provider_id not in overview:
+                continue
             d = r.to_dict()
             d["location_names"] = [loc_map.get(lid, lid) for lid in r.location_ids]
             d["visit_type_names"] = [vt_map.get(vt, vt) for vt in r.visit_types]
             overview[r.provider_id]["rules"].append(d)
 
         for b in blocks:
+            if b.provider_id not in overview:
+                continue
             overview[b.provider_id]["blocks"].append(b.to_dict())
 
         for rb in recurring_blocks:
+            if rb.provider_id not in overview:
+                continue
             overview[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
         sorted_overview = sorted(

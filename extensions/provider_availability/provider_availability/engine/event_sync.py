@@ -30,6 +30,7 @@ from provider_availability.engine.models import (
     RecurringBlock,
     date_in_pattern,
 )
+from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.storage import get_event_ids, get_rules_for_provider, save_event_ids
 from provider_availability.engine.tz_utils import localize_naive, practice_tz, provider_tz, to_utc
 
@@ -82,14 +83,49 @@ def _location_name(location_id: str | None) -> str:
         return ""
 
 
-def sync_provider_availability(provider_id: str) -> list[Effect]:
+def sync_provider_availability(
+    provider_id: str, schedulable_ids: set[str] | None = None
+) -> list[Effect]:
     """Delete all availability events and recreate for ALL active rules.
 
     This is the correct entry point for syncing availability. It handles
     multiple rules per provider without accidentally deleting sibling rules.
+
+    Availability is gated on the schedulable set: a provider who is not in it
+    has their events cleared and NOT recreated, because a de-scheduled provider
+    must not be bookable. Rule definitions are left untouched, so re-adding the
+    role restores availability on the next sync.
+
+    ``schedulable_ids`` is an optional pre-computed set, for callers syncing
+    many providers in a loop so the role lookup runs once rather than once per
+    provider. When omitted it is computed here on purpose: the gate has to hold
+    on every path, and a caller that forgets to pass it would otherwise leave a
+    de-scheduled provider bookable.
+
+    An empty schedulable set means the role configuration is missing or was
+    saved empty, not that every provider is de-scheduled. Clearing the whole
+    instance's availability on a configuration mistake is worse than leaving it
+    in place, so the gate is skipped and a warning is logged.
     """
     effects: list[Effect] = []
     effects.extend(build_delete_effects(provider_id))
+
+    if schedulable_ids is None:
+        schedulable_ids = get_schedulable_provider_ids()
+
+    if not schedulable_ids:
+        log.warning(
+            "sync_provider_availability: provider=%s, schedulable set is empty, "
+            "skipping the gate rather than clearing all availability",
+            provider_id,
+        )
+    elif provider_id not in schedulable_ids:
+        log.info(
+            "sync_provider_availability: provider=%s not schedulable — cleared "
+            "availability, skipping recreate",
+            provider_id,
+        )
+        return effects
 
     rules = get_rules_for_provider(provider_id)
     total_events = 0

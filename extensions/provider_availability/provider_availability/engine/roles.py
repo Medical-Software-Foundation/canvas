@@ -62,6 +62,15 @@ def get_schedulable_staff() -> list[Staff]:
     return result
 
 
+def get_schedulable_provider_ids() -> set[str]:
+    """Return the set of currently-schedulable staff ids (as strings).
+
+    Used to gate availability effectiveness: a provider not in this set must
+    not generate bookable slots or calendar availability events.
+    """
+    return {str(s.id) for s in get_schedulable_staff()}
+
+
 def get_available_roles() -> list[dict[str, Any]]:
     """Return the distinct roles held by active staff, for the Settings UI.
 

@@ -1423,15 +1423,40 @@ class TestSchedulableRolesEndpoints:
         assert mock_avail.mock_calls == [call()]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
     @patch(f"{MODULE}.set_schedulable_roles")
-    def test_set_roles_normalizes_and_saves(self, mock_set, mock_access):
+    def test_set_roles_normalizes_and_saves(self, mock_set, mock_reconcile, mock_access):
         handler = _make_handler(json_body={"schedulable_roles": ["cc", " md ", ""]})
         result = handler.set_roles()
 
-        data, code = _parse(result[0])
+        data, code = _parse(result[-1])
         assert code == HTTPStatus.OK
         assert data["schedulable_roles"] == ["CC", "MD"]
         assert mock_set.mock_calls == [call(["CC", "MD"])]
+        # Saving roles reconciles availability so the change takes effect now.
+        assert mock_reconcile.mock_calls == [call()]
+
+    @patch(f"{MODULE}.sync_provider_availability", return_value=["fx"])
+    @patch(f"{MODULE}.get_all_rules")
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
+    def test_reconcile_availability_clears_descheduled_and_syncs_schedulable(
+        self, mock_sched, mock_rules, mock_sync
+    ):
+        from provider_availability.api.availability_api import _reconcile_availability_to_roles
+
+        schedulable_rule = ProviderAvailabilityRule(id="r1", provider_id=PROVIDER_ID)
+        descheduled_rule = ProviderAvailabilityRule(id="r2", provider_id=PROVIDER_ID_2)
+        mock_rules.return_value = [schedulable_rule, descheduled_rule]
+
+        effects = _reconcile_availability_to_roles()
+
+        # Both providers are re-synced with the schedulable set passed through;
+        # sync_provider_availability clears the de-scheduled one internally.
+        assert effects == ["fx", "fx"]
+        called_pids = {c.args[0] for c in mock_sync.call_args_list}
+        assert called_pids == {PROVIDER_ID, PROVIDER_ID_2}
+        for c in mock_sync.call_args_list:
+            assert c.kwargs["schedulable_ids"] == {PROVIDER_ID}
 
     @patch(f"{MODULE}._check_write_access", return_value=["DENIED"])
     @patch(f"{MODULE}.set_schedulable_roles")
@@ -1450,3 +1475,30 @@ class TestSchedulableRolesEndpoints:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "must be a list" in data["error"]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_rejects_empty_list(self, mock_set, mock_reconcile, mock_access):
+        """An empty set would de-schedule every provider at once."""
+        handler = _make_handler(json_body={"schedulable_roles": []})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "at least one" in data["error"].lower()
+        assert mock_set.mock_calls == []
+        assert mock_reconcile.mock_calls == []
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_rejects_blanks_only(self, mock_set, mock_reconcile, mock_access):
+        """Entries that are only whitespace normalize away to nothing."""
+        handler = _make_handler(json_body={"schedulable_roles": ["", "  ", "\t"]})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert mock_set.mock_calls == []
+        assert mock_reconcile.mock_calls == []

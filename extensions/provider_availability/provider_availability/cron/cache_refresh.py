@@ -13,7 +13,10 @@ from canvas_sdk.handlers.cron_task import CronTask
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from logger import log
 
-from provider_availability.engine.roles import get_schedulable_staff
+from provider_availability.engine.roles import (
+    get_schedulable_provider_ids,
+    get_schedulable_staff,
+)
 from provider_availability.engine.event_sync import (
     build_hold_block_refresh_effects,
     build_lead_time_block_effects,
@@ -99,8 +102,10 @@ def _daily_resync() -> list[Effect]:
             # Rule expired yesterday — remove its events
             if rule.effective_end and rule.effective_end == yesterday:
                 providers_to_sync.add(rule.provider_id)
-        for pid in providers_to_sync:
-            effects.extend(sync_provider_availability(pid))
+        if providers_to_sync:
+            schedulable_ids = get_schedulable_provider_ids()
+            for pid in providers_to_sync:
+                effects.extend(sync_provider_availability(pid, schedulable_ids=schedulable_ids))
         set_last_sync_date(today_str)
         log.info("daily_resync: checked %d rules, re-synced %d providers", len(rules), len(providers_to_sync))
     except Exception:

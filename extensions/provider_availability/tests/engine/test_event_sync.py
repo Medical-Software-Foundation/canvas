@@ -130,6 +130,14 @@ class TestWeekdayOccurrences:
 
 
 class TestSyncProviderAvailability:
+    @pytest.fixture(autouse=True)
+    def _schedulable_provider(self):
+        """These tests cover rule syncing; the gate is just a precondition."""
+        with patch(
+            f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID}
+        ):
+            yield
+
     @patch(f"{MODULE}._build_rule_events")
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.build_delete_effects")
@@ -269,6 +277,85 @@ class TestSyncProviderAvailability:
 
 
 # ── build_sync_effects ────────────────────────────────────────────────
+
+
+class TestSyncProviderAvailabilityGate:
+    """The schedulable gate: a de-scheduled provider must not stay bookable."""
+
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_gate_holds_when_caller_omits_the_set(
+        self, mock_ids, mock_delete, mock_get_rules
+    ):
+        """Omitting the argument must still gate, not skip the check."""
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+        mock_ids.return_value = {"a-different-provider"}
+
+        result = sync_provider_availability(PROVIDER_ID)
+
+        assert mock_ids.mock_calls == [call()]
+        assert mock_delete.mock_calls == [call(PROVIDER_ID)]
+        assert mock_get_rules.mock_calls == []
+        assert result == [delete_effect]
+
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_supplied_set_avoids_the_role_lookup(
+        self, mock_ids, mock_delete, mock_get_rules
+    ):
+        """Loop callers pass the set so the lookup runs once, not per provider."""
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+
+        result = sync_provider_availability(
+            PROVIDER_ID, schedulable_ids={"a-different-provider"}
+        )
+
+        assert mock_ids.mock_calls == []
+        assert mock_get_rules.mock_calls == []
+        assert result == [delete_effect]
+
+    @patch(f"{MODULE}._build_rule_events")
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_empty_set_skips_the_gate_instead_of_clearing_everyone(
+        self, mock_ids, mock_delete, mock_get_rules, mock_build_events, sample_rule
+    ):
+        """An empty set is a config mistake, not grounds to clear all providers."""
+        mock_ids.return_value = set()
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+        event_effect = MagicMock()
+        mock_build_events.return_value = [event_effect]
+        mock_get_rules.return_value = [sample_rule]
+
+        result = sync_provider_availability(PROVIDER_ID)
+
+        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert result == [delete_effect, event_effect]
+
+    @patch(f"{MODULE}._build_rule_events")
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_schedulable_provider_still_syncs(
+        self, mock_ids, mock_delete, mock_get_rules, mock_build_events, sample_rule
+    ):
+        mock_ids.return_value = {PROVIDER_ID}
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+        event_effect = MagicMock()
+        mock_build_events.return_value = [event_effect]
+        mock_get_rules.return_value = [sample_rule]
+
+        result = sync_provider_availability(PROVIDER_ID)
+
+        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert result == [delete_effect, event_effect]
 
 
 class TestBuildSyncEffects:

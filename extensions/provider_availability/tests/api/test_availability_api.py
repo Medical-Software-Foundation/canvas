@@ -39,6 +39,16 @@ VISIT_TYPE_ID = "visit-type-uuid-789"
 MODULE = "provider_availability.api.availability_api"
 
 
+def _sched(*ids):
+    """Build a list of schedulable-staff mocks with the given ids."""
+    staff = []
+    for i in ids:
+        s = MagicMock()
+        s.id = i
+        staff.append(s)
+    return staff
+
+
 def _parse(response) -> tuple[dict, int]:
     """Extract (body_dict, status_code) from a JSONResponse."""
     body = json.loads(getattr(response, "content"))
@@ -384,7 +394,8 @@ class TestGetOverview:
     @patch(f"{MODULE}.get_all_rules", return_value=[])
     @patch(f"{MODULE}.get_all_provider_timezones", return_value={})
     @patch(f"{MODULE}.get_practice_timezone", return_value="UTC")
-    def test_empty(self, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
+    @patch(f"{MODULE}.get_schedulable_staff", return_value=_sched(PROVIDER_ID))
+    def test_empty(self, mock_sched, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
         handler = _make_handler()
         result = handler.get_overview()
         body, code = _parse(result[0])
@@ -410,7 +421,8 @@ class TestGetOverview:
     @patch(f"{MODULE}.get_all_rules")
     @patch(f"{MODULE}.get_all_provider_timezones", return_value={})
     @patch(f"{MODULE}.get_practice_timezone", return_value="UTC")
-    def test_with_rules(self, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
+    @patch(f"{MODULE}.get_schedulable_staff", return_value=_sched(PROVIDER_ID))
+    def test_with_rules(self, mock_sched, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
         rule = ProviderAvailabilityRule(
             id="r1",
             provider_id=PROVIDER_ID,
@@ -434,12 +446,38 @@ class TestGetOverview:
     @patch(f"{MODULE}.get_scheduleable_visit_types", return_value=[])
     @patch(f"{MODULE}.get_active_locations", return_value=[])
     @patch(f"{MODULE}.get_provider_displays")
+    @patch(f"{MODULE}.get_all_recurring_blocks", return_value=[])
+    @patch(f"{MODULE}.get_all_blocks", return_value=[])
+    @patch(f"{MODULE}.get_all_rules")
+    @patch(f"{MODULE}.get_all_provider_timezones", return_value={})
+    @patch(f"{MODULE}.get_practice_timezone", return_value="UTC")
+    @patch(f"{MODULE}.get_schedulable_staff", return_value=_sched(PROVIDER_ID))
+    def test_hides_de_scheduled_provider(self, mock_sched, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
+        """A rule for a provider no longer in a schedulable role is not shown."""
+        schedulable_rule = ProviderAvailabilityRule(id="r1", provider_id=PROVIDER_ID)
+        descheduled_rule = ProviderAvailabilityRule(id="r2", provider_id=PROVIDER_ID_2)
+        mock_rules.return_value = [schedulable_rule, descheduled_rule]
+        mock_displays.return_value = {PROVIDER_ID: {"name": "Dr. Smith"}}
+
+        handler = _make_handler()
+        body, code = _parse(handler.get_overview()[0])
+
+        assert code == HTTPStatus.OK
+        # Only the schedulable provider appears; PROVIDER_ID_2 is filtered out.
+        assert [p["provider_id"] for p in body["providers"]] == [PROVIDER_ID]
+        # displays only queried for the schedulable provider
+        assert mock_displays.mock_calls == [call([PROVIDER_ID])]
+
+    @patch(f"{MODULE}.get_scheduleable_visit_types", return_value=[])
+    @patch(f"{MODULE}.get_active_locations", return_value=[])
+    @patch(f"{MODULE}.get_provider_displays")
     @patch(f"{MODULE}.get_all_recurring_blocks")
     @patch(f"{MODULE}.get_all_blocks")
     @patch(f"{MODULE}.get_all_rules")
     @patch(f"{MODULE}.get_all_provider_timezones", return_value={})
     @patch(f"{MODULE}.get_practice_timezone", return_value="UTC")
-    def test_with_blocks_and_recurring(self, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
+    @patch(f"{MODULE}.get_schedulable_staff", return_value=_sched(PROVIDER_ID))
+    def test_with_blocks_and_recurring(self, mock_sched, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
         """Overview includes blocks and recurring blocks grouped by provider."""
         block = AdminBlock(
             id="b1",
@@ -475,7 +513,8 @@ class TestGetOverview:
     @patch(f"{MODULE}.get_all_rules")
     @patch(f"{MODULE}.get_all_provider_timezones", return_value={})
     @patch(f"{MODULE}.get_practice_timezone", return_value="UTC")
-    def test_lookup_errors_handled(self, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
+    @patch(f"{MODULE}.get_schedulable_staff", return_value=_sched(PROVIDER_ID))
+    def test_lookup_errors_handled(self, mock_sched, mock_ptz, mock_ptzs, mock_rules, mock_blocks, mock_rb, mock_displays, mock_locs, mock_vts):
         """Location/visit-type lookup failures are caught gracefully."""
         rule = ProviderAvailabilityRule(
             id="r1", provider_id=PROVIDER_ID, location_ids=["loc-x"], visit_types=["vt-x"]
@@ -517,9 +556,29 @@ class TestGetAvailableSlots:
         assert "no provider" in body["error"]
         assert mock_resolve.mock_calls == [call("", "bad")]
 
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value=set())
+    @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
+    def test_descheduled_provider_not_bookable(self, mock_resolve, mock_sched, mock_rules):
+        """A provider not in a schedulable role returns no slots and isn't even queried for rules."""
+        handler = _make_handler(
+            query_params={
+                "provider_id": PROVIDER_ID,
+                "start_date": "2026-03-01",
+                "end_date": "2026-03-07",
+            }
+        )
+        body, code = _parse(handler.get_available_slots()[0])
+        assert code == HTTPStatus.OK
+        assert body["slots"] == []
+        assert body["count"] == 0
+        # short-circuits before reading rules
+        assert mock_rules.mock_calls == []
+
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
-    def test_no_rules_returns_empty(self, mock_resolve, mock_rules):
+    def test_no_rules_returns_empty(self, mock_resolve, mock_rules, mock_sched):
         handler = _make_handler(
             query_params={
                 "provider_id": PROVIDER_ID,
@@ -535,10 +594,11 @@ class TestGetAvailableSlots:
         assert mock_resolve.mock_calls == [call(PROVIDER_ID, "")]
         assert mock_rules.mock_calls == [call(PROVIDER_ID)]
 
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.get_available_slots_for_provider")
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
-    def test_success_with_slots(self, mock_resolve, mock_rules, mock_slots):
+    def test_success_with_slots(self, mock_resolve, mock_rules, mock_slots, mock_sched):
         rule = ProviderAvailabilityRule(provider_id=PROVIDER_ID)
         mock_rules.return_value = [rule]
         slot = AvailableSlot(
@@ -585,9 +645,10 @@ class TestGetAvailableProviders:
         assert code == HTTPStatus.BAD_REQUEST
         assert "start_date and end_date are required" in data["error"]
 
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.calculate_available_slots", return_value=[])
     @patch(f"{MODULE}.get_all_rules", return_value=[])
-    def test_no_rules(self, mock_rules, mock_calc):
+    def test_no_rules(self, mock_rules, mock_calc, mock_sched):
         handler = _make_handler(
             query_params={"start_date": "2026-03-01", "end_date": "2026-03-07"}
         )
@@ -598,9 +659,10 @@ class TestGetAvailableProviders:
         assert mock_rules.mock_calls == [call()]
         assert mock_calc.mock_calls == []
 
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.calculate_available_slots")
     @patch(f"{MODULE}.get_all_rules")
-    def test_with_providers(self, mock_rules, mock_calc):
+    def test_with_providers(self, mock_rules, mock_calc, mock_sched):
         rule = ProviderAvailabilityRule(id="r1", provider_id=PROVIDER_ID)
         mock_rules.return_value = [rule]
         mock_calc.return_value = [MagicMock()]  # 1 slot
@@ -616,9 +678,10 @@ class TestGetAvailableProviders:
         assert mock_rules.mock_calls == [call()]
         assert mock_calc.mock_calls == [call(rule, date(2026, 3, 1), date(2026, 3, 7))]
 
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.calculate_available_slots")
     @patch(f"{MODULE}.get_all_rules")
-    def test_location_filter_skips_non_matching(self, mock_rules, mock_calc):
+    def test_location_filter_skips_non_matching(self, mock_rules, mock_calc, mock_sched):
         """Rules with non-matching location_ids are skipped."""
         rule = ProviderAvailabilityRule(
             id="r1", provider_id=PROVIDER_ID, location_ids=["other-loc"]
@@ -637,9 +700,10 @@ class TestGetAvailableProviders:
         assert body["count"] == 0
         assert mock_calc.mock_calls == []
 
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.calculate_available_slots")
     @patch(f"{MODULE}.get_all_rules")
-    def test_visit_type_filter_skips_non_matching(self, mock_rules, mock_calc):
+    def test_visit_type_filter_skips_non_matching(self, mock_rules, mock_calc, mock_sched):
         """Rules with non-matching visit_types are skipped."""
         rule = ProviderAvailabilityRule(
             id="r1", provider_id=PROVIDER_ID, visit_types=["other-vt"]
@@ -658,9 +722,10 @@ class TestGetAvailableProviders:
         assert body["count"] == 0
         assert mock_calc.mock_calls == []
 
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     @patch(f"{MODULE}.calculate_available_slots")
     @patch(f"{MODULE}.get_all_rules")
-    def test_empty_location_ids_passes_filter(self, mock_rules, mock_calc):
+    def test_empty_location_ids_passes_filter(self, mock_rules, mock_calc, mock_sched):
         """Rules with empty location_ids pass the location filter."""
         rule = ProviderAvailabilityRule(
             id="r1", provider_id=PROVIDER_ID, location_ids=[]

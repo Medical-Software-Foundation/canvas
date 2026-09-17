@@ -95,8 +95,8 @@ class TestReconcileBuffers:
 
             assert result == []
 
-    def test_creates_buffer_events_for_this_appointment(self):
-        """Creates exactly this appointment's pre + post buffers, tagged with its id."""
+    def test_creates_buffers_with_clean_title(self):
+        """Buffers are rebuilt for future appointments with a plain 'Buffer' title (no id)."""
         appt = self._future_appt()
 
         with patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_objects, \
@@ -107,16 +107,17 @@ class TestReconcileBuffers:
              patch(f"{BUFFER_MODULE}.EventModel.objects"), \
              patch(f"{BUFFER_MODULE}.EventEffect") as mock_event_effect:
             mock_objects.get.return_value = appt
+            mock_objects.filter.return_value.exclude.return_value = [appt]
 
             result = _reconcile_buffers("appt-1", "created")
 
             # pre + post
             assert len(result) == 2
             titles = {c.kwargs["title"] for c in mock_event_effect.call_args_list}
-            assert titles == {"Buffer:appt-1"}
+            assert titles == {"Buffer"}
 
-    def test_cancel_deletes_only_this_appointments_buffers(self):
-        """Cancel removes this appt's buffers and creates nothing."""
+    def test_rebuild_deletes_existing_buffers_then_recreates_from_current_appts(self):
+        """Delete all existing buffers (incl. legacy tagged) and rebuild from current appts."""
         appt = self._future_appt()
         existing = MagicMock()
         existing.id = "evt-9"
@@ -127,35 +128,19 @@ class TestReconcileBuffers:
              patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[self._rule()]), \
              patch(f"{BUFFER_MODULE}.resolve_provider_name", return_value="Dr X"), \
              patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=[cal]), \
-             patch(f"{BUFFER_MODULE}.get_admin_calendar_id") as mock_get_cal, \
+             patch(f"{BUFFER_MODULE}.get_admin_calendar_id", return_value=("cal-1", [])), \
              patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events:
             mock_objects.get.return_value = appt
             mock_events.filter.return_value = [existing]
+            # no current future appointments → nothing recreated
+            mock_objects.filter.return_value.exclude.return_value = []
 
             result = _reconcile_buffers("appt-1", "canceled")
 
-            # only the delete effect; calendar for creation never resolved
+            # one delete effect, no recreations
             assert len(result) == 1
-            assert mock_get_cal.mock_calls == []
-            # queried this appointment's tagged title
-            assert mock_events.filter.call_args.kwargs["title"] == "Buffer:appt-1"
-
-    def test_past_appointment_deletes_but_does_not_recreate(self):
-        appt = self._future_appt()
-        appt.start_time = datetime.now(UTC) - timedelta(days=1)  # in the past
-
-        with patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_objects, \
-             patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[self._rule()]), \
-             patch(f"{BUFFER_MODULE}.resolve_provider_name", return_value="Dr X"), \
-             patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=[]), \
-             patch(f"{BUFFER_MODULE}.get_admin_calendar_id") as mock_get_cal, \
-             patch(f"{BUFFER_MODULE}.EventModel.objects"):
-            mock_objects.get.return_value = appt
-
-            result = _reconcile_buffers("appt-1", "rescheduled")
-
-            assert result == []
-            assert mock_get_cal.mock_calls == []
+            # deletion matches any Buffer-prefixed title (cleans legacy tagged ones)
+            assert mock_events.filter.call_args.kwargs["title__startswith"] == "Buffer"
 
 
 class TestProtocolHandlers:

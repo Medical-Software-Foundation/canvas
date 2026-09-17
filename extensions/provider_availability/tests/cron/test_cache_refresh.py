@@ -141,13 +141,14 @@ class TestDailyResync:
 
         with patch(f"{CR_MODULE}.get_last_sync_date", return_value=yesterday_str), \
              patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_starting_today]) as mock_rules, \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p1", "p2"}), \
              patch(f"{CR_MODULE}.sync_provider_availability", return_value=["effect1"]) as mock_sync, \
              patch(f"{CR_MODULE}.set_last_sync_date") as mock_set:
 
             result = _daily_resync()
 
             assert mock_rules.mock_calls == [call()]
-            assert mock_sync.mock_calls == [call("p1")]
+            assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1", "p2"})]
             assert mock_set.mock_calls == [call(today.isoformat())]
             assert result == ["effect1"]
 
@@ -164,12 +165,13 @@ class TestDailyResync:
 
         with patch(f"{CR_MODULE}.get_last_sync_date", return_value=""), \
              patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_expired_yesterday]), \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p1", "p2"}), \
              patch(f"{CR_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
              patch(f"{CR_MODULE}.set_last_sync_date") as mock_set:
 
             result = _daily_resync()
 
-            assert mock_sync.mock_calls == [call("p2")]
+            assert mock_sync.mock_calls == [call("p2", schedulable_ids={"p1", "p2"})]
             assert mock_set.mock_calls == [call(today.isoformat())]
 
     def test_skips_inactive_rule(self):
@@ -231,13 +233,14 @@ class TestDailyResync:
 
         with patch(f"{CR_MODULE}.get_last_sync_date", return_value=""), \
              patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_a, rule_b]), \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p1"}), \
              patch(f"{CR_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
              patch(f"{CR_MODULE}.set_last_sync_date"):
 
             result = _daily_resync()
 
             # Only one call despite two matching rules for same provider
-            assert mock_sync.mock_calls == [call("p1")]
+            assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1"})]
 
     def test_exception_is_caught(self):
         """An exception in get_all_rules should be caught and return empty."""
