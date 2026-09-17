@@ -26,6 +26,7 @@ let _providers = [];
 let _locations = [];
 let _visitTypes = [];
 let _overviewData = [];
+let _savedView = [];  // the viewer's saved default view, as loaded from the server
 let _providerTzMap = {};  // {provider_id: {timezone, explicit}} — authoritative TZ state
 let _tzOptions = [];
 var _viewTz = null;  // null = practice TZ (default)
@@ -392,6 +393,18 @@ document.addEventListener('focusout', function (e) {
 
 /* ---------- Saved default view ---------- */
 
+// True when the filter still holds exactly the saved default view, meaning the
+// user has not narrowed it by hand. The viewer's own row is exempt from the
+// filter only in that case: a saved view must not hide your own availability,
+// but a filter you typed yourself should do what you asked.
+function filterIsJustSavedView(selectedIds) {
+  if (!_savedView.length || selectedIds.length !== _savedView.length) return false;
+  var saved = _savedView.map(String).slice().sort();
+  var current = selectedIds.map(String).slice().sort();
+  return saved.every(function(v, i) { return v === current[i]; });
+}
+
+
 // Store whichever providers are selected in the filter as this user's default
 // view. Saved per staff member on the server, so two people managing different
 // providers do not overwrite each other. An empty selection clears the saved
@@ -400,6 +413,8 @@ async function saveMyView() {
   var ids = msFilterProvider ? msFilterProvider.getValue() : [];
   var data = await apiCall('/my-view', { method: 'PUT', body: JSON.stringify({ provider_ids: ids }) });
   if (data && data.error) { showMsg(data.error, 'error'); return; }
+  _savedView = ids.map(String);
+  renderAccordion();
   if (ids.length) {
     showMsg('Saved ' + ids.length + ' provider' + (ids.length === 1 ? '' : 's') + ' as your default view', 'success');
   } else {
@@ -1200,10 +1215,11 @@ function renderAccordion() {
 
   let providers = _overviewData;
   if (selectedIds.length > 0) {
-    // The viewer's own row survives the filter. A provider saving a view that
-    // omits themselves would otherwise hide their own availability, which is
-    // the confusing outcome the pin exists to prevent.
-    providers = providers.filter(p => p.is_you || selectedIds.includes(p.provider_id));
+    // A saved view that omits the viewer must not hide their own availability,
+    // so their row is added back. A filter the user typed by hand is left to
+    // do exactly what they asked, including excluding themselves.
+    var keepSelf = filterIsJustSavedView(selectedIds);
+    providers = providers.filter(p => (keepSelf && p.is_you) || selectedIds.includes(p.provider_id));
   }
 
   if (providers.length === 0) {
@@ -3447,8 +3463,8 @@ try {
     _syncProviderTzMapFromOverview();
 
     // Land on the saved default view. Empty means show everyone.
-    var savedView = (P.my_view && P.my_view.provider_ids) || [];
-    if (savedView.length && msFilterProvider) msFilterProvider.setValue(savedView.map(String));
+    _savedView = ((P.my_view && P.my_view.provider_ids) || []).map(String);
+    if (_savedView.length && msFilterProvider) msFilterProvider.setValue(_savedView.slice());
 
     renderAccordion();
 
