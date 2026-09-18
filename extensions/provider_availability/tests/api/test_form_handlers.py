@@ -26,6 +26,20 @@ def _parse(response) -> tuple[dict, int]:
     return body, response.status_code
 
 
+def _session_headers(staff_id: str = "staff-1", user_type: str = "Staff") -> dict[str, str]:
+    """The headers Canvas uses to identify the signed-in user.
+
+    Canvas sends identity as request headers, not as an attribute on the
+    request object. Tests that set a `staff_id` attribute passed while
+    production denied everyone, so building real headers here is what keeps
+    these tests honest.
+    """
+    return {
+        "canvas-logged-in-user-id": staff_id,
+        "canvas-logged-in-user-type": user_type,
+    }
+
+
 def _make_handler(
     json_body: dict | None = None,
     staff_id: str = "staff-1",
@@ -35,7 +49,7 @@ def _make_handler(
     handler.request.query_params = {}
     handler.request.path_params = {}
     handler.request.json.return_value = json_body or {}
-    handler.request.staff_id = staff_id
+    handler.request.headers = _session_headers(staff_id)
     handler.secrets = {}
     return handler
 

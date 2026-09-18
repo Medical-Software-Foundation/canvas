@@ -20,7 +20,10 @@ def _make_ui_handler(staff_id: str = "staff-1") -> UIApi:
     mock_event = MagicMock()
     handler = UIApi(mock_event)
     handler.request = MagicMock()
-    handler.request.staff_id = staff_id
+    handler.request.headers = {
+        "canvas-logged-in-user-id": staff_id,
+        "canvas-logged-in-user-type": "Staff",
+    }
     return handler
 
 
@@ -82,7 +85,7 @@ class TestGetAdminUI:
     def test_none_staff_id_denied(self, mock_allowed):
         """None staff_id attribute is denied when access list is non-empty."""
         handler = _make_ui_handler()
-        handler.request.staff_id = None
+        handler.request.headers = {}
         result = handler.get_admin_ui()
 
         resp = result[0]

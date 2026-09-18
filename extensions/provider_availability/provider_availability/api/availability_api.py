@@ -33,6 +33,7 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
 )
+from provider_availability.api.session import signed_in_staff_id as _signed_in_staff_id
 from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
 from provider_availability.engine.roles import (
     get_available_roles,
@@ -202,7 +203,7 @@ def _check_write_access(request: object, secrets: dict | None = None) -> list[Re
     Falls back to cache-based ``get_allowed_staff()`` for backward compat.
     Empty / missing secret = allow everyone (bootstrap behaviour).
     """
-    staff_id = str(getattr(request, "staff_id", None) or "")
+    staff_id = _signed_in_staff_id(request)
 
     # Prefer secret-based access control
     secret_val = (secrets or {}).get("allowed-staff-keys", "")
@@ -250,11 +251,6 @@ def _reconcile_availability_to_roles() -> list[Effect]:
         len(provider_ids), len(schedulable_ids),
     )
     return effects
-
-
-def _signed_in_staff_id(request: object) -> str:
-    """The staff id of whoever is viewing, or "" when it cannot be determined."""
-    return str(getattr(request, "staff_id", None) or "")
 
 
 def _sort_providers_you_first(providers: list[dict], staff_id: str) -> list[dict]:

@@ -55,6 +55,20 @@ def _parse(response) -> tuple[dict, int]:
     return body, response.status_code
 
 
+def _session_headers(staff_id: str = "staff-1", user_type: str = "Staff") -> dict[str, str]:
+    """The headers Canvas uses to identify the signed-in user.
+
+    Canvas sends identity as request headers, not as an attribute on the
+    request object. Tests that set a `staff_id` attribute passed while
+    production denied everyone, so building real headers here is what keeps
+    these tests honest.
+    """
+    return {
+        "canvas-logged-in-user-id": staff_id,
+        "canvas-logged-in-user-type": user_type,
+    }
+
+
 def _make_handler(
     query_params: dict | None = None,
     path_params: dict | None = None,
@@ -67,7 +81,7 @@ def _make_handler(
     handler.request.query_params = query_params or {}
     handler.request.path_params = path_params or {}
     handler.request.json.return_value = json_body or {}
-    handler.request.staff_id = staff_id
+    handler.request.headers = _session_headers(staff_id)
     handler.secrets = {}
     return handler
 
@@ -79,7 +93,7 @@ class TestCheckWriteAccess:
     @patch(f"{MODULE}.get_allowed_staff", return_value=[])
     def test_empty_list_allows_all(self, mock_allowed):
         request = MagicMock()
-        request.staff_id = "anyone"
+        request.headers = _session_headers("anyone")
         result = _check_write_access(request)
         assert result is None
         assert mock_allowed.mock_calls == [call()]
@@ -87,7 +101,7 @@ class TestCheckWriteAccess:
     @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
     def test_allowed_staff_returns_none(self, mock_allowed):
         request = MagicMock()
-        request.staff_id = "staff-1"
+        request.headers = _session_headers("staff-1")
         result = _check_write_access(request)
         assert result is None
         assert mock_allowed.mock_calls == [call()]
@@ -95,7 +109,7 @@ class TestCheckWriteAccess:
     @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
     def test_denied_staff_returns_error(self, mock_allowed):
         request = MagicMock()
-        request.staff_id = "staff-999"
+        request.headers = _session_headers("staff-999")
         result = _check_write_access(request)
         assert result is not None
         body, code = _parse(result[0])
@@ -106,7 +120,7 @@ class TestCheckWriteAccess:
     @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1"])
     def test_missing_staff_id_denied(self, mock_allowed):
         request = MagicMock()
-        request.staff_id = ""
+        request.headers = _session_headers("")
         result = _check_write_access(request)
         assert result is not None
         body, code = _parse(result[0])
