@@ -1318,7 +1318,7 @@ def test_check_slots_forwards_tz_offset_to_memo_prefill() -> None:
 
     def _capture_prefill(
         memo, fhir_base_url, access_token, schedule_id, dates,
-        duration_minutes=30, tz_offset_minutes=0,
+        duration_minutes=30, tz_offset_minutes=0, tz_name="",
     ):
         captured["tz_offset_minutes"] = tz_offset_minutes
         for d in dates:
@@ -1962,6 +1962,86 @@ def test_book_missing_tz_offset_defaults_to_zero() -> None:
     assert mock_appt_cls.call_args.kwargs["start_time"] == datetime(
         2026, 5, 1, 9, 0, tzinfo=timezone.utc
     )
+
+
+def test_book_weekly_series_across_daylight_saving_change_stores_correct_utc() -> None:
+    """Covers backlog item B1, the daylight saving shift.
+
+    A weekly series booked at 10:00 AM in America/Los_Angeles, with tz_offset
+    420 read once at click time, spans the 2026-11-01 change from daylight
+    saving. Before the bug fix a single fixed offset was applied to every
+    occurrence, so the ones after the change stored an hour off. With a named
+    tz_name, each occurrence converts at its own date, storing 17:00 UTC for
+    the four occurrences still on daylight time and 18:00 UTC for the three
+    occurrences after the clocks fell back.
+    """
+    mock_staff = MagicMock()
+    mock_location = MagicMock()
+    mock_location.id = "loc-1"
+    mock_appt_instance = MagicMock()
+    mock_appt_instance.create.return_value = MagicMock()
+    note_type_id = "a1b2c3d4-0000-0000-0000-000000000042"
+
+    occurrence_dates = [
+        "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26",
+        "2026-11-02", "2026-11-09", "2026-11-16",
+    ]
+    appointments = [{"date": d, "start_time": "10:00"} for d in occurrence_dates]
+
+    with (
+        patch(
+            "scheduling_modal_with_recurring_support.api.scheduling_api.Staff"
+        ) as mock_staff_cls,
+        patch(
+            "scheduling_modal_with_recurring_support.api.scheduling_api.PracticeLocation"
+        ) as mock_loc_cls,
+        patch(
+            "scheduling_modal_with_recurring_support.api.scheduling_api.AppointmentEffect",
+            return_value=mock_appt_instance,
+        ) as mock_appt_cls,
+        patch(
+            "scheduling_modal_with_recurring_support.api.scheduling_api.AppointmentModel"
+        ) as mock_appt_model,
+        patch(
+            "scheduling_modal_with_recurring_support.api.scheduling_api._now",
+            return_value=datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc),
+        ),
+        patch(
+            "scheduling_modal_with_recurring_support.api.scheduling_api.bust_filled_pct"
+        ),
+    ):
+        mock_staff_cls.objects.filter.return_value.first.return_value = mock_staff
+        mock_loc_cls.objects.filter.return_value.first.return_value = mock_location
+        mock_appt_model.objects.filter.return_value.exclude.return_value.values_list.return_value = []
+
+        api = _make_api(json_body={
+            "patient_id": "p1",
+            "provider_id": "s1",
+            "note_type_id": note_type_id,
+            "appointments": appointments,
+            "tz_offset": 420,
+            "tz_name": "America/Los_Angeles",
+        })
+        results = api.book()
+
+    assert mock_appt_cls.call_count == 7
+    starts = [call.kwargs["start_time"] for call in mock_appt_cls.call_args_list]
+
+    before_change = starts[:4]
+    after_change = starts[4:]
+
+    assert before_change == [
+        datetime(2026, 10, 5, 17, 0, tzinfo=timezone.utc),
+        datetime(2026, 10, 12, 17, 0, tzinfo=timezone.utc),
+        datetime(2026, 10, 19, 17, 0, tzinfo=timezone.utc),
+        datetime(2026, 10, 26, 17, 0, tzinfo=timezone.utc),
+    ]
+    assert after_change == [
+        datetime(2026, 11, 2, 18, 0, tzinfo=timezone.utc),
+        datetime(2026, 11, 9, 18, 0, tzinfo=timezone.utc),
+        datetime(2026, 11, 16, 18, 0, tzinfo=timezone.utc),
+    ]
+    assert len(results) == 8  # JSONResponse + 7 effects
 
 
 def test_book_busts_filled_pct_cache_for_provider() -> None:

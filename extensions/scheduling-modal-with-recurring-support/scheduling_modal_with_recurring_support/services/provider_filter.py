@@ -149,6 +149,7 @@ def providers_ranked_by_series_availability(
     fhir_base_url: str,
     access_token: str,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     now: datetime | None = None,
 ) -> list[ProviderSeriesSummary]:
@@ -188,6 +189,7 @@ def providers_ranked_by_series_availability(
                 rule=rule,
                 start_date=start_date,
                 tz_offset_minutes=tz_offset_minutes,
+                tz_name=tz_name,
                 duration_minutes=duration_minutes,
                 now=now,
             ),
@@ -241,6 +243,7 @@ def providers_covering_series_by_first_date(
     fhir_base_url: str,
     access_token: str,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     now: datetime | None = None,
 ) -> list[FirstDateCoverage]:
@@ -291,6 +294,7 @@ def providers_covering_series_by_first_date(
             window_start=window_start,
             window_end=window_end,
             tz_offset_minutes=tz_offset_minutes,
+            tz_name=tz_name,
             duration_minutes=duration_minutes,
             now=now,
         )

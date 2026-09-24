@@ -841,6 +841,18 @@
     let PATIENT_ID = "{{ patient_id }}";
     const API_BASE = "/plugin-io/api/scheduling_modal_with_recurring_support/scheduling";
     const CACHE_BUST = "{{ cache_bust }}";
+    // The named zone the browser itself resolved, alongside the fixed minute
+    // offset every request already sent. tz_offset is only true at the instant
+    // it was read, so a series that crosses a daylight saving change needs the
+    // named zone on the server to convert each occurrence at its own date.
+    // A browser that cannot resolve one falls back to empty, and the server
+    // then falls back to tz_offset exactly as it did before this carried.
+    let TZ_NAME = "";
+    try {
+      TZ_NAME = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch (e) {
+      TZ_NAME = "";
+    }
     const NEEDS_PATIENT_SELECTION = {{ needs_patient_selection|yesno:"true,false" }};
     // The chart launch resolves the patient's state on the server and renders it
     // here, so the state dropdown can prefill at load without an extra round trip.
@@ -1568,6 +1580,7 @@
           start_date: formState.startDate.value,
           recurrence: JSON.stringify(formState.cadence.value),
           tz_offset: String(tz),
+          tz_name: TZ_NAME,
           duration_minutes: String(formState.duration.value),
           v: CACHE_BUST,
         });
@@ -2043,6 +2056,7 @@
           search_window_start: isoDate(windowStart),
           search_window_end: isoDate(windowEnd),
           tz_offset: tz,
+          tz_name: TZ_NAME,
           duration_minutes: formState.duration.value,
         };
         if (sessionStateOverride) reqBody.state = sessionStateOverride;
@@ -2317,8 +2331,8 @@
       try {
         const tz = new Date().getTimezoneOffset();
         const url = useCandidateTimes
-          ? `${API_BASE}/candidate-times?provider_id=${provider.id}&cadence=${preset}&start_date=${dateVal}&occurrences=${occurrences}&tz_offset=${tz}&duration_minutes=${formState.duration.value}&v=${CACHE_BUST}`
-          : `${API_BASE}/available-times?provider_id=${provider.id}&date=${dateVal}&tz_offset=${tz}&duration_minutes=${formState.duration.value}&v=${CACHE_BUST}`;
+          ? `${API_BASE}/candidate-times?provider_id=${provider.id}&cadence=${preset}&start_date=${dateVal}&occurrences=${occurrences}&tz_offset=${tz}&tz_name=${encodeURIComponent(TZ_NAME)}&duration_minutes=${formState.duration.value}&v=${CACHE_BUST}`
+          : `${API_BASE}/available-times?provider_id=${provider.id}&date=${dateVal}&tz_offset=${tz}&tz_name=${encodeURIComponent(TZ_NAME)}&duration_minutes=${formState.duration.value}&v=${CACHE_BUST}`;
 
         const resp = await fetch(url, {
           credentials: "same-origin",
@@ -2406,7 +2420,7 @@
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider_id: provider.id, slots: slots, tz_offset: new Date().getTimezoneOffset(), duration_minutes: formState.duration.value }),
+          body: JSON.stringify({ provider_id: provider.id, slots: slots, tz_offset: new Date().getTimezoneOffset(), tz_name: TZ_NAME, duration_minutes: formState.duration.value }),
         });
         if (seq !== availabilityCheckSeq) return;
         if (!resp.ok) throw await buildFetchError(resp);
@@ -2484,6 +2498,7 @@
             + `&window_start=${windowStartIso}`
             + `&window_end=${windowEndIso}`
             + `&tz_offset=${tz}`
+            + `&tz_name=${encodeURIComponent(TZ_NAME)}`
             + `&duration_minutes=${formState.duration.value}`
             + `&v=${CACHE_BUST}`;
           const resp = await fetch(url, { credentials: "same-origin" });
@@ -2540,6 +2555,7 @@
           + `&window_start=${windowStartIso}`
           + `&window_end=${windowEndIso}`
           + `&tz_offset=${tz}`
+          + `&tz_name=${encodeURIComponent(TZ_NAME)}`
           + `&duration_minutes=${formState.duration.value}`
           + `&v=${CACHE_BUST}`;
         const resp = await fetch(url, { credentials: "same-origin" });
@@ -3260,6 +3276,7 @@
         note_type_id: formState.noteType.value,
         appointments,
         tz_offset: new Date().getTimezoneOffset(),
+        tz_name: TZ_NAME,
         duration_minutes: formState.duration.value,
       };
     }
@@ -3303,6 +3320,7 @@
               provider_id: formState.provider.value.id,
               appointments: missing,
               tz_offset: new Date().getTimezoneOffset(),
+              tz_name: TZ_NAME,
             }),
           });
           if (!resp.ok) throw await buildFetchError(resp);

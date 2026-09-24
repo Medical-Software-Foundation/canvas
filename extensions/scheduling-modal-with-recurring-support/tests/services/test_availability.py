@@ -382,6 +382,67 @@ def test_aggregate_by_candidate_time_no_times() -> None:
     assert result == []
 
 
+def test_aggregate_by_candidate_time_matches_all_occurrences_across_daylight_saving_change() -> None:
+    """Covers backlog item B1, the daylight saving shift.
+
+    Twelve weekly occurrences from 2026-10-05 to 2026-12-21 cross the
+    2026-11-01 change out of daylight saving in America/Los_Angeles. FHIR
+    reports a 9:00 AM local slot on every occurrence, each stamped in the
+    clinic's own zone, so the four occurrences before the change carry a
+    -07:00 offset and the eight from the change onward carry -08:00.
+    Before this fix, aggregate_by_candidate_time converted every date with
+    one offset read once at click time, so the two groups landed on
+    different local times and the 09:00 candidate only matched the four
+    occurrences that shared the browser's original offset. With tz_name
+    set, every date converts at its own offset and the candidate matches
+    all twelve.
+    """
+    from scheduling_modal_with_recurring_support.services.availability import aggregate_by_candidate_time
+
+    mock_http = MagicMock()
+    schedule_resp = MagicMock()
+    schedule_resp.ok = True
+    schedule_resp.json.return_value = _schedule_bundle(SCHEDULE_ID)
+
+    before_change = [
+        {"start": f"{d}T09:00:00-07:00", "end": f"{d}T09:30:00-07:00"}
+        for d in ["2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"]
+    ]
+    after_change = [
+        {"start": f"{d}T09:00:00-08:00", "end": f"{d}T09:30:00-08:00"}
+        for d in [
+            "2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23",
+            "2026-11-30", "2026-12-07", "2026-12-14", "2026-12-21",
+        ]
+    ]
+
+    range_resp = MagicMock()
+    range_resp.ok = True
+    range_resp.json.return_value = _slot_bundle(before_change + after_change)
+
+    mock_http.get.side_effect = [schedule_resp, range_resp]
+
+    with patch(
+        "scheduling_modal_with_recurring_support.services.availability.Http",
+        return_value=mock_http,
+    ):
+        result = aggregate_by_candidate_time(
+            fhir_base_url="https://fumage-test.canvasmedical.com",
+            access_token="tok",
+            provider_id=PROVIDER_ID,
+            rule=from_legacy_cadence("weekly", 12),
+            start_date=date(2026, 10, 5),
+            tz_offset_minutes=420,
+            tz_name="America/Los_Angeles",
+        )
+
+    by_hhmm = {a.hhmm: a for a in result}
+    assert "09:00" in by_hhmm
+    assert by_hhmm["09:00"].total_count == 12
+    assert by_hhmm["09:00"].available_count == 12
+    assert by_hhmm["09:00"].availability_pct == 100.0
+
+
 def test_analyse_recurrence_accepts_direct_rule_with_weekdays() -> None:
     """A RecurrenceRule built directly (no legacy translation) projects correctly."""
     from scheduling_modal_with_recurring_support.services.recurrence import Weekday

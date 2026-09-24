@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, NamedTuple
+from zoneinfo import ZoneInfo
 
 from canvas_sdk.utils import Http
 
@@ -9,6 +10,7 @@ from scheduling_modal_with_recurring_support.services.recurrence import (
     iter_candidate_first_dates,
     project_dates,
 )
+from scheduling_modal_with_recurring_support.services.zone import client_zone
 
 # MAX_OCCURRENCES is re-exported from .recurrence so existing call sites and
 # tests that import it from this module continue to work during the
@@ -88,6 +90,7 @@ def analyse_recurrence(
     rule: RecurrenceRule,
     start_date: date,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     now: datetime | None = None,
 ) -> RecurrenceAnalysis:
     schedule_id = _resolve_schedule_id(fhir_base_url, access_token, provider_id)
@@ -96,7 +99,7 @@ def analyse_recurrence(
     memo: dict[date, SlotAvailability] = {}
     _prefill_memo_for_range(
         memo, fhir_base_url, access_token, schedule_id, set(target_dates),
-        tz_offset_minutes=tz_offset_minutes, now=now,
+        tz_offset_minutes=tz_offset_minutes, tz_name=tz_name, now=now,
     )
 
     slots = [
@@ -123,6 +126,7 @@ def aggregate_by_candidate_time(
     rule: RecurrenceRule,
     start_date: date,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     now: datetime | None = None,
 ) -> list[CandidateTimeAggregate]:
@@ -131,7 +135,9 @@ def aggregate_by_candidate_time(
     For each candidate time on start_date, count how many occurrence dates have
     a free slot at the same local hhmm. Returns one aggregate per candidate
     time, ordered by hhmm. Slot lookups run at duration_minutes so the count
-    reflects the real appointment length rather than the default.
+    reflects the real appointment length rather than the default. A named
+    tz_name converts every occurrence date at its own offset, so a series that
+    crosses a daylight saving change still lines candidate times up correctly.
     """
     schedule_id = _resolve_schedule_id(fhir_base_url, access_token, provider_id)
     target_dates = project_dates(start_date, rule)
@@ -139,10 +145,10 @@ def aggregate_by_candidate_time(
     memo: dict[date, SlotAvailability] = {}
     _prefill_memo_for_range(
         memo, fhir_base_url, access_token, schedule_id, set(target_dates),
-        duration_minutes, tz_offset_minutes, now,
+        duration_minutes, tz_offset_minutes, tz_name, now,
     )
 
-    client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+    client_tz = client_zone(tz_name, tz_offset_minutes)
 
     per_date_hhmm: list[set[str]] = []
     candidate_hhmms_in_order: list[str] = []
@@ -188,6 +194,7 @@ def best_series_availability(
     rule: RecurrenceRule,
     start_date: date,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     now: datetime | None = None,
 ) -> SeriesScore:
@@ -217,17 +224,18 @@ def best_series_availability(
         set(occurrence_dates),
         duration_minutes,
         tz_offset_minutes,
+        tz_name,
         now,
     )
 
-    client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+    client_tz = client_zone(tz_name, tz_offset_minutes)
     return _series_score_from_memo(memo, occurrence_dates, client_tz)
 
 
 def _series_score_from_memo(
     memo: dict[date, SlotAvailability],
     occurrence_dates: list[date],
-    client_tz: timezone,
+    client_tz: timezone | ZoneInfo,
 ) -> SeriesScore:
     """Compute the best achievable series for one provider from a filled memo.
 
@@ -279,6 +287,7 @@ def series_scores_by_first_date(
     window_start: date,
     window_end: date,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     now: datetime | None = None,
 ) -> list[FirstDateSeriesScore]:
@@ -307,10 +316,10 @@ def series_scores_by_first_date(
     memo: dict[date, SlotAvailability] = {}
     _prefill_memo_for_range(
         memo, fhir_base_url, access_token, schedule_id, unique_dates,
-        duration_minutes, tz_offset_minutes, now,
+        duration_minutes, tz_offset_minutes, tz_name, now,
     )
 
-    client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+    client_tz = client_zone(tz_name, tz_offset_minutes)
 
     scores: list[FirstDateSeriesScore] = []
     for first_date, occurrence_dates in zip(candidate_first_dates, occurrence_sets):
@@ -335,6 +344,7 @@ def aggregate_by_first_date(
     window_end: date,
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     now: datetime | None = None,
 ) -> list[FirstDateAggregate]:
     """Pivot recurrence availability by candidate first date across the window.
@@ -359,7 +369,7 @@ def aggregate_by_first_date(
     memo: dict[date, SlotAvailability] = {}
     _prefill_memo_for_range(
         memo, fhir_base_url, access_token, schedule_id, unique_dates,
-        duration_minutes, tz_offset_minutes, now,
+        duration_minutes, tz_offset_minutes, tz_name, now,
     )
 
     def slot_for(d: date) -> SlotAvailability:
@@ -427,6 +437,7 @@ def lookup_window(
     window_start: date,
     window_end: date,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     duration_minutes: int | None = None,
 ) -> dict[str, list[dict[str, str]]]:
     """Fetch the FHIR Slot bundle for a date window in one call and bucket by
@@ -453,7 +464,7 @@ def lookup_window(
     if not getattr(resp, "ok", False):
         return {}
 
-    client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+    client_tz = client_zone(tz_name, tz_offset_minutes)
     bundle: dict = resp.json()
     by_date: dict[str, list[dict[str, str]]] = {}
 
@@ -473,7 +484,7 @@ def lookup_window(
     return by_date
 
 
-def _fhir_to_local_hhmm(iso_str: str, client_tz: timezone) -> str:
+def _fhir_to_local_hhmm(iso_str: str, client_tz: timezone | ZoneInfo) -> str:
     """Convert a FHIR ISO datetime to HH:MM in the client's timezone.
 
     Handles UTC ('Z'), offset aware ('+00:00', '-04:00'), and naive formats.
@@ -487,7 +498,7 @@ def _fhir_to_local_hhmm(iso_str: str, client_tz: timezone) -> str:
     return dt.strftime("%H:%M")
 
 
-def _to_local_datetime(iso_str: str, client_tz: timezone) -> datetime:
+def _to_local_datetime(iso_str: str, client_tz: timezone | ZoneInfo) -> datetime:
     """Parse a FHIR ISO datetime to a datetime in the client's timezone.
 
     Same offset handling as _fhir_to_local_hhmm. Naive datetimes are
@@ -537,6 +548,7 @@ def _fetch_slots_by_date_range(
     window_end: date,
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     now: datetime | None = None,
 ) -> dict[date, list[FreeSlot]]:
     """Fetch the FHIR Slot bundle for a date range in one call and bucket
@@ -565,7 +577,7 @@ def _fetch_slots_by_date_range(
     if not getattr(resp, "ok", False):
         return {}
 
-    client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+    client_tz = client_zone(tz_name, tz_offset_minutes)
     bundle: dict = resp.json()
     by_date: dict[date, list[FreeSlot]] = {}
 
@@ -598,6 +610,7 @@ def _prefill_memo_for_range(
     dates: set[date],
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     tz_offset_minutes: int = 0,
+    tz_name: str = "",
     now: datetime | None = None,
 ) -> None:
     """Bulk fetch the union date set in one or more range calls and write
@@ -629,7 +642,7 @@ def _prefill_memo_for_range(
     if span <= MAX_RANGE_DAYS:
         by_date = _fetch_slots_by_date_range(
             fhir_base_url, access_token, schedule_id, fetch_lo, fetch_hi,
-            duration_minutes, tz_offset_minutes, now,
+            duration_minutes, tz_offset_minutes, tz_name, now,
         )
     else:
         chunk_start = fetch_lo
@@ -639,7 +652,7 @@ def _prefill_memo_for_range(
                 chunk_end = fetch_hi
             chunk = _fetch_slots_by_date_range(
                 fhir_base_url, access_token, schedule_id, chunk_start, chunk_end,
-                duration_minutes, tz_offset_minutes, now,
+                duration_minutes, tz_offset_minutes, tz_name, now,
             )
             for d, free_slots in chunk.items():
                 by_date.setdefault(d, []).extend(free_slots)

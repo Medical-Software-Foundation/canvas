@@ -41,6 +41,7 @@ from scheduling_modal_with_recurring_support.services.recurrence import (
     from_legacy_cadence,
     parse_recurrence,
 )
+from scheduling_modal_with_recurring_support.services.zone import client_zone
 
 CANDIDATE_FIRST_DATES_WINDOW_CAP_DAYS = 90
 FREE_SLOTS_DEFAULT_LIMIT = 25
@@ -188,6 +189,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         ranked_rule: RecurrenceRule | None = None
         ranked_start_date: date | None = None
         ranked_tz = 0
+        ranked_tz_name = ""
         ranked_duration = _resolve_default_duration_minutes(self.secrets)
         start_date_str = self.request.query_params.get("start_date", "")
         if start_date_str:
@@ -208,6 +210,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                     occurrences = min(int(occurrences_str), MAX_OCCURRENCES)
                     ranked_rule = from_legacy_cadence(cadence, occurrences)
                 ranked_tz = int(self.request.query_params.get("tz_offset", 0))
+                ranked_tz_name = self.request.query_params.get("tz_name", "")
             except (ValueError, TypeError, RecurrenceValidationError):
                 return [
                     JSONResponse(
@@ -243,6 +246,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                     fhir_base_url=fhir_base_url,
                     access_token=token.access_token,
                     tz_offset_minutes=ranked_tz,
+                    tz_name=ranked_tz_name,
                     duration_minutes=ranked_duration,
                     now=_now(),
                 )
@@ -456,6 +460,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         qp = self.request.query_params
         provider_id = qp.get("provider_id", "")
         date_str = qp.get("date", "")
+        tz_name = qp.get("tz_name", "")
         try:
             tz_offset_minutes = int(qp.get("tz_offset", 0))
         except (TypeError, ValueError):
@@ -516,7 +521,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         except (RuntimeError, ValueError, RequestException) as exc:
             return [_backend_error_response(exc)]
 
-        client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+        client_tz = client_zone(tz_name, tz_offset_minutes)
         times: list[dict[str, str]] = []
         for t in slot_avail.available_times:
             local_hhmm = _fhir_to_local_hhmm(t.start, client_tz)
@@ -537,6 +542,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         cadence = qp.get("cadence", "weekly")
         start_date_str = qp.get("start_date", "")
         occurrences_str = qp.get("occurrences", "1")
+        tz_name = qp.get("tz_name", "")
         try:
             tz_offset_minutes = int(qp.get("tz_offset", 0))
         except (TypeError, ValueError):
@@ -599,6 +605,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                 rule=rule,
                 start_date=start_date,
                 tz_offset_minutes=tz_offset_minutes,
+                tz_name=tz_name,
                 now=_now(),
             )
         except (RuntimeError, ValueError, RequestException) as exc:
@@ -740,6 +747,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
             effective_state = override or patient_state.state
             state_missing = not effective_state
             tz_offset_minutes = int(body.get("tz_offset", 0) or 0)
+            tz_name = body.get("tz_name", "") or ""
 
             try:
                 token = acquire_token(instance_url, client_id, client_secret)
@@ -752,6 +760,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                     fhir_base_url=fhir_base_url,
                     access_token=token.access_token,
                     tz_offset_minutes=tz_offset_minutes,
+                    tz_name=tz_name,
                     duration_minutes=duration_minutes,
                     now=_now(),
                 )
@@ -783,6 +792,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         assert staff is not None  # narrowed by the identity resolution above
 
         tz_offset_minutes = int(body.get("tz_offset", 0) or 0)
+        tz_name = body.get("tz_name", "") or ""
 
         try:
             token = acquire_token(instance_url, client_id, client_secret)
@@ -796,6 +806,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                 window_end=window_end,
                 duration_minutes=duration_minutes,
                 tz_offset_minutes=tz_offset_minutes,
+                tz_name=tz_name,
                 now=_now(),
             )
         except (RuntimeError, ValueError, RequestException) as exc:
@@ -837,6 +848,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         provider_id = qp.get("provider_id", "")
         window_start_str = qp.get("search_window_start", "")
         window_end_str = qp.get("search_window_end", "")
+        tz_name = qp.get("tz_name", "")
         try:
             tz_offset_minutes = int(qp.get("tz_offset", 0))
         except (TypeError, ValueError):
@@ -914,7 +926,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         client_id = self.secrets.get("CANVAS_OAUTH_CLIENT_ID", "")
         client_secret = self.secrets.get("CANVAS_OAUTH_CLIENT_SECRET", "")
 
-        client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+        client_tz = client_zone(tz_name, tz_offset_minutes)
 
         try:
             token = acquire_token(instance_url, client_id, client_secret)
@@ -975,6 +987,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         provider_id = qp.get("provider_id", "")
         window_start_str = qp.get("window_start", "")
         window_end_str = qp.get("window_end", "")
+        tz_name = qp.get("tz_name", "")
         try:
             tz_offset_minutes = int(qp.get("tz_offset", 0))
         except (TypeError, ValueError):
@@ -1066,6 +1079,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                 window_start=window_start,
                 window_end=window_end,
                 tz_offset_minutes=tz_offset_minutes,
+                tz_name=tz_name,
                 duration_minutes=duration_minutes,
             )
         except (RuntimeError, ValueError, RequestException) as exc:
@@ -1076,8 +1090,10 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         # (provider already booked) from a closed one (outside hours). Bucket by
         # local date and hhmm so the frontend compares against its row time
         # directly. FHIR returns only free slots, so this DB read is the only
-        # source of the booked signal for the row date picker.
-        client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+        # source of the booked signal for the row date picker. A named zone
+        # converts the window bounds and each booked instant at its own date,
+        # so a window spanning a daylight saving change still buckets correctly.
+        client_tz = client_zone(tz_name, tz_offset_minutes)
         range_start = datetime.combine(
             window_start, datetime.min.time(), tzinfo=client_tz
         ).astimezone(timezone.utc)
@@ -1118,6 +1134,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         body: dict[str, Any] = self.request.json()
         provider_id = body.get("provider_id", "")
         slots: list[dict[str, str]] = body.get("slots", [])
+        tz_name = body.get("tz_name", "") or ""
         try:
             tz_offset_minutes = int(body.get("tz_offset", 0))
         except (TypeError, ValueError):
@@ -1165,7 +1182,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         except (RuntimeError, ValueError, RequestException) as exc:
             return [_backend_error_response(exc)]
 
-        client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+        client_tz = client_zone(tz_name, tz_offset_minutes)
 
         # Collect the union of slot dates so the FHIR availability lookup runs
         # in one prefilled bundle rather than per slot. A twelve occurrence
@@ -1196,6 +1213,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                     unique_dates,
                     duration_minutes,
                     tz_offset_minutes,
+                    tz_name,
                 )
             except (RuntimeError, ValueError, RequestException) as exc:
                 return [_backend_error_response(exc)]
@@ -1374,6 +1392,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         body: dict[str, Any] = self.request.json()
         provider_id = body.get("provider_id", "")
         appointments: list[dict[str, str]] = body.get("appointments", [])
+        tz_name = body.get("tz_name", "") or ""
         try:
             tz_offset_minutes = int(body.get("tz_offset", 0))
         except (TypeError, ValueError):
@@ -1392,7 +1411,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+        client_tz = client_zone(tz_name, tz_offset_minutes)
 
         # Parse each requested appointment to its UTC datetime, keeping the
         # client's own date and start_time so the response matches back to rows
@@ -1459,6 +1478,7 @@ def _validate_booking_request(
     provider_id = body.get("provider_id", "")
     note_type_id = body.get("note_type_id", "")
     appointments: list[dict[str, str]] = body.get("appointments", [])
+    tz_name = body.get("tz_name", "") or ""
     try:
         tz_offset_minutes = int(body.get("tz_offset", 0))
     except (TypeError, ValueError):
@@ -1505,7 +1525,11 @@ def _validate_booking_request(
     location = PracticeLocation.objects.filter(active=True).first()
     location_id = str(location.id) if location else ""
 
-    client_tz = timezone(timedelta(minutes=-tz_offset_minutes))
+    # A named zone converts each appointment at its own date, so a series
+    # that books across a daylight saving change stores the right UTC
+    # instant for every occurrence rather than one offset read at click
+    # time and reused for the whole series.
+    client_tz = client_zone(tz_name, tz_offset_minutes)
     parsed_datetimes: list[datetime] = []
     for i, appt in enumerate(appointments):
         appt_date_str = appt.get("date", "")
