@@ -184,22 +184,46 @@ def test_external_hold_exists_false(mocker):
     assert InboundSync._external_hold_exists("g1", "p1") is False
 
 
-# --- _hold_delete_effect --------------------------------------------------------------------------
+# --- _hold_delete_effects -------------------------------------------------------------------------
 
 
-def test_hold_delete_effect_returns_none_when_no_canvas_id(mocker):
+def test_hold_delete_effects_empty_when_no_live_hold(mocker):
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
-    assert inbound._hold_delete_effect("g1", "p1") is None
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
+    assert inbound._hold_delete_effects("g1", "p1") == []
 
 
-def test_hold_delete_effect_returns_effect_when_found(mocker):
+def test_hold_delete_effects_returns_effect_when_found(mocker):
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch.object(
+        inbound, "_live_holds_for_event", return_value={"g1": "appt-1"}
+    )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
-    result = inbound._hold_delete_effect("g1", "p1")
+    result = inbound._hold_delete_effects("g1", "p1")
     se.assert_called_once_with(instance_id="appt-1")
-    assert result is not None
+    assert len(result) == 1
+
+
+def test_hold_delete_effects_removes_every_per_day_hold(mocker):
+    # A cancelled multi-day all-day event has one hold per covered day; all of them must go.
+    inbound = _inbound(mocker)
+    mocker.patch.object(
+        inbound,
+        "_live_holds_for_event",
+        return_value={
+            "g1:2026-08-31": "appt-1",
+            "g1:2026-09-01": "appt-2",
+            "g1:2026-09-02": "appt-3",
+        },
+    )
+    se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
+    result = inbound._hold_delete_effects("g1", "p1")
+    assert len(result) == 3
+    assert [c.kwargs["instance_id"] for c in se.call_args_list] == [
+        "appt-1",
+        "appt-2",
+        "appt-3",
+    ]
 
 
 # --- _hold_update_effect --------------------------------------------------------------------------
@@ -338,7 +362,7 @@ def test_cancelled_event_clears_pending_marker(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_hold_delete_effect", return_value="DEL")
+    mocker.patch.object(inbound, "_hold_delete_effects", return_value=["DEL"])
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "cancelled"}, stats)
     assert effects == ["DEL"]
@@ -356,7 +380,7 @@ def test_cancelled_event_no_effect_when_no_hold(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_hold_delete_effect", return_value=None)
+    mocker.patch.object(inbound, "_hold_delete_effects", return_value=[])
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "cancelled"}, stats)
     assert effects == []
