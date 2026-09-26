@@ -36,10 +36,11 @@ class CardFormAPI(SimpleAPI):
         environment = self.secrets.get("paytheory_environment", DEFAULT_ENVIRONMENT)
         public_api_key = self.secrets["paytheory_public_key"]
         sdk_url = get_sdk_url(partner, environment)
+        payor_id = self.query_params.get("payor_id", "")
 
         html = render_to_string(
             "templates/card_form.html",
-            {"public_api_key": public_api_key, "sdk_url": sdk_url},
+            {"public_api_key": public_api_key, "sdk_url": sdk_url, "payor_id": payor_id},
         )
         return [
             HTMLResponse(

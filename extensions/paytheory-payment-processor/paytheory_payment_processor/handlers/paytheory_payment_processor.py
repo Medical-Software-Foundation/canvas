@@ -55,19 +55,21 @@ class PayTheoryPaymentProcessor(CardPaymentProcessor):
 
     def payment_form(self, patient: Patient | None = None) -> PaymentProcessorForm:
         """Return the payment form for the credit card processor."""
+        payor_id = self.get_or_create_payor_id(patient) if patient else None
         return PaymentProcessorForm(
-            content=self._card_fields_html(),
+            content=self._card_fields_html(payor_id=payor_id),
             intent=self.PaymentIntent.PAY,
         )
 
     def add_card_form(self, patient: Patient | None = None) -> PaymentProcessorForm:
         """Return the form for adding a card."""
+        payor_id = self.get_or_create_payor_id(patient) if patient else None
         return PaymentProcessorForm(
-            content=self._card_fields_html(),
+            content=self._card_fields_html(payor_id=payor_id),
             intent=self.PaymentIntent.ADD_CARD,
         )
 
-    def _card_fields_html(self) -> str:
+    def _card_fields_html(self, payor_id: str | None = None) -> str:
         """Embed the PayTheory card form in an iframe served from a real URL.
 
         A separate browsing context gives a fresh CustomElementRegistry each open,
@@ -79,6 +81,9 @@ class PayTheoryPaymentProcessor(CardPaymentProcessor):
         CustomPayment.tsx can find it via querySelector('#submit'). Clicks are
         forwarded to the iframe via postMessage.
         """
+        url = _CARD_FORM_URL
+        if payor_id:
+            url = f"{_CARD_FORM_URL}?payor_id={payor_id}"
         return (
             '<iframe id="pt-card-frame" title="Add a card" src="%s" '
             'style="width:100%%;min-height:300px;border:0;background:#fff;display:block;" '
@@ -93,7 +98,7 @@ class PayTheoryPaymentProcessor(CardPaymentProcessor):
             '  }'
             '});'
             '</script>'
-        ) % _CARD_FORM_URL
+        ) % url
 
     def get_or_create_payor_id(self, patient: Patient | None = None) -> str | None:
         """Retrieve or create a payor_id based on the patient_id."""
