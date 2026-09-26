@@ -1,0 +1,21 @@
+{
+  "session_id": "fd6e91fb-92a2-4e9e-b8d0-4fce7deb18d8",
+  "timestamp": "2026-01-28T01:15:42.995945+00:00",
+  "exit_reason": "prompt_input_exit",
+  "working_directory": "/Users/andrew/src/plugin-development/msf-canvas/extensions/prescription-processing-dashboard",
+  "transcript_path": "/Users/andrew/.claude/projects/-Users-andrew-src-plugin-development-msf-canvas-extensions-prescription-processing-dashboard/fd6e91fb-92a2-4e9e-b8d0-4fce7deb18d8.jsonl",
+  "user_inputs": [
+    {
+      "input": "I am building a plugin with the Canvas SDK, the source code for which can be found here: /Users/src/canvas-plugins",
+      "type": "free_text"
+    },
+    {
+      "input": "I need to write unit tests for the python classes I've created. What are all the classes I need to write tests for?",
+      "type": "free_text"
+    },
+    {
+      "input": "Yes",
+      "type": "free_text"
+    }
+  ]
+}
