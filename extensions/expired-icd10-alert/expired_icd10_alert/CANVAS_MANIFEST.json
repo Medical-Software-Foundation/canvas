@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.94.0",
+    "plugin_version": "0.1.0",
+    "name": "expired_icd10_alert",
+    "description": "Annotates patient-chart conditions with an EXPIRED tag when their ICD-10 code has been deleted from the current CMS code set.",
+    "license": "MIT",
+    "components": {
+        "protocols": [
+            {
+                "class": "expired_icd10_alert.protocols.expired_icd10_annotation:ExpiredICD10Annotation",
+                "description": "Annotates conditions whose ICD-10 code is no longer valid in the current CMS code set."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["EXPIRED_ICD10_CODES_OVERRIDE"],
+    "tags": {},
+    "references": [],
+    "diagram": false,
+    "readme": "README.md"
+}
