@@ -11,12 +11,18 @@ handlers. Each concrete handler inherits a mixin AND BaseHandler.
 
 from typing import Any
 
+from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.events import Event, EventType
 from canvas_sdk.handlers import BaseHandler
 from logger import log
 
 from patient_panel.services.stats_recompute import recompute_stats_for_patient_uuid
+
+# Coalesce repeated recomputes for the same patient: one note/task save cascades
+# several events, each of which would otherwise rerun the full recompute. The
+# nightly reconcile cron is the correctness backstop, so a skipped one self-heals.
+_RECOMPUTE_DEBOUNCE_SECONDS = 30
 
 
 def _patient_uuid_from_context(event: Any) -> str | None:
@@ -42,10 +48,25 @@ class _PanelStatsMixin:
     def _patient_uuid(self) -> str | None:
         return _patient_uuid_from_context(self.event)
 
+    def _recently_recomputed(self, uuid: str) -> bool:
+        """True if this patient was recomputed within the debounce window.
+
+        Cache failures degrade to False (recompute proceeds) so a cache outage
+        can never suppress updates."""
+        try:
+            cache = get_cache()
+            key = f"panel_stats_recompute_{uuid}"
+            if cache.get(key):
+                return True
+            cache.set(key, True, timeout_seconds=_RECOMPUTE_DEBOUNCE_SECONDS)
+        except Exception:
+            return False
+        return False
+
     def compute(self) -> list[Effect]:
         try:
             uuid = self._patient_uuid()
-            if uuid:
+            if uuid and not self._recently_recomputed(uuid):
                 recompute_stats_for_patient_uuid(uuid)
         except Exception:
             log.exception("[panel_stats] recompute failed for %s", self.__class__.__name__)
