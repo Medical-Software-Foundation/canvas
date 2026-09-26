@@ -1,0 +1,23 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Medical, Inc."}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Canvas plugin that forwards EHR events to up to three configurable webhook URLs."
+license = "MIT"
+name = "canvas-event-webhooks"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.5.2"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.coverage.run]
+source = ["canvas_event_webhooks"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
