@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance policy</title>
+  <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+  <link rel="stylesheet" href="/plugin-io/api/attendance_policy_tracker/app/canvas-plugin-ui.css?v={{ cache_bust }}">
+  <script src="/plugin-io/api/attendance_policy_tracker/app/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+  <style>
+    /* The design system stylesheet declares the typeface on h1 through h5 and
+       nowhere else, and a plugin iframe inherits no typography from the host
+       page, so the body has to carry Lato itself. Without this every paragraph,
+       label and span falls back to the browser's serif default. */
+    body {
+      font-family: var(--font-family);
+      font-size: var(--font-size-base);
+      line-height: var(--line-height-base);
+      color: var(--color-text);
+    }
+    /* The surface fills the modal so the identifier line sits on the bottom edge
+       rather than floating under short content. The tabs absorb the slack, which
+       keeps the line's own spacing intact when content is tall enough to push it
+       down on its own. */
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; }
+    /* The modal header carries its own padding and bottom border, so it sits
+       outside the layout inset and spans the full width of the modal. */
+    .layout {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-medium);
+    }
+    .layout canvas-tabs { flex: 1 0 auto; }
+    /* The title, its close control and the policy line are one band pinned to the
+       top. Keeping them together means a single sticky rule, rather than pinning
+       the header and then guessing its height to offset the line below it. */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--palette-white);
+    }
+    /* Carries the layout's own horizontal inset so it lines up with the content
+       below it, since it now sits outside that padding. */
+    .page-summary {
+      margin: 0;
+      padding: var(--space-tiny) var(--space-medium) var(--space-small);
+      border-bottom: 1px solid var(--color-border);
+    }
+    /* Capped so the search does not run the full width of the surface. */
+    .search { max-width: 20rem; }
+    .stack { margin-top: var(--space-medium); }
+    .row-actions { display: flex; gap: var(--space-small); align-items: center; }
+    .muted { color: var(--color-text-muted, #767676); }
+    .hidden { display: none; }
+    .detail-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-small);
+      padding-bottom: var(--space-small);
+      border-bottom: 1px solid var(--color-border);
+      margin-bottom: var(--space-medium);
+    }
+    /* Settings stack vertically at 12px, the form layout rule. Numbers and
+       pickers are capped so a near fullscreen modal does not stretch a two digit
+       field across the whole window. */
+    .config { padding-top: var(--space-medium); display: flex; flex-direction: column; gap: 12px; }
+    .config h4 { margin: 0; font-weight: 700; }
+    .config .picker { max-width: 28rem; }
+    .config canvas-inline-row { max-width: 40rem; }
+    .checks { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+    /* Pushed to the far right of the record heading, so the patient's name and count
+       read together on the left and the view control sits away from them. */
+    .show-all { margin-left: auto; }
+    /* A counted rule and the number that qualifies it. The indent is what carries
+       the relationship, so the number reads as belonging to the checkbox above it
+       rather than floating loose in the section. */
+    .rules { display: flex; flex-direction: column; gap: var(--space-small); }
+    .rule { display: flex; flex-direction: column; gap: var(--space-tiny); }
+    .qualifier { margin-left: var(--space-large); }
+    /* Every number on the panel holds one to three digits, so they all share one
+       width whether they stand alone or sit in a row. Inside a row the component
+       would otherwise grow to fill it, which is what made a lone field twice the
+       width of a paired one. */
+    .num { max-width: 14rem; }
+    /* A caret button holds a glyph where a text button holds a line of text, so its
+       content box is padded out to the same height. Padding and border are already
+       identical on every default button, so matching the content box is all that is
+       needed.
+
+       The target is the line box the component's inner button actually produces,
+       which is the font's normal line height rather than the design system's
+       1.4285em. That is a measured value, 19.4px against a 16px base, so a change
+       to the base font size would need it re measured. Deriving it in CSS is not
+       possible, there is no length that expresses a normal line height. */
+    .caret svg { display: block; margin: calc((19.4px - 14px) / 2) 0; }
+    /* A patient's name opens their record on this surface, so it is a button
+       rather than an anchor. It carries no destination and it leaves nowhere, and
+       an anchor that does neither lies to anybody reading the markup or hovering
+       the status bar. Blue is the design system's link colour, and every other
+       button property is stripped so the name still reads as text in its cell. */
+    .patient-name {
+      appearance: none;
+      background: none;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      font-weight: inherit;
+      color: var(--palette-blue);
+      cursor: pointer;
+      text-align: left;
+    }
+    .patient-name:hover { text-decoration: underline; }
+    /* The chart sits beside the name in parentheses rather than on the name,
+       because the two go to different places and one target cannot say both. It
+       is the secondary of the pair, so it drops the cell's bold weight. */
+    .chart-aside { font-weight: 400; margin-left: var(--space-mini); }
+    .chart-link {
+      color: var(--palette-blue);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-mini);
+    }
+    .chart-link:hover { text-decoration: underline; }
+    .chart-link svg { display: block; flex: 0 0 auto; }
+    .field-note { margin: 0; font-size: .92857143em; }
+    .group-note { margin: 0 0 var(--space-tiny); font-size: .92857143em; }
+    .field-label { margin: 0; font-weight: 700; font-size: .92857143em; }
+    /* The save pair follows the bottom of the viewport while the form is longer
+       than the screen, then settles into its own place once you reach the end. The
+       opaque background and the rule above it are what let the form scroll beneath
+       rather than through it, and z-index keeps it over content that comes later in
+       the document. */
+    .actions {
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      display: flex;
+      gap: var(--space-small);
+      margin-top: var(--space-medium);
+      padding: var(--space-small) 0;
+      background: var(--palette-white);
+      border-top: 1px solid var(--color-border);
+    }
+    .key-line {
+      margin-top: var(--space-large);
+      padding-top: var(--space-small);
+      border-top: 1px solid var(--color-border);
+      font-size: .92857143em;
+    }
+    .key-line code { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <canvas-modal-header dismissable>Attendance policy</canvas-modal-header>
+    <p id="policy-summary" class="page-summary muted">Loading policy</p>
+  </div>
+
+  <div class="layout">
+    <canvas-tabs>
+      <canvas-tab for="panel-today" active>
+        <canvas-tab-label>Today</canvas-tab-label>
+      </canvas-tab>
+      <canvas-tab for="panel-review">
+        <canvas-tab-label>Patients</canvas-tab-label>
+      </canvas-tab>
+      {% if can_configure %}
+      <canvas-tab for="panel-config">
+        <canvas-tab-label>Configuration</canvas-tab-label>
+      </canvas-tab>
+      {% endif %}
+
+      <canvas-tab-panel id="panel-today">
+        <canvas-banner id="today-error" class="hidden" variant="error" header="Could not load that day">
+          <p id="today-error-description" style="margin: 0">Check the connection and try again.</p>
+        </canvas-banner>
+
+        <div class="stack">
+          <!-- The carets are inline SVG because the bundle registers no icon
+               component, and this is the shape it draws its own close button with.
+               aria-label is mirrored onto the inner button by the component, which
+               is what keeps an icon only control announced. -->
+          <canvas-inline-row>
+            <canvas-date-input id="day-picker" label="Day" inline-role="natural" style="width: 13rem"></canvas-date-input>
+            <canvas-button-group aria-label="Move between days">
+              <canvas-button id="day-prev" class="caret" aria-label="Previous day">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </canvas-button>
+              <canvas-button id="day-today">Today</canvas-button>
+              <canvas-button id="day-next" class="caret" aria-label="Next day">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </canvas-button>
+            </canvas-button-group>
+          </canvas-inline-row>
+        </div>
+
+        <div class="stack">
+          <div id="today-loading"><canvas-loader></canvas-loader></div>
+
+          <div id="today-empty" class="hidden">
+            <div style="padding: var(--space-huge); text-align: center">
+              <h3 style="margin: 0 0 var(--space-small); font-weight: 700">Nothing happened on this day</h3>
+              <p style="margin: 0" class="muted">Missed visits, late cancellations and late moves appear here on the day they were recorded.</p>
+            </div>
+          </div>
+
+          <div id="today-card" class="hidden">
+              <canvas-table id="today-table" striped aria-label="Attendance changes for the chosen day">
+                <canvas-table-head>
+                  <canvas-table-row>
+                    <canvas-table-cell width="90px">Time</canvas-table-cell>
+                    <canvas-table-cell>Patient</canvas-table-cell>
+                    <canvas-table-cell width="200px">Visit</canvas-table-cell>
+                    <canvas-table-cell>What happened</canvas-table-cell>
+                    <canvas-table-cell width="240px">Attributed to</canvas-table-cell>
+                  </canvas-table-row>
+                </canvas-table-head>
+                <canvas-table-body id="today-body"></canvas-table-body>
+              </canvas-table>
+          </div>
+        </div>
+      </canvas-tab-panel>
+
+      <canvas-tab-panel id="panel-review">
+        <canvas-banner id="error-banner" class="hidden" variant="error" header="Could not load attendance records">
+          <p id="error-description" style="margin: 0">Check the connection and try again.</p>
+          <div style="margin-top: 8px">
+            <canvas-button id="error-retry" variant="ghost" size="sm">Retry</canvas-button>
+          </div>
+        </canvas-banner>
+
+        <div id="list-view">
+        <div class="stack">
+          <canvas-input
+            id="search"
+            class="search"
+            label="Filter by name"
+            placeholder="Start typing a name"></canvas-input>
+        </div>
+
+        <div class="stack">
+          <div id="loading"><canvas-loader></canvas-loader></div>
+
+          <div id="empty" class="hidden">
+            <div style="padding: var(--space-huge); text-align: center">
+              <h3 style="margin: 0 0 var(--space-small); font-weight: 700">No attendance records yet</h3>
+              <p style="margin: 0 0 var(--space-medium)" class="muted">Missed and late cancelled visits appear here after a short delay.</p>
+            </div>
+          </div>
+
+          <div id="no-results" class="hidden">
+            <div style="padding: var(--space-huge); text-align: center">
+              <h3 style="margin: 0 0 var(--space-small); font-weight: 700">No results match your filter</h3>
+              <p style="margin: 0 0 var(--space-medium)" class="muted">Clear the name filter to see everybody again.</p>
+              <canvas-button id="clear-filter" variant="ghost">Clear filter</canvas-button>
+            </div>
+          </div>
+
+          <div id="table-card" class="hidden">
+              <canvas-table id="patients-table" selectable striped aria-label="Patients with counted visits">
+                <canvas-table-head>
+                  <canvas-table-row>
+                    <canvas-table-cell>Patient</canvas-table-cell>
+                    <canvas-table-cell width="150px">Counted visits</canvas-table-cell>
+                    <canvas-table-cell width="170px">Status</canvas-table-cell>
+                    <canvas-table-cell actions></canvas-table-cell>
+                  </canvas-table-row>
+                </canvas-table-head>
+                <canvas-table-body id="patients-body"></canvas-table-body>
+              </canvas-table>
+          </div>
+        </div>
+
+        </div>
+
+        <div id="record-view" class="hidden">
+          <div class="stack row-actions">
+            <canvas-button id="back-to-list" variant="ghost">Back to patients</canvas-button>
+            <a id="detail-chart" class="chart-link" target="_blank" rel="noopener noreferrer">View chart<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+          </div>
+
+          <div class="stack">
+              <div class="detail-head">
+                <span id="detail-name" style="font-weight: 700"></span>
+                <span id="detail-count" class="muted" style="font-size: .92857143em"></span>
+                <canvas-toggle id="show-all" class="show-all" label="Show visits that do not count" label-position="start"></canvas-toggle>
+              </div>
+              <canvas-table id="incidents-table" celled compact aria-label="Counted visits for the selected patient">
+                <canvas-table-head>
+                  <canvas-table-row>
+                    <canvas-table-cell width="200px">Visit</canvas-table-cell>
+                    <canvas-table-cell>What happened</canvas-table-cell>
+                    <canvas-table-cell width="240px">Attributed to</canvas-table-cell>
+                  </canvas-table-row>
+                </canvas-table-head>
+                <canvas-table-body id="incidents-body"></canvas-table-body>
+              </canvas-table>
+
+              <div id="record-empty" class="hidden">
+                <div style="padding: var(--space-huge); text-align: center">
+                  <p style="margin: 0" class="muted">No visits are counted toward the policy for this patient. Switch on the control above to see visits that were attributed to the clinic.</p>
+                </div>
+              </div>
+          </div>
+        </div>
+      </canvas-tab-panel>
+
+      {% if can_configure %}
+      <canvas-tab-panel id="panel-config">
+        <canvas-banner id="config-error" class="hidden" variant="error" header="Could not save the policy">
+          <p id="config-error-description" style="margin: 0">Check the fields and try again.</p>
+        </canvas-banner>
+
+        <div class="config">
+          <h4>What counts</h4>
+          <div class="rules">
+            <canvas-checkbox id="kind-no_show" label="A visit the patient did not attend"></canvas-checkbox>
+
+            <div class="rule">
+              <canvas-checkbox id="kind-late_cancellation" label="A cancellation close to the visit"></canvas-checkbox>
+              <canvas-input id="late_cutoff_hours" type="number" class="num qualifier" label="Cancellation cutoff, in hours"></canvas-input>
+            </div>
+
+            <div class="rule">
+              <canvas-checkbox id="kind-late_move" label="A visit moved close to its original time"></canvas-checkbox>
+              <canvas-input id="move_boundary_hours" type="number" class="num qualifier" label="Move cutoff, in hours"></canvas-input>
+            </div>
+          </div>
+
+          <canvas-divider></canvas-divider>
+
+          <h4>Who a cancellation is attributed to</h4>
+          <p class="group-note muted">Applies to staff cancellations that carry no label. A labelled cancellation always follows its label.</p>
+          <div class="checks">
+            <canvas-radio name="default_attribution" value="patient" label="The patient, unless somebody marks it as the clinic's"></canvas-radio>
+            <canvas-radio name="default_attribution" value="clinic" label="The clinic, unless somebody marks it as the patient's"></canvas-radio>
+          </div>
+          <canvas-combobox id="clinic_tag" class="picker" label="The label that marks a cancellation as the clinic's" placeholder="Search appointment labels" empty-state="No appointment labels found. An administrator creates one in Canvas."></canvas-combobox>
+          <p class="field-note muted">Only appointment labels appear here. Changing this label leaves past corrections on the old one.</p>
+
+          <canvas-divider></canvas-divider>
+
+          <h4>How far back the count reaches</h4>
+          <canvas-input id="counting_window_months" type="number" class="num" label="Window length, in months"></canvas-input>
+          <p class="field-note muted">The window rolls back from today. It does not reset at the start of a year.</p>
+          <canvas-date-input id="install_floor" class="num" label="Count nothing before"></canvas-date-input>
+          <p class="field-note muted">Set automatically when the plugin is installed, so history nobody was tracking stays out of the count. Move it to draw the line elsewhere, or clear it to count everything the window reaches.</p>
+
+          <canvas-divider></canvas-divider>
+
+          <h4>Thresholds and tasks</h4>
+          <canvas-inline-row>
+            <canvas-input id="warning_line" type="number" label="Warning threshold" inline-role="natural" style="width: 14rem"></canvas-input>
+            <canvas-input id="discharge_review_line" type="number" label="Review threshold" inline-role="natural" style="width: 14rem"></canvas-input>
+          </canvas-inline-row>
+          <canvas-combobox id="warning_team_id" class="picker" label="Who gets the warning task" placeholder="Search teams" empty-state="No teams found. An administrator creates one in Canvas."></canvas-combobox>
+          <canvas-multi-select id="warning_task_labels" class="picker" label="Labels on the warning task" placeholder="Search task labels" empty-state="No task labels found."></canvas-multi-select>
+          <canvas-combobox id="discharge_review_team_id" class="picker" label="Who gets the review task" placeholder="Search teams" empty-state="No teams found. An administrator creates one in Canvas."></canvas-combobox>
+          <canvas-multi-select id="discharge_review_task_labels" class="picker" label="Labels on the review task" placeholder="Search task labels" empty-state="No task labels found."></canvas-multi-select>
+          <p class="field-note muted">A threshold with no team raises no task.</p>
+
+          <canvas-divider></canvas-divider>
+
+          <h4>Timing</h4>
+          <canvas-input id="holding_window_minutes" type="number" class="num" label="Delay, in minutes"></canvas-input>
+          <p class="field-note muted">A correction made inside this window applies before anything appears.</p>
+
+          <canvas-divider></canvas-divider>
+
+          <h4>Cancellations the clinic caused</h4>
+          <canvas-inline-row>
+            <canvas-input id="run_count" type="number" label="How many cancellations" inline-role="natural" style="width: 14rem"></canvas-input>
+            <canvas-input id="run_window_minutes" type="number" label="Within how many minutes" inline-role="natural" style="width: 14rem"></canvas-input>
+          </canvas-inline-row>
+          <p class="field-note muted">When one provider has this many cancellations this close together, the plugin labels them as the clinic's without asking.</p>
+
+          <canvas-divider></canvas-divider>
+
+          <p class="field-label">Who may open this screen</p>
+          <p class="field-note muted">Set by an administrator in Canvas administration under this plugin's settings. Each person's identifier is shown at the bottom of this page.</p>
+
+          <div class="actions">
+            <canvas-button id="config-save" disabled>Save</canvas-button>
+            <canvas-button id="config-discard" variant="ghost" disabled>Discard changes</canvas-button>
+          </div>
+        </div>
+      </canvas-tab-panel>
+      {% endif %}
+    </canvas-tabs>
+
+    <p class="key-line muted">Staff ID: <code>{{ staff_key }}</code></p>
+  </div>
+
+<script>
+  var BASE = "/plugin-io/api/attendance_policy_tracker/app";
+
+  var CAN_CONFIGURE = {% if can_configure %}true{% else %}false{% endif %};
+
+  var KINDS = ["no_show", "late_cancellation", "late_move"];
+
+  var NUMBERS = [
+    "late_cutoff_hours", "move_boundary_hours", "counting_window_months",
+    "holding_window_minutes", "run_count", "run_window_minutes",
+    "warning_line", "discharge_review_line"
+  ];
+
+  var TEAMS = ["warning_team_id", "discharge_review_team_id"];
+
+  /* Each counted kind that carries a cutoff, and the field that qualifies it. A
+     cutoff means nothing while its kind is switched off. */
+  var QUALIFIERS = {
+    "late_cancellation": "late_cutoff_hours",
+    "late_move": "move_boundary_hours"
+  };
+
+  var LABEL_SETS = ["warning_task_labels", "discharge_review_task_labels"];
+
+  var state = { patients: [], filter: "", clinicTag: "clinic-cancelled", selected: null, policy: null, day: null, record: null, showNonCounting: false };
+
+  function el(id) { return document.getElementById(id); }
+
+  /* The bundled canvas-modal-header only dismisses a canvas-modal ancestor, and
+     this surface is rendered straight into the host's modal chrome with no such
+     ancestor, so its X would be silently dead. Wire the shadow close button to
+     the host bridge instead, which is the supported way for a DEFAULT_MODAL
+     surface to close itself. A listener on the host element is deliberately not
+     used, clicks originating inside a shadow root do not reach it reliably. */
+  (function wireHeaderDismiss() {
+    var header = document.querySelector("canvas-modal-header");
+    var close = header && header.shadowRoot
+      ? header.shadowRoot.querySelector(".close")
+      : null;
+    if (!close) { return; }
+    close.addEventListener("click", function () {
+      CanvasUI.utils.dismissModal();
+    });
+  })();
+
+  function show(node, visible) {
+    if (!node) { return; }
+    if (visible) { node.classList.remove("hidden"); } else { node.classList.add("hidden"); }
+  }
+
+  /* canvas-button has no disabled property setter, the attribute is the API. */
+  function enable(node, on) {
+    if (!node) { return; }
+    if (on) { node.removeAttribute("disabled"); } else { node.setAttribute("disabled", ""); }
+  }
+
+  /* The design system's external icon, the one every link that opens a new tab
+     carries. Built here rather than repeated at each call site, and marked hidden
+     because the label beside it already names the destination. */
+  function externalIcon() {
+    var holder = document.createElement("span");
+    holder.setAttribute("aria-hidden", "true");
+    holder.style.display = "inline-flex";
+    holder.innerHTML =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+      'stroke-linejoin="round">' +
+      '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+      '<polyline points="15 3 21 3 21 9"/>' +
+      '<line x1="10" y1="14" x2="21" y2="3"/>' +
+      '</svg>';
+    return holder.firstChild;
+  }
+
+  /* An anchor into a patient's chart, opening in a new tab.
+
+     The identifier the routes already send is the patient key the chart is addressed
+     by, so no extra lookup is needed. A new tab on purpose, since this surface sits
+     over whatever page the user was on and navigating it away would lose their
+     place. */
+  function chartLink(patientId, name) {
+    var link = document.createElement("a");
+    link.className = "chart-link";
+    link.href = "/patient/" + encodeURIComponent(patientId);
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.setAttribute("aria-label", name + ", chart");
+    link.appendChild(document.createTextNode("chart"));
+    link.appendChild(externalIcon());
+    return link;
+  }
+
+  /* The name cell, which carries two different moves rather than one.
+
+     The name opens the patient's record on this surface. The chart beside it, in
+     parentheses, leaves for the chart in a new tab. They used to be a single target
+     doing only the second, which meant there was no way to reach a record from the
+     day feed at all and no way to read a name without leaving. Both pieces append
+     the name as a text node rather than as markup, because it is patient supplied. */
+  function patientCell(row) {
+    var cell = document.createDocumentFragment();
+    var name = document.createElement("button");
+    name.type = "button";
+    name.className = "patient-name";
+    name.appendChild(document.createTextNode(row.name));
+    name.addEventListener("click", function () { openRecord(row.patient_id); });
+    cell.appendChild(name);
+    var aside = document.createElement("span");
+    aside.className = "chart-aside";
+    aside.appendChild(document.createTextNode("("));
+    aside.appendChild(chartLink(row.patient_id, row.name));
+    aside.appendChild(document.createTextNode(")"));
+    cell.appendChild(aside);
+    return cell;
+  }
+
+  /* Show the Patients tab, whichever position it is declared in.
+
+     The tabs component exposes no public way to change the active tab, only the
+     active attribute it manages itself and the tab-change event it emits, so its
+     controller's own _activate is the seam. The index is read off the declared tab
+     order rather than written in, so adding a tab ahead of Patients cannot quietly
+     point this at the wrong panel. */
+  function showPatientsTab() {
+    var tabs = document.querySelector("canvas-tabs");
+    if (!tabs) { return; }
+    var declared = tabs.querySelectorAll(":scope > canvas-tab");
+    var index = -1;
+    for (var i = 0; i < declared.length; i++) {
+      if (declared[i].getAttribute("for") === "panel-review") { index = i; }
+    }
+    if (index < 0) { return; }
+    if (typeof tabs._activate === "function") { tabs._activate(index); return; }
+    var button = tabs.shadowRoot &&
+      tabs.shadowRoot.querySelector('.tab-button[data-index="' + index + '"]');
+    if (button) { button.click(); }
+  }
+
+  /* Open one patient's record from anywhere, including the day feed, which sits on
+     a different tab from the record it is asking for. */
+  function openRecord(patientId) {
+    showPatientsTab();
+    openDetail(patientId);
+  }
+
+  /* canvas-banner takes its title through the header attribute and its body
+     through the default slot. There are no title or description slots. */
+  function showError(title, description) {
+    el("error-banner").setAttribute("header", title);
+    el("error-description").textContent = description;
+    show(el("error-banner"), true);
+  }
+
+  function clearError() { show(el("error-banner"), false); }
+
+  function request(path, options) {
+    return fetch(BASE + path, options).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (payload) {
+        if (!response.ok) {
+          var error = new Error(payload.error || ("Request failed with status " + response.status));
+          throw error;
+        }
+        return payload;
+      });
+    });
+  }
+
+  function statusBadge(lines) {
+    if (lines.indexOf("discharge_review") !== -1) {
+      return '<canvas-badge color="red" size="mini">Review</canvas-badge>';
+    }
+    if (lines.indexOf("warning") !== -1) {
+      return '<canvas-badge color="orange" size="mini">Warning</canvas-badge>';
+    }
+    return '<canvas-badge color="grey" size="mini" basic>Below thresholds</canvas-badge>';
+  }
+
+  function renderPatients() {
+    var body = el("patients-body");
+    body.textContent = "";
+    var filter = state.filter.toLowerCase();
+    var rows = state.patients.filter(function (row) {
+      return !filter || row.name.toLowerCase().indexOf(filter) !== -1;
+    });
+
+    show(el("loading"), false);
+    show(el("empty"), state.patients.length === 0);
+    show(el("no-results"), state.patients.length > 0 && rows.length === 0);
+    show(el("table-card"), rows.length > 0);
+
+    rows.forEach(function (row) {
+      var tr = document.createElement("canvas-table-row");
+      /* The review row is deliberately not tinted. A red row is a visual
+         verdict about a person in a clinical list, and the badge already
+         carries the severity. The warning tint stays, orange is an honest
+         severity and nothing about it reads as a decision. */
+      if (row.lines_reached.indexOf("discharge_review") === -1 && row.lines_reached.indexOf("warning") !== -1) { tr.setAttribute("warning", ""); }
+
+      var name = document.createElement("canvas-table-cell");
+      name.setAttribute("bold", "");
+      name.appendChild(patientCell(row));
+
+      var count = document.createElement("canvas-table-cell");
+      count.textContent = String(row.count);
+
+      var status = document.createElement("canvas-table-cell");
+      status.innerHTML = statusBadge(row.lines_reached);
+
+      var action = document.createElement("canvas-table-cell");
+      action.setAttribute("actions", "");
+      var open = document.createElement("canvas-button");
+      open.setAttribute("variant", "ghost");
+      open.setAttribute("size", "sm");
+      open.textContent = "Open record";
+      open.addEventListener("click", function () { openDetail(row.patient_id); });
+      action.appendChild(open);
+
+      tr.appendChild(name);
+      tr.appendChild(count);
+      tr.appendChild(status);
+      tr.appendChild(action);
+      body.appendChild(tr);
+    });
+  }
+
+  function renderIncidents(payload) {
+    state.record = payload;
+    drawRecord();
+  }
+
+  function drawRecord() {
+    var payload = state.record;
+    if (!payload) { return; }
+
+    el("detail-name").textContent = payload.name;
+    /* Only the destination and the label change here. The link's text and its
+       icon are declared in the markup, where a reader can see that this one
+       leaves the page. */
+    var chart = el("detail-chart");
+    chart.href = "/patient/" + encodeURIComponent(state.selected);
+    chart.setAttribute("aria-label", payload.name + ", chart");
+    el("detail-count").textContent = payload.count + " counted toward the attendance policy";
+
+    var showAll = state.showNonCounting;
+    var rows = payload.incidents.filter(function (incident) {
+      return showAll || incident.counts || incident.pending;
+    });
+
+    var body = el("incidents-body");
+    body.textContent = "";
+
+    rows.forEach(function (incident) {
+      /* A row that stopped counting is kept rather than hidden, so a correction
+         made by mistake stays visible and reversible in place. Its own attribution
+         cell reads the clinic, which is what marks it. */
+      var tr = document.createElement("canvas-table-row");
+      markPending(tr, incident);
+
+      var visit = document.createElement("canvas-table-cell");
+      visit.textContent = whenOf(incident.anchor);
+
+      var what = document.createElement("canvas-table-cell");
+      what.textContent = happenedLabel(incident);
+
+      tr.appendChild(visit);
+      tr.appendChild(what);
+      tr.appendChild(attributionCell(incident, "record"));
+      body.appendChild(tr);
+    });
+
+    show(el("record-empty"), rows.length === 0);
+
+    showRecord(true);
+  }
+
+  /* The record replaces the list rather than stacking under it, so the whole
+     panel is one thing at a time and the back button is the only way out. */
+  function showRecord(visible) {
+    show(el("list-view"), !visible);
+    show(el("record-view"), visible);
+  }
+
+  function openDetail(patientId) {
+    clearError();
+    state.selected = patientId;
+    request("/incidents?patient=" + encodeURIComponent(patientId))
+      .then(renderIncidents)
+      .catch(function () {
+        showError("Could not load that patient's record", "Try opening the record again.");
+      });
+  }
+
+  function describePolicy(policy) {
+    el("policy-summary").textContent =
+      "Warning at " + policy.warning_line +
+      ", review at " + policy.discharge_review_line +
+      ", counting the last " + policy.counting_window_months + " months.";
+  }
+
+  /* While a flip of ours is in flight the local value is the truth. A policy read
+     landing in that gap still carries the old one and would snap the switch back
+     under the hand that just moved it. */
+  var preferenceWrites = 0;
+
+  function loadPolicy() {
+    return request("/policy").then(function (payload) {
+      state.clinicTag = payload.policy.clinic_tag;
+      describePolicy(payload.policy);
+      if (!preferenceWrites) { adoptShowNonCounting(!!payload.show_non_counting); }
+    }).catch(function () {
+      el("policy-summary").textContent = "";
+      showError("Could not load the policy", "The thresholds shown may be out of date.");
+    });
+  }
+
+  function loadPatients() {
+    show(el("loading"), true);
+    show(el("table-card"), false);
+    show(el("empty"), false);
+    show(el("no-results"), false);
+    return request("/patients").then(function (payload) {
+      state.patients = payload.patients;
+      renderPatients();
+    }).catch(function () {
+      show(el("loading"), false);
+      showError("Could not load attendance records", "Check the connection and try again.");
+    });
+  }
+
+  el("error-retry").addEventListener("click", function () { clearError(); loadPatients(); });
+  /* One place decides both what the switch shows and what the table filters on,
+     so the control and the rows can never disagree. State is set before the
+     control, which is what makes a change raised by this function harmless, the
+     listener below sees the two already agreeing and does nothing. */
+  function adoptShowNonCounting(value) {
+    if (state.showNonCounting === value) { return; }
+    state.showNonCounting = value;
+    el("show-all").checked = value;
+    if (state.selected) { drawRecord(); }
+  }
+
+  /* The switch is shared by everybody rather than remembered per person, so
+     moving it is a write and not a local preference. It redraws before the write
+     returns, because waiting to be told is the thing being fixed here, and it
+     puts itself back if the write fails. */
+  el("show-all").addEventListener("change", function () {
+    var wanted = !!el("show-all").checked;
+    if (wanted === state.showNonCounting) { return; }
+    var before = state.showNonCounting;
+    state.showNonCounting = wanted;
+    if (state.selected) { drawRecord(); }
+    preferenceWrites += 1;
+    request("/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ show_non_counting: wanted })
+    }).catch(function () {
+      state.showNonCounting = before;
+      el("show-all").checked = before;
+      if (state.selected) { drawRecord(); }
+      showError("Could not save that setting", "Nothing was changed. Try again.");
+    }).then(function () {
+      preferenceWrites -= 1;
+    });
+  });
+  el("back-to-list").addEventListener("click", function () {
+    showRecord(false);
+    state.selected = null;
+    /* Forgotten as well as hidden, because a record left in hand is a record
+       something else can decide to redraw, which would pull somebody back into a
+       patient they had already left. */
+    state.record = null;
+  });
+  el("clear-filter").addEventListener("click", function () {
+    state.filter = "";
+    el("search").value = "";
+    renderPatients();
+  });
+  el("search").addEventListener("input", function (event) {
+    state.filter = event.target.value || "";
+    renderPatients();
+  });
+
+  /* ---------- configuration ---------- */
+
+  function showConfigError(description) {
+    el("config-error-description").textContent = description;
+    show(el("config-error"), true);
+  }
+
+  function clearConfigError() { show(el("config-error"), false); }
+
+  /* The dropdown family reads its options once on connect and never watches for
+     child changes. Flipping the loading attribute off makes it re-read them,
+     which is the supported way to fill a picker from live data. */
+  function fillPicker(node, options, selected) {
+    if (!node) { return; }
+    var chosen = selected || [];
+    node.setAttribute("loading", "");
+    node.textContent = "";
+    options.forEach(function (option) {
+      var item = document.createElement("canvas-option");
+      item.setAttribute("value", option.id);
+      item.textContent = option.name;
+      if (chosen.indexOf(option.id) !== -1) { item.setAttribute("selected", ""); }
+      node.appendChild(item);
+    });
+    node.removeAttribute("loading");
+  }
+
+  /* A cutoff that qualifies a switched off rule is greyed rather than hidden, so
+     the setting stays discoverable and its stored value is visible. The value is
+     deliberately left in place, which keeps validation passing and means unticking
+     then reticking does not lose the number. */
+  function syncQualifiers() {
+    KINDS.forEach(function (kind) {
+      var target = QUALIFIERS[kind];
+      if (!target) { return; }
+      var field = el(target);
+      if (!field) { return; }
+      if (el("kind-" + kind).checked) {
+        field.removeAttribute("disabled");
+      } else {
+        field.setAttribute("disabled", "");
+      }
+    });
+  }
+
+  function applyPolicy(policy, options) {
+    KINDS.forEach(function (kind) {
+      el("kind-" + kind).checked = (policy.counted_kinds || []).indexOf(kind) !== -1;
+    });
+
+    NUMBERS.forEach(function (name) {
+      el(name).value = String(policy[name]);
+      el(name).removeAttribute("error");
+    });
+
+    syncQualifiers();
+
+    document.querySelectorAll('canvas-radio[name="default_attribution"]').forEach(function (radio) {
+      radio.checked = radio.getAttribute("value") === policy.default_attribution;
+    });
+
+    fillPicker(el("clinic_tag"), options.appointment_labels, [policy.clinic_tag]);
+    /* A label already chosen may no longer exist on the instance. Keeping the
+       stored value visible is better than silently showing an empty field for a
+       policy that is genuinely in force. */
+    if (el("clinic_tag").value !== policy.clinic_tag) {
+      var kept = document.createElement("canvas-option");
+      kept.setAttribute("value", policy.clinic_tag);
+      kept.setAttribute("selected", "");
+      kept.textContent = policy.clinic_tag + " (not an appointment label on this instance)";
+      el("clinic_tag").setAttribute("loading", "");
+      el("clinic_tag").appendChild(kept);
+      el("clinic_tag").removeAttribute("loading");
+    }
+
+    TEAMS.forEach(function (name) {
+      fillPicker(el(name), options.teams, policy[name] ? [policy[name]] : []);
+    });
+
+    LABEL_SETS.forEach(function (name) {
+      fillPicker(el(name), options.task_labels, policy[name] || []);
+    });
+
+    /* The floor arrives as an instant and the picker holds a calendar date, so
+       only the date part is shown. An absent floor clears the field, which is
+       the state that counts everything. */
+    el("install_floor").value = policy.install_floor
+      ? String(policy.install_floor).slice(0, 10)
+      : "";
+  }
+
+  function readForm() {
+    var values = {};
+
+    values.counted_kinds = KINDS.filter(function (kind) {
+      return el("kind-" + kind).checked;
+    });
+
+    NUMBERS.forEach(function (name) { values[name] = el(name).value; });
+
+    var picked = "patient";
+    document.querySelectorAll('canvas-radio[name="default_attribution"]').forEach(function (radio) {
+      if (radio.checked) { picked = radio.getAttribute("value"); }
+    });
+    values.default_attribution = picked;
+
+    values.clinic_tag = el("clinic_tag").value || "";
+    TEAMS.forEach(function (name) { values[name] = el(name).value || ""; });
+    LABEL_SETS.forEach(function (name) { values[name] = el(name).value || []; });
+
+    /* An empty floor is sent as empty rather than omitted, because clearing the
+       field is how a person deliberately chooses to count everything. */
+    values.install_floor = el("install_floor").value || "";
+
+    return values;
+  }
+
+  /* Checked on the client so the field carrying the problem can say so, and
+     again on the server because the server is the only place that decides. */
+  function validateForm() {
+    var ok = true;
+
+    NUMBERS.forEach(function (name) {
+      var raw = el(name).value;
+      var parsed = parseInt(raw, 10);
+      if (raw === "" || isNaN(parsed) || parsed < 0) {
+        el(name).setAttribute("error", "Enter a whole number, zero or more.");
+        ok = false;
+      } else {
+        el(name).removeAttribute("error");
+      }
+    });
+
+    var warning = parseInt(el("warning_line").value, 10);
+    var review = parseInt(el("discharge_review_line").value, 10);
+    if (!isNaN(warning) && !isNaN(review) && review <= warning) {
+      el("discharge_review_line").setAttribute(
+        "error", "The review threshold has to sit above the warning threshold."
+      );
+      ok = false;
+    }
+
+    return ok;
+  }
+
+  function markDirty() {
+    enable(el("config-save"), true);
+    enable(el("config-discard"), true);
+  }
+
+  /* No banner on a successful save. The Save button going inactive is the
+     confirmation, because there is nothing left to save. */
+  function markClean() {
+    enable(el("config-save"), false);
+    enable(el("config-discard"), false);
+  }
+
+  function loadConfig() {
+    return request("/config").then(function (payload) {
+      state.policy = payload.policy;
+      applyPolicy(payload.policy, payload.options);
+      markClean();
+      clearConfigError();
+    }).catch(function (error) {
+      showConfigError(error.message || "Try opening the configuration again.");
+    });
+  }
+
+  function saveConfig() {
+    clearConfigError();
+    if (!validateForm()) {
+      showConfigError("Some fields need correcting before this can be saved.");
+      return;
+    }
+    enable(el("config-save"), false);
+    request("/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(readForm())
+    }).then(function () {
+      return loadConfig();
+    }).then(function () {
+      return loadPolicy();
+    }).then(function () {
+      /* The thresholds and the counted kinds decide every badge on the other tabs
+         and which rows exist at all, so a save that only redrew this form left the
+         rest of the surface showing the policy that was just replaced. */
+      return refreshData(true);
+    }).catch(function (error) {
+      enable(el("config-save"), true);
+      showConfigError(error.message || "Try saving again.");
+    });
+  }
+
+  if (CAN_CONFIGURE) {
+    el("config-save").addEventListener("click", saveConfig);
+    el("config-discard").addEventListener("click", function () {
+      clearConfigError();
+      loadConfig();
+    });
+
+    /* Two listeners because the two jobs want different moments.
+
+       Dirtiness is answered on input, so Save wakes on the first keystroke rather
+       than making somebody leave the field to find out the form noticed.
+
+       Validation stays on change, which fires on blur, because running it per
+       keystroke flashes an error at every half typed number. The component
+       re-dispatches both events out of its shadow root, so one listener on the
+       panel catches every field. */
+    var configPanel = document.querySelector(".config");
+
+    configPanel.addEventListener("input", markDirty);
+
+    configPanel.addEventListener("change", function () {
+      markDirty();
+      syncQualifiers();
+      validateForm();
+    });
+
+    loadConfig();
+  }
+
+  /* ---------- the day feed ---------- */
+
+  /* A day only means something in somebody's timezone, and the browser is the only
+     party that knows which one, so the page turns a chosen date into two instants
+     and the server does no calendar arithmetic at all. Local midnight to the next
+     local midnight, which stays correct across a daylight saving change because
+     setDate walks the local calendar rather than adding a fixed span. */
+  function isoOf(date) {
+    var month = String(date.getMonth() + 1);
+    var day = String(date.getDate());
+    if (month.length < 2) { month = "0" + month; }
+    if (day.length < 2) { day = "0" + day; }
+    return date.getFullYear() + "-" + month + "-" + day;
+  }
+
+  function localMidnight(iso) {
+    var parts = String(iso).split("-");
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+
+  function todayIso() { return isoOf(new Date()); }
+
+  function shiftDay(iso, delta) {
+    var date = localMidnight(iso);
+    date.setDate(date.getDate() + delta);
+    return isoOf(date);
+  }
+
+  function dayBounds(iso) {
+    var start = localMidnight(iso);
+    var end = localMidnight(iso);
+    end.setDate(end.getDate() + 1);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+
+  /* Python renders a datetime with a space where a browser wants a T. */
+  function asDate(value) {
+    if (!value) { return null; }
+    var date = new Date(String(value).replace(" ", "T"));
+    return isNaN(date.getTime()) ? null : date;
+  }
+
+  function timeOf(value) {
+    var date = asDate(value);
+    if (!date) { return "Unknown"; }
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function whenOf(value) {
+    var date = asDate(value);
+    if (!date) { return "Unknown"; }
+    return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) +
+      ", " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  /* Says what happened and who did it in one cell, because on a feed those are one
+     question. Canvas records who performed the change, so the portal and the front
+     desk are distinguishable even though what the patient asked for is not. */
+  function happenedLabel(row) {
+    if (row.kind === "no_show") { return "Did not attend"; }
+    var who = row.by_patient_portal ? "the patient in the portal" : "clinic staff";
+    return (row.kind === "late_move" ? "Moved by " : "Cancelled by ") + who;
+  }
+
+  function showTodayError(title, description) {
+    el("today-error").setAttribute("header", title);
+    el("today-error-description").textContent = description;
+    show(el("today-error"), true);
+  }
+
+  function clearTodayError() { show(el("today-error"), false); }
+
+  /* The one counting rule this page has to know, taken from the engine, which
+     counts a visit when it is attributed to the patient and its holding period has
+     passed. Nothing else about counting lives here, and the header total is exactly
+     the number of rows where that rule holds, so moving it by one is arithmetic
+     rather than a second opinion. The authoritative payload arrives moments later
+     and overwrites all of it, so a disagreement heals instead of lasting. */
+  function applyCorrection(appointmentId, value) {
+    var payload = state.record;
+    if (!payload) { return; }
+    var target = null;
+    payload.incidents.forEach(function (incident) {
+      if (incident.appointment_id === appointmentId) { target = incident; }
+    });
+    if (!target) { return; }
+
+    var counted = target.counts;
+    target.attribution = value;
+    target.counts = value === "patient" && !target.pending;
+    if (target.counts !== counted) {
+      payload.count = Math.max(0, payload.count + (target.counts ? 1 : -1));
+    }
+    drawRecord();
+  }
+
+  /* The refresh that reconciles a correction stands aside while a dropdown holds
+     focus, and right after choosing an option the dropdown holding focus is the one
+     just used. So the guard meant to protect somebody's cursor was delaying the
+     very change they asked for. Letting go of the control opens the way, and it
+     costs nothing, the row it belongs to is usually about to leave the table. */
+  function releasePicker() {
+    var active = document.activeElement;
+    if (active && active.blur && active.tagName &&
+        active.tagName.toLowerCase() === "canvas-dropdown") {
+      active.blur();
+    }
+  }
+
+  /* Written the moment it is chosen. There is no Save on this tab because the whole
+     point is to fix something the instant you notice it. The page applies the change
+     to what it is already showing rather than waiting to be told about it, and the
+     read that follows confirms it. It used to wait, and waiting is what made a
+     correction sit on screen for seconds after it had been made. */
+  function setAttribution(appointmentId, value, context) {
+    clearTodayError();
+    clearError();
+    return request("/tag", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        appointment_id: appointmentId,
+        action: value === "clinic" ? "add" : "remove"
+      })
+    }).then(function () {
+      /* Accepted rather than applied, because the route answers with an effect and
+         the platform writes the label afterwards. So this is the page rendering what
+         it asked for and the live refresh confirming it, rather than a reply that
+         proves anything. In the record the row may now belong on the other side of
+         the filter, which is the whole point. The day feed hides nothing, so its
+         control already tells the truth on its own. */
+      if (context === "record") { applyCorrection(appointmentId, value); }
+      releasePicker();
+      return null;
+    }).catch(function () {
+      var title = "Could not change how that visit is attributed";
+      var detail = "Nothing was changed. Try again.";
+      /* Reloaded only when the write failed, so the control returns to the value
+         that is actually stored rather than sitting on one that did not save. A
+         successful change needs no redraw, the control already shows it. */
+      if (context === "record") {
+        showError(title, detail);
+        if (state.selected) { return openDetail(state.selected); }
+        return null;
+      }
+      showTodayError(title, detail);
+      return loadActivity(true);
+    });
+  }
+
+  function attributionCell(row, context) {
+    var cell = document.createElement("canvas-table-cell");
+
+    var settling = pendingBadge(row);
+    if (settling) {
+      cell.appendChild(settling);
+      cell.appendChild(document.createTextNode(" "));
+    }
+
+    if (!row.correctable) {
+      var badge = document.createElement("canvas-badge");
+      badge.setAttribute("color", "grey");
+      badge.setAttribute("size", "mini");
+      badge.textContent = "The patient";
+      cell.appendChild(badge);
+      return cell;
+    }
+
+    /* Options are appended before the control enters the document, because the
+       dropdown reads its children once on connect. */
+    var picker = document.createElement("canvas-dropdown");
+    picker.setAttribute("size", "sm");
+    picker.setAttribute("aria-label", "How this visit is attributed");
+    [["patient", "The patient"], ["clinic", "The clinic"]].forEach(function (pair) {
+      var option = document.createElement("canvas-option");
+      option.setAttribute("value", pair[0]);
+      option.textContent = pair[1];
+      if (row.attribution === pair[0]) { option.setAttribute("selected", ""); }
+      picker.appendChild(option);
+    });
+    picker.addEventListener("change", function () {
+      setAttribution(row.appointment_id, picker.value, context);
+    });
+    cell.appendChild(picker);
+    return cell;
+  }
+
+  /* The design system's own row state for borderline or pending, so a settling
+     incident is tinted as well as labelled. */
+  function markPending(tr, row) {
+    if (row.pending) { tr.setAttribute("warning", ""); }
+  }
+
+  function pendingBadge(row) {
+    if (!row.pending) { return null; }
+    var badge = document.createElement("canvas-badge");
+    badge.setAttribute("color", "orange");
+    badge.setAttribute("size", "mini");
+    badge.textContent = row.counts_at
+      ? "Counts at " + timeOf(row.counts_at)
+      : "Not counted yet";
+    return badge;
+  }
+
+  function renderActivity(rows) {
+    var body = el("today-body");
+    body.textContent = "";
+
+    show(el("today-loading"), false);
+    show(el("today-empty"), rows.length === 0);
+    show(el("today-card"), rows.length > 0);
+
+    rows.forEach(function (row) {
+      var tr = document.createElement("canvas-table-row");
+      markPending(tr, row);
+
+      var when = document.createElement("canvas-table-cell");
+      when.textContent = timeOf(row.occurred_at);
+
+      var name = document.createElement("canvas-table-cell");
+      name.setAttribute("bold", "");
+      name.appendChild(patientCell(row));
+
+      var visit = document.createElement("canvas-table-cell");
+      visit.textContent = whenOf(row.anchor);
+
+      var what = document.createElement("canvas-table-cell");
+      what.textContent = happenedLabel(row);
+
+      tr.appendChild(when);
+      tr.appendChild(name);
+      tr.appendChild(visit);
+      tr.appendChild(what);
+      tr.appendChild(attributionCell(row, "today"));
+      body.appendChild(tr);
+    });
+  }
+
+  function syncDayControls() {
+    el("day-picker").value = state.day;
+    /* Forward travel stops at today, on the picker and on the arrow alike, because
+       nothing can have been recorded on a day that has not happened. */
+    el("day-picker").setAttribute("max", todayIso());
+    enable(el("day-next"), state.day < todayIso());
+    enable(el("day-today"), state.day !== todayIso());
+  }
+
+  function loadActivity(quiet) {
+    syncDayControls();
+    if (!quiet) {
+      show(el("today-loading"), true);
+      show(el("today-card"), false);
+      show(el("today-empty"), false);
+    }
+    var bounds = dayBounds(state.day);
+    return request("/activity?from=" + encodeURIComponent(bounds.from) +
+                   "&to=" + encodeURIComponent(bounds.to))
+      .then(function (payload) { renderActivity(payload.activity); })
+      .catch(function () {
+        show(el("today-loading"), false);
+        showTodayError("Could not load that day", "Check the connection and try again.");
+      });
+  }
+
+  function goToDay(iso) {
+    if (iso > todayIso()) { return; }
+    state.day = iso;
+    loadActivity();
+  }
+
+  el("day-prev").addEventListener("click", function () { goToDay(shiftDay(state.day, -1)); });
+  el("day-next").addEventListener("click", function () { goToDay(shiftDay(state.day, 1)); });
+  el("day-today").addEventListener("click", function () { goToDay(todayIso()); });
+  el("day-picker").addEventListener("change", function () {
+    var chosen = el("day-picker").value;
+    if (chosen) { goToDay(chosen); }
+  });
+
+  /* ---------- live updates ---------- */
+
+  /* The page keeps one socket on a shared channel and refetches through the same
+     routes it used on load. The message body is ignored on purpose, it carries no
+     patient data, so there is nothing here to trust and one place computes a
+     total. A burst of changes coalesces into a single refetch, because a bulk
+     cancellation would otherwise have every open page recompute the whole list
+     once per appointment. */
+  var LIVE_DEBOUNCE_MS = 750;
+  var LIVE_BACKOFF_START_MS = 1000;
+  var LIVE_BACKOFF_MAX_MS = 30000;
+  var LIVE_DEFER_MS = 2000;
+  var LIVE_DEFER_LIMIT = 5;
+
+  function refreshData(quiet) {
+    loadActivity(quiet);
+    return loadPatients().then(function () {
+      /* An open record is refreshed too, otherwise the list moves while the
+         patient below it keeps showing the totals from before. */
+      if (state.selected) { openDetail(state.selected); }
+    });
+  }
+
+  /* Focus inside a shadow root reports the host element, so an open dropdown is
+     precisely this check. Narrower than asking whether the panel holds focus,
+     which would let a filter box defer every refresh indefinitely. */
+  function pickerIsBusy() {
+    var active = document.activeElement;
+    return !!(active && active.tagName &&
+      active.tagName.toLowerCase() === "canvas-dropdown");
+  }
+
+  var liveDeferred = false;
+  /* Bounded, so a control left with focus cannot hold the surface stale for ever.
+     Standing aside politely is right, standing aside indefinitely is a hang. */
+  var liveDeferrals = 0;
+
+  function refreshFromLive() {
+    /* Re-rendering under somebody's cursor destroys the control they are using,
+       which is what made a change deselect the next dropdown. The refresh waits
+       for them to finish rather than fighting them, and only one retry is ever
+       outstanding. */
+    if (pickerIsBusy() && liveDeferrals < LIVE_DEFER_LIMIT) {
+      if (liveDeferred) { return; }
+      liveDeferred = true;
+      liveDeferrals += 1;
+      window.setTimeout(function () {
+        liveDeferred = false;
+        refreshFromLive();
+      }, LIVE_DEFER_MS);
+      return;
+    }
+    liveDeferrals = 0;
+    refreshData(true);
+    loadPolicy();
+  }
+
+  function watchForChanges() {
+    if (!window.WebSocket) { return; }
+
+    var scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    var url = scheme + "//" + window.location.host +
+      "/plugin-io/ws/attendance_policy_tracker/attendance/";
+    var backoff = LIVE_BACKOFF_START_MS;
+    var pending = null;
+
+    function connect() {
+      var socket = new WebSocket(url);
+
+      socket.addEventListener("open", function () {
+        backoff = LIVE_BACKOFF_START_MS;
+      });
+
+      socket.addEventListener("message", function () {
+        if (pending) { window.clearTimeout(pending); }
+        pending = window.setTimeout(function () {
+          pending = null;
+          refreshFromLive();
+        }, LIVE_DEBOUNCE_MS);
+      });
+
+      /* Reconnect with a widening delay rather than immediately, so a restarting
+         instance is not hammered by every open modal at once. No banner on a drop,
+         the surface is still correct as of its last read. */
+      socket.addEventListener("close", function () {
+        window.setTimeout(connect, backoff);
+        backoff = Math.min(backoff * 2, LIVE_BACKOFF_MAX_MS);
+      });
+    }
+
+    connect();
+  }
+
+  state.day = todayIso();
+
+  loadPolicy();
+  loadActivity();
+  loadPatients();
+  watchForChanges();
+</script>
+</body>
+</html>
