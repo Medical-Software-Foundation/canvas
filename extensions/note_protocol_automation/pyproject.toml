@@ -1,0 +1,46 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "note-protocol-automation"
+version = "0.1.0"
+description = "Auto-inserts a configured set of commands into a note based on its note type and patient parameters, with a global admin UI for defining the rules."
+authors = [{ name = "Canvas Medical", email = "engineering@canvasmedical.com" }]
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+DJANGO_SETTINGS_MODULE = "canvas_sdk.tests.settings"
+addopts = "-v"
+markers = [
+    "integtest: integration tests that exercise the test database",
+]
+
+[tool.coverage.run]
+source = ["note_protocol_automation"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
