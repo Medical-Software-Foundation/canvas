@@ -1,0 +1,149 @@
+# The tolerability check in the plugin ships with itself, so the worked GLP-1 class
+# runs on an instance where nobody has built a questionnaire yet. Seven questions,
+# matching the check in the proposal shows on the prescriber's task.
+name: Medication tolerability check in
+form_type: QUES
+code_system: INTERNAL
+code: MDJ-MFP-TOLERABILITY
+can_originate_in_charting: false
+prologue: >
+  A few questions about how you are getting on with your new medication. Your answers
+  go straight to the person who prescribed it.
+questions:
+  - code_system: INTERNAL
+    code: MFP-Q1
+    code_description: Nausea frequency
+    content: How often have you felt sick or nauseous?
+    responses_code_system: INTERNAL
+    responses_type: SING
+    responses:
+      - name: Never
+        code: MFP-Q1-A
+        code_description: Never
+        value: "0"
+      - name: Some days
+        code: MFP-Q1-B
+        code_description: Some days
+        value: "1"
+      - name: Most days
+        code: MFP-Q1-C
+        code_description: Most days
+        value: "2"
+      - name: Every day
+        code: MFP-Q1-D
+        code_description: Every day
+        value: "3"
+  - code_system: INTERNAL
+    code: MFP-Q2
+    code_description: Vomiting frequency
+    content: How often have you been sick?
+    responses_code_system: INTERNAL
+    responses_type: SING
+    responses:
+      - name: Never
+        code: MFP-Q2-A
+        code_description: Never
+        value: "0"
+      - name: Some days
+        code: MFP-Q2-B
+        code_description: Some days
+        value: "1"
+      - name: Most days
+        code: MFP-Q2-C
+        code_description: Most days
+        value: "2"
+      - name: Every day
+        code: MFP-Q2-D
+        code_description: Every day
+        value: "3"
+  - code_system: INTERNAL
+    code: MFP-Q3
+    code_description: Adherence
+    content: Are you still taking it the way it was prescribed?
+    responses_code_system: INTERNAL
+    responses_type: SING
+    responses:
+      - name: "Yes"
+        code: MFP-Q3-A
+        code_description: Taking as prescribed
+        value: "0"
+      - name: I have changed the dose myself
+        code: MFP-Q3-B
+        code_description: Self adjusted the dose
+        value: "1"
+      - name: I have stopped taking it
+        code: MFP-Q3-C
+        code_description: Stopped taking it
+        value: "2"
+  - code_system: INTERNAL
+    code: MFP-Q4
+    code_description: Missed doses
+    content: Have you missed any doses in the last week?
+    responses_code_system: INTERNAL
+    responses_type: SING
+    responses:
+      - name: None
+        code: MFP-Q4-A
+        code_description: No missed doses
+        value: "0"
+      - name: One or two
+        code: MFP-Q4-B
+        code_description: One or two missed doses
+        value: "1"
+      - name: More than two
+        code: MFP-Q4-C
+        code_description: More than two missed doses
+        value: "2"
+  - code_system: INTERNAL
+    code: MFP-Q5
+    code_description: Other side effects
+    content: Have you noticed anything else since starting it?
+    responses_code_system: INTERNAL
+    responses_type: MULT
+    responses:
+      - name: Headache
+        code: MFP-Q5-A
+        code_description: Headache
+        value: "1"
+      - name: Dizziness
+        code: MFP-Q5-B
+        code_description: Dizziness
+        value: "1"
+      - name: Tiredness
+        code: MFP-Q5-C
+        code_description: Tiredness
+        value: "1"
+      - name: Changes to appetite
+        code: MFP-Q5-D
+        code_description: Appetite change
+        value: "1"
+      - name: Nothing else
+        code: MFP-Q5-E
+        code_description: No other side effects
+        value: "0"
+  - code_system: INTERNAL
+    code: MFP-Q6
+    code_description: Wants to be contacted
+    content: Would you like somebody to call you about this?
+    responses_code_system: INTERNAL
+    responses_type: SING
+    responses:
+      - name: Yes, please call me
+        code: MFP-Q6-A
+        code_description: Requests a call
+        value: "1"
+      - name: No, I am fine
+        code: MFP-Q6-B
+        code_description: No call needed
+        value: "0"
+  - code_system: INTERNAL
+    code: MFP-Q7
+    code_description: Free text
+    content: Anything you want to tell us
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    responses:
+      - name: TXT
+        code: MFP-Q7-A
+        code_description: Free text response
+        value: ""
