@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Personalized Prevention Plan</title>
+<style>
+  @media print {
+    body { margin: 0; padding: 20px; }
+    .no-print { display: none !important; }
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 13px;
+    color: #333;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 24px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 20px;
+    color: #1565c0;
+    margin: 0 0 4px 0;
+    text-align: center;
+  }
+  .subtitle {
+    text-align: center;
+    color: #666;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .patient-header {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    background: #f8f9fa;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+  }
+  .patient-header .field {
+    font-size: 12px;
+  }
+  .patient-header .field-label {
+    color: #666;
+    font-weight: 600;
+  }
+  .patient-header .field-value {
+    color: #333;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1565c0;
+    border-bottom: 2px solid #1565c0;
+    padding-bottom: 4px;
+    margin: 20px 0 10px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  th {
+    background: #e3f2fd;
+    color: #1565c0;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 10px;
+    border: 1px solid #bbdefb;
+  }
+  td {
+    padding: 6px 10px;
+    border: 1px solid #e0e0e0;
+    vertical-align: top;
+  }
+  tr:nth-child(even) {
+    background: #fafafa;
+  }
+  .status-ordered {
+    color: #1565c0;
+    font-weight: 600;
+  }
+  .status-due {
+    color: #e65100;
+    font-weight: 600;
+  }
+  .status-uptodate {
+    color: #2e7d32;
+  }
+  .status-norecord {
+    color: #888;
+    font-style: italic;
+  }
+  .next-awv {
+    border: 2px solid #1565c0;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 24px;
+    background: #e3f2fd;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1565c0;
+  }
+  .print-bar {
+    text-align: center;
+    margin: 20px 0;
+  }
+  .print-bar button {
+    background: #1565c0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 24px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .print-bar button:hover {
+    background: #0d47a1;
+  }
+  .provider-comments {
+    margin-top: 24px;
+  }
+  .provider-comments textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  .provider-comments textarea:focus {
+    outline: none;
+    border-color: #1565c0;
+  }
+  .provider-comments-print {
+    display: none;
+    white-space: pre-wrap;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    min-height: 40px;
+    font-size: 13px;
+  }
+  @media print {
+    .provider-comments textarea { display: none !important; }
+    .provider-comments-print { display: block !important; }
+  }
+  .bottom-bar {
+    text-align: center;
+    margin: 20px 0;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  .bottom-bar button {
+    background: #1565c0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 24px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .bottom-bar button:hover {
+    background: #0d47a1;
+  }
+  .bottom-bar .save-status {
+    font-size: 12px;
+    margin-left: 8px;
+    align-self: center;
+  }
+  .footer-note {
+    text-align: center;
+    font-size: 11px;
+    color: #999;
+    margin-top: 24px;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="print-bar no-print">
+  <button onclick="window.print()">Print Prevention Plan</button>
+</div>
+
+<h1>Personalized Prevention Plan</h1>
+<div class="subtitle">Annual Wellness Visit &mdash; [[awv_type]]</div>
+
+<div class="patient-header">
+  <div class="field"><span class="field-label">Patient:</span> <span class="field-value">[[patient_name]]</span></div>
+  <div class="field"><span class="field-label">DOB:</span> <span class="field-value">[[patient_dob]]</span></div>
+  <div class="field"><span class="field-label">Age:</span> <span class="field-value">[[patient_age]]</span></div>
+  <div class="field"><span class="field-label">Sex:</span> <span class="field-value">[[patient_sex]]</span></div>
+  <div class="field"><span class="field-label">Visit Date:</span> <span class="field-value">[[visit_date]]</span></div>
+</div>
+
+<div class="provider-comments">
+  <div class="section-title">Provider Comments</div>
+  <textarea id="provider-comments-text" placeholder="Add provider notes, additional recommendations, or patient-specific instructions...">[[provider_comments]]</textarea>
+  <div class="provider-comments-print" id="provider-comments-print">[[provider_comments]]</div>
+</div>
+
+[[next_due_timeline]]
+
+[[immunizations_section]]
+
+[[cancer_screenings_section]]
+
+[[chronic_disease_section]]
+
+[[behavioral_health_section]]
+
+[[functional_assessment_section]]
+
+<div class="next-awv">
+  Next Annual Wellness Visit Due: [[next_awv_date]]
+</div>
+
+<div class="bottom-bar no-print">
+  <button onclick="saveComments()">Save Comments</button>
+  <button onclick="window.print()">Print Plan</button>
+  <span class="save-status" id="save-status"></span>
+</div>
+
+<div class="footer-note">
+  Generated on [[visit_date]] during Annual Wellness Visit. This plan is personalized based on patient demographics and clinical history.
+</div>
+
+<script>
+var NOTE_ID = '[[note_id]]';
+var API_BASE = '[[api_base]]';
+var messagePort = null;
+
+// Establish Canvas messagePort for modal control
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+    messagePort = event.ports[0];
+    messagePort.start();
+  }
+});
+
+function closeModal() {
+  if (messagePort) {
+    messagePort.postMessage({ type: 'CLOSE_MODAL' });
+  }
+}
+
+function saveComments() {
+  var text = document.getElementById('provider-comments-text').value;
+  var status = document.getElementById('save-status');
+  var printDiv = document.getElementById('provider-comments-print');
+  if (status) { status.textContent = 'Saving...'; status.style.color = '#1565c0'; }
+  fetch('/plugin-io/api/guided_awv/awv/preventive-services', {
+    method: 'POST',
+    // Authorization header matches the other plugin-io fetches in the
+    // sibling guided_awv.html template. Auth actually flows via the session
+    // cookie (StaffSessionAuthMixin) so this is consistency-only - but the
+    // sentinel keeps grep-ability and matches the rest of the file family.
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer internal-call' },
+    body: JSON.stringify({ note_id: NOTE_ID, prevention_plan_comments: text })
+  }).then(function(r) { return r.json(); }).then(function(result) {
+    if (result && result.success) {
+      if (status) { status.textContent = 'Saved'; status.style.color = '#2e7d32'; }
+      if (printDiv) printDiv.textContent = text;
+    } else {
+      if (status) { status.textContent = 'Save failed'; status.style.color = '#e65100'; }
+    }
+  }).catch(function(err) {
+    if (status) { status.textContent = 'Error: ' + err.message; status.style.color = '#e65100'; }
+  });
+}
+
+// Sync textarea to print div on input
+document.getElementById('provider-comments-text').addEventListener('input', function() {
+  document.getElementById('provider-comments-print').textContent = this.value;
+});
+</script>
+
+</body>
+</html>

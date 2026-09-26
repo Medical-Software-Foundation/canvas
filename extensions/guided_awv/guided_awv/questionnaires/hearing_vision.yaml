@@ -1,0 +1,25 @@
+name: "Hearing and Vision Screening"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "AWV_HEARING_VISION"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+questions:
+- content: "Hearing Assessment"
+  code_system: "INTERNAL"
+  code: "AWV_HEARING"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Hearing Result"
+    code: "AWV_HEARING_RESP"
+    value: ''
+- content: "Vision Assessment"
+  code_system: "INTERNAL"
+  code: "AWV_VISION"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Vision Result"
+    code: "AWV_VISION_RESP"
+    value: ''
