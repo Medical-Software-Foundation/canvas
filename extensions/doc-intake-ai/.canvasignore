@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+tests/
+.pytest_cache/
+.venv/
+.cpa-workflow-artifacts/
+mypy.ini
+pyproject.toml
+uv.lock
+HANDOFF.md
