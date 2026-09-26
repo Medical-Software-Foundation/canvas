@@ -150,6 +150,61 @@ def test_submit_success_for_single_payload() -> None:
         mock_failure.assert_not_called()
 
 
+def test_submit_warns_when_a_resubmission_code_is_set() -> None:
+    """Candid can't carry a box-22 code, so the claim has to say so after filing."""
+    claim = _claim_in_submission_queue()
+    coverage = MagicMock()
+    coverage.payer_order = "Primary"
+    coverage.resubmission_code = "7"
+    claim.coverages.active.return_value = [coverage]
+
+    with (
+        patch("candid.api.submit.Claim") as MockClaim,
+        patch("candid.api.submit.CandidClient") as MC,
+        patch("candid.api.submit.build_split_payloads") as mock_build,
+        patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.ClaimEffect") as MockClaimEffect,
+        patch("candid.api.submit.notify_claim_updated"),
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = claim
+        mock_build.return_value = [({"external_id": "canvas:claim-1"}, [])]
+        MC.from_secrets.return_value.submit_claim.return_value = (True, "encounter-1")
+        mock_success.return_value = ["success-effect"]
+
+        result = _build_handler(claim).post()
+
+        assert MockClaimEffect.return_value.add_comment.return_value in result
+        comment = MockClaimEffect.return_value.add_comment.call_args.kwargs["comment"]
+        assert "7 (replacement of prior claim)" in comment
+        # The payload itself is untouched — this change only adds a comment.
+        MC.from_secrets.return_value.submit_claim.assert_called_once_with(
+            {"external_id": "canvas:claim-1"}
+        )
+
+
+def test_submit_adds_no_resubmission_warning_for_an_ordinary_claim() -> None:
+    """No code set → no extra comment, so ordinary submissions read as before."""
+    claim = _claim_in_submission_queue()
+    claim.coverages.active.return_value = []
+
+    with (
+        patch("candid.api.submit.Claim") as MockClaim,
+        patch("candid.api.submit.CandidClient") as MC,
+        patch("candid.api.submit.build_split_payloads") as mock_build,
+        patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.ClaimEffect") as MockClaimEffect,
+        patch("candid.api.submit.notify_claim_updated"),
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = claim
+        mock_build.return_value = [({"external_id": "canvas:claim-1"}, [])]
+        MC.from_secrets.return_value.submit_claim.return_value = (True, "encounter-1")
+        mock_success.return_value = ["success-effect"]
+
+        _build_handler(claim).post()
+
+        MockClaimEffect.return_value.add_comment.assert_not_called()
+
+
 def test_submit_success_for_multiple_splits() -> None:
     """All splits succeed → handle_submit_success with N encounter records."""
     claim = _claim_in_submission_queue()

@@ -15,6 +15,7 @@ from candid.effect_helpers import (
     check_internal_auth,
     handle_submit_failure,
     handle_submit_success,
+    resubmission_code_comment,
 )
 
 SUBMISSION_QUEUE = ClaimQueues.QUEUED_FOR_SUBMISSION
@@ -124,6 +125,18 @@ class CandidSubmitAPI(SimpleAPIRoute):
             return []
 
         effects = self._submit(claim)
+
+        # Warn on every attempt, success or failure. A biller who set a
+        # resubmission code is expecting a correction, and Candid can't carry
+        # one, so the claim needs to say that whatever else happened.
+        warning = resubmission_code_comment(claim, ClaimEffect(claim_id=claim.id))
+        if warning:
+            log.info(
+                f"Candid: claim {claim.id} carries a resubmission code that "
+                "Candid's submission API cannot accept; warned on the claim"
+            )
+            effects.append(warning)
+
         effects.append(notify_claim_updated(str(claim.id)))
         return effects
 
