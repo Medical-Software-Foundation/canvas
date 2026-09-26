@@ -1,0 +1,89 @@
+{
+    "sdk_version": "0.135.0",
+    "plugin_version": "0.10.12",
+    "name": "patient_notify",
+    "description": "Patient appointment notifications via direct SMS and email. Handles confirmations, reminders, no-shows, cancellations, and telehealth join notifications with configurable per-visit-type campaigns.",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_notify.handlers.event_handler:AppointmentEventHandler",
+                "description": "Sends instant notifications for appointment created, canceled, and no-showed events",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Patient",
+                        "v1.Appointment",
+                        "v1.PracticeLocation",
+                        "v1.Organization"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_notify.handlers.reminder_scheduler:ReminderScheduler",
+                "description": "Cron task that checks for upcoming booked appointments needing reminders and telehealth join notifications every 15 minutes",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Patient",
+                        "v1.Appointment",
+                        "v1.PracticeLocation",
+                        "v1.NoteType",
+                        "v1.Organization"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_notify.handlers.notification_api:NotificationAPI",
+                "description": "API endpoints for admin configuration, notification history, and manual send/retry/preview",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.NoteType",
+                        "v1.Patient",
+                        "v1.Appointment",
+                        "v1.Organization"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "patient_notify.handlers.admin_app:NotifyAdminApp",
+                "name": "Notifications Admin",
+                "description": "Configure notification campaigns and view global notification history",
+                "icon": "assets/admin-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 100
+            },
+            {
+                "class": "patient_notify.handlers.patient_app:NotifyPatientApp",
+                "name": "Patient Notifications",
+                "description": "View notification history and send notifications to this patient",
+                "icon": "assets/patient-icon.png",
+                "scope": "patient_specific",
+                "show_in_panel": true,
+                "panel_priority": 1
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "twilio-account-sid",
+        "twilio-auth-token",
+        "twilio-phone-number",
+        "sendgrid-api-key",
+        "sendgrid-from-email"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
