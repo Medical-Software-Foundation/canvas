@@ -1,0 +1,56 @@
+{
+    "sdk_version": "0.113.0",
+    "plugin_version": "0.7.1",
+    "name": "supervisor_cosign",
+    "description": "Supervisor co-signature workflow. Reads Canvas's native Staff.default_supervising_provider; when a supervisee's note locks, creates a co-sign task for the supervisor and exposes a Co-sign button with approve + addendum.",
+    "components": {
+        "commands": [
+            {
+                "name": "Attestation Review",
+                "label": "Attestation Review",
+                "schema_key": "attestation_review"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "supervisor_cosign.protocols.note_lock_handler:NoteLockHandler",
+                "description": "Samples locked notes and creates co-sign tasks for supervisors",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.protocols.cosign_button:CoSignButton",
+                "description": "Note-header button visible on notes with a pending co-sign record",
+                "data_access": {
+                    "event": "SHOW_NOTE_HEADER_BUTTON",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.api.handlers:SupervisorCoSignAPI",
+                "description": "Admin config, co-sign submission, and compliance report endpoints",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ]
+    },
+    "custom_data": {
+        "namespace": "supervisor__cosign",
+        "access": "read_write"
+    },
+    "secrets": [
+        "SAMPLE_PERCENTAGE"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
