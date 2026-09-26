@@ -1,0 +1,84 @@
+{
+    "sdk_version": "0.131.0",
+    "plugin_version": "0.1.13",
+    "name": "rx_history",
+    "description": "Automates Surescripts medication history requests for upcoming appointments and surfaces history in the chart",
+    "components": {
+        "protocols": [
+            {
+                "class": "rx_history.protocols.eligibility_cron:EligibilityCronTask",
+                "description": "Daily cron to send Surescripts eligibility requests for appointments 1 and 7 days out",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Appointment", "Patient", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "rx_history.protocols.med_history_cron:MedHistoryCronTask",
+                "description": "Daily cron to send Surescripts medication history requests for appointments 1 and 7 days out",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Appointment", "Patient", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "rx_history.protocols.action_button:MedHistoryActionButton",
+                "description": "Action button in medications section that renders and opens the medication history comparison modal",
+                "data_access": {
+                    "event": "ACTION_BUTTON_CLICKED",
+                    "read": ["MedicationHistoryMedication", "MedicationHistoryMedicationCoding", "Medication", "MedicationCoding", "Patient", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "rx_history.protocols.view:MedHistoryRequestApi",
+                "description": "POST endpoints for requesting fresh Surescripts history and adding medication statements from the modal",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff", "Note"],
+                    "write": ["Note"]
+                }
+            },
+            {
+                "class": "rx_history.protocols.bulk_api:BulkRequestsApi",
+                "description": "Bulk Surescripts eligibility and med history request endpoints",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Patient", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "rx_history.protocols.static_api:StaticApi",
+                "description": "Serves design system CSS and JS assets for plugin templates",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "rx_history.applications.bulk_requests:BulkSurescriptsApp",
+                "name": "Surescripts Requests",
+                "description": "Bulk request Surescripts eligibility and medication history for upcoming appointments",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "show_in_panel": true
+            }
+        ]
+    },
+    "secrets": ["namespace_read_write_access_key"],
+    "custom_data": {
+        "namespace": "vicert__rx_history",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
