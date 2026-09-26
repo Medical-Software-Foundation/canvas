@@ -77,6 +77,7 @@ from provider_availability.engine.provider_resolver import (
     resolve_provider_id,
     search_providers,
 )
+from provider_availability.protocols.appointment_buffer import reconcile_buffers_for_provider
 from provider_availability.templates.admin_ui import render_admin_page
 
 ACCESS_DENIED_HTML = """<!DOCTYPE html>
@@ -574,6 +575,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         sync_effects = sync_provider_availability(provider_id)
         if rule.is_active and rule.booking_interval.min_lead_hours > 0:
             sync_effects.extend(build_lead_time_block_effects(rule))
+        sync_effects.extend(reconcile_buffers_for_provider(provider_id, "rule_saved"))
 
         return [
             *sync_effects,
@@ -667,6 +669,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     has_lead_time = True
             if not has_lead_time:
                 all_effects.extend(delete_provider_lead_time_events(pid))
+            all_effects.extend(reconcile_buffers_for_provider(pid, "rule_saved"))
 
         return [
             *all_effects,
@@ -696,6 +699,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 has_lead_time = True
         if not has_lead_time:
             event_effects.extend(delete_provider_lead_time_events(provider_id))
+        event_effects.extend(reconcile_buffers_for_provider(provider_id, "rule_deleted"))
 
         return [
             *event_effects,
@@ -719,6 +723,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         event_effects = build_delete_effects(provider_id)
 
         count = delete_rules_for_provider(provider_id)
+        event_effects.extend(reconcile_buffers_for_provider(provider_id, "rules_deleted"))
 
         return [
             *event_effects,
