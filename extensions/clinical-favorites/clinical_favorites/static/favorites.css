@@ -1,0 +1,493 @@
+        :root {
+            --primary: #4F7DF3;
+            --primary-light: #EEF2FF;
+            --primary-dark: #3D62C9;
+            --primary-subtle: #E0E7FF;
+            --success: #10B981;
+            --success-light: #ECFDF5;
+            --error: #EF4444;
+            --error-light: #FEF2F2;
+            --warning: #F59E0B;
+            --warning-light: #FFFBEB;
+            --accent-custom: #10B981;
+            --accent-custom-light: #ECFDF5;
+            --accent-default: #6B7280;
+            --text-primary: #1E293B;
+            --text-secondary: #64748B;
+            --text-tertiary: #94A3B8;
+            --text-muted: #CBD5E1;
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F8FAFC;
+            --bg-tertiary: #F1F5F9;
+            --bg-hover: #F1F5F9;
+            --border: #E2E8F0;
+            --border-light: #F1F5F9;
+            --border-selected: var(--primary);
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03);
+            --shadow-lg: 0 12px 28px rgba(0,0,0,0.06), 0 6px 12px rgba(0,0,0,0.03);
+            --shadow-toast: 0 12px 32px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+            --radius-sm: 8px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-full: 9999px;
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            box-sizing: border-box;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-family, lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .header {
+            padding: 14px 0 12px;
+            background: var(--bg-primary);
+            flex-shrink: 0;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+            letter-spacing: -0.2px;
+        }
+
+
+        .error-section {
+            padding: 40px 24px;
+            text-align: center;
+            background: var(--bg-primary);
+            margin: 24px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+        .error-icon {
+            font-size: 56px;
+            color: var(--warning);
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .error-section h3 {
+            margin: 0 0 8px;
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .error-section p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .no-results {
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 15px;
+        }
+        .loading { opacity: 0.6; pointer-events: none; }
+
+        canvas-tabs.type-tabs {
+            flex: none;
+            overflow: visible;
+        }
+        canvas-tabs.type-tabs canvas-tab-panel {
+            display: none !important;
+        }
+        #type-tabs-insert canvas-tab,
+        #type-tabs-manage canvas-tab,
+        #scope-tabs-insert canvas-tab,
+        #scope-tabs-manage canvas-tab {
+            flex: 1;
+        }
+
+        .manage-section {
+            padding: 12px 0;
+            padding-bottom: 80px;
+        }
+        .insert-section {
+            padding-bottom: 80px;
+        }
+        /* Clinical favorites list tables. See journal 036 for the layout rules. */
+        .fav-table-cell-shrink {
+            width: 1%;
+            white-space: nowrap;
+        }
+        .fav-table-cell-check {
+            width: 1%;
+            white-space: nowrap;
+            position: relative;
+        }
+        .fav-check-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .fav-check-center canvas-checkbox::part(label) {
+            padding: 0;
+        }
+        .fav-table-cell-flex {
+            width: 100%;
+        }
+        .fav-table-cell-num {
+            width: 1%;
+            white-space: nowrap;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .fav-table-cell-owner {
+            width: 1%;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+        canvas-table-body .fav-table-cell-flex {
+            color: var(--text-secondary);
+        }
+        canvas-table-body .fav-table-cell-owner {
+            color: var(--text-tertiary);
+        }
+        canvas-table-body .fav-table-cell-flex.fav-table-name {
+            color: inherit;
+        }
+        .fav-table-cell-actions {
+            width: 1%;
+            white-space: nowrap;
+            text-align: right;
+        }
+        .fav-table-cell-actions canvas-button + canvas-button {
+            margin-left: 4px;
+        }
+        .fav-table-name {
+            font-weight: 600;
+        }
+        canvas-table-row[data-hidden="true"] {
+            opacity: 0.55;
+        }
+
+        /* Form helpers (modal form) */
+        .form-group { margin-bottom: 0; }
+        body.favorite-type-condition .medication-only { display: none !important; }
+        body:not(.favorite-type-condition) .condition-only { display: none !important; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .form-label .required { color: var(--error); }
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+        .form-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 6px;
+        }
+
+        .form-container {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+        }
+        .form-actions {
+            padding: 20px 24px;
+            padding-bottom: 80px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-light);
+        }
+
+.picker-block { display: flex; flex-direction: row; gap: 12px; padding: 12px 0; flex-shrink: 0; }
+        .picker-block > canvas-combobox { flex: 0 0 360px; min-width: 0; max-width: 360px; }
+
+        /* CNV 895, tab row wrappers. Tabs stacked above the action row. */
+        .fav-type-bar {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .fav-type-bar > canvas-tabs { flex: 1; min-width: 0; }
+        .fav-type-bar .fav-type-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .fav-scope-bar {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 8px 0;
+        }
+        .fav-scope-bar > canvas-tabs { flex: 1; min-width: 0; }
+        .fav-scope-bar .fav-scope-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* CNV 895, width budget for inputs across the page. */
+        .fav-scope-bar canvas-input { width: 280px; max-width: 280px; }
+        .fav-scope-bar canvas-dropdown { width: 100px; max-width: 100px; }
+
+        /* CNV 895, Form Element Height Cohesion. The button defaults to
+           1rem font-size (16 px) but canvas-input and canvas-dropdown use
+           1em which inherits the body's 14 px. Pinning the button to the
+           same 1em context keeps the row of controls at one height. */
+        .fav-scope-bar canvas-button { --canvas-button-font-size: 1em; }
+
+        /* CNV 895, Ungrouped section title treatment. Italic plus the
+           DESIGN.md --color-text-muted token signals a system bucket
+           rather than a user-named group, while keeping bold weight so
+           the accordion title hierarchy still scans as a section header. */
+        .fav-section-title-system {
+            font-style: italic;
+            color: var(--color-text-muted);
+        }
+
+        /* CNV 895, fixed bottom action bar for Insert primary action.
+           Top border and shadow appear via .is-elevated when content extends
+           behind the bar. The transparent base border avoids a 1px layout
+           shift when the elevated state toggles on. */
+        .fav-footer-bar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 24px;
+            background: var(--bg-primary);
+            border-top: 1px solid transparent;
+            transition: box-shadow 0.15s ease-out, border-color 0.15s ease-out;
+        }
+        .fav-footer-bar.is-elevated {
+            border-top-color: var(--color-border);
+            /* Mirror of the plugin --shadow-md token used by popovers and
+               tooltips, with negated y offsets so the bar casts its shadow
+               upward over the scrolling content instead of off-screen. */
+            box-shadow:
+                0 -4px 12px rgba(0, 0, 0, 0.04),
+                0 -2px 6px rgba(0, 0, 0, 0.03);
+        }
+        .fav-footer-bar[hidden] { display: none; }
+        #add-button-wrap { display: inline-flex; }
+        #add-button-wrap.is-disabled { cursor: not-allowed; }
+        #bulk-import-banner:not(:empty) { margin-bottom: 16px; }
+
+        /* CNV 895, hover popup that lists Required and Selected slots above
+           the Insert button. Replaces the short sentence tooltip so the user
+           can see at a glance what is filled and what is missing. */
+        .fav-footer-popup {
+            position: fixed;
+            z-index: 11;
+            width: 280px;
+            max-width: calc(100vw - 24px);
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            padding: 14px 16px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(2px);
+            transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+            pointer-events: auto;
+        }
+        .fav-footer-popup:not([hidden]) {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .fav-footer-popup[hidden] { display: none; }
+        .fav-footer-popup-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .fav-footer-popup-section[hidden] { display: none; }
+        .fav-footer-popup-heading {
+            margin: 0;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .fav-footer-popup-list {
+            margin: 0;
+            padding-left: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .fav-footer-popup-list li {
+            margin: 0;
+            padding: 0;
+            color: var(--text-primary);
+        }
+        .fav-footer-popup-arrow {
+            position: absolute;
+            bottom: -7px;
+            left: 24px;
+            width: 12px;
+            height: 12px;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            transform: rotate(45deg);
+        }
+
+        /* CNV 940, compact click to expand rows for the chart insert list.
+           Each favorite is a one line summary, name plus status badge, that
+           expands its detail on click of the row toggle or its chevron. No
+           hover trigger, the toggle is a native button so it is keyboard
+           reachable. The selection checkbox sits outside the toggle so a
+           click on it never expands the row. */
+        #insert-main[hidden] { display: none; }
+
+        .fav-crow {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-primary);
+            overflow: hidden;
+        }
+
+        .fav-crow-summary {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .fav-crow-check {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-left: 10px;
+            flex: 0 0 auto;
+        }
+        .fav-crow-check canvas-checkbox::part(label) { padding: 0; }
+
+        .fav-crow-select {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 8px 10px 8px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: var(--transition-fast);
+        }
+        .fav-crow-name {
+            flex: 0 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+        .fav-crow-select canvas-badge { flex: 0 0 auto; }
+
+        .fav-crow-toggle {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 10px;
+            margin-right: 4px;
+            border: none;
+            background: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: var(--transition-fast);
+        }
+        .fav-crow-toggle:hover { background: var(--bg-hover); }
+        .fav-crow-toggle:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: -2px;
+        }
+        .fav-crow-chevron {
+            flex: 0 0 auto;
+            font-size: 20px;
+            color: var(--text-tertiary);
+            transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .fav-crow.is-expanded .fav-crow-chevron { transform: rotate(180deg); }
+
+        .fav-crow-detail {
+            padding: 12px 14px 14px 40px;
+            border-top: 1px solid var(--border-light);
+            background: var(--bg-secondary);
+        }
+        .fav-crow-detail[hidden] { display: none; }
+        .fav-crow-detail-grid {
+            margin: 0;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px 16px;
+        }
+        .fav-crow-detail-wide { grid-column: 1 / -1; }
+        .fav-crow-detail-item dt {
+            margin: 0 0 2px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .fav-crow-detail-item dd {
+            margin: 0;
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+
+        /* CNV 940, no open notes empty state on the chart insert surface. */
+        .fav-no-notes {
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        .fav-no-notes[hidden] { display: none; }
+        .fav-no-notes-icon {
+            font-size: 48px;
+            color: var(--text-tertiary);
+            margin-bottom: 12px;
+        }
+        .fav-no-notes h3 {
+            margin: 0 0 8px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .fav-no-notes p {
+            margin: 0 auto;
+            max-width: 320px;
+            font-size: 14px;
+        }
+
