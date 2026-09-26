@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "visit_confirmed",
+    "description": "AI appointment reminders that confirm visits and answer patient replies over two-way SMS and voice, passing only the exceptions to staff. For scheduling and front-desk teams at any practice.",
+    "components": {
+        "handlers": [
+            {
+                "class": "visit_confirmed.handlers.appointment_events:AppointmentEvents",
+                "description": "Notifies Visit Confirmed when appointments are created, rescheduled, cancelled, or marked no-show.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Patient", "Staff"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "VISIT_CONFIRMED_API_URL", "sensitive": true},
+        {"name": "VISIT_CONFIRMED_API_KEY", "sensitive": true}
+    ],
+    "tags": {
+        "interaction_modes_and_utilization": ["auto_followup"]
+    },
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

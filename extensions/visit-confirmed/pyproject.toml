@@ -1,0 +1,26 @@
+[project]
+name = "visitconfirmed-canvas-medical"
+version = "0.1.0"
+description = "Visit Confirmed appointment-event connector for Canvas Medical"
+# Pinned to the Python range the Canvas plugin runtime supports.
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "canvas[test-utils]",
+    "pytest",
+    # Canvas's REVIEW.md assumes `/wrap-up` has already passed mypy and >=90%
+    # branch coverage, so both are needed before a catalog submission.
+    "mypy",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["visit_confirmed"]
+omit = ["tests/*"]
