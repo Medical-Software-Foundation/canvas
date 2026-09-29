@@ -24,7 +24,7 @@ bookable time.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event as EventEffect
@@ -39,7 +39,14 @@ from provider_availability.engine.admin_calendar import (
     get_admin_calendars,
     resolve_provider_name,
 )
+from provider_availability.engine.models import (
+    DAYS_OF_WEEK,
+    ProviderAvailabilityRule,
+    TimeWindow,
+    date_in_pattern,
+)
 from provider_availability.engine.storage import get_rules_for_provider
+from provider_availability.engine.tz_utils import to_provider_naive
 
 BUFFER_TITLE = "Buffer"
 
@@ -78,7 +85,7 @@ def _load_appointment(appointment_id: str) -> Appointment | None:
     """
     appt = (
         Appointment.objects.filter(id=appointment_id, entered_in_error__isnull=True)
-        .select_related("provider", "appointment_rescheduled_from__provider")
+        .select_related("provider", "location", "appointment_rescheduled_from__provider")
         .first()
     )
     if appt is None:
@@ -97,13 +104,81 @@ def _appointment_window(appt: Appointment) -> tuple[datetime, datetime]:
     return start, start + timedelta(minutes=appt.duration_minutes)
 
 
-def _buffer_minutes(provider_id: str) -> tuple[int, int]:
-    """Return the provider's configured (pre, post) buffer minutes."""
-    rules = get_rules_for_provider(provider_id)
-    if not rules:
+def _windows_on(rule: ProviderAvailabilityRule, day: date) -> list[TimeWindow]:
+    """The rule's time windows on a given date."""
+    if rule.recurrence_frequency == "daily":
+        return rule.time_windows
+    return rule.weekly_schedule.get(DAYS_OF_WEEK[day.weekday()], [])
+
+
+def _covering_rules(
+    appt: Appointment, provider_id: str
+) -> list[ProviderAvailabilityRule]:
+    """The provider's rules that actually govern this appointment.
+
+    Matched the way slot calculation already decides which rule produced a
+    slot: the rule must be active, the appointment's local date must fall
+    inside both its effective range and its recurrence pattern, its start must
+    sit within one of that day's time windows, and its location must be
+    permitted. Times are compared in the provider's timezone, since a rule's
+    windows are written in local time while an appointment is stored in UTC.
+
+    Visit type is deliberately not matched. A rule stores visit types as UUID
+    strings while an appointment carries an integer ``note_type_id``, so
+    comparing the two would match nothing rather than narrowing correctly.
+    """
+    local_start = to_provider_naive(appt.start_time, provider_id)
+    local_date = local_start.date()
+    local_time = local_start.time()
+    appt_location = str(appt.location.id) if appt.location else ""
+
+    covering: list[ProviderAvailabilityRule] = []
+    for rule in get_rules_for_provider(provider_id):
+        if not rule.is_active:
+            continue
+        if rule.effective_start and local_date < rule.effective_start:
+            continue
+        if rule.effective_end and local_date > rule.effective_end:
+            continue
+        if not date_in_pattern(
+            local_date,
+            rule.effective_start,
+            rule.recurrence_frequency,
+            rule.recurrence_interval,
+            rule.weekly_schedule,
+        ):
+            continue
+        if rule.location_ids and appt_location not in rule.location_ids:
+            continue
+        if not any(
+            w.start <= local_time < w.end for w in _windows_on(rule, local_date)
+        ):
+            continue
+        covering.append(rule)
+    return covering
+
+
+def _buffer_minutes(appt: Appointment, provider_id: str) -> tuple[int, int]:
+    """The (pre, post) buffer minutes for this appointment's own rule.
+
+    Padding follows the rule covering where the appointment actually sits, so
+    rescheduling onto a day whose rule sets no padding correctly leaves it with
+    none, and moving it back restores it. Reading whichever rule came first
+    instead gave every one of a provider's appointments the same padding, which
+    was zero whenever the first rule happened to have none configured.
+
+    Where several rules cover one slot the largest values win, which is at
+    least deterministic. Where no rule covers the appointment there is no
+    configured padding to apply.
+    """
+    covering = _covering_rules(appt, provider_id)
+    if not covering:
+        log.info("BUFFER: no rule covers appt %s, drawing no padding", appt.id)
         return 0, 0
-    buffers = rules[0].buffer_minutes
-    return buffers.pre, buffers.post
+    return (
+        max(r.buffer_minutes.pre for r in covering),
+        max(r.buffer_minutes.post for r in covering),
+    )
 
 
 def _delete_buffer_effects(appt: Appointment) -> list[Effect]:
@@ -144,7 +219,7 @@ def _create_buffer_effects(appt: Appointment) -> list[Effect]:
         return []
 
     provider_id = str(appt.provider.id)
-    pre_buffer, post_buffer = _buffer_minutes(provider_id)
+    pre_buffer, post_buffer = _buffer_minutes(appt, provider_id)
     if pre_buffer == 0 and post_buffer == 0:
         return []
 
@@ -230,7 +305,7 @@ def _on_appointment_rescheduled(appointment_id: str) -> list[Effect]:
         Appointment.objects.filter(
             appointment_rescheduled_from__id=appt.id, entered_in_error__isnull=True
         )
-        .select_related("provider")
+        .select_related("provider", "location")
         .first()
     )
     if replacement is not None:

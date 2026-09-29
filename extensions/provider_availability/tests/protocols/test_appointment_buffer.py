@@ -1,9 +1,17 @@
 """Tests for provider_availability.protocols.appointment_buffer."""
 
 from datetime import UTC, datetime, timedelta
+from datetime import time as dt_time
 from unittest.mock import MagicMock, call, patch
 
-from provider_availability.engine.models import BufferTime, ProviderAvailabilityRule
+import pytest
+
+from provider_availability.engine.models import (
+    DAYS_OF_WEEK,
+    BufferTime,
+    ProviderAvailabilityRule,
+    TimeWindow,
+)
 from provider_availability.protocols.appointment_buffer import (
     BUFFER_TITLE,
     OnAppointmentCanceled,
@@ -11,6 +19,8 @@ from provider_availability.protocols.appointment_buffer import (
     OnAppointmentRescheduled,
     _create_buffer_effects,
     _delete_buffer_effects,
+    _buffer_minutes,
+    _covering_rules,
     _load_appointment,
     _on_appointment_canceled,
     _on_appointment_created,
@@ -21,19 +31,72 @@ from provider_availability.protocols.appointment_buffer import (
 BUFFER_MODULE = "provider_availability.protocols.appointment_buffer"
 
 
-def _future_appt(minutes=30, status="confirmed", provider_id="p1"):
+_ALL_DAY = TimeWindow(start=dt_time(0, 0), end=dt_time(23, 59))
+_CLINIC_HOURS = TimeWindow(start=dt_time(8, 0), end=dt_time(18, 0))
+
+
+def _future_appt(minutes=30, status="confirmed", provider_id="p1", location_id="loc-1"):
+    """A future appointment at a fixed hour, so an all-day window never grazes
+    the window edge on a late-night test run."""
+    day = (datetime.now(UTC) + timedelta(days=30)).date()
     appt = MagicMock()
+    appt.id = "appt-1"
     appt.provider.id = provider_id
-    appt.start_time = datetime.now(UTC) + timedelta(days=30)
+    appt.location.id = location_id
+    appt.start_time = datetime(day.year, day.month, day.day, 10, 0, tzinfo=UTC)
     appt.duration_minutes = minutes
     appt.status = status
     return appt
 
 
+def _appt_on(weekday_name, hour=10, location_id="loc-1"):
+    """A future appointment falling on the named weekday."""
+    target = DAYS_OF_WEEK.index(weekday_name)
+    day = (datetime.now(UTC) + timedelta(days=7)).date()
+    while day.weekday() != target:
+        day += timedelta(days=1)
+    appt = MagicMock()
+    appt.id = "appt-1"
+    appt.provider.id = "p1"
+    appt.location.id = location_id
+    appt.start_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=UTC)
+    appt.duration_minutes = 30
+    appt.status = "confirmed"
+    return appt
+
+
 def _rule(pre=15, post=15):
+    """A rule covering every day, all day, so buffer tests isolate the padding."""
     return ProviderAvailabilityRule(
-        id="r1", provider_id="p1", buffer_minutes=BufferTime(pre=pre, post=post)
+        id="r1",
+        provider_id="p1",
+        buffer_minutes=BufferTime(pre=pre, post=post),
+        weekly_schedule={day: [_ALL_DAY] for day in DAYS_OF_WEEK},
     )
+
+
+def _rule_on(days, pre=15, post=15, rule_id="r1", location_ids=None, active=True):
+    """A rule covering only the named weekdays, 8am to 6pm."""
+    return ProviderAvailabilityRule(
+        id=rule_id,
+        provider_id="p1",
+        buffer_minutes=BufferTime(pre=pre, post=post),
+        weekly_schedule={d: [_CLINIC_HOURS] for d in days},
+        location_ids=list(location_ids or []),
+        is_active=active,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _provider_tz_is_utc():
+    """A rule's windows are written in provider-local time while an appointment
+    is stored in UTC. These tests treat the provider's timezone as UTC so the
+    two line up without a timezone lookup."""
+    with patch(
+        f"{BUFFER_MODULE}.to_provider_naive",
+        side_effect=lambda dt_val, provider_id: dt_val.replace(tzinfo=None),
+    ):
+        yield
 
 
 class TestLoadAppointment:
@@ -337,3 +400,115 @@ class TestProtocolHandlers:
 
             assert mock_fn.mock_calls == [call("appt-3")]
             assert result == []
+
+
+class TestBufferMinutesFollowsTheCoveringRule:
+    """Padding comes from the rule governing where the appointment sits, not
+    from whichever rule happens to be stored first."""
+
+    def test_uses_the_covering_rules_padding(self):
+        appt = _appt_on("friday")
+        rule = _rule_on(["friday"], pre=5, post=15)
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (5, 15)
+
+    def test_a_rule_for_another_day_gives_no_padding(self):
+        """The case that matters on a reschedule: Friday has padding, Monday
+        has no rule, so a Monday appointment gets none."""
+        appt = _appt_on("monday")
+        friday_only = _rule_on(["friday"], pre=5, post=15)
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[friday_only]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_moving_between_days_changes_the_padding(self):
+        """Same provider, same two rules, opposite answers by day."""
+        rules = [
+            _rule_on(["friday"], pre=5, post=15, rule_id="fri"),
+            _rule_on(["monday"], pre=0, post=0, rule_id="mon"),
+        ]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=rules):
+            assert _buffer_minutes(_appt_on("friday"), "p1") == (5, 15)
+            assert _buffer_minutes(_appt_on("monday"), "p1") == (0, 0)
+
+    def test_a_zero_padding_rule_first_does_not_suppress_the_covering_one(self):
+        """The original defect: a provider's first rule had no padding, so every
+        appointment got none regardless of which rule covered it."""
+        appt = _appt_on("friday")
+        rules = [
+            _rule_on(["monday"], pre=0, post=0, rule_id="first-and-irrelevant"),
+            _rule_on(["friday"], pre=5, post=15, rule_id="covering"),
+        ]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=rules):
+            assert _buffer_minutes(appt, "p1") == (5, 15)
+
+    def test_largest_wins_when_two_rules_cover_the_same_slot(self):
+        appt = _appt_on("friday")
+        rules = [
+            _rule_on(["friday"], pre=5, post=30, rule_id="a"),
+            _rule_on(["friday"], pre=10, post=15, rule_id="b"),
+        ]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=rules):
+            assert _buffer_minutes(appt, "p1") == (10, 30)
+
+    def test_no_rules_at_all_gives_no_padding(self):
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[]):
+            assert _buffer_minutes(_appt_on("friday"), "p1") == (0, 0)
+
+    def test_an_inactive_rule_is_ignored(self):
+        appt = _appt_on("friday")
+        rule = _rule_on(["friday"], pre=5, post=15, active=False)
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_a_rule_at_another_location_is_ignored(self):
+        appt = _appt_on("friday", location_id="loc-elsewhere")
+        rule = _rule_on(["friday"], pre=5, post=15, location_ids=["loc-1"])
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_a_rule_with_no_location_restriction_covers_any_location(self):
+        appt = _appt_on("friday", location_id="loc-anything")
+        rule = _rule_on(["friday"], pre=5, post=15, location_ids=[])
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (5, 15)
+
+    def test_an_appointment_outside_the_rules_hours_gets_no_padding(self):
+        appt = _appt_on("friday", hour=20)  # rule covers 8am to 6pm
+        rule = _rule_on(["friday"], pre=5, post=15)
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_a_rule_whose_effective_range_has_ended_is_ignored(self):
+        appt = _appt_on("friday")
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.effective_end = (datetime.now(UTC) - timedelta(days=1)).date()
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_a_rule_that_has_not_started_yet_is_ignored(self):
+        appt = _appt_on("friday")
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.effective_start = (datetime.now(UTC) + timedelta(days=365)).date()
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_covering_rules_reports_which_rules_matched(self):
+        appt = _appt_on("friday")
+        rules = [
+            _rule_on(["friday"], rule_id="fri"),
+            _rule_on(["monday"], rule_id="mon"),
+        ]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=rules):
+            assert [r.id for r in _covering_rules(appt, "p1")] == ["fri"]
