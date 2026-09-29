@@ -258,9 +258,28 @@ def _create_buffer_effects(appt: Appointment) -> list[Effect]:
 
 
 def _on_appointment_created(appointment_id: str) -> list[Effect]:
-    """Draw buffers for a newly booked appointment."""
+    """Draw buffers for a newly booked appointment.
+
+    Canvas fires APPOINTMENT_CREATED alongside APPOINTMENT_RESCHEDULED for the
+    replacement appointment, so a reschedule reaches both handlers roughly 70ms
+    apart. Each one drawing produced two sets of buffers at every time.
+
+    Ownership is therefore decided by whether the appointment replaces another:
+    a replacement belongs to the reschedule handler, which has to clear the
+    predecessor's buffers anyway, and a plain booking belongs here. Having both
+    handlers delete-then-create instead would race, because effects apply
+    asynchronously and the second handler can query before the first one's
+    events exist.
+    """
     appt = _load_appointment(appointment_id)
     if appt is None:
+        return []
+
+    if appt.appointment_rescheduled_from is not None:
+        log.info(
+            "BUFFER: appt %s replaces another, leaving buffers to the reschedule handler",
+            appointment_id,
+        )
         return []
 
     effects = _create_buffer_effects(appt)

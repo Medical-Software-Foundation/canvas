@@ -46,6 +46,7 @@ def _future_appt(minutes=30, status="confirmed", provider_id="p1", location_id="
     appt.start_time = datetime(day.year, day.month, day.day, 10, 0, tzinfo=UTC)
     appt.duration_minutes = minutes
     appt.status = status
+    appt.appointment_rescheduled_from = None
     return appt
 
 
@@ -62,6 +63,7 @@ def _appt_on(weekday_name, hour=10, location_id="loc-1"):
     appt.start_time = datetime(day.year, day.month, day.day, hour, 0, tzinfo=UTC)
     appt.duration_minutes = 30
     appt.status = "confirmed"
+    appt.appointment_rescheduled_from = None
     return appt
 
 
@@ -283,6 +285,53 @@ class TestOnAppointmentCreated:
              patch(f"{BUFFER_MODULE}._create_buffer_effects") as mock_create:
             assert _on_appointment_created("appt-1") == []
             assert mock_create.mock_calls == []
+
+
+class TestOnAppointmentCreatedOwnership:
+    """Canvas fires APPOINTMENT_CREATED as well as APPOINTMENT_RESCHEDULED for a
+    replacement appointment. Only one handler may draw, or the provider gets two
+    sets of buffers at every time."""
+
+    def test_a_replacement_is_left_to_the_reschedule_handler(self):
+        replacement = _future_appt()
+        replacement.appointment_rescheduled_from = _future_appt()
+
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=replacement), \
+             patch(f"{BUFFER_MODULE}._create_buffer_effects") as mock_create:
+            result = _on_appointment_created("appt-new")
+
+            assert result == []
+            assert mock_create.mock_calls == []
+
+    def test_a_plain_booking_is_still_drawn_here(self):
+        appt = _future_appt()
+        appt.appointment_rescheduled_from = None
+
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=appt), \
+             patch(f"{BUFFER_MODULE}._create_buffer_effects", side_effect=lambda a: ["drawn"]) as mock_create:
+            result = _on_appointment_created("appt-1")
+
+            assert mock_create.mock_calls == [call(appt)]
+            assert result == ["drawn"]
+
+    def test_the_two_handlers_together_draw_exactly_one_set(self):
+        """A reschedule reaches both handlers. Between them they must clear the
+        predecessor once and draw the replacement once."""
+        previous = _future_appt()
+        previous.id = "appt-old"
+        replacement = _future_appt()
+        replacement.appointment_rescheduled_from = previous
+
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=replacement), \
+             patch(f"{BUFFER_MODULE}._delete_buffer_effects", side_effect=lambda a: ["gone"]) as mock_delete, \
+             patch(f"{BUFFER_MODULE}._create_buffer_effects", side_effect=lambda a: ["drawn"]) as mock_create:
+            from_created = _on_appointment_created("appt-new")
+            from_rescheduled = _on_appointment_rescheduled("appt-new")
+
+            assert from_created == []
+            assert from_rescheduled == ["gone", "drawn"]
+            assert mock_create.mock_calls == [call(replacement)]
+            assert mock_delete.mock_calls == [call(previous)]
 
 
 class TestOnAppointmentCanceled:
