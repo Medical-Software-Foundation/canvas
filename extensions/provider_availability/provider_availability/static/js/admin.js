@@ -27,6 +27,7 @@ let _locations = [];
 let _visitTypes = [];
 let _overviewData = [];
 let _savedView = [];  // the viewer's saved default view, as loaded from the server
+let _showExpired = false;  // expired rows are hidden until asked for
 let _providerTzMap = {};  // {provider_id: {timezone, explicit}} — authoritative TZ state
 let _tzOptions = [];
 var _viewTz = null;  // null = practice TZ (default)
@@ -392,6 +393,24 @@ document.addEventListener('focusout', function (e) {
 });
 
 /* ---------- Saved default view ---------- */
+
+// A row is expired once its end date has passed. One definition, used by both
+// the filtering below and the Expired badge, so the badge can never disagree
+// with what got hidden.
+function isExpiredRow(row) {
+  return !!(row.effective_end && new Date(row.effective_end + 'T23:59:59') < new Date());
+}
+
+// Expired rules and recurring blocks are hidden by default: a provider's list
+// is dominated by finished one-day rules otherwise. Not persisted, so a reload
+// returns to hiding them.
+function toggleExpired() {
+  _showExpired = !_showExpired;
+  var btn = document.getElementById('toggle-expired');
+  if (btn) btn.textContent = _showExpired ? 'Hide expired' : 'Show expired';
+  renderAccordion();
+}
+
 
 // True when the filter still holds exactly the saved default view, meaning the
 // user has not narrowed it by hand. The viewer's own row is exempt from the
@@ -1248,14 +1267,21 @@ function renderAccordion() {
     // Count Available rules (one row per rule). Counting weekdays would
     // miss daily-frequency rules (which keep weekly_schedule empty), so
     // a "Mon-Fri" rule and an "Every 2 days" rule both count as 1 here.
-    const availableCount = (p.rules || []).length;
+    // Hide expired rows unless asked for, and count only what is shown: a
+    // count taken before filtering would read "3 available" above one row.
+    const visibleRules = (p.rules || []).filter(r => _showExpired || !isExpiredRow(r));
+    const visibleRecurring = (p.recurring_blocks || []).filter(
+      rb => _showExpired || !isExpiredRow(rb)
+    );
+
+    const availableCount = visibleRules.length;
     let overrideCount = 0;
     let holdCount = 0;
-    p.rules.forEach(r => { overrideCount += (r.date_overrides || []).length; });
-    p.recurring_blocks.forEach(rb => {
+    visibleRules.forEach(r => { overrideCount += (r.date_overrides || []).length; });
+    visibleRecurring.forEach(rb => {
       if (rb.hold_type && rb.hold_type !== 'none') holdCount++;
     });
-    const pureBlockCount = p.blocks.length + p.recurring_blocks.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
+    const pureBlockCount = p.blocks.length + visibleRecurring.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
     const hasData = availableCount > 0 || pureBlockCount > 0 || holdCount > 0;
 
     html += '<div class="provider-card">';
@@ -1299,9 +1325,9 @@ function renderAccordion() {
       var rows = [];
 
       // Available rules — expandable rows
-      p.rules.forEach(r => {
+      visibleRules.forEach(r => {
         const schedule = r.weekly_schedule || {};
-        const isExpired = r.effective_end && new Date(r.effective_end + 'T23:59:59') < new Date();
+        const isExpired = isExpiredRow(r);
         const reasonChipHtml = r.reason
           ? '<div class="chip-group"><span class="detail-tag tag-avail">' + r.reason + '</span></div>'
           : '<span class="col-empty">\u2014</span>';
@@ -1478,9 +1504,9 @@ function renderAccordion() {
       });
 
       // Recurring blocks — expandable rows
-      p.recurring_blocks.forEach(rb => {
+      visibleRecurring.forEach(rb => {
         const schedule = rb.weekly_schedule || {};
-        const isExpired = rb.effective_end && new Date(rb.effective_end + 'T23:59:59') < new Date();
+        const isExpired = isExpiredRow(rb);
         const isHold = rb.hold_type && rb.hold_type !== 'none';
         const holdLabels = { none: '', same_day: 'Same Day Hold', next_day: 'Next Day Hold' };
         const holdLabel = holdLabels[rb.hold_type || 'none'] || '';
