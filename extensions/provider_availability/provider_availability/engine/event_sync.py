@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from datetime import UTC, date, datetime
+from typing import Any, cast
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
@@ -391,6 +392,27 @@ def _compute_recurring_segments(
     return segments
 
 
+def _series_end(evt: Any) -> datetime | None:
+    """When the event's whole series finishes, or None if it never does.
+
+    A one-off event finishes when its single occurrence ends. A recurring event
+    finishes at ``recurrence_ends_at``; when that is null the series is
+    open-ended and is therefore never fully past.
+
+    ``ends_at`` describes only the FIRST occurrence of a recurring event, so
+    using it as the series boundary misclassifies any long-running series whose
+    first occurrence has passed. That was PLUGIN-478: such a series was skipped
+    by the delete while the create step still ran, leaving the provider
+    advertising the same availability twice.
+    """
+    if getattr(evt, "recurrence_ends_at", None):
+        return cast(datetime, evt.recurrence_ends_at)
+    if getattr(evt, "recurrence", None):
+        return None
+    ends_at = getattr(evt, "ends_at", None)
+    return cast(datetime, ends_at) if ends_at else None
+
+
 def build_delete_effects(provider_id: str) -> list[Effect]:
     """Delete all 'Available' events on the provider's Clinic calendars.
 
@@ -419,9 +441,11 @@ def build_delete_effects(provider_id: str) -> list[Effect]:
             is_cancelled=False,
         )
         for evt in events:
-            # Preserve fully-past events for historical reporting
-            end_boundary = getattr(evt, "recurrence_ends_at", None) or evt.ends_at
-            if end_boundary and end_boundary < now:
+            # Preserve fully-past events for historical reporting. The
+            # boundary is the end of the SERIES, not of the first occurrence,
+            # so an open-ended recurring series is never treated as finished.
+            series_end = _series_end(evt)
+            if series_end is not None and series_end < now:
                 continue
             effects.append(EventEffect(event_id=str(evt.id)).delete())
         log.info(

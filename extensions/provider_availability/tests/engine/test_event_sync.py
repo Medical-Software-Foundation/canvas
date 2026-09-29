@@ -441,10 +441,12 @@ class TestBuildDeleteEffects:
         mock_evt1.id = "evt-uuid-1"
         mock_evt1.ends_at = future
         mock_evt1.recurrence_ends_at = None
+        mock_evt1.recurrence = None
         mock_evt2 = MagicMock()
         mock_evt2.id = "evt-uuid-2"
         mock_evt2.ends_at = future
         mock_evt2.recurrence_ends_at = None
+        mock_evt2.recurrence = None
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt1, mock_evt2]))
@@ -477,10 +479,12 @@ class TestBuildDeleteEffects:
         mock_evt1.id = "evt-1"
         mock_evt1.ends_at = future
         mock_evt1.recurrence_ends_at = None
+        mock_evt1.recurrence = None
         mock_evt2 = MagicMock()
         mock_evt2.id = "evt-2"
         mock_evt2.ends_at = future
         mock_evt2.recurrence_ends_at = None
+        mock_evt2.recurrence = None
 
         # Use separate querysets so each calendar's iterator works independently
         mock_qs1 = MagicMock()
@@ -549,9 +553,67 @@ class TestBuildDeleteEffects:
         mock_evt.id = "evt-past"
         mock_evt.ends_at = past
         mock_evt.recurrence_ends_at = None
+        mock_evt.recurrence = None
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt]))
+
+        with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
+             patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
+             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_staff_objects.get.return_value = mock_staff
+            mock_cal_objects.filter.return_value = [mock_cal]
+            mock_event_objects.filter.return_value = mock_qs
+
+            result = build_delete_effects(PROVIDER_ID)
+
+            assert result == []
+
+    def _delete_setup(self, events):
+        """Staff, one Clinic calendar, and a queryset over the given events."""
+        mock_staff = MagicMock()
+        mock_staff.full_name = "Jane Doe"
+        mock_cal = MagicMock()
+        mock_cal.id = "cal-1"
+        mock_cal.title = "Jane Doe: Clinic"
+        mock_qs = MagicMock()
+        mock_qs.__iter__ = MagicMock(return_value=iter(events))
+        return mock_staff, mock_cal, mock_qs
+
+    def test_open_ended_series_with_a_past_first_occurrence_is_deleted(self):
+        """PLUGIN-478. ends_at on a recurring event is the end of the FIRST
+        occurrence, so an open-ended series that began long ago must not be
+        mistaken for finished. Skipping it left the create step to add a second
+        copy of the same availability."""
+        past = datetime.now(UTC) - dt.timedelta(days=90)
+        evt = MagicMock()
+        evt.id = "evt-open-ended"
+        evt.ends_at = past
+        evt.recurrence_ends_at = None
+        evt.recurrence = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
+        mock_staff, mock_cal, mock_qs = self._delete_setup([evt])
+
+        with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
+             patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
+             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_staff_objects.get.return_value = mock_staff
+            mock_cal_objects.filter.return_value = [mock_cal]
+            mock_event_objects.filter.return_value = mock_qs
+
+            result = build_delete_effects(PROVIDER_ID)
+
+            assert len(result) == 1
+
+    def test_bounded_series_that_has_fully_ended_is_preserved(self):
+        """A recurring series whose recurrence_ends_at has passed really is
+        finished, so it stays for historical reporting."""
+        past = datetime.now(UTC) - dt.timedelta(days=90)
+        evt = MagicMock()
+        evt.id = "evt-bounded-past"
+        evt.ends_at = past
+        evt.recurrence_ends_at = datetime.now(UTC) - dt.timedelta(days=30)
+        evt.recurrence = "FREQ=WEEKLY"
+        mock_staff, mock_cal, mock_qs = self._delete_setup([evt])
 
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
@@ -579,6 +641,7 @@ class TestBuildDeleteEffects:
         mock_evt.id = "evt-recurring"
         mock_evt.ends_at = past_start
         mock_evt.recurrence_ends_at = future_end
+        mock_evt.recurrence = "FREQ=WEEKLY"
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt]))
