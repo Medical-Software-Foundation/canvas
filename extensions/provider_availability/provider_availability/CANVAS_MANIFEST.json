@@ -34,7 +34,7 @@
             },
             {
                 "class": "provider_availability.cron.cache_refresh:CacheRefreshTask",
-                "description": "Daily cache TTL refresh for availability rules",
+                "description": "Runs every 5 minutes: renews cached rules and blocks every 6 hours so they never expire, ensures each active provider has a Clinic calendar, re-syncs availability events once a day, and refreshes lead-time blocks",
                 "data_access": {
                     "event": "",
                     "read": ["Calendar", "Event", "PracticeLocation", "Staff", "StaffRole"],
@@ -70,7 +70,7 @@
             },
             {
                 "class": "provider_availability.protocols.slot_provider:SlotAvailabilityProvider",
-                "description": "Intercepts appointment slot search to inject rule-based availability",
+                "description": "Disabled: responds to appointment slot search but returns nothing, because slot search can only add slots, never remove them. Buffers are enforced by the appointment buffer handlers instead",
                 "data_access": {
                     "event": "",
                     "read": [],
