@@ -7,47 +7,102 @@
         "protocols": [
             {
                 "class": "provider_availability.api.availability_api:AvailabilityAPI",
-                "description": "REST API for querying availability and managing rules"
+                "description": "REST API for querying availability and managing rules",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.api.provision_api:ProvisionAPI",
-                "description": "API key-authenticated endpoint for provisioning provider calendars"
+                "description": "API key-authenticated endpoint for provisioning provider calendars",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.api.csv_import_api:CSVImportAPI",
-                "description": "Staff-session API for bulk availability import from a CSV file"
+                "description": "Staff-session API for bulk availability import from a CSV file",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.cron.cache_refresh:CacheRefreshTask",
-                "description": "Daily cache TTL refresh for availability rules"
+                "description": "Daily cache TTL refresh for availability rules",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "PracticeLocation", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.protocols.staff_lifecycle:OnStaffActivated",
-                "description": "Creates a Clinic calendar when a new provider is activated"
+                "description": "Creates a Clinic calendar when a new provider is activated",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "PracticeLocation", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.protocols.staff_lifecycle:OnStaffDeactivated",
-                "description": "Cleans up availability rules and calendar events when a provider is deactivated"
+                "description": "Cleans up availability rules and calendar events when a provider is deactivated",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "PracticeLocation", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.protocols.staff_lifecycle:OnPluginInstalled",
-                "description": "Syncs all cached rules to Canvas Calendar Events on plugin install or update"
+                "description": "Syncs all cached rules to Canvas Calendar Events on plugin install or update",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "PracticeLocation", "Staff", "StaffRole"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.protocols.slot_provider:SlotAvailabilityProvider",
-                "description": "Intercepts appointment slot search to inject rule-based availability"
+                "description": "Intercepts appointment slot search to inject rule-based availability",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
             },
             {
                 "class": "provider_availability.protocols.appointment_buffer:OnAppointmentCreated",
-                "description": "Creates buffer events on Administrative calendar when appointment is booked"
+                "description": "Creates buffer events on Administrative calendar when appointment is booked",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.protocols.appointment_buffer:OnAppointmentRescheduled",
-                "description": "Updates buffer events on Administrative calendar when appointment is rescheduled"
+                "description": "Updates buffer events on Administrative calendar when appointment is rescheduled",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Calendar", "Event"]
+                }
             },
             {
                 "class": "provider_availability.protocols.appointment_buffer:OnAppointmentCanceled",
-                "description": "Removes buffer events from Administrative calendar when appointment is canceled"
+                "description": "Removes buffer events from Administrative calendar when appointment is canceled",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Calendar", "Event"]
+                }
             }
         ],
         "applications": [
