@@ -443,7 +443,7 @@ body {
 .time-sep { color: var(--text-muted); font-size: 13px; font-weight: 600; }
 
 /* Time field (typed) */
-.time-combo { display: block; width: 100%; }
+.time-combo { display: block; width: 100%; position: relative; }
 .day-time-inputs .time-combo { flex: 1; }
 .time-combo-input {
   width: 100%; box-sizing: border-box;
@@ -453,6 +453,23 @@ body {
   outline: none; transition: border-color 0.15s;
 }
 .time-combo-input:focus { border-color: var(--teal-deep); box-shadow: 0 0 0 2px rgba(33,133,208,0.2); }
+
+/* 15-minute suggestion panel. Capped at roughly seven rows and scrolled, since
+   a full day is 96 options and the browser's own list ran the height of the
+   screen. Opened scrolled to 8:00 AM rather than to midnight. */
+.time-menu {
+  position: absolute; top: calc(100% + 3px); left: 0; right: 0;
+  z-index: 60; max-height: 244px; overflow-y: auto;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius-xs); box-shadow: var(--shadow-md);
+  padding: 2px 0;
+}
+.time-menu[hidden] { display: none; }
+.time-option {
+  padding: 7px 10px; font-size: 14px; line-height: 1.2;
+  color: var(--text-body); cursor: pointer; white-space: nowrap;
+}
+.time-option:hover { background: var(--surface-alt); }
 
 .remove-time {
   background: none; border: none; cursor: pointer; color: var(--text-muted);

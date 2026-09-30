@@ -321,25 +321,68 @@ function parseTimeTo24(str) {
   return _pad2(h) + ':' + _pad2(min);
 }
 
-// 15-minute suggestions for the time fields. Options carry the same 12-hour
-// display text the visible input uses, so picking one flows through the
-// existing parse-on-input handler with no special casing. A datalist only
-// suggests, so typing an off-grid time such as "9:07 AM" still works exactly
-// as before. Order is plain chronological from 12:00 AM: a datalist cannot be
-// told where to scroll, so reordering it would only move the oddity around.
-var TIME_OPTIONS_ID = 'pa-time-options';
-
-function buildTimeOptions() {
-  if (document.getElementById(TIME_OPTIONS_ID)) return;
-  var dl = document.createElement('datalist');
-  dl.id = TIME_OPTIONS_ID;
-  var html = '';
+// 15-minute suggestions for the time fields, rendered as our own panel rather
+// than a browser datalist. A datalist cannot be given a height or told where
+// to scroll, so it opened at 12:00 AM and ran the full height of the screen.
+// A panel can do both. Free typing is unaffected either way: the list only
+// suggests, and an off-grid time such as "9:07 AM" still parses.
+var TIME_OPTIONS = (function () {
+  var out = [];
   for (var mins = 0; mins < 24 * 60; mins += 15) {
-    var canon = _pad2(Math.floor(mins / 60)) + ':' + _pad2(mins % 60);
-    html += '<option value="' + _fmt12(canon) + '"></option>';
+    out.push(_fmt12(_pad2(Math.floor(mins / 60)) + ':' + _pad2(mins % 60)));
   }
-  dl.innerHTML = html;
-  document.body.appendChild(dl);
+  return out;
+})();
+
+// Where the list lands when opened with nothing typed. Midnight is almost
+// never what someone wants, and scrolling past it every time is the whole
+// reason this stopped being a datalist.
+var TIME_MENU_DEFAULT = '8:00 AM';
+
+function _timeMenu(input) {
+  var combo = input.closest('.time-combo');
+  return combo ? combo.querySelector('.time-menu') : null;
+}
+
+function closeAllTimeMenus() {
+  var menus = document.querySelectorAll('.time-menu');
+  for (var i = 0; i < menus.length; i++) menus[i].hidden = true;
+}
+
+// Opening and typing want different lists, which is why this takes a flag.
+//
+// Opening a field that already reads "2:30 PM" must show the whole day
+// positioned at 2:30, not a one-item list containing what is already there.
+// Typing narrows, because typing "9" to reach the nine-o-clock quarters is
+// faster than scrolling. And when what has been typed matches nothing, the
+// panel closes rather than falling back to all 96 options, which would yank
+// the list back to the top part-way through typing an off-grid time.
+function openTimeMenu(input, narrowToTyped) {
+  var menu = _timeMenu(input);
+  if (!menu) return;
+
+  var typed = String(input.value || '').trim().toLowerCase();
+  var shown = TIME_OPTIONS;
+  if (narrowToTyped && typed) {
+    shown = TIME_OPTIONS.filter(function (o) {
+      return o.toLowerCase().indexOf(typed) === 0;
+    });
+    if (!shown.length) {
+      menu.hidden = true;
+      return;
+    }
+  }
+
+  menu.innerHTML = shown.map(function (o) {
+    return '<div class="time-option" role="option">' + o + '</div>';
+  }).join('');
+  menu.hidden = false;
+
+  // Land on the field's current value, or on the default when it has none.
+  var current = input.value.trim();
+  var idx = shown.indexOf(current);
+  if (idx < 0) idx = shown.indexOf(TIME_MENU_DEFAULT);
+  menu.scrollTop = idx > 0 && menu.children[idx] ? menu.children[idx].offsetTop : 0;
 }
 
 // A plain typed time field. The user types any time (e.g. "9:07 AM"); it is
@@ -350,8 +393,9 @@ function timeFieldHtml(val, id) {
   var idAttr = id ? ' id="' + id + '"' : '';
   var display = val ? _fmt12(val) : '';
   return '<span class="time-combo">' +
-    '<input type="text" class="time-combo-input" autocomplete="off" list="' + TIME_OPTIONS_ID + '" placeholder="e.g. 9:00 AM" value="' + display + '">' +
+    '<input type="text" class="time-combo-input" autocomplete="off" placeholder="e.g. 9:00 AM" value="' + display + '">' +
     '<input type="hidden" class="time-input"' + idAttr + ' value="' + val + '">' +
+    '<div class="time-menu" role="listbox" hidden></div>' +
     '</span>';
 }
 
@@ -380,6 +424,33 @@ document.addEventListener('input', function (e) {
   var input = e.target.closest && e.target.closest('.time-combo-input');
   if (!input) return;
   input.closest('.time-combo').querySelector('.time-input').value = parseTimeTo24(input.value) || '';
+  openTimeMenu(input, true);
+});
+
+document.addEventListener('focusin', function (e) {
+  var input = e.target.closest && e.target.closest('.time-combo-input');
+  closeAllTimeMenus();
+  if (input) openTimeMenu(input, false);
+});
+
+// mousedown rather than click, and preventDefault, so the field keeps focus and
+// the focusout normalizer below does not run between the press and the release.
+document.addEventListener('mousedown', function (e) {
+  var option = e.target.closest && e.target.closest('.time-option');
+  if (option) {
+    e.preventDefault();
+    var combo = option.closest('.time-combo');
+    var picked = option.textContent;
+    combo.querySelector('.time-combo-input').value = picked;
+    combo.querySelector('.time-input').value = parseTimeTo24(picked) || '';
+    combo.querySelector('.time-menu').hidden = true;
+    return;
+  }
+  if (!(e.target.closest && e.target.closest('.time-combo'))) closeAllTimeMenus();
+});
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeAllTimeMenus();
 });
 
 // Normalize the typed text to a clean value when the field loses focus.
@@ -390,6 +461,8 @@ document.addEventListener('focusout', function (e) {
   var canon = parseTimeTo24(input.value);
   span.querySelector('.time-input').value = canon || '';
   input.value = canon ? _fmt12(canon) : '';
+  var menu = span.querySelector('.time-menu');
+  if (menu) menu.hidden = true;
 });
 
 /* ---------- Saved default view ---------- */
@@ -3433,8 +3506,6 @@ msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search loca
 msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
 msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
 // msSettingsStaff removed — access control now via plugin secret
-
-buildTimeOptions();
 
 // Template-defined time fields (Single Event / Blocked start & end)
 initTimeField('single_start_time_wrap', 'single_start_time');
