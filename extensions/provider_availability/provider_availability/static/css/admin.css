@@ -217,7 +217,7 @@ body {
 .bulk-link:hover { text-decoration: underline; }
 .bulk-btn {
   font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-  background: transparent; color: var(--text); border: 1px solid var(--border);
+  background: transparent; color: var(--text-head); border: 1px solid var(--border);
 }
 .bulk-btn:hover:not(:disabled) { border-color: var(--cyan); }
 /* Upload stays quiet until there is a file to upload. */
