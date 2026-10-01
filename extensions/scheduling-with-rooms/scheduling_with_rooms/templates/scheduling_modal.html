@@ -8,508 +8,19 @@
   <meta http-equiv="Expires" content="0" />
   <title>Schedule Appointment</title>
   {{ theme_style|safe }}
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body, html {
-      height: 100%;
-      width: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      font-size: 14px;
-      background: #fff;
-      overflow: hidden;
-    }
-
-    .app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      width: 100%;
-      background: #fff;
-    }
-
-    /* -- Body: two columns -- */
-    .body {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* -- Left panel: form fields -- */
-    .panel-left {
-      width: 280px;
-      min-width: 240px;
-      border-right: 1px solid #e5e7eb;
-      padding: 24px 20px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .panel-left-title {
-      font-size: 18px;
-      font-weight: 700;
-      color: #111827;
-      margin-bottom: 4px;
-    }
-
-    /* -- Right panel: calendar + slots -- */
-    .panel-right {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Calendar section */
-    .cal-section {
-      padding: 20px 24px 16px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    /* Manual override toggle row */
-    .manual-toggle-row {
-      display: flex;
-      justify-content: flex-end;
-      padding: 8px 24px 0;
-    }
-    .link-btn {
-      background: none;
-      border: none;
-      color: var(--brand-primary);
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 8px;
-      cursor: pointer;
-      border-radius: 6px;
-    }
-    .link-btn:hover { background: rgba(74,111,165,0.08); }
-    .link-btn.active { background: var(--brand-primary); color: #fff; }
-
-    /* Manual override form */
-    .manual-section {
-      padding: 16px 24px 24px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .manual-help {
-      font-size: 12px;
-      color: #6b7280;
-      margin-bottom: 12px;
-      line-height: 1.4;
-    }
-    .manual-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-    }
-    .manual-section .form-group input,
-    .manual-section .form-group select {
-      width: 100%;
-    }
-
-    /* Slots section */
-    .slots-section {
-      flex: 1;
-      padding: 16px 24px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    /* -- Form fields -- */
-    .form-group { display: flex; flex-direction: column; gap: 4px; }
-    .form-group label {
-      font-size: 11px;
-      font-weight: 600;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .req { color: #dc2626; }
-    .form-group input,
-    .form-group select {
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 13px;
-      color: #111827;
-      background: #fff;
-      width: 100%;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .form-group input:focus,
-    .form-group select:focus {
-      outline: none;
-      border-color: #111827;
-      box-shadow: 0 0 0 1px #111827;
-    }
-
-    /* Patient search autocomplete */
-    .patient-search-wrap { position: relative; }
-    #patient-results {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      border: 1px solid #d1d5db;
-      border-top: none;
-      border-radius: 0 0 8px 8px;
-      background: #fff;
-      max-height: 170px;
-      overflow-y: auto;
-      display: none;
-      z-index: 20;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    .patient-result-item {
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 13px;
-      border-bottom: 1px solid #f3f4f6;
-    }
-    .patient-result-item:last-child { border-bottom: none; }
-    .patient-result-item:hover { background: #f3f4f6; }
-    .patient-result-item .pt-name { font-weight: 600; color: #1f2937; }
-    .patient-result-item .pt-meta { font-size: 11px; color: #6b7280; margin-top: 1px; }
-
-    /* Selected patient chip */
-    #selected-patient-chip {
-      display: none;
-      background: #f3f4f6;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      padding: 7px 10px;
-      font-size: 13px;
-      color: #111827;
-      align-items: center;
-      justify-content: space-between;
-    }
-    #selected-patient-chip.visible { display: flex; }
-    .chip-clear {
-      background: none; border: none; cursor: pointer; color: #9ca3af;
-      font-size: 16px; line-height: 1; padding: 0 2px;
-    }
-    .chip-clear:hover { color: #111827; }
-
-    /* -- Mini Calendar -- */
-    .cal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .cal-month-label {
-      font-size: 16px;
-      font-weight: 700;
-      color: #111827;
-    }
-    .cal-month-label span {
-      font-weight: 400;
-      color: #6b7280;
-    }
-    .cal-nav {
-      display: flex;
-      gap: 4px;
-    }
-    .cal-nav button {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 18px;
-      color: #9ca3af;
-      padding: 4px 8px;
-      border-radius: 6px;
-      transition: color 0.12s, background 0.12s;
-    }
-    .cal-nav button:hover { color: #111827; background: #f3f4f6; }
-    #cal-today {
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      margin-right: 4px;
-    }
-
-    .cal-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 1px;
-      text-align: center;
-    }
-    .cal-dow {
-      font-size: 11px;
-      font-weight: 600;
-      color: #9ca3af;
-      text-transform: uppercase;
-      padding: 4px 0 8px;
-    }
-    .cal-day {
-      padding: 7px 0;
-      font-size: 13px;
-      color: #374151;
-      cursor: pointer;
-      border-radius: 8px;
-      transition: all 0.12s;
-      font-weight: 500;
-    }
-    .cal-day:hover { background: #f3f4f6; }
-    .cal-day.other-month { color: #d1d5db; }
-    .cal-day.today {
-      background: #f3f4f6;
-      color: #111827;
-      font-weight: 700;
-      border: 2px solid #9ca3af;
-    }
-    .cal-day.selected {
-      background: #111827;
-      color: #fff;
-      font-weight: 700;
-    }
-    .cal-day.avail-none:not(.selected):not(.other-month) {
-      color: #d1d5db;
-    }
-    .cal-day.avail-some:not(.selected):not(.other-month) {
-      color: #f59e0b;
-      font-weight: 700;
-    }
-    .cal-day.avail-many:not(.selected):not(.other-month) {
-      color: #16a34a;
-      font-weight: 700;
-    }
-
-    /* -- Provider / Room column grid -- */
-    .section-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
-    }
-
-    .provider-columns, .room-columns {
-      display: flex;
-      gap: 0;
-      flex: 1;
-      min-height: 0;
-      overflow-x: auto;
-    }
-
-    /* Multi-location: stack location groups vertically. */
-    .provider-columns.grouped {
-      display: block;
-      overflow-x: visible;
-    }
-    .location-group { margin-bottom: 18px; }
-    .location-group:last-child { margin-bottom: 0; }
-    .location-group-label {
-      font-size: 11.5px;
-      font-weight: 700;
-      color: var(--brand-primary);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 6px;
-    }
-    .group-section-label {
-      font-size: 10.5px;
-      font-weight: 600;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 8px 0 4px 0;
-    }
-    .location-group .provider-columns,
-    .location-group .room-columns {
-      display: flex;
-      overflow-x: auto;
-    }
-
-    .prov-col, .room-col {
-      flex: 1 1 0;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-    }
-    /* Provider columns get a hard minimum width so names/times don't wrap or
-       collide. The parent .provider-columns has overflow-x:auto, so adding
-       enough providers will produce a horizontal scrollbar instead. */
-    .prov-col {
-      flex: 0 0 130px;
-      min-width: 130px;
-    }
-    .prov-col + .prov-col,
-    .room-col + .room-col {
-      border-left: 1px solid #e5e7eb;
-    }
-
-    .col-header {
-      font-size: 12px;
-      font-weight: 700;
-      color: #111827;
-      padding: 6px 8px;
-      text-align: center;
-      border-bottom: 1px solid #e5e7eb;
-      background: #f9fafb;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .col-slots {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 4px;
-      padding: 6px 4px;
-    }
-
-    .slot-btn {
-      border: 1.5px solid #d1d5db;
-      border-radius: 20px;
-      padding: 6px 4px;
-      cursor: pointer;
-      background: #fff;
-      text-align: center;
-      font-size: 12px;
-      font-weight: 500;
-      color: #374151;
-      transition: all 0.15s;
-      width: 100%;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .slot-btn:hover {
-      border-color: #111827;
-      background: #f9fafb;
-    }
-    .slot-btn.selected {
-      background: #111827;
-      border-color: #111827;
-      color: #fff;
-      font-weight: 600;
-    }
-    .load-more-btn {
-      grid-column: 1 / -1;
-      background: none;
-      border: 1px dashed #d1d5db;
-      border-radius: 8px;
-      padding: 5px 8px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #6b7280;
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.12s;
-    }
-    .load-more-btn:hover {
-      border-color: #111827;
-      color: #111827;
-    }
-
-    .col-slots .no-slots-msg {
-      grid-column: 1 / -1;
-    }
-
-    .slot-time-patient { font-weight: 600; color: #1f2937; }
-    .slot-time-user { font-size: 10px; color: #9ca3af; margin-top: 1px; }
-    .slot-btn.selected .slot-time-patient,
-    .slot-btn.selected .slot-time-user { color: #fff; }
-
-    .slots-placeholder {
-      color: #9ca3af;
-      font-size: 13px;
-      padding: 12px 0;
-    }
-
-    .no-slots-msg {
-      color: #9ca3af;
-      font-size: 13px;
-      padding: 12px 0;
-    }
-
-    #room-slots-section {
-      border-top: 1px solid #e5e7eb;
-      padding-top: 10px;
-      margin-top: 6px;
-    }
-
-    /* -- Loading spinner -- */
-    .spinner {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid #e5e7eb;
-      border-top-color: #111827;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      vertical-align: middle;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* -- Footer -- */
-    .footer {
-      padding: 12px 20px;
-      border-top: 1px solid #e5e7eb;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #fff;
-    }
-    #status-msg {
-      font-size: 12px;
-      color: #6b7280;
-      min-height: 16px;
-    }
-    #status-msg.error { color: #dc2626; }
-    #status-msg.success { color: #16a34a; }
-
-    .btn-cancel {
-      background: #fff;
-      border: 1.5px solid #d1d5db;
-      border-radius: 8px;
-      padding: 8px 18px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      color: #374151;
-      transition: all 0.12s;
-    }
-    .btn-cancel:hover { border-color: #111827; }
-    .btn-book {
-      background: #111827;
-      border: none;
-      border-radius: 8px;
-      padding: 8px 22px;
-      font-size: 13px;
-      font-weight: 600;
-      color: #fff;
-      cursor: pointer;
-      transition: background 0.12s;
-    }
-    .btn-book:disabled {
-      background: #9ca3af;
-      cursor: not-allowed;
-    }
-    .btn-book:not(:disabled):hover { background: #374151; }
-  </style>
+  <link rel="stylesheet" href="/plugin-io/api/scheduling_with_rooms/modal.css?v={{ cache_bust }}">
 </head>
 <body>
 
-{% if prefill_patient %}
-{{ prefill_patient|json_script:"prefill-patient-data" }}
-<script>window.PREFILL_PATIENT = JSON.parse(document.getElementById('prefill-patient-data').textContent);</script>
-{% endif %}
+{{ prefill|json_script:"prefill-data" }}
+<script>window.PREFILL = JSON.parse(document.getElementById('prefill-data').textContent) || {};</script>
 
 <div class="app">
   <div class="body">
 
     <!-- LEFT: form fields (Patient, Appt Type, Duration, Location, Provider) -->
     <div class="panel-left">
-      <div class="panel-left-title">Schedule Appointment</div>
+      <div class="panel-left-title" id="panel-title">Schedule Appointment</div>
 
       <div class="form-group">
         <label for="patient-search">Patient <span class="req">*</span></label>
@@ -574,7 +85,7 @@
       <!-- Slots -->
       <div class="slots-section" id="slots-section">
         <div id="slots-loading" style="display:none; padding:8px 0;">
-          <span class="spinner"></span> <span style="font-size:12px;color:#6b7280;">Loading...</span>
+          <span class="spinner"></span> <span style="font-size:12px;color:var(--text-subtle);">Loading...</span>
         </div>
 
         <!-- Provider slots -->
@@ -688,6 +199,16 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
     manualDurationMinutes: null, // overrides state.durationMinutes when set
     monthSummary: {},        // {"2026-03-01": 12, ...}
     monthSummaryKey: null,   // cache key to avoid redundant fetches
+    // Launch context (see window.PREFILL / scheduling_context.py)
+    mode: 'schedule',        // 'schedule' | 'reschedule' | 'followup'
+    origin: '',              // launching surface; 'global_panel' is ours
+    appointmentId: '',       // set in reschedule mode — /book updates instead of creates
+    prefillStart: null,      // naive ISO in calendar tz; auto-selected once slots load
+    prefillStartUsed: false,
+    // Columns the user expanded via "N more...". Keyed by column id, because
+    // selecting a slot re-renders every column — without this the expansion is
+    // lost and the slot that was just selected scrolls out of existence.
+    expandedColumns: {},
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -713,6 +234,7 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
   var slotsPlaceholder    = $('slots-placeholder');
   var statusMsg           = $('status-msg');
   var btnBook             = $('btn-book');
+  var panelTitle          = $('panel-title');
 
   var API_BASE = '/plugin-io/api/scheduling_with_rooms';
   var MONTH_NAMES = ['January','February','March','April','May','June',
@@ -997,7 +519,7 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
   function renderPatientResults(patients) {
     patientResults.innerHTML = '';
     if (!patients.length) {
-      patientResults.innerHTML = '<div class="patient-result-item" style="color:#6b7280;">No patients found.</div>';
+      patientResults.innerHTML = '<div class="patient-result-item" style="color:var(--text-subtle);">No patients found.</div>';
       patientResults.style.display = 'block';
       return;
     }
@@ -1054,9 +576,10 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
         selectLocation.innerHTML =
           '<option value="' + esc(locs[0].id) + '">' + esc(locs[0].name) + '</option>';
         state.locationId = locs[0].id;
-        loadProviders(locs[0].id);
         maybeFetchSlots();
         fetchMonthSummary();
+        // Returned so prefill can wait for the provider options to exist.
+        return loadProviders(locs[0].id);
       } else if (locs.length > 1) {
         // Multiple locations — default to "All locations".
         selectLocation.innerHTML =
@@ -1067,7 +590,7 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
         state.locationId = '';
         // Populate the provider dropdown with the union of providers across
         // all active locations.
-        loadProviders('');
+        return loadProviders('');
       }
     }).catch(function () {
       selectLocation.innerHTML = '<option value="">Failed to load</option>';
@@ -1091,7 +614,7 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
   function loadProviders(locationId) {
     selectProvider.innerHTML = '<option value="">Loading...</option>';
     selectProvider.disabled = true;
-    apiFetch('/providers?location_id=' + encodeURIComponent(locationId)).then(function (providers) {
+    return apiFetch('/providers?location_id=' + encodeURIComponent(locationId)).then(function (providers) {
       selectProvider.innerHTML = '<option value="">All providers</option>' +
         providers.map(function (p) {
           return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
@@ -1193,6 +716,9 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
     state.allRoomSlots = [];
     state.locationGroups = null;
     state.roomsRequired = false;
+    // A different date/location/visit type means different columns, so start
+    // them collapsed again rather than carrying the old expansion over.
+    state.expandedColumns = {};
     slotsPlaceholder.style.display = !state.locationId ? 'block' : 'none';
     // Keep the manual-mode room dropdown in sync when slot data is cleared
     // (e.g., the user changed visit type or location while manual is on).
@@ -1270,7 +796,57 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
       if (!stillValid2) state.selectedRoomSlot = null;
     }
 
+    maybeSelectPrefilledSlot();
     renderAllSlots();
+  }
+
+  // The launch context can name an exact start time (the calendar drag-and-drop
+  // and both reschedule flows do). Claim the matching slot the first time it
+  // shows up so the user only has to confirm, then get out of the way.
+  function maybeSelectPrefilledSlot() {
+    if (!state.prefillStart || state.prefillStartUsed) return;
+
+    var match = null;
+    state.allProviderSlots.forEach(function (prov) {
+      if (match) return;
+      // With a provider from the launch context, only that provider's column
+      // counts; otherwise the first column offering the time wins.
+      if (state.providerId && prov.id !== state.providerId) return;
+      prov.slots.forEach(function (slot) {
+        if (!match && slot.start === state.prefillStart) {
+          match = { provider: prov, slot: slot };
+        }
+      });
+    });
+    if (!match) return;
+
+    state.prefillStartUsed = true;
+    state.selectedProviderSlot = {
+      providerId: match.provider.id,
+      providerName: match.provider.name,
+      start: match.slot.start,
+      end: match.slot.end,
+      locationId: match.provider.location_id || state.locationId || '',
+    };
+
+    // Rooms are only offered at the provider's chosen time, so pick the first
+    // eligible one at that start rather than leaving Book disabled.
+    if (!state.selectedRoomSlot) {
+      state.allRoomSlots.forEach(function (room) {
+        if (state.selectedRoomSlot) return;
+        room.slots.forEach(function (slot) {
+          if (slot.start === state.prefillStart && !state.selectedRoomSlot) {
+            state.selectedRoomSlot = {
+              roomId: room.id,
+              roomName: room.name,
+              start: slot.start,
+              end: slot.end,
+              locationId: room.location_id || state.locationId || '',
+            };
+          }
+        });
+      });
+    }
   }
 
   function fetchSlotsForLocation(locationId) {
@@ -1295,32 +871,31 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
       slotsLoading.style.display = 'none';
       return;
     }
-    Promise.all(locs.map(function (l) {
-      return apiFetch('/all-slots?' + buildAllSlotsParams(l.id))
-        .then(function (result) { return { loc: l, result: result }; })
-        .catch(function () { return null; });
-    })).then(function (results) {
+    // One request covering every location. The server shares its calendar,
+    // staff, appointment and limit reads across them, which it can't do when
+    // each location arrives as a separate request.
+    var params = buildAllSlotsParams('');
+    params.delete('location_id');
+    params.set('location_ids', locs.map(function (l) { return l.id; }).join(','));
+
+    apiFetch('/all-slots?' + params).then(function (result) {
       var providers = [];
       var roomsById = {};
       var groups = [];
       var firstTz = null;
-      results.forEach(function (entry) {
-        if (!entry || !entry.result) return;
-        var locTz = entry.result.timezone || null;
+      (result.locations || []).forEach(function (entry) {
+        var locTz = entry.timezone || null;
         if (!firstTz) firstTz = locTz;
-        var locProvs = (entry.result.providers || []).map(function (p) {
-          return Object.assign({}, p, {
-            location_id: entry.loc.id,
-            location_name: entry.loc.name,
-            timezone: locTz,
-          });
+        var stamp = {
+          location_id: entry.location_id,
+          location_name: entry.location_name,
+          timezone: locTz,
+        };
+        var locProvs = (entry.providers || []).map(function (p) {
+          return Object.assign({}, p, stamp);
         });
-        var locRooms = (entry.result.rooms || []).map(function (r) {
-          return Object.assign({}, r, {
-            location_id: entry.loc.id,
-            location_name: entry.loc.name,
-            timezone: locTz,
-          });
+        var locRooms = (entry.rooms || []).map(function (r) {
+          return Object.assign({}, r, stamp);
         });
         providers.push.apply(providers, locProvs);
         // Keep one entry per room id in the flat list (used by the manual
@@ -1331,8 +906,8 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
           }
         });
         groups.push({
-          location_id: entry.loc.id,
-          location_name: entry.loc.name,
+          location_id: entry.location_id,
+          location_name: entry.location_name,
           timezone: locTz,
           providers: locProvs,
           rooms: locRooms,
@@ -1340,6 +915,9 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
       });
       state.locationGroups = groups;
       applySlotsResult(providers, Object.values(roomsById), firstTz);
+    }).catch(function () {
+      providerSlotsList.innerHTML = '<p class="no-slots-msg">Failed to load availability.</p>';
+      providerSlotsSection.style.display = 'block';
     }).finally(function () {
       slotsLoading.style.display = 'none';
     });
@@ -1373,6 +951,19 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
 
   var INITIAL_VISIBLE = 14; // 7 rows x 2 columns
 
+  // A column shows all its slots once the user expands it, and also whenever
+  // the current selection sits past the cutoff — otherwise selecting a
+  // late-in-the-day slot (or auto-selecting one from the launch context) would
+  // hide it behind "N more...".
+  function columnIsExpanded(columnKey, visible, selectedStart) {
+    if (state.expandedColumns[columnKey]) return true;
+    if (!selectedStart) return false;
+    for (var i = INITIAL_VISIBLE; i < visible.length; i++) {
+      if (visible[i].start === selectedStart) return true;
+    }
+    return false;
+  }
+
   function filterAvailableSlots(slots, allowedTimes) {
     // If no constraint, all slots pass through.
     if (!allowedTimes) return slots;
@@ -1396,7 +987,14 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
     var slotsDiv = document.createElement('div');
     slotsDiv.className = 'col-slots';
 
-    var showCount = INITIAL_VISIBLE;
+    var columnKey = 'prov:' + (prov.location_id || '') + ':' + prov.id;
+    var selectedStart =
+      state.selectedProviderSlot && state.selectedProviderSlot.providerId === prov.id
+        ? state.selectedProviderSlot.start
+        : null;
+    var showCount = columnIsExpanded(columnKey, visible, selectedStart)
+      ? visible.length
+      : INITIAL_VISIBLE;
     var showing = visible.slice(0, showCount);
 
     showing.forEach(function (slot) {
@@ -1418,8 +1016,11 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
       var moreBtn = document.createElement('button');
       moreBtn.className = 'load-more-btn';
       moreBtn.textContent = (visible.length - showCount) + ' more...';
-      (function (provRef, allVisible, container, tz) {
+      (function (provRef, allVisible, container, tz, key) {
         moreBtn.addEventListener('click', function () {
+          // Remember it, so the re-render triggered by selecting a slot keeps
+          // this column open instead of hiding the selection.
+          state.expandedColumns[key] = true;
           this.remove();
           allVisible.slice(INITIAL_VISIBLE).forEach(function (slot) {
             var btn = document.createElement('button');
@@ -1436,7 +1037,7 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
             container.appendChild(btn);
           });
         });
-      })(prov, visible, slotsDiv, provTz);
+      })(prov, visible, slotsDiv, provTz, columnKey);
       slotsDiv.appendChild(moreBtn);
     }
 
@@ -1589,7 +1190,14 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
     var slotsDiv = document.createElement('div');
     slotsDiv.className = 'col-slots';
 
-    var showCount = INITIAL_VISIBLE;
+    var columnKey = 'room:' + (room.location_id || '') + ':' + room.id;
+    var selectedStart =
+      state.selectedRoomSlot && state.selectedRoomSlot.roomId === room.id
+        ? state.selectedRoomSlot.start
+        : null;
+    var showCount = columnIsExpanded(columnKey, visible, selectedStart)
+      ? visible.length
+      : INITIAL_VISIBLE;
     var showing = visible.slice(0, showCount);
 
     showing.forEach(function (slot) {
@@ -1611,8 +1219,9 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
       var moreBtn = document.createElement('button');
       moreBtn.className = 'load-more-btn';
       moreBtn.textContent = (visible.length - showCount) + ' more...';
-      (function (roomRef, allVisible, container, tz) {
+      (function (roomRef, allVisible, container, tz, key) {
         moreBtn.addEventListener('click', function () {
+          state.expandedColumns[key] = true;
           this.remove();
           allVisible.slice(INITIAL_VISIBLE).forEach(function (slot) {
             var btn = document.createElement('button');
@@ -1629,7 +1238,7 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
             container.appendChild(btn);
           });
         });
-      })(room, visible, slotsDiv, roomTz);
+      })(room, visible, slotsDiv, roomTz, columnKey);
       slotsDiv.appendChild(moreBtn);
     }
 
@@ -1750,9 +1359,22 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
 
   // -- Book --
 
+  function isReschedule() {
+    return state.mode === 'reschedule' && !!state.appointmentId;
+  }
+
+  // Surfaces the modal should dismiss itself from once the booking lands.
+  // A reschedule is done the moment the appointment moves. The global panel
+  // button has no page underneath expecting to be returned to, so it closes
+  // too. Canvas's own entry points stay open and refresh their slots instead,
+  // so a scheduler can book again without relaunching.
+  function shouldCloseAfterBooking() {
+    return isReschedule() || state.origin === 'global_panel';
+  }
+
   btnBook.addEventListener('click', function () {
     btnBook.disabled = true;
-    setStatus('Booking appointment...', '');
+    setStatus(isReschedule() ? 'Rescheduling appointment...' : 'Booking appointment...', '');
     var rfvInput = $('input-rfv');
     var reasonForVisit = rfvInput ? (rfvInput.value || '').trim() : '';
 
@@ -1797,9 +1419,12 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
         duration_minutes: bookingDuration,
         rr_staff_id:      rrStaffId,
         reason_for_visit: reasonForVisit,
+        // Present only for the reschedule entry points; the server moves the
+        // existing appointment instead of creating a second one.
+        appointment_id:   isReschedule() ? state.appointmentId : '',
       }),
     }).then(function () {
-      setStatus('Appointment booked!', 'success');
+      setStatus(isReschedule() ? 'Appointment rescheduled!' : 'Appointment booked!', 'success');
       if (rfvInput) rfvInput.value = '';
       state.selectedProviderSlot = null;
       state.selectedRoomSlot = null;
@@ -1814,9 +1439,18 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
         if ($('manual-room')) $('manual-room').value = '';
       }
       updateBookButton();
+      if (shouldCloseAfterBooking()) {
+        // Leave the success message up briefly, then get out of the way.
+        // Re-submitting here would double-book (or re-move) the appointment.
+        setTimeout(function () { closeModal(); }, 1200);
+        return;
+      }
       setTimeout(function () { fetchSlots(); }, 1500);
     }).catch(function () {
-      setStatus('Failed to book. Please try again.', 'error');
+      setStatus(
+        isReschedule() ? 'Failed to reschedule. Please try again.' : 'Failed to book. Please try again.',
+        'error'
+      );
       btnBook.disabled = false;
     });
   });
@@ -1912,21 +1546,123 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
     updateBookButton();
   });
 
+  // -- Prefill from the launch context --
+
+  // Select an <option> by value, but only if the dropdown actually offers it —
+  // a provider or location from the launch context may not be schedulable here.
+  function selectOptionByValue(select, value) {
+    if (!value) return null;
+    for (var i = 0; i < select.options.length; i++) {
+      if (select.options[i].value === String(value)) {
+        select.selectedIndex = i;
+        return select.options[i];
+      }
+    }
+    return null;
+  }
+
+  // Keep a prefilled duration selectable even when it isn't one of the
+  // configured choices, so a reschedule preserves the appointment's length.
+  function ensureDurationOption(minutes) {
+    if (!minutes) return;
+    if (!selectOptionByValue(selectDuration, minutes)) {
+      var opt = document.createElement('option');
+      opt.value = String(minutes);
+      opt.textContent = minutes + ' min';
+      selectDuration.appendChild(opt);
+      selectDuration.value = String(minutes);
+    }
+    state.durationMinutes = minutes;
+  }
+
+  function parsePrefillDate(iso) {
+    if (!iso) return null;
+    var parts = String(iso).split('-').map(Number);
+    if (parts.length !== 3 || parts.some(function (n) { return !Number.isInteger(n); })) return null;
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Reflect reschedule mode in the chrome so it's obvious the modal is moving
+  // an existing appointment rather than creating one.
+  function applyModeChrome() {
+    if (!isReschedule()) return;
+    if (panelTitle) panelTitle.textContent = 'Reschedule Appointment';
+    btnBook.textContent = 'Reschedule';
+  }
+
+  // Apply the entity/scalar context that /modal resolved for us. Location has
+  // to settle before the provider list exists, and the visit type before the
+  // duration list is filtered, so these run as a chain rather than in parallel.
+  function applyPrefillSelections(pf) {
+    var chain = Promise.resolve();
+
+    if (pf.location && selectOptionByValue(selectLocation, pf.location.id)) {
+      state.locationId = pf.location.id;
+      chain = chain.then(function () { return loadProviders(state.locationId); });
+    }
+
+    if (pf.provider) {
+      chain = chain.then(function () {
+        if (selectOptionByValue(selectProvider, pf.provider.id)) {
+          state.providerId = pf.provider.id;
+        }
+      });
+    }
+
+    if (pf.note_type) {
+      chain = chain.then(function () {
+        var opt = selectOptionByValue(selectNoteType, pf.note_type.id);
+        if (opt) {
+          state.noteTypeId = pf.note_type.id;
+          state.noteTypeCode = opt.dataset.code || pf.note_type.code || '';
+        }
+      });
+    }
+
+    return chain.then(function () {
+      state.durationMinutes = pf.duration_minutes || state.durationMinutes;
+      // Re-filter durations now that the visit type is known; loadDurations
+      // keeps state.durationMinutes when it's still on offer.
+      return loadDurations();
+    }).then(function () {
+      ensureDurationOption(pf.duration_minutes);
+      fetchMonthSummary();
+      maybeFetchSlots();
+    });
+  }
+
   // -- Init --
 
-  var now = new Date();
-  state.selectedDate = now;
-  state.calViewYear = now.getFullYear();
-  state.calViewMonth = now.getMonth();
+  var prefill = window.PREFILL || {};
+  state.mode = prefill.mode || 'schedule';
+  state.origin = prefill.origin || '';
+  state.appointmentId = prefill.appointment_id || '';
+  state.prefillStart = prefill.start || null;
+  applyModeChrome();
+
+  var initialDate = parsePrefillDate(prefill.date) || new Date();
+  state.selectedDate = initialDate;
+  state.calViewYear = initialDate.getFullYear();
+  state.calViewMonth = initialDate.getMonth();
   renderCalendar();
   slotsPlaceholder.style.display = 'block';
-  Promise.all([loadLocations(), loadNoteTypes(), loadDurations()]);
 
-  // Pre-populate patient when launched from a patient chart.
-  if (window.PREFILL_PATIENT && window.PREFILL_PATIENT.id) {
-    selectPatient(window.PREFILL_PATIENT);
-    btnClearPatient.style.display = 'none';
+  if (prefill.patient && prefill.patient.id) {
+    selectPatient(prefill.patient);
+    if (prefill.lock_patient) btnClearPatient.style.display = 'none';
   }
+
+  // The reason lives on the note as a Reason-for-Visit command, not on the
+  // appointment, so a reschedule carries it forward for the user to keep or edit.
+  if (prefill.reason_for_visit) {
+    var prefillRfv = $('input-rfv');
+    if (prefillRfv) prefillRfv.value = prefill.reason_for_visit;
+  }
+
+  Promise.all([loadLocations(), loadNoteTypes()]).then(function () {
+    return applyPrefillSelections(prefill);
+  });
 
 })();
 </script>

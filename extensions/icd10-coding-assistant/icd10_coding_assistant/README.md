@@ -97,5 +97,3 @@ _The assistant open on a patient chart: each active condition missing an ICD-10 
 with its current coding, the recommended ICD-10 code, a search box for alternatives, and per-row
 and bulk approve actions._
 
-<!-- TODO before publishing: capture this from the centered modal (the layout changed from the
-right chart pane) and commit it as assets/screenshot-coding-modal.png. -->

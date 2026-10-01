@@ -74,7 +74,7 @@ def test_safety_cap_aborts_without_advancing_cursor(mocker):
     )
     inbound = _inbound(client)
 
-    def over_cap(_cal, _event, stats):
+    def over_cap(_cal, _event, stats, force_rebuild=False, dry_run=False, verbose=False):
         stats["holds_created"] = inbound._MAX_HOLDS_PER_RUN
         return []
 

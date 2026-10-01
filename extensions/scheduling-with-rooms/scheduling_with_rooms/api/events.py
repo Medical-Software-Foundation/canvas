@@ -56,8 +56,14 @@ def _parse_dt(value: str | None, cal_tz: ZoneInfo) -> datetime.datetime | None:
     return dt
 
 
-def _serialize_event(event, providers, locations, view_tz=None):
+def _serialize_event(event, providers, locations_by_name, view_tz=None):
     """Match the shape rendered by AvailabilityWebApp.index()'s `events` context.
+
+    ``locations_by_name`` maps a practice location's ``full_name`` to its id.
+    Callers build it once per request: this used to receive the whole list of
+    PracticeLocation instances and linear-scan it for every event, which both
+    over-fetched (only two fields are read) and made serialization O(events ×
+    locations).
 
     Times are emitted in ``view_tz`` (when provided) or the calendar's own
     timezone otherwise. The client passes a `tz` query param so the user can
@@ -101,10 +107,7 @@ def _serialize_event(event, providers, locations, view_tz=None):
     # the matched provider's primary practice location for generic calendars.
     location_id = ""
     if title_loc_name:
-        for location in locations:
-            if location.full_name == title_loc_name:
-                location_id = str(location.id)
-                break
+        location_id = locations_by_name.get(title_loc_name, "")
     if not location_id and matched_provider is not None:
         primary = getattr(matched_provider, "primary_practice_location", None)
         if primary is not None:
@@ -194,14 +197,17 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
             .select_related("primary_practice_location")
             .distinct()
         )
-        locations = list(PracticeLocation.objects.filter(active=True))
+        locations_by_name = {
+            row["full_name"]: str(row["id"])
+            for row in PracticeLocation.objects.filter(active=True).values("id", "full_name")
+        }
         events = list(
             EventModel.objects.all()
             .select_related("calendar")
             .prefetch_related("allowed_note_types")
         )
 
-        data = [_serialize_event(e, providers, locations, view_tz) for e in events]
+        data = [_serialize_event(e, providers, locations_by_name, view_tz) for e in events]
         return [
             Response(
                 json.dumps(data).encode("utf-8"),

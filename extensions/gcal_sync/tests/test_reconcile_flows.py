@@ -42,6 +42,8 @@ def test_outbound_truth_pushes_only_live_non_origin(mocker):
     sync = mocker.patch("gcal_sync.reconcile.SyncService").return_value
     ext = mocker.patch("gcal_sync.reconcile.AppointmentExternalIdentifier")
     ext.objects.filter.return_value.values_list.return_value = []  # no google-origin records
+    aem = mocker.patch("gcal_sync.reconcile.AppointmentEventMapping")
+    aem.objects.filter.return_value = []
     appt = mocker.patch("gcal_sync.reconcile.Appointment")
     appt.objects.filter.return_value.values.return_value = [
         {"id": 1, "status": "confirmed"},
@@ -50,7 +52,7 @@ def test_outbound_truth_pushes_only_live_non_origin(mocker):
     mocker.patch("gcal_sync.reconcile.snapshot_from_values", return_value="SNAP")
     pushed = outbound_truth({}, [SimpleNamespace(canvas_staff_id="14", google_calendar_id="c1")])
     assert pushed == 1
-    sync.push.assert_called_once_with("c1", "SNAP")
+    sync.push.assert_called_once_with("c1", "SNAP", {})
 
 
 def test_outbound_truth_skips_google_origin(mocker):
@@ -68,6 +70,7 @@ def test_reconcile_provider_combines_inbound_outbound_blocks(mocker):
     inbound = mocker.patch("gcal_sync.reconcile.InboundSync").return_value
     inbound.process_calendar.return_value = ({}, ["HOLD"])
     mocker.patch("gcal_sync.reconcile.outbound_truth", return_value=3)
+    mocker.patch("gcal_sync.reconcile.sweep_outbound", return_value=0)
     mocker.patch(
         "gcal_sync.reconcile.sync_all_blocks", return_value={"pushed": 2, "deleted": 1}
     )
@@ -75,7 +78,7 @@ def test_reconcile_provider_combines_inbound_outbound_blocks(mocker):
         {}, SimpleNamespace(canvas_staff_id="14", google_calendar_id="c1")
     )
     assert effects == ["HOLD"]
-    assert stats == {"pushed": 3, "blocks_pushed": 2, "blocks_deleted": 1}
+    assert stats == {"pushed": 3, "swept": 0, "blocks_pushed": 2, "blocks_deleted": 1}
 
 
 def test_reconcile_all_noop_without_mappings(mocker):
@@ -91,6 +94,7 @@ def test_reconcile_all_runs_full_pass(mocker):
     scm.objects.filter.return_value = [SimpleNamespace(google_calendar_id="c1")]
     mocker.patch("gcal_sync.reconcile.inbound_recovery", return_value=["E"])
     mocker.patch("gcal_sync.reconcile.outbound_truth", return_value=5)
+    mocker.patch("gcal_sync.reconcile.sweep_outbound", return_value=0)
     mocker.patch(
         "gcal_sync.reconcile.sync_all_blocks", return_value={"pushed": 1, "deleted": 0}
     )

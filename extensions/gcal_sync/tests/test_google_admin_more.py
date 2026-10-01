@@ -137,10 +137,13 @@ def test_latest_channel_by_calendar_keeps_newest(mocker):
 def test_page_context_builds_rows(mocker):
     scm = mocker.patch("gcal_sync.routes.google_admin.StaffCalendarMapping")
     scm.objects.all.return_value = [
-        SimpleNamespace(canvas_staff_id="14", google_calendar_id="j@r.com", active=True)
+        SimpleNamespace(canvas_staff_id="14", google_calendar_id="j@r.com", active=True,
+                        last_outbound_synced_at=None)
     ]
     css = mocker.patch("gcal_sync.routes.google_admin.CalendarSyncState")
     css.objects.all.return_value = []
+    aem = mocker.patch("gcal_sync.routes.google_admin.AppointmentEventMapping")
+    aem.objects.values.return_value.annotate.return_value = []
     staff = mocker.patch("gcal_sync.routes.google_admin.Staff")
     staff.objects.filter.return_value.values.return_value.order_by.return_value = [
         {"id": 14, "first_name": "Joe", "last_name": "Ryan", "user__email": "j@r.com"}

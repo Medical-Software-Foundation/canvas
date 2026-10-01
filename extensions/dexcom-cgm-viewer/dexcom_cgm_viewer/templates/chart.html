@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dexcom CGM</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --accent: #00853e;
+    --accent-dark: #006a31;
+    --bg: #ffffff;
+    --bg-alt: #f7f8fa;
+    --border: #e2e6eb;
+    --text: #1f2933;
+    --text-muted: #5b6873;
+    --target: #d9efe1;
+    --danger: #b03030;
+    --warn: #ad6810;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  h2 { font-size: 13px; margin: 0 0 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 1px 4px rgba(15,23,42,0.04);
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .header .last-synced { color: var(--text-muted); font-size: 12px; }
+  .latest-reading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .latest-reading .value {
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--accent-dark);
+  }
+  .latest-reading .unit { color: var(--text-muted); }
+  .latest-reading .trend { font-size: 22px; color: var(--accent-dark); }
+  .latest-reading .age { color: var(--text-muted); margin-left: auto; font-size: 12px; }
+
+  .range-selector { display: flex; gap: 6px; margin-bottom: 12px; }
+  .range-chip {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    padding: 6px 0;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .range-chip[aria-pressed="true"] {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 260px;
+  }
+  @media (min-width: 720px) {
+    .chart-wrap { height: 320px; }
+  }
+  #chart-canvas { display: block; }
+  .chart-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 50px 0;
+    font-size: 12px;
+  }
+
+  .tir-bar {
+    display: flex;
+    height: 18px;
+    border-radius: 9px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .tir-bar > div { transition: flex 0.2s; }
+  .tir-bar .seg-low { background: var(--warn); }
+  .tir-bar .seg-target { background: var(--accent); }
+  .tir-bar .seg-high { background: var(--danger); }
+  .tir-legend {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+  .stats-row .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .stats-row .stat-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  button.primary,
+  button.secondary,
+  button.danger {
+    flex: 1;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.primary:hover { background: var(--accent-dark); }
+  button.secondary { background: var(--bg); color: var(--text); border-color: var(--border); }
+  button.danger { background: var(--bg); color: var(--danger); border-color: var(--border); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .toast {
+    position: fixed;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    background: #1f2933;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    max-width: 380px;
+    text-align: center;
+  }
+  .toast.show { opacity: 1; }
+
+  .empty-state { text-align: center; padding: 32px 8px; color: var(--text-muted); }
+  .empty-state h2 { margin-bottom: 12px; color: var(--text); }
+  .empty-state p { margin: 0 0 16px; }
+  .meta { color: var(--text-muted); font-size: 12px; }
+  .reconnect { color: var(--warn); font-weight: 600; }
+
+  .channel-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+    max-width: 260px;
+    margin: 0 auto 16px;
+  }
+  .channel-picker label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .channel-picker input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .sync-banner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: var(--target);
+    border: 1px solid var(--accent);
+    color: var(--accent-dark);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .sync-banner.show { display: flex; }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(0,133,62,0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="sync-banner" class="sync-banner" role="status" aria-live="polite">
+  <span class="spinner"></span>
+  <span>Pulling readings from Dexcom — the first sync can take a minute…</span>
+</div>
+
+<div id="root"><p class="meta">Loading…</p></div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  const PATIENT_ID = "{{ patient_id }}";
+  const RANGES = [7, 14, 30, 90];
+  const TIR_LOW = 70;
+  const TIR_HIGH = 180;
+
+  const state = {
+    range: 14,
+    chart: null,
+    payload: null,
+    pendingLink: null,
+  };
+
+  // ---- target-band plugin -------------------------------------------------
+  const targetBand = {
+    id: "targetBand",
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      if (!scales.y || !chartArea) return;
+      const top = scales.y.getPixelForValue(TIR_HIGH);
+      const bottom = scales.y.getPixelForValue(TIR_LOW);
+      ctx.save();
+      ctx.fillStyle = "rgba(0,133,62,0.10)";
+      ctx.fillRect(chartArea.left, top, chartArea.right - chartArea.left, bottom - top);
+      ctx.strokeStyle = "rgba(0,133,62,0.55)";
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
+      [top, bottom].forEach(y => {
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, y);
+        ctx.lineTo(chartArea.right, y);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+  };
+
+  // ---- helpers ------------------------------------------------------------
+  function relTime(iso) {
+    if (!iso) return "";
+    const dt = new Date(iso);
+    const diff = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
+    if (diff < 60) return "just now";
+    const mins = Math.floor(diff / 60);
+    if (mins < 60) return mins + " minute" + (mins === 1 ? "" : "s") + " ago";
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + " hour" + (hrs === 1 ? "" : "s") + " ago";
+    const days = Math.floor(hrs / 24);
+    return days + " day" + (days === 1 ? "" : "s") + " ago";
+  }
+
+  function trendArrow(t) {
+    return ({
+      doubleUp: "⇈", singleUp: "↑", fortyFiveUp: "↗",
+      flat: "→",
+      fortyFiveDown: "↘", singleDown: "↓", doubleDown: "⇊",
+      none: "·", notComputable: "·", rateOutOfRange: "·"
+    })[t] || "·";
+  }
+
+  function dash(n) {
+    return (n === null || n === undefined) ? "—" : n;
+  }
+
+  function showToast(message) {
+    const el = document.getElementById("toast");
+    el.textContent = message;
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 3500);
+  }
+
+  function api(method, path, body) {
+    const init = { method, headers: { "Content-Type": "application/json" } };
+    if (body !== undefined) init.body = JSON.stringify(body);
+    return fetch(`/plugin-io/api/dexcom_cgm_viewer${path}`, init);
+  }
+
+  // ---- rendering ----------------------------------------------------------
+  function render() {
+    const root = document.getElementById("root");
+    const data = state.payload;
+    if (!data) {
+      root.innerHTML = '<p class="meta">Loading…</p>';
+      return;
+    }
+    if (data.connection_status === "expired") {
+      root.innerHTML = `
+        <div class="card empty-state">
+          <h2>Reconnect Dexcom</h2>
+          <p>The Dexcom connection has expired. Generate a new connection link to reconnect.</p>
+          ${renderChannelPicker()}
+          <button class="primary" data-action="send-link">Generate connection link</button>
+        </div>
+        ${renderLinkBox()}`;
+      bind();
+      return;
+    }
+    if (data.connection_status === "disconnected") {
+      root.innerHTML = renderDisconnected(data);
+      bind();
+      return;
+    }
+    if (data.connection_status === "link_pending") {
+      root.innerHTML = renderLinkPending(data);
+      bind();
+      return;
+    }
+    root.innerHTML = renderConnected(data);
+    bind();
+    drawChart(data);
+  }
+
+  function renderChannelPicker() {
+    // Both channels checked by default; staff unchecks what they don't want.
+    return `
+      <div class="channel-picker">
+        <label><input type="checkbox" id="ch-email" checked> Send via email</label>
+        <label><input type="checkbox" id="ch-portal" checked> Send via patient portal</label>
+      </div>`;
+  }
+
+  function selectedChannels() {
+    const channels = [];
+    if (document.getElementById("ch-email") &&
+        document.getElementById("ch-email").checked) channels.push("email");
+    if (document.getElementById("ch-portal") &&
+        document.getElementById("ch-portal").checked) channels.push("portal");
+    return channels;
+  }
+
+  function renderLinkBox() {
+    if (!state.pendingLink) return "";
+    return `
+      <div class="card">
+        <h2>Connection link</h2>
+        <p class="meta">Copy this link and send it to the patient through any channel. Expires in 15 minutes.</p>
+        <textarea readonly id="link-box" style="width:100%;min-height:64px;font-family:monospace;font-size:11px;padding:6px;border:1px solid var(--border);border-radius:4px;resize:none;">${state.pendingLink}</textarea>
+        <div class="actions">
+          <button class="primary" data-action="copy-link">Copy link</button>
+        </div>
+      </div>`;
+  }
+
+  function renderDisconnected(data) {
+    const last = data.link_sent_at
+      ? `<p class="meta">Last link generated ${relTime(data.link_sent_at)}.</p>` : "";
+    return `
+      <div class="card empty-state">
+        <h2>Connect Dexcom</h2>
+        <p>Generate a one-tap link to send the patient so they can securely connect their Dexcom CGM.</p>
+        ${renderChannelPicker()}
+        <button class="primary" data-action="send-link">Generate connection link</button>
+        ${last}
+      </div>
+      ${renderLinkBox()}`;
+  }
+
+  function renderLinkPending(data) {
+    return `
+      <div class="card empty-state">
+        <h2>Awaiting patient</h2>
+        <p>Link generated ${relTime(data.link_sent_at)}. Waiting for the patient to complete the Dexcom flow on their phone.</p>
+        <div class="actions">
+          <button class="primary" data-action="refresh">Check for connection</button>
+        </div>
+        <p class="meta">Once the patient finishes connecting their Dexcom, click "Check for connection" (or refresh this panel) to load their readings.</p>
+        ${renderChannelPicker()}
+        <div class="actions">
+          <button class="secondary" data-action="send-link">Generate new link</button>
+          <button class="danger" data-action="cancel">Cancel</button>
+        </div>
+      </div>
+      ${renderLinkBox()}`;
+  }
+
+  function renderConnected(data) {
+    const lr = data.latest_reading || {};
+    const summary = data.summary || {};
+    const tir = summary.tir || { low: 0, target: 0, high: 0 };
+    const chips = RANGES.map(d => {
+      const pressed = (state.range === d) ? "true" : "false";
+      return `<button class="range-chip" aria-pressed="${pressed}" data-range="${d}">${d}d</button>`;
+    }).join("");
+    return `
+      <div class="header">
+        <h1>Dexcom CGM</h1>
+        <span class="last-synced">Synced ${relTime(data.last_synced_at)}</span>
+      </div>
+
+      <div class="card">
+        <h2>Latest reading</h2>
+        <div class="latest-reading">
+          <span class="value">${dash(lr.value)}</span>
+          <span class="unit">${lr.unit || "mg/dL"}</span>
+          <span class="trend">${trendArrow(lr.trend)}</span>
+          <span class="age">${lr.display_time ? relTime(lr.display_time) : "—"}</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="range-selector">${chips}</div>
+        <div class="chart-wrap"><canvas id="chart-canvas"></canvas></div>
+        ${data.egvs.length === 0
+          ? '<p class="chart-empty">No readings in this range. Try a longer window or sync.</p>' : ""}
+      </div>
+
+      <div class="card">
+        <h2>Time in range</h2>
+        <div class="tir-bar">
+          <div class="seg-low" style="flex:${tir.low}"></div>
+          <div class="seg-target" style="flex:${tir.target}"></div>
+          <div class="seg-high" style="flex:${tir.high}"></div>
+        </div>
+        <div class="tir-legend">
+          <span>Low ${tir.low}%</span>
+          <span>Target ${tir.target}%</span>
+          <span>High ${tir.high}%</span>
+        </div>
+      </div>
+
+      <div class="card stats-row">
+        <div>
+          <div class="stat-label">Avg</div>
+          <div class="stat-value">${dash(summary.avg_glucose)}</div>
+        </div>
+        <div>
+          <div class="stat-label">GMI</div>
+          <div class="stat-value">${summary.gmi !== undefined && summary.gmi !== null ? summary.gmi + "%" : "—"}</div>
+        </div>
+        <div>
+          <div class="stat-label">Readings</div>
+          <div class="stat-value">${dash(summary.reading_count)}</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" data-action="sync">Sync now</button>
+        <button class="danger" data-action="disconnect">Disconnect</button>
+      </div>`;
+  }
+
+  function drawChart(data) {
+    if (state.chart) { state.chart.destroy(); state.chart = null; }
+    if (!data.egvs.length) return;
+    const points = data.egvs.map(p => ({ x: new Date(p.display_time).getTime(), y: p.value }));
+    const canvas = document.getElementById("chart-canvas");
+    if (!canvas) return;
+    state.chart = new Chart(canvas, {
+      type: "line",
+      data: { datasets: [{ data: points, borderColor: "#00853e", borderWidth: 1.5, pointRadius: 0, tension: 0.25 }] },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: "nearest",
+            intersect: false,
+            displayColors: false,
+            callbacks: {
+              title: (items) => {
+                if (!items.length) return "";
+                const d = new Date(items[0].parsed.x);
+                return d.toLocaleString(undefined, {
+                  month: "short", day: "numeric",
+                  hour: "numeric", minute: "2-digit",
+                });
+              },
+              label: (item) => `${item.parsed.y} mg/dL`,
+            },
+          },
+        },
+        scales: {
+          x: { type: "linear", ticks: { display: false }, grid: { display: false } },
+          y: {
+            suggestedMin: 40, suggestedMax: 250,
+            grid: { color: "#eef0f2" },
+            title: { display: true, text: "mg/dL", color: "#5b6873", font: { size: 11 } },
+          }
+        }
+      },
+      plugins: [targetBand]
+    });
+  }
+
+  // ---- actions ------------------------------------------------------------
+  function bind() {
+    document.querySelectorAll("[data-range]").forEach(btn => {
+      btn.addEventListener("click", () => { state.range = parseInt(btn.dataset.range, 10); refresh(); });
+    });
+    document.querySelectorAll("[data-action]").forEach(btn => {
+      btn.addEventListener("click", () => onAction(btn.dataset.action, btn));
+    });
+  }
+
+  function describeSendResult(body) {
+    // Build a human-readable toast from the per-channel statuses.
+    const delivered = [];
+    if (body.email_status === "sent" && body.email_to) {
+      delivered.push(`email (${body.email_to})`);
+    }
+    if (body.portal_status === "sent") delivered.push("Canvas portal inbox");
+    if (delivered.length) {
+      return `Link delivered to ${delivered.join(" + ")}.`;
+    }
+    const problems = [];
+    if (body.email_status === "failed") problems.push("email failed");
+    if (body.email_status === "skipped" && body.email_error === "no_email_on_file") {
+      problems.push("no email on file");
+    }
+    if (body.email_status === "skipped" && body.email_error === "sendgrid_not_configured") {
+      problems.push("email not configured");
+    }
+    if (body.portal_status === "failed") problems.push("portal send failed");
+    if (body.portal_status === "skipped" && body.portal_error === "no_messageable_channel") {
+      problems.push("portal unavailable");
+    }
+    if (problems.length) {
+      return `Link generated — ${problems.join(", ")}. Use the copyable link below.`;
+    }
+    return "Link generated. Copy it below to share with the patient.";
+  }
+
+  function showSyncBanner() {
+    document.getElementById("sync-banner").classList.add("show");
+  }
+  function hideSyncBanner() {
+    document.getElementById("sync-banner").classList.remove("show");
+  }
+
+  async function onAction(action, btn) {
+    btn.disabled = true;
+    try {
+      if (action === "send-link") {
+        const channels = selectedChannels();
+        const qs = `patient_id=${encodeURIComponent(PATIENT_ID)}` +
+          `&channels=${encodeURIComponent(channels.join(","))}`;
+        const r = await api("POST", `/send-link?${qs}`);
+        if (!r.ok) {
+          showToast("Failed to generate link.");
+        } else {
+          const body = await r.json();
+          state.pendingLink = body.connection_link || null;
+          showToast(describeSendResult(body));
+        }
+        await refresh();
+      } else if (action === "copy-link") {
+        const box = document.getElementById("link-box");
+        if (box) {
+          box.select();
+          try {
+            await navigator.clipboard.writeText(box.value);
+            showToast("Link copied.");
+          } catch (e) {
+            document.execCommand("copy");
+            showToast("Link copied.");
+          }
+        }
+        btn.disabled = false;
+        return;
+      } else if (action === "refresh") {
+        await refresh();
+      } else if (action === "cancel") {
+        await api("POST", `/disconnect?patient_id=${encodeURIComponent(PATIENT_ID)}`);
+        await refresh();
+      } else if (action === "sync") {
+        btn.textContent = "Syncing…";
+        showSyncBanner();
+        try {
+          const r = await api("POST",
+            `/sync?patient_id=${encodeURIComponent(PATIENT_ID)}&range=${state.range}d`);
+          if (!r.ok) showToast("Sync timed out. Showing last synced data.");
+        } finally {
+          hideSyncBanner();
+        }
+        await refresh();
+      } else if (action === "disconnect") {
+        if (!window.confirm("Disconnect Dexcom and delete cached glucose data?")) {
+          btn.disabled = false; return;
+        }
+        await api("POST", `/disconnect?patient_id=${encodeURIComponent(PATIENT_ID)}`);
+        await refresh();
+      }
+    } catch (e) {
+      hideSyncBanner();
+      showToast("Something went wrong.");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function refresh() {
+    try {
+      const r = await api("GET", `/data?patient_id=${encodeURIComponent(PATIENT_ID)}&range=${state.range}d`);
+      if (!r.ok) throw new Error("data fetch failed");
+      state.payload = await r.json();
+      render();
+    } catch (e) {
+      document.getElementById("root").innerHTML =
+        '<p class="meta">Could not load Dexcom data.</p>';
+    }
+  }
+
+  refresh();
+})();
+</script>
+</body>
+</html>

@@ -198,21 +198,17 @@ body {
 .pip-hold { background: var(--hold-bg); color: var(--hold); border: 1px solid var(--hold-border); }
 .pip-override { background: var(--override-bg); color: var(--override); border: 1px solid var(--override-border); }
 
-/* Marks the signed-in user's own row, which is pinned to the top of the list.
-   Deliberately neutral so it reads as a label rather than as a status chip. */
-.you-tag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 7px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.5;
-  vertical-align: middle;
-  background: var(--color-bg);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
+/* Headings that split the Availability tab into the viewer's own row and
+   everyone else. Same uppercase muted treatment as the table headers. */
+.overview-section-title {
+  margin: 24px 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
+.overview-section-title:first-child { margin-top: 0; }
 
 .provider-header-right { display: flex; align-items: center; gap: 8px; }
 .chevron { width: 18px; height: 18px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; margin-left: 4px; }
@@ -543,6 +539,14 @@ body {
 .confirm-dialog h3 { font-family: var(--font-family, lato, sans-serif); font-size: 20px; color: var(--text-head); margin-bottom: 8px; }
 .confirm-dialog p { font-size: 14px; color: var(--text-dim); margin-bottom: 20px; }
 .confirm-dialog .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* Confirm modal (canvas-modal): more breathing room so content isn't tight against
+   the edges. These override the components' default :host padding (header 1.25/1.5rem,
+   content 1.5rem, footer 1rem) — a higher-specificity outer rule wins over :host. */
+#confirm-modal canvas-modal-header { padding: 1.5rem 2rem 0.75rem; }
+#confirm-modal canvas-modal-content { padding: 0.5rem 2rem; }   /* top == bottom */
+#confirm-modal canvas-modal-footer { padding: 0.75rem 2rem; }   /* top == bottom */
+#confirm-message { margin: 0; line-height: 1.6; }
 
 /* Alerts */
 .alert { padding: 12px 18px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 14px; font-weight: 500; position: relative; display: flex; align-items: center; justify-content: space-between; }

@@ -12,6 +12,8 @@ from html import escape
 from http import HTTPStatus
 from typing import Callable
 
+import arrow
+from django.db.models import Count
 from requests import RequestException
 
 from canvas_sdk.effects import Effect
@@ -24,11 +26,22 @@ from logger import log
 from gcal_sync.channels import ChannelConfigError, ChannelManager
 from gcal_sync.google.auth import GoogleAuthError
 from gcal_sync.google.client import GoogleApiError
-from gcal_sync.models import CalendarSyncState, StaffCalendarMapping, WatchChannel
+from gcal_sync.models import (
+    AppointmentEventMapping,
+    CalendarSyncState,
+    StaffCalendarMapping,
+    WatchChannel,
+)
 from gcal_sync.reconcile import (
+    acquire_provider_lock,
+    cancel_fleet_reimport,
+    enqueue_fleet_reimport,
+    purge_holds_chunk,
     reconcile_all,
     reconcile_provider,
     reimport_provider,
+    reimport_queue_depth,
+    release_provider_lock,
     reset_inbound_for_provider,
 )
 
@@ -68,13 +81,17 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         """True only when the caller is an explicitly-listed admin. Fails closed if unset."""
         raw = (self.secrets.get("ADMIN_STAFF_IDS") or "").strip()
         if not raw:
-            log.warning("ADMIN_STAFF_IDS not configured; denying Google sync admin access")
+            log.warning(
+                "ADMIN_STAFF_IDS not configured; denying Google sync admin access"
+            )
             return False
         admin_ids = {item.strip() for item in raw.split(",") if item.strip()}
         return self._logged_in_staff_id() in admin_ids
 
     def _forbidden(self) -> list[Response | Effect]:
-        return [JSONResponse({"error": "Not authorized"}, status_code=HTTPStatus.FORBIDDEN)]
+        return [
+            JSONResponse({"error": "Not authorized"}, status_code=HTTPStatus.FORBIDDEN)
+        ]
 
     @staticmethod
     def _notice_html(title: str, body_html: str) -> str:
@@ -132,7 +149,12 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         calendar_email = (body.get("calendar_email") or "").strip()
         active = bool(body.get("active", True))
         if not staff_id:
-            return [JSONResponse({"error": "staff_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
+            return [
+                JSONResponse(
+                    {"error": "staff_id is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
         if active and not calendar_email:
             return [
                 JSONResponse(
@@ -141,13 +163,19 @@ class GoogleCalendarAdminAPI(SimpleAPI):
                 )
             ]
 
-        mapping, _created = StaffCalendarMapping.objects.get_or_create(canvas_staff_id=staff_id)
+        mapping, _created = StaffCalendarMapping.objects.get_or_create(
+            canvas_staff_id=staff_id
+        )
         mapping.google_calendar_id = calendar_email
         mapping.active = active
         mapping.save()
 
         warning = self._open_channel_best_effort(calendar_email) if active else None
-        return [JSONResponse({"status": "saved", "warning": warning}, status_code=HTTPStatus.OK)]
+        return [
+            JSONResponse(
+                {"status": "saved", "warning": warning}, status_code=HTTPStatus.OK
+            )
+        ]
 
     @api.post("/google/admin/auto-map")
     def auto_map(self) -> list[Response | Effect]:
@@ -173,7 +201,11 @@ class GoogleCalendarAdminAPI(SimpleAPI):
 
         return [
             JSONResponse(
-                {"status": "ok", "mapped": created, "skipped_no_email": skipped_no_email},
+                {
+                    "status": "ok",
+                    "mapped": created,
+                    "skipped_no_email": skipped_no_email,
+                },
                 status_code=HTTPStatus.OK,
             )
         ]
@@ -190,7 +222,12 @@ class GoogleCalendarAdminAPI(SimpleAPI):
 
         emails = parse_provider_emails(self.request.json().get("csv") or "")
         if not emails:
-            return [JSONResponse({"error": "No emails found in CSV"}, status_code=HTTPStatus.BAD_REQUEST)]
+            return [
+                JSONResponse(
+                    {"error": "No emails found in CSV"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
 
         email_to_staff = {
             (row.get("user__email") or "").strip().lower(): str(row["id"])
@@ -224,10 +261,16 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         except (GoogleApiError, GoogleAuthError, RequestException) as exc:
             log.error("Manual reconcile failed: %s", exc)
             return [
-                JSONResponse({"error": "Reconcile failed"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE)
+                JSONResponse(
+                    {"error": "Reconcile failed"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
             ]
         # Apply any inbound admin-hold effects alongside the JSON summary.
-        return [*effects, JSONResponse({"status": "ok", **stats}, status_code=HTTPStatus.OK)]
+        return [
+            *effects,
+            JSONResponse({"status": "ok", **stats}, status_code=HTTPStatus.OK),
+        ]
 
     def _provider_action(
         self, action: Callable[[dict, StaffCalendarMapping], tuple[dict, list]]
@@ -242,15 +285,37 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         if mapping is None:
             return [
                 JSONResponse(
-                    {"error": "Provider is not enrolled"}, status_code=HTTPStatus.BAD_REQUEST
+                    {"error": "Provider is not enrolled"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        # One action per provider at a time: a double-click or a second admin gets a clean 409
+        # instead of racing (the buttons run synchronously across multiple containers).
+        if not acquire_provider_lock(mapping.google_calendar_id):
+            return [
+                JSONResponse(
+                    {
+                        "error": "A sync is already running for this provider; try again shortly."
+                    },
+                    status_code=HTTPStatus.CONFLICT,
                 )
             ]
         try:
             stats, effects = action(self.secrets, mapping)
         except (GoogleApiError, GoogleAuthError, RequestException) as exc:
             log.error("Provider action failed for %s: %s", staff_id, exc)
-            return [JSONResponse({"error": "Action failed"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE)]
-        return [*effects, JSONResponse({"status": "ok", **stats}, status_code=HTTPStatus.OK)]
+            return [
+                JSONResponse(
+                    {"error": "Action failed"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
+        finally:
+            release_provider_lock(mapping.google_calendar_id)
+        return [
+            *effects,
+            JSONResponse({"status": "ok", **stats}, status_code=HTTPStatus.OK),
+        ]
 
     @api.post("/google/admin/reconcile-provider")
     def reconcile_one(self) -> list[Response | Effect]:
@@ -259,8 +324,94 @@ class GoogleCalendarAdminAPI(SimpleAPI):
 
     @api.post("/google/admin/reimport-provider")
     def reimport_one(self) -> list[Response | Effect]:
-        """Force a full re-pull of one provider's Google calendar (imports existing events as holds)."""
-        return self._provider_action(reimport_provider)
+        """Force a full re-pull of one provider's Google calendar (imports existing events as holds).
+
+        Runs ``verbose`` so the plugin logs a per-event line for each outcome — this is the single
+        provider case where per-event detail is wanted (the fleet re-import logs summaries only).
+        """
+        return self._provider_action(
+            lambda secrets, mapping: reimport_provider(secrets, mapping, verbose=True)
+        )
+
+    @api.post("/google/admin/dryrun-provider")
+    def dryrun_one(self) -> list[Response | Effect]:
+        """Preview a re-import for one provider WITHOUT changing anything.
+
+        Runs the real inbound logic with ``dry_run=True`` (no mapping writes, no Google writes, no
+        sync-token advance) and logs every decision through the SDK logger — the per-event
+        ``gcal inbound: …`` lines plus a per-calendar summary. Returns ONLY a JSON summary; the
+        would-be effects are deliberately discarded so a dry-run applies nothing. No provider lock is
+        taken because it is read-only and safe to run alongside anything.
+        """
+        if not self._is_admin():
+            return self._forbidden()
+        staff_id = (self.request.json().get("staff_id") or "").strip()
+        mapping = StaffCalendarMapping.objects.filter(
+            canvas_staff_id=staff_id, active=True
+        ).first()
+        if mapping is None:
+            return [
+                JSONResponse(
+                    {"error": "Provider is not enrolled"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        try:
+            stats, _effects = reimport_provider(self.secrets, mapping, dry_run=True)
+        except (GoogleApiError, GoogleAuthError, RequestException) as exc:
+            log.error("Dry-run re-import failed for %s: %s", staff_id, exc)
+            return [
+                JSONResponse(
+                    {"error": "Dry-run failed"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
+        # _effects intentionally discarded: a dry run must apply nothing. Detail is in the logs.
+        return [
+            JSONResponse(
+                {"status": "ok", "dry_run": True, **stats}, status_code=HTTPStatus.OK
+            )
+        ]
+
+    @api.post("/google/admin/reimport-all")
+    def reimport_all(self) -> list[Response | Effect]:
+        """Queue EVERY active provider for a re-import; ``ReimportDrainCron`` rebuilds them over time.
+
+        Enqueuing is fast, synchronous DB writes only (no Google calls), so this returns immediately —
+        no gateway timeout and no long-running background task. The drain cron then rebuilds a few
+        providers per tick, applying each provider's hold effects in its own short invocation, so a
+        whole-roster rebuild spreads across many minutes and its effects always land. Idempotent:
+        re-clicking while a drain is in flight doesn't double any provider's work. Progress shows in
+        the per-provider ``last synced`` column and the ``Re-import drain: …`` plugin logs.
+        """
+        if not self._is_admin():
+            return self._forbidden()
+        queued = enqueue_fleet_reimport()
+        pending = reimport_queue_depth()
+        return [
+            JSONResponse(
+                {"status": "ok", "queued": queued, "pending": pending},
+                status_code=HTTPStatus.OK,
+            )
+        ]
+
+    @api.post("/google/admin/cancel-reimport-all")
+    def cancel_reimport_all(self) -> list[Response | Effect]:
+        """Cancel an in-progress fleet re-import by emptying its queue; the drain cron then stops.
+
+        For when a running "Re-import all" is straining the instance. Clears every queued provider so
+        no further rebuilds start (a tick already mid-flight finishes its small current batch). Holds
+        already rebuilt are left as-is. Idempotent — safe to click when nothing is queued.
+        """
+        if not self._is_admin():
+            return self._forbidden()
+        cleared = cancel_fleet_reimport()
+        return [
+            JSONResponse(
+                {"status": "ok", "cleared": cleared, "pending": reimport_queue_depth()},
+                status_code=HTTPStatus.OK,
+            )
+        ]
 
     @api.post("/google/admin/purge-provider")
     def purge_one(self) -> list[Response | Effect]:
@@ -273,25 +424,50 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         """
         if not self._is_admin():
             return self._forbidden()
-        staff_id = (self.request.json().get("staff_id") or "").strip()
+        body = self.request.json()
+        staff_id = (body.get("staff_id") or "").strip()
         mapping = StaffCalendarMapping.objects.filter(canvas_staff_id=staff_id).first()
         if mapping is None:
             return [
                 JSONResponse(
-                    {"error": "Provider has no calendar mapping"}, status_code=HTTPStatus.BAD_REQUEST
+                    {"error": "Provider has no calendar mapping"},
+                    status_code=HTTPStatus.BAD_REQUEST,
                 )
+            ]
+        # Bounded, resumable mode: cancel up to `limit` holds per call so a heavy provider drains
+        # across many fast requests instead of one that exceeds the gateway timeout.
+        limit = body.get("limit")
+        if limit:
+            effects, next_after, done = purge_holds_chunk(
+                mapping, int(limit), (body.get("after_id") or "")
+            )
+            return [
+                *effects,
+                JSONResponse(
+                    {
+                        "status": "ok",
+                        "purged": len(effects),
+                        "next_after": next_after,
+                        "done": done,
+                    },
+                    status_code=HTTPStatus.OK,
+                ),
             ]
         effects = reset_inbound_for_provider(mapping)
         return [
             *effects,
-            JSONResponse({"status": "ok", "purged": len(effects)}, status_code=HTTPStatus.OK),
+            JSONResponse(
+                {"status": "ok", "purged": len(effects)}, status_code=HTTPStatus.OK
+            ),
         ]
 
     @staticmethod
     def _schedulable_providers() -> list[dict]:
         """Active staff with a Provider role — the ones who can be booked on appointments."""
         return list(
-            Staff.objects.filter(active=True, roles__role_type=StaffRole.RoleType.PROVIDER)
+            Staff.objects.filter(
+                active=True, roles__role_type=StaffRole.RoleType.PROVIDER
+            )
             .values("id", "first_name", "last_name", "user__email")
             .distinct()
             .order_by("last_name", "first_name")
@@ -299,7 +475,9 @@ class GoogleCalendarAdminAPI(SimpleAPI):
 
     @staticmethod
     def _upsert_mapping(staff_id: str, calendar_email: str) -> None:
-        mapping, _created = StaffCalendarMapping.objects.get_or_create(canvas_staff_id=staff_id)
+        mapping, _created = StaffCalendarMapping.objects.get_or_create(
+            canvas_staff_id=staff_id
+        )
         mapping.google_calendar_id = calendar_email
         mapping.active = True
         mapping.save()
@@ -309,7 +487,12 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         try:
             ChannelManager(self.secrets).open_channel(calendar_email)
             return None
-        except (ChannelConfigError, GoogleApiError, GoogleAuthError, RequestException) as exc:
+        except (
+            ChannelConfigError,
+            GoogleApiError,
+            GoogleAuthError,
+            RequestException,
+        ) as exc:
             log.error("Could not open watch channel for %s: %s", calendar_email, exc)
             return f"Mapping saved, but the watch channel could not be opened: {exc}"
 
@@ -317,6 +500,13 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         mappings = {m.canvas_staff_id: m for m in StaffCalendarMapping.objects.all()}
         channels = self._latest_channel_by_calendar()
         sync_states = {s.google_calendar_id: s for s in CalendarSyncState.objects.all()}
+        # One aggregate for how many events we're tracking per calendar (not a query per provider).
+        synced_counts = {
+            row["google_calendar_id"]: row["n"]
+            for row in AppointmentEventMapping.objects.values(
+                "google_calendar_id"
+            ).annotate(n=Count("dbid"))
+        }
 
         providers = []
         staff_rows = (
@@ -327,9 +517,16 @@ class GoogleCalendarAdminAPI(SimpleAPI):
         for staff in staff_rows:
             staff_id = str(staff["id"])
             mapping = mappings.get(staff_id)
-            calendar_id = mapping.google_calendar_id if mapping else (staff.get("user__email") or "")
+            calendar_id = (
+                mapping.google_calendar_id
+                if mapping
+                else (staff.get("user__email") or "")
+            )
             channel = channels.get(calendar_id) if calendar_id else None
             state = sync_states.get(calendar_id) if calendar_id else None
+            last_synced = (
+                getattr(mapping, "last_outbound_synced_at", None) if mapping else None
+            )
             providers.append(
                 {
                     "staff_id": staff_id,
@@ -339,14 +536,25 @@ class GoogleCalendarAdminAPI(SimpleAPI):
                     "mapped": mapping is not None,
                     "channel_expiration": channel.expiration if channel else None,
                     "needs_full_resync": bool(state and state.needs_full_resync),
+                    # Persistent completion signal: how many events are synced and when the last
+                    # outbound reconcile for this provider finished.
+                    "synced_count": synced_counts.get(calendar_id, 0),
+                    "last_synced_display": arrow.get(last_synced).humanize()
+                    if last_synced
+                    else "never",
                 }
             )
 
-        return {"providers": providers, "logged_in_staff_id": self._logged_in_staff_id()}
+        return {
+            "providers": providers,
+            "logged_in_staff_id": self._logged_in_staff_id(),
+        }
 
     @staticmethod
     def _latest_channel_by_calendar() -> dict:
         latest: dict = {}
         for channel in WatchChannel.objects.all().order_by("created_at"):
-            latest[channel.google_calendar_id] = channel  # later rows overwrite -> newest wins
+            latest[channel.google_calendar_id] = (
+                channel  # later rows overwrite -> newest wins
+            )
         return latest

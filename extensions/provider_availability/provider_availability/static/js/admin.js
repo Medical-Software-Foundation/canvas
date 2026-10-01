@@ -412,15 +412,13 @@ function toggleExpired() {
 }
 
 
-// True when the filter still holds exactly the saved default view, meaning the
-// user has not narrowed it by hand. The viewer's own row is exempt from the
-// filter only in that case: a saved view must not hide your own availability,
-// but a filter you typed yourself should do what you asked.
-function filterIsJustSavedView(selectedIds) {
-  if (!_savedView.length || selectedIds.length !== _savedView.length) return false;
-  var saved = _savedView.map(String).slice().sort();
-  var current = selectedIds.map(String).slice().sort();
-  return saved.every(function(v, i) { return v === current[i]; });
+// The provider filter and saved views cover other providers only. The viewer's
+// own row always shows in its own section, so offering them in the filter
+// would be a choice that does nothing.
+function filterItems(providers, items) {
+  var viewer = {};
+  providers.forEach(function(p) { if (p.is_you) viewer[String(p.id)] = true; });
+  return items.filter(function(it) { return !viewer[String(it.id)]; });
 }
 
 
@@ -1125,7 +1123,7 @@ async function loadProviders() {
   if (msProvider) msProvider.setItems(items);
   if (msBlockProvider) msBlockProvider.setItems(items);
   if (msHoldProvider) msHoldProvider.setItems(items);
-  if (msFilterProvider) msFilterProvider.setItems(items);
+  if (msFilterProvider) msFilterProvider.setItems(filterItems(_providers, items));
 }
 
 async function loadLocations() {
@@ -1232,34 +1230,38 @@ function renderAccordion() {
 
   const selectedIds = msFilterProvider ? msFilterProvider.getValue() : [];
 
-  let providers = _overviewData;
+  // The viewer's own row lives in its own section and ignores the filter and
+  // saved view. Those narrow only the other providers.
+  const yours = _overviewData.filter(p => p.is_you);
+  let others = _overviewData.filter(p => !p.is_you);
   if (selectedIds.length > 0) {
-    // A saved view that omits the viewer must not hide their own availability,
-    // so their row is added back. A filter the user typed by hand is left to
-    // do exactly what they asked, including excluding themselves.
-    var keepSelf = filterIsJustSavedView(selectedIds);
-    providers = providers.filter(p => (keepSelf && p.is_you) || selectedIds.includes(p.provider_id));
+    others = others.filter(p => selectedIds.includes(p.provider_id));
   }
-
-  if (providers.length === 0) {
-    if (selectedIds.length > 0) {
-      container.innerHTML = '<div class="empty-state">No availability configured for the selected provider(s).<br><span style="font-size:13px;margin-top:6px;display:inline-block;">Use <strong>Add / Edit</strong> to set up rules.</span></div>';
-    } else {
-      container.innerHTML = '<div class="empty-state">No availability or blocks configured yet</div>';
-    }
-    return;
-  }
-
-  providers = providers.slice().sort(function(a, b) {
-    // Viewer first whatever their name sorts to; everyone else by last name.
-    if (!!a.is_you !== !!b.is_you) return a.is_you ? -1 : 1;
+  others = others.slice().sort(function(a, b) {
     var aLast = (a.provider_name || '').split(' ').slice(-1)[0].toLowerCase();
     var bLast = (b.provider_name || '').split(' ').slice(-1)[0].toLowerCase();
     return aLast.localeCompare(bLast);
   });
 
+  let othersEmpty = '';
+  if (others.length === 0) {
+    if (selectedIds.length > 0) {
+      othersEmpty = '<div class="empty-state">No availability configured for the selected provider(s).<br><span style="font-size:13px;margin-top:6px;display:inline-block;">Use <strong>Add / Edit</strong> to set up rules.</span></div>';
+    } else if (yours.length) {
+      othersEmpty = '<div class="empty-state">No other providers have availability or blocks configured yet</div>';
+    } else {
+      othersEmpty = '<div class="empty-state">No availability or blocks configured yet</div>';
+    }
+  }
+
+  const providers = yours.concat(others);
+
   let html = '';
+  if (yours.length) html += '<h3 class="overview-section-title">Your availability</h3>';
   providers.forEach((p, idx) => {
+    if (idx === yours.length) {
+      html += '<h3 class="overview-section-title">' + (yours.length ? 'Other providers' : 'Providers') + '</h3>';
+    }
     const pid = p.provider_id;
     const name = p.provider_name || pid.slice(0, 8) + '...';
     const initials = getInitials(name);
@@ -1293,8 +1295,7 @@ function renderAccordion() {
     var pTz = p.provider_timezone || _practiceTz;
     var pTzExplicit = p.provider_timezone_explicit;
     html += '<div class="provider-name-col">';
-    html += '<span class="provider-name">' + name +
-      (p.is_you ? '<span class="you-tag">you</span>' : '') + '</span>';
+    html += '<span class="provider-name">' + name + '</span>';
     if (!_viewTz) {
       html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' (default)') + '</div>';
     }
@@ -1606,6 +1607,10 @@ function renderAccordion() {
 
     html += '</div>';
   });
+  if (others.length === 0) {
+    if (yours.length) html += '<h3 class="overview-section-title">Other providers</h3>';
+    html += othersEmpty;
+  }
   container.innerHTML = html;
   // Restore expanded card state — collapse cards that weren't open before
   container.querySelectorAll('.provider-card').forEach(function(card) {
@@ -2933,66 +2938,6 @@ function applyToAll(editorId) {
   _formDirty = true;
 }
 
-/* ---------- Settings tab ---------- */
-
-const PROVISION_BASE = '/plugin-io/api/provider_availability/provision';
-
-async function loadAllowedStaff() {
-  const container = document.getElementById('allowed-staff-list');
-  try {
-    const data = await apiCall('/overview');  // reuse to check auth
-  } catch(e) { /* ignore */ }
-
-  try {
-    const resp = await fetch(PROVISION_BASE + '/allowed-staff', { credentials: 'same-origin' });
-    if (!resp.ok) { container.innerHTML = '<div class="empty-state" style="padding:16px;">Could not load allowed staff</div>'; return; }
-    const data = await resp.json();
-    const ids = data.allowed_staff || [];
-
-    if (ids.length === 0) {
-      container.innerHTML = '<div class="empty-state" style="padding:16px;">No staff restrictions. All staff have access.</div>';
-      return;
-    }
-
-    // Look up names from _providers
-    let html = '';
-    ids.forEach(id => {
-      const prov = _providers.find(p => String(p.id) === String(id));
-      const name = prov ? prov.name : 'Unknown';
-      html += '<div class="staff-item">';
-      html += '<div><span class="staff-name">' + name + '</span><span class="staff-id">' + id + '</span></div>';
-      html += '<button class="btn btn-danger btn-sm" onclick="removeStaff(\'' + id + '\')">Remove</button>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  } catch (e) {
-    container.innerHTML = '<div class="empty-state" style="padding:16px;">Could not load allowed staff</div>';
-  }
-}
-
-async function addStaffToAllowed() {
-  const ids = msSettingsStaff.getValue();
-  if (ids.length === 0) { showMsg('Select a staff member to add', 'error'); return; }
-  for (const id of ids) {
-    await fetch(PROVISION_BASE + '/allowed-staff', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ staff_id: id }),
-    });
-  }
-  msSettingsStaff.clear();
-  showMsg('Staff added', 'success');
-  loadAllowedStaff();
-}
-
-async function removeStaff(staffId) {
-  await fetch(PROVISION_BASE + '/allowed-staff/' + staffId, {
-    method: 'DELETE', credentials: 'same-origin',
-  });
-  showMsg('Staff removed', 'success');
-  loadAllowedStaff();
-}
-
 /* ---------- Timezone ---------- */
 
 let _practiceTz = 'UTC';
@@ -3432,7 +3377,6 @@ msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search prov
 msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
 msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
 msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
-// msSettingsStaff removed — access control now via plugin secret
 
 buildTimeOptions();
 
@@ -3468,8 +3412,7 @@ try {
     if (msProvider) msProvider.setItems(provItems);
     if (msBlockProvider) msBlockProvider.setItems(provItems);
     if (msHoldProvider) msHoldProvider.setItems(provItems);
-    if (msFilterProvider) msFilterProvider.setItems(provItems);
-    // Staff access control now via plugin secret — no msSettingsStaff
+    if (msFilterProvider) msFilterProvider.setItems(filterItems(_providers, provItems));
 
     _locations = (P.locations && P.locations.locations) || [];
     if (msLocation) { msLocation.setItems(_locations); msLocation.setValue(_locations.map(function(l) { return String(l.id); })); }

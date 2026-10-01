@@ -1,0 +1,73 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.104",
+    "name": "salesforce_to_canvas_integration",
+    "description": "Reference one-way patient sync from Salesforce to Canvas. When a Salesforce record is flagged for sync, a configurable filter either applies the change automatically or holds it for a human, creating or updating the linked Canvas patient.",
+    "components": {
+        "applications": [
+            {
+                "class": "salesforce_to_canvas_integration.handlers.admin_app:SalesforceAdminApp",
+                "name": "Salesforce Integration",
+                "description": "Admin console for the Salesforce → Canvas patient sync plugin",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "icon": "assets/salesforce_icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "salesforce_to_canvas_integration.handlers.webhook_api:SalesforceWebhookSync",
+                "description": "Inbound webhook endpoint accepting the Salesforce deliberate sync HTTP Callout, intent sync or delete"
+            },
+            {
+                "class": "salesforce_to_canvas_integration.handlers.oauth_api:SalesforceOAuthAPI",
+                "description": "OAuth 2.0 authorization-code flow for the Salesforce External Client App"
+            },
+            {
+                "class": "salesforce_to_canvas_integration.handlers.status_api:SalesforceStatusAPI",
+                "description": "Status endpoint exposing inbound events bucketed into needs action, applied and skipped, connection state and field mapping"
+            },
+            {
+                "class": "salesforce_to_canvas_integration.handlers.status_api:SalesforceAdminPage",
+                "description": "Admin console HTML page, served to any logged in staff and gated inside so a non admin sees a styled access page instead of raw JSON"
+            },
+            {
+                "class": "salesforce_to_canvas_integration.handlers.chart_banner:SalesforceChartBanner",
+                "description": "Patient chart banner under the patient name linking to the patient's Salesforce record"
+            },
+            {
+                "class": "salesforce_to_canvas_integration.handlers.canvas_id_writeback:SalesforceCanvasIdWriteback",
+                "description": "On patient creation, writes the new Canvas patient id back to the linked Salesforce record over OAuth"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "SF_CLIENT_ID",
+        "SF_CLIENT_SECRET",
+        "SF_LOGIN_URL",
+        "SF_WEBHOOK_SECRET",
+        "SF_SOURCE_SOBJECT",
+        "SF_FIELD_MAPPING_JSON",
+        "SF_ADMIN_STAFF_IDS",
+        "CANVAS_API_CLIENT_ID",
+        "CANVAS_API_CLIENT_SECRET",
+        "FUMAGE_BASE_URL",
+        "CANVAS_INSTANCE_URL",
+        "SF_INSTANCE_URL",
+        "simpleapi-api-key",
+        "namespace_read_write_access_key"
+    ],
+    "custom_data": {
+        "namespace": "vicert__salesforce_integration",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

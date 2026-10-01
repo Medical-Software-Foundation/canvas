@@ -66,7 +66,7 @@ def test_upsert_inserts_new_block(mocker):
         ends_at=datetime(2026, 6, 22, 12, 30, tzinfo=timezone.utc),
     )
     stats = {"pushed": 0, "deleted": 0}
-    bs._upsert(client, "cal", "ev1", event, stats)
+    bs._upsert(client, "cal", "ev1", event, stats, {})
     client.insert_event.assert_called_once()
     cem.objects.create.assert_called_once()
     assert stats["pushed"] == 1
@@ -75,7 +75,7 @@ def test_upsert_inserts_new_block(mocker):
 def test_upsert_skips_unchanged(mocker):
     bs = _bs()
     cem = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    cem.objects.filter.return_value.first.return_value = SimpleNamespace(
+    existing = SimpleNamespace(
         last_pushed_hash="h1", google_calendar_id="cal", google_event_id="g1"
     )
     mocker.patch("gcal_sync.blocks.build_event_body", return_value={})
@@ -87,7 +87,7 @@ def test_upsert_skips_unchanged(mocker):
         ends_at=datetime(2026, 6, 22, 12, 30, tzinfo=timezone.utc),
     )
     stats = {"pushed": 0, "deleted": 0}
-    bs._upsert(client, "cal", "ev1", event, stats)
+    bs._upsert(client, "cal", "ev1", event, stats, {"ev1": existing})
     client.patch_event.assert_not_called()  # unchanged -> no Google call
     assert stats["pushed"] == 0
 
@@ -108,6 +108,7 @@ def test_delete_removed_drops_orphans(mocker):
 def test_sync_provider_upserts_then_deletes(mocker):
     bs = _bs()
     mocker.patch.object(bs, "_current_blocks", return_value={"ev1": SimpleNamespace(id="ev1")})
+    mocker.patch("gcal_sync.blocks.CalendarEventMapping").objects.filter.return_value = []
     up = mocker.patch.object(bs, "_upsert")
     rm = mocker.patch.object(bs, "_delete_removed")
     bs.sync_provider("14", "cal")

@@ -111,6 +111,46 @@ def test_event_occurs_on_date_until_invalid_continues():
     assert event_occurs_on_date(event, datetime.date(2026, 5, 10)) is True
 
 
+def _daily_until(until_value):
+    event = MagicMock(recurrence_ends_at=None)
+    event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)
+    event.recurrence = f"FREQ=DAILY;UNTIL={until_value}"
+    return event
+
+
+def test_event_occurs_on_date_until_date_form_is_honored():
+    """RFC 5545 allows a bare YYYYMMDD UNTIL.
+
+    This form used to raise ValueError into a swallowed except, so the end date
+    was dropped and the recurrence ran forever.
+    """
+    event = _daily_until("20260505")
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 10)) is False
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 3)) is True
+
+
+def test_event_occurs_on_date_until_utc_suffix_is_honored():
+    """The UTC DATE-TIME form carries a trailing Z."""
+    event = _daily_until("20260505T235959Z")
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 10)) is False
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 3)) is True
+
+
+def test_event_occurs_on_date_until_is_inclusive_of_its_own_day():
+    event = _daily_until("20260505")
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 5)) is True
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 6)) is False
+
+
+def test_event_occurs_on_date_empty_until_is_unbounded():
+    event = _daily_until("")
+
+    assert event_occurs_on_date(event, datetime.date(2027, 1, 1)) is True
+
+
 def test_event_occurs_on_date_daily_interval_one():
     event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)

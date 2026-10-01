@@ -1,0 +1,229 @@
+{
+    "sdk_version": "0.154.1",
+    "plugin_version": "2.0.1",
+    "name": "patient_panel",
+    "description": "Patient panel management dashboard with filtering, tasks, gaps, and clinical notes",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "patient_panel.applications.patient_panel_app:PatientPanelApp",
+                "name": "Patient Panel",
+                "description": "Patient panel management dashboard",
+                "scope": "provider_menu_item",
+                "icon": "assets/patient-panel-icon.png",
+                "menu_position": "top",
+                "menu_order": 100
+            }
+        ],
+        "protocols": [
+            {
+                "class": "patient_panel.api.panel_api:PatientPanelAPI",
+                "description": "API that populates the application",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.flag_cleanup:WeeklyFlagCleanup",
+                "description": "Weekly cleanup of stale flag metadata records",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.metadata_fields:PatientMetadataFields",
+                "description": "Configurable patient-profile additional fields driven by METADATA_FIELDS secret",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_button:PanelButton",
+                "description": "Note-header button that opens the Patient Panel dashboard",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnNoteCreated",
+                "description": "Recompute panel stats on note created",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnNoteUpdated",
+                "description": "Recompute panel stats on note updated",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnNoteStateCreated",
+                "description": "Recompute panel stats on note state created",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnNoteStateUpdated",
+                "description": "Recompute panel stats on note state updated",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnTaskCreated",
+                "description": "Recompute panel stats on task created",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnTaskUpdated",
+                "description": "Recompute panel stats on task updated",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnTaskClosed",
+                "description": "Recompute panel stats on task closed",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnTaskCompleted",
+                "description": "Recompute panel stats on task completed",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnAddressCreated",
+                "description": "Recompute panel stats on address created",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnAddressUpdated",
+                "description": "Recompute panel stats on address updated",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnAddressDeleted",
+                "description": "Recompute panel stats on address deleted",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnPatientCreated",
+                "description": "Recompute panel stats on patient created",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnProtocolOverrideCreated",
+                "description": "Recompute panel stats on protocol override created",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnProtocolOverrideUpdated",
+                "description": "Recompute panel stats on protocol override updated",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_sync:PanelStatsOnProtocolOverrideDeleted",
+                "description": "Recompute panel stats on protocol override deleted",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_panel.handlers.panel_stats_reconcile:PanelStatsReconcile",
+                "description": "Nightly reconciliation of PatientPanelStats",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "patient__panel",
+        "access": "read_write"
+    },
+    "secrets": [
+        "HIGHLIGHT_THRESHOLD_DAYS_GREEN",
+        "HIGHLIGHT_THRESHOLD_DAYS_YELLOW",
+        "HIGHLIGHT_THRESHOLD_DAYS_RED",
+        "PAGE_SIZE",
+        "INSURANCES",
+        "FHIR_CLIENT_ID",
+        "FHIR_CLIENT_SECRET",
+        "CANVAS_INSTANCE_URL",
+        "PANEL_CONFIG",
+        "INSTANCE_TIMEZONE",
+        "FLAG_COLOR_LABELS",
+        "METADATA_FIELDS",
+        "namespace_read_write_access_key"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "readme": "./README.md"
+}

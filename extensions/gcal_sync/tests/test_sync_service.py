@@ -42,6 +42,9 @@ class FakeClient:
     def delete_event(self, calendar_id, event_id):
         self.calls.append(("delete", calendar_id, event_id))
 
+    def find_event_by_private_property(self, calendar_id, key, value):
+        return None
+
 
 def _mock_model(mocker, existing):
     """Patch AppointmentEventMapping so .get returns ``existing`` (or raises DoesNotExist if None)."""
@@ -52,6 +55,10 @@ def _mock_model(mocker, existing):
     else:
         model.objects.get.return_value = existing
     model.objects.create.side_effect = lambda **kw: SimpleNamespace(**kw)
+    model.objects.update_or_create.side_effect = lambda **kw: (
+        SimpleNamespace(**kw.get("defaults", {}), **{k: v for k, v in kw.items() if k != "defaults"}),
+        True,
+    )
     return model
 
 
@@ -63,8 +70,8 @@ def test_push_inserts_when_no_existing_mapping(mocker):
     service.push("cal@example.com", _snapshot())
 
     assert ("insert", "cal@example.com") in fake.calls
-    model.objects.create.assert_called_once()
-    assert model.objects.create.call_args.kwargs["google_event_id"] == "g-new"
+    model.objects.update_or_create.assert_called_once()
+    assert model.objects.update_or_create.call_args.kwargs["defaults"]["google_event_id"] == "g-new"
 
 
 def test_push_skips_when_content_unchanged(mocker):

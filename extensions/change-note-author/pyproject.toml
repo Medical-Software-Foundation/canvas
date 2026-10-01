@@ -1,0 +1,37 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "change-note-author"
+version = "0.0.0"
+description = "Adds a 'Change providers' item to the note header dropdown on Chart Review notes, letting staff reassign the note's author."
+authors = [
+    { name = "Kevin Carey", email = "kevin.carey@canvasmedical.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "canvas[test-utils]",
+    "django>=4.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["change_note_author"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]

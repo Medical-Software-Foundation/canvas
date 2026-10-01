@@ -1,0 +1,25 @@
+<td colspan="11">
+    <div class="accordion-details">
+        <h4>Allergies</h4>
+        {% if allergies %}
+        <div class="activity-list">
+            {% for allergy in allergies %}
+            <div class="task-item" data-allergy-id="{{ allergy.id }}">
+                <div class="task-header">
+                    <div class="task-info">
+                        <div class="activity-title">{{ allergy.display }}</div>
+                        <div class="activity-due">
+                            {% if allergy.severity %}Severity: {{ allergy.severity }}{% endif %}
+                            {% if allergy.severity and allergy.recorded_date %} &middot; {% endif %}
+                            {% if allergy.recorded_date %}Recorded: {{ allergy.recorded_date }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-activity">No known allergies</div>
+        {% endif %}
+    </div>
+</td>

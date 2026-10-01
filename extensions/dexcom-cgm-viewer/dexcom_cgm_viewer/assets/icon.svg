@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Glucose drop in Dexcom green, with an EKG-style trace -->
+  <path
+    d="M50,8 C50,8 16,42 16,64 C16,82 31,94 50,94 C69,94 84,82 84,64 C84,42 50,8 50,8 Z"
+    fill="#00853e"
+    stroke="#006a31"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <!-- Trend line crossing the lower half -->
+  <polyline
+    points="26,68 36,60 44,72 56,52 66,64 76,58"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

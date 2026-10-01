@@ -29,6 +29,7 @@ class TestOnStaffActivated:
              patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True) as mock_sched, \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
+            mock_cal.filter.return_value.first.return_value = None
             mock_cal.for_calendar_name.return_value.first.return_value = None
 
             result = handler.compute()
@@ -71,6 +72,7 @@ class TestOnStaffActivated:
              patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
+            mock_cal.filter.return_value.first.return_value = None
             mock_cal.for_calendar_name.return_value.first.return_value = None
 
             result = handler.compute()
@@ -204,7 +206,8 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"), \
-             patch(f"{SL_MODULE}.uuid4", return_value="new-cal-id"):
+             patch(f"{SL_MODULE}.deterministic_calendar_id", return_value="new-cal-id"):
+            mock_cal.filter.return_value.first.return_value = None
             mock_cal.for_calendar_name.return_value.first.return_value = None
 
             result = handler.compute()
@@ -262,8 +265,8 @@ class TestOnPluginInstalled:
             # Should not crash, returns empty (no successful calendars)
             assert result == []
 
-    def test_first_install_full_sync(self):
-        """First install should delete all events and resync rules, blocks, recurring blocks."""
+    def test_first_install_reconciles_per_entity(self):
+        """First install reconciles per-entity (no blanket event sweep)."""
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
@@ -291,23 +294,26 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark, \
-             patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]) as mock_delete_all, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=["sync-fx"]) as mock_sync, \
              patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=["lead-fx"]) as mock_lead, \
+             patch(f"{SL_MODULE}.build_delete_block_effects", return_value=["del-block-fx"]) as mock_del_block, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=["block-fx"]) as mock_block_fx, \
              patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"]) as mock_rb_fx:
 
             result = handler.compute()
 
-            assert mock_delete_all.mock_calls == [call()]
             assert mock_mark.mock_calls == [call()]
             assert mock_set_ver.mock_calls == [call("1.0")]
             assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1"})]
             assert mock_lead.mock_calls == [call(mock_rule)]
+            # Block reconciliation deletes the block's own prior events first,
+            # then recreates — never a blanket calendar sweep.
+            assert mock_del_block.mock_calls == [call("p1", mock_block)]
             assert mock_block_fx.mock_calls == [call(mock_block)]
             assert mock_rb_fx.mock_calls == [call(mock_rb)]
             assert "sync-fx" in result
             assert "lead-fx" in result
+            assert "del-block-fx" in result
             assert "block-fx" in result
             assert "rb-fx" in result
 
@@ -331,7 +337,6 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"), \
-             patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]), \
              patch(f"{SL_MODULE}.sync_provider_availability", side_effect=Exception("sync error")):
 
             result = handler.compute()
@@ -339,8 +344,19 @@ class TestOnPluginInstalled:
             # Should not crash — exception caught per-rule
             assert result == []
 
-    def test_redeploy_version_change_performs_full_sync(self):
-        """On redeploy with a new version, should do a full sync of all rules/blocks."""
+    def test_redeploy_reconciles_without_destructive_sweep(self):
+        """On redeploy, reconcile per-entity — NO blanket event deletion.
+
+        This is the regression guard for Kristen's concern: a redeploy must not
+        wipe every event on the Clinic/Admin calendars. The handler must no
+        longer call any all-events delete; instead each block deletes only its
+        own prior events before recreating.
+        """
+        import provider_availability.protocols.staff_lifecycle as sl
+
+        # The destructive helper must no longer exist / be referenced.
+        assert not hasattr(sl, "delete_all_plugin_events")
+
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
@@ -369,23 +385,23 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}._current_plugin_version", return_value="0.0.2"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
-             patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]) as mock_delete, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
              patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=[]) as mock_lead, \
+             patch(f"{SL_MODULE}.build_delete_block_effects", return_value=[]) as mock_del_block, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=[]) as mock_block_fx, \
              patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=[]) as mock_rb_fx:
 
             handler.compute()
 
-            mock_delete.assert_called_once()
             mock_set_ver.assert_called_once_with("0.0.2")
             mock_sync.assert_called_once_with("p1", schedulable_ids={"p1"})
             mock_lead.assert_called_once_with(mock_rule)
+            mock_del_block.assert_called_once_with("p1", mock_block)
             mock_block_fx.assert_called_once_with(mock_block)
             mock_rb_fx.assert_called_once_with(mock_rb)
 
     def test_redeploy_same_version_skips_full_sync(self):
-        """A config-only redeploy at the same version must NOT wipe/rebuild events."""
+        """A config-only redeploy at the same version must NOT rebuild events."""
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
@@ -395,15 +411,13 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}._current_plugin_version", return_value="1.2.3"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="1.2.3"), \
              patch(f"{SL_MODULE}.get_all_rules") as mock_rules, \
-             patch(f"{SL_MODULE}.delete_all_plugin_events") as mock_delete, \
              patch(f"{SL_MODULE}.sync_provider_availability") as mock_sync, \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver:
 
             result = handler.compute()
 
-            # No destructive resync: rules aren't even read, nothing deleted/synced.
+            # No resync: rules aren't even read, nothing synced.
             assert mock_rules.mock_calls == []
-            assert mock_delete.mock_calls == []
             assert mock_sync.mock_calls == []
             assert mock_set_ver.mock_calls == []
             assert result == []
@@ -426,7 +440,6 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}._current_plugin_version", return_value="0.0.2"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
              patch(f"{SL_MODULE}.set_synced_version"), \
-             patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]), \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]), \
              patch(f"{SL_MODULE}.build_lead_time_block_effects", side_effect=Exception("lead error")):
 

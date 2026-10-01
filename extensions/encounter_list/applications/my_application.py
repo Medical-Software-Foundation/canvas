@@ -51,7 +51,9 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         sort_by = self.request.query_params.get("sort_by", "dos")
         sort_direction = self.request.query_params.get("sort_direction", "asc")
 
-        note_queryset = Note.objects.exclude(current_state__state__in=(
+        note_queryset = Note.objects.select_related(
+            "patient", "provider", "location", "note_type_version"
+        ).exclude(current_state__state__in=(
             NoteStates.SIGNED,
             NoteStates.LOCKED,
             NoteStates.DELETED,
@@ -121,7 +123,8 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         # Convert queryset to encounter data
         encounters = []
         for note in paginated_notes:
-            claim_queue = note.get_claim().current_queue.name if note.get_claim() else None
+            claim = note.get_claim()
+            claim_queue = claim.current_queue.name if claim else None
 
             delegated_commands = self._calculate_delegated_orders_count(note)
 
@@ -337,10 +340,15 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         # Get total count
         total_count = note_queryset.count()
         
-        # Apply pagination using the helper method
-        paginated_notes, _, _ = self._apply_pagination(list(note_queryset), page, page_size)
+        total_pages = (total_count + page_size - 1) // page_size
+        if page < 1:
+            page = 1
+        elif page > total_pages and total_pages > 0:
+            page = total_pages
+        offset = (page - 1) * page_size
+        paginated_notes = list(note_queryset[offset:offset + page_size])
         
-        return paginated_notes, total_count, (total_count + page_size - 1) // page_size
+        return paginated_notes, total_count, total_pages
 
     def _get_billable_status(self, note):
         """Safely get the billable status of a note, handling cases where note_type_version doesn't exist."""

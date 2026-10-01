@@ -23,6 +23,7 @@ from provider_availability.engine.models import (
     TimeWindow,
     date_in_pattern,
 )
+from provider_availability.engine.event_sync import AVAILABILITY_TITLE
 from provider_availability.engine.provider_resolver import get_provider_display
 from provider_availability.engine.storage import get_blocks_for_provider, get_recurring_blocks_for_provider
 from provider_availability.engine.tz_utils import provider_now, to_provider_naive
@@ -301,8 +302,13 @@ def _get_schedule_event_blocks(
     """Fetch Canvas Schedule Events that block the provider's time.
 
     Calendar titles are formatted as "{provider name}: {event type}",
-    so we match by provider name prefix. Pass provider_name to skip the
-    per-call name lookup when computing many rules for the same provider.
+    so we match by provider name prefix. The plugin's own Available
+    windows (on the Clinic calendar with title=AVAILABILITY_TITLE) are
+    the open baseline and must NOT be treated as blockers — exclude
+    those specifically. Any other event on a Clinic calendar (manual,
+    FHIR, Google sync, another plugin) is a real blocker. Pass
+    provider_name to skip the per-call name lookup when computing many
+    rules for the same provider.
     """
     if provider_name is None:
         provider_name = get_provider_display(provider_id).get("name", "")
@@ -315,7 +321,8 @@ def _get_schedule_event_blocks(
         ends_at__gt=start,
         is_cancelled=False,
     ).exclude(
-        calendar__title__startswith=provider_name + ": Clinic"
+        calendar__title__startswith=provider_name + ": Clinic",
+        title=AVAILABILITY_TITLE,
     )
     return [(to_provider_naive(e.starts_at, provider_id), to_provider_naive(e.ends_at, provider_id)) for e in events]
 

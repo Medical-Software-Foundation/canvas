@@ -1,5 +1,6 @@
 """Tests for api/scheduling_admin_api.py."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from scheduling_with_rooms.api.scheduling_admin_api import SchedulingAdminAPI
@@ -28,15 +29,10 @@ def test_admin_data_full_payload():
     h = _handler()
 
     visit_type = {"id": "nt-1", "name": "Visit", "code": "VISIT"}
-    room = MagicMock()
-    room.id = "room-1"
-    room.full_name = "Exam 1"
 
     with patch(
         "scheduling_with_rooms.api.scheduling_admin_api.NoteType"
     ) as mock_nt, patch(
-        "scheduling_with_rooms.api.scheduling_admin_api.Staff"
-    ) as mock_staff, patch(
         "scheduling_with_rooms.api.scheduling_admin_api.VisitTypeRoomMapping"
     ) as mock_mapping, patch(
         "scheduling_with_rooms.api.scheduling_admin_api.VisitTypeRoomEvent"
@@ -45,19 +41,13 @@ def test_admin_data_full_payload():
     ) as mock_duration, patch(
         "scheduling_with_rooms.api.scheduling_admin_api.StaffSlotConfig"
     ) as mock_slot, patch(
-        "scheduling_with_rooms.api.scheduling_admin_api.get_schedulable_staff",
-        return_value=[{"id": "p1", "name": "Bob"}],
-    ), patch(
-        "scheduling_with_rooms.api.scheduling_admin_api.get_room_staff",
-        return_value=[{"id": "room-1", "name": "Exam 1"}],
+        "scheduling_with_rooms.api.scheduling_admin_api.get_schedulable_staff_and_rooms",
+        return_value=([{"id": "p1", "name": "Bob"}], [{"id": "room-1", "name": "Exam 1"}]),
     ):
         # encounter visit types — match returned shape used by .values()
         mock_nt.objects.filter.return_value.values.return_value.order_by.return_value = [
             visit_type,
             {"id": "nt-2", "name": "Other", "code": ""},  # filtered out
-        ]
-        mock_staff.objects.filter.return_value.distinct.return_value.order_by.return_value = [
-            room
         ]
         mock_mapping.objects.values.return_value = [
             {"note_type_code": "VISIT", "room_staff_key": "room-1"},
@@ -226,15 +216,19 @@ def test_save_mappings_none_payload_falls_back_to_empty():
         assert len(result) == 1
 
 
-def test_admin_data_dedupes_provider_room_overlap():
-    """A staff member that's both schedulable and an RR room should appear once."""
+def test_admin_data_tags_providers_and_rooms():
+    """Each entry carries its role so the admin matrix can group them.
+
+    The two lists arrive already disjoint from
+    ``get_schedulable_staff_and_rooms`` — a staff member holding both a
+    clinical role and RR is classified there, not deduped here. See
+    ``test_staff_lookup.test_staff_holding_both_a_clinical_role_and_rr_counts_as_a_room``.
+    """
     h = _handler()
 
     with patch(
         "scheduling_with_rooms.api.scheduling_admin_api.NoteType"
     ) as mock_nt, patch(
-        "scheduling_with_rooms.api.scheduling_admin_api.Staff"
-    ) as mock_staff, patch(
         "scheduling_with_rooms.api.scheduling_admin_api.VisitTypeRoomMapping"
     ) as mock_mapping, patch(
         "scheduling_with_rooms.api.scheduling_admin_api.VisitTypeRoomEvent"
@@ -243,18 +237,46 @@ def test_admin_data_dedupes_provider_room_overlap():
     ) as mock_duration, patch(
         "scheduling_with_rooms.api.scheduling_admin_api.StaffSlotConfig"
     ) as mock_slot, patch(
-        "scheduling_with_rooms.api.scheduling_admin_api.get_schedulable_staff",
-        return_value=[{"id": "p1", "name": "Bob"}],
-    ), patch(
-        "scheduling_with_rooms.api.scheduling_admin_api.get_room_staff",
-        return_value=[{"id": "p1", "name": "Bob"}],  # same id
+        "scheduling_with_rooms.api.scheduling_admin_api.get_schedulable_staff_and_rooms",
+        return_value=([{"id": "p1", "name": "Bob"}], [{"id": "r1", "name": "Exam 1"}]),
     ):
         mock_nt.objects.filter.return_value.values.return_value.order_by.return_value = []
-        mock_staff.objects.filter.return_value.distinct.return_value.order_by.return_value = []
         mock_mapping.objects.values.return_value = []
         mock_event_cfg.objects.values.return_value = []
         mock_duration.objects.values.return_value = []
         mock_slot.objects.values.return_value = []
 
-        result = h.admin_data()
+        body = json.loads(h.admin_data()[0].content)
+
+        assert body["schedulable_staff"] == [
+            {"id": "p1", "name": "Bob", "role": "provider"},
+            {"id": "r1", "name": "Exam 1", "role": "room"},
+        ]
+
+
+def test_admin_css_is_served_as_a_stylesheet():
+    h = _handler()
+    with patch(
+        "scheduling_with_rooms.api.scheduling_admin_api.render_to_string",
+        return_value=":root { color: red; }",
+    ) as mock_render:
+        result = h.admin_css()
+
         assert len(result) == 1
+        assert result[0].headers["Content-Type"] == "text/css"
+        mock_render.assert_called_once_with("static/scheduling_admin.css")
+
+
+def test_admin_css_contains_no_hardcoded_colors():
+    import pathlib
+    import re
+
+    css = (
+        pathlib.Path(__file__).parents[2]
+        / "scheduling_with_rooms"
+        / "static"
+        / "scheduling_admin.css"
+    ).read_text()
+    hexes = re.findall(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b", css)
+
+    assert hexes == [], f"hardcoded colors leaked back in: {sorted(set(hexes))}"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
@@ -15,6 +14,7 @@ from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
+from provider_availability.engine.admin_calendar import deterministic_calendar_id
 from provider_availability.engine.roles import (
     get_schedulable_codes,
     get_schedulable_staff,
@@ -22,10 +22,10 @@ from provider_availability.engine.roles import (
 )
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
+    build_delete_block_effects,
     build_delete_effects,
     build_lead_time_block_effects,
     build_recurring_block_sync_effects,
-    delete_all_plugin_events,
     sync_provider_availability,
 )
 from provider_availability.engine.storage import (
@@ -76,11 +76,15 @@ class OnStaffActivated(BaseProtocol):
             return []
 
         provider_name = staff.full_name
-        existing = CalendarModel.objects.for_calendar_name(
-            provider_name=provider_name,
-            calendar_type=CalendarType.Clinic,
-            location=None,
-        ).first()
+        calendar_id = deterministic_calendar_id(staff_key, CalendarType.Clinic, None)
+        existing = (
+            CalendarModel.objects.filter(id=calendar_id).first()
+            or CalendarModel.objects.for_calendar_name(
+                provider_name=provider_name,
+                calendar_type=CalendarType.Clinic,
+                location=None,
+            ).first()
+        )
         if existing:
             log.info(
                 "OnStaffActivated: Clinic calendar already exists for %s %s",
@@ -89,11 +93,11 @@ class OnStaffActivated(BaseProtocol):
             )
             return []
 
-        calendar_id = str(uuid4())
         cal_effect = CalendarEffect(
             id=calendar_id,
             provider=staff_key,
             type=CalendarType.Clinic,
+            description=staff_key,
         ).create()
 
         log.info(
@@ -165,21 +169,25 @@ class OnPluginInstalled(BaseProtocol):
             try:
                 staff_key = str(staff.id)
                 provider_name = staff.full_name
-                existing = CalendarModel.objects.for_calendar_name(
-                    provider_name=provider_name,
-                    calendar_type=CalendarType.Clinic,
-                    location=None,
-                ).first()
+                calendar_id = deterministic_calendar_id(staff_key, CalendarType.Clinic, None)
+                existing = (
+                    CalendarModel.objects.filter(id=calendar_id).first()
+                    or CalendarModel.objects.for_calendar_name(
+                        provider_name=provider_name,
+                        calendar_type=CalendarType.Clinic,
+                        location=None,
+                    ).first()
+                )
 
                 if existing:
                     cal_skipped += 1
                     continue
 
-                calendar_id = str(uuid4())
                 cal_effect = CalendarEffect(
                     id=calendar_id,
                     provider=staff_key,
                     type=CalendarType.Clinic,
+                    description=staff_key,
                 ).create()
                 effects.append(cal_effect)
                 cal_created += 1
@@ -201,8 +209,8 @@ class OnPluginInstalled(BaseProtocol):
         )
 
         # Step 2: Decide whether a full event resync is warranted.
-        # A full resync deletes and recreates every plugin event across all
-        # calendars — expensive at scale. It's only needed when the plugin is
+        # A full resync rebuilds every plugin event across all calendars,
+        # which is expensive at scale. It's only needed when the plugin is
         # first installed or when the code that generates events changed
         # (i.e. a new plugin version). A config-only redeploy at the same
         # version leaves the existing events correct, so we skip the batch.
@@ -219,7 +227,7 @@ class OnPluginInstalled(BaseProtocol):
             )
             return effects
 
-        # Step 3: Read cached data for the full sync.
+        # Step 3: Read stored data for the full sync.
         rules = get_all_rules()
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
@@ -238,21 +246,27 @@ class OnPluginInstalled(BaseProtocol):
         blocks_synced = 0
         recurring_synced = 0
 
-        log.info(
-            "OnPluginInstalled: %s — performing full sync",
-            "first install" if first_install else f"version change to {current_version}",
-        )
-        effects.extend(delete_all_plugin_events())
         if first_install:
             mark_installed()
+        log.info(
+            "OnPluginInstalled: %s — reconciling plugin events (non-destructive)",
+            "first install" if first_install else f"version change to {current_version}",
+        )
 
-        # Step 3: Full sync of all rules, blocks, and recurring blocks.
-        # Only currently-schedulable providers get availability (re)generated;
-        # others' events stay cleared (they were removed by delete_all above).
+        # Step 4: Per-entity reconciliation. We deliberately do NOT sweep every
+        # event off the Clinic/Admin calendars — that would delete events this
+        # plugin didn't create (manual entries, other plugins, external sync).
+        # Each builder below deletes only its OWN prior events (scoped by the
+        # plugin's titles / the entity's time range) before recreating, so a
+        # redeploy repairs drift without collateral deletion or duplicates.
+        # Only currently-schedulable providers get availability rebuilt;
+        # sync_provider_availability clears it for everyone else.
         schedulable_ids = {str(s.id) for s in active_staff}
         provider_ids_synced: set[str] = set()
         for rule in rules:
             try:
+                # sync_provider_availability deletes this provider's "Available"
+                # events (preserving past) then rebuilds — safe to call directly.
                 if rule.provider_id not in provider_ids_synced:
                     effects.extend(
                         sync_provider_availability(rule.provider_id, schedulable_ids=schedulable_ids)
@@ -275,6 +289,9 @@ class OnPluginInstalled(BaseProtocol):
 
         for block in blocks:
             try:
+                # build_block_event_effects only creates; delete this block's
+                # own prior events first so a redeploy doesn't duplicate them.
+                effects.extend(build_delete_block_effects(block.provider_id, block))
                 effects.extend(build_block_event_effects(block))
                 blocks_synced += 1
             except Exception:

@@ -1,0 +1,504 @@
+/* Scheduling modal styles.
+ *
+ * Served by GET /plugin-io/api/scheduling_with_rooms/modal.css so it is a
+ * separately cacheable asset rather than 490 lines inlined into the HTML.
+ * Colors come from the custom properties emitted by utils/theming.py into
+ * the page <head>, so BRAND_* variables actually re-skin this surface.
+ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body, html {
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px;
+      background: var(--surface-card);
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+      background: var(--surface-card);
+    }
+
+    /* -- Body: two columns -- */
+    .body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* -- Left panel: form fields -- */
+    .panel-left {
+      width: 280px;
+      min-width: 240px;
+      border-right: 1px solid var(--border-default);
+      padding: 24px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-left-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-strong);
+      margin-bottom: 4px;
+    }
+
+    /* -- Right panel: calendar + slots -- */
+    .panel-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Calendar section */
+    .cal-section {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    /* Manual override toggle row */
+    .manual-toggle-row {
+      display: flex;
+      justify-content: flex-end;
+      padding: 8px 24px 0;
+    }
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--brand-primary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .link-btn:hover { background: rgba(74,111,165,0.08); }
+    .link-btn.active { background: var(--brand-primary); color: var(--text-on-brand); }
+
+    /* Manual override form */
+    .manual-section {
+      padding: 16px 24px 24px;
+      border-top: 1px solid var(--border-default);
+    }
+    .manual-help {
+      font-size: 12px;
+      color: var(--text-subtle);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .manual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .manual-section .form-group input,
+    .manual-section .form-group select {
+      width: 100%;
+    }
+
+    /* Slots section */
+    .slots-section {
+      flex: 1;
+      padding: 16px 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* -- Form fields -- */
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .req { color: var(--danger-fg); }
+    .form-group input,
+    .form-group select {
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: var(--text-strong);
+      background: var(--surface-card);
+      width: 100%;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 1px var(--border-focus);
+    }
+
+    /* Patient search autocomplete */
+    .patient-search-wrap { position: relative; }
+    #patient-results {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      border: 1px solid var(--border-strong);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      background: var(--surface-card);
+      max-height: 170px;
+      overflow-y: auto;
+      display: none;
+      z-index: 20;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .patient-result-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid var(--surface-hover);
+    }
+    .patient-result-item:last-child { border-bottom: none; }
+    .patient-result-item:hover { background: var(--surface-hover); }
+    .patient-result-item .pt-name { font-weight: 600; color: var(--text-emphasis); }
+    .patient-result-item .pt-meta { font-size: 11px; color: var(--text-subtle); margin-top: 1px; }
+
+    /* Selected patient chip */
+    #selected-patient-chip {
+      display: none;
+      background: var(--surface-hover);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+      color: var(--text-strong);
+      align-items: center;
+      justify-content: space-between;
+    }
+    #selected-patient-chip.visible { display: flex; }
+    .chip-clear {
+      background: none; border: none; cursor: pointer; color: var(--text-soft);
+      font-size: 16px; line-height: 1; padding: 0 2px;
+    }
+    .chip-clear:hover { color: var(--text-strong); }
+
+    /* -- Mini Calendar -- */
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .cal-month-label {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-strong);
+    }
+    .cal-month-label span {
+      font-weight: 400;
+      color: var(--text-subtle);
+    }
+    .cal-nav {
+      display: flex;
+      gap: 4px;
+    }
+    .cal-nav button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: var(--text-soft);
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.12s, background 0.12s;
+    }
+    .cal-nav button:hover { color: var(--text-strong); background: var(--surface-hover); }
+    #cal-today {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      margin-right: 4px;
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      text-align: center;
+    }
+    .cal-dow {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      padding: 4px 0 8px;
+    }
+    .cal-day {
+      padding: 7px 0;
+      font-size: 13px;
+      color: var(--text-body);
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.12s;
+      font-weight: 500;
+    }
+    .cal-day:hover { background: var(--surface-hover); }
+    .cal-day.other-month { color: var(--status-empty); }
+    .cal-day.today {
+      background: var(--surface-hover);
+      color: var(--text-strong);
+      font-weight: 700;
+      border: 2px solid var(--text-soft);
+    }
+    .cal-day.selected {
+      background: var(--surface-inverse);
+      color: var(--text-on-brand);
+      font-weight: 700;
+    }
+    .cal-day.avail-none:not(.selected):not(.other-month) {
+      color: var(--status-empty);
+    }
+    .cal-day.avail-some:not(.selected):not(.other-month) {
+      color: var(--status-partial);
+      font-weight: 700;
+    }
+    .cal-day.avail-many:not(.selected):not(.other-month) {
+      color: var(--status-positive);
+      font-weight: 700;
+    }
+
+    /* -- Provider / Room column grid -- */
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .provider-columns, .room-columns {
+      display: flex;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+      overflow-x: auto;
+    }
+
+    /* Multi-location: stack location groups vertically. */
+    .provider-columns.grouped {
+      display: block;
+      overflow-x: visible;
+    }
+    .location-group { margin-bottom: 18px; }
+    .location-group:last-child { margin-bottom: 0; }
+    .location-group-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--brand-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .group-section-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 8px 0 4px 0;
+    }
+    .location-group .provider-columns,
+    .location-group .room-columns {
+      display: flex;
+      overflow-x: auto;
+    }
+
+    .prov-col, .room-col {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Provider columns get a hard minimum width so names/times don't wrap or
+       collide. The parent .provider-columns has overflow-x:auto, so adding
+       enough providers will produce a horizontal scrollbar instead. */
+    .prov-col {
+      flex: 0 0 130px;
+      min-width: 130px;
+    }
+    .prov-col + .prov-col,
+    .room-col + .room-col {
+      border-left: 1px solid var(--border-default);
+    }
+
+    .col-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-strong);
+      padding: 6px 8px;
+      text-align: center;
+      border-bottom: 1px solid var(--border-default);
+      background: var(--surface-page);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .col-slots {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding: 6px 4px;
+    }
+
+    .slot-btn {
+      border: 1.5px solid var(--border-strong);
+      border-radius: 20px;
+      padding: 6px 4px;
+      cursor: pointer;
+      background: var(--surface-card);
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-body);
+      transition: all 0.15s;
+      width: 100%;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* When the patient's timezone differs from the viewer's, the label is two
+         sibling elements. This is a row flex container, so without a gap they
+         render as "8:00 AM CDT9:00 AM EDT" — invisible in narrow provider
+         columns where each wraps, obvious in wide room columns where they
+         don't. */
+      gap: 6px;
+    }
+    .slot-btn:hover {
+      border-color: var(--border-focus);
+      background: var(--surface-page);
+    }
+    .slot-btn.selected {
+      background: var(--surface-inverse);
+      border-color: var(--border-focus);
+      color: var(--text-on-brand);
+      font-weight: 600;
+    }
+    .load-more-btn {
+      grid-column: 1 / -1;
+      background: none;
+      border: 1px dashed var(--border-strong);
+      border-radius: 8px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.12s;
+    }
+    .load-more-btn:hover {
+      border-color: var(--border-focus);
+      color: var(--text-strong);
+    }
+
+    .col-slots .no-slots-msg {
+      grid-column: 1 / -1;
+    }
+
+    .slot-time-patient { font-weight: 600; color: var(--text-emphasis); }
+    /* Deliberately no `white-space: nowrap` and no fixed width: in a 130px
+       provider column these two labels have to wrap internally to fit side by
+       side. No margin-top either — that was written for a stacked layout and
+       here only nudges the secondary 1px out of vertical alignment. Spacing
+       between the two comes from .slot-btn's gap. */
+    .slot-time-user { font-size: 10px; color: var(--text-soft); }
+    .slot-btn.selected .slot-time-patient,
+    .slot-btn.selected .slot-time-user { color: var(--text-on-brand); }
+
+    .slots-placeholder {
+      color: var(--text-soft);
+      font-size: 13px;
+      padding: 12px 0;
+    }
+
+    .no-slots-msg {
+      color: var(--text-soft);
+      font-size: 13px;
+      padding: 12px 0;
+    }
+
+    #room-slots-section {
+      border-top: 1px solid var(--border-default);
+      padding-top: 10px;
+      margin-top: 6px;
+    }
+
+    /* -- Loading spinner -- */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border-default);
+      border-top-color: var(--border-focus);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* -- Footer -- */
+    .footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border-default);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface-card);
+    }
+    #status-msg {
+      font-size: 12px;
+      color: var(--text-subtle);
+      min-height: 16px;
+    }
+    #status-msg.error { color: var(--danger-fg); }
+    #status-msg.success { color: var(--status-positive); }
+
+    .btn-cancel {
+      background: var(--surface-card);
+      border: 1.5px solid var(--border-strong);
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-body);
+      transition: all 0.12s;
+    }
+    .btn-cancel:hover { border-color: var(--border-focus); }
+    .btn-book {
+      background: var(--surface-inverse);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 22px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-on-brand);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .btn-book:disabled {
+      background: var(--surface-disabled);
+      cursor: not-allowed;
+    }
+    .btn-book:not(:disabled):hover { background: var(--surface-inverse-hover); }

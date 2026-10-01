@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin: 0; padding: 8px; background: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    #field-wrapper-card-name,
+    #field-wrapper-card-number,
+    #field-wrapper-card-exp,
+    #field-wrapper-card-cvv,
+    #field-wrapper-billing-zip {
+      width: 6em;
+      height: 2.5em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin: 5px;
+      padding: 5px;
+    }
+    .submitButton {
+      display: flex;
+      width: 100px;
+      height: 20px;
+      visibility: hidden;
+    }
+    .custom-fields {
+      display: flex;
+    }
+    .error {
+      color: #b00020;
+      margin: 8px 5px 0;
+      font-size: 0.9em;
+      min-height: 1.2em;
+    }
+  </style>
+  <script src="{{ sdk_url }}"></script>
+</head>
+<body>
+  <div>
+    <div id="custom-payment-fields" class="custom-fields">
+      <div id="pay-theory-credit-card-account-name"></div>
+      <div id="pay-theory-credit-card"></div>
+      <div id="pay-theory-credit-card-zip"></div>
+    </div>
+    <div class="error"></div>
+    <button type="submit" id="submit" class="submitButton">Pay</button>
+
+    <script>
+      var ERROR_MESSAGES = {
+        SOCKET_ERROR: 'Your card could not be processed. Please contact your card issuer or try a different card.',
+        TRANSACTING_FIELD_ERROR: 'Please check your card details and try again.',
+        FIELD_ERROR: 'Please check your card details and try again.',
+        NOT_VALID: 'Please check your card details and try again.',
+        INVALID_PARAM: 'Please check your card details and try again.',
+        SESSION_EXPIRED: 'Your session has expired. Please refresh the page and try again.',
+        NOT_READY: 'The payment form is not ready yet. Please wait a moment and try again.',
+        NO_TOKEN: 'The payment form is not ready yet. Please wait a moment and try again.',
+        NO_FIELDS: 'The payment form is not ready yet. Please wait a moment and try again.'
+      };
+      var DEFAULT_ERROR_MESSAGE = 'We could not process your card. Please try again or use a different card.';
+
+      var TERMINAL_ERROR_PREFIXES = {
+        SOCKET_ERROR: true,
+        SESSION_EXPIRED: true
+      };
+
+      function formatPayTheoryError(rawError) {
+        var prefix = (rawError || '').split(':')[0].trim();
+        return ERROR_MESSAGES[prefix] || DEFAULT_ERROR_MESSAGE;
+      }
+
+      function isTerminalError(rawError) {
+        var prefix = (rawError || '').split(':')[0].trim();
+        return !!TERMINAL_ERROR_PREFIXES[prefix];
+      }
+
+      function showError(rawError) {
+        if (rawError) console.error('PayTheory error:', rawError);
+        var message = formatPayTheoryError(rawError);
+        var errorEl = document.querySelector('.error');
+        if (errorEl) errorEl.textContent = message;
+        try { window.parent.setError(message); } catch(e) {}
+      }
+
+      function clearError() {
+        var errorEl = document.querySelector('.error');
+        if (errorEl) errorEl.textContent = '';
+      }
+
+      function doTokenize() {
+        clearError();
+        paytheory.tokenizePaymentMethod({}).then(function(result) {
+          if (result.type === 'ERROR') {
+            showError(result.error);
+            return;
+          }
+          if (result.body && result.body.payment_method_id) {
+            try { window.parent.setToken(result.body.payment_method_id); } catch(e) {}
+          } else {
+            showError(result.error);
+          }
+        });
+      }
+
+      function setupPayTheory() {
+        paytheory.readyObserver(function(ready) {
+          try { window.parent.setFormIsReady(ready); } catch(e) {}
+        });
+
+        paytheory.errorObserver(function(error) {
+          if (isTerminalError(error)) {
+            showError(error);
+          } else if (error) {
+            console.warn('PayTheory (non-fatal):', error);
+          }
+        });
+
+        paytheory.stateObserver(function(state) {
+          if (state['billing-zip'] && state['billing-zip'].isDirty) {
+            var el = document.getElementById('field-wrapper-billing-zip');
+            if (el) el.style.borderColor = state['billing-zip'].errorMessages[0] ? 'red' : '#ccc';
+          }
+          if (state['card-cvv'] && state['card-cvv'].isDirty) {
+            var el = document.getElementById('field-wrapper-card-cvv');
+            if (el) el.style.borderColor = state['card-cvv'].errorMessages[0] ? 'red' : '#ccc';
+          }
+          if (state['card-exp'] && state['card-exp'].isDirty) {
+            var el = document.getElementById('field-wrapper-card-exp');
+            if (el) el.style.borderColor = state['card-exp'].errorMessages[0] ? 'red' : '#ccc';
+          }
+          if (state['card-number'] && state['card-number'].isDirty) {
+            var el = document.getElementById('field-wrapper-card-number');
+            if (el) el.style.borderColor = state['card-number'].errorMessages[0] ? 'red' : '#ccc';
+          }
+        });
+
+        paytheory.validObserver(function(valid) {
+          try { window.parent.setFormIsValid(valid === 'card'); } catch(e) {}
+        });
+
+        paytheory.payTheoryFields({
+          apiKey: '{{ public_api_key }}'
+        });
+
+        // Signal readiness unconditionally after payTheoryFields() is invoked.
+        // The readyObserver callback above fires only when the iframe becomes
+        // visible, but Canvas hides the form until setFormIsReady(true) is called,
+        // creating a deadlock. This breaks the cycle.
+        try { window.parent.setFormIsReady(true); } catch(e) {}
+
+        // Listen for submit forwarded from the host DOM via postMessage.
+        // Canvas's CustomPayment.tsx clicks the host #submit button, which
+        // posts a message into this iframe to trigger tokenization.
+        window.addEventListener('message', function(event) {
+          if (event.origin === window.location.origin && event.data && event.data.type === 'pt-submit') {
+            doTokenize();
+          }
+        });
+
+        document.getElementById('submit').addEventListener('click', function(e) {
+          e.preventDefault();
+          doTokenize();
+        });
+      }
+
+      // SDK is loaded via <script> tag in <head>, so it should be available.
+      if (typeof paytheory !== 'undefined') {
+        setupPayTheory();
+      } else {
+        var _waitCount = 0;
+        (function waitForSDK() {
+          if (typeof paytheory !== 'undefined') { setupPayTheory(); return; }
+          if (++_waitCount > 50) { showError('NOT_READY'); return; }
+          setTimeout(waitForSDK, 200);
+        })();
+      }
+    </script>
+  </div>
+</body>
+</html>

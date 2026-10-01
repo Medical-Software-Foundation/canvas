@@ -27,20 +27,24 @@ def build_consent_payload(
     code,
     display,
     patient_id,
-    pdf_base64,
     today,
+    pdf_base64="",
 ):
     """Build the FHIR Consent create payload.
 
     ``today`` is an ISO ``YYYY-MM-DD`` string used for the effective date
     (``provision.period.start``). No ``period.end`` is set, so the consent never
     expires. Canvas records the accepted/issued datetime automatically.
+
+    ``pdf_base64`` is the generated documentation PDF. When it is empty (e.g. a
+    "Written" consent, where the provider uploads the signed document themselves)
+    the ``sourceAttachment`` is omitted and the Consent is recorded without one.
     """
     coding = {"system": system, "code": code}
     if display:
         coding["display"] = display
 
-    return {
+    payload = {
         "resourceType": "Consent",
         "status": "active",
         "scope": {},
@@ -49,10 +53,12 @@ def build_consent_payload(
             "reference": "Patient/%s" % patient_id,
             "type": "Patient",
         },
-        "sourceAttachment": {
+        "provision": {"period": {"start": today}},
+    }
+    if pdf_base64:
+        payload["sourceAttachment"] = {
             "title": _attachment_filename(display, code, today),
             "contentType": "application/pdf",
             "data": pdf_base64,
-        },
-        "provision": {"period": {"start": today}},
-    }
+        }
+    return payload

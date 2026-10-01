@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect x="4" y="4" width="92" height="92" rx="20" fill="#2d6cdf"/>
+  <path d="M62 26a26 26 0 1 0 12 34 20 20 0 0 1-12-34z" fill="#ffffff"/>
+  <g fill="#2d6cdf" font-family="Arial, sans-serif" font-weight="700">
+    <text x="30" y="40" font-size="16">z</text>
+    <text x="40" y="30" font-size="12">z</text>
+  </g>
+</svg>

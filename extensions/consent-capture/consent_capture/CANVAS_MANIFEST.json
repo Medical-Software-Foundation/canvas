@@ -1,14 +1,16 @@
 {
-    "sdk_version": "0.177.0",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.179.0",
+    "plugin_version": "1.36.0",
     "name": "consent_capture",
-    "description": "Red 'Collect Consent' action button in the patient chart header, shown only for patients without the configured consent on file. Opens a scripted consent modal; on Accept, records the consent via the Canvas FHIR API (accepted + effective today, never expires) with a generated PDF documenting the collecting staff member.",
-    "url_permissions": [],
+    "description": "Multi-consent capture and management. A 'Consents' chart-header button (always shown; red when the patient still has a required consent due, neutral gray once satisfied) opens a picker of all configured consents, and records the selected one via the Canvas FHIR API with a generated documentation PDF. Configure consents (verbiage, questions, capacity statements) at runtime on the Consent Settings page: sign in to Canvas and open /plugin-io/api/consent_capture/admin/settings.",
+    "url_permissions": [
+        {"url": "https://cdn.jsdelivr.net", "permissions": []}
+    ],
     "components": {
         "protocols": [
             {
                 "class": "consent_capture.handlers.consent_button:ConsentButton",
-                "description": "Red action button in the patient chart header that opens the consent modal when the patient has no accepted consent of the configured code.",
+                "description": "'Consents' action button in the patient chart header, always shown for a patient. It turns red only for an active, non-deceased patient with a required consent still due, and is a neutral gray otherwise; it opens the consent picker.",
                 "data_access": {
                     "event": "",
                     "read": ["Patient", "PatientConsent"],
@@ -17,10 +19,28 @@
             },
             {
                 "class": "consent_capture.handlers.consent_api:ConsentApi",
-                "description": "Endpoint that records the accepted consent via the Canvas FHIR API with a generated documentation PDF.",
+                "description": "Endpoint that records the selected consent via the Canvas FHIR API, and serves the recorded consent's PDF for the completed cards.",
                 "data_access": {
                     "event": "",
-                    "read": ["Patient", "Staff"],
+                    "read": ["Patient", "PatientConsent", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "consent_capture.handlers.consent_api:ConsentAdminApi",
+                "description": "Admin endpoints for the Consent Settings UI: lists the instance's Patient Consent Codings, stores the plugin workflow (verbiage, questions) configured for each, and runs the admin-only banner backfill across active patients.",
+                "data_access": {
+                    "event": "",
+                    "read": ["PatientConsentCoding", "Patient", "PatientConsent", "BannerAlert"],
+                    "write": []
+                }
+            },
+            {
+                "class": "consent_capture.handlers.consent_banner:ConsentBanner",
+                "description": "Adds a red profile banner alert when the patient has a required consent that is not on file, and removes it once all required consents are complete.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "PatientConsent"],
                     "write": []
                 }
             }
@@ -28,16 +48,29 @@
         "commands": [],
         "content": [],
         "effects": [],
-        "views": []
+        "views": [],
+        "applications": [
+            {
+                "class": "consent_capture.handlers.consent_app:ConsentApp",
+                "name": "Consents",
+                "description": "Review and record patient consents.",
+                "scope": "patient_specific",
+                "icon": "assets/consent.png"
+            }
+        ]
     },
     "variables": [
         {"name": "CANVAS_FHIR_CLIENT_ID", "sensitive": true},
         {"name": "CANVAS_FHIR_CLIENT_SECRET", "sensitive": true},
-        {"name": "CONSENT_SYSTEM", "default": "http://loinc.org"},
-        {"name": "CONSENT_CODE"},
-        {"name": "CONSENT_DISPLAY"},
-        {"name": "CONSENT_STATEMENT"}
+        {"name": "CONSENT_SYSTEM", "default": "INTERNAL"},
+        {"name": "CONSENT_ADMIN_USERS", "default": ""},
+        {"name": "CONSENT_BANNERS_ENABLED", "default": "true"}
     ],
+    "secrets": ["namespace_read_write_access_key"],
+    "custom_data": {
+        "namespace": "canvas_medical__consent_capture",
+        "access": "read_write"
+    },
     "tags": {},
     "references": [],
     "license": "",

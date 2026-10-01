@@ -348,6 +348,28 @@ def _parse_base_event(
                 override_props, uid_prop[2], rid_key, duration, sequence, default_tz
             )
             if override_event is not None:
+                # Window-check the override against its OWN times, not the base
+                # occurrence's. The `moment + duration <= now` test above used
+                # the time this instance *would* have been, so a moved instance
+                # can pass it while the moved slot has already ended (or been
+                # pushed past the look-ahead horizon).
+                #
+                # That mismatch is not cosmetic. `live_busy_events` selects
+                # `ends_at > now`, so an ended block is invisible on the "have"
+                # side of the reconcile while an unfiltered override keeps it on
+                # the "want" side. The cron then creates a fresh block for it on
+                # every tick, forever, until the base occurrence itself ages out
+                # (Pylon 32976: 16 duplicate blocks in four hours).
+                #
+                # Drop the instance rather than falling through to the base time:
+                # an override *replaces* the occurrence it names (RFC 5545
+                # 3.8.4.4), so emitting the base slot would block time the
+                # provider moved away from.
+                if (
+                    override_event.ends_at <= now
+                    or override_event.starts_at >= window_end
+                ):
+                    continue
                 out.append(override_event)
                 continue
             # Override unparseable or missing DTSTART -> fall through to the

@@ -1,0 +1,13 @@
+<div class="clinical-note-view">
+    <div class="clinical-note-content">
+        <span
+            class="clinical-note-text"
+            id="clinical-note-text-{{ patient_id }}"
+            hx-get="/plugin-io/api/patient_panel/app/{{ patient_id }}/clinical-note/edit"
+            hx-target="#clinical-note-{{ patient_id }}"
+            hx-swap="innerHTML"
+            hx-trigger="click"
+        >{{ clinical_note }}</span>
+        <button type="button" class="clinical-note-toggle" id="clinical-note-toggle-{{ patient_id }}" onclick="event.stopPropagation(); toggleClinicalNote('{{ patient_id }}')">more</button>
+    </div>
+</div>

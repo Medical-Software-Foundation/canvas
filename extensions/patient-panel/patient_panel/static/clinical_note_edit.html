@@ -1,0 +1,13 @@
+<div class="clinical-note-edit">
+    <textarea
+        name="clinical_note"
+        class="clinical-note-input"
+        placeholder="Type clinical caption..."
+        autofocus
+        hx-post="/plugin-io/api/patient_panel/app/{{ patient_id }}/clinical-note/save"
+        hx-target="#clinical-note-{{ patient_id }}"
+        hx-swap="innerHTML"
+        hx-trigger="blur"
+        hx-include="this"
+    >{{ clinical_note }}</textarea>
+</div>

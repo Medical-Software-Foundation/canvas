@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0891b2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0e7490;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded rectangle -->
+  <rect x="4" y="4" width="92" height="92" rx="18" ry="18" fill="url(#bg)" />
+  <!-- Person icon (head) -->
+  <circle cx="34" cy="30" r="8" fill="white" opacity="0.95" />
+  <!-- Person icon (body) -->
+  <path d="M22 48 C22 40 46 40 46 48" fill="white" opacity="0.95" />
+  <!-- List lines -->
+  <rect x="54" y="26" width="26" height="3.5" rx="1.75" fill="white" opacity="0.85" />
+  <rect x="54" y="34" width="18" height="3.5" rx="1.75" fill="white" opacity="0.55" />
+  <rect x="54" y="42" width="22" height="3.5" rx="1.75" fill="white" opacity="0.55" />
+  <!-- Divider -->
+  <rect x="20" y="54" width="60" height="1" fill="white" opacity="0.3" />
+  <!-- Second person icon (head) -->
+  <circle cx="34" cy="65" r="7" fill="white" opacity="0.75" />
+  <!-- Second person icon (body) -->
+  <path d="M23.5 81 C23.5 74 44.5 74 44.5 81" fill="white" opacity="0.75" />
+  <!-- List lines row 2 -->
+  <rect x="54" y="61" width="26" height="3.5" rx="1.75" fill="white" opacity="0.65" />
+  <rect x="54" y="69" width="18" height="3.5" rx="1.75" fill="white" opacity="0.4" />
+  <rect x="54" y="77" width="22" height="3.5" rx="1.75" fill="white" opacity="0.4" />
+</svg>

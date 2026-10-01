@@ -12,7 +12,7 @@ Clinicians and care coordinators who review patient measurements such as vital s
 
 ## Video
 
-Here is a video demonstrating this plugin in action: https://www.loom.com/share/a475c3cba69149f2b60851b6f9ec1da8
+Here is a video demonstrating this plugin in action: https://www.loom.com/share/80a52e7146d04c9d9b0ca176ee7b0e61
 
 ## Features
 

@@ -1,0 +1,25 @@
+<td colspan="11">
+    <div class="accordion-details">
+        <h4>Due Gaps</h4>
+        {% if gaps %}
+        <div class="activity-list">
+            {% for gap in gaps %}
+            <div class="task-item" data-task-id="{{ gap.id }}">
+                <div class="task-header" onclick="toggleTaskComments('{{ gap.id }}')">
+                    <div class="task-info">
+                        <div class="activity-title">{{ gap.title }}</div>
+                    </div>
+                    <div class="task-actions">
+                        <div class="task-actions">
+                            <span class="gaps-display status-{{ gap.status|lower }}">{{ gap.status }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-activity">No gaps found.</div>
+        {% endif %}
+    </div>
+</td>

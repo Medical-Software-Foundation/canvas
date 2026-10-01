@@ -1,1 +1,25 @@
+# Claude Code / CPA
 .claude
+.cpa-workflow-artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Test & type-check caches
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# OS cruft
+.DS_Store

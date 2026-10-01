@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Consent Settings</title>
+  <style>
+    :root {
+      --ink:#16181d; --secondary:#5a6270; --muted:#8b93a1; --disabled-dot:#c6ccd4;
+      --bg:#f4f6f8; --surface:#ffffff; --inset:#f7f8fa; --chip:#f0f2f5; --matte:#eef1f4; --seg:#f0f2f4;
+      --line:#e8eaef; --line-strong:#d9dce3;
+      --success:#0b7a3b; --success-bg:#e7f5ee; --warn:#f2c04d; --warn-ink:#8a6d1a; --danger:#b42318;
+      --r-lg:14px; --r-md:10px; --r-sm:8px;
+      --shadow-card:0 1px 2px rgba(16,24,40,.04),0 10px 26px rgba(16,24,40,.05);
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; margin:0; background:var(--bg); }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+    .app { height:100%; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; }
+
+    .grid { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:340px 1fr; }
+    .grid.collapsed { grid-template-columns:46px 1fr; }
+
+    /* Sidebar */
+    .side { border-right:1px solid var(--line); background:var(--surface); display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+    .shead { flex:none; height:53px; padding:0 12px 0 20px; display:flex; align-items:center; gap:8px; }
+    .grid.collapsed .shead { padding:0 8px; justify-content:center; }
+    .shead .label { flex:1 1 auto; min-width:0; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); padding-left:6px; }
+    .sidetoggle { flex:none; width:30px; height:30px; border:1px solid var(--line); background:var(--surface); border-radius:var(--r-sm); cursor:pointer; color:var(--secondary); font-size:13px; line-height:1; padding:0; display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+    .sidetoggle:hover { border-color:var(--secondary); color:var(--ink); }
+    #newCodingLink { font-size:17px; }
+    .sidetoggle svg { width:16px; height:16px; display:block; }
+    .slist { flex:1 1 auto; overflow-y:auto; padding:2px 12px 12px; }
+    .srow { width:100%; text-align:left; display:flex; flex-direction:column; align-items:stretch; border:1px solid transparent; border-radius:var(--r-md); background:transparent; padding:10px 12px; font:inherit; color:inherit; cursor:pointer; margin-bottom:2px; transition:background .1s; }
+    .srow:hover { background:var(--inset); }
+    .srow.sel { background:var(--inset); border-color:var(--line-strong); }
+    .srow .stoprow { display:flex; align-items:center; gap:8px; }
+    .srow .sname { flex:1 1 auto; min-width:0; font-weight:600; font-size:14px; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .srow .scode { align-self:flex-start; max-width:100%; margin-top:4px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; color:var(--secondary); background:var(--chip); border-radius:5px; padding:1px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .srow .pill-tag { flex:none; font-size:10.5px; font-weight:600; letter-spacing:.02em; border-radius:999px; padding:2px 8px; white-space:nowrap; border:1px solid transparent; }
+    .pill-tag.req { color:#8a6d1a; background:#fdf6e3; }
+    .pill-tag.opt { color:#2f5fae; background:#eaf1fb; }
+    .pill-tag.notshown { color:var(--muted); background:var(--chip); }
+    .pill-tag.notset { color:var(--muted); background:transparent; border:1px dashed var(--line-strong); }
+    .pill-tag.inactive { color:var(--secondary); background:var(--matte); border:1px solid var(--line-strong); }
+
+    /* Main */
+    .main { min-height:0; min-width:0; display:flex; flex-direction:column; }
+    .mhead { flex:none; height:53px; background:var(--surface); border-bottom:1px solid var(--line); padding:0 28px; display:flex; align-items:center; gap:14px; }
+    .mhead .htitle { flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:10px; }
+    .mhead h2 { font-size:16px; font-weight:650; margin:0; letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .status { flex:none; display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:500; }
+    .status .sdot { width:7px; height:7px; border-radius:50%; }
+    .mbody { flex:1 1 auto; overflow-y:auto; padding:24px 28px 110px; }
+    .wrap { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:18px; }
+
+    /* Cards */
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--shadow-card); }
+    .card > .ch { background:var(--inset); border-bottom:1px solid var(--line); border-radius:13px 13px 0 0; padding:12px 20px; }
+    .card > .ch h3 { font-size:14.5px; font-weight:650; margin:0; }
+    .card > .ch p { font-size:12.5px; color:var(--muted); margin:2px 0 0; }
+    .card > .ch.row { display:flex; align-items:center; gap:12px; }
+    .card > .ch.row .grow { flex:1 1 auto; }
+
+    /* Metadata strip */
+    .metacard { padding:14px 20px; }
+    .metacols { display:flex; flex-wrap:wrap; gap:12px 32px; }
+    .metacols .m { font-size:13px; display:flex; flex-direction:column; gap:1px; }
+    .metacols .mk { color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
+    .metacols .mv { font-weight:600; font-size:13.5px; }
+    .gdivider { height:1px; background:var(--line); margin:14px 20px 0; }
+
+    /* Content */
+    .cb { padding:14px 20px 18px; }
+    textarea { width:100%; box-sizing:border-box; font:inherit; font-size:14px; color:var(--ink); border:1px solid var(--line); border-radius:var(--r-sm); padding:12px 14px; background:var(--surface); min-height:170px; resize:vertical; line-height:1.6; }
+    textarea:focus { outline:none; border-color:var(--line-strong); box-shadow:0 0 0 3px rgba(16,24,40,.06); }
+    .helper { font-size:12px; color:var(--muted); margin-top:6px; }
+
+    /* Buttons */
+    .btn { font:inherit; font-size:13px; font-weight:600; padding:6px 12px; border-radius:var(--r-sm); border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); cursor:pointer; min-height:32px; }
+    .btn:hover { border-color:var(--secondary); }
+
+    /* Questions */
+    .qbody { padding:14px 20px 18px; }
+    .qlist { display:flex; flex-direction:column; gap:10px; }
+    .qempty { font-size:13px; color:var(--muted); }
+    .qaddbtn { margin-top:10px; }
+    .qcard { border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface); transition:border-color .1s; }
+    .qcard.drag { opacity:.45; border-color:var(--muted); }
+    .qtop { display:flex; gap:10px; align-items:center; padding:12px 12px 0; }
+    .qhandle { flex:none; display:inline-flex; align-items:center; gap:7px; cursor:grab; user-select:none; }
+    .qhandle .grip { color:#c1c7d0; font-size:14px; line-height:1; }
+    .qnum { width:22px; height:22px; border-radius:50%; background:var(--chip); color:var(--secondary); font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+    .qprompt { flex:1 1 auto; min-width:0; box-sizing:border-box; font:inherit; font-size:14px; font-weight:500; color:var(--ink); border:1px solid transparent; border-radius:var(--r-sm); padding:8px 10px; background:var(--inset); }
+    .qprompt:focus { outline:none; background:var(--surface); border-color:var(--line-strong); box-shadow:0 0 0 3px rgba(16,24,40,.06); }
+    .qdel { flex:none; width:30px; height:30px; border:1px solid var(--line); background:var(--surface); border-radius:var(--r-sm); cursor:pointer; color:var(--muted); font-size:14px; line-height:1; }
+    .qdel:hover { border-color:var(--danger); color:var(--danger); }
+    .qopts { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px 8px 46px; }
+    .qcap { padding:0 12px 12px 46px; font-size:12px; color:var(--muted); line-height:1.5; }
+    .seg { display:inline-flex; background:var(--seg); border:1px solid var(--line); border-radius:var(--r-sm); padding:3px; gap:2px; }
+    .seg button { font:inherit; font-size:12.5px; font-weight:500; padding:5px 11px; border-radius:6px; border:0; cursor:pointer; background:transparent; color:var(--secondary); }
+    .seg button.on { background:var(--surface); color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(16,24,40,.12); }
+    .pill { font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface); color:var(--secondary); cursor:pointer; }
+    .pill.on { background:var(--ink); border-color:var(--ink); color:#fff; }
+
+    /* Toggle rows (General / At capture) */
+    .trow { display:flex; gap:14px; align-items:flex-start; padding:12px; border-radius:var(--r-md); }
+    .trow:hover { background:var(--inset); }
+    .trow .tmain { flex:1 1 auto; cursor:pointer; }
+    .trow .tt { font-size:14px; font-weight:600; }
+    .trow .td { font-size:12.5px; color:var(--muted); margin-top:1px; }
+    .switch { flex:none; width:36px; height:20px; border-radius:999px; border:0; padding:0; cursor:pointer; background:var(--line-strong); position:relative; transition:background .15s; margin-top:2px; }
+    .switch.on { background:var(--ink); }
+    .switch .knob { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); transition:left .15s; }
+    .switch.on .knob { left:18px; }
+    .capgroup { padding:4px 8px 8px; }
+    .inset { margin:0 12px 12px; padding:12px 14px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--inset); }
+    .inset.hidden { display:none; }
+    .inset .ititle { font-size:12.5px; font-weight:600; margin-bottom:8px; }
+    .mpills { display:flex; gap:8px; flex-wrap:wrap; }
+    .writtennote { font-size:12px; color:var(--muted); line-height:1.5; margin-top:9px; }
+    .writtennote strong { color:var(--secondary); }
+    .caplabel { display:block; margin-bottom:12px; } .caplabel:last-child { margin-bottom:0; }
+    .caplabel .lab { display:block; font-size:12.5px; font-weight:600; margin-bottom:5px; }
+    .caplabel .lab .hint { font-weight:400; color:var(--muted); }
+    .caplabel input { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; color:var(--ink); border:1px solid var(--line); border-radius:var(--r-sm); padding:9px 11px; background:var(--surface); }
+    .caplabel input:focus { outline:none; border-color:var(--line-strong); box-shadow:0 0 0 3px rgba(16,24,40,.06); }
+    .stepper { flex:none; display:inline-flex; align-items:center; border:1px solid var(--line-strong); border-radius:var(--r-sm); overflow:hidden; margin-top:2px; }
+    .stepper button { font:inherit; width:30px; height:32px; border:0; background:var(--surface); color:var(--secondary); cursor:pointer; font-size:15px; }
+    .stepper button:hover { background:var(--inset); }
+    .stepper .sval { width:52px; text-align:center; font-size:13.5px; font-weight:600; border:0; border-left:1px solid var(--line); border-right:1px solid var(--line); padding:5px 4px; background:transparent; color:var(--ink); font-family:inherit; }
+    .stepper .sval:focus { outline:none; background:var(--inset); }
+
+    /* Equivalent consents */
+    .eqbody { padding:14px 20px 18px; }
+    .eqsummary { font-size:12px; color:var(--muted); margin-bottom:10px; }
+    .eqchosen { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+    .eqitem { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface); padding:9px 10px; }
+    .eqitem .eqnm { flex:1 1 auto; min-width:0; font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .eqrm { flex:none; width:26px; height:26px; border:1px solid var(--line); background:var(--surface); border-radius:var(--r-sm); cursor:pointer; color:var(--muted); font-size:15px; line-height:1; }
+    .eqrm:hover { border-color:var(--danger); color:var(--danger); }
+    .eqadd { position:relative; display:inline-block; }
+    .eqaddbtn { font:inherit; font-size:13px; font-weight:600; padding:8px 14px; border-radius:var(--r-sm); border:1px solid var(--line-strong); background:var(--inset); color:var(--ink); cursor:pointer; box-shadow:0 1px 1px rgba(16,24,40,.04); }
+    .eqaddbtn:hover { background:var(--chip); border-color:var(--secondary); }
+    .eqaddbtn:active { background:var(--matte); }
+    .eqpop { position:absolute; z-index:20; top:calc(100% + 6px); left:0; width:400px; max-width:82vw; background:var(--surface); border:1px solid var(--line-strong); border-radius:var(--r-md); box-shadow:0 12px 30px rgba(16,24,40,.16); padding:8px; }
+    .eqpop.hidden { display:none; }
+    .eqsearch { width:100%; box-sizing:border-box; font:inherit; font-size:13px; border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 10px; margin-bottom:6px; }
+    .eqsearch:focus { outline:none; border-color:var(--line-strong); box-shadow:0 0 0 3px rgba(16,24,40,.06); }
+    .eqresults { max-height:288px; overflow-y:auto; display:flex; flex-direction:column; gap:1px; }
+    /* Each result stacks name over meta so long names never collide with the chips
+       and every row is the same height. */
+    .eqresult { display:flex; flex-direction:column; align-items:stretch; gap:4px; width:100%; text-align:left; border:0; background:transparent; border-radius:var(--r-sm); padding:9px 10px; cursor:pointer; font:inherit; color:inherit; }
+    .eqresult:hover { background:var(--inset); }
+    .eqresult .eqnm { min-width:0; font-size:13.5px; font-weight:600; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .eqempty2 { font-size:12.5px; color:var(--muted); padding:12px 8px; text-align:center; }
+    .eqmeta { display:flex; align-items:center; gap:6px; min-width:0; }
+    .eqchip { flex:0 1 auto; min-width:0; max-width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; line-height:1.7; color:var(--secondary); background:var(--chip); border-radius:5px; padding:1px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .eqchip.sys { flex:0 1 auto; font-family:inherit; color:var(--muted); background:transparent; padding:1px 0; }
+    .eqchip.nocode { flex:none; font-family:inherit; color:var(--muted); background:transparent; border:1px dashed var(--line-strong); }
+
+    /* Document preview */
+    .pv-matte { background:var(--matte); border:1px solid var(--line); border-radius:var(--r-md); padding:18px; }
+    .pv-sheet { background:#fff; border:1px solid var(--line-strong); box-shadow:0 1px 3px rgba(16,24,40,.09); padding:38px 40px; max-width:560px; margin:0 auto; }
+    .pv-eyebrow { font-size:8px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); font-weight:700; }
+    .pv-title { font-size:16px; font-weight:700; letter-spacing:-0.01em; margin-top:4px; }
+    .pv-rule { border-top:1.5px solid var(--ink); margin-top:9px; }
+    .pv-table { border:1px solid var(--line-strong); margin-top:14px; }
+    .pv-trow { display:flex; border-bottom:1px solid var(--line); } .pv-trow:last-child { border-bottom:0; }
+    .pv-tk { width:40%; flex:none; font-size:8px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); font-weight:700; padding:6px 10px; border-right:1px solid var(--line); display:flex; align-items:center; }
+    .pv-tv { flex:1 1 auto; font-size:11px; padding:6px 10px; }
+    .pv-sec { font-size:8.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:15px 0 7px; }
+    .pv-p { font-size:10.5px; line-height:1.55; margin:0 0 7px; }
+    .pv-attest { border:1px solid var(--line-strong); padding:10px 12px; }
+    .pv-attest .l { font-size:7px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:4px; }
+    .pv-attest .t { font-size:10.5px; line-height:1.4; }
+    .pv-qrow { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); }
+    .pv-q { font-size:10.5px; } .pv-a { font-size:10.5px; white-space:nowrap; }
+    .pv-foot { margin-top:16px; padding-top:8px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; font-size:8.5px; color:var(--muted); }
+    .pv-nodoc { background:#fff; border:1px dashed var(--line-strong); border-radius:var(--r-md); padding:28px 22px; text-align:center; }
+    .pv-nodoc .t { font-size:14px; font-weight:700; margin-bottom:6px; }
+    .pv-nodoc .b { font-size:13px; line-height:1.55; color:var(--secondary); max-width:360px; margin:0 auto; }
+
+    /* Header save/discard buttons */
+    .hbtn { flex:none; font:inherit; font-size:13px; font-weight:600; padding:7px 14px; border-radius:var(--r-sm); border:1px solid transparent; cursor:pointer; }
+    .hbtn:disabled { opacity:.6; cursor:default; }
+    .hbtn.primary { background:var(--ink); color:#fff; } .hbtn.primary:hover:not(:disabled) { background:#000; }
+    .hbtn.ghost { background:var(--surface); color:var(--ink); border-color:var(--line-strong); } .hbtn.ghost:hover:not(:disabled) { border-color:var(--secondary); }
+
+    /* Toast (errors only) */
+    .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:var(--danger); color:#fff; border-radius:var(--r-md); padding:10px 18px; font-size:13.5px; box-shadow:0 10px 28px rgba(0,0,0,.2); z-index:41; opacity:0; pointer-events:none; transition:opacity .2s; }
+    .toast.show { opacity:1; }
+    .toast.err { background:var(--danger); }
+    .hidden { display:none !important; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="grid" id="grid">
+      <aside class="side">
+        <div class="shead">
+          <span class="label" id="sideLabel">Consent settings</span>
+          <a class="sidetoggle" id="refreshBannersLink" href="/plugin-io/api/consent_capture/admin/banners" target="_blank" rel="noopener" title="Refresh consent banners"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg></a>
+          <a class="sidetoggle" id="newCodingLink" target="_blank" rel="noopener" title="Add a consent coding in Canvas admin">+</a>
+          <button type="button" class="sidetoggle" id="sideToggle" title="Show or hide the consent list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+        </div>
+        <div class="slist" id="slist"></div>
+      </aside>
+      <main class="main">
+        <div class="mhead">
+          <div class="htitle"><h2 id="mTitle">Consent</h2></div>
+          <span class="status" id="mStatus"><span class="sdot"></span><span class="stext"></span></span>
+          <button type="button" class="hbtn ghost hidden" id="discardBtn">Discard</button>
+          <button type="button" class="hbtn primary hidden" id="saveBtn">Save changes</button>
+        </div>
+        <div class="mbody">
+          <div class="wrap" id="wrap">
+            <!-- General -->
+            <div class="card">
+              <div class="ch"><h3>General</h3><p>How this consent appears in the chart. Identity comes from Canvas admin.</p></div>
+              <div class="metacard">
+                <div class="metacols" id="metaCols"></div>
+              </div>
+              <div class="gdivider"></div>
+              <div class="capgroup">
+                <div class="trow"><div class="tmain" data-toggle="active"><div class="tt">Show in the consent modal</div><div class="td">Providers can record it in the consent modal.</div></div><button type="button" class="switch" data-toggle="active"><span class="knob"></span></button></div>
+                <div class="trow"><div class="tmain" data-toggle="required"><div class="tt">Required for all patients</div><div class="td">Listed under Required until it's on file.</div></div><button type="button" class="switch" data-toggle="required"><span class="knob"></span></button></div>
+                <div class="trow" style="align-items:center"><div class="tmain" style="cursor:default"><div class="tt">Position in the modal</div><div class="td" id="sortCaption"></div></div>
+                  <div class="stepper"><button type="button" id="sortDown">−</button><input type="text" inputmode="numeric" class="sval" id="sortVal" aria-label="Position number" /><button type="button" id="sortUp">+</button></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Equivalent consents -->
+            <div class="card">
+              <div class="ch"><h3>Equivalent consents</h3><p>If the patient already has one of these on file, this consent won't be requested. Use for older or alternate versions that satisfy the same requirement.</p></div>
+              <div class="eqbody">
+                <div class="eqsummary" id="eqSummary"></div>
+                <div class="eqchosen" id="eqChosen"></div>
+                <div class="eqadd">
+                  <button type="button" class="eqaddbtn" id="eqAddBtn">Add equivalent consent</button>
+                  <div class="eqpop hidden" id="eqPop">
+                    <input type="text" class="eqsearch" id="eqSearch" placeholder="Search consents by name or code…" />
+                    <div class="eqresults" id="eqResults"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Content -->
+            <div class="card">
+              <div class="ch"><h3>Content</h3><p>What the patient is consenting to. Blank lines start new paragraphs.</p></div>
+              <div class="cb">
+                <textarea id="verbiage" placeholder="Enter the consent content…"></textarea>
+                <div class="helper" id="paraCount"></div>
+              </div>
+            </div>
+
+            <!-- Questions -->
+            <div class="card">
+              <div class="ch"><h3>Questions</h3><p>Asked in order and printed on the record.</p></div>
+              <div class="qbody">
+                <div class="qlist" id="qlist"></div>
+                <button type="button" class="eqaddbtn qaddbtn" id="addQ">Add question</button>
+              </div>
+            </div>
+
+            <!-- At capture -->
+            <div class="card">
+              <div class="ch"><h3>At capture</h3><p>Extra details recorded with the consent.</p></div>
+              <div class="capgroup">
+                <div class="trow"><div class="tmain" style="cursor:default"><div class="tt">Ask how consent was obtained</div><div class="td">The provider picks a method, printed on the record.</div></div></div>
+                <div class="inset" id="methodInset">
+                  <div class="ititle">Methods the provider can choose from</div>
+                  <div class="mpills" id="methodPills"></div>
+                  <div class="writtennote hidden" id="writtenNote"><strong>Written</strong> consents don't generate a PDF. The provider uploads the signed document to the chart.</div>
+                </div>
+                <div class="trow"><div class="tmain" style="cursor:default"><div class="tt">Ask who is giving consent</div><div class="td">The patient, or a representative with their name and relationship.</div></div></div>
+                <div class="trow"><div class="tmain" data-toggle="capacityEnabled"><div class="tt">Include a capacity statement</div><div class="td">Adds a capacity attestation to the PDF.</div></div><button type="button" class="switch" data-toggle="capacityEnabled"><span class="knob"></span></button></div>
+                <div class="inset" id="capInset">
+                  <label class="caplabel"><span class="lab">Patient statement <span class="hint">[Patient name] fills in automatically</span></span><input type="text" id="capPatient" /></label>
+                  <label class="caplabel"><span class="lab">Representative statement <span class="hint">[Name] fills in automatically</span></span><input type="text" id="capRep" /></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Document preview -->
+            <div class="card">
+              <div class="ch"><h3>Document preview</h3><p>Live preview of the recorded PDF, using sample details.</p></div>
+              <div class="cb"><div id="preview"></div></div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    var BASE = "/plugin-io/api/consent_capture/admin";
+    var CONSENTS = JSON.parse("{{ consents_json|escapejs }}");
+    var METHOD_OPTIONS = JSON.parse("{{ method_options_json|escapejs }}");
+    var DEFAULT_CAP_PATIENT = "{{ default_capacity_patient|escapejs }}";
+    var DEFAULT_CAP_REP = "{{ default_capacity_representative|escapejs }}";
+    var CODINGS = [];   // every consent coding in Canvas (sidebar + equivalents picker)
+
+    var TYPE_LABELS = { yes_no: 'Yes / No', acknowledge: 'Acknowledge', text: 'Free text' };
+    var el = function (id) { return document.getElementById(id); };
+    var mk = function (t, c, x) { var e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+
+    var state = { selKey: null, form: null, saved: null, sideOpen: true, saving: false, dragQ: null, savedToast: false };
+
+    // Sidebar-panel toggle glyph (Option C): outline when open, left cell shaded when collapsed.
+    var SIDE_ICON_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>';
+    var SIDE_ICON_COLLAPSED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" fill="currentColor" opacity=".18" stroke="none"/></svg>';
+
+    function keyOf(x) { return x.system + '|' + x.code; }
+    function codingByKey(k) { for (var i = 0; i < CODINGS.length; i++) if (keyOf(CODINGS[i]) === k) return CODINGS[i]; return null; }
+    function consentByKey(k) { for (var i = 0; i < CONSENTS.length; i++) if (keyOf(CONSENTS[i]) === k) return CONSENTS[i]; return null; }
+
+    function formFromConsent(c) {
+      return {
+        verbiage: c.verbiage || '',
+        questions: JSON.parse(JSON.stringify(c.questions || [])),
+        methodOptions: (c.method_options && c.method_options.length) ? c.method_options.slice() : METHOD_OPTIONS.slice(),
+        methodEnabled: true, obtainedEnabled: true, capacityEnabled: !!c.capacity_enabled,
+        required: !!c.required, active: !!c.active, sort: c.sort_order,
+        satisfiedBy: JSON.parse(JSON.stringify(c.satisfied_by || [])),
+        capPatient: c.capacity_patient_template || '', capRep: c.capacity_representative_template || ''
+      };
+    }
+    function defaultForm() {
+      return {
+        verbiage: '', questions: [], methodOptions: METHOD_OPTIONS.slice(),
+        methodEnabled: true, obtainedEnabled: true, capacityEnabled: true,
+        required: false, active: true, sort: 100, satisfiedBy: [],
+        capPatient: DEFAULT_CAP_PATIENT, capRep: DEFAULT_CAP_REP
+      };
+    }
+    function snap(f) { return JSON.stringify(f); }
+    function isDirty() { return state.form && snap(state.form) !== state.saved; }
+
+    function select(key, force) {
+      if (!force && isDirty() && !window.confirm('Discard unsaved changes to this consent?')) return;
+      var c = consentByKey(key);
+      state.selKey = key;
+      state.form = c ? formFromConsent(c) : defaultForm();
+      state.saved = snap(state.form);
+      state.savedToast = false;
+      var pop = el('eqPop'); if (pop) pop.classList.add('hidden');  // close the add dropdown
+      renderAll();
+    }
+
+    /* ---------- sidebar ---------- */
+    function sortOrderFor(coding) { var c = consentByKey(keyOf(coding)); return c ? c.sort_order : 100000; }
+    // How the consent behaves in the patient consent modal.
+    function statusFor(coding) {
+      // A coding Canvas has deselected (user_selected=false) is inactive at the source,
+      // regardless of any plugin configuration — flag it first.
+      if (coding && coding.user_selected === false) return { label: 'Inactive', cls: 'inactive' };
+      var c = consentByKey(keyOf(coding));
+      if (!c) return { label: 'Not set up', cls: 'notset' };
+      if (!c.active) return { label: 'Not shown', cls: 'notshown' };
+      return c.required ? { label: 'Required', cls: 'req' } : { label: 'Optional', cls: 'opt' };
+    }
+    function renderSidebar() {
+      var list = el('slist'); list.innerHTML = '';
+      var rows = CODINGS.slice().sort(function (a, b) { return (sortOrderFor(a) - sortOrderFor(b)) || String(a.display).localeCompare(String(b.display)); });
+      rows.forEach(function (cd) {
+        var k = keyOf(cd), sel = k === state.selKey, st = statusFor(cd);
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'srow' + (sel ? ' sel' : '');
+        var top = mk('div', 'stoprow');
+        var nm = mk('span', 'sname', cd.display || cd.code); nm.title = cd.display || cd.code;
+        top.appendChild(nm);
+        top.appendChild(mk('span', 'pill-tag ' + st.cls, st.label));
+        b.appendChild(top);
+        var code = mk('span', 'scode', cd.code); code.title = cd.code; b.appendChild(code);
+        b.onclick = function () { select(k); };
+        list.appendChild(b);
+      });
+    }
+
+    /* ---------- header + meta ---------- */
+    function renderHeaderAndMeta() {
+      var cd = codingByKey(state.selKey) || { display: 'Consent', code: '', system: '' };
+      el('mTitle').textContent = cd.display || 'Consent';
+      var cols = el('metaCols'); cols.innerHTML = '';
+      [['Name', cd.display || 'Not set'], ['Code', cd.code || 'Not set'], ['Expiration', cd.expiration_label || 'Not set']].forEach(function (m) {
+        var d = mk('div', 'm'); d.appendChild(mk('span', 'mk', m[0])); d.appendChild(mk('span', 'mv', m[1])); cols.appendChild(d);
+      });
+    }
+    function renderStatus() {
+      var configured = !!consentByKey(state.selKey), dirty = isDirty(), saving = state.saving;
+      var st = el('mStatus');
+      st.querySelector('.stext').textContent = saving ? 'Saving…' : (dirty ? (configured ? 'Unsaved changes' : 'Unsaved setup') : (configured ? 'All changes saved' : 'Not configured'));
+      st.querySelector('.sdot').style.background = (dirty && !saving) ? 'var(--warn)' : 'var(--disabled-dot)';
+      st.style.color = (dirty && !saving) ? 'var(--warn-ink)' : 'var(--muted)';
+      var show = dirty || saving;
+      el('discardBtn').classList.toggle('hidden', !show);
+      el('saveBtn').classList.toggle('hidden', !show);
+      el('saveBtn').disabled = saving; el('discardBtn').disabled = saving;
+      el('saveBtn').textContent = saving ? 'Saving…' : 'Save changes';
+    }
+
+    /* ---------- content ---------- */
+    function renderContent() {
+      el('verbiage').value = state.form.verbiage;
+      updateParaCount();
+    }
+    function paras(t) { return (t || '').split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean); }
+    function updateParaCount() {
+      var n = paras(state.form.verbiage).length;
+      el('paraCount').textContent = n ? (n + ' paragraph' + (n === 1 ? '' : 's') + ' on the PDF') : 'No statement yet.';
+    }
+
+    /* ---------- questions ---------- */
+    function renderQuestions() {
+      var wrap = el('qlist'); wrap.innerHTML = ''; var f = state.form;
+      if (!f.questions.length) { wrap.appendChild(mk('div', 'qempty', 'No questions yet. Add the affirmation the provider must record.')); return; }
+      f.questions.forEach(function (q, i) {
+        var type = q.type || 'yes_no', req = q.required !== false, aff = !!q.affirm;
+        var card = mk('div', 'qcard' + (state.dragQ === i ? ' drag' : '')); card.setAttribute('draggable', 'true');
+        card.ondragstart = function (e) { try { e.dataTransfer.setData('text/plain', String(i)); e.dataTransfer.effectAllowed = 'move'; } catch (err) {} state.dragQ = i; };
+        card.ondragover = function (e) { e.preventDefault(); var from = state.dragQ; if (from == null || from === i) return; var qs = f.questions.slice(); qs.splice(i, 0, qs.splice(from, 1)[0]); f.questions = qs; state.dragQ = i; renderQuestions(); touch(); };
+        card.ondragend = function () { state.dragQ = null; renderQuestions(); };
+
+        var top = mk('div', 'qtop');
+        var handle = mk('span', 'qhandle'); handle.title = 'Drag to reorder'; handle.appendChild(mk('span', 'grip', '⠿')); handle.appendChild(mk('span', 'qnum', String(i + 1))); top.appendChild(handle);
+        var prompt = document.createElement('input'); prompt.type = 'text'; prompt.className = 'qprompt'; prompt.placeholder = 'Question prompt'; prompt.value = q.prompt || '';
+        prompt.oninput = function () { q.prompt = prompt.value; touch(); };
+        top.appendChild(prompt);
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'qdel'; del.innerHTML = '&times;';
+        del.onclick = function () { f.questions.splice(i, 1); renderQuestions(); touch(); };
+        top.appendChild(del); card.appendChild(top);
+
+        var opts = mk('div', 'qopts');
+        var seg = mk('div', 'seg');
+        ['yes_no', 'acknowledge', 'text'].forEach(function (t) {
+          var b = document.createElement('button'); b.type = 'button'; b.className = (t === type ? 'on' : ''); b.textContent = TYPE_LABELS[t];
+          b.onclick = function () { q.type = t; if (t === 'text') q.affirm = false; renderQuestions(); touch(); };
+          seg.appendChild(b);
+        });
+        opts.appendChild(seg);
+        var reqBtn = document.createElement('button'); reqBtn.type = 'button'; reqBtn.className = 'pill' + (req ? ' on' : ''); reqBtn.textContent = (req ? '✓ ' : '') + 'Required';
+        reqBtn.onclick = function () { q.required = !req; renderQuestions(); touch(); };
+        opts.appendChild(reqBtn);
+        if (type !== 'text') {
+          var affBtn = document.createElement('button'); affBtn.type = 'button'; affBtn.className = 'pill' + (aff ? ' on' : ''); affBtn.textContent = (aff ? '✓ ' : '') + 'Must be Yes';
+          affBtn.onclick = function () { q.affirm = !aff; renderQuestions(); touch(); };
+          opts.appendChild(affBtn);
+        }
+        card.appendChild(opts);
+
+        var answered = { yes_no: 'Answered Yes or No at capture.', acknowledge: 'Acknowledged at capture.', text: 'A typed answer at capture.' }[type];
+        var caption = answered + (req ? ' Required.' : ' Optional.') + (type !== 'text' && aff ? ' Must be Yes to record.' : '');
+        card.appendChild(mk('div', 'qcap', caption));
+        wrap.appendChild(card);
+      });
+    }
+    el('addQ').addEventListener('click', function () { state.form.questions.push({ prompt: '', type: 'yes_no', required: true, affirm: true }); renderQuestions(); touch(); });
+
+    /* ---------- at capture ---------- */
+    function renderCapture() {
+      var f = state.form;
+      setSwitch('capacityEnabled');
+      el('capInset').classList.toggle('hidden', !f.capacityEnabled);
+      var pills = el('methodPills'); pills.innerHTML = '';
+      METHOD_OPTIONS.forEach(function (m) {
+        var on = f.methodOptions.indexOf(m) !== -1;
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'pill' + (on ? ' on' : ''); b.textContent = (on ? '✓ ' : '') + m;
+        b.onclick = function () { var mo = f.methodOptions.slice(), idx = mo.indexOf(m); if (idx === -1) mo.push(m); else mo.splice(idx, 1); f.methodOptions = mo; renderCapture(); touch(); };
+        pills.appendChild(b);
+      });
+      el('writtenNote').classList.toggle('hidden', f.methodOptions.indexOf('Written') === -1);
+      el('capPatient').value = f.capPatient; el('capRep').value = f.capRep;
+    }
+
+    /* ---------- in the chart ---------- */
+    function renderChart() {
+      var f = state.form;
+      setSwitch('active'); setSwitch('required');
+      var si = el('sortVal');
+      if (document.activeElement !== si) si.value = String(f.sort);  // don't clobber while typing
+      var others = CONSENTS.filter(function (c) { return keyOf(c) !== state.selKey && c.active; }).map(function (c) { return c.sort_order; });
+      var before = others.filter(function (s) { return s < (parseInt(f.sort, 10) || 100); }).length;
+      el('sortCaption').textContent = f.active ? ('#' + (before + 1) + ' of ' + (others.length + 1) + ' in the consent modal.') : 'Hidden from the consent modal.';
+    }
+
+    /* ---------- equivalent consents ---------- */
+    // Compact list of chosen equivalents + an "Add" dropdown that searches the
+    // codings, so the whole catalog is never dumped on the page.
+    // Meta line: a leading identity chip (the code, or a dashed "No code") followed by
+    // the system as muted, truncatable text — same shape for every row so they align.
+    function eqMetaChips(c) {
+      var meta = mk('div', 'eqmeta');
+      var lead = c.code ? mk('span', 'eqchip', c.code) : mk('span', 'eqchip nocode', 'No code');
+      lead.title = c.code || 'No code';
+      meta.appendChild(lead);
+      var sys = c.system || '—';
+      var s = mk('span', 'eqchip sys', sys); s.title = sys;
+      meta.appendChild(s);
+      return meta;
+    }
+    function renderEquivalents() {
+      var f = state.form, host = el('eqChosen'); host.innerHTML = '';
+      el('eqSummary').textContent = f.satisfiedBy.length
+        ? (f.satisfiedBy.length + ' equivalent consent' + (f.satisfiedBy.length === 1 ? '' : 's') + ' selected')
+        : 'No equivalents selected. Only this exact consent counts as on file.';
+      f.satisfiedBy.forEach(function (e, idx) {
+        var row = mk('div', 'eqitem');
+        var label = e.display || e.code || e.system;
+        var nm = mk('span', 'eqnm', label); nm.title = label; row.appendChild(nm);
+        row.appendChild(eqMetaChips(e));
+        var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'eqrm'; rm.innerHTML = '&times;'; rm.title = 'Remove';
+        rm.onclick = function () { f.satisfiedBy.splice(idx, 1); renderEquivalents(); renderEqResults(); touch(); };
+        row.appendChild(rm); host.appendChild(row);
+      });
+      if (!el('eqPop').classList.contains('hidden')) renderEqResults();
+    }
+    function renderEqResults() {
+      var f = state.form, q = (el('eqSearch').value || '').trim().toLowerCase();
+      var chosen = {}; f.satisfiedBy.forEach(function (e) { chosen[keyOf(e)] = true; });
+      var host = el('eqResults'); host.innerHTML = '';
+      var matches = CODINGS.filter(function (c) {
+        if (keyOf(c) === state.selKey || chosen[keyOf(c)]) return false;   // not self, not already added
+        if (!q) return true;
+        return (c.display || '').toLowerCase().indexOf(q) !== -1
+          || (c.code || '').toLowerCase().indexOf(q) !== -1
+          || (c.system || '').toLowerCase().indexOf(q) !== -1;
+      });
+      if (!matches.length) { host.appendChild(mk('div', 'eqempty2', q ? 'No matches.' : 'All other consents already added.')); return; }
+      matches.forEach(function (c) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'eqresult';
+        var label = c.display || c.code || c.system;
+        var nm = mk('span', 'eqnm', label); nm.title = label; b.appendChild(nm);
+        b.appendChild(eqMetaChips(c));
+        b.onclick = function () {
+          f.satisfiedBy.push({ system: c.system, code: c.code, display: c.display || '' });
+          el('eqSearch').value = '';
+          renderEquivalents(); renderEqResults(); el('eqSearch').focus(); touch();
+        };
+        host.appendChild(b);
+      });
+    }
+
+    function setSwitch(field) {
+      var on = !!state.form[field];
+      var nodes = document.querySelectorAll('.switch[data-toggle="' + field + '"]');
+      for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('on', on);
+    }
+
+    /* ---------- preview ---------- */
+    function renderPreview() {
+      var host = el('preview'); host.innerHTML = ''; var f = state.form;
+      var cd = codingByKey(state.selKey) || { display: 'Consent' };
+      var onlyWritten = !!(f.methodEnabled && f.methodOptions.length && f.methodOptions.every(function (m) { return m === 'Written'; }));
+      if (onlyWritten) {
+        var nd = mk('div', 'pv-nodoc'); nd.appendChild(mk('div', 't', 'No document generated'));
+        nd.appendChild(mk('div', 'b', 'Written-only consents don\'t generate a PDF. The provider uploads the signed document.'));
+        host.appendChild(nd); return;
+      }
+      var d = new Date(); function z(n) { return (n < 10 ? '0' : '') + n; }
+      var date = d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+      var matte = mk('div', 'pv-matte'); var sheet = mk('div', 'pv-sheet');
+      sheet.appendChild(mk('div', 'pv-eyebrow', 'Patient Consent Record'));
+      sheet.appendChild(mk('div', 'pv-title', cd.display || 'Consent'));
+      sheet.appendChild(mk('div', 'pv-rule'));
+      var rows = [['PATIENT', 'Jane Doe'], ['DATE OF BIRTH', '1980-05-01']];
+      if (f.obtainedEnabled) rows.push(['CONSENTING PARTY', 'Patient']);
+      if (f.methodEnabled) rows.push(['METHOD OBTAINED', f.methodOptions.filter(function (m) { return m !== 'Written'; })[0] || f.methodOptions[0] || 'Verbal']);
+      rows.push(['EFFECTIVE DATE', date]); rows.push(['COLLECTING STAFF', 'Dr. Smith']);
+      var tbl = mk('div', 'pv-table');
+      rows.forEach(function (r) { var tr = mk('div', 'pv-trow'); tr.appendChild(mk('div', 'pv-tk', r[0])); tr.appendChild(mk('div', 'pv-tv', r[1])); tbl.appendChild(tr); });
+      sheet.appendChild(tbl);
+      var ps = paras(f.verbiage);
+      if (ps.length) { sheet.appendChild(mk('div', 'pv-sec', 'Consent statement')); ps.forEach(function (p) { sheet.appendChild(mk('p', 'pv-p', p)); }); }
+      if (f.capacityEnabled && f.capPatient) {
+        var cap = f.capPatient.replace(/\[Patient name\]/g, 'Jane Doe').replace(/\[Name\]/g, 'Jane Doe');
+        sheet.appendChild(mk('div', 'pv-sec', 'Capacity'));
+        var box = mk('div', 'pv-attest'); box.appendChild(mk('div', 'l', 'Attestation of decision-making capacity')); box.appendChild(mk('div', 't', cap)); sheet.appendChild(box);
+      }
+      var qs = f.questions.filter(function (q) { return q.prompt; });
+      if (qs.length) {
+        sheet.appendChild(mk('div', 'pv-sec', 'Questions & responses'));
+        qs.forEach(function (q) { var row = mk('div', 'pv-qrow'); row.appendChild(mk('div', 'pv-q', q.prompt)); row.appendChild(mk('div', 'pv-a', q.type === 'text' ? 'Typed' : (q.type === 'acknowledge' ? 'Confirmed' : 'Yes'))); sheet.appendChild(row); });
+      }
+      var foot = mk('div', 'pv-foot'); foot.appendChild(mk('span', null, 'Recorded ' + date)); foot.appendChild(mk('span', null, 'Confidential · Patient Health Information')); sheet.appendChild(foot);
+      matte.appendChild(sheet); host.appendChild(matte);
+    }
+
+    /* touch = the form changed: refresh derived UI (not the inputs the user is typing in) */
+    function touch() { updateParaCount(); renderCapture(); renderChart(); renderPreview(); renderStatus(); }
+
+    function renderAll() { renderSidebar(); renderHeaderAndMeta(); renderContent(); renderEquivalents(); renderQuestions(); renderCapture(); renderChart(); renderPreview(); renderStatus(); }
+
+    /* ---------- input wiring (bind once) ---------- */
+    el('verbiage').addEventListener('input', function () { state.form.verbiage = el('verbiage').value; touch(); });
+    el('capPatient').addEventListener('input', function () { state.form.capPatient = el('capPatient').value; touch(); });
+    el('capRep').addEventListener('input', function () { state.form.capRep = el('capRep').value; touch(); });
+    el('sortDown').addEventListener('click', function () { state.form.sort = Math.max(0, (parseInt(state.form.sort, 10) || 0) - 1); touch(); });
+    el('sortUp').addEventListener('click', function () { state.form.sort = (parseInt(state.form.sort, 10) || 0) + 1; touch(); });
+    el('sortVal').addEventListener('input', function () {
+      var si = el('sortVal'), cleaned = si.value.replace(/[^0-9]/g, '');
+      if (cleaned !== si.value) si.value = cleaned;   // keep it numeric
+      state.form.sort = cleaned === '' ? 0 : Math.max(0, parseInt(cleaned, 10));
+      touch();
+    });
+    el('sortVal').addEventListener('blur', function () { el('sortVal').value = String(state.form.sort); });
+    function bindToggles() {
+      var nodes = document.querySelectorAll('[data-toggle]');
+      for (var i = 0; i < nodes.length; i++) (function (node) {
+        node.addEventListener('click', function () { var f = node.getAttribute('data-toggle'); state.form[f] = !state.form[f]; touch(); });
+      })(nodes[i]);
+    }
+    bindToggles();
+
+    /* ---------- equivalent-consents add dropdown wiring (bind once) ---------- */
+    el('eqAddBtn').addEventListener('click', function (e) {
+      e.stopPropagation();
+      var opening = el('eqPop').classList.contains('hidden');
+      el('eqPop').classList.toggle('hidden');
+      if (opening) { el('eqSearch').value = ''; renderEqResults(); el('eqSearch').focus(); }
+    });
+    el('eqSearch').addEventListener('input', renderEqResults);
+    el('eqPop').addEventListener('click', function (e) { e.stopPropagation(); });
+    document.addEventListener('click', function () { el('eqPop').classList.add('hidden'); });
+
+    el('sideToggle').addEventListener('click', function () {
+      state.sideOpen = !state.sideOpen;
+      el('grid').classList.toggle('collapsed', !state.sideOpen);
+      el('sideToggle').innerHTML = state.sideOpen ? SIDE_ICON_OPEN : SIDE_ICON_COLLAPSED;
+      el('sideLabel').style.display = state.sideOpen ? '' : 'none';
+      el('slist').style.display = state.sideOpen ? '' : 'none';
+      el('newCodingLink').style.display = state.sideOpen ? '' : 'none';
+      el('refreshBannersLink').style.display = state.sideOpen ? '' : 'none';
+    });
+
+    /* ---------- toast ---------- */
+    function toast(msg, err) { var t = el('toast'); t.textContent = msg; t.className = 'toast show' + (err ? ' err' : ''); setTimeout(function () { t.className = 'toast'; }, 2400); }
+
+    /* ---------- save / discard ---------- */
+    el('discardBtn').addEventListener('click', function () { if (state.saving) return; var c = consentByKey(state.selKey); state.form = c ? formFromConsent(c) : defaultForm(); renderAll(); });
+    el('saveBtn').addEventListener('click', function () {
+      if (state.saving || !state.form) return;
+      var f = state.form, cd = codingByKey(state.selKey);
+      if (!f.methodOptions.length) { toast('Select at least one method.', true); return; }
+      var existing = consentByKey(state.selKey);
+      var payload = {
+        dbid: existing ? existing.dbid : undefined, code: cd.code, system: cd.system,
+        verbiage: f.verbiage, questions: f.questions,
+        method_enabled: f.methodEnabled, obtained_by_enabled: f.obtainedEnabled, capacity_enabled: f.capacityEnabled,
+        method_options: f.methodOptions.slice(),
+        satisfied_by: f.satisfiedBy.slice(),
+        required: f.required, active: f.active, sort_order: parseInt(f.sort, 10) || 100,
+        capacity_patient_template: f.capPatient, capacity_representative_template: f.capRep
+      };
+      state.saving = true; renderStatus();
+      fetch(BASE + '/consents', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          state.saving = false;
+          if (d && d.ok) {
+            state.saved = snap(state.form);
+            Promise.all([refreshConsents(), loadCodings()]).then(function () {
+              renderSidebar(); renderHeaderAndMeta(); renderChart(); renderStatus();
+            });
+          } else { renderStatus(); toast((d && d.error) || 'Could not save.', true); }
+        }).catch(function () { state.saving = false; renderStatus(); toast('Could not reach the server.', true); });
+    });
+
+    function loadCodings() {
+      return fetch(BASE + '/codings', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) CODINGS = d.codings; });
+    }
+    function refreshConsents() {
+      return fetch(BASE + '/consents', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) CONSENTS = d.consents; });
+    }
+
+    /* Point the "New consent coding" link at this instance's Canvas Django admin. */
+    (function () {
+      var loc = window.location;
+      var base = (loc && loc.origin && loc.origin.indexOf('http') === 0) ? loc.origin : '';
+      el('newCodingLink').setAttribute('href', base + '/admin/api/consentcoding/');
+    })();
+
+    /* Warn before leaving (refresh / close / navigate away) with unsaved changes. */
+    window.addEventListener('beforeunload', function (e) {
+      if (isDirty()) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    /* ---------- boot ---------- */
+    loadCodings().then(function () {
+      if (!CODINGS.length) { el('mTitle').textContent = 'No consent codings'; el('slist').appendChild(mk('div', 'qempty', 'No Patient Consent Codings are configured in Canvas admin yet.')); return; }
+      var first = null;
+      CODINGS.forEach(function (cd) { if (!first && consentByKey(keyOf(cd))) first = keyOf(cd); });
+      if (!first) first = keyOf(CODINGS.slice().sort(function (a, b) { return sortOrderFor(a) - sortOrderFor(b); })[0]);
+      select(first, true);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+{
+    "sdk_version": "0.157.0",
+    "plugin_version": "0.0.6",
+    "name": "sleep_screening",
+    "description": "Sleep Screening tab for Sleep Intake notes: administers STOP-BANG, Epworth, and ISI in-app, commits each scored questionnaire to the note, and stages a diagnosis and a sleep-study task for clinician review.",
+    "components": {
+        "protocols": [
+            {
+                "class": "sleep_screening.handlers.sleep_screening_api:SleepScreeningAPI",
+                "description": "Serves the Sleep Screening UI and the commit/stage endpoints"
+            },
+            {
+                "class": "sleep_screening.handlers.scorer_handler:InstrumentScorer",
+                "description": "Writes a structured score after each bundled questionnaire commits"
+            }
+        ],
+        "applications": [
+            {
+                "class": "sleep_screening.applications.sleep_screening_app:SleepScreeningApp",
+                "name": "Sleep Screening",
+                "description": "Note tab for the sleep screening instruments",
+                "scope": "provider_companion_note_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "questionnaires": [
+            {
+                "template": "questionnaires/stopbang.yaml"
+            },
+            {
+                "template": "questionnaires/ess.yaml"
+            },
+            {
+                "template": "questionnaires/isi.yaml"
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "RFV_TRIGGER_CODE"
+        },
+        {
+            "name": "RFV_TRIGGER_SYSTEM"
+        },
+        {
+            "name": "SLEEP_DX_CODES"
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

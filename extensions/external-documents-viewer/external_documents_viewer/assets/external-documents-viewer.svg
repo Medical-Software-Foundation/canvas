@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background rounded rectangle -->
+  <rect x="8" y="8" width="84" height="84" rx="14" ry="14" fill="#3B82F6"/>
+
+  <!-- Folder body -->
+  <rect x="18" y="38" width="64" height="42" rx="5" ry="5" fill="#FFFFFF"/>
+
+  <!-- Folder tab -->
+  <path d="M18 38 L18 32 Q18 28 22 28 L42 28 Q46 28 48 32 L50 38 Z" fill="#FFFFFF"/>
+
+  <!-- Document lines inside folder -->
+  <rect x="27" y="48" width="30" height="3" rx="1.5" fill="#BFDBFE"/>
+  <rect x="27" y="55" width="46" height="3" rx="1.5" fill="#BFDBFE"/>
+  <rect x="27" y="62" width="38" height="3" rx="1.5" fill="#BFDBFE"/>
+  <rect x="27" y="69" width="24" height="3" rx="1.5" fill="#BFDBFE"/>
+</svg>

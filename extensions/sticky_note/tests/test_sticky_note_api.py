@@ -79,7 +79,10 @@ class TestStickyNoteAPIPost:
         "sticky_note.protocols.sticky_note_api._resolve_patient_dbid",
         return_value=PATIENT_DBID,
     )
-    def test_post_saves_shared_note(self, mock_patient, mock_staff, mock_save):
+    @patch("sticky_note.protocols.sticky_note_api.ReloadPatientActionButtonsEffect")
+    def test_post_saves_shared_note(
+        self, mock_reload, mock_patient, mock_staff, mock_save
+    ):
         handler = _make_api(
             body={
                 "patient_id": "p-123",
@@ -91,7 +94,8 @@ class TestStickyNoteAPIPost:
         )
         effects = handler.post()
 
-        assert len(effects) == 1
+        assert len(effects) == 2
+        mock_reload.assert_called_once_with(id="p-123")
         mock_save.assert_called_once_with(
             patient_dbid=PATIENT_DBID,
             patient_uuid="p-123",
@@ -116,7 +120,10 @@ class TestStickyNoteAPIPost:
         "sticky_note.protocols.sticky_note_api._resolve_patient_dbid",
         return_value=PATIENT_DBID,
     )
-    def test_post_saves_user_note(self, mock_patient, mock_staff, mock_save):
+    @patch("sticky_note.protocols.sticky_note_api.ReloadPatientActionButtonsEffect")
+    def test_post_saves_user_note(
+        self, mock_reload, mock_patient, mock_staff, mock_save
+    ):
         handler = _make_api(
             body={
                 "patient_id": "p-123",
@@ -128,7 +135,8 @@ class TestStickyNoteAPIPost:
         )
         effects = handler.post()
 
-        assert len(effects) == 1
+        assert len(effects) == 2
+        mock_reload.assert_called_once_with(id="p-123")
         mock_save.assert_called_once_with(
             patient_dbid=PATIENT_DBID,
             patient_uuid="p-123",
@@ -205,7 +213,10 @@ class TestStickyNoteAPIPost:
         "sticky_note.protocols.sticky_note_api._resolve_patient_dbid",
         return_value=PATIENT_DBID,
     )
-    def test_post_passes_audit_true(self, mock_patient, mock_staff, mock_save):
+    @patch("sticky_note.protocols.sticky_note_api.ReloadPatientActionButtonsEffect")
+    def test_post_passes_audit_true(
+        self, mock_reload, mock_patient, mock_staff, mock_save
+    ):
         handler = _make_api(
             body={
                 "patient_id": "p-123",
@@ -218,7 +229,8 @@ class TestStickyNoteAPIPost:
         )
         effects = handler.post()
 
-        assert len(effects) == 1
+        assert len(effects) == 2
+        mock_reload.assert_called_once_with(id="p-123")
         mock_save.assert_called_once_with(
             patient_dbid=PATIENT_DBID,
             patient_uuid="p-123",
@@ -243,7 +255,10 @@ class TestStickyNoteAPIPost:
         "sticky_note.protocols.sticky_note_api._resolve_patient_dbid",
         return_value=PATIENT_DBID,
     )
-    def test_post_audit_defaults_false(self, mock_patient, mock_staff, mock_save):
+    @patch("sticky_note.protocols.sticky_note_api.ReloadPatientActionButtonsEffect")
+    def test_post_audit_defaults_false(
+        self, mock_reload, mock_patient, mock_staff, mock_save
+    ):
         """Omitting audit from body should pass audit=False to _save_note."""
         handler = _make_api(
             body={
@@ -268,6 +283,37 @@ class TestStickyNoteAPIPost:
             expected_version=2,
             audit=False,
         )
+
+    @patch(
+        "sticky_note.protocols.sticky_note_api._save_note",
+        return_value={"status": "conflict", "version": 5},
+    )
+    @patch(
+        "sticky_note.protocols.sticky_note_api._resolve_staff",
+        return_value=(STAFF_DBID, "Jane Doe"),
+    )
+    @patch(
+        "sticky_note.protocols.sticky_note_api._resolve_patient_dbid",
+        return_value=PATIENT_DBID,
+    )
+    @patch("sticky_note.protocols.sticky_note_api.ReloadPatientActionButtonsEffect")
+    def test_post_conflict_does_not_reload(
+        self, mock_reload, mock_patient, mock_staff, mock_save
+    ):
+        """A version conflict returns only the JSON response, no button reload."""
+        handler = _make_api(
+            body={
+                "patient_id": "p-123",
+                "staff_id": "s-456",
+                "type": "shared",
+                "content": "racing edit",
+                "version": 1,
+            },
+        )
+        effects = handler.post()
+
+        assert len(effects) == 1
+        mock_reload.assert_not_called()
 
 
 class TestSaveNoteAuditGating:

@@ -39,7 +39,18 @@ class StaffCalendarFeed(CustomModel):
 
 
 class ImportedEvent(CustomModel):
-    """One row per (ICS UID, recurrence-id) -> Canvas Event id mapping."""
+    """DEPRECATED as of 0.4.0. No longer read or written at runtime.
+
+    This table stored each block's `canvas_event_id`, but Canvas's create
+    interpreter discards the supplied id and assigns its own (KOALA-6372), so
+    every stored id was a phantom and update/delete by it failed. The plugin now
+    reconciles against the live calendar by `(starts_at, ends_at)` and reads real
+    uuids back from the calendar data model, so this mapping is obsolete. The
+    class is retained only so the table isn't dropped; existing rows are inert
+    and it can be removed in a follow-up once the drop migration is vetted.
+
+    Historically: one row per (ICS UID, recurrence-id) -> Canvas Event id mapping.
+    """
 
     class Meta:
         constraints = [

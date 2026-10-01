@@ -1,0 +1,17 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]",
+  "pytest-cov>=7.0.0",
+]
+description = "Blocks a Create Coding Gap command that duplicates a condition already on the chart."
+license = "MIT"
+name = "duplicate-coding-gap-validation"
+readme = "duplicate_coding_gap_validation/README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]

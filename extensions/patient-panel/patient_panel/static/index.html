@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patient Panel</title>
+    <link rel="stylesheet" href="/plugin-io/api/patient_panel/app/styles.css?v={{ cache_bust }}">
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"
+        integrity="sha384-Akqfrbj/HpNVo8k11SXBb6TlBWmXXlYQrCSqEWmyKJe+hDm3Z/B2WVG4smwBkRVm"
+        crossorigin="anonymous"></script>
+    <script src="/plugin-io/api/patient_panel/app/scripts.js?v={{ cache_bust }}"></script>
+</head>
+
+<body data-staff-id="{{ staff_id }}">
+    <!-- The initial table load is driven by scripts.js (loadInitialTable) so it
+         can replay the user's persisted filter/sort/page state from localStorage
+         on a full page reload. Do NOT add hx-trigger="load" here — that would
+         fetch the unfiltered default and race the persisted-state load. -->
+    <div id="table" class="table-content"></div>
+</body>
+
+</html>

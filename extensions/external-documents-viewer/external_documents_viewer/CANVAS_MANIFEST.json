@@ -1,0 +1,40 @@
+{
+    "sdk_version": "0.116.0",
+    "plugin_version": "0.1.0",
+    "name": "external_documents_viewer",
+    "description": "Patient-scoped application to view historical external documents stored in S3",
+    "components": {
+        "protocols": [
+            {
+                "class": "external_documents_viewer.applications.external_documents_api:ExternalDocumentsAPI",
+                "description": "SimpleAPI providing document list and presigned URL endpoints"
+            }
+        ],
+        "applications": [
+            {
+                "class": "external_documents_viewer.applications.external_documents_app:ExternalDocumentsViewerApp",
+                "name": "External Documents",
+                "description": "View historical external patient documents",
+                "icon": "assets/external-documents-viewer.png",
+                "scope": "patient_specific",
+                "show_in_panel": false
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "S3_KEY",
+        "S3_SECRET",
+        "S3_REGION",
+        "S3_BUCKET",
+        "S3_PREFIX"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

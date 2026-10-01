@@ -39,6 +39,7 @@ from provider_availability.engine.admin_calendar import (
     get_admin_calendars,
     resolve_provider_name,
 )
+from provider_availability.engine.event_sync import DEFAULT_HORIZON_YEARS
 from provider_availability.engine.models import (
     DAYS_OF_WEEK,
     ProviderAvailabilityRule,
@@ -49,6 +50,15 @@ from provider_availability.engine.storage import get_rules_for_provider
 from provider_availability.engine.tz_utils import to_provider_naive
 
 BUFFER_TITLE = "Buffer"
+
+
+def _buffer_horizon(now: datetime) -> datetime:
+    """The furthest future point we create buffers for, matching availability sync."""
+    try:
+        return now.replace(year=now.year + DEFAULT_HORIZON_YEARS)
+    except ValueError:
+        # Feb 29 in a leap year — fall back to Feb 28
+        return now.replace(year=now.year + DEFAULT_HORIZON_YEARS, day=now.day - 1)
 
 
 class OnAppointmentCreated(BaseProtocol):
@@ -217,6 +227,10 @@ def _create_buffer_effects(appt: Appointment) -> list[Effect]:
     """Draw the pre/post buffer events for this one appointment."""
     if not appt.provider or appt.status == AppointmentProgressStatus.CANCELLED:
         return []
+    if appt.patient_id is None:
+        # Lunch, meetings and other schedule events are stored as appointments
+        # with no patient. They are not visits, so they are never padded.
+        return []
 
     provider_id = str(appt.provider.id)
     pre_buffer, post_buffer = _buffer_minutes(appt, provider_id)
@@ -224,8 +238,13 @@ def _create_buffer_effects(appt: Appointment) -> list[Effect]:
         return []
 
     start, end = _appointment_window(appt)
-    if _to_utc(start) < datetime.now(UTC):
+    now = datetime.now(UTC)
+    if _to_utc(start) < now:
         # A past appointment needs no buffers drawn.
+        return []
+    if _to_utc(start) > _buffer_horizon(now):
+        # Same ceiling the availability sync uses, so a far-future booking
+        # cannot draw buffers beyond the window anything else is built for.
         return []
 
     calendar_id, calendar_effects = get_admin_calendar_id(

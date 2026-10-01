@@ -15,9 +15,6 @@ def mock_event():
 @pytest.fixture
 def mock_secrets():
     return {
-        "FHIR_BASE_URL": "https://fumage-instance.canvasmedical.com",
-        "FHIR_CLIENT_ID": "client-id",
-        "FHIR_CLIENT_SECRET": "client-secret",
         "SCHEDULABLE_STAFF_ROLES": "MD,NP",
         "SCHEDULE_DURATIONS": "",
     }

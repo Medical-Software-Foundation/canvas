@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from hmac import compare_digest
 
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.action_button import ReloadPatientActionButtonsEffect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPIRoute, BearerCredentials
 from canvas_sdk.v1.data import Patient, Staff
@@ -322,10 +323,16 @@ class StickyNoteAPI(SimpleAPIRoute):
                 audit=audit,
             )
 
+            responses: list[Response | Effect] = [JSONResponse(result)]
             if result["status"] == "ok":
                 log.info(
                     "StickyNoteAPI: saved %s note (v%s) for patient %s by %s"
                     % (note_type, result["version"], patient_id, staff_id)
+                )
+                # Re-render the chart-header button so its content indicator
+                # (📝/⛔) updates immediately for anyone viewing this patient.
+                responses.append(
+                    ReloadPatientActionButtonsEffect(id=patient_id).apply()
                 )
             else:
                 log.info(
@@ -333,7 +340,7 @@ class StickyNoteAPI(SimpleAPIRoute):
                     % (note_type, patient_id, staff_id)
                 )
 
-            return [JSONResponse(result)]
+            return responses
         except Staff.DoesNotExist:
             return [JSONResponse({"status": "error", "message": "Staff not found"})]
         except Exception as e:

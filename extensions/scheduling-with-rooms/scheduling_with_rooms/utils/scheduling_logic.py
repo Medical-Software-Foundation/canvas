@@ -10,7 +10,7 @@ from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatu
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
-from scheduling_with_rooms.models import get_concurrent_limit
+from scheduling_with_rooms.models import get_concurrent_limit, prefetch_concurrent_limits
 from scheduling_with_rooms.utils.calendar_availability import (
     get_availability_windows,
     get_blocking_calendar_events,
@@ -18,10 +18,6 @@ from scheduling_with_rooms.utils.calendar_availability import (
 
 
 DEFAULT_DURATION_MINUTES = 20
-
-# Default business hours (8 AM to 5 PM) — fallback only.
-DEFAULT_START_HOUR = 8
-DEFAULT_END_HOUR = 17
 
 # Appointment statuses that should NOT block a time slot. Use the SDK
 # enum so the canonical strings stay in one place — Canvas's column stores
@@ -31,6 +27,9 @@ _NON_BLOCKING_STATUSES = (
     AppointmentProgressStatus.CANCELLED,
     AppointmentProgressStatus.NOSHOWED,
 )
+
+# How often a provider slot may start within an availability window.
+SLOT_STEP_MINUTES = 30
 
 
 def _count_overlaps(
@@ -46,29 +45,6 @@ def _count_overlaps(
         if slot_start < e and slot_end > s:
             count += 1
     return count
-
-
-def _generate_time_slots(
-    date: str,
-    duration_minutes: int,
-    start_hour: int = DEFAULT_START_HOUR,
-    end_hour: int = DEFAULT_END_HOUR,
-) -> list[tuple[datetime.datetime, datetime.datetime]]:
-    """Generate (start, end) tuples for every slot in the business day."""
-    base = datetime.datetime.fromisoformat(f"{date}T00:00:00")
-    day_start = base.replace(hour=start_hour, minute=0, second=0)
-    day_end = base.replace(hour=end_hour, minute=0, second=0)
-    delta = datetime.timedelta(minutes=duration_minutes)
-
-    slots: list[tuple[datetime.datetime, datetime.datetime]] = []
-    current = day_start
-    while current + delta <= day_end:
-        slots.append((current, current + delta))
-        current += delta
-    return slots
-
-
-SLOT_STEP_MINUTES = 30
 
 
 def _subtract_blocks(
@@ -125,11 +101,74 @@ def _generate_time_slots_from_windows(
     return slots
 
 
+# Widen appointment query windows to cover any UTC offset (up to ±14 h).
+_UTC_OFFSET_BUFFER = datetime.timedelta(hours=16)
+
+
+def _to_calendar_local(
+    start: datetime.datetime, tz: ZoneInfo | None
+) -> datetime.datetime:
+    """Drop an appointment's UTC start into naive calendar-local time."""
+    if tz and start.tzinfo:
+        return start.astimezone(tz).replace(tzinfo=None)
+    if start.tzinfo:
+        return start.replace(tzinfo=None)
+    return start
+
+
+def prefetch_blocking_appointments(
+    staff_ids: list[str],
+    range_start: datetime.datetime,
+    range_end: datetime.datetime,
+    calendar_tz: str = "",
+) -> dict[str, list[tuple[datetime.datetime, datetime.datetime]]]:
+    """Fetch blocking appointments for many staff over a whole range, in one query.
+
+    Callers that sweep a date range (the month view) would otherwise run one
+    query per staff member per day. The returned windows are naive
+    calendar-local, matching what :func:`_get_blocking_appointments` produces,
+    and are meant to be passed back in as its ``booked_cache``.
+    """
+    ids = [staff_id for staff_id in dict.fromkeys(staff_ids) if staff_id]
+    if not ids:
+        return {}
+
+    rows = (
+        Appointment.objects.filter(
+            provider__id__in=ids,
+            start_time__lt=range_end + _UTC_OFFSET_BUFFER,
+            start_time__gte=range_start - _UTC_OFFSET_BUFFER,
+        )
+        .exclude(status__in=_NON_BLOCKING_STATUSES)
+        .values_list("provider__id", "start_time", "duration_minutes")
+    )
+
+    tz = ZoneInfo(calendar_tz) if calendar_tz else None
+    by_staff: dict[str, list[tuple[datetime.datetime, datetime.datetime]]] = {
+        staff_id: [] for staff_id in ids
+    }
+    for staff_id, start, duration in rows:
+        if not start or not duration:
+            continue
+        local_start = _to_calendar_local(start, tz)
+        by_staff.setdefault(str(staff_id), []).append(
+            (local_start, local_start + datetime.timedelta(minutes=duration))
+        )
+
+    log.info(
+        "prefetch_blocking_appts: %d staff, %s..%s, %d blocking appts",
+        len(ids), range_start.date(), range_end.date(),
+        sum(len(v) for v in by_staff.values()),
+    )
+    return by_staff
+
+
 def _get_blocking_appointments(
     provider_id: str,
     day_start: datetime.datetime,
     day_end: datetime.datetime,
     calendar_tz: str = "",
+    booked_cache: dict[str, list[tuple[datetime.datetime, datetime.datetime]]] | None = None,
 ) -> list[tuple[datetime.datetime, datetime.datetime]]:
     """Return (start, end) tuples of existing appointments that block slots.
 
@@ -143,24 +182,25 @@ def _get_blocking_appointments(
 
     Uses a blacklist approach: all appointments block EXCEPT explicitly
     non-blocking statuses (cancelled, noshowed).
+
+    ``booked_cache`` — from :func:`prefetch_blocking_appointments` — replaces
+    the query with an in-memory filter, for callers sweeping many days.
     """
-    # Widen the query window to cover any UTC offset (up to ±14 h).
-    buffer = datetime.timedelta(hours=16)
+    if booked_cache is not None:
+        return [
+            (start, end)
+            for start, end in booked_cache.get(provider_id, ())
+            if end > day_start and start < day_end
+        ]
+
     appts = list(
         Appointment.objects.filter(
             provider__id=provider_id,
-            start_time__lt=day_end + buffer,
-            start_time__gte=day_start - buffer,
+            start_time__lt=day_end + _UTC_OFFSET_BUFFER,
+            start_time__gte=day_start - _UTC_OFFSET_BUFFER,
         )
         .exclude(status__in=_NON_BLOCKING_STATUSES)
         .values_list("start_time", "duration_minutes", "status")
-    )
-
-    log.info(
-        "blocking_appts: provider=%s, found %d appts, statuses=%s",
-        provider_id,
-        len(appts),
-        [a[2] for a in appts],
     )
 
     tz = ZoneInfo(calendar_tz) if calendar_tz else None
@@ -168,14 +208,10 @@ def _get_blocking_appointments(
     result: list[tuple[datetime.datetime, datetime.datetime]] = []
     for start, duration, _status in appts:
         if start and duration:
-            # Convert from UTC to the calendar's local timezone.
-            if tz and start.tzinfo:
-                start = start.astimezone(tz).replace(tzinfo=None)
-            elif start.tzinfo:
-                start = start.replace(tzinfo=None)
-            end = start + datetime.timedelta(minutes=duration)
-            if end > day_start and start < day_end:
-                result.append((start, end))
+            local_start = _to_calendar_local(start, tz)
+            end = local_start + datetime.timedelta(minutes=duration)
+            if end > day_start and local_start < day_end:
+                result.append((local_start, end))
     return result
 
 
@@ -200,6 +236,8 @@ def build_plain_slots(
     calendar_tz: str = "",
     staff_cache: dict | None = None,
     calendar_cache: dict | None = None,
+    booked_cache: dict | None = None,
+    limit_cache: dict | None = None,
 ) -> list[dict[str, Any]]:
     """Generate available slots from calendar availability minus existing appointments.
 
@@ -217,12 +255,14 @@ def build_plain_slots(
 
     day_start = time_slots[0][0]
     day_end = time_slots[-1][1]
-    booked = _get_blocking_appointments(provider_id, day_start, day_end, calendar_tz)
+    booked = _get_blocking_appointments(
+        provider_id, day_start, day_end, calendar_tz, booked_cache=booked_cache
+    )
     hard_blocks = get_blocking_calendar_events(
         provider_id, date, calendar_tz,
         staff_cache=staff_cache, calendar_cache=calendar_cache,
     )
-    concurrent_limit = get_concurrent_limit(provider_id)
+    concurrent_limit = get_concurrent_limit(provider_id, cache=limit_cache)
     log.info(
         "slots: provider=%s, date=%s, %d candidate slots, %d booked, %d hard blocks, concurrent_limit=%d",
         provider_id, date, len(time_slots), len(booked), len(hard_blocks), concurrent_limit,
@@ -247,6 +287,10 @@ def build_all_provider_slots(
     duration_minutes: int,
     location_name: str = "",
     calendar_tz: str = "",
+    staff_cache: dict | None = None,
+    calendar_cache: dict | None = None,
+    booked_cache: dict | None = None,
+    limit_cache: dict | None = None,
 ) -> list[dict[str, Any]]:
     """Build available slots for every provider on a single date.
 
@@ -257,12 +301,30 @@ def build_all_provider_slots(
         duration_minutes: Slot length in minutes.
         location_name: Human-readable location name for calendar matching.
         calendar_tz: IANA timezone string for the location calendar.
+        staff_cache, calendar_cache, booked_cache, limit_cache: optional shared
+            caches. Callers building several locations in one request should
+            pass all four so the underlying queries are made once overall
+            rather than once per location.
 
     Returns:
         ``[{id, name, slots: [{start, end}]}]`` — one entry per provider.
     """
-    staff_cache: dict = {}
-    calendar_cache: dict = {}
+    if staff_cache is None:
+        staff_cache = {}
+    if calendar_cache is None:
+        calendar_cache = {}
+    # One query each for appointments and limits across every provider, rather
+    # than a pair per provider.
+    provider_ids = [prov["id"] for prov in provider_list]
+    if limit_cache is None:
+        limit_cache = prefetch_concurrent_limits(provider_ids)
+    if booked_cache is None:
+        booked_cache = prefetch_blocking_appointments(
+            provider_ids,
+            datetime.datetime.fromisoformat(date),
+            datetime.datetime.fromisoformat(date) + datetime.timedelta(days=1),
+            calendar_tz,
+        )
     result: list[dict[str, Any]] = []
     for prov in provider_list:
         slots = build_plain_slots(
@@ -274,6 +336,8 @@ def build_all_provider_slots(
             calendar_tz=calendar_tz,
             staff_cache=staff_cache,
             calendar_cache=calendar_cache,
+            booked_cache=booked_cache,
+            limit_cache=limit_cache,
         )
         result.append({
             "id": prov["id"],
@@ -309,6 +373,21 @@ def build_month_slot_counts(
     # days × P providers, so resolve each only once.
     staff_cache: dict = {}
     calendar_cache: dict = {}
+
+    # Appointments and concurrent limits are month-wide facts, so fetch them
+    # once here rather than per day per staff member — that was 31 × P queries
+    # for each, and dominated the cost of rendering the month view.
+    provider_ids = [prov["id"] for prov in provider_list]
+    room_staff = resolve_room_staff(allowed_room_keys) if allowed_room_keys is not None else []
+    room_ids = [str(rr.id) for rr in room_staff]
+    limit_cache = prefetch_concurrent_limits(provider_ids + room_ids)
+    booked_cache = prefetch_blocking_appointments(
+        provider_ids + room_ids,
+        datetime.datetime(year, month, 1),
+        datetime.datetime(year, month, days_in_month) + datetime.timedelta(days=1),
+        calendar_tz,
+    )
+
     for day in range(1, days_in_month + 1):
         date_str = f"{year}-{month:02d}-{day:02d}"
 
@@ -323,6 +402,9 @@ def build_month_slot_counts(
                 allowed_room_keys=allowed_room_keys,
                 staff_cache=staff_cache,
                 calendar_cache=calendar_cache,
+                booked_cache=booked_cache,
+                limit_cache=limit_cache,
+                room_staff=room_staff,
             )
             room_starts = set()
             for room in rooms_data:
@@ -340,6 +422,8 @@ def build_month_slot_counts(
                 calendar_tz=calendar_tz,
                 staff_cache=staff_cache,
                 calendar_cache=calendar_cache,
+                booked_cache=booked_cache,
+                limit_cache=limit_cache,
             )
             if room_starts is None:
                 total += len(slots)
@@ -347,6 +431,18 @@ def build_month_slot_counts(
                 total += sum(1 for s in slots if s["start"] in room_starts)
         counts[date_str] = total
     return counts
+
+
+def resolve_room_staff(allowed_room_keys: set[str] | None = None) -> list:
+    """Return the active RR-role Staff rows eligible as rooms.
+
+    Extracted so callers sweeping many dates can resolve rooms once and hand
+    the list back in, instead of re-running this query per day.
+    """
+    rr_qs = Staff.objects.filter(active=True, roles__internal_code="RR").distinct()
+    if allowed_room_keys is not None:
+        rr_qs = rr_qs.filter(id__in=allowed_room_keys)
+    return list(rr_qs)
 
 
 def build_all_room_slots(
@@ -357,6 +453,9 @@ def build_all_room_slots(
     allowed_room_keys: set[str] | None = None,
     staff_cache: dict | None = None,
     calendar_cache: dict | None = None,
+    booked_cache: dict | None = None,
+    limit_cache: dict | None = None,
+    room_staff: list | None = None,
 ) -> list[dict[str, Any]]:
     """Build available slots for every active RR staff member on a single date.
 
@@ -375,10 +474,7 @@ def build_all_room_slots(
     Returns:
         ``[{id, name, slots: [{start, end}]}]`` — one entry per RR staff.
     """
-    rr_qs = Staff.objects.filter(active=True, roles__internal_code="RR").distinct()
-    if allowed_room_keys is not None:
-        rr_qs = rr_qs.filter(id__in=allowed_room_keys)
-    rr_staff_list = list(rr_qs)
+    rr_staff_list = room_staff if room_staff is not None else resolve_room_staff(allowed_room_keys)
     if not rr_staff_list:
         return []
 
@@ -387,6 +483,16 @@ def build_all_room_slots(
         staff_cache = {}
     if calendar_cache is None:
         calendar_cache = {}
+    rr_ids = [str(rr.id) for rr in rr_staff_list]
+    if limit_cache is None:
+        limit_cache = prefetch_concurrent_limits(rr_ids)
+    if booked_cache is None:
+        booked_cache = prefetch_blocking_appointments(
+            rr_ids,
+            datetime.datetime.fromisoformat(date),
+            datetime.datetime.fromisoformat(date) + datetime.timedelta(days=1),
+            calendar_tz,
+        )
     result: list[dict[str, Any]] = []
     delta = datetime.timedelta(minutes=duration_minutes)
     for rr in rr_staff_list:
@@ -424,8 +530,10 @@ def build_all_room_slots(
 
         day_start = time_slots[0][0]
         day_end = time_slots[-1][1]
-        booked = _get_blocking_appointments(rr_id, day_start, day_end, calendar_tz)
-        concurrent_limit = get_concurrent_limit(rr_id)
+        booked = _get_blocking_appointments(
+            rr_id, day_start, day_end, calendar_tz, booked_cache=booked_cache
+        )
+        concurrent_limit = get_concurrent_limit(rr_id, cache=limit_cache)
 
         free_slots: list[dict[str, str]] = []
         for slot_start, slot_end in time_slots:
@@ -438,112 +546,4 @@ def build_all_room_slots(
                 })
 
         result.append({"id": rr_id, "name": rr.full_name, "slots": free_slots})
-    return result
-
-
-def build_slots_with_resource_availability(
-    provider_id: str,
-    location_id: str,
-    date: str,
-    duration_minutes: int,
-    location_name: str = "",
-    calendar_tz: str = "",
-    allowed_room_keys: set[str] | None = None,
-) -> list[dict[str, Any]]:
-    """Generate slots with RR staff availability annotation.
-
-    For each candidate slot, checks the provider and every eligible RR
-    staff member. Each staff member's per-staff concurrent-slot limit
-    (admin app) governs whether their bookings block the slot.
-
-    Both regular Appointments and room ScheduleEvents are stored in the
-    Canvas Appointment data model, so a single DB query catches both.
-
-    Slots with no available RR staff are excluded.
-    """
-    # Per-request caches shared across the provider + every RR staff member.
-    staff_cache: dict = {}
-    calendar_cache: dict = {}
-    windows = get_availability_windows(
-        provider_id, location_name, date,
-        staff_cache=staff_cache, calendar_cache=calendar_cache,
-    )
-    time_slots = _generate_time_slots_from_windows(windows, duration_minutes)
-
-    if not time_slots:
-        return []
-
-    day_start = time_slots[0][0]
-    day_end = time_slots[-1][1]
-    provider_booked = _get_blocking_appointments(provider_id, day_start, day_end, calendar_tz)
-    provider_hard_blocks = get_blocking_calendar_events(
-        provider_id, date, calendar_tz,
-        staff_cache=staff_cache, calendar_cache=calendar_cache,
-    )
-    provider_limit = get_concurrent_limit(provider_id)
-
-    rr_qs = Staff.objects.filter(active=True, roles__internal_code="RR").distinct()
-    if allowed_room_keys is not None:
-        rr_qs = rr_qs.filter(id__in=allowed_room_keys)
-    rr_staff_list = list(rr_qs)
-    log.info(
-        "slots (RR): provider=%s, date=%s, %d candidate slots, %d RR staff, provider_limit=%d",
-        provider_id, date, len(time_slots), len(rr_staff_list), provider_limit,
-    )
-
-    if not rr_staff_list:
-        return []
-
-    # Pre-fetch calendar availability, bookings, hard blocks, and concurrent limit per RR.
-    rr_windows: dict[str, list[tuple[datetime.datetime, datetime.datetime]]] = {}
-    rr_booked: dict[str, list[tuple[datetime.datetime, datetime.datetime]]] = {}
-    rr_hard_blocks: dict[str, list[tuple[datetime.datetime, datetime.datetime]]] = {}
-    rr_limit: dict[str, int] = {}
-    for rr in rr_staff_list:
-        rr_id = str(rr.id)
-        staff_cache.setdefault(rr_id, rr)
-        rr_windows[rr_id] = get_availability_windows(
-            rr_id, location_name, date,
-            staff_cache=staff_cache, calendar_cache=calendar_cache,
-        )
-        rr_booked[rr_id] = _get_blocking_appointments(
-            rr_id, day_start, day_end, calendar_tz,
-        )
-        rr_hard_blocks[rr_id] = get_blocking_calendar_events(
-            rr_id, date, calendar_tz,
-            staff_cache=staff_cache, calendar_cache=calendar_cache,
-        )
-        rr_limit[rr_id] = get_concurrent_limit(rr_id)
-
-    result: list[dict[str, Any]] = []
-    for slot_start, slot_end in time_slots:
-        # Provider hard blocks (admin events) trump capacity entirely.
-        if _count_overlaps(slot_start, slot_end, provider_hard_blocks) > 0:
-            continue
-        # Provider must have capacity for the slot.
-        if _count_overlaps(slot_start, slot_end, provider_booked) >= provider_limit:
-            continue
-
-        available_rr: list[dict[str, str]] = []
-        for rr in rr_staff_list:
-            rr_id = str(rr.id)
-
-            # RR staff must have calendar availability for this slot.
-            if not _slot_in_windows(slot_start, slot_end, rr_windows.get(rr_id, [])):
-                continue
-
-            # RR hard blocks trump capacity entirely.
-            if _count_overlaps(slot_start, slot_end, rr_hard_blocks.get(rr_id, [])) > 0:
-                continue
-
-            if _count_overlaps(slot_start, slot_end, rr_booked.get(rr_id, [])) < rr_limit[rr_id]:
-                available_rr.append({"id": rr_id, "name": rr.full_name})
-
-        if available_rr:
-            result.append({
-                "start": slot_start.isoformat(),
-                "end": slot_end.isoformat(),
-                "available_rr_staff": available_rr,
-            })
-
     return result

@@ -1,14 +1,14 @@
 # alert_facility_fields
 
-A Canvas SDK plugin that adds an **Alert facility** Yes/No field to the **Medication Statement** and **Stop Medication** commands and blocks committing those commands until the field is set.
+A Canvas SDK plugin that adds an **Alert facility** Yes/No field to the **Medication Statement**, **Stop Medication**, **Prescribe**, **Adjust Prescription**, and **Refill** commands and blocks committing those commands until the field is set.
 
 ## Why
 
-Healthcare teams routinely need to flag whether a medication change should trigger a notification to the patient's facility (skilled nursing facility, group home, school, etc.). Capturing this signal at the point of charting — and refusing to commit a Medication Statement or Stop Medication without it — keeps the data consistent and makes downstream automation (alerting, reporting, integrations) trivial: the answer is on the command itself, not buried in free text.
+Healthcare teams routinely need to flag whether a medication change should trigger a notification to the patient's facility (skilled nursing facility, group home, school, etc.). Capturing this signal at the point of charting — and refusing to commit a medication command (Medication Statement, Stop Medication, Prescribe, Adjust Prescription, or Refill) without it — keeps the data consistent and makes downstream automation (alerting, reporting, integrations) trivial: the answer is on the command itself, not buried in free text.
 
 ## What it does
 
-When a clinician opens or prints a note containing a Medication Statement or Stop Medication command, the plugin contributes one extra form field:
+When a clinician opens or prints a note containing a Medication Statement, Stop Medication, Prescribe, Adjust Prescription, or Refill command, the plugin contributes one extra form field:
 
 | Property | Value |
 |---|---|
@@ -36,11 +36,11 @@ Two `BaseHandler` subclasses, both registered in `CANVAS_MANIFEST.json`:
 
 ### `AlertFacilityFormHandler`
 
-Subscribes to `EventType.COMMAND__FORM__GET_ADDITIONAL_FIELDS`. On each event it inspects `event.context["schema_key"]`; for `medicationStatement` or `stopMedication` it returns a `CommandMetadataCreateFormEffect` declaring the Alert facility field. The same effect is returned regardless of `event.context["purpose"]` (`"form"` for chart UI, `"print"` for the printout), so the field surfaces in both contexts.
+Subscribes to `EventType.COMMAND__FORM__GET_ADDITIONAL_FIELDS`. On each event it inspects `event.context["schema_key"]`; for `medicationStatement`, `stopMedication`, `prescribe`, `adjustPrescription`, or `refill` it returns a `CommandMetadataCreateFormEffect` declaring the Alert facility field. The same effect is returned regardless of `event.context["purpose"]` (`"form"` for chart UI, `"print"` for the printout), so the field surfaces in both contexts.
 
 ### `AlertFacilityRequiredValidator`
 
-Subscribes to `MEDICATION_STATEMENT_COMMAND__POST_VALIDATION` and `STOP_MEDICATION_COMMAND__POST_VALIDATION`. On commit it reads the stored `alert_facility` metadata via `CommandMetadata.objects.filter(...)`. If the value is missing or blank it returns a `CommandValidationErrorEffect` with the message *"Alert Facility is a required field."* — the platform surfaces the error inline and refuses the commit until the user makes a choice.
+Subscribes to `MEDICATION_STATEMENT_COMMAND__POST_VALIDATION`, `STOP_MEDICATION_COMMAND__POST_VALIDATION`, `PRESCRIBE_COMMAND__POST_VALIDATION`, `ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION`, and `REFILL_COMMAND__POST_VALIDATION`. On commit it reads the stored `alert_facility` metadata via `CommandMetadata.objects.filter(...)`. If the value is missing or blank it returns a `CommandValidationErrorEffect` with the message *"Alert Facility is a required field."* — the platform surfaces the error inline and refuses the commit until the user makes a choice.
 
 ## Demo
 

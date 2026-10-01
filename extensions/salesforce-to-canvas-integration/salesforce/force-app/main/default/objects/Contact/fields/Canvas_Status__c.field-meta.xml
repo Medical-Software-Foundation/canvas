@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Canvas_Status__c</fullName>
+    <label>Canvas Status</label>
+    <type>Text</type>
+    <formula>IF( ISPICKVAL(Canvas_Sync_Status__c, &quot;Failed&quot;), IMAGE(&quot;/img/samples/light_red.gif&quot;, &quot;Error&quot;, 8, 8) &amp; &quot; Error&quot;, IF( ISPICKVAL(Canvas_Sync_Status__c, &quot;Retrying&quot;), IMAGE(&quot;/img/samples/light_yellow.gif&quot;, &quot;Retrying&quot;, 8, 8) &amp; &quot; Retrying&quot;, IF( NOT(ISBLANK(Canvas_Patient_ID__c)), IMAGE(&quot;/img/samples/light_green.gif&quot;, &quot;Synced&quot;, 8, 8) &amp; &quot; Synced&quot;, IF( ISPICKVAL(Canvas_Sync_Status__c, &quot;Delivered&quot;), &quot;Sent, awaiting Canvas&quot;, &quot;Not synced&quot; ))))</formula>
+    <formulaTreatBlanksAs>BlankAsBlank</formulaTreatBlanksAs>
+    <inlineHelpText>At a glance Canvas link state, derived from the reverse link and the last delivery outcome. Synced means a Canvas patient is linked. Sent awaiting Canvas means the last request reached Canvas and is waiting on an operator. Retrying and Error reflect delivery problems, see Canvas Sync Last Error. Not synced means nothing has been pushed yet.</inlineHelpText>
+</CustomField>

@@ -14,6 +14,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.protocols.appointment_buffer import (
     BUFFER_TITLE,
+    DEFAULT_HORIZON_YEARS,
     OnAppointmentCanceled,
     OnAppointmentCreated,
     OnAppointmentRescheduled,
@@ -46,6 +47,7 @@ def _future_appt(minutes=30, status="confirmed", provider_id="p1", location_id="
     appt.start_time = datetime(day.year, day.month, day.day, 10, 0, tzinfo=UTC)
     appt.duration_minutes = minutes
     appt.status = status
+    appt.patient_id = "pat-1"
     appt.appointment_rescheduled_from = None
     return appt
 
@@ -211,6 +213,27 @@ class TestCreateBufferEffects:
 
         with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[_rule()]):
             assert _create_buffer_effects(appt) == []
+
+    def test_schedule_event_without_a_patient_gets_no_buffers(self):
+        """Lunch, meetings and other schedule events are appointments with no
+        patient. They are not visits, so a covering rule must not pad them."""
+        appt = _future_appt()
+        appt.patient_id = None
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[_rule()]) as mock_rules, \
+             patch(f"{BUFFER_MODULE}.get_admin_calendar_id") as mock_cal:
+            assert _create_buffer_effects(appt) == []
+            assert mock_rules.mock_calls == []
+            assert mock_cal.mock_calls == []
+
+    def test_appointment_beyond_the_horizon_gets_no_buffers(self):
+        appt = _future_appt()
+        appt.start_time = datetime.now(UTC).replace(year=datetime.now(UTC).year + DEFAULT_HORIZON_YEARS + 1)
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[_rule()]), \
+             patch(f"{BUFFER_MODULE}.get_admin_calendar_id") as mock_cal:
+            assert _create_buffer_effects(appt) == []
+            assert mock_cal.mock_calls == []
 
     def test_no_admin_calendar_returns_nothing(self):
         appt = _future_appt()

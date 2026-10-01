@@ -18,7 +18,6 @@ from provider_availability.engine.storage import (
     BLOCK_INDEX_KEY,
     RECURRING_BLOCK_INDEX_KEY,
     EVENT_IDS_PREFIX,
-    ALLOWED_STAFF_KEY,
     PRACTICE_TZ_KEY,
     INSTALL_SENTINEL_KEY,
     save_rule,
@@ -45,10 +44,6 @@ from provider_availability.engine.storage import (
     get_recurring_blocks_by_group,
     get_last_sync_date,
     set_last_sync_date,
-    get_allowed_staff,
-    set_allowed_staff,
-    add_allowed_staff,
-    remove_allowed_staff,
     get_practice_timezone,
     set_practice_timezone,
     get_provider_timezone,
@@ -268,38 +263,6 @@ class TestGroupLookups:
         assert len(result) == 2
 
 
-# ── Allowed staff ─────────────────────────────────────────────────────
-
-
-class TestAllowedStaff:
-    def test_get_empty(self, patch_cache):
-        assert get_allowed_staff() == []
-
-    def test_set_and_get(self, patch_cache):
-        set_allowed_staff(["s1", "s2"])
-        assert get_allowed_staff() == ["s1", "s2"]
-
-    def test_add(self, patch_cache):
-        set_allowed_staff(["s1"])
-        add_allowed_staff("s2")
-        assert get_allowed_staff() == ["s1", "s2"]
-
-    def test_add_duplicate(self, patch_cache):
-        set_allowed_staff(["s1"])
-        add_allowed_staff("s1")
-        assert get_allowed_staff() == ["s1"]
-
-    def test_remove(self, patch_cache):
-        set_allowed_staff(["s1", "s2"])
-        remove_allowed_staff("s1")
-        assert get_allowed_staff() == ["s2"]
-
-    def test_remove_nonexistent(self, patch_cache):
-        set_allowed_staff(["s1"])
-        remove_allowed_staff("s999")
-        assert get_allowed_staff() == ["s1"]
-
-
 # ── Practice timezone ─────────────────────────────────────────────────
 
 
@@ -410,14 +373,6 @@ class TestTTLRefresh:
         assert result == 0
         index = patch_cache._store.get(RECURRING_BLOCK_INDEX_KEY, [])
         assert "pa:recurring:p1:stale-rb" not in index
-
-    def test_refresh_all_ttls_with_allowed_staff(self, patch_cache):
-        """Refresh should also refresh allowed staff TTL."""
-        set_allowed_staff(["s1", "s2"])
-        result = refresh_all_ttls()
-        assert result == 0
-        # Allowed staff should still be retrievable
-        assert get_allowed_staff() == ["s1", "s2"]
 
     def test_refresh_all_ttls_with_practice_timezone(self, patch_cache):
         """Refresh should also refresh practice timezone TTL."""

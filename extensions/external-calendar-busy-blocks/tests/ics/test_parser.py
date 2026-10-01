@@ -414,3 +414,77 @@ def test_parse_bad_exdate_tzid_keeps_series(ics_fixture) -> None:
     )
     days = sorted(e.starts_at.day for e in events)
     assert days == [1, 8, 15]
+
+
+def test_parse_drops_override_moved_earlier_once_it_has_ended(ics_fixture) -> None:
+    # Regression (Pylon 32976): a recurring instance moved EARLIER in the day must
+    # drop out of the parse once the MOVED slot has ended, even though the base
+    # occurrence it replaces has not.
+    #
+    # Base series is Fridays 12:00-17:00 America/New_York (EDT -> 16:00-21:00 UTC).
+    # The 6/12 instance is moved to 08:00-13:00 ET (12:00-17:00 UTC).
+    #
+    # The window test on the base occurrence uses the time the instance *would*
+    # have been (ends 21:00 UTC), so between 17:00 and 21:00 UTC an unfiltered
+    # override passed it while already being over. `live_busy_events` selects
+    # `ends_at > now` and so could never see the block, and the cron created a
+    # fresh one every tick for four hours.
+    fixture = ics_fixture("override_moved_earlier.ics")
+    moved_slot = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
+
+    # In progress: the moved instance is still live and must be yielded.
+    events = parse_ics(
+        fixture, now=datetime(2026, 6, 12, 12, 30, tzinfo=timezone.utc), lookahead_days=90
+    )
+    moved = [e for e in events if e.starts_at == moved_slot]
+    assert len(moved) == 1
+    assert moved[0].ends_at == datetime(2026, 6, 12, 17, 0, tzinfo=timezone.utc)
+    assert moved[0].recurrence_id == "20260612T160000Z"
+
+    # Ended: gone from the parse, both at the tick it ends and hours afterwards
+    # while the base occurrence is still ahead of `now`.
+    for now in (
+        datetime(2026, 6, 12, 17, 0, 1, tzinfo=timezone.utc),
+        datetime(2026, 6, 12, 20, 45, tzinfo=timezone.utc),
+    ):
+        events = parse_ics(fixture, now=now, lookahead_days=90)
+        assert [e for e in events if e.starts_at == moved_slot] == []
+        # And it must not fall back to the base 16:00 UTC slot either: the
+        # provider moved away from that time, so blocking it would be wrong.
+        assert [
+            e
+            for e in events
+            if e.starts_at == datetime(2026, 6, 12, 16, 0, tzinfo=timezone.utc)
+        ] == []
+
+
+def test_parse_keeps_other_occurrences_when_one_override_is_dropped(ics_fixture) -> None:
+    # The dropped override must cost only its own instance, not the series.
+    events = parse_ics(
+        ics_fixture("override_moved_earlier.ics"),
+        now=datetime(2026, 6, 12, 20, 45, tzinfo=timezone.utc),
+        lookahead_days=30,
+    )
+    # 6/12 is dropped (its moved instance is already over) and 6/5 is in the
+    # past. Every other Friday in the 30-day window survives, on the base
+    # 16:00 UTC start.
+    assert [e.starts_at for e in events] == [
+        datetime(2026, 6, 19, 16, 0, tzinfo=timezone.utc),
+        datetime(2026, 6, 26, 16, 0, tzinfo=timezone.utc),
+        datetime(2026, 7, 3, 16, 0, tzinfo=timezone.utc),
+        datetime(2026, 7, 10, 16, 0, tzinfo=timezone.utc),
+    ]
+
+
+def test_parse_drops_override_moved_beyond_lookahead(ics_fixture) -> None:
+    # An instance moved PAST the look-ahead horizon is out of window too. Base
+    # series is Fridays 12:00-13:00 ET, COUNT=2 (6/5 and 6/12); the 6/12 instance
+    # is moved a full year out.
+    events = parse_ics(
+        ics_fixture("override_moved_beyond_window.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert [e.starts_at for e in events] == [
+        datetime(2026, 6, 5, 16, 0, tzinfo=timezone.utc)
+    ]

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Canvas_Sync_Last_Attempt__c</fullName>
+    <label>Canvas Sync Last Attempt</label>
+    <type>DateTime</type>
+    <required>false</required>
+    <inlineHelpText>When the emitter last attempted to deliver a sync for this Contact.</inlineHelpText>
+</CustomField>

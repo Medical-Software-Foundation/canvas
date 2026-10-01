@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Endpoint__c</fullName>
+    <label>Endpoint</label>
+    <type>Url</type>
+    <required>false</required>
+    <unique>false</unique>
+    <externalId>false</externalId>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <inlineHelpText>The full Canvas plugin webhook URL the emitter posts to. Set this on the record named Default. The host must also be allow listed in the Canvas Plugin Webhook remote site setting.</inlineHelpText>
+</CustomField>

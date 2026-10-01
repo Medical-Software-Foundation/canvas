@@ -1,0 +1,146 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "daily_dashboard",
+    "description": "Clinic-wide daily readiness dashboard for nephrology/dialysis: today's scheduled patients with labs/imaging/referral/authorization readiness, action panels (tasks, refills, messages), and outreach tracking.",
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "daily_dashboard.handlers.homepage:HomepageHandler",
+                "description": "Sets the Daily Readiness Dashboard as the default homepage on login.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "daily_dashboard.applications.dashboard_app:DashboardApp",
+                "name": "Daily Readiness",
+                "description": "Clinic-wide view of today's scheduled patients and their visit readiness.",
+                "icon": "assets/daily-dashboard-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 100
+            }
+        ],
+        "handlers": [
+            {
+                "class": "daily_dashboard.routes.dashboard_api:DashboardIndexRoute",
+                "description": "Serves the dashboard HTML shell (staff-session authenticated)."
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:DashboardStylesRoute",
+                "description": "Serves the dashboard CSS."
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:DashboardScriptRoute",
+                "description": "Serves the dashboard JavaScript."
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:DashboardDataRoute",
+                "description": "Returns today's appointments, readiness, panels + filter options as JSON.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Appointment", "Patient", "PatientMetadata", "Staff", "PracticeLocation",
+                        "LabOrder", "LabReport", "ImagingOrder", "ImagingReport",
+                        "Referral", "ReferralReport", "Task", "Prescription", "Message"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:OutreachRoute",
+                "description": "Records an outreach attempt to patient metadata.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "PatientMetadata", "Staff"],
+                    "write": ["PatientMetadata"]
+                }
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:ReadinessOverrideRoute",
+                "description": "Sets a manual 'Mark complete' override in patient metadata.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "PatientMetadata"],
+                    "write": ["PatientMetadata"]
+                }
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:CreateTaskRoute",
+                "description": "Creates a follow-up task for a patient.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient"],
+                    "write": ["Task"]
+                }
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:TaskActionRoute",
+                "description": "Updates a task's fields and/or adds a comment from the dashboard.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Task", "Staff", "Team"],
+                    "write": ["Task", "TaskComment"]
+                }
+            },
+            {
+                "class": "daily_dashboard.routes.dashboard_api:PrepRoute",
+                "description": "Stages an Appointment Prep prompt for the Assistant panel.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient"],
+                    "write": ["PatientMetadata"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "CLINIC_TIMEZONE",
+            "sensitive": false
+        },
+        {
+            "name": "CUSTOMER_IDENTIFIER",
+            "sensitive": false
+        },
+        {
+            "name": "MESSAGING_APP_IDENTIFIER",
+            "sensitive": false
+        },
+        {
+            "name": "PANEL_TASKS_URL",
+            "sensitive": false
+        },
+        {
+            "name": "PANEL_REFILLS_URL",
+            "sensitive": false
+        },
+        {
+            "name": "PANEL_MESSAGES_URL",
+            "sensitive": false
+        },
+        {
+            "name": "ASSISTANT_PANEL_APP",
+            "sensitive": false
+        },
+        {
+            "name": "ASSISTANT_PREP_PROMPT",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

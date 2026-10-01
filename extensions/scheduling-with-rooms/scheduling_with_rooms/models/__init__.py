@@ -7,6 +7,7 @@ namespace declared in CANVAS_MANIFEST.json.
 from scheduling_with_rooms.models.staff_slot_config import (
     StaffSlotConfig,
     get_concurrent_limit,
+    prefetch_concurrent_limits,
     replace_concurrent_limits,
 )
 from scheduling_with_rooms.models.visit_type_duration import (
@@ -29,6 +30,7 @@ __all__ = [
     "get_concurrent_limit",
     "get_durations_for",
     "get_room_event_code_for",
+    "prefetch_concurrent_limits",
     "replace_concurrent_limits",
     "replace_durations",
     "replace_room_event_codes",

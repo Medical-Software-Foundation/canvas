@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.5;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  gap: 12px;
+}
+.header-left { min-width: 0; flex: 1; }
+.header-title { font-size: 16px; font-weight: 600; color: #111827; }
+.header-status { font-size: 12px; margin-top: 3px; display: flex; flex-direction: column; gap: 2px; }
+.hchip { font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.hchip-matched { color: #047857; }
+.hchip-matched_empty { color: #1d4ed8; }
+.hchip-not_matched { color: #b45309; }
+.hchip-no_data { color: #6b7280; }
+.hsep { color: #d1d5db; }
+.hsummary { color: #6b7280; }
+.hsummary strong { color: #b45309; font-weight: 600; }
+.hts { color: #9ca3af; }
+
+.header-right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.provider-select {
+  font-size: 12px; padding: 6px 8px;
+  border: 1px solid #d1d5db; border-radius: 8px;
+  background: #fff; color: #374151; max-width: 160px;
+}
+.btn-request {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; font-size: 12px; font-weight: 500;
+  border-radius: 8px; border: 1px solid #d1d5db;
+  background: #fff; color: #374151; cursor: pointer; white-space: nowrap;
+}
+.btn-request:hover:not(:disabled) { background: #f9fafb; }
+.btn-request:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-request.sent { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border-radius: 8px; border: 1px solid #d1d5db;
+  background: #fff; color: #6b7280; cursor: pointer;
+}
+.btn-icon:hover:not(:disabled) { background: #f9fafb; color: #374151; }
+.btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Tooltip ── */
+.tip-wrap { position: relative; display: inline-block; }
+.tip-text {
+  visibility: hidden; opacity: 0; width: 210px;
+  background: #1f2937; color: #fff; font-size: 11px; line-height: 1.4;
+  text-align: center; padding: 6px 10px; border-radius: 6px;
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+  transition: opacity 0.15s; pointer-events: none; font-weight: 400;
+}
+.tip-wrap:hover .tip-text { visibility: visible; opacity: 1; }
+
+/* ── Toast ── */
+.toast {
+  flex-shrink: 0; margin: 8px 16px 0;
+  padding: 7px 10px 7px 12px; border-radius: 8px; font-size: 12px;
+  display: none; align-items: flex-start; gap: 8px;
+}
+.toast.visible { display: flex; }
+.toast-msg { flex: 1; }
+.toast-close { flex-shrink: 0; background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.6; padding: 0 2px; }
+.toast-close:hover { opacity: 1; }
+.toast.success { background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; }
+.toast.error   { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
+
+/* ── Scrollable content ── */
+/* Generous bottom buffer so the last rows clear the floating Chat widget that
+   overlaps the bottom-right of the panel. */
+.content { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 96px; }
+
+/* ── Section headings ── */
+.section-head {
+  padding: 14px 16px 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; align-items: center; gap: 7px; color: #6b7280;
+}
+.section-head.unmatched { color: #b45309; }
+.section-head.matched   { color: #047857; }
+.count-badge {
+  font-size: 11px; font-weight: 600; color: #6b7280;
+  background: #f3f4f6; border: 1px solid #e5e7eb;
+  border-radius: 10px; padding: 0 7px; min-width: 18px; text-align: center;
+}
+
+/* ── Collapsible sections ── */
+details.section > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 14px 16px 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #6b7280; display: flex; align-items: center; gap: 7px;
+}
+details.section > summary::-webkit-details-marker { display: none; }
+details.section > summary .sec-caret { font-size: 9px; color: #9ca3af; transition: transform 0.15s; }
+details.section[open] > summary .sec-caret { transform: rotate(90deg); }
+details.section.matched > summary { color: #047857; }
+
+/* ── Cards ── */
+.card {
+  margin: 8px 16px; background: #fff;
+  border: 1px solid #e5e7eb; border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03); overflow: hidden;
+}
+.card.unresolved { border-left: 3px solid #f59e0b; }
+.card.dismissed { background: #fcfcfd; }
+.card.dismissed .card-title { color: #6b7280; }
+.card-main { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; cursor: pointer; }
+.card-main:hover { background: rgba(0,0,0,0.012); }
+.card-chevron { flex-shrink: 0; font-size: 9px; color: #9ca3af; margin-top: 5px; width: 9px; transition: transform 0.15s; }
+.card.expanded .card-chevron { transform: rotate(90deg); }
+.card-body { flex: 1; min-width: 0; }
+.card-title { font-size: 14px; font-weight: 600; color: #1f2937; }
+.card-sub { font-size: 12px; color: #6b7280; margin-top: 1px; }
+.card-sig { font-size: 12px; color: #6b7280; margin-top: 2px; font-style: italic; }
+.card-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.card-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #9ca3af; }
+.card-date { display: inline-flex; align-items: center; }
+.fills-pill { background: #f3f4f6; border-radius: 10px; padding: 1px 8px; font-size: 11px; color: #6b7280; }
+.card-dismissed-meta { font-size: 11px; color: #9ca3af; margin-top: 6px; font-style: italic; }
+.mock-badge {
+  display: inline-block; margin-left: 6px; vertical-align: 1px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  background: #fef3c7; color: #92400e; border: 1px solid #fde68a;
+  border-radius: 6px; padding: 1px 5px;
+}
+
+/* ── Code pills ── */
+.code-pill {
+  display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 8px;
+  background: #f3f4f6; color: #6b7280;
+  font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+}
+.code-pill.match { background: #d1fae5; color: #065f46; }
+
+/* ── Card actions ── */
+.card-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.btn-add {
+  padding: 6px 11px; font-size: 12px; font-weight: 600;
+  border-radius: 8px; border: 1px solid #d1d5db;
+  background: #fff; color: #374151; cursor: pointer; white-space: nowrap;
+}
+.btn-add:hover:not(:disabled) { background: #f0fdf4; border-color: #6ee7b7; color: #047857; }
+.btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-add.added { pointer-events: none; background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.btn-dismiss {
+  padding: 6px 11px; font-size: 12px; font-weight: 500;
+  border-radius: 8px; border: 1px solid #d1d5db;
+  background: #fff; color: #6b7280; cursor: pointer; white-space: nowrap;
+}
+.btn-dismiss:hover:not(:disabled) { background: #f9fafb; color: #374151; }
+.btn-dismiss:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Fills sub-table (accordion) ── */
+.fills-detail { display: none; padding: 0 14px 12px 33px; }
+.card.expanded .fills-detail { display: block; }
+.fills-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.fills-table th {
+  text-align: left; padding: 5px 8px; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #9ca3af;
+  border-bottom: 1px solid #e5e7eb;
+}
+.fills-table td { padding: 5px 8px; color: #4b5563; border-bottom: 1px solid #f3f4f6; }
+.fills-table tr:last-child td { border-bottom: none; }
+
+/* ── Empty ── */
+.empty { padding: 14px 16px; margin: 0 16px; text-align: center; color: #9ca3af; font-size: 12px; border: 1px dashed #e5e7eb; border-radius: 12px; }
+
+/* ── Active meds ── */
+.active-meds-table { width: 100%; border-collapse: collapse; }
+.active-meds-table th { text-align: left; padding: 5px 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+.active-meds-table td { padding: 5px 8px; }
+</style>
+</head>
+<body>
+
+<!-- hidden data spans -->
+<span id="rx-groups"      hidden>{{ grouped_items_json }}</span>
+<span id="rx-patient"     hidden>{{ patient_id }}</span>
+<span id="rx-active-meds" hidden>{{ active_meds_json }}</span>
+<span id="rx-providers"   hidden>{{ providers_json }}</span>
+<span id="rx-default-staff" hidden>{{ default_staff_id }}</span>
+<span id="rx-status"      hidden>{{ status_json }}</span>
+
+<!-- header -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-title">Medication history</div>
+    <div class="header-status" id="headerStatus"></div>
+  </div>
+  <div class="header-right">
+    {% if can_request %}
+      {% if show_provider_select %}<select class="provider-select" id="providerSelect" title="Run the request as this provider"></select>{% endif %}
+      <button class="btn-request" id="requestBtn" type="button" title="Sends a fresh eligibility + medication-history request. Surescripts caches results (~24h for medication history, up to ~72h for eligibility), so a repeat request may return the same data until the cache expires."></button>
+      <button class="btn-icon" id="refreshBtn" type="button" title="Refresh results"></button>
+    {% else %}
+      <button class="btn-icon" id="refreshBtn" type="button" title="Refresh results"></button>
+      <div class="tip-wrap">
+        <button class="btn-request" disabled type="button">Request new history</button>
+        <span class="tip-text">No Surescripts-registered (SPI) providers are configured on this instance, so requests can't be sent.</span>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="toastSuccess" class="toast success"><span class="toast-msg"></span><button class="toast-close" onclick="this.closest('.toast').classList.remove('visible')">&times;</button></div>
+<div id="toastError"   class="toast error"><span class="toast-msg"></span><button class="toast-close" onclick="this.closest('.toast').classList.remove('visible')">&times;</button></div>
+
+<!-- scrollable content -->
+<div class="content">
+
+  <div id="unmatchedSection">
+    <div class="section-head unmatched">&#9888; New / Unresolved <span class="count-badge" id="unmatchedCount">0</span></div>
+    <div id="unmatchedContainer"></div>
+  </div>
+
+  <details class="section matched" id="matchedSection">
+    <summary><span class="sec-caret">&#9654;</span> &#10003; Matched <span class="count-badge" id="matchedCount">0</span></summary>
+    <div id="matchedContainer"></div>
+    <details style="margin:0;">
+      <summary style="padding:8px 16px 6px 34px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:#9ca3af;cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;">
+        <span style="font-size:8px;">&#9654;</span> Active meds
+      </summary>
+      <div id="activeMedsContainer" style="padding:0 16px 10px 34px;"></div>
+    </details>
+  </details>
+
+  <details class="section" id="dismissedSection">
+    <summary><span class="sec-caret">&#9654;</span> &#x2715; Dismissed <span class="count-badge" id="dismissedCount">0</span></summary>
+    <div id="dismissedContainer"></div>
+  </details>
+
+</div>
+
+<script>
+(function () {
+  var PATIENT_ID = ((document.getElementById("rx-patient") || {}).textContent || "{{ patient_id }}").trim();
+  var BASE = "/plugin-io/api/surescripts_med_history/routes";
+
+  var CAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:5px;opacity:0.7"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var REFRESH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
+
+  function parseSpan(id) {
+    var el = document.getElementById(id);
+    try { return el ? JSON.parse(el.textContent) : []; } catch (e) { return []; }
+  }
+  function parseObj(id) {
+    var el = document.getElementById(id);
+    try { return el ? (JSON.parse(el.textContent) || {}) : {}; } catch (e) { return {}; }
+  }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  // Format a server ISO-8601 timestamp (UTC offset) in the browser's timezone.
+  function fmtTime(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
+    });
+  }
+
+  function showToast(type, msg) {
+    var el = document.getElementById(type === "success" ? "toastSuccess" : "toastError");
+    el.querySelector(".toast-msg").textContent = msg;
+    el.classList.add("visible");
+    if (type === "success") {
+      setTimeout(function () { el.classList.remove("visible"); }, 4000);
+    }
+  }
+
+  /* ── state ── */
+  var currentGroups = parseSpan("rx-groups");
+  var activeMeds    = parseSpan("rx-active-meds");
+  var STATUS        = parseObj("rx-status");
+  var added         = [];
+
+  /* ── header status ── */
+  function renderHeader() {
+    var state = STATUS.state || "no_data";
+    var chipLabel, icon;
+    if (state === "matched") { icon = "✓"; chipLabel = "Matched in Surescripts"; }
+    else if (state === "matched_empty") { icon = "✓"; chipLabel = "Matched — no history returned"; }
+    else if (state === "not_matched") { icon = "⚠"; chipLabel = "Not matched" + (STATUS.detail ? ": " + STATUS.detail : ""); }
+    else { icon = "•"; chipLabel = "No successful requests"; }
+
+    // Show when Surescripts last *responded*, not when we asked. Prefer the
+    // response-record timestamp (MedicationHistoryResponse.created — present
+    // even for empty/denied, and stable across cached re-requests); fall back
+    // to when the med rows were written. A denial carries a time too, so label
+    // it "Last attempt" rather than "Returned" (nothing useful came back).
+    var ts = "";
+    var tsLabel = (state === "not_matched") ? "Last attempt " : "Returned ";
+    if (STATUS.last_response_at) ts = tsLabel + fmtTime(STATUS.last_response_at);
+    else if (STATUS.last_pulled) ts = "Returned " + fmtTime(STATUS.last_pulled);
+
+    var html = "<span class=\"hchip hchip-" + state + "\">" + icon + " " + esc(chipLabel) + "</span>";
+    if (ts) html += "<span class=\"hts\">" + esc(ts) + "</span>";
+    document.getElementById("headerStatus").innerHTML = html;
+  }
+
+  /* ── cards ── */
+  function buildCodePills(group) {
+    var pills = "";
+    var codes = group.rxnorm_codes || [], ndcs = group.ndc_codes || [];
+    for (var i = 0; i < codes.length; i++) pills += "<span class=\"code-pill\">RxNorm " + esc(codes[i]) + "</span>";
+    for (var j = 0; j < ndcs.length; j++) pills += "<span class=\"code-pill\">NDC " + esc(ndcs[j]) + "</span>";
+    if (group.match_method) pills += "<span class=\"code-pill match\">matched: " + esc(group.match_method) + "</span>";
+    return pills;
+  }
+
+  function buildFillsTable(fills, groupDesc) {
+    if (!fills || !fills.length) return "";
+    var multi = false;
+    for (var k = 0; k < fills.length; k++) {
+      if (fills[k].drug_description && fills[k].drug_description !== groupDesc) { multi = true; break; }
+    }
+    var rows = "";
+    for (var i = 0; i < fills.length; i++) {
+      var f = fills[i];
+      rows += "<tr>"
+        + (multi ? "<td style=\"color:#6b7280;\">" + esc(f.drug_description) + "</td>" : "")
+        + "<td>" + esc(f.last_fill_date) + "</td>"
+        + "<td>" + esc(f.written_date) + "</td>"
+        + "<td>" + esc(f.prescriber) + "</td>"
+        + "<td>" + esc(f.pharmacy_name) + "</td>"
+        + "<td>" + esc(f.source_description) + (f.source_type ? " (" + esc(f.source_type) + ")" : "") + "</td>"
+        + "</tr>";
+    }
+    return "<table class=\"fills-table\"><thead><tr>"
+      + (multi ? "<th>Description</th>" : "")
+      + "<th>Fill date</th><th>Written</th><th>Prescriber</th><th>Pharmacy</th><th>Source</th></tr></thead><tbody>"
+      + rows + "</tbody></table>";
+  }
+
+  // section: "unresolved" (Add + Dismiss), "dismissed" (Add only), "matched" (no buttons)
+  function makeCard(group, section) {
+    var isAdded = added.indexOf(group.drug_description) !== -1;
+    var fillCount = group.unique_fill_count || (group.fills ? group.fills.length : 0);
+    var latestFill = group.latest_fill_date || "";
+
+    // Hide the strength sub-line when it's already in the drug name (e.g.
+    // "LEVOTHYROXINE 75 MCG TABLET" + "75 MCG"); keep it when it adds detail.
+    var strength = group.strength || "";
+    var showStrength = strength &&
+      group.drug_description.toLowerCase().indexOf(strength.toLowerCase()) === -1;
+
+    var addBtn = "", dismissBtn = "";
+    if (section === "unresolved" || section === "dismissed") {
+      addBtn = isAdded
+        ? "<button class=\"btn-add added\" disabled>✓ Added</button>"
+        : "<button class=\"btn-add\" data-desc=\"" + esc(group.drug_description) + "\" data-sig=\"" + esc(group.sig || "") + "\" data-rxnorm=\"" + esc((group.rxnorm_codes || [])[0] || "") + "\" data-ndc=\"" + esc((group.ndc_codes || [])[0] || "") + "\">+ Add</button>";
+    }
+    if (section === "unresolved") {
+      dismissBtn = "<button class=\"btn-dismiss\" data-group-key=\"" + esc(group.group_key || "") + "\" data-desc=\"" + esc(group.drug_description) + "\">Dismiss</button>";
+    }
+    var actions = addBtn + dismissBtn;
+
+    var dateText = latestFill ? (CAL + esc(latestFill)) : "";
+    var fillsPill = fillCount > 1 ? "<span class=\"fills-pill\">" + fillCount + " fills</span>" : "";
+
+    var dismissedMeta = "";
+    if (section === "dismissed" && group.dismissed_at) {
+      dismissedMeta = "<div class=\"card-dismissed-meta\">Dismissed " + esc(group.dismissed_at) + (group.dismissed_by ? " by " + esc(group.dismissed_by) : "") + "</div>";
+    }
+
+    return "<div class=\"card " + section + "\" data-drug=\"" + esc(group.drug_description) + "\" data-group-key=\"" + esc(group.group_key || "") + "\">"
+      + "<div class=\"card-main\">"
+      + "<span class=\"card-chevron\">▶</span>"
+      + "<div class=\"card-body\">"
+      + "<div class=\"card-title\">" + esc(group.drug_description)
+      + (group.is_mock ? "<span class=\"mock-badge\">Test data</span>" : "") + "</div>"
+      + (showStrength ? "<div class=\"card-sub\">" + esc(strength) + "</div>" : "")
+      + (group.sig ? "<div class=\"card-sig\">" + esc(group.sig) + "</div>" : "")
+      + ((dateText || fillsPill) ? "<div class=\"card-foot\">" + (dateText ? "<span class=\"card-date\">" + dateText + "</span>" : "") + fillsPill + "</div>" : "")
+      + dismissedMeta
+      + "</div>"
+      + (actions ? "<div class=\"card-actions\">" + actions + "</div>" : "")
+      + "</div>"
+      + "<div class=\"fills-detail\">"
+      + (buildCodePills(group) ? "<div class=\"card-pills\" style=\"margin-bottom:8px;\">" + buildCodePills(group) + "</div>" : "")
+      + buildFillsTable(group.fills, group.drug_description)
+      + "</div>"
+      + "</div>";
+  }
+
+  function renderList(groups, section, emptyMsg) {
+    if (!groups.length) return "<div class=\"empty\">" + emptyMsg + "</div>";
+    var html = "";
+    for (var i = 0; i < groups.length; i++) html += makeCard(groups[i], section);
+    return html;
+  }
+
+  function render() {
+    var unresolved = [], matched = [], dismissed = [];
+    for (var i = 0; i < currentGroups.length; i++) {
+      var g = currentGroups[i];
+      if (g.dismissed) dismissed.push(g);
+      else if (g.is_match) matched.push(g);
+      else unresolved.push(g);
+    }
+
+    document.getElementById("unmatchedContainer").innerHTML = renderList(unresolved, "unresolved", "None — all medications accounted for.");
+    document.getElementById("unmatchedCount").textContent = unresolved.length;
+    document.getElementById("matchedContainer").innerHTML = renderList(matched, "matched", "None matched yet.");
+    document.getElementById("matchedCount").textContent = matched.length;
+    document.getElementById("dismissedContainer").innerHTML = renderList(dismissed, "dismissed", "No dismissed medications.");
+    document.getElementById("dismissedCount").textContent = dismissed.length;
+
+    renderHeader();
+  }
+
+  function renderActiveMeds() {
+    var el = document.getElementById("activeMedsContainer");
+    if (!activeMeds || !activeMeds.length) {
+      el.innerHTML = "<div class=\"empty\">No active medications.</div>";
+      return;
+    }
+    var rows = "";
+    for (var i = 0; i < activeMeds.length; i++) {
+      var m = activeMeds[i];
+      rows += "<tr>"
+        + "<td style=\"font-size:12px;\">" + esc(m.description) + "</td>"
+        + "<td style=\"font-size:11px;font-family:monospace;color:#6b7280;\">" + esc((m.rxnorm_codes || []).join(", ")) + "</td>"
+        + "<td style=\"font-size:11px;font-family:monospace;color:#6b7280;\">" + esc((m.ndc_codes || []).join(", ")) + "</td>"
+        + "</tr>";
+    }
+    el.innerHTML = "<table class=\"active-meds-table\"><thead><tr><th>Description</th><th>RxNorm</th><th>NDC</th></tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+
+  /* ── accordion toggle ── */
+  document.addEventListener("click", function (e) {
+    if (e.target.closest(".card-actions")) return;
+    var main = e.target.closest(".card-main");
+    if (!main) return;
+    main.parentElement.classList.toggle("expanded");
+  });
+
+  /* ── Add / Dismiss ── */
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".btn-add, .btn-dismiss");
+    if (!btn) return;
+    if (btn.classList.contains("btn-add")) handleAdd(btn);
+    else handleDismiss(btn);
+  });
+
+  function todayDisplay() {
+    var d = new Date();
+    var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
+  }
+
+  function handleDismiss(btn) {
+    var groupKey = btn.dataset.groupKey, desc = btn.dataset.desc;
+    if (!groupKey) return;
+    btn.disabled = true; btn.textContent = "Dismissing…";
+    fetch(BASE + "/dismiss", {
+      method: "POST", headers: {"Content-Type": "application/json"}, credentials: "same-origin",
+      body: JSON.stringify({patient_id: PATIENT_ID, group_key: groupKey, drug_description: desc})
+    })
+    .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+    .then(function (res) {
+      if (res.ok) {
+        for (var i = 0; i < currentGroups.length; i++) {
+          if (currentGroups[i].group_key === groupKey) {
+            currentGroups[i].dismissed = true;
+            currentGroups[i].dismissed_at = todayDisplay();
+            break;
+          }
+        }
+        render();
+        showToast("success", "“" + desc + "” dismissed.");
+      } else {
+        btn.disabled = false; btn.textContent = "Dismiss";
+        showToast("error", res.data.error || "Failed to dismiss.");
+      }
+    })
+    .catch(function () { btn.disabled = false; btn.textContent = "Dismiss"; showToast("error", "Request failed. Please try again."); });
+  }
+
+  function handleAdd(btn) {
+    var desc = btn.dataset.desc, sig = btn.dataset.sig || "";
+    btn.disabled = true; btn.textContent = "Adding…";
+    var ndcCodes = [], altDescs = [];
+    for (var gi = 0; gi < currentGroups.length; gi++) {
+      if (currentGroups[gi].drug_description === desc) {
+        ndcCodes = currentGroups[gi].ndc_codes || [];
+        if (currentGroups[gi].fills) {
+          for (var fi = 0; fi < currentGroups[gi].fills.length; fi++) {
+            var fd = currentGroups[gi].fills[fi].drug_description;
+            if (fd && fd !== desc && altDescs.indexOf(fd) === -1) altDescs.push(fd);
+          }
+        }
+        break;
+      }
+    }
+    fetch(BASE + "/add-medication", {
+      method: "POST", headers: {"Content-Type": "application/json"}, credentials: "same-origin",
+      body: JSON.stringify({patient_id: PATIENT_ID, drug_description: desc, sig: sig, rxnorm_rxcui: btn.dataset.rxnorm || "", ndc_codes: ndcCodes, alt_descriptions: altDescs})
+    })
+    .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+    .then(function (res) {
+      if (res.ok) {
+        added.push(desc); render();
+        showToast("success", "“" + desc + "” added to open note.");
+      } else {
+        btn.disabled = false; btn.textContent = "+ Add";
+        showToast("error", res.data.error || "Failed to add medication.");
+      }
+    })
+    .catch(function () { btn.disabled = false; btn.textContent = "+ Add"; showToast("error", "Request failed. Please try again."); });
+  }
+
+  /* ── refresh (async results land later) ── */
+  var refreshBtn = document.getElementById("refreshBtn");
+  if (refreshBtn) refreshBtn.innerHTML = REFRESH;
+
+  function snapshot() {
+    return (STATUS.last_pulled || "") + "|" + (STATUS.state || "") + "|" + currentGroups.length;
+  }
+
+  function refresh(silent) {
+    if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.querySelector("svg").classList.add("spin"); }
+    return fetch(BASE + "/history?patient_id=" + encodeURIComponent(PATIENT_ID), {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (payload) {
+        var before = snapshot();
+        currentGroups = payload.grouped_items || [];
+        activeMeds = payload.active_meds || [];
+        STATUS = payload.status || STATUS;
+        render();
+        renderActiveMeds();
+        return before !== snapshot();
+      })
+      .catch(function () { if (!silent) showToast("error", "Couldn't refresh. Please try again."); return false; })
+      .then(function (changed) {
+        if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.querySelector("svg").classList.remove("spin"); }
+        return changed;
+      });
+  }
+
+  if (refreshBtn) refreshBtn.addEventListener("click", function () { refresh(false); });
+
+  // Poll for a while after a request, since Surescripts responds asynchronously.
+  var pollsLeft = 0;
+  function poll() {
+    if (pollsLeft <= 0) return;
+    setTimeout(function () {
+      pollsLeft--;
+      refresh(true).then(function (changed) {
+        if (changed) { showToast("success", "Results updated."); pollsLeft = 0; }
+        else poll();
+      });
+    }, 5000);
+  }
+
+  /* ── request button ── */
+  var reqBtn = document.getElementById("requestBtn");
+  if (reqBtn) {
+    reqBtn.innerHTML = REFRESH + "<span>Request new history</span>";
+    reqBtn.addEventListener("click", function () {
+      reqBtn.disabled = true;
+      reqBtn.innerHTML = "<span>Requesting…</span>";
+      var sel = document.getElementById("providerSelect");
+      var staffId = sel ? sel.value : "";
+      fetch(BASE + "/request", {
+        method: "POST", headers: {"Content-Type": "application/json"}, credentials: "same-origin",
+        body: JSON.stringify({patient_id: PATIENT_ID, staff_id: staffId})
+      })
+      .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+      .then(function (res) {
+        if (res.ok) {
+          reqBtn.classList.add("sent");
+          reqBtn.innerHTML = "<span>Requested</span>";
+          // Honest about caching: a recent pull may return the same data until
+          // Surescripts' cache expires. Still poll briefly in case it's fresh
+          // (or the instance has cache suppression on).
+          showToast("success", "Request sent. Surescripts caches results (~24h medication history, up to ~72h eligibility), so recently-pulled patients may show the same data until the cache expires.");
+          pollsLeft = 6;  // ~30s
+          poll();
+        } else {
+          reqBtn.disabled = false;
+          reqBtn.innerHTML = REFRESH + "<span>Request new history</span>";
+          showToast("error", res.data.error || "Request failed. Please try again.");
+        }
+      })
+      .catch(function () {
+        reqBtn.disabled = false;
+        reqBtn.innerHTML = REFRESH + "<span>Request new history</span>";
+        showToast("error", "Request failed — check your connection and try again.");
+      });
+    });
+  }
+
+  /* ── provider dropdown ── */
+  function populateProviders() {
+    var sel = document.getElementById("providerSelect");
+    if (!sel) return;
+    var providers = parseSpan("rx-providers");
+    var defaultStaff = ((document.getElementById("rx-default-staff") || {}).textContent || "").trim();
+    var html = "";
+    for (var i = 0; i < providers.length; i++) {
+      var p = providers[i];
+      html += "<option value=\"" + esc(p.id) + "\"" + (p.id === defaultStaff ? " selected" : "") + ">" + esc(p.name) + "</option>";
+    }
+    sel.innerHTML = html;
+  }
+
+  /* ── init ── */
+  render();
+  renderActiveMeds();
+  populateProviders();
+
+})();
+</script>
+
+</body>
+</html>

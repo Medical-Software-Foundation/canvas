@@ -1,0 +1,411 @@
+<div class="filters" data-sort-by="{{ sort_by }}" data-sort-dir="{{ sort_dir }}" data-page-size="{{ page_size }}">
+    <input
+        name="patient_search"
+        type="text"
+        class="filter-input"
+        id="patient-search-input"
+        placeholder="Search patients..."
+        value="{{ patient_search }}"
+        oninput="debouncedPatientSearch()"
+    >
+
+    <!-- Care Team Multi-Select -->
+    <div class="filter-dropdown" id="staff-dropdown" data-values="{{ selected_staff_ids }}">
+        <div class="selected-value" onclick="toggleFilterDropdown('staff-dropdown')">
+            <span class="placeholder-text">Team: {% if selected_staff_ids %}Selected{% else %}Any{% endif %}</span>
+            <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="dropdown-options">
+            <div class="dropdown-search">
+                <input type="text" placeholder="Search..." oninput="filterDropdownOptionsDebounced('staff-dropdown', this.value)">
+            </div>
+            <div class="dropdown-option">
+                <input type="checkbox" id="staff-all" {% if not selected_staff_ids %}checked{% endif %}>
+                <label for="staff-all">All</label>
+            </div>
+            {% for member in staff %}
+            <div class="dropdown-option" data-value="{{ member.id }}" data-search="{{ member.first_name }} {{ member.last_name }}">
+                <input type="checkbox" id="staff-{{ member.id }}" value="{{ member.id }}">
+                <label for="staff-{{ member.id }}">{{ member.display_name }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Insurance Multi-Select -->
+    <div class="filter-dropdown" id="insurance-dropdown" data-values="{{ selected_insurances }}">
+        <div class="selected-value" onclick="toggleFilterDropdown('insurance-dropdown')">
+            <span class="placeholder-text">Insurance: {% if selected_insurances %}Selected{% else %}Any{% endif %}</span>
+            <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="dropdown-options">
+            <div class="dropdown-search">
+                <input type="text" placeholder="Search..." oninput="filterDropdownOptionsDebounced('insurance-dropdown', this.value)">
+            </div>
+            <div class="dropdown-option">
+                <input type="checkbox" id="insurance-all" {% if not selected_insurances %}checked{% endif %}>
+                <label for="insurance-all">All</label>
+            </div>
+            {% for ins in insurances %}
+            <div class="dropdown-option" data-value="{{ ins }}" data-search="{{ ins }}">
+                <input type="checkbox" id="insurance-{{ forloop.counter }}" value="{{ ins }}">
+                <label for="insurance-{{ forloop.counter }}">{{ ins }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Facility Multi-Select -->
+    <div class="filter-dropdown" id="facility-dropdown" data-values="{{ selected_facility_ids }}">
+        <div class="selected-value" onclick="toggleFilterDropdown('facility-dropdown')">
+            <span class="placeholder-text">Facility: {% if selected_facility_ids %}Selected{% else %}Any{% endif %}</span>
+            <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="dropdown-options">
+            <div class="dropdown-search">
+                <input type="text" placeholder="Search..." oninput="filterDropdownOptionsDebounced('facility-dropdown', this.value)">
+            </div>
+            <div class="dropdown-option">
+                <input type="checkbox" id="facility-all" {% if not selected_facility_ids %}checked{% endif %}>
+                <label for="facility-all">All</label>
+            </div>
+            {% for fac in facilities %}
+            <div class="dropdown-option" data-value="{{ fac.id }}" data-search="{{ fac.name }}">
+                <input type="checkbox" id="facility-{{ fac.id }}" value="{{ fac.id }}">
+                <label for="facility-{{ fac.id }}">{{ fac.name }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Configurable Metadata Filters -->
+    {% for col in filterable_metadata_columns %}
+    <div class="filter-dropdown metadata-filter-dropdown"
+         id="metadata-{{ col.key }}-dropdown"
+         data-metadata-key="{{ col.key }}"
+         data-values="{{ col.selected_values }}">
+        <div class="selected-value" onclick="toggleFilterDropdown('metadata-{{ col.key }}-dropdown')">
+            <span class="placeholder-text">{{ col.label }}: {% if col.selected_values %}Selected{% else %}Any{% endif %}</span>
+            <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="dropdown-options">
+            <div class="dropdown-search">
+                <input type="text" placeholder="Search..." oninput="filterDropdownOptionsDebounced('metadata-{{ col.key }}-dropdown', this.value)">
+            </div>
+            <div class="dropdown-option">
+                <input type="checkbox" id="metadata-{{ col.key }}-all" {% if not col.selected_values %}checked{% endif %}>
+                <label for="metadata-{{ col.key }}-all">All</label>
+            </div>
+            {% for opt in col.filter_options_resolved %}
+            <div class="dropdown-option" data-value="{{ opt }}" data-search="{{ opt }}">
+                <input type="checkbox" id="metadata-{{ col.key }}-{{ forloop.counter }}" value="{{ opt }}">
+                <label for="metadata-{{ col.key }}-{{ forloop.counter }}">{{ opt }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Protocol Multi-Select -->
+    <div class="filter-dropdown" id="protocol-dropdown" data-values="{{ selected_protocols }}">
+        <div class="selected-value" onclick="toggleFilterDropdown('protocol-dropdown')">
+            <span class="placeholder-text">Protocol: {% if selected_protocols %}Selected{% else %}Any{% endif %}</span>
+            <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="dropdown-options">
+            <div class="dropdown-search">
+                <input type="text" placeholder="Search..." oninput="filterDropdownOptionsDebounced('protocol-dropdown', this.value)">
+            </div>
+            <div class="dropdown-option">
+                <input type="checkbox" id="protocol-all" {% if not selected_protocols %}checked{% endif %}>
+                <label for="protocol-all">All</label>
+            </div>
+            {% for protocol in protocol_titles %}
+            <div class="dropdown-option" data-value="{{ protocol }}" data-search="{{ protocol }}">
+                <input type="checkbox" id="protocol-{{ forloop.counter }}" value="{{ protocol }}">
+                <label for="protocol-{{ forloop.counter }}">{{ protocol }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <button type="button" class="filter-clear-btn" onclick="clearFilters()">Clear</button>
+
+    <div class="column-settings-container">
+        <button type="button" class="column-settings-btn" onclick="toggleColumnPicker()" title="Configure columns">&#9881;</button>
+        <div class="column-picker" id="column-picker" style="display: none;">
+            <div class="column-picker-header">
+                <span class="column-picker-title">Visible Columns</span>
+                <button type="button" class="column-picker-reset" onclick="resetColumnPreferences()">Reset</button>
+            </div>
+            <div class="column-picker-options" id="column-picker-options"></div>
+            <div class="column-picker-actions">
+                <button type="button" class="column-picker-save" onclick="saveColumnPreferences()">Save</button>
+                <button type="button" class="column-picker-cancel" onclick="toggleColumnPicker()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="table-scroll-container">
+    <table class="patient-table">
+        <thead>
+            <tr>
+                {% for col in columns %}
+                <th class="col-{{ col.key }}{% if col.sortable %} sortable{% if sort_by == col.sort_key %} sorted-{{ sort_dir }}{% endif %}{% endif %}"
+                    {% if col.sort_key %}data-sort="{{ col.sort_key }}"{% endif %}>
+                    {{ col.label }}{% if sort_by == col.sort_key %}&nbsp;{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for patient in patients %}
+            <tr class="patient-row" data-patient-id="{{ patient.id }}">
+                {% for col_data in patient.columns_data %}
+                {% if col_data.key == 'patient' %}
+                <td class="col-patient">
+                    <div class="patient-info">
+                        <div class="flag-picker-container" id="flag-picker-{{ patient.id }}">
+                            <div class="patient-avatar{% if col_data.value.flag_color %} flag-{{ col_data.value.flag_color }}{% endif %}"
+                                 onclick="toggleFlagOptions('{{ patient.id }}')"
+                                 title="{% if col_data.value.flag_color == 'green' %}Flagged: {{ flag_labels.green }} — click to change{% elif col_data.value.flag_color == 'yellow' %}Flagged: {{ flag_labels.yellow }} — click to change{% elif col_data.value.flag_color == 'red' %}Flagged: {{ flag_labels.red }} — click to change{% else %}Flag this patient{% endif %}"
+                            >
+                                <img src="{{ col_data.value.photo_url }}" alt="{{ col_data.value.name }}'s photo" loading="lazy">
+                            </div>
+                            <div class="flag-options">
+                                <div class="flag-options-header">Flag this patient</div>
+                                <button type="button" class="flag-option-btn{% if not col_data.value.flag_color %} active{% endif %}" data-color=""
+                                    hx-post="/plugin-io/api/patient_panel/app/{{ patient.id }}/flag"
+                                    hx-vals='{"color": ""}'
+                                    hx-swap="none"
+                                    hx-on::after-request="selectFlag('{{ patient.id }}', '')"
+                                ><span class="flag-swatch swatch-none"></span>None</button>
+                                <button type="button" class="flag-option-btn{% if col_data.value.flag_color == 'green' %} active{% endif %}" data-color="green"
+                                    hx-post="/plugin-io/api/patient_panel/app/{{ patient.id }}/flag"
+                                    hx-vals='{"color": "green"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="selectFlag('{{ patient.id }}', 'green')"
+                                ><span class="flag-swatch swatch-green"></span>{{ flag_labels.green }}</button>
+                                <button type="button" class="flag-option-btn{% if col_data.value.flag_color == 'yellow' %} active{% endif %}" data-color="yellow"
+                                    hx-post="/plugin-io/api/patient_panel/app/{{ patient.id }}/flag"
+                                    hx-vals='{"color": "yellow"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="selectFlag('{{ patient.id }}', 'yellow')"
+                                ><span class="flag-swatch swatch-yellow"></span>{{ flag_labels.yellow }}</button>
+                                <button type="button" class="flag-option-btn{% if col_data.value.flag_color == 'red' %} active{% endif %}" data-color="red"
+                                    hx-post="/plugin-io/api/patient_panel/app/{{ patient.id }}/flag"
+                                    hx-vals='{"color": "red"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="selectFlag('{{ patient.id }}', 'red')"
+                                ><span class="flag-swatch swatch-red"></span>{{ flag_labels.red }}</button>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="patient-name">
+                                <a class="patient-link" href="/patient/{{ patient.id }}" target="_blank" title="{{ col_data.value.name }}">{{ col_data.value.name }}</a>
+                            </div>
+                            <div class="patient-details">{{ col_data.value.age }} - {{ col_data.value.gender }} - {{ col_data.value.dob }}</div>
+                        </div>
+                    </div>
+                </td>
+                {% elif col_data.key == 'care_team' %}
+                <td class="col-care_team care-team">
+                    {% if col_data.value %}
+                    <div class="care-team-container" id="care-team-{{ patient.id }}">
+                        <div class="care-team-bubbles" onclick="toggleCareTeamPopup('{{ patient.id }}')">
+                            {% for member in col_data.value|slice:":3" %}
+                            <div class="care-team-bubble color-{{ forloop.counter }}" title="{{ member.name }}{% if member.role %} ({{ member.role }}){% endif %}">
+                                <img src="{{ member.photo_url }}" alt="{{ member.initials }}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <span class="initials" style="display: none;">{{ member.initials }}</span>
+                            </div>
+                            {% endfor %}
+                            {% if col_data.value|length > 3 %}
+                            <div class="care-team-more-badge" title="View all {{ col_data.value|length }} team members">+{{ col_data.value|length|add:"-3" }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="care-team-popup" id="care-team-popup-{{ patient.id }}">
+                            {% for member in col_data.value %}
+                            <div class="care-team-popup-item">
+                                <div class="care-team-popup-avatar color-{{ forloop.counter }}">
+                                    <img src="{{ member.photo_url }}" alt="{{ member.initials }}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <span class="initials" style="display: none;">{{ member.initials }}</span>
+                                </div>
+                                <div class="care-team-popup-info">
+                                    <div class="care-team-popup-name">{{ member.name }}</div>
+                                    {% if member.role %}<div class="care-team-popup-role">{{ member.role }}</div>{% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <span class="care-team-empty">—</span>
+                    {% endif %}
+                </td>
+                {% elif col_data.key == 'last_visit' %}
+                {% if col_data.value.date %}
+                <td class="col-visit visit-date {{ col_data.value.color }}">{{ col_data.value.date }}</td>
+                {% else %}
+                <td class="col-visit visit-date">No visits</td>
+                {% endif %}
+                {% elif col_data.key == 'facility' %}
+                <td class="col-facility facility">{% if col_data.value %}<span class="cell-truncate" title="{{ col_data.value }}">{{ col_data.value }}</span>{% else %}<span class="care-team-empty">—</span>{% endif %}</td>
+                {% elif col_data.key == 'room' %}
+                <td class="col-room room">{% if col_data.value %}<span class="cell-truncate" title="{{ col_data.value }}">{{ col_data.value }}</span>{% else %}<span class="care-team-empty">—</span>{% endif %}</td>
+                {% elif col_data.key == 'tasks' %}
+                <td class="col-tasks fraction">
+                    <a href="#" title="View open tasks" onclick="toggleAccordion('{{ patient.id }}', 'tasks', '/plugin-io/api/patient_panel/app/{{ patient.id }}/tasks', event)">{{ col_data.value.open }}</a>
+                </td>
+                {% elif col_data.key == 'gaps' %}
+                <td class="col-gaps fraction">
+                    <a href="#" title="View care gaps" onclick="toggleAccordion('{{ patient.id }}', 'gaps', '/plugin-io/api/patient_panel/app/{{ patient.id }}/gaps', event)">{{ col_data.value.due }}</a>
+                </td>
+                {% elif col_data.key == 'insurance' %}
+                <td class="col-ins insurance">
+                    {% if col_data.value.logo %}
+                    <img src="{{ col_data.value.logo }}" alt="{{ col_data.value.name }}" class="insurance-logo" title="{{ col_data.value.name }}" loading="lazy">
+                    {% elif col_data.value.name %}
+                    <span class="cell-truncate" title="{{ col_data.value.name }}">{{ col_data.value.name }}</span>
+                    {% else %}
+                    <span class="icon-symbol">&#10067;</span>
+                    {% endif %}
+                </td>
+                {% elif col_data.key == 'caption' %}
+                <td class="col-caption clinical-notes">
+                    <div class="clinical-note-container" id="clinical-note-{{ patient.id }}">
+                        <div class="clinical-note-view">
+                            <div class="clinical-note-content">
+                                <span class="clinical-note-text" id="clinical-note-text-{{ patient.id }}"
+                                    hx-get="/plugin-io/api/patient_panel/app/{{ patient.id }}/clinical-note/edit"
+                                    hx-target="#clinical-note-{{ patient.id }}"
+                                    hx-swap="innerHTML"
+                                    hx-trigger="click"
+                                >{{ col_data.value }}</span>
+                                <button type="button" class="clinical-note-toggle" id="clinical-note-toggle-{{ patient.id }}" onclick="event.stopPropagation(); toggleClinicalNote('{{ patient.id }}')">more</button>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                {% elif col_data.key == 'next_visit' %}
+                <td class="col-next-visit">{% if col_data.value %}{{ col_data.value }}{% else %}<span class="care-team-empty">—</span>{% endif %}</td>
+                {% elif col_data.key == 'conditions' %}
+                <td class="col-conditions fraction">
+                    {% if col_data.value.count %}
+                    <a href="#" title="View conditions" onclick="toggleAccordion('{{ patient.id }}', 'conditions', '/plugin-io/api/patient_panel/app/{{ patient.id }}/conditions', event)">{{ col_data.value.count }}</a>
+                    {% else %}
+                    0
+                    {% endif %}
+                </td>
+                {% elif col_data.key == 'medications' %}
+                <td class="col-medications fraction">
+                    {% if col_data.value.count %}
+                    <a href="#" title="View medications" onclick="toggleAccordion('{{ patient.id }}', 'medications', '/plugin-io/api/patient_panel/app/{{ patient.id }}/medications', event)">{{ col_data.value.count }}</a>
+                    {% else %}
+                    0
+                    {% endif %}
+                </td>
+                {% elif col_data.key == 'allergies' %}
+                <td class="col-allergies fraction">
+                    {% if col_data.value.count %}
+                    <a href="#" title="View allergies" onclick="toggleAccordion('{{ patient.id }}', 'allergies', '/plugin-io/api/patient_panel/app/{{ patient.id }}/allergies', event)">{{ col_data.value.count }}</a>
+                    {% else %}
+                    NKDA
+                    {% endif %}
+                </td>
+                {% elif col_data.key == 'referrals' %}
+                <td class="col-referrals fraction">
+                    {% if col_data.value.count %}
+                    <a href="#" title="View referrals" onclick="toggleAccordion('{{ patient.id }}', 'referrals', '/plugin-io/api/patient_panel/app/{{ patient.id }}/referrals', event)">{{ col_data.value.count }}</a>
+                    {% else %}
+                    0
+                    {% endif %}
+                </td>
+                {% elif col_data.key == 'address' %}
+                <td class="col-address">
+                    {% if col_data.value %}<span class="cell-truncate" title="{{ col_data.value }}">{{ col_data.value }}</span>{% else %}<span class="care-team-empty">—</span>{% endif %}
+                </td>
+                {% else %}
+                {# Generic rendering for observation/metadata columns #}
+                <td class="col-{{ col_data.key }}">
+                    {% if col_data.inline_edit %}
+                        {% if col_data.inline_edit.type == 'SELECT' %}
+                        <select class="metadata-edit metadata-edit-select" aria-label="{{ col_data.label }}"
+                                data-prev-value="{{ col_data.value }}"
+                                onchange="updateMetadata(this, '{{ patient.id }}', '{{ col_data.key }}')">
+                            <option value="">—</option>
+                            {% for opt in col_data.inline_edit.options %}
+                            <option value="{{ opt }}"{% if opt == col_data.value %} selected{% endif %}>{{ opt }}</option>
+                            {% endfor %}
+                        </select>
+                        {% else %}
+                        <input type="{% if col_data.inline_edit.type == 'DATE' %}date{% else %}text{% endif %}"
+                               class="metadata-edit metadata-edit-input" aria-label="{{ col_data.label }}"
+                               value="{{ col_data.value }}" data-prev-value="{{ col_data.value }}"
+                               onchange="updateMetadata(this, '{{ patient.id }}', '{{ col_data.key }}')">
+                        {% endif %}
+                    {% elif col_data.render == 'tags' %}
+                        {% if col_data.value %}
+                            <span class="metadata-tags">
+                                {% for tag in col_data.value %}<span class="metadata-tag">{{ tag }}</span>{% endfor %}
+                            </span>
+                        {% else %}<span class="care-team-empty">—</span>{% endif %}
+                    {% else %}
+                        {% if col_data.value %}{{ col_data.value }}{% else %}<span class="care-team-empty">—</span>{% endif %}
+                    {% endif %}
+                </td>
+                {% endif %}
+                {% endfor %}
+            </tr>
+
+            <!-- Accordion content row -->
+            <tr class="accordion-content" id="accordion-{{ patient.id }}" style="display: none;"></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="pagination">
+    <div class="pagination-size">
+        <span class="pagination-size-label">Show:</span>
+        <button type="button" class="pagination-size-btn{% if page_size == 1 %} active{% endif %}" onclick="changePageSize(1)">1</button>
+        <button type="button" class="pagination-size-btn{% if page_size == 10 %} active{% endif %}" onclick="changePageSize(10)">10</button>
+        <button type="button" class="pagination-size-btn{% if page_size == 50 %} active{% endif %}" onclick="changePageSize(50)">50</button>
+        <button type="button" class="pagination-size-btn{% if page_size == 100 %} active{% endif %}" onclick="changePageSize(100)">100</button>
+    </div>
+    <span class="pagination-info">{{ pagination.total_count }} patients — Page {{ pagination.current_page }} of {{ pagination.total_pages }}</span>
+    {% if pagination.total_pages > 1 %}
+    <div class="pagination-nav">
+        {% if pagination.has_previous %}
+        <button
+            class="pagination-arrow"
+            hx-get="{{ pagination.previous_page }}"
+            hx-target="#table"
+            hx-swap="innerHTML"
+        >&lt;</button>
+        {% endif %}
+
+        {% for pg in pagination.page_numbers %}
+        {% if pg.is_current %}
+        <span class="pagination-number active">{{ pg.number }}</span>
+        {% else %}
+        <button
+            class="pagination-number"
+            hx-get="{{ pg.url }}"
+            hx-target="#table"
+            hx-swap="innerHTML"
+        >{{ pg.number }}</button>
+        {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+        <button
+            class="pagination-arrow"
+            hx-get="{{ pagination.next_page }}"
+            hx-target="#table"
+            hx-swap="innerHTML"
+        >&gt;</button>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

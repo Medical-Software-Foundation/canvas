@@ -1,0 +1,59 @@
+{% if comments %}
+    <div class="comments-bubble-container">
+        {% for comment in comments %}
+            <div class="comment-bubble">
+                <div class="comment-avatar">
+                    {{ comment.creator.first_name|first }}{{ comment.creator.last_name|first }}
+                </div>
+                <div class="comment-content-wrapper">
+                    <div class="comment-header">
+                        <span class="comment-author">{{ comment.creator.name }}</span>
+                        <span class="comment-timestamp">{{ comment.date }}</span>
+                    </div>
+                    <div class="comment-bubble-content">
+                        {{ comment.content }}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="no-comments">
+        <p>No comments yet</p>
+    </div>
+{% endif %}
+
+<!-- Add Comment Form -->
+<div class="add-comment-form">
+    <form
+        hx-post="/plugin-io/api/patient_panel/app/tasks/{{ task_id }}/comment"
+        hx-swap="none"
+        hx-on::after-request="clearCommentForm('{{ task_id }}'); htmx.trigger('#task-header-{{ task_id }}', 'click'); toggleTaskComments('{{ task_id }}')"
+    >
+        <div class="comment-input-container">
+            <textarea
+                name="comment_content"
+                id="comment-input-{{ task_id }}"
+                class="comment-input"
+                placeholder="Add a comment..."
+                rows="2"
+                required
+            ></textarea>
+            <div class="comment-form-actions">
+                <button
+                    type="button"
+                    class="comment-cancel-btn"
+                    onclick="clearCommentForm('{{ task_id }}')"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="submit"
+                    class="comment-submit-btn"
+                >
+                    Add Comment
+                </button>
+            </div>
+        </div>
+    </form>
+</div>

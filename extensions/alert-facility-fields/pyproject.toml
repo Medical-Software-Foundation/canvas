@@ -6,12 +6,12 @@ dependencies = [
   "canvas[test-utils]",
   "pytest-cov>=7.0.0",
 ]
-description = "Adds a required Alert facility Yes/No form field to Medication Statement and Stop Medication commands and blocks commit until a value is selected."
+description = "Adds a required Alert facility Yes/No form field to Medication Statement, Stop Medication, Prescribe, Adjust Prescription, and Refill commands and blocks commit until a value is selected."
 license = "MIT"
 name = "alert-facility-fields"
 readme = "alert_facility_fields/README.md"
 requires-python = ">=3.11"
-version = "0.0.5"
+version = "0.0.6"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]

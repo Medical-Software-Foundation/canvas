@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Fields__c</fullName>
+    <label>Fields</label>
+    <type>LongTextArea</type>
+    <length>2000</length>
+    <visibleLines>4</visibleLines>
+    <required>false</required>
+    <inlineHelpText>A comma separated list of Salesforce field API names the sync sends, set on the record named Default. Mirror the plugin field mapping SF_FIELD_MAPPING_JSON. The emitter validates each name against the Contact describe, so an unknown name is skipped rather than breaking the whole sync. A delete always sends the Id only.</inlineHelpText>
+</CustomField>

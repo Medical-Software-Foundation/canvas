@@ -67,7 +67,8 @@ Defaults to the provider roles `MD`, `DO`, `NP`, `PA` (whose internal codes matc
 - **Calculation Engine**: Computes bookable time slots from weekly schedules, booking constraints, buffer times, and existing appointment conflicts.
 - **Calendar Sync**: Syncs rules and blocks to Canvas Calendar Events (Clinic = available, Administrative = blocked).
 - **Hold Types**: Recurring blocks with same-day or next-day hold release on a rolling 30-day window.
-- **Appointment Buffers**: Automatic pre/post buffer events on Administrative calendars when appointments are created/rescheduled/canceled.
+- **Your availability first**: The Availability tab shows the signed-in provider's own row in a "Your availability" section, above "Other providers". The provider filter, **Save as my view**, and **Show all** apply only to other providers. Expired rules and blocks are hidden until **Show expired** is clicked.
+- **Appointment Buffers**: Pre/post buffer events on Administrative calendars for each patient appointment, drawn from the availability rule covering that appointment's day, time, and location. A rescheduled appointment's buffers move with it and follow the rule for its new day; a canceled appointment's buffers are removed. Schedule events with no patient (lunch, meetings) never get buffers.
 - **Timezone Support**: Practice-level default with per-provider overrides; all times stored UTC internally.
 - **Configurable Schedulable Roles**: Choose which staff roles (by internal code, including non-clinical roles) can be scheduled, from the Settings tab. See [Schedulable roles](#schedulable-roles).
 - **Cache-backed Storage**: Rules stored in plugin cache with TTL refresh.
@@ -122,11 +123,10 @@ Each row is validated for format and required fields, then the staff key is chec
 | Component | Handler Type | Description |
 |-----------|-------------|-------------|
 | `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI (includes the Bulk Import tab) |
-| `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, admin UI serving |
+| `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, and admin UI/asset serving |
 | `CSVImportAPI` | SimpleAPI | Staff-session endpoints for the CSV bulk import (validate / commit / template) |
-| `UIApi` | SimpleAPI | Serves the admin HTML interface (Application iframe) |
-| `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and allowed-staff management |
-| `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window |
+| `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |
+| `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window (every 5 min) |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
 | `OnPluginInstalled` | Protocol | Full sync of all cached rules/blocks to Calendar Events on install and redeploy |
@@ -163,12 +163,15 @@ Each row is validated for format and required fields, then the staff key is chec
 | DELETE | `/recurring-blocks/<provider_id>/<block_id>` | Delete a recurring block |
 | GET | `/timezone` | Get practice timezone and available options |
 | PUT | `/timezone` | Set practice timezone (re-syncs all rules/blocks) |
-| GET | `/provider-timezone/<provider_id>` | Get provider-specific timezone |
-| PUT | `/provider-timezone/<provider_id>` | Set provider timezone (re-syncs all rules, blocks, and recurring blocks) |
+| GET | `/provider-timezone?provider_id=` | Get provider-specific timezone |
+| GET | `/provider-timezones/all` | Get all provider timezone overrides |
+| PUT | `/provider-timezone` | Set a provider timezone (re-syncs all their rules, blocks, and recurring blocks) |
+| PUT | `/provider-timezones/bulk` | Set timezones for multiple providers at once |
 | GET | `/availability-admin` | Serve admin UI HTML with preloaded data |
 | POST | `/form-action` | CSP-compliant form dispatch for admin UI writes |
 | GET | `/admin.css` | Admin UI stylesheet |
 | GET | `/admin.js` | Admin UI JavaScript |
+| GET | `/tokens.css`, `/typography.css`, `/canvas-components.js` | Canvas design-system static assets |
 
 ### CSVImportAPI (session-authenticated)
 
@@ -183,16 +186,21 @@ Each row is validated for format and required fields, then the staff key is chec
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/provision/run` | Create Clinic calendars and Available events for all active providers |
-| GET | `/provision/allowed-staff` | List staff IDs with admin UI edit access |
-| PUT | `/provision/allowed-staff` | Replace full allowed staff list |
-| POST | `/provision/allowed-staff` | Add a staff ID to the allowed list |
-| DELETE | `/provision/allowed-staff/<staff_id>` | Remove a staff ID from the allowed list |
 | GET | `/provision/timezone` | Get practice timezone |
 | PUT | `/provision/timezone` | Set practice timezone |
 
 ## Data Model
 
-**ProviderAvailabilityRule** - Defines when a provider is available:
+### Secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `simpleapi-api-key` | API key for ProvisionAPI authentication |
+| `allowed-staff-keys` | Comma-separated staff UUIDs allowed to open the admin UI and edit rules. Dashed or undashed UUIDs both work. Leave empty/unset to allow any logged-in Canvas staff member (bootstrap). |
+
+### Data Model
+
+**ProviderAvailabilityRule** — Defines when a provider is available:
 - Weekly schedule (time windows per day), location/visit type filters
 - Booking interval (min lead hours, slot granularity)
 - Buffer times (pre/post appointment minutes)

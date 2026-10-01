@@ -74,7 +74,7 @@ def test_upsert_inserts_when_no_mapping(mocker):
     sync = _sync(mocker)
     fake = FakeClient()
     stats = {"pushed": 0, "deleted": 0}
-    sync._upsert(fake, "cal@x", "e1", _event(), stats)
+    sync._upsert(fake, "cal@x", "e1", _event(), stats, {})
     assert ("insert", "cal@x") in fake.calls
     model.objects.create.assert_called_once()
     assert stats["pushed"] == 1
@@ -84,20 +84,20 @@ def test_upsert_skips_when_unchanged(mocker):
     event = _event()
     unchanged_hash = content_hash(build_event_body(block_snapshot(event)))
     model = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    model.objects.filter.return_value.first.return_value = SimpleNamespace(
+    existing = SimpleNamespace(
         google_calendar_id="cal@x", google_event_id="g-1", last_pushed_hash=unchanged_hash
     )
     sync = _sync(mocker)
     fake = FakeClient()
     stats = {"pushed": 0, "deleted": 0}
-    sync._upsert(fake, "cal@x", "e1", event, stats)
+    sync._upsert(fake, "cal@x", "e1", event, stats, {"e1": existing})
     assert fake.calls == []  # no Google call when nothing changed
     assert stats["pushed"] == 0
 
 
 def test_upsert_patches_when_changed(mocker):
     model = mocker.patch("gcal_sync.blocks.CalendarEventMapping")
-    model.objects.filter.return_value.first.return_value = SimpleNamespace(
+    existing = SimpleNamespace(
         google_calendar_id="cal@x",
         google_event_id="g-1",
         last_pushed_hash="stale",
@@ -106,7 +106,7 @@ def test_upsert_patches_when_changed(mocker):
     sync = _sync(mocker)
     fake = FakeClient()
     stats = {"pushed": 0, "deleted": 0}
-    sync._upsert(fake, "cal@x", "e1", _event(), stats)
+    sync._upsert(fake, "cal@x", "e1", _event(), stats, {"e1": existing})
     assert ("patch", "cal@x", "g-1") in fake.calls
     assert stats["pushed"] == 1
 

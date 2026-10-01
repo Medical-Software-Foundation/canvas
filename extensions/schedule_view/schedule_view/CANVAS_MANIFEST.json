@@ -1,0 +1,93 @@
+{
+    "sdk_version": "0.191.0",
+    "plugin_version": "0.13.7",
+    "name": "schedule_view",
+    "description": "Enriched schedule calendar. Surfaces appointment type, labels with color coding, provider name, room/location, and appointment status in a single full-page homepage view — without clicking into each appointment.",
+    "components": {
+        "applications": [
+            {
+                "class": "schedule_view.applications.schedule_app:ScheduleViewApp",
+                "name": "Schedule View",
+                "description": "Rich appointment calendar with type, labels, provider, location, and status at a glance.",
+                "scope": "provider_menu_item",
+                "icon": "assets/schedule-calendar-icon.png",
+                "menu_position": "top",
+                "menu_order": 100
+            }
+        ],
+        "handlers": [
+            {
+                "class": "schedule_view.handlers.schedule_api:ScheduleViewAPI",
+                "description": "Serves the schedule view HTML, CSS, JS, and appointment JSON data.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Appointment",
+                        "AppointmentLabel",
+                        "AppointmentMetadata",
+                        "Calendar",
+                        "CalendarEvent",
+                        "Note",
+                        "NoteMetadata",
+                        "CurrentNoteStateEvent",
+                        "NoteStateChangeEvent",
+                        "NoteType",
+                        "Patient",
+                        "PracticeLocation",
+                        "Staff",
+                        "StaffRole",
+                        "TaskLabel"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "schedule_view.handlers.homepage:ScheduleHomepage",
+                "description": "Sets the Schedule View as the default Canvas homepage.",
+                "data_access": {
+                    "event": "GET_HOMEPAGE_CONFIGURATION",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "schedule_view.handlers.hide_native_schedule:HideNativeScheduleMenu",
+                "description": "Hides the native Schedule item from the provider hamburger menu.",
+                "data_access": {
+                    "event": "GET_PROVIDER_MENU_CONFIGURATION",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "schedule_view.handlers.hide_native_schedule:HideAppointmentsPanelFilter",
+                "description": "Hides the Appointments filter from the global panel.",
+                "data_access": {
+                    "event": "PANEL_SECTIONS_CONFIGURATION",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "BRAND_PRIMARY"},
+        {"name": "BRAND_PRIMARY_HOVER"},
+        {"name": "BRAND_PRIMARY_TINT_BG"},
+        {"name": "BRAND_PRIMARY_TINT_TEXT"},
+        {"name": "BRAND_FONT_STACK"},
+        {"name": "BRAND_FONT_URL"},
+        {"name": "GRID_START_HOUR"},
+        {"name": "GRID_END_HOUR"},
+        {"name": "SCHEDULABLE_STAFF_ROLES"}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

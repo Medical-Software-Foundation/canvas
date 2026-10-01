@@ -16,4 +16,32 @@ def canonical_staff_id(headers) -> str | None:
     raw = headers.get(_HEADER)
     if not raw:
         return None
-    return raw.replace("-", "")
+    return canonicalize_staff_id(raw)
+
+
+def canonicalize_staff_id(value: str) -> str:
+    """Dashless, stripped, lowercased form for case/format-insensitive UUID comparison.
+
+    Staff.id is stored as ``uuid4().hex`` (always lowercase, no dashes). Every
+    path that stores, compares, or looks up a staff id must route through this
+    single primitive so a mixed-case or dashed id never diverges from the
+    stored key.
+    """
+    return value.replace("-", "").strip().lower()
+
+
+def is_admin(staff_id, secrets) -> bool:
+    """Return True only if ``staff_id`` is listed in the ADMIN_STAFF_IDS secret.
+
+    Fails closed: an unset, empty, or whitespace-only secret means no one is an
+    admin. Both the caller id and each configured id are canonicalized to the
+    dashless, lowercased form so dashed/uppercase entries still match Staff.id
+    (uuid4().hex).
+    """
+    if not staff_id:
+        return False
+    raw = (secrets or {}).get("ADMIN_STAFF_IDS") or ""
+    admins = {canonicalize_staff_id(part) for part in raw.split(",") if part.strip()}
+    if not admins:
+        return False
+    return canonicalize_staff_id(staff_id) in admins

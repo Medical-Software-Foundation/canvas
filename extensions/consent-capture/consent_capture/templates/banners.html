@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Refresh Consent Banners</title>
+  <style>
+    :root{
+      --ink:#1b2333;--secondary:#5b6472;--muted:#8b93a1;--line:#e7eaef;
+      --surface:#fff;--inset:#f7f8fa;
+      --primary:#1e2634;--primary-ink:#fff;--r:16px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;background:#f2f4f7;color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px 20px;}
+    .card{background:var(--surface);border:1px solid #edeff3;border-radius:var(--r);
+      max-width:660px;width:100%;padding:44px 48px;box-shadow:0 6px 24px rgba(16,24,40,.07);}
+    h1{font-size:27px;font-weight:700;letter-spacing:-.01em;margin:0 0 16px;color:var(--ink);}
+    p.lead{color:var(--secondary);font-size:17px;line-height:1.6;margin:0 0 28px;}
+    .preview-cap{font-size:13px;color:var(--muted);margin:0 0 8px;}
+    .banner-demo{position:relative;display:flex;align-items:center;gap:14px;background:#fff;
+      border:1px solid var(--line);border-radius:8px;padding:18px 20px 18px 24px;margin:0 0 28px;
+      overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+    .banner-demo .bd-accent{position:absolute;left:0;top:0;bottom:0;width:6px;background:#b42318;}
+    .banner-demo .bd-icon{width:24px;height:24px;flex:none;}
+    .banner-demo .bd-text{font-size:18px;color:var(--ink);font-weight:500;}
+    .banner-demo .bd-x{margin-left:auto;color:#3a3f47;font-size:20px;line-height:1;flex:none;}
+    .btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+      font:inherit;font-weight:600;font-size:16px;border-radius:10px;padding:15px 24px;cursor:pointer;}
+    .btn:hover{background:var(--inset);}
+    .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink);}
+    .btn.primary:hover{opacity:.92;}
+    .btn:disabled{opacity:.5;cursor:default;}
+    .row{display:flex;gap:12px;align-items:center;}
+    .result{font-size:15px;line-height:1.5;color:var(--secondary);}
+    .result:not(:empty){margin-top:20px;}
+    .result.err{color:#b42318;}
+    .result strong{color:var(--ink);}
+    .plan{margin-top:20px;padding:14px 16px;background:var(--inset);border:1px solid var(--line);
+      border-radius:10px;font-size:15px;line-height:1.55;}
+    .plan .n{font-weight:700;color:var(--ink);}
+    .hidden{display:none;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Refresh Consent Banners</h1>
+    <p class="lead">
+      Re-checks every active patient and adds or removes this chart banner. Existing consents
+      are not changed.
+    </p>
+    <p class="preview-cap">Preview of the chart banner</p>
+    <div class="banner-demo">
+      <span class="bd-accent"></span>
+      <svg class="bd-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.4c.52 0 1 .28 1.26.74l7.9 13.86c.53.93-.14 2.1-1.26 2.1H4.1c-1.12 0-1.79-1.17-1.26-2.1l7.9-13.86c.26-.46.74-.74 1.26-.74Z" fill="#b42318"/>
+        <rect x="11" y="9" width="2" height="5.4" rx="1" fill="#fff"/>
+        <circle cx="12" cy="16.9" r="1.15" fill="#fff"/>
+      </svg>
+      <span class="bd-text">Required consent not on file.</span>
+      <span class="bd-x" aria-hidden="true">&times;</span>
+    </div>
+
+    <div id="startRow" class="row">
+      <button class="btn primary" id="previewBtn" type="button">Preview Changes</button>
+    </div>
+
+    <div id="planBox" class="plan hidden"></div>
+
+    <div id="applyRow" class="row hidden" style="margin-top:12px;">
+      <button class="btn primary" id="applyBtn" type="button">Apply Changes</button>
+      <button class="btn" id="cancelBtn" type="button">Cancel</button>
+    </div>
+
+    <div id="result" class="result" role="status" aria-live="polite"></div>
+  </div>
+
+  <script>
+    var PREVIEW_URL = "/plugin-io/api/consent_capture/admin/banners/preview";
+    var REFRESH_URL = "/plugin-io/api/consent_capture/admin/banners/refresh";
+
+    var startRow = document.getElementById('startRow');
+    var previewBtn = document.getElementById('previewBtn');
+    var applyRow = document.getElementById('applyRow');
+    var applyBtn = document.getElementById('applyBtn');
+    var cancelBtn = document.getElementById('cancelBtn');
+    var planBox = document.getElementById('planBox');
+    var result = document.getElementById('result');
+
+    function setResult(text, isErr) {
+      result.textContent = text || '';
+      result.className = 'result' + (isErr ? ' err' : '');
+    }
+    function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+    function post(url) {
+      return fetch(url, { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        .then(function (r) { return r.json(); });
+    }
+
+    previewBtn.addEventListener('click', function () {
+      previewBtn.disabled = true; setResult('Checking patients…');
+      planBox.classList.add('hidden'); applyRow.classList.add('hidden');
+      post(PREVIEW_URL).then(function (d) {
+        previewBtn.disabled = false;
+        if (!d || !d.ok) { setResult((d && d.error) || 'Could not run the preview.', true); return; }
+        setResult('');
+        if (d.add === 0 && d.remove === 0) {
+          planBox.innerHTML = 'Everything is already up to date. No changes needed.';
+          planBox.classList.remove('hidden');
+          return;
+        }
+        planBox.innerHTML = 'This will add <span class="n">' + plural(d.add, 'banner') +
+          '</span> and remove <span class="n">' + plural(d.remove, 'banner') + '</span>.';
+        planBox.classList.remove('hidden');
+        applyRow.classList.remove('hidden');
+        startRow.classList.add('hidden');   // Preview gives way to Apply / Cancel
+      }).catch(function () { previewBtn.disabled = false; setResult('Could not reach the server.', true); });
+    });
+
+    cancelBtn.addEventListener('click', function () {
+      applyRow.classList.add('hidden'); planBox.classList.add('hidden');
+      startRow.classList.remove('hidden'); setResult('');
+    });
+
+    applyBtn.addEventListener('click', function () {
+      applyBtn.disabled = true; cancelBtn.disabled = true; setResult('Applying…');
+      post(REFRESH_URL).then(function (d) {
+        applyBtn.disabled = false; cancelBtn.disabled = false;
+        if (!d || !d.ok) { setResult((d && d.error) || 'Could not apply the changes.', true); return; }
+        applyRow.classList.add('hidden'); planBox.classList.add('hidden');
+        startRow.classList.remove('hidden');   // ready to run again
+        result.innerHTML = 'Done. Added <strong>' + d.added + '</strong>, removed <strong>' +
+          d.removed + '</strong>.';
+        result.className = 'result';
+      }).catch(function () {
+        applyBtn.disabled = false; cancelBtn.disabled = false;
+        setResult('Could not reach the server.', true);
+      });
+    });
+  </script>
+</body>
+</html>

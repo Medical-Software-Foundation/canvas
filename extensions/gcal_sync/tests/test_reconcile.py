@@ -21,6 +21,7 @@ def test_reset_cancels_existing_holds_and_clears_mappings(mocker):
         102,
     ]
     iem = mocker.patch("gcal_sync.reconcile.InboundEventMapping")
+    phc = mocker.patch("gcal_sync.reconcile.PendingHoldCreate")
     schedule_event = mocker.patch("gcal_sync.reconcile.ScheduleEvent")
 
     effects = reset_inbound_for_provider(_mapping())
@@ -31,10 +32,12 @@ def test_reset_cancels_existing_holds_and_clears_mappings(mocker):
     # Inbound mappings for THIS calendar are dropped so the pull recreates fresh.
     iem.objects.filter.assert_called_once_with(google_calendar_id="joe@x")
     iem.objects.filter.return_value.delete.assert_called_once()
+    # PendingHoldCreate markers for THIS calendar are also cleared.
+    phc.objects.filter.assert_called_once_with(google_calendar_id="joe@x")
+    phc.objects.filter.return_value.delete.assert_called_once()
 
 
 def test_reimport_resets_then_full_pulls(mocker):
-    mocker.patch("gcal_sync.reconcile.reset_inbound_for_provider", return_value=["CANCEL"])
     state = SimpleNamespace(sync_token="stale-token", needs_full_resync=False, save=mocker.Mock())
     css = mocker.patch("gcal_sync.reconcile.CalendarSyncState")
     css.objects.get_or_create.return_value = (state, False)
@@ -47,6 +50,6 @@ def test_reimport_resets_then_full_pulls(mocker):
     assert state.sync_token == ""
     assert state.needs_full_resync is True
     state.save.assert_called_once()
-    # Reset (cancel) effects are applied before the freshly-imported holds.
-    assert effects == ["CANCEL", "HOLD"]
+    # Re-import now does a force_rebuild pull (no separate reset step).
+    assert effects == ["HOLD"]
     assert stats["holds_created"] == 5

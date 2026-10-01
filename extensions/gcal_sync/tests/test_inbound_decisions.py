@@ -88,25 +88,33 @@ def test_marked_provider_edit_reverts_to_canvas(mocker):
 def test_unmarked_new_event_creates_hold(mocker):
     iem = mocker.patch("gcal_sync.inbound.InboundEventMapping")
     iem.objects.filter.return_value.first.return_value = None
+    phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    phc.objects.filter.return_value.first.return_value = None
     # Import context (note-type + provider/location) is resolved once per calendar; mock the resolvers.
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
     inbound = _inbound(mocker)
+    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-new", "status": "confirmed", "summary": "Hold"}, stats)
     assert effects == ["HOLD_EFFECT"]
     assert stats["holds_created"] == 1
-    iem.objects.update_or_create.assert_called_once()
+    phc.objects.update_or_create.assert_called_once()
 
 
 def test_unmarked_unresolvable_hold_is_ignored(mocker):
     mocker.patch("gcal_sync.inbound.InboundEventMapping").objects.filter.return_value.first.return_value = None
+    phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    phc.objects.filter.return_value.first.return_value = None
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     # build_hold_effect returns None (e.g. event time unparseable) -> skip, no create.
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value=None)
     inbound = _inbound(mocker)
+    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-new", "status": "confirmed"}, stats)
     assert effects == []
@@ -114,9 +122,14 @@ def test_unmarked_unresolvable_hold_is_ignored(mocker):
 
 
 def test_unmarked_known_event_updates_hold(mocker):
-    mocker.patch(
-        "gcal_sync.inbound.InboundEventMapping"
-    ).objects.filter.return_value.first.return_value = SimpleNamespace(google_event_id="g-1")
+    iem = mocker.patch("gcal_sync.inbound.InboundEventMapping")
+    iem.objects.filter.return_value.first.return_value = SimpleNamespace(
+        google_event_id="g-1", last_applied_hash=""
+    )
+    phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    phc.objects.filter.return_value.first.return_value = None
+    mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
+    mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
     # A live Canvas hold exists for this mapping -> take the update path.
     mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-99")
@@ -128,10 +141,14 @@ def test_unmarked_known_event_updates_hold(mocker):
 
 
 def test_unmarked_orphaned_mapping_recreates_hold(mocker):
-    # Mapping row exists but no live Canvas hold AND it predates the pending-create grace window (a
-    # prior run was interrupted/capped before the create applied). RE-CREATE it, don't skip (#4).
+    # Mapping row exists but no live Canvas hold AND the pending-create marker predates the grace
+    # window (a prior run was interrupted/capped before the create applied). RE-CREATE it (#4).
     iem = mocker.patch("gcal_sync.inbound.InboundEventMapping")
     iem.objects.filter.return_value.first.return_value = SimpleNamespace(
+        google_event_id="g-1", last_applied_hash=""
+    )
+    phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    phc.objects.filter.return_value.first.return_value = SimpleNamespace(
         google_event_id="g-1", created_at=datetime.now(timezone.utc) - timedelta(hours=1)
     )
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
@@ -139,33 +156,41 @@ def test_unmarked_orphaned_mapping_recreates_hold(mocker):
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
     inbound = _inbound(mocker)
     mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)  # orphaned
+    mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     update_spy = mocker.patch.object(inbound, "_hold_update_effect")
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "confirmed", "summary": "Hold"}, stats)
     assert effects == ["HOLD_EFFECT"]
     assert stats["holds_created"] == 1
     update_spy.assert_not_called()
-    iem.objects.update_or_create.assert_called_once()
+    phc.objects.update_or_create.assert_called_once()
 
 
 def test_unmarked_pending_create_is_not_duplicated(mocker):
-    # Mapping was written moments ago but the async create hasn't applied yet (no live hold). A
-    # re-delivered webhook must NOT re-issue the create — re-creating in-flight holds is what
-    # produced the duplicate-hold storm under load.
+    # PendingHoldCreate was written moments ago but the async create hasn't applied yet (no live
+    # hold). A re-delivered webhook must NOT re-issue the create — re-creating in-flight holds is
+    # what produced the duplicate-hold storm under load.
     iem = mocker.patch("gcal_sync.inbound.InboundEventMapping")
     iem.objects.filter.return_value.first.return_value = SimpleNamespace(
+        google_event_id="g-1", last_applied_hash=""
+    )
+    phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    phc.objects.filter.return_value.first.return_value = SimpleNamespace(
         google_event_id="g-1", created_at=datetime.now(timezone.utc)
     )
+    mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
+    mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     build = mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
     inbound = _inbound(mocker)
     mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)  # not applied yet
+    mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "confirmed", "summary": "Hold"}, stats)
     assert effects == []
     assert stats["holds_created"] == 0
     assert stats["ignored"] == 1
     build.assert_not_called()
-    iem.objects.update_or_create.assert_not_called()
+    phc.objects.update_or_create.assert_not_called()
 
 
 def test_unmarked_cancelled_known_event_removes_hold(mocker):
@@ -173,6 +198,10 @@ def test_unmarked_cancelled_known_event_removes_hold(mocker):
     mocker.patch(
         "gcal_sync.inbound.InboundEventMapping"
     ).objects.filter.return_value.first.return_value = existing
+    phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    phc.objects.filter.return_value.first.return_value = None
+    mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
+    mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
     mocker.patch.object(inbound, "_hold_delete_effect", return_value="DELETE_EFFECT")
     stats = _stats()
@@ -199,7 +228,7 @@ def test_update_masks_private_event_title(mocker):
     )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent").return_value
     inbound._hold_update_effect(
-        "g-1", {"id": "g-1", "visibility": "private", "summary": "Dad - Dr. Appt"}
+        "g-1", {"id": "g-1", "visibility": "private", "summary": "Dad - Dr. Appt"}, "14"
     )
     assert se.description == "Busy"
 
@@ -212,5 +241,5 @@ def test_update_keeps_public_event_title(mocker):
         return_value=(datetime(2026, 6, 10, 15, 0, tzinfo=timezone.utc), 30),
     )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent").return_value
-    inbound._hold_update_effect("g-1", {"id": "g-1", "summary": "Standup"})
+    inbound._hold_update_effect("g-1", {"id": "g-1", "summary": "Standup"}, "14")
     assert se.description == "Standup"

@@ -25,6 +25,38 @@ class GoogleApiError(RuntimeError):
         self.status_code = status_code
 
 
+class GoogleRateLimitError(GoogleApiError):
+    """Google is throttling us (``403``/``429`` ``rateLimitExceeded``/``userRateLimitExceeded``).
+
+    A distinct type because it must be handled differently from a real error: it is transient, so the
+    caller should back off and retry later (the bulk pusher defers the provider to a later run rather
+    than dropping the write). The RestrictedPython sandbox has no ``time`` module, so backoff can't
+    sleep in-process — it is expressed as "stop and retry on the next cron tick".
+    """
+
+
+def _error_for(status_code: int, body: str) -> GoogleApiError:
+    """Map a non-success Google response to the right exception.
+
+    A ``403``/``429`` from Google's usage limits is throttling (``GoogleRateLimitError``); any other
+    non-success is a plain ``GoogleApiError``. Matching on the body is deliberate — a bare ``403`` can
+    be either throttling or a genuine permission error (e.g. calendar not shared), and only the latter
+    should be a hard failure. Every usage-limit response carries ``"domain": "usageLimits"`` (with a
+    reason of ``rateLimitExceeded``/``userRateLimitExceeded`` for per-minute limits, or
+    ``quotaExceeded``/``dailyLimitExceeded`` for the daily quota); the reason strings are kept too as a
+    belt-and-suspenders in case Google varies the body shape.
+    """
+    if status_code in (403, 429) and (
+        "usageLimits" in body
+        or "rateLimitExceeded" in body
+        or "userRateLimitExceeded" in body
+        or "quotaExceeded" in body
+        or "dailyLimitExceeded" in body
+    ):
+        return GoogleRateLimitError(status_code, body)
+    return GoogleApiError(status_code, body)
+
+
 class GoogleCalendarClient:
     """Calendar-event CRUD, watch-channel, and incremental-list operations for one access token."""
 
@@ -46,49 +78,80 @@ class GoogleCalendarClient:
     def insert_event(self, calendar_id: str, body: dict) -> dict:
         """Create an event; returns the created Google event (including its ``id``)."""
         resp = self._http.post(
-            self._url(f"/calendars/{self._cal(calendar_id)}/events"), json=body, headers=self._headers
+            self._url(f"/calendars/{self._cal(calendar_id)}/events"),
+            json=body,
+            headers=self._headers,
         )
         if resp.status_code not in (200, 201):
-            raise GoogleApiError(resp.status_code, resp.text)
+            raise _error_for(resp.status_code, resp.text)
         created: dict = resp.json()
         return created
 
     def patch_event(self, calendar_id: str, event_id: str, body: dict) -> dict:
         """Update an existing event in place."""
         resp = self._http.patch(
-            self._url(f"/calendars/{self._cal(calendar_id)}/events/{quote(event_id, safe='')}"),
+            self._url(
+                f"/calendars/{self._cal(calendar_id)}/events/{quote(event_id, safe='')}"
+            ),
             json=body,
             headers=self._headers,
         )
         if resp.status_code != 200:
-            raise GoogleApiError(resp.status_code, resp.text)
+            raise _error_for(resp.status_code, resp.text)
         patched: dict = resp.json()
         return patched
 
     def delete_event(self, calendar_id: str, event_id: str) -> None:
         """Delete an event. A ``404``/``410`` (already gone) is treated as success — idempotent."""
         resp = self._http.delete(
-            self._url(f"/calendars/{self._cal(calendar_id)}/events/{quote(event_id, safe='')}"),
+            self._url(
+                f"/calendars/{self._cal(calendar_id)}/events/{quote(event_id, safe='')}"
+            ),
             headers=self._headers,
         )
         if resp.status_code not in (200, 204, 404, 410):
-            raise GoogleApiError(resp.status_code, resp.text)
+            raise _error_for(resp.status_code, resp.text)
 
     def get_event(self, calendar_id: str, event_id: str) -> dict | None:
         """Fetch a single event, or ``None`` if it no longer exists."""
         resp = self._http.get(
-            self._url(f"/calendars/{self._cal(calendar_id)}/events/{quote(event_id, safe='')}"),
+            self._url(
+                f"/calendars/{self._cal(calendar_id)}/events/{quote(event_id, safe='')}"
+            ),
             headers=self._headers,
         )
         if resp.status_code in (404, 410):
             return None
         if resp.status_code != 200:
-            raise GoogleApiError(resp.status_code, resp.text)
+            raise _error_for(resp.status_code, resp.text)
         event: dict = resp.json()
         return event
 
+    def find_event_by_private_property(
+        self, calendar_id: str, key: str, value: str
+    ) -> dict | None:
+        """Return the first LIVE event whose private extended property ``key`` equals ``value``.
+
+        Lets an outbound push ADOPT an event it created earlier (matched by ``canvasApptId``) when the
+        local mapping is missing, instead of inserting a duplicate. ``showDeleted`` is left false so a
+        deleted/cancelled remnant is never adopted — a truly gone event falls through to a fresh insert.
+        """
+        params = {"privateExtendedProperty": f"{key}={value}", "maxResults": "1"}
+        url = self._url(
+            f"/calendars/{self._cal(calendar_id)}/events?{urlencode(params)}"
+        )
+        resp = self._http.get(url, headers=self._headers)
+        if resp.status_code != 200:
+            raise _error_for(resp.status_code, resp.text)
+        items = resp.json().get("items", [])
+        return items[0] if items else None
+
     def list_event_deltas(
-        self, calendar_id: str, sync_token: str = "", time_min: str = "", time_max: str = ""
+        self,
+        calendar_id: str,
+        sync_token: str = "",
+        time_min: str = "",
+        time_max: str = "",
     ) -> tuple[list[dict], str]:
         """Pull changed events, following pagination.
 
@@ -114,10 +177,12 @@ class GoogleCalendarClient:
             if page_token:
                 params["pageToken"] = page_token
 
-            url = self._url(f"/calendars/{self._cal(calendar_id)}/events?{urlencode(params)}")
+            url = self._url(
+                f"/calendars/{self._cal(calendar_id)}/events?{urlencode(params)}"
+            )
             resp = self._http.get(url, headers=self._headers)
             if resp.status_code != 200:
-                raise GoogleApiError(resp.status_code, resp.text)
+                raise _error_for(resp.status_code, resp.text)
 
             payload = resp.json()
             events.extend(payload.get("items", []))
@@ -128,8 +193,46 @@ class GoogleCalendarClient:
 
         return events, next_sync_token
 
+    def list_all_events(
+        self, calendar_id: str, time_min: str, time_max: str
+    ) -> list[dict]:
+        """Return all LIVE events on the calendar in ``[time_min, time_max]`` (paginated).
+
+        Used by the reconcile sweep to find events we pushed whose Canvas appointment is gone/terminal
+        (orphans to delete) or duplicated (extras to collapse). ``showDeleted`` is omitted so
+        already-deleted events aren't re-processed; ``singleEvents`` expands recurrences.
+        """
+        events: list[dict] = []
+        page_token = ""
+        while True:
+            params: dict[str, str] = {
+                "singleEvents": "true",
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "maxResults": "250",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            url = self._url(
+                f"/calendars/{self._cal(calendar_id)}/events?{urlencode(params)}"
+            )
+            resp = self._http.get(url, headers=self._headers)
+            if resp.status_code != 200:
+                raise _error_for(resp.status_code, resp.text)
+            payload = resp.json()
+            events.extend(payload.get("items", []))
+            page_token = payload.get("nextPageToken", "")
+            if not page_token:
+                break
+        return events
+
     def watch_events(
-        self, calendar_id: str, channel_id: str, address: str, token: str, ttl_seconds: int
+        self,
+        calendar_id: str,
+        channel_id: str,
+        address: str,
+        token: str,
+        ttl_seconds: int,
     ) -> dict:
         """Open an ``events.watch`` push channel. Returns Google's channel resource (``resourceId``)."""
         body = {
@@ -145,7 +248,7 @@ class GoogleCalendarClient:
             headers=self._headers,
         )
         if resp.status_code != 200:
-            raise GoogleApiError(resp.status_code, resp.text)
+            raise _error_for(resp.status_code, resp.text)
         channel: dict = resp.json()
         return channel
 
@@ -157,4 +260,4 @@ class GoogleCalendarClient:
             headers=self._headers,
         )
         if resp.status_code not in (200, 204, 404):
-            raise GoogleApiError(resp.status_code, resp.text)
+            raise _error_for(resp.status_code, resp.text)

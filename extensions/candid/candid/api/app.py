@@ -13,10 +13,14 @@ The claim-timeline page takes a ``claim_id`` query param, rendered into the
 page as a ``data-claim-id`` attribute the JS reads on load.
 """
 
+from http import HTTPStatus
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+
+from candid.access import staff_can_access_dashboard
 
 
 def _asset(template_name: str, content_type: str) -> Response:
@@ -32,16 +36,29 @@ class CandidAppAssets(StaffSessionAuthMixin, SimpleAPI):
 
     PREFIX = "/app"
 
+    def _dashboard_forbidden(self) -> Response | None:
+        """Return a 403 when the logged-in staff may not access the dashboard."""
+        staff_key = self.request.headers.get("canvas-logged-in-user-id")
+        if staff_can_access_dashboard(staff_key, self.secrets):
+            return None
+        return Response(b"Forbidden", status_code=HTTPStatus.FORBIDDEN, content_type="text/plain")
+
     @api.get("/dashboard")
     def dashboard(self) -> list[Response | Effect]:
+        if forbidden := self._dashboard_forbidden():
+            return [forbidden]
         return [HTMLResponse(render_to_string("static/dashboard.html") or "")]
 
     @api.get("/dashboard.css")
     def dashboard_css(self) -> list[Response | Effect]:
+        if forbidden := self._dashboard_forbidden():
+            return [forbidden]
         return [_asset("static/dashboard.css", "text/css")]
 
     @api.get("/dashboard.js")
     def dashboard_js(self) -> list[Response | Effect]:
+        if forbidden := self._dashboard_forbidden():
+            return [forbidden]
         return [_asset("static/dashboard.js", "text/javascript")]
 
     @api.get("/claim-timeline")

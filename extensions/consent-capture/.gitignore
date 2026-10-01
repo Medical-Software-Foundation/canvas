@@ -37,3 +37,6 @@ uv.lock
 
 # Claude Code local config
 .claude/
+
+# Screenshot harness temp render files
+*.render.html

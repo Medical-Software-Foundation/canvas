@@ -1,144 +1,81 @@
-"""Red 'Collect Consent' action button in the patient chart header.
+"""'Consents' action button in the patient chart header.
 
-Visible only for patients who do not already have an accepted consent of the
-configured coding. Clicking it opens a modal with the scripted consent statement.
+With multiple configured consents the button is a hub: it opens a picker listing
+every active consent with its on-file status, and the provider fills them out one
+at a time. The same picker is also reachable any time from the app-drawer
+``ConsentApp``.
 
-Visibility is only evaluated on page load, so the button can linger after a
-consent is collected until the next reload. To handle that stale state, ``handle``
-re-checks for an accepted consent and shows an informational notice (rather than
-collecting again) when one is already on file.
+The button is **always shown** for a patient in context — it is a persistent,
+discoverable entry point — and its *color* signals status rather than its
+presence. It goes RED only for an eligible (active, non-deceased) patient with a
+required consent still due (never recorded, or expired); otherwise it is a neutral
+gray chip. The label is always "Consents". Deceased/inactive patients therefore
+always see the gray button and never the red one, matching the banner, which stays
+gated to eligible patients.
+
+Color is recomputed each time the header is evaluated. After a consent is recorded,
+``ConsentApi.collect`` emits ``ReloadPatientActionButtonsEffect`` so the color
+updates live (red -> gray) without a page reload.
 """
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
-from canvas_sdk.templates import render_to_string
-from canvas_sdk.v1.data import Patient, PatientConsent
-
-from logger import log
 
 from consent_capture.constants import (
-    ACCEPTED_STATES,
-    BUTTON_COLOR,
+    BUTTON_DUE_BACKGROUND,
+    BUTTON_DUE_TEXT,
     BUTTON_KEY,
+    BUTTON_SATISFIED_BACKGROUND,
+    BUTTON_SATISFIED_TEXT,
     BUTTON_TITLE,
-    NO_STATEMENT_NOTE,
-    parse_statement,
 )
+from consent_capture.picker_modal import build_picker_modal
+from consent_capture.service import is_eligible_patient, picker_items
 
 
-def should_prompt(patient_id, code, accepted_exists):
-    """Decide whether the Collect Consent button should be shown.
-
-    - No patient in context -> hide.
-    - No consent code configured yet -> show (so it can be collected once set up).
-    - Otherwise show only when there is no accepted consent already on file.
-    """
-    if not patient_id:
-        return False
-    if not code:
-        return True
-    return not accepted_exists
+def needs_any(items):
+    """Whether at least one *required* active consent is still not on file
+    (never recorded, or expired). Optional consents do not surface the button —
+    it mirrors the hub's "Required" (due) section, so the red button means
+    "a required consent is missing" rather than "some optional consent is unfilled"."""
+    return any(item.get("required") and not item.get("on_file") for item in items)
 
 
 class ConsentButton(ActionButton):
     BUTTON_TITLE = BUTTON_TITLE
     BUTTON_KEY = BUTTON_KEY
     BUTTON_LOCATION = ActionButton.ButtonLocation.CHART_PATIENT_HEADER
-    BUTTON_BACKGROUND_COLOR = BUTTON_COLOR
 
     def _patient_id(self):
         target = getattr(self.event, "target", None)
         return getattr(target, "id", None)
 
-    def _has_accepted_consent(self, patient_id) -> bool:
-        """Whether the patient already has an accepted consent of the configured
-        coding. Returns False when no consent code is configured yet (there is
-        nothing to check against)."""
-        code = self.secrets.get("CONSENT_CODE", "")
-        if not code:
-            return False
-
-        system = self.secrets.get("CONSENT_SYSTEM", "")
-        filters = {
-            "patient__id": patient_id,
-            "category__code": code,
-            "state__in": ACCEPTED_STATES,
-        }
-        if system:
-            filters["category__system"] = system
-
-        return PatientConsent.objects.filter(**filters).exists()
-
     def visible(self) -> bool:
-        """Show the button only when there is no accepted consent on file."""
+        """Always show the button for a patient in context, coloring it to signal
+        status (the label is always "Consents"). It is RED (white text) only for an
+        eligible (active, non-deceased) patient that still has a *required* consent
+        not on file (needed or expired); otherwise it is a neutral gray chip
+        (light-gray background, dark slate text). Ineligible patients short-circuit
+        before the consent lookup, so they never go red — matching the banner, which
+        only surfaces when due.
+
+        The ``ActionButton`` base reads ``BUTTON_BACKGROUND_COLOR`` /
+        ``BUTTON_TEXT_COLOR`` off the instance right after this returns, so setting
+        them here applies the chosen colors for this render."""
         patient_id = self._patient_id()
         if not patient_id:
-            return False
-
-        code = self.secrets.get("CONSENT_CODE", "")
-        if not code:
-            return should_prompt(patient_id, code, False)
-
-        accepted_exists = self._has_accepted_consent(patient_id)
-        return should_prompt(patient_id, code, accepted_exists)
+            return False  # no patient in context -> no patient-header button
+        due = is_eligible_patient(patient_id) and needs_any(picker_items(patient_id))
+        if due:
+            self.BUTTON_BACKGROUND_COLOR = BUTTON_DUE_BACKGROUND
+            self.BUTTON_TEXT_COLOR = BUTTON_DUE_TEXT
+        else:
+            self.BUTTON_BACKGROUND_COLOR = BUTTON_SATISFIED_BACKGROUND
+            self.BUTTON_TEXT_COLOR = BUTTON_SATISFIED_TEXT
+        return True
 
     def handle(self) -> list[Effect]:
         patient_id = self._patient_id()
-
-        # visible() is only evaluated on page load, so the button can linger in the
-        # chart header after a consent was just recorded this session. If the
-        # consent is now on file, show an informational notice instead of
-        # collecting it again.
-        if patient_id and self._has_accepted_consent(patient_id):
-            log.info(
-                "ConsentButton: consent already on file for patient %s; showing notice"
-                % patient_id
-            )
-            html = render_to_string(
-                "templates/consent_none.html",
-                {"button_title": BUTTON_TITLE},
-            )
-            modal = LaunchModalEffect(
-                target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
-                content=html,
-            )
-            return [modal.apply()]
-
         staff_id = self.event.context.get("user", {}).get("id", "")
-
-        log.info(
-            "ConsentButton: opened for patient %s by staff %s"
-            % (patient_id, staff_id)
-        )
-
-        patient_name = ""
-        patient_dob = ""
-        row = (
-            Patient.objects.filter(id=patient_id)
-            .values_list("first_name", "last_name", "birth_date")
-            .first()
-        )
-        if row:
-            patient_name = ("%s %s" % (row[0] or "", row[1] or "")).strip()
-            patient_dob = row[2].isoformat() if row[2] else ""
-
-        paragraphs = parse_statement(self.secrets.get("CONSENT_STATEMENT", ""))
-
-        html = render_to_string(
-            "templates/consent.html",
-            {
-                "patient_id": patient_id,
-                "patient_name": patient_name,
-                "patient_dob": patient_dob,
-                "consent_display": self.secrets.get("CONSENT_DISPLAY", ""),
-                "paragraphs": paragraphs,
-                "no_statement_note": NO_STATEMENT_NOTE,
-            },
-        )
-
-        modal = LaunchModalEffect(
-            target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
-            content=html,
-        )
-        return [modal.apply()]
+        secrets = getattr(self, "secrets", None) or {}
+        return [build_picker_modal(patient_id, staff_id, secrets).apply()]
