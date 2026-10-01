@@ -168,17 +168,16 @@ class ReminderScheduler(CronTask):
         # This asked it of RESOLVABLE_ZONES, the eleven zones `timezones.py` can
         # derive from a US address. That is narrower than what the resolver can
         # return, and not by a little: the chart's preferredSchedulingTimezone
-        # holds any IANA name, and one production instance has patients on
-        # America/Detroit, America/Indiana/Indianapolis, America/Kentucky/
-        # Louisville and America/Menominee, none of which an address resolves
-        # to. A patient on a zone outside the eleven had their day-out reminder
+        # holds any IANA name, such as America/Detroit,
+        # America/Indiana/Indianapolis, America/Kentucky/Louisville or
+        # America/Menominee, none of which an address resolves to. A patient on a zone outside the eleven had their day-out reminder
         # dropped on the tick it was due, and the only trace was a log line that
         # reads like a normal quiet tick.
         #
         # Asking about UTC offsets instead makes the gate complete: what decides
         # whether a local clock reads the send time is the offset, not the zone
-        # name, and there are 38 distinct offsets against 598 zones. Day-out-only
-        # instances still skip ~82% of ticks rather than ~96%, and the gate is
+        # name, and there are 38 distinct offsets against 598 zones. With one
+        # day-out send time the gate opens on 70 of 288 daily ticks, and it is
         # only an optimization — _is_day_out_window still makes the exact
         # per-appointment decision, so a wider gate changes how many ticks run
         # the query, never which reminders fire. Under-inclusion was the bug.

@@ -3,14 +3,12 @@
 ``Patient.last_known_timezone`` is the field a plugin is supposed to read for a
 patient's zone, and it is the only patient timezone column in the schema. In
 practice nothing in routine charting writes it: it is populated by the FHIR
-Patient ``tz-code`` extension, so across the production fleet it holds a value
-on a handful of patient rows in total and is NULL everywhere else. A resolver
-that stops there therefore renders every message in the one configured clinic
-zone, which is what a patient two zones away sees today.
+Patient ``tz-code`` extension, so it is almost always NULL. A resolver that
+stops there therefore renders nearly every message in the one configured clinic
+zone, which is what a patient two zones away sees.
 
-The patient's own address is the populated stand-in. On the instance this was
-measured against, 1,340 of 1,353 appointments in the next 30 days had a patient
-address carrying a state code.
+The patient's own address is the populated stand-in for a patient with no
+scheduling-timezone preference recorded in the chart.
 
 Accuracy, stated plainly: a two-letter state resolves exactly for the 44 states
 that sit in one zone. For the states split across two, the three-digit ZIP

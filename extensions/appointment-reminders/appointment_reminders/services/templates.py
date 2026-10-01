@@ -86,12 +86,10 @@ def unresolved_placeholders(text: str) -> list[str]:
 def _preferred_scheduling_timezone(patient: Patient) -> str:
     """The zone staff chose in the chart's Preferences, or ``""`` if unset.
 
-    This is the field the practice actually maintains. Across one production
-    instance it carries a value on 140,028 patients, of which 52,382 are not
-    Eastern, where ``last_known_timezone`` holds a value on five patient rows in
-    the entire fleet. Reading only the latter meant every one of those patients
-    fell through to the configured clinic zone, which is what a customer
-    reported as messages "normalized to EST".
+    This is the field the practice actually maintains, where
+    ``last_known_timezone`` is almost always NULL. Reading only the latter meant
+    nearly every patient fell through to the configured clinic zone, which is
+    what was reported as messages "normalized to EST".
 
     Filtered in Python rather than with ``.get(name=...)``. Django serves a
     prefetch cache for ``.all()`` alone, so a filtered lookup re-queries even
@@ -151,11 +149,10 @@ def resolve_timezone_name(patient: Patient, clinic_timezone: str = "") -> str:
     the configured clinic default, then Eastern.
 
     The chart preference leads because it is the field a practice actually
-    maintains and the one they expect to govern outbound times. It is also by
-    far the best populated: 140,028 patients on one production instance against
-    five rows fleet-wide for ``last_known_timezone``, and it is finer-grained
-    than the address heuristic, which can only produce the eleven zones a US
-    mailing address maps to. Address resolution stays as the fallback for a
+    maintains and the one they expect to govern outbound times. It is also far
+    better populated than ``last_known_timezone``, and finer-grained than the
+    address heuristic, which can only produce the eleven zones a US mailing
+    address maps to. Address resolution stays as the fallback for a
     patient with no preference recorded.
 
     Each candidate is type-checked before ``ZoneInfo`` sees it, because

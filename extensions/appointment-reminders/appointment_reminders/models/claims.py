@@ -3,9 +3,7 @@
 These used to live in the plugins cache. That cache is backed by a Postgres
 table with Django's default ``MAX_ENTRIES`` of 300 and ``CULL_FREQUENCY`` of 3,
 and no ``OPTIONS`` override is set on it, so once the table passes 300 rows a
-write deletes a third of them ordered by ``cache_key``. Measured across 220
-production instances, no plugins cache exceeds 300 rows and roughly a dozen sit
-at 250-299, which is the shape a routinely-firing cull leaves behind.
+write deletes a third of them ordered by ``cache_key``.
 
 Every marker this plugin kept there was load-bearing:
 

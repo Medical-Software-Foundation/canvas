@@ -91,10 +91,9 @@ def test_resolve_timezone_skips_invalid_strings() -> None:
 
 # ---- preferredSchedulingTimezone ----
 #
-# The field the practice actually maintains. A customer reported messages
-# "normalized to EST" because the resolver read last_known_timezone, which holds
-# a value on five rows fleet-wide, while their chart preference was set on
-# 140,028 patients of whom 52,382 are not Eastern.
+# The field the practice actually maintains. Messages were reported as
+# "normalized to EST" because the resolver read last_known_timezone, which is
+# almost always NULL, and never read the chart preference.
 
 
 def _setting(name, value):
@@ -161,7 +160,7 @@ def test_an_unparseable_preference_falls_through() -> None:
 
 
 def test_zones_no_address_can_produce_still_resolve() -> None:
-    """Real values from one production instance. None of these is in
+    """Valid preference values. None of these is in
     RESOLVABLE_ZONES, the eleven zones a US mailing address maps to, so the
     address heuristic could never have produced them."""
     for zone in (
@@ -244,7 +243,7 @@ def test_phone_formatting_leaves_anything_unrecognised_alone() -> None:
 
 # ---- _resolve_timezone: the patient's address ----
 #
-# `last_known_timezone` is NULL on effectively every patient in the fleet, so
+# `last_known_timezone` is almost always NULL, so
 # before the address step every message rendered in the one configured clinic
 # zone. These cover the step that actually resolves.
 
