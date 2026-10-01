@@ -557,12 +557,11 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
           <div id="bulk-step-upload">
             <input type="file" id="bulk-file" accept=".csv" onchange="bulkFileSelect(event)" style="display:none;">
             <div class="bulk-actions">
-              <a href="#" class="bulk-link" onclick="bulkDownloadTemplate();return false;">Download template</a>
               <button type="button" class="bulk-btn" onclick="document.getElementById('bulk-file').click()">Choose CSV file</button>
               <span id="bulk-file-name" class="bulk-file-name">No file chosen</span>
               <button type="button" id="bulk-validate-btn" class="bulk-btn bulk-btn-primary" disabled onclick="bulkUploadValidate()">Upload &amp; Validate</button>
             </div>
-            <p class="bulk-hint">One row per time window. Each row names the staff member by their Canvas staff key.</p>
+            <p class="bulk-hint">One row per time window. Each row names the staff member by their Canvas staff key. <a href="#" class="bulk-link" onclick="bulkDownloadTemplate();return false;">Download template</a></p>
             <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
           </div>
 

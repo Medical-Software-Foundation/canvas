@@ -213,7 +213,7 @@ body {
 /* Bulk import controls: template, file picker and upload on one row, with the
    technical note underneath in small muted text. */
 .bulk-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.bulk-link { font-size: 13px; color: var(--cyan); text-decoration: none; }
+.bulk-link { font-size: inherit; color: var(--cyan); text-decoration: none; margin-left: 4px; }
 .bulk-link:hover { text-decoration: underline; }
 .bulk-btn {
   font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
