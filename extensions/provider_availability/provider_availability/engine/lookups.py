@@ -12,7 +12,8 @@ def get_active_providers() -> list[dict[str, Any]]:
     """Return active staff in a schedulable role, sorted by last name.
 
     "Schedulable" is configurable per practice by StaffRole internal code (see
-    ``engine.roles``); it defaults to the provider roles MD/DO/NP/PA.
+    ``engine.roles``); until configured, it is every staff member with a
+    Provider role type.
     """
     from provider_availability.engine.roles import get_schedulable_staff
 

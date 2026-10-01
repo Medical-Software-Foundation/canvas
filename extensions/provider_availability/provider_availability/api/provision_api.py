@@ -18,7 +18,12 @@ from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.calendar import Event as EventModel
 from logger import log
 
-from provider_availability.engine.roles import get_available_roles, get_schedulable_staff
+from provider_availability.api.availability_api import _reconcile_availability_to_roles
+from provider_availability.engine.roles import (
+    get_available_roles,
+    get_effective_schedulable_roles,
+    get_schedulable_staff,
+)
 from provider_availability.engine.storage import (
     get_practice_timezone,
     get_schedulable_roles,
@@ -187,7 +192,8 @@ class ProvisionAPI(SimpleAPI):
         """Return configured schedulable role codes and the roles available in the instance."""
         return [
             JSONResponse({
-                "schedulable_roles": get_schedulable_roles(),
+                "schedulable_roles": get_effective_schedulable_roles(),
+                "configured": get_schedulable_roles() is not None,
                 "available": get_available_roles(),
             })
         ]
@@ -205,9 +211,22 @@ class ProvisionAPI(SimpleAPI):
                 )
             ]
         normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        if not normalized:
+            # Same rule as the Settings tab: an empty set would de-schedule
+            # every provider at once.
+            return [
+                JSONResponse(
+                    {"error": "At least one schedulable role is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
         set_schedulable_roles(normalized)
         log.info("provision set_roles: set %d schedulable roles", len(normalized))
+
+        # Same as the Settings tab: availability follows the new set at once.
+        effects = _reconcile_availability_to_roles()
         return [
+            *effects,
             JSONResponse({
                 "message": "Schedulable roles updated",
                 "schedulable_roles": normalized,

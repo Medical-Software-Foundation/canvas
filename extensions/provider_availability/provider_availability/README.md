@@ -24,7 +24,7 @@ uv run canvas install provider_availability --host <your-host>
 
 The core admin UI and calculation engine work with no secrets. To enable the API-key-authenticated provisioning endpoints and restrict who can edit availability, set the secrets below under **Settings > Plugins > provider_availability** in your Canvas instance (see [Configuration options](#configuration-options)).
 
-After install, open **Provider Availability** from the provider menu to manage schedules, or use the **Bulk Import** tab to upload a CSV (see [Bulk CSV import](#bulk-csv-import)).
+After install, open **Provider Availability** from the provider menu to manage schedules, or use **Settings > Bulk Import** to upload a CSV (see [Bulk CSV import](#bulk-csv-import)).
 
 ## Configuration options
 
@@ -43,7 +43,7 @@ Set a practice-level default timezone in the admin UI **Settings** tab, with opt
 
 Which staff can be scheduled is configurable per practice from the **Settings** tab under **Schedulable Roles**. Staff in a checked role get a Clinic calendar (on activation, plugin install, provisioning, and the daily cron) and appear in the provider pickers. Roles are matched by StaffRole **internal code** — always present, unlike the public abbreviation, so non-clinical roles (Care Coordinator, Office Manager, etc.) can be scheduled too. The checklist lists each role as `Name (CODE) — N staff` for every role active staff currently hold.
 
-Defaults to the provider roles `MD`, `DO`, `NP`, `PA` (whose internal codes match their abbreviations), so behavior is unchanged until you configure it. The set can also be read/written via the API: `GET`/`PUT /api/roles` (staff session, write-gated by `allowed-staff-keys`) and `GET`/`PUT /provision/roles` (API key).
+Until you save a list, every staff member with a Provider role type is schedulable, the same as before roles were configurable. The Settings tab shows those roles' codes as the current selection. A saved list that matches no active staff falls back to the Provider role type rather than making nobody bookable. The set can also be read/written via the API: `GET`/`PUT /api/roles` (staff session, write-gated by `allowed-staff-keys`) and `GET`/`PUT /provision/roles` (API key).
 
 ## Screenshots
 
@@ -61,7 +61,7 @@ Defaults to the provider roles `MD`, `DO`, `NP`, `PA` (whose internal codes matc
 
 ## Features
 
-- **Admin UI**: Configure availability rules, blocks, and recurring blocks via an in-app panel (provider menu item), with Availability / Add-Edit / Settings / Bulk Import tabs.
+- **Admin UI**: Configure availability rules, blocks, and recurring blocks via an in-app panel (provider menu item), with Availability / Add-Edit / Settings tabs. Bulk import is a section of Settings.
 - **CSV Bulk Import**: Upload a CSV to load availability rules, one-off blocks, and recurring blocks for one or many staff at once, with per-row validation, overlap detection, and a preview before commit (see [Bulk CSV import](#bulk-csv-import)).
 - **REST API**: Query available slots, list providers, and manage rules/blocks programmatically.
 - **Calculation Engine**: Computes bookable time slots from weekly schedules, booking constraints, buffer times, and existing appointment conflicts.
@@ -75,7 +75,7 @@ Defaults to the provider roles `MD`, `DO`, `NP`, `PA` (whose internal codes matc
 
 ## Bulk CSV import
 
-Open the **Provider Availability** admin (provider menu) and select the **Bulk Import** tab to bulk-load availability from a spreadsheet. The flow is upload -> validate/preview -> commit. Download the template from the tab (or `GET /csv/template`).
+Open the **Provider Availability** admin (provider menu) and open **Settings**, then the **Bulk Import** section, to bulk-load availability from a spreadsheet. The flow is upload -> validate/preview -> commit. Download the template from that section (or `GET /csv/template`).
 
 ### How rows become records
 
@@ -122,7 +122,7 @@ Each row is validated for format and required fields, then the staff key is chec
 
 | Component | Handler Type | Description |
 |-----------|-------------|-------------|
-| `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI (includes the Bulk Import tab) |
+| `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI (bulk import is under Settings) |
 | `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, and admin UI/asset serving |
 | `CSVImportAPI` | SimpleAPI | Staff-session endpoints for the CSV bulk import (validate / commit / template) |
 | `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |

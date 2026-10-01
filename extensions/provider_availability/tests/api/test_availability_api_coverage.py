@@ -1391,15 +1391,19 @@ class TestSchedulableRolesEndpoints:
     @patch(f"{MODULE}.get_available_roles", return_value=[
         {"code": "CC", "name": "Care Coordinator", "abbreviation": "", "domain": "HYB", "staff_count": 8},
     ])
-    @patch(f"{MODULE}.get_schedulable_roles", return_value=["MD", "DO", "NP", "PA"])
-    def test_get_roles(self, mock_get, mock_avail):
+    @patch(f"{MODULE}.get_schedulable_roles", return_value=None)
+    @patch(f"{MODULE}.get_effective_schedulable_roles", return_value=["LCSW", "MD"])
+    def test_get_roles(self, mock_effective, mock_get, mock_avail):
+        """Before roles are saved, the selection shows the Provider-type codes in effect."""
         handler = _make_handler()
         result = handler.get_roles()
 
         data, code = _parse(result[0])
         assert code == HTTPStatus.OK
-        assert data["schedulable_roles"] == ["MD", "DO", "NP", "PA"]
+        assert data["schedulable_roles"] == ["LCSW", "MD"]
+        assert data["configured"] is False
         assert data["available"][0]["code"] == "CC"
+        assert mock_effective.mock_calls == [call()]
         assert mock_get.mock_calls == [call()]
         assert mock_avail.mock_calls == [call()]
 

@@ -9,6 +9,7 @@ import pytest
 from provider_availability.engine.models import (
     DAYS_OF_WEEK,
     BufferTime,
+    DateOverride,
     ProviderAvailabilityRule,
     TimeWindow,
 )
@@ -153,7 +154,9 @@ class TestDeleteBufferEffects:
 
         with patch(f"{BUFFER_MODULE}.resolve_provider_name", return_value="Dr X"), \
              patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=[cal]), \
+             patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts, \
              patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events:
+            mock_appts.filter.return_value.exclude.return_value.exclude.return_value.select_related.return_value = []
             base = mock_events.filter.return_value
             base.filter.side_effect = [[pre_evt], [post_evt]]
 
@@ -181,6 +184,89 @@ class TestDeleteBufferEffects:
             mock_events.filter.return_value.filter.side_effect = [[], []]
 
             assert _delete_buffer_effects(appt) == []
+
+
+def _buffer_evt(evt_id, starts_at, ends_at):
+    evt = MagicMock()
+    evt.id = evt_id
+    evt.starts_at = starts_at
+    evt.ends_at = ends_at
+    return evt
+
+
+def _neighbor(start, minutes=45):
+    other = MagicMock()
+    other.id = "appt-neighbor"
+    other.start_time = start
+    other.duration_minutes = minutes
+    other.location.id = "loc-1"
+    return other
+
+
+class TestDeleteKeepsANeighborsBuffer:
+    """Cancelling or moving an appointment must not delete the buffer of the
+    appointment booked right next to it, or that time becomes bookable."""
+
+    def _run(self, appt, events_pre, events_post, neighbors, rule):
+        cal = MagicMock()
+        cal.id = "cal-1"
+        with patch(f"{BUFFER_MODULE}.resolve_provider_name", return_value="Dr X"), \
+             patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=[cal]), \
+             patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]), \
+             patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts, \
+             patch(f"{BUFFER_MODULE}.EventEffect") as mock_effect, \
+             patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events:
+            mock_appts.filter.return_value.exclude.return_value.exclude.return_value.select_related.return_value = neighbors
+            mock_events.filter.return_value.filter.side_effect = [events_pre, events_post]
+            mock_effect.side_effect = lambda event_id: MagicMock(delete=lambda: f"delete:{event_id}")
+            return _delete_buffer_effects(appt)
+
+    def test_previous_appointments_post_buffer_survives(self):
+        appt = _future_appt(minutes=30)
+        start = appt.start_time
+        end = start + timedelta(minutes=30)
+        earlier = _neighbor(start - timedelta(minutes=60), minutes=45)  # ends 15 min before start
+        theirs = _buffer_evt("evt-theirs", start - timedelta(minutes=15), start)
+        mine_post = _buffer_evt("evt-mine-post", end, end + timedelta(minutes=15))
+
+        result = self._run(appt, [theirs], [mine_post], [earlier], _rule(15, 15))
+
+        assert result == ["delete:evt-mine-post"]
+
+    def test_identical_spans_keep_exactly_one(self):
+        """Both buffers cover the same 15 minutes: one goes, one stays."""
+        appt = _future_appt(minutes=30)
+        start = appt.start_time
+        earlier = _neighbor(start - timedelta(minutes=60), minutes=45)
+        mine = _buffer_evt("evt-mine", start - timedelta(minutes=15), start)
+        theirs = _buffer_evt("evt-theirs", start - timedelta(minutes=15), start)
+
+        result = self._run(appt, [mine, theirs], [], [earlier], _rule(15, 15))
+
+        assert result == ["delete:evt-theirs"] or result == ["delete:evt-mine"]
+        assert len(result) == 1
+
+    def test_neighbor_with_no_padding_claims_nothing(self):
+        """A neighbor whose rule draws no buffer cannot keep this appointment's."""
+        appt = _future_appt(minutes=30)
+        start = appt.start_time
+        earlier = _neighbor(start - timedelta(minutes=60), minutes=45)
+        mine = _buffer_evt("evt-mine", start - timedelta(minutes=15), start)
+
+        result = self._run(appt, [mine], [], [earlier], _rule(0, 0))
+
+        assert result == ["delete:evt-mine"]
+
+    def test_next_appointments_pre_buffer_survives(self):
+        appt = _future_appt(minutes=30)
+        start = appt.start_time
+        end = start + timedelta(minutes=30)
+        later = _neighbor(end + timedelta(minutes=15), minutes=30)  # starts 15 min after end
+        theirs = _buffer_evt("evt-theirs", end, end + timedelta(minutes=15))
+
+        result = self._run(appt, [], [theirs], [later], _rule(15, 15))
+
+        assert result == []
 
 
 class TestCreateBufferEffects:
@@ -504,6 +590,39 @@ class TestBufferMinutesFollowsTheCoveringRule:
         with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=rules):
             assert _buffer_minutes(_appt_on("friday"), "p1") == (5, 15)
             assert _buffer_minutes(_appt_on("monday"), "p1") == (0, 0)
+
+    def test_override_hours_on_an_off_day_get_padding(self):
+        """A Saturday the rule never covers, opened by a date override."""
+        appt = _appt_on("saturday", hour=10)
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.date_overrides = [
+            DateOverride(date=appt.start_time.date(), time_windows=[_CLINIC_HOURS])
+        ]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (5, 15)
+
+    def test_closed_override_gives_no_padding(self):
+        appt = _appt_on("friday")
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.date_overrides = [DateOverride(date=appt.start_time.date(), is_closed=True)]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_override_hours_replace_the_days_usual_hours(self):
+        """Friday is normally 8 to 6; an override narrows it to 1 to 3pm."""
+        appt = _appt_on("friday", hour=10)
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.date_overrides = [
+            DateOverride(
+                date=appt.start_time.date(),
+                time_windows=[TimeWindow(start=dt_time(13, 0), end=dt_time(15, 0))],
+            )
+        ]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
 
     def test_a_zero_padding_rule_first_does_not_suppress_the_covering_one(self):
         """The original defect: a provider's first rule had no padding, so every

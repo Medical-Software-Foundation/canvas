@@ -2333,3 +2333,40 @@ class TestViewerSection:
         body, _ = _parse(_make_handler(staff_id=_STAFF_HEX).list_providers()[0])
 
         assert [(p["id"], p["is_you"]) for p in body["providers"]] == [(_STAFF_HEX, True), ("p2", False)]
+
+
+class TestFormFallbackSaves:
+    """The hidden-form fallback (used when the browser blocks normal API calls)
+    reaches the same roles and saved-view saves as the API routes."""
+
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_roles_save_through_the_fallback(self, mock_set, mock_reconcile):
+        handler = _make_handler(staff_id=_STAFF_HEX)
+
+        result = handler._do_dispatch("PUT", "/roles", {"schedulable_roles": ["md", "cc"]})
+
+        body, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert mock_set.mock_calls == [call(["MD", "CC"])]
+        assert mock_reconcile.mock_calls == [call()]
+
+    @patch(f"{MODULE}.set_my_view")
+    def test_saved_view_saves_through_the_fallback(self, mock_set):
+        handler = _make_handler(staff_id=_STAFF_HEX)
+
+        result = handler._do_dispatch("PUT", "/my-view", {"provider_ids": ["p2"]})
+
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert mock_set.mock_calls == [call(_STAFF_HEX, ["p2"])]
+
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_fallback_roles_save_still_checks_permission(self, mock_set):
+        handler = _make_handler(staff_id=_OTHER_HEX, secrets={"allowed-staff-keys": _STAFF_HEX})
+
+        result = handler._do_dispatch("PUT", "/roles", {"schedulable_roles": ["MD"]})
+
+        _, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert mock_set.mock_calls == []

@@ -4,13 +4,13 @@ from unittest.mock import MagicMock, call, patch
 
 from provider_availability.engine.roles import (
     get_available_roles,
+    get_effective_schedulable_roles,
     get_schedulable_codes,
     get_schedulable_staff,
     is_schedulable_staff,
 )
 from provider_availability.engine.storage import (
     CACHE_TTL_SECONDS,
-    DEFAULT_SCHEDULABLE_ROLES,
     SCHEDULABLE_ROLES_KEY,
     get_schedulable_roles,
     set_schedulable_roles,
@@ -19,9 +19,10 @@ from provider_availability.engine.storage import (
 ROLES_MODULE = "provider_availability.engine.roles"
 
 
-def _role(internal_code, name="", abbreviation="", domain="", staff_id=1):
+def _role(internal_code, name="", abbreviation="", domain="", staff_id=1, role_type="ADMIN"):
     role = MagicMock()
     role.internal_code = internal_code
+    role.role_type = role_type
     role.name = name
     role.public_abbreviation = abbreviation
     role.domain = domain
@@ -29,16 +30,15 @@ def _role(internal_code, name="", abbreviation="", domain="", staff_id=1):
     return role
 
 
-def _staff(codes):
+def _staff(codes, role_type="ADMIN"):
     staff = MagicMock()
-    staff.roles.all.return_value = [_role(c) for c in codes]
+    staff.roles.all.return_value = [_role(c, role_type=role_type) for c in codes]
     return staff
 
 
 class TestSchedulableRolesStorage:
-    def test_defaults_to_provider_codes_when_unset(self, patch_cache):
-        assert get_schedulable_roles() == list(DEFAULT_SCHEDULABLE_ROLES)
-        assert get_schedulable_roles() == ["MD", "DO", "NP", "PA"]
+    def test_unset_reads_as_not_configured(self, patch_cache):
+        assert get_schedulable_roles() is None
 
     def test_set_then_get_roundtrips(self, patch_cache):
         set_schedulable_roles(["CC", "MD"])
@@ -106,13 +106,44 @@ class TestGetSchedulableStaff:
             ]
             assert result == [provider, coordinator]
 
-    def test_empty_config_short_circuits_without_query(self):
-        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=[]), \
-             patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
-            result = get_schedulable_staff()
+    def test_unconfigured_schedules_every_provider_role_type(self):
+        """Before a practice saves roles, the plugin keeps its original rule:
+        anyone holding a Provider-type role, whatever the role's code."""
+        therapist = _staff(["LCSW"], role_type="PROVIDER")
+        physician = _staff(["MD"], role_type="PROVIDER")
+        admin = _staff(["AD"])
 
-            assert result == []
-            assert mock_staff.mock_calls == []
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=None), \
+             patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
+            mock_staff.filter.return_value.prefetch_related.return_value = [therapist, physician, admin]
+
+            assert get_schedulable_staff() == [therapist, physician]
+
+    def test_configured_roles_matching_nobody_fall_back_to_provider_role_type(self):
+        physician = _staff(["MD"], role_type="PROVIDER")
+        admin = _staff(["AD"])
+
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC"]), \
+             patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
+            mock_staff.filter.return_value.prefetch_related.return_value = [physician, admin]
+
+            assert get_schedulable_staff() == [physician]
+
+
+class TestEffectiveSchedulableRoles:
+    def test_configured_list_is_shown_as_is(self):
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC", "MD"]), \
+             patch(f"{ROLES_MODULE}.StaffRole.objects") as mock_roles:
+            assert get_effective_schedulable_roles() == ["CC", "MD"]
+            assert mock_roles.mock_calls == []
+
+    def test_unconfigured_shows_the_provider_type_codes_in_use(self):
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=None), \
+             patch(f"{ROLES_MODULE}.StaffRole.objects") as mock_roles:
+            mock_roles.filter.return_value = [_role("np"), _role("LCSW"), _role("NP"), _role("")]
+
+            assert get_effective_schedulable_roles() == ["LCSW", "NP"]
+            assert mock_roles.mock_calls == [call.filter(staff__active=True, role_type="PROVIDER")]
 
 
 class TestGetAvailableRoles:

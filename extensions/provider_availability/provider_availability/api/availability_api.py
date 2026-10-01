@@ -37,6 +37,7 @@ from provider_availability.api._auth import current_staff_id as _signed_in_staff
 from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
 from provider_availability.engine.roles import (
     get_available_roles,
+    get_effective_schedulable_roles,
     get_schedulable_provider_ids,
     get_schedulable_staff,
 )
@@ -1417,7 +1418,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         """Return configured schedulable role codes and the roles in this instance."""
         return [
             JSONResponse({
-                "schedulable_roles": get_schedulable_roles(),
+                "schedulable_roles": get_effective_schedulable_roles(),
+                "configured": get_schedulable_roles() is not None,
                 "available": get_available_roles(),
             })
         ]
@@ -1425,10 +1427,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/roles")
     def set_roles(self) -> list[Response | Effect]:
         """Replace the set of schedulable role internal codes."""
+        return self._save_roles(self.request.json())
+
+    def _save_roles(self, body: dict) -> list[Response | Effect]:
+        """Shared by the API route and the form fallback."""
         denied = _check_write_access(self.request, self.secrets)
         if denied:
             return denied
-        body = self.request.json()
         codes = body.get("schedulable_roles")
         if not isinstance(codes, list):
             return [
@@ -1480,6 +1485,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         check because this changes only what the viewer sees, not any shared
         configuration.
         """
+        return self._save_view(self.request.json())
+
+    def _save_view(self, body: dict) -> list[Response | Effect]:
+        """Shared by the API route and the form fallback."""
         staff_id = _signed_in_staff_id(self.request)
         if not staff_id:
             return [
@@ -1489,7 +1498,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        body = self.request.json()
         provider_ids = body.get("provider_ids")
         if not isinstance(provider_ids, list):
             return [
@@ -1835,6 +1843,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 return self._form_clear_provider_timezone(parts[1])
         if method == "PUT" and p == "provider-timezones/bulk":
             return self._form_set_provider_tz_bulk(body)
+        if method == "PUT" and p == "roles":
+            return self._save_roles(body)
+        if method == "PUT" and p == "my-view":
+            return self._save_view(body)
         return [JSONResponse({"error": f"Unknown: {method} /{p}"}, status_code=HTTPStatus.BAD_REQUEST)]
 
     def _form_create_rule(self, body: dict) -> list[Response | Effect]:

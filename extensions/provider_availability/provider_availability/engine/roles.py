@@ -3,7 +3,9 @@
 Which staff are "schedulable" — get a Clinic calendar, appear in the provider
 dropdown, and are provisioned — is configurable per practice by StaffRole
 ``internal_code``. A staff member qualifies if ANY of their roles' internal
-code is in the configured set.
+code is in the configured set. Until a practice configures a set, every staff
+member holding a role whose ``role_type`` is Provider qualifies, matching the
+plugin's behavior before roles were configurable.
 
 We scan every role (``staff.roles.all()``) rather than
 ``Staff.top_role_abbreviation`` on purpose: that SDK property is derived only
@@ -29,19 +31,32 @@ def _normalize(code: str) -> str:
     return (code or "").strip().upper()
 
 
-def get_schedulable_codes() -> set[str]:
-    """Return the configured schedulable internal codes, normalized."""
-    return {_normalize(c) for c in get_schedulable_roles() if _normalize(c)}
+PROVIDER_ROLE_TYPE = "PROVIDER"
 
 
-def is_schedulable_staff(staff: Staff, schedulable_codes: set[str]) -> bool:
+def get_schedulable_codes() -> set[str] | None:
+    """Return the configured schedulable internal codes, normalized.
+
+    None means roles were never configured, so the Provider role type decides.
+    """
+    configured = get_schedulable_roles()
+    if configured is None:
+        return None
+    return {_normalize(c) for c in configured if _normalize(c)}
+
+
+def is_schedulable_staff(staff: Staff, schedulable_codes: set[str] | None) -> bool:
     """Return True if any of the staff member's roles is a schedulable role.
 
     Scans all roles so administrative/hybrid roles count too, not just the top
-    clinical role. ``schedulable_codes`` must already be normalized (upper-cased).
+    clinical role. ``schedulable_codes`` must already be normalized (upper-cased);
+    None means any role with the Provider role type qualifies.
     """
     for role in staff.roles.all():
-        if _normalize(role.internal_code) in schedulable_codes:
+        if schedulable_codes is None:
+            if role.role_type == PROVIDER_ROLE_TYPE:
+                return True
+        elif _normalize(role.internal_code) in schedulable_codes:
             return True
     return False
 
@@ -49,17 +64,43 @@ def is_schedulable_staff(staff: Staff, schedulable_codes: set[str]) -> bool:
 def get_schedulable_staff() -> list[Staff]:
     """Return active staff whose role set makes them schedulable.
 
+    A configured set that matches no active staff falls back to the Provider
+    role type rather than making nobody bookable. Every caller (slot search,
+    pickers, overview, calendar sync) then agrees, and a configuration that
+    has drifted out of date cannot clear a practice's availability.
+
     Prefetches roles to avoid an N+1 across the per-staff ``is_schedulable_staff``
     check.
     """
     codes = get_schedulable_codes()
-    if not codes:
-        log.info("get_schedulable_staff: no schedulable roles configured")
-        return []
-    staff = Staff.objects.filter(active=True).prefetch_related("roles")
+    staff = list(Staff.objects.filter(active=True).prefetch_related("roles"))
     result = [s for s in staff if is_schedulable_staff(s, codes)]
+    if codes is not None and not result:
+        log.warning(
+            "get_schedulable_staff: configured roles %s match no active staff, "
+            "falling back to the Provider role type",
+            sorted(codes),
+        )
+        result = [s for s in staff if is_schedulable_staff(s, None)]
     log.info("get_schedulable_staff: %d of active staff are schedulable", len(result))
     return result
+
+
+def get_effective_schedulable_roles() -> list[str]:
+    """The role codes currently deciding who is schedulable, for display.
+
+    When roles were never configured, these are the codes of the Provider-type
+    roles held by active staff, so the Settings tab shows what is in effect
+    rather than an empty selection.
+    """
+    configured = get_schedulable_roles()
+    if configured is not None:
+        return configured
+    codes = {
+        _normalize(role.internal_code)
+        for role in StaffRole.objects.filter(staff__active=True, role_type=PROVIDER_ROLE_TYPE)
+    }
+    return sorted(c for c in codes if c)
 
 
 def get_schedulable_provider_ids() -> set[str]:

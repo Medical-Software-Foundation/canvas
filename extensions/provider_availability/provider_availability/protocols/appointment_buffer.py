@@ -150,19 +150,27 @@ def _covering_rules(
             continue
         if rule.effective_end and local_date > rule.effective_end:
             continue
-        if not date_in_pattern(
+        # A date override replaces the day's pattern and windows, exactly as it
+        # does in slot calculation, so hours that exist only because of an
+        # override still get their padding.
+        override = next((o for o in rule.date_overrides if o.date == local_date), None)
+        if override is not None:
+            if override.is_closed:
+                continue
+            windows = override.time_windows
+        elif date_in_pattern(
             local_date,
             rule.effective_start,
             rule.recurrence_frequency,
             rule.recurrence_interval,
             rule.weekly_schedule,
         ):
+            windows = _windows_on(rule, local_date)
+        else:
             continue
         if rule.location_ids and appt_location not in rule.location_ids:
             continue
-        if not any(
-            w.start <= local_time < w.end for w in _windows_on(rule, local_date)
-        ):
+        if not any(w.start <= local_time < w.end for w in windows):
             continue
         covering.append(rule)
     return covering
@@ -217,10 +225,75 @@ def _delete_buffer_effects(appt: Appointment) -> list[Effect]:
         title__startswith=BUFFER_TITLE,
         is_cancelled=False,
     )
-    matches = list(on_admin_calendars.filter(ends_at=start)) + list(
-        on_admin_calendars.filter(starts_at=end)
+    pre_side = list(on_admin_calendars.filter(ends_at=start))
+    post_side = list(on_admin_calendars.filter(starts_at=end))
+    if not pre_side and not post_side:
+        return []
+
+    # A buffer at one of these positions can belong to the appointment booked
+    # right next to this one: the previous appointment's post-buffer also ends
+    # when this one starts, and the next one's pre-buffer starts when this one
+    # ends. A neighbor keeps the one event that matches the buffer its own rule
+    # draws, so cancelling or moving this appointment never opens up time the
+    # neighbor still needs.
+    claimed = _neighbor_buffer_spans(appt, provider_id, start, end)
+    doomed = _unclaimed(pre_side + post_side, claimed)
+    return [EventEffect(event_id=str(evt.id)).delete() for evt in doomed]
+
+
+def _neighbor_buffer_spans(
+    appt: Appointment, provider_id: str, start: datetime, end: datetime
+) -> list[tuple[datetime, datetime]]:
+    """The buffer spans other appointments draw at this appointment's edges.
+
+    An earlier appointment's post-buffer that ends exactly when this one starts,
+    and a later appointment's pre-buffer that starts exactly when this one ends.
+    Spans come from each neighbor's own covering rule, so this appointment's
+    buffer is never mistaken for a neighbor's that does not exist.
+    """
+    neighbors = (
+        Appointment.objects.filter(
+            provider__id=provider_id,
+            patient__isnull=False,
+            entered_in_error__isnull=True,
+            start_time__gte=start - timedelta(days=1),
+            start_time__lte=end + timedelta(days=1),
+        )
+        .exclude(id=appt.id)
+        .exclude(status=AppointmentProgressStatus.CANCELLED)
+        .select_related("location")
     )
-    return [EventEffect(event_id=str(evt.id)).delete() for evt in matches]
+    at_start, at_end = _to_utc(start), _to_utc(end)
+    spans: list[tuple[datetime, datetime]] = []
+    for other in neighbors:
+        other_start, other_end = (_to_utc(t) for t in _appointment_window(other))
+        if other_end > at_start and other_start < at_end:
+            continue  # overlapping, not a neighbor
+        pre, post = _buffer_minutes(other, provider_id)
+        if post > 0 and other_end + timedelta(minutes=post) == at_start:
+            spans.append((other_end, at_start))
+        if pre > 0 and other_start - timedelta(minutes=pre) == at_end:
+            spans.append((at_end, other_start))
+    return spans
+
+
+def _unclaimed(
+    events: list[EventModel], claimed: list[tuple[datetime, datetime]]
+) -> list[EventModel]:
+    """The events not accounted for by a neighbor, each neighbor span claiming one.
+
+    When this appointment's buffer and a neighbor's cover the identical span,
+    one of the two is deleted and the other is kept.
+    """
+    remaining = list(claimed)
+    doomed: list[EventModel] = []
+    for evt in events:
+        span = (_to_utc(evt.starts_at), _to_utc(evt.ends_at))
+        if span in remaining:
+            remaining.remove(span)
+        else:
+            doomed.append(evt)
+    return doomed
 
 
 def _create_buffer_effects(appt: Appointment) -> list[Effect]:

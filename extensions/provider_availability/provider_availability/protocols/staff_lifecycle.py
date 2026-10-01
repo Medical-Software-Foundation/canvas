@@ -66,7 +66,7 @@ class OnStaffActivated(BaseProtocol):
             return []
 
         # Only create calendars for staff in a schedulable role (configurable
-        # per practice by role internal code; defaults to MD/DO/NP/PA).
+        # per practice by role internal code; until configured, the Provider role type).
         if not is_schedulable_staff(staff, get_schedulable_codes()):
             log.info(
                 "OnStaffActivated: %s %s not in a schedulable role, skipping",

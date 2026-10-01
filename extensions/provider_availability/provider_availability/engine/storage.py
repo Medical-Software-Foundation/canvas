@@ -535,22 +535,18 @@ def set_practice_timezone(tz_name: str) -> None:
 
 # ── Schedulable roles ─────────────────────────────────────────────────
 
-# Default set matches the historical hard-coded providers. For provider roles
-# the StaffRole ``internal_code`` equals the ``public_abbreviation`` (MD, DO,
-# NP, PA), so this default preserves prior behaviour on upgrade.
-DEFAULT_SCHEDULABLE_ROLES = ("MD", "DO", "NP", "PA")
+def get_schedulable_roles() -> list[str] | None:
+    """Get the StaffRole internal codes a practice chose as schedulable.
 
-
-def get_schedulable_roles() -> list[str]:
-    """Get the StaffRole internal codes considered schedulable.
-
-    Falls back to the default provider codes when never configured, so a fresh
-    or upgraded install still schedules providers out of the box.
+    Returns None when roles were never configured. Callers treat that as
+    "every staff member with a Provider role type", which is what the plugin
+    did before roles were configurable, so an upgrade changes nobody's
+    bookability until a practice saves its own list.
     """
     cache = _get_cache()
     val = cache.get(SCHEDULABLE_ROLES_KEY)
     if val is None:
-        return list(DEFAULT_SCHEDULABLE_ROLES)
+        return None
     return list(val)
 
 

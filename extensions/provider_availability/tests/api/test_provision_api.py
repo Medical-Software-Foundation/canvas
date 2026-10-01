@@ -345,26 +345,45 @@ class TestSchedulableRolesEndpoints:
         {"code": "MD", "name": "Physician", "abbreviation": "MD", "domain": "CLI", "staff_count": 3},
     ])
     @patch(f"{PROV_MODULE}.get_schedulable_roles", return_value=["MD", "DO"])
-    def test_get_roles(self, mock_get, mock_avail):
+    @patch(f"{PROV_MODULE}.get_effective_schedulable_roles", return_value=["MD", "DO"])
+    def test_get_roles(self, mock_effective, mock_get, mock_avail):
         handler = _make_provision_handler()
         result = handler.get_roles()
 
         data, code = _parse(result[0])
         assert code == HTTPStatus.OK
         assert data["schedulable_roles"] == ["MD", "DO"]
+        assert data["configured"] is True
         assert data["available"][0]["code"] == "MD"
+        assert mock_effective.mock_calls == [call()]
         assert mock_get.mock_calls == [call()]
         assert mock_avail.mock_calls == [call()]
 
+    @patch(f"{PROV_MODULE}._reconcile_availability_to_roles", return_value=["sync-effect"])
     @patch(f"{PROV_MODULE}.set_schedulable_roles")
-    def test_set_roles_normalizes_and_saves(self, mock_set):
+    def test_set_roles_normalizes_saves_and_resyncs(self, mock_set, mock_reconcile):
+        """Same as the Settings tab: availability follows the new set at once."""
         handler = _make_provision_handler(json_body={"schedulable_roles": ["cc", " md ", ""]})
         result = handler.set_roles()
 
-        data, code = _parse(result[0])
+        assert result[0] == "sync-effect"
+        data, code = _parse(result[-1])
         assert code == HTTPStatus.OK
         assert data["schedulable_roles"] == ["CC", "MD"]
         assert mock_set.mock_calls == [call(["CC", "MD"])]
+        assert mock_reconcile.mock_calls == [call()]
+
+    @patch(f"{PROV_MODULE}._reconcile_availability_to_roles")
+    @patch(f"{PROV_MODULE}.set_schedulable_roles")
+    def test_set_roles_rejects_an_empty_list(self, mock_set, mock_reconcile):
+        handler = _make_provision_handler(json_body={"schedulable_roles": ["", "  "]})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "At least one" in data["error"]
+        assert mock_set.mock_calls == []
+        assert mock_reconcile.mock_calls == []
 
     def test_set_roles_rejects_non_list(self):
         handler = _make_provision_handler(json_body={"schedulable_roles": "MD,DO"})

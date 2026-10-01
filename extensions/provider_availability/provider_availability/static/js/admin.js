@@ -780,8 +780,8 @@ window.addEventListener('beforeunload', function(e) {
   }
 });
 
-var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2, 'bulk-import': 3 };
-var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings', 'panel-bulk-import': 'bulk-import' };
+var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2 };
+var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings' };
 
 function _isEditorVisible() {
   var edPanel = document.getElementById('panel-editor');
@@ -811,7 +811,6 @@ function showTab(name) {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {
       renderSettingsPanel();
-    } else if (name === 'bulk-import') {
       bulkReset();
     } else {
       if (!_skipDirtyCheck) loadOverview();
@@ -2954,13 +2953,13 @@ function updateEditorTzConversionHint() {
 }
 
 async function loadTimezone() {
+  // A failed or empty response (expired session, form fallback mode) keeps the
+  // last known values, so the page never quietly switches the practice to UTC.
   try {
     const data = await apiCall('/timezone');
-    _practiceTz = data.timezone || 'UTC';
-    _tzOptions = data.available || [];
-  } catch (e) {
-    _practiceTz = 'UTC';
-  }
+    if (data && data.timezone) _practiceTz = data.timezone;
+    if (data && data.available && data.available.length) _tzOptions = data.available;
+  } catch (e) {}
 
   updateTzHints();
   updateEditorTzLabels();
@@ -3471,7 +3470,6 @@ if (_mainTabsEl) {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {
       renderSettingsPanel();
-    } else if (name === 'bulk-import') {
       bulkReset();
     } else {
       if (!_skipDirtyCheck) loadOverview();
@@ -3486,8 +3484,13 @@ if (_mainTabsEl) {
 
 // Restore active tab from URL hash
 var _initHash = location.hash.replace('#', '');
-if (_initHash === 'settings' || _initHash === 'editor' || _initHash === 'bulk-import') {
+if (_initHash === 'settings' || _initHash === 'editor') {
   showTab(_initHash);
+} else if (_initHash === 'bulk-import') {
+  // Bulk import used to be its own tab; an old link lands on its Settings section.
+  showTab('settings');
+  var bulkSection = document.getElementById('settings-bulk-import');
+  if (bulkSection) bulkSection.scrollIntoView();
 }
 
 // Intercept browser back/forward so it stays inside the admin and behaves like
