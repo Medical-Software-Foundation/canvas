@@ -1,14 +1,14 @@
 {
     "sdk_version": "0.179.0",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.2.0",
     "name": "collections_report",
-    "description": "Daily collections reporting — view payments collected by date, method, and patient.",
+    "description": "Financial reporting: payments collected by date, method, and patient, plus patients with outstanding balances.",
     "components": {
         "applications": [
             {
                 "class": "collections_report.applications.collections_app:CollectionsApp",
                 "name": "Collections",
-                "description": "Daily collections reporting view.",
+                "description": "Collections and balances owed reporting view.",
                 "scope": "provider_menu_item",
                 "icon": "assets/collections-icon.png",
                 "menu_position": "bottom",
@@ -18,7 +18,7 @@
         "handlers": [
             {
                 "class": "collections_report.handlers.api:CollectionsAPI",
-                "description": "REST API for collections data and report UI.",
+                "description": "REST API for collections and patient balances data and report UI.",
                 "data_access": {
                     "event": "",
                     "read": [
@@ -26,7 +26,11 @@
                         "BulkPatientPosting",
                         "BasePosting",
                         "Claim",
-                        "Patient"
+                        "Patient",
+                        "CoveragePosting",
+                        "ClaimCoverage",
+                        "InstallmentPlan",
+                        "Note"
                     ],
                     "write": []
                 }
