@@ -810,6 +810,7 @@ document.addEventListener('change', function(e) {
 // its launch address on a refresh.
 var _LAST_TAB_KEY = 'provider_availability:last-tab';
 function _rememberTab(name) {
+  _activeTab = name;
   try { history.replaceState(null, '', '#' + name); } catch (e) {}
   try { sessionStorage.setItem(_LAST_TAB_KEY, name); } catch (e) {}
 }
@@ -817,16 +818,21 @@ function _rememberTab(name) {
 var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2 };
 var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings' };
 
-function _isEditorVisible() {
-  var edPanel = document.getElementById('panel-editor');
-  return edPanel && !edPanel.hasAttribute('hidden');
+// Which tab is showing, kept by _rememberTab.
+var _activeTab = 'availability';
+
+// Ask before leaving a tab that has unsaved changes. Returns false to stay.
+function _confirmLeave(toName) {
+  if (_skipDirtyCheck || toName === _activeTab) return true;
+  var unsaved = (_activeTab === 'editor' && _formDirty) || (_activeTab === 'settings' && _settingsDirty);
+  if (!unsaved) return true;
+  if (!confirm('You have unsaved changes. Leave without saving?')) return false;
+  if (_activeTab === 'settings') _settingsDirty = false;
+  return true;
 }
 
 function showTab(name) {
-  // Unsaved changes prompt when leaving editor
-  if (_isEditorVisible() && name !== 'editor' && _formDirty && !_skipDirtyCheck) {
-    if (!confirm('You have unsaved changes. Leave without saving?')) return;
-  }
+  if (!_confirmLeave(name)) return;
   _formDirty = false;
 
   showTab._inProgress = true;
@@ -3499,6 +3505,23 @@ try {
 // Listen for user-initiated tab changes from the canvas-tabs component
 var _mainTabsEl = document.getElementById('main-tabs');
 if (_mainTabsEl) {
+  // A click on a tab header switches tabs inside the tab component, which
+  // never passes through showTab. Catch it first, in the capture phase, so
+  // leaving a tab with unsaved changes asks the same question.
+  var _tabNames = Object.keys(_tabIndexMap);
+  document.addEventListener('click', function(e) {
+    var path = e.composedPath ? e.composedPath() : [];
+    var btn = path.find(function(n) { return n.classList && n.classList.contains('tab-button'); });
+    if (!btn || !_mainTabsEl.shadowRoot || !_mainTabsEl.shadowRoot.contains(btn)) return;
+    var toName = _tabNames.find(function(k) { return _tabIndexMap[k] === parseInt(btn.dataset.index, 10); });
+    if (!toName || _confirmLeave(toName)) {
+      if (toName && toName !== _activeTab && _activeTab === 'editor') _formDirty = false;
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+
   _mainTabsEl.addEventListener('tab-change', function(e) {
     var panelId = e.detail && e.detail.panel;
     var name = _tabPanelMap[panelId] || 'availability';
