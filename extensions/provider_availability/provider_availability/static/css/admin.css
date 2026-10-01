@@ -213,6 +213,16 @@ body {
 /* Bulk import controls: template, file picker and upload on one row, with the
    technical note underneath in small muted text. */
 .bulk-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bulk-link { font-size: 13px; color: var(--cyan); text-decoration: none; }
+.bulk-link:hover { text-decoration: underline; }
+.bulk-btn {
+  font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--text); border: 1px solid var(--border);
+}
+.bulk-btn:hover:not(:disabled) { border-color: var(--cyan); }
+/* Upload stays quiet until there is a file to upload. */
+.bulk-btn-primary:not(:disabled) { background: var(--cyan); border-color: var(--cyan); color: #fff; }
+.bulk-btn:disabled { color: var(--text-muted); cursor: default; }
 .bulk-file-name { font-size: 13px; color: var(--text-muted); }
 .bulk-hint { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
 
