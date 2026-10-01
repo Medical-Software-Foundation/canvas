@@ -848,8 +848,14 @@ const CSV_BASE = '/plugin-io/api/provider_availability/csv';
 var _bulkFile = null;
 var _bulkRecords = null;
 
+function _bulkShowFileName() {
+  var label = document.getElementById('bulk-file-name');
+  if (label) label.textContent = _bulkFile ? _bulkFile.name : 'No file chosen';
+}
+
 function bulkFileSelect(event) {
   _bulkFile = (event.target.files && event.target.files[0]) || null;
+  _bulkShowFileName();
   var btn = document.getElementById('bulk-validate-btn');
   if (btn) btn.disabled = !_bulkFile;
   var err = document.getElementById('bulk-upload-error');
@@ -868,6 +874,7 @@ function bulkReset() {
   _bulkRecords = null;
   var input = document.getElementById('bulk-file');
   if (input) input.value = '';
+  _bulkShowFileName();
   var btn = document.getElementById('bulk-validate-btn');
   if (btn) btn.disabled = true;
   var err = document.getElementById('bulk-upload-error');

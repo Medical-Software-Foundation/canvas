@@ -551,22 +551,20 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
         <!-- Bulk import: rarely used, so it lives with the other set-once settings -->
         <div id="settings-bulk-import">
           <div class="section-label">Bulk Import</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Upload a CSV to load availability, blocks, and holds for many staff at once.</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Load availability, blocks, and holds for many staff at once from a spreadsheet.</p>
 
           <!-- Step 1: upload -->
           <div id="bulk-step-upload">
-            <div class="section-label">CSV File</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
-              One row per time window; rows for the same staff key and settings merge into one rule.
-              Staff are keyed by <strong>staff_key</strong> (Canvas Staff UUID).
-              <a href="#" onclick="bulkDownloadTemplate();return false;">Download template</a>
-            </p>
-            <input type="file" id="bulk-file" accept=".csv" onchange="bulkFileSelect(event)">
-            <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
-            <div style="margin-top:16px;">
+            <input type="file" id="bulk-file" accept=".csv" onchange="bulkFileSelect(event)" style="display:none;">
+            <div class="bulk-actions">
+              <canvas-button variant="ghost" onclick="bulkDownloadTemplate()">Download template</canvas-button>
+              <canvas-button variant="ghost" onclick="document.getElementById('bulk-file').click()">Choose CSV file</canvas-button>
+              <span id="bulk-file-name" class="bulk-file-name">No file chosen</span>
               <button type="button" id="bulk-validate-btn" class="btn" disabled onclick="bulkUploadValidate()"
                 style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Upload &amp; Validate</button>
             </div>
+            <p class="bulk-hint">One row per time window. Each row names the staff member by their Canvas staff key.</p>
+            <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
           </div>
 
           <!-- Step 2: preview -->
