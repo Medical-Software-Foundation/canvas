@@ -1,54 +1,56 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Failed faxes</title>
-  <link rel="stylesheet" href="{{ asset_base }}/styles.css?v={{ cache_bust }}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Failed faxes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ asset_base }}/styles.css?v={{ cache_bust }}">
 </head>
 <body data-base="{{ asset_base }}">
-  <header class="page-header">
-    <h1>Failed faxes</h1>
-    <p class="subtitle">Faxes sent from Canvas that were not delivered, and faxes received only in part, from the last <span id="window-days">90</span> days. Newest first.</p>
-  </header>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>Failed faxes</h1>
+        <p class="lede">Faxes that didn't make it, with what went wrong and a way to fix each one.</p>
+      </div>
+      <span class="window">Last 90 days</span>
+    </header>
 
-  <main>
-    <div id="status" class="status" role="status"></div>
-    <div class="table-wrap">
-      <table id="fax-table" hidden>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Patient</th>
-            <th>Fax number</th>
-            <th>Sent by</th>
-            <th>Time</th>
-            <th>Pages</th>
-            <th>Reason</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="fax-rows"></tbody>
-      </table>
+    <div class="tabs" role="tablist" aria-label="Fax direction">
+      <button class="tab" role="tab" data-tab="sent" aria-selected="true">Sent <span class="count" id="count-sent">0</span></button>
+      <button class="tab" role="tab" data-tab="received" aria-selected="false">Received <span class="count" id="count-received">0</span></button>
     </div>
-    <nav class="pager" id="pager" hidden>
-      <button type="button" id="prev-page">Previous</button>
-      <span id="page-label"></span>
-      <button type="button" id="next-page">Next</button>
-    </nav>
-  </main>
 
-  <div id="overlay" class="overlay" hidden>
+    <p class="hint-line" id="hint-line"></p>
+    <div class="filters" id="filters" role="search" aria-label="Filter failed faxes"></div>
+    <p class="filter-count" id="filter-count" hidden></p>
+    <div class="table-panel" id="table-panel" role="tabpanel"></div>
+    <nav class="pager" id="pager" aria-label="Pages" hidden>
+      <button class="btn" id="prev-page" type="button">Previous</button>
+      <span id="page-label"></span>
+      <button class="btn" id="next-page" type="button">Next</button>
+    </nav>
+  </div>
+
+  <div class="scrim" id="scrim" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
-      <h2 id="dialog-title"></h2>
-      <div id="dialog-body"></div>
-      <p id="dialog-error" class="form-error" role="alert"></p>
-      <div class="dialog-actions">
-        <button type="button" id="dialog-cancel" class="secondary">Cancel</button>
-        <button type="button" id="dialog-submit" class="primary">Submit</button>
+      <div class="dialog-head">
+        <h2 id="dialog-title"></h2>
+        <p class="context" id="dialog-context"></p>
+      </div>
+      <div class="dialog-body" id="dialog-body"></div>
+      <div class="dialog-foot">
+        <p class="form-error" id="dialog-error" role="alert"></p>
+        <button class="btn quiet" id="dialog-cancel" type="button">Cancel</button>
+        <button class="btn primary" id="dialog-submit" type="button"></button>
       </div>
     </div>
   </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
 
   <script src="{{ asset_base }}/app.js?v={{ cache_bust }}"></script>
 </body>
