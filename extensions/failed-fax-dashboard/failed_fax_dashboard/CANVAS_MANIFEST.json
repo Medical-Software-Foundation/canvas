@@ -1,8 +1,8 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.1.0",
     "name": "failed_fax_dashboard",
-    "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Lets front desk, referral coordinators, and Data Integration staff resend a note fax, create a follow-up task, or dismiss a row.",
+    "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Shows each row's attempts and task, lets staff resend a note fax, reassign or comment on the row's task, or dismiss it, and creates a task for each new failure.",
     "components": {
         "applications": [
             {
@@ -16,7 +16,7 @@
         "handlers": [
             {
                 "class": "failed_fax_dashboard.api.dashboard_api:FailedFaxDashboardAPI",
-                "description": "Serves the dashboard page and its data, resend, follow-up task, and dismiss endpoints to logged-in staff.",
+                "description": "Serves the dashboard page and its data, resend, task reassign and comment, saved settings, and dismiss endpoints to logged-in staff.",
                 "data_access": {
                     "event": "",
                     "read": [
@@ -35,7 +35,40 @@
                         "IntegrationTask",
                         "Patient",
                         "Staff",
+                        "CanvasUser",
                         "Team",
+                        "Task",
+                        "TaskComment",
+                        "ServiceProvider"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "failed_fax_dashboard.handlers.fax_alert_cron:FaxAlertCron",
+                "description": "Every 10 minutes, creates a task for each new failed fax, moves it to each new sender, and closes it once a later attempt is delivered.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Fax",
+                        "NoteActionEvent",
+                        "ReferralActionEvent",
+                        "ImagingOrderActionEvent",
+                        "LabOrderActionEvent",
+                        "LetterActionEvent",
+                        "IntegrationTaskActionEvent",
+                        "Note",
+                        "Referral",
+                        "ImagingOrder",
+                        "LabOrder",
+                        "Letter",
+                        "IntegrationTask",
+                        "Patient",
+                        "Staff",
+                        "CanvasUser",
+                        "Team",
+                        "Task",
+                        "TaskComment",
                         "ServiceProvider"
                     ],
                     "write": []
@@ -44,8 +77,22 @@
         ]
     },
     "variables": [
-        {"name": "FAX_DASHBOARD_STAFF_IDS", "default": ""},
-        {"name": "namespace_read_write_access_key", "sensitive": false}
+        {
+            "name": "FAX_DASHBOARD_STAFF_IDS",
+            "default": ""
+        },
+        {
+            "name": "FAILED_FAX_FALLBACK_TEAM",
+            "default": ""
+        },
+        {
+            "name": "RECEIVED_FAX_TASK_TEAM",
+            "default": ""
+        },
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": true
+        }
     ],
     "custom_data": {
         "namespace": "canvas_medical__failed_fax_dashboard",

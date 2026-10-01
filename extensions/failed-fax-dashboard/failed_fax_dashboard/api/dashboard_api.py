@@ -5,8 +5,6 @@ then repeats the ``FAX_DASHBOARD_STAFF_IDS`` access check, so a patient-portal
 session is rejected by the mixin and an unlisted staff member gets a 403.
 """
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
@@ -19,16 +17,14 @@ from canvas_sdk.templates import render_to_string
 from failed_fax_dashboard.services.access import is_staff_allowed
 from failed_fax_dashboard.services.actions import (
     ActionError,
+    build_comment,
+    build_reassign,
     build_resend,
-    build_task,
     dismiss_row,
-    resend_prefill,
-    task_options,
 )
-from failed_fax_dashboard.services.failures import (
-    DEFAULT_PAGE_SIZE,
-    failed_fax_page,
-)
+from failed_fax_dashboard.services.dashboard import dashboard_page
+from failed_fax_dashboard.services.preferences import TABS, reset_views, save_views
+from failed_fax_dashboard.services.tasks import assignee_options
 
 PREFIX = "/app"
 ASSET_BASE = "/plugin-io/api/failed_fax_dashboard/app"
@@ -45,14 +41,6 @@ NOT_AUTHORIZED_HTML = (
     "<p>Your account does not have access to the failed fax dashboard.</p>"
     "</body></html>"
 )
-
-
-def _int_param(raw: str | None, default: int) -> int:
-    """Parse a positive integer query parameter, falling back to the default."""
-    try:
-        return int(raw) if raw else default
-    except ValueError:
-        return default
 
 
 class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -115,26 +103,35 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/failures")
     def failures(self) -> list[Response | Effect]:
-        """One page of failed faxes from the last 90 days."""
+        """One tab at the requested filter, sort, and page, plus both tab totals."""
         if not self._is_allowed():
             return self._forbidden()
         params = self.request.query_params
-        data = failed_fax_page(
-            page=_int_param(params.get("page"), 1),
-            page_size=_int_param(params.get("page_size"), DEFAULT_PAGE_SIZE),
-        )
+        tab = params.get("tab")
+        data = dashboard_page(tab if tab in TABS else "sent", params, self._staff_id())
         return [JSONResponse(data)]
 
-    @api.get("/resend-prefill")
-    def resend_defaults(self) -> list[Response | Effect]:
-        """Number and suggested recipient name for the resend form."""
+    @api.get("/people")
+    def people(self) -> list[Response | Effect]:
+        """Active staff and teams, for the person filter and the reassign picker."""
+        if not self._is_allowed():
+            return self._forbidden()
+        return [JSONResponse(assignee_options())]
+
+    @api.post("/preferences")
+    def preferences(self) -> list[Response | Effect]:
+        """Save the logged-in staff member's settings, or clear them with ``{"reset": true}``."""
         if not self._is_allowed():
             return self._forbidden()
         try:
-            data = resend_prefill(self.request.query_params.get("event_id"))
+            body = self._body()
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
-        return [JSONResponse(data)]
+        if body.get("reset") is True:
+            reset_views(self._staff_id())
+        elif not save_views(self._staff_id(), body.get("views")):
+            return [JSONResponse({"error": "Staff member not found"}, status_code=HTTPStatus.FORBIDDEN)]
+        return [JSONResponse({"ok": True})]
 
     @api.post("/resend")
     def resend(self) -> list[Response | Effect]:
@@ -142,25 +139,29 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_allowed():
             return self._forbidden()
         try:
-            effect = build_resend(self._body())
+            effect = build_resend(self._body(), staff_id=self._staff_id())
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
         return [JSONResponse({"ok": True}), effect]
 
-    @api.get("/task-options")
-    def task_form_options(self) -> list[Response | Effect]:
-        """Staff and teams for the follow-up task form."""
-        if not self._is_allowed():
-            return self._forbidden()
-        return [JSONResponse(task_options())]
-
-    @api.post("/task")
-    def create_task(self) -> list[Response | Effect]:
-        """Create a follow-up task for a failed fax, authored by the staff member clicking."""
+    @api.post("/tasks/reassign")
+    def reassign(self) -> list[Response | Effect]:
+        """Move a row's task to a person or team, noted as a comment under the clicker's name."""
         if not self._is_allowed():
             return self._forbidden()
         try:
-            effect = build_task(self._body(), author_id=self._staff_id())
+            effects = build_reassign(self._body(), staff_id=self._staff_id())
+        except ActionError as error:
+            return [JSONResponse({"error": error.message}, status_code=error.status)]
+        return [JSONResponse({"ok": True}), *effects]
+
+    @api.post("/tasks/comment")
+    def comment(self) -> list[Response | Effect]:
+        """Add a comment to a row's task, under the logged-in staff member's name."""
+        if not self._is_allowed():
+            return self._forbidden()
+        try:
+            effect = build_comment(self._body(), staff_id=self._staff_id())
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
         return [JSONResponse({"ok": True}), effect]

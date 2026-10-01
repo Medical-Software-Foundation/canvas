@@ -39,6 +39,13 @@ class SourceSpec:
     # Attribute chain to the linkable object for follow-up tasks, with its task type.
     link_path: tuple[str, ...] | None = None
     link_type: AddTask.LinkableObjectType | None = None
+    # Attribute chain to the ServiceProvider the item names as its recipient, if it has one.
+    contact_path: tuple[str, ...] | None = None
+    # Attribute chain to a lab's name, for lab orders (the order carries no ServiceProvider).
+    lab_name_path: tuple[str, ...] | None = None
+    # Card note shown with the contact, and the item as written in a sentence.
+    contact_source: str = "Matched in your contact directory"
+    noun: str = ""
 
 
 def _live_item(prefix: str) -> dict[str, Any]:
@@ -56,6 +63,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         note_path=("note",),
         select_related=("note__patient",),
         item_excludes={"note__current_state__state": NoteStates.DELETED},
+        noun="note",
     ),
     SourceSpec(
         type_key="referral",
@@ -64,10 +72,13 @@ SOURCES: tuple[SourceSpec, ...] = (
         item_field="referral",
         patient_path=("referral", "patient"),
         note_path=("referral", "note"),
-        select_related=("referral__patient", "referral__note"),
+        select_related=("referral__patient", "referral__note", "referral__service_provider"),
         item_filters=_live_item("referral"),
         link_path=("referral",),
         link_type=AddTask.LinkableObjectType.REFERRAL,
+        contact_path=("referral", "service_provider"),
+        contact_source="From the referral",
+        noun="referral",
     ),
     SourceSpec(
         type_key="imaging_order",
@@ -76,10 +87,17 @@ SOURCES: tuple[SourceSpec, ...] = (
         item_field="imaging_order",
         patient_path=("imaging_order", "patient"),
         note_path=("imaging_order", "note"),
-        select_related=("imaging_order__patient", "imaging_order__note"),
+        select_related=(
+            "imaging_order__patient",
+            "imaging_order__note",
+            "imaging_order__imaging_center",
+        ),
         item_filters=_live_item("imaging_order"),
         link_path=("imaging_order",),
         link_type=AddTask.LinkableObjectType.IMAGING,
+        contact_path=("imaging_order", "imaging_center"),
+        contact_source="From the imaging order",
+        noun="imaging order",
     ),
     SourceSpec(
         type_key="lab_order",
@@ -90,6 +108,9 @@ SOURCES: tuple[SourceSpec, ...] = (
         note_path=("lab_order", "note"),
         select_related=("lab_order__patient", "lab_order__note"),
         item_filters=_live_item("lab_order"),
+        lab_name_path=("lab_order", "ontology_lab_partner"),
+        contact_source="Lab from the order, details from your contact directory",
+        noun="lab order",
     ),
     SourceSpec(
         type_key="letter",
@@ -100,6 +121,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         note_path=("letter", "note"),
         select_related=("letter__note__patient",),
         item_excludes={"letter__note__current_state__state": NoteStates.DELETED},
+        noun="letter",
     ),
     SourceSpec(
         type_key="integration_task",
@@ -109,6 +131,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         patient_path=("integration_task", "patient"),
         note_path=None,
         select_related=("integration_task__patient",),
+        noun="Data Integration document",
     ),
 )
 

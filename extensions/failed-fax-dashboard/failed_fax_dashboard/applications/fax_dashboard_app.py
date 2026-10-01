@@ -1,7 +1,5 @@
 """App drawer entry that opens the failed-fax dashboard."""
 
-from __future__ import annotations
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import Application

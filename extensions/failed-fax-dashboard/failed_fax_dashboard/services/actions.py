@@ -1,27 +1,27 @@
-"""Row actions: resend a note fax, create a follow-up task, dismiss a row."""
+"""Row actions: resend a note fax, dismiss a row, reassign a task, comment on a task."""
 
-from __future__ import annotations
-
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 from uuid import UUID
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.fax import FaxNoteEffect
-from canvas_sdk.effects.task import AddTask, TaskPriority
-from canvas_sdk.v1.data import Fax, FaxDirection, ServiceProvider, Staff, Team
+from canvas_sdk.effects.task import AddTaskComment, UpdateTask
+from canvas_sdk.v1.data import Fax, FaxDirection, Staff, Team
 
-from failed_fax_dashboard.models import FaxDismissal
-from failed_fax_dashboard.services.failures import normalize_number, person_name
-from failed_fax_dashboard.services.sources import (
-    RECEIVED_TYPE,
-    SOURCES_BY_KEY,
-    TYPE_LABELS,
-    walk,
+from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
+from failed_fax_dashboard.services.history import FAXED
+from failed_fax_dashboard.services.sources import RECEIVED_TYPE, SOURCES_BY_KEY, TYPE_LABELS
+from failed_fax_dashboard.services.util import (
+    STAFF_PREFIX,
+    TEAM_PREFIX,
+    normalize_number,
+    person_name,
+    to_e164,
 )
 
-ASSIGNEE_TYPES = ("staff", "team")
+MAX_COMMENT = 5000
 
 
 class ActionError(Exception):
@@ -80,33 +80,8 @@ def _failed_note_event(event_id: Any) -> Any:
     return event
 
 
-def resend_prefill(event_id: Any) -> dict[str, str]:
-    """Number and suggested recipient name for the resend form.
-
-    The recipient name is filled in only when exactly one active contact in the
-    directory has this fax number.
-    """
-    event = _failed_note_event(event_id)
-    number = event.fax.to_fax_number if event.fax is not None else ""
-    return {"fax_number": number, "recipient_name": _directory_name(number)}
-
-
-def _directory_name(number: str) -> str:
-    """Name of the single directory contact with this fax number, else ''."""
-    digits = normalize_number(number)[-10:]
-    if len(digits) < 7:
-        return ""
-    pattern = r"\D*".join(digits) + r"\D*$"
-    matches = list(
-        ServiceProvider.objects.filter(is_active=True, business_fax__regex=pattern)[:2]
-    )
-    if len(matches) != 1:
-        return ""
-    return person_name(matches[0])
-
-
-def build_resend(payload: dict[str, Any]) -> Effect:
-    """Build the FaxNoteEffect that resends a failed note fax."""
+def build_resend(payload: dict[str, Any], staff_id: str, now: datetime | None = None) -> Effect:
+    """Remember who clicked Resend and build the FaxNoteEffect that sends the note again."""
     event = _failed_note_event(payload.get("event_id"))
     recipient_name = _text(payload, "recipient_name")
     recipient_number = _text(payload, "recipient_fax_number")
@@ -114,84 +89,30 @@ def build_resend(payload: dict[str, Any]) -> Effect:
         raise ActionError("Recipient name is required")
     if not normalize_number(recipient_number):
         raise ActionError("A valid fax number is required")
+    staff = Staff.objects.filter(id=staff_id).first()
+    if staff is None:
+        raise ActionError("Staff member not found", HTTPStatus.FORBIDDEN)
+    failed_number = to_e164(event.fax.to_fax_number if event.fax is not None else "")
+    later = [
+        other
+        for other in SOURCES_BY_KEY["note"].model.objects.filter(
+            note_id=event.note_id, event_type=FAXED, created__gt=event.created
+        ).select_related("fax")
+        if other.fax is not None and to_e164(other.fax.to_fax_number) == failed_number
+    ]
+    if later:
+        raise ActionError("This fax was already sent again", HTTPStatus.CONFLICT)
+    FaxResend.objects.create(
+        note_id=event.note_id,
+        staff_id=staff.dbid,
+        fax_number=to_e164(recipient_number),
+        resent_at=now or datetime.now(timezone.utc),
+    )
     return FaxNoteEffect(
         note_id=str(event.note.id),
         recipient_name=recipient_name,
         recipient_fax_number=recipient_number,
     ).apply()
-
-
-def task_options() -> dict[str, list[dict[str, str]]]:
-    """Staff and teams that a follow-up task can be assigned to."""
-    staff = Staff.objects.filter(active=True).order_by("last_name", "first_name")
-    teams = Team.objects.order_by("name")
-    return {
-        "staff": [{"id": member.id, "name": person_name(member)} for member in staff],
-        "teams": [{"id": str(team.id), "name": team.name} for team in teams],
-    }
-
-
-def _parse_due(raw: str) -> datetime | None:
-    """Turn a YYYY-MM-DD date into noon UTC so the calendar day holds in any US timezone."""
-    if not raw:
-        return None
-    try:
-        day = date.fromisoformat(raw)
-    except ValueError as error:
-        raise ActionError("Due date must be YYYY-MM-DD") from error
-    return datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc)
-
-
-def build_task(payload: dict[str, Any], author_id: str) -> Effect:
-    """Build the AddTask effect for a failed-fax row, authored by the clicking staff member."""
-    source_type = _text(payload, "source_type")
-    if source_type not in TYPE_LABELS:
-        raise ActionError("Unknown item type")
-
-    title = _text(payload, "title")
-    if not title:
-        raise ActionError("Title is required")
-
-    assignee_type = _text(payload, "assignee_type")
-    assignee_id = _text(payload, "assignee_id")
-    if assignee_type not in ASSIGNEE_TYPES or not assignee_id:
-        raise ActionError("Choose a staff member or a team to assign the task to")
-
-    priority_raw = _text(payload, "priority")
-    try:
-        priority = TaskPriority(priority_raw) if priority_raw else None
-    except ValueError as error:
-        raise ActionError("Unknown priority") from error
-    due = _parse_due(_text(payload, "due"))
-
-    fields: dict[str, Any] = {
-        "title": title,
-        "due": due,
-        "priority": priority,
-        "author_id": author_id,
-    }
-    if assignee_type == "staff":
-        if not Staff.objects.filter(id=assignee_id, active=True).exists():
-            raise ActionError("Assignee not found", HTTPStatus.NOT_FOUND)
-        fields["assignee_id"] = assignee_id
-    else:
-        if not Team.objects.filter(id=_parse_uuid(assignee_id, "team id")).exists():
-            raise ActionError("Team not found", HTTPStatus.NOT_FOUND)
-        fields["team_id"] = assignee_id
-
-    if source_type != RECEIVED_TYPE:
-        spec, event = load_sent_event(source_type, payload.get("source_id"))
-        patient = walk(event, spec.patient_path)
-        if patient is not None:
-            fields["patient_id"] = patient.id
-        linked = walk(event, spec.link_path)
-        if linked is not None and spec.link_type is not None:
-            fields["linked_object_id"] = str(linked.id)
-            fields["linked_object_type"] = spec.link_type
-    else:
-        load_received_fax(payload.get("source_id"))
-
-    return AddTask(**fields).apply()
 
 
 def dismiss_row(payload: dict[str, Any], staff_id: str) -> None:
@@ -208,3 +129,61 @@ def dismiss_row(payload: dict[str, Any], staff_id: str) -> None:
         source_id=str(record_id),
         defaults={"dismissed_by": staff_id, "dismissed_at": datetime.now(timezone.utc)},
     )
+
+
+def _alert_for_task(task_id: str) -> FaxAlert:
+    """The alert behind a task. Only tasks this plugin made can be changed from the dashboard."""
+    alert: FaxAlert | None = FaxAlert.objects.filter(
+        task_id=str(_parse_uuid(task_id, "task id"))
+    ).first()
+    if alert is None:
+        raise ActionError("Task not found", HTTPStatus.NOT_FOUND)
+    return alert
+
+
+def _actor(staff_id: str) -> Staff:
+    staff = Staff.objects.filter(id=staff_id).first()
+    if staff is None:
+        raise ActionError("Staff member not found", HTTPStatus.FORBIDDEN)
+    return staff
+
+
+def build_reassign(payload: dict[str, Any], staff_id: str) -> list[Effect]:
+    """Move a task to a person or team and leave a comment saying who did it."""
+    actor = _actor(staff_id)
+    alert = _alert_for_task(_text(payload, "task_id"))
+    choice = _text(payload, "assignee")
+    if choice.startswith(STAFF_PREFIX):
+        target = Staff.objects.filter(id=choice[len(STAFF_PREFIX) :], active=True).first()
+        if target is None:
+            raise ActionError("Assignee not found", HTTPStatus.NOT_FOUND)
+        name = person_name(target)
+        update = UpdateTask(id=alert.task_id, assignee_id=target.id, team_id=None)
+    elif choice.startswith(TEAM_PREFIX):
+        team = Team.objects.filter(id=_parse_uuid(choice[len(TEAM_PREFIX) :], "team id")).first()
+        if team is None:
+            raise ActionError("Assignee not found", HTTPStatus.NOT_FOUND)
+        name = team.name
+        update = UpdateTask(id=alert.task_id, assignee_id=None, team_id=str(team.id))
+    else:
+        raise ActionError("Choose a person or a team")
+    alert.assignee = choice
+    alert.save()
+    comment = AddTaskComment(
+        task_id=alert.task_id,
+        body=f"Reassigned to {name} by {person_name(actor)}.",
+        author_id=actor.id,
+    )
+    return [update.apply(), comment.apply()]
+
+
+def build_comment(payload: dict[str, Any], staff_id: str) -> Effect:
+    """A reply on a task, written under the logged-in staff member's name."""
+    actor = _actor(staff_id)
+    alert = _alert_for_task(_text(payload, "task_id"))
+    body = _text(payload, "body")
+    if not body:
+        raise ActionError("Write a comment first")
+    if len(body) > MAX_COMMENT:
+        raise ActionError("That comment is too long")
+    return AddTaskComment(task_id=alert.task_id, body=body, author_id=actor.id).apply()
