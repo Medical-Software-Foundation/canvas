@@ -4,50 +4,36 @@ A dashboard that lists every fax that failed across the practice, with one-click
 
 ## What it does
 
-Adds a "Failed Faxes" app to the app drawer. It opens a table of faxes sent from Canvas that were not delivered, and faxes received only in part, from the last 90 days, newest first. From each row, staff can open the faxed item, create a follow-up task, or dismiss the row. Failed note faxes can also be resent.
+Adds a "Failed Faxes" app to the app drawer. It opens a dashboard with two tabs from the last 90 days:
 
-## Problem it solves
+- Sent: faxes that were not delivered, one row per item and fax number across notes, referrals, imaging orders, lab orders, letters, and Data Integration documents.
+- Received: faxes that only partly arrived.
 
-Canvas shows a fax's status (Pending, Success, Error) only on the item that was faxed: the note menu, a command's Audit History, a letter's heading, or a Data Integration document's Fax Event History. Staff have to open each item to find out a fax failed, so failures go unnoticed. Received faxes that only partly arrived still become Data Integration documents, so a partial document can be filed without anyone noticing. This plugin puts every failure in one list. See Canvas's [Fax Migration & Event History](https://help.canvasmedical.com/articles/4882014801-fax-migration-event-history) article for the native behavior.
-
-## Who it's for
-
-- Front desk staff and referral coordinators who send faxes
-- Clinical staff who fax notes, orders, and letters
-- Staff who work the Data Integration queue
-
-## What it lists
-
-Sent faxes that were not delivered, for all six faxable item types:
-
-| Item type | Row actions |
-|---|---|
-| Note | Open note, Resend, Create task, Dismiss |
-| Referral | Open note, Create task (linked to the referral), Dismiss |
-| Imaging order | Open note, Create task (linked to the imaging order), Dismiss |
-| Lab order | Open note, Create task, Dismiss |
-| Letter | Open letter, Create task, Dismiss |
-| Data Integration document | Open Data Integration, Create task, Dismiss |
-
-A sent fax counts as failed when its delivery result is "not delivered". A fax still waiting on a result is pending and is not shown.
-
-Received faxes that failed (inbound, not received successfully) are also listed, with a link to the Data Integration queue. Only the sender can resend, so there is no resend action for these.
-
-Each row shows the item type, patient (when the item has one), fax number, who sent it, when, page count, and the reason the fax service gave (sent faxes only).
+Each row shows the recipient or sender (click the name for a contact card), the fax service's reason, who sent it, when, pages, and the attempt count. Expanding a row shows every attempt and the row's automatic task, with its comments.
 
 ## How rows clear
 
-- A sent fax row clears when a later fax of the same item to the same number is delivered. A resend from the dashboard counts.
-- Any row can be dismissed. The dismissal records who dismissed it and when.
-- A received fax row clears only by dismissal.
+- A sent row clears when a later fax of the same item to the same number is delivered. A resend from the dashboard counts.
+- Any row can be dismissed. The dismissal records who and when.
+- A received row clears only by dismissal.
+
+## Automatic tasks
+
+A scheduled job runs every 10 minutes. For each new failure it makes one task per item and fax number, assigned to the sender and labeled "Failed fax". A later failure moves the same task to that attempt's sender, reopens it, and adds a comment. A later delivered attempt closes it. Failures from before the job first ran get no task.
+
+- Sent fax with no staff sender (for example one sent by another plugin): the team named in `FAILED_FAX_FALLBACK_TEAM`. Empty: no task.
+- Received fax that only partly arrived: the team named in `RECEIVED_FAX_TASK_TEAM`. Empty: no task.
+- Team settings hold the team's name, matched exactly.
+
+From the expanded row, staff can click the assignee to reassign the task and add comments. Both are written under their own name.
 
 ## Resend (notes only)
 
-Resend opens a short form prefilled with the failed number. The recipient name is filled in from the contact directory when exactly one active contact has that fax number, otherwise it is blank and required. The resent fax is sent as Canvas Bot, and its outcome shows in the note's fax history like any other fax.
+Resend opens a short form prefilled with the failed number and, when exactly one directory contact has that number, the recipient name. The fax is sent as Canvas Bot. The plugin remembers who clicked, so the row, the history, and the task comments show "Resent by {name}".
 
-## Create task
+## Sorting, filtering, sections
 
-Every row has a Create task button. Choose a staff member or a team, edit the title (prefilled as "Failed fax: {item type} to {fax number}"), and optionally set a due date and priority. The task is authored by the staff member who clicked, carries the patient when the item has one, and links to the referral or imaging order for those two item types. Creating a task does not clear the row.
+Click a column header to sort (people sort by last name). Filter by search text, item type, and person. Rows assigned to you or your teams appear under "Assigned to you"; everything else is under "Everything else", and each section collapses. Search, filters, sort, and collapsed sections are saved per staff member and restored on any computer. Reset view clears them. Filtering, sorting, and paging cover all 90 days.
 
 ## How to install
 
@@ -62,6 +48,8 @@ The instance must run a Canvas SDK release that includes the fax delivery data m
 | Variable | Purpose |
 |---|---|
 | `FAX_DASHBOARD_STAFF_IDS` | Comma-separated staff ids allowed to use the dashboard. |
+| `FAILED_FAX_FALLBACK_TEAM` | Team name that gets the task when a failed sent fax has no staff sender. |
+| `RECEIVED_FAX_TASK_TEAM` | Team name that gets the task for a received fax that only partly arrived. |
 
 Access behavior:
 
@@ -69,8 +57,8 @@ Access behavior:
 - When it is empty or unset, every logged-in staff member can use the dashboard. This is deliberate and differs from the fail-closed guidance for admin checks: the dashboard shows nothing a staff member cannot already see on each faxed item.
 - Every endpoint requires a logged-in staff session, so patient portal sessions are always rejected.
 
-The plugin stores dismissals in a custom data namespace, `canvas_medical__failed_fax_dashboard`. Canvas generates the `namespace_read_write_access_key` variable on first install; leave it as generated.
+The plugin stores dismissals, task alerts, resend clicks, and saved settings in a custom data namespace, `canvas_medical__failed_fax_dashboard`. Canvas generates the `namespace_read_write_access_key` variable on first install; leave it as generated.
 
 ## Data used
 
-Read: `Fax` and the six fax action event models (note, referral, imaging order, lab order, letter, Data Integration document) with their items, patients, and the sending staff member; `Staff`, `Team`, and `ServiceProvider` for the task and resend forms. Written: dismissals (custom data), plus the resend fax and follow-up task effects.
+Read: `Fax`, the six fax action event models with their items, patients, and sending staff; `Staff`, `Team`, `Task`, `TaskComment`, `IntegrationTask`, and `ServiceProvider`. Written: custom data, plus the resend fax, task, and task comment effects.
