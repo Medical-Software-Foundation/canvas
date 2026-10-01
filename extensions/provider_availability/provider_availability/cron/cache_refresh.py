@@ -26,8 +26,10 @@ from provider_availability.engine.storage import (
     get_all_recurring_blocks,
     get_all_rules,
     get_last_sync_date,
+    get_seen_schedulable_ids,
     refresh_all_ttls,
     set_last_sync_date,
+    set_seen_schedulable_ids,
     should_refresh_ttls,
 )
 
@@ -54,7 +56,13 @@ class CacheRefreshTask(CronTask):
         # Detect day rollover BEFORE _daily_resync (which updates the sync date).
         day_changed = get_last_sync_date() != date.today().isoformat()
 
-        effects = _ensure_provider_calendars()
+        schedulable = get_schedulable_staff()
+        effects = _ensure_provider_calendars(schedulable)
+
+        # Who is bookable changes outside the plugin too: a role edited on a
+        # staff record, someone activated or deactivated, or the Provider role
+        # type fallback switching on or off. Rebuild availability when it does.
+        effects.extend(_reconcile_if_schedulable_changed({str(s.id) for s in schedulable}))
 
         # Daily re-sync: when the date changes, re-sync all rules
         # so recurrence_ends_at advances for effective_end enforcement
@@ -145,11 +153,37 @@ def _refresh_hold_blocks() -> list[Effect]:
     return effects
 
 
-def _ensure_provider_calendars() -> list[Effect]:
+def _reconcile_if_schedulable_changed(schedulable_ids: set[str]) -> list[Effect]:
+    """Re-sync every provider's availability when the schedulable set changed.
+
+    The first tick after install only records the set: install already ran a
+    full sync against it.
+    """
+    try:
+        seen = get_seen_schedulable_ids()
+        if seen is None:
+            set_seen_schedulable_ids(sorted(schedulable_ids))
+            return []
+        if set(seen) == schedulable_ids:
+            return []
+        log.info(
+            "schedulable set changed: %d added, %d removed, reconciling availability",
+            len(schedulable_ids - set(seen)), len(set(seen) - schedulable_ids),
+        )
+        from provider_availability.api.availability_api import _reconcile_availability_to_roles
+
+        return _reconcile_availability_to_roles()
+    except Exception:
+        log.exception("_reconcile_if_schedulable_changed: error reconciling")
+        return []
+
+
+def _ensure_provider_calendars(active_providers: list | None = None) -> list[Effect]:
     """Create Clinic calendars for any active providers missing one."""
     effects: list[Effect] = []
     try:
-        active_providers = get_schedulable_staff()
+        if active_providers is None:
+            active_providers = get_schedulable_staff()
         staff_keys = [str(s.id) for s in active_providers]
 
         # One query for all existing calendars instead of one per provider.

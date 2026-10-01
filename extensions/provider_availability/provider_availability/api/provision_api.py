@@ -22,6 +22,7 @@ from provider_availability.api.availability_api import _reconcile_availability_t
 from provider_availability.engine.roles import (
     get_available_roles,
     get_effective_schedulable_roles,
+    is_provider_type_fallback_active,
     get_schedulable_staff,
 )
 from provider_availability.engine.storage import (
@@ -194,6 +195,7 @@ class ProvisionAPI(SimpleAPI):
             JSONResponse({
                 "schedulable_roles": get_effective_schedulable_roles(),
                 "configured": get_schedulable_roles() is not None,
+                "fallback_active": is_provider_type_fallback_active(),
                 "available": get_available_roles(),
             })
         ]

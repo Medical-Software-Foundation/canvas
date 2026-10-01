@@ -1393,7 +1393,8 @@ class TestSchedulableRolesEndpoints:
     ])
     @patch(f"{MODULE}.get_schedulable_roles", return_value=None)
     @patch(f"{MODULE}.get_effective_schedulable_roles", return_value=["LCSW", "MD"])
-    def test_get_roles(self, mock_effective, mock_get, mock_avail):
+    @patch(f"{MODULE}.is_provider_type_fallback_active", return_value=False)
+    def test_get_roles(self, mock_fallback, mock_effective, mock_get, mock_avail):
         """Before roles are saved, the selection shows the Provider-type codes in effect."""
         handler = _make_handler()
         result = handler.get_roles()
@@ -1403,6 +1404,7 @@ class TestSchedulableRolesEndpoints:
         assert data["schedulable_roles"] == ["LCSW", "MD"]
         assert data["configured"] is False
         assert data["available"][0]["code"] == "CC"
+        assert data["fallback_active"] is False
         assert mock_effective.mock_calls == [call()]
         assert mock_get.mock_calls == [call()]
         assert mock_avail.mock_calls == [call()]
@@ -1422,10 +1424,11 @@ class TestSchedulableRolesEndpoints:
         assert mock_reconcile.mock_calls == [call()]
 
     @patch(f"{MODULE}.sync_provider_availability", return_value=["fx"])
+    @patch(f"{MODULE}.set_seen_schedulable_ids")
     @patch(f"{MODULE}.get_all_rules")
     @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
     def test_reconcile_availability_clears_descheduled_and_syncs_schedulable(
-        self, mock_sched, mock_rules, mock_sync
+        self, mock_sched, mock_rules, mock_seen, mock_sync
     ):
         from provider_availability.api.availability_api import _reconcile_availability_to_roles
 
@@ -1442,6 +1445,8 @@ class TestSchedulableRolesEndpoints:
         assert called_pids == {PROVIDER_ID, PROVIDER_ID_2}
         for c in mock_sync.call_args_list:
             assert c.kwargs["schedulable_ids"] == {PROVIDER_ID}
+        # Recorded so the background job does not reconcile the same change again.
+        assert mock_seen.mock_calls == [call([PROVIDER_ID])]
 
     @patch(f"{MODULE}._check_write_access", return_value=["DENIED"])
     @patch(f"{MODULE}.set_schedulable_roles")

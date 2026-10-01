@@ -2,9 +2,11 @@
 
 import datetime as dt
 from datetime import date, timedelta
+import pytest
 from unittest.mock import MagicMock, call, patch
 
 from provider_availability.cron.cache_refresh import (
+    _reconcile_if_schedulable_changed,
     CacheRefreshTask,
     _daily_resync,
     _ensure_provider_calendars,
@@ -24,6 +26,12 @@ CR_MODULE = "provider_availability.cron.cache_refresh"
 class TestCacheRefreshTaskExecute:
     """Test that execute() orchestrates TTL refresh and delegates to helpers."""
 
+    @pytest.fixture(autouse=True)
+    def _no_schedulable_change(self):
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
+             patch(f"{CR_MODULE}._reconcile_if_schedulable_changed", return_value=[]):
+            yield
+
     def test_execute_calls_refresh_when_due(self):
         handler = CacheRefreshTask(MagicMock())
 
@@ -39,7 +47,7 @@ class TestCacheRefreshTaskExecute:
 
             assert mock_should.mock_calls == [call()]
             assert mock_refresh.mock_calls == [call()]
-            assert mock_cal.mock_calls == [call()]
+            assert mock_cal.mock_calls == [call([])]
             assert mock_resync.mock_calls == [call()]
             assert mock_lead.mock_calls == [call()]
             # Same day → hold refresh is NOT run
@@ -409,3 +417,30 @@ class TestRefreshHoldBlocks:
 
             mock_build.assert_not_called()
             assert result == []
+
+
+class TestReconcileWhenSchedulableChanges:
+    """Who is bookable can change outside the plugin (a role edit, an
+    activation, the Provider role type fallback switching). Availability is
+    rebuilt when it does, and left alone when it does not."""
+
+    def test_first_tick_only_records_the_set(self):
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=None), \
+             patch(f"{CR_MODULE}.set_seen_schedulable_ids") as mock_set, \
+             patch("provider_availability.api.availability_api._reconcile_availability_to_roles") as mock_rec:
+            assert _reconcile_if_schedulable_changed({"b", "a"}) == []
+            assert mock_set.mock_calls == [call(["a", "b"])]
+            assert mock_rec.mock_calls == []
+
+    def test_unchanged_set_does_nothing(self):
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=["a", "b"]), \
+             patch("provider_availability.api.availability_api._reconcile_availability_to_roles") as mock_rec:
+            assert _reconcile_if_schedulable_changed({"a", "b"}) == []
+            assert mock_rec.mock_calls == []
+
+    def test_changed_set_rebuilds_availability(self):
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=["a"]), \
+             patch("provider_availability.api.availability_api._reconcile_availability_to_roles",
+                   return_value=["sync"]) as mock_rec:
+            assert _reconcile_if_schedulable_changed({"a", "b"}) == ["sync"]
+            assert mock_rec.mock_calls == [call()]

@@ -86,6 +86,16 @@ def get_schedulable_staff() -> list[Staff]:
     return result
 
 
+def is_provider_type_fallback_active() -> bool:
+    """True when saved roles exist but no active staff member holds one, so the
+    Provider role type is deciding who is bookable instead."""
+    codes = get_schedulable_codes()
+    if codes is None:
+        return False
+    staff = Staff.objects.filter(active=True).prefetch_related("roles")
+    return not any(is_schedulable_staff(s, codes) for s in staff)
+
+
 def get_effective_schedulable_roles() -> list[str]:
     """The role codes currently deciding who is schedulable, for display.
 

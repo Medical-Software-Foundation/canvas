@@ -13,6 +13,7 @@ BLOCK_INDEX_KEY = "pa:blocks:index"
 RECURRING_BLOCK_INDEX_KEY = "pa:recurring_blocks:index"
 EVENT_IDS_PREFIX = "pa:event_ids:"
 SCHEDULABLE_ROLES_KEY = "pa:schedulable_roles"
+SCHEDULABLE_SEEN_KEY = "pa:schedulable_ids_seen"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
@@ -548,6 +549,19 @@ def get_schedulable_roles() -> list[str] | None:
     if val is None:
         return None
     return list(val)
+
+
+def get_seen_schedulable_ids() -> list[str] | None:
+    """The schedulable staff ids availability was last reconciled against."""
+    cache = _get_cache()
+    val = cache.get(SCHEDULABLE_SEEN_KEY)
+    return None if val is None else list(val)
+
+
+def set_seen_schedulable_ids(ids: list[str]) -> None:
+    """Record the schedulable staff ids availability now reflects."""
+    cache = _get_cache()
+    cache.set(SCHEDULABLE_SEEN_KEY, sorted(ids), timeout_seconds=CACHE_TTL_SECONDS)
 
 
 def set_schedulable_roles(codes: list[str]) -> None:

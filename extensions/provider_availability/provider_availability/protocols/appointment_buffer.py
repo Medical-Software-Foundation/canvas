@@ -266,6 +266,14 @@ def _neighbor_buffer_spans(
     at_start, at_end = _to_utc(start), _to_utc(end)
     spans: list[tuple[datetime, datetime]] = []
     for other in neighbors:
+        # The link column holds the internal row number (dbid), not the UUID key.
+        if other.appointment_rescheduled_from_id is not None and (
+            other.appointment_rescheduled_from_id == appt.dbid
+        ):
+            # The appointment this one was moved to is not a neighbor: it is
+            # drawing its own buffers, and keeping this one's alongside them
+            # leaves a duplicate.
+            continue
         other_start, other_end = (_to_utc(t) for t in _appointment_window(other))
         if other_end > at_start and other_start < at_end:
             continue  # overlapping, not a neighbor

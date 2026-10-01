@@ -346,7 +346,8 @@ class TestSchedulableRolesEndpoints:
     ])
     @patch(f"{PROV_MODULE}.get_schedulable_roles", return_value=["MD", "DO"])
     @patch(f"{PROV_MODULE}.get_effective_schedulable_roles", return_value=["MD", "DO"])
-    def test_get_roles(self, mock_effective, mock_get, mock_avail):
+    @patch(f"{PROV_MODULE}.is_provider_type_fallback_active", return_value=False)
+    def test_get_roles(self, mock_fallback, mock_effective, mock_get, mock_avail):
         handler = _make_provision_handler()
         result = handler.get_roles()
 
@@ -355,6 +356,7 @@ class TestSchedulableRolesEndpoints:
         assert data["schedulable_roles"] == ["MD", "DO"]
         assert data["configured"] is True
         assert data["available"][0]["code"] == "MD"
+        assert data["fallback_active"] is False
         assert mock_effective.mock_calls == [call()]
         assert mock_get.mock_calls == [call()]
         assert mock_avail.mock_calls == [call()]

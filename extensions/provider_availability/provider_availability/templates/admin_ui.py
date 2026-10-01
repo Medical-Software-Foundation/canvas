@@ -519,6 +519,9 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="field">
               <label>Roles</label>
               <div id="ms-schedulable-roles" class="multi-select"></div>
+              <div id="roles-fallback-note" class="roles-fallback-note" style="display:none;">
+                None of the saved roles are held by active staff, so everyone with a Provider role type is bookable.
+              </div>
             </div>
             <canvas-button onclick="saveSchedulableRoles()" style="white-space:nowrap;margin-top:22px;">Save Roles</canvas-button>
           </div>

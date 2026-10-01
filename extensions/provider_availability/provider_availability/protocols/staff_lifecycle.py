@@ -16,9 +16,8 @@ from logger import log
 
 from provider_availability.engine.admin_calendar import deterministic_calendar_id
 from provider_availability.engine.roles import (
-    get_schedulable_codes,
+    get_schedulable_provider_ids,
     get_schedulable_staff,
-    is_schedulable_staff,
 )
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
@@ -67,7 +66,7 @@ class OnStaffActivated(BaseProtocol):
 
         # Only create calendars for staff in a schedulable role (configurable
         # per practice by role internal code; until configured, the Provider role type).
-        if not is_schedulable_staff(staff, get_schedulable_codes()):
+        if str(staff.id) not in get_schedulable_provider_ids():
             log.info(
                 "OnStaffActivated: %s %s not in a schedulable role, skipping",
                 staff.first_name,

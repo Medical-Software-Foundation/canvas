@@ -25,8 +25,7 @@ class TestOnStaffActivated:
         handler = OnStaffActivated(mock_event)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
-             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"MD"}), \
-             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True) as mock_sched, \
+             patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"p1"}) as mock_sched, \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
             mock_cal.filter.return_value.first.return_value = None
@@ -35,7 +34,7 @@ class TestOnStaffActivated:
             result = handler.compute()
 
             assert mock_objects.mock_calls == [call.get(id="p1")]
-            assert mock_sched.mock_calls == [call(mock_staff, {"MD"})]
+            assert mock_sched.mock_calls == [call()]
             assert len(result) == 1  # Calendar create effect
 
     def test_skips_non_provider_role(self):
@@ -47,8 +46,7 @@ class TestOnStaffActivated:
         handler = OnStaffActivated(mock_event)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
-             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"MD", "DO", "NP", "PA"}), \
-             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=False):
+             patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"someone-else"}):
             mock_objects.get.return_value = mock_staff
 
             result = handler.compute()
@@ -68,8 +66,7 @@ class TestOnStaffActivated:
         handler = OnStaffActivated(mock_event)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
-             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"CC"}), \
-             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True), \
+             patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"cc1"}), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
             mock_cal.filter.return_value.first.return_value = None
@@ -91,8 +88,7 @@ class TestOnStaffActivated:
         handler = OnStaffActivated(mock_event)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
-             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"DO"}), \
-             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True), \
+             patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"p1"}), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
             mock_cal.for_calendar_name.return_value.first.return_value = MagicMock()

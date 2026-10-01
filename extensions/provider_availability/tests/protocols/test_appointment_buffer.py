@@ -197,6 +197,7 @@ def _buffer_evt(evt_id, starts_at, ends_at):
 def _neighbor(start, minutes=45):
     other = MagicMock()
     other.id = "appt-neighbor"
+    other.appointment_rescheduled_from_id = None
     other.start_time = start
     other.duration_minutes = minutes
     other.location.id = "loc-1"
@@ -256,6 +257,21 @@ class TestDeleteKeepsANeighborsBuffer:
         result = self._run(appt, [mine], [], [earlier], _rule(0, 0))
 
         assert result == ["delete:evt-mine"]
+
+    def test_the_replacement_of_a_reschedule_is_not_a_neighbor(self):
+        """Moved from 9:00 to 9:40: the 9:30-9:40 post-buffer goes, even though
+        the replacement's own pre-buffer covers the same span."""
+        appt = _future_appt(minutes=30)
+        start = appt.start_time
+        end = start + timedelta(minutes=30)
+        replacement = _neighbor(end + timedelta(minutes=10), minutes=30)
+        appt.dbid = 4101
+        replacement.appointment_rescheduled_from_id = 4101
+        old_post = _buffer_evt("evt-old-post", end, end + timedelta(minutes=10))
+
+        result = self._run(appt, [], [old_post], [replacement], _rule(10, 10))
+
+        assert result == ["delete:evt-old-post"]
 
     def test_next_appointments_pre_buffer_survives(self):
         appt = _future_appt(minutes=30)

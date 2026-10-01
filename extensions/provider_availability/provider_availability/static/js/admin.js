@@ -791,6 +791,7 @@ window.addEventListener('beforeunload', function(e) {
 var _DIRTY_CLICK_SELECTOR = '.ms-option, .ms-chip-remove, .remove-time, .date-chip-remove, .type-card, ' +
   '[onclick^="add"], [onclick^="saveOverride"], [onclick^="deleteOverride"]';
 document.addEventListener('click', function(e) {
+  if (!e.isTrusted) return;
   var hit = e.target && e.target.closest ? e.target.closest(_DIRTY_CLICK_SELECTOR) : null;
   if (!hit) return;
   var editor = document.getElementById('panel-editor');
@@ -801,6 +802,9 @@ document.addEventListener('click', function(e) {
 
 // Dropdowns, checkboxes and date pickers report "change" rather than "input".
 document.addEventListener('change', function(e) {
+  // The page sets dropdowns itself when it loads a rule or hold for editing;
+  // those changes are not the user's.
+  if (!e.isTrusted) return;
   var editor = document.getElementById('panel-editor');
   if (editor && editor.contains(e.target)) _formDirty = true;
 });
@@ -1092,6 +1096,15 @@ function _formApiCall(path, opts) {
   addField('_method', method);
   addField('_path', path);
   if (opts.body) addField('_body', opts.body);
+
+  // The reload that follows is the save itself, not leaving with unsaved
+  // work, and it should land where a normal save would: Settings for Settings
+  // saves, Availability for everything else.
+  _formDirty = false;
+  _settingsDirty = false;
+  var p = String(path).replace(/^\//, '');
+  var landing = /^(roles|timezone|provider-timezone)/.test(p) ? 'settings' : 'availability';
+  try { sessionStorage.setItem(_LAST_TAB_KEY, landing); } catch (e) {}
 
   document.body.appendChild(form);
   form.submit();
@@ -3055,6 +3068,8 @@ async function loadSchedulableRoles() {
   });
   msSchedulableRoles.setItems(items);
   msSchedulableRoles.setValue(configured);
+  var note = document.getElementById('roles-fallback-note');
+  if (note) note.style.display = data.fallback_active ? 'block' : 'none';
 }
 
 async function saveSchedulableRoles() {
@@ -3072,9 +3087,9 @@ async function saveSchedulableRoles() {
 /* ---------- Settings panel ---------- */
 
 async function renderSettingsPanel() {
-  _settingsDirty = false;
-  // Load the schedulable-role checklist.
-  loadSchedulableRoles();
+  // Load the schedulable-role checklist, unless the user has picks they have
+  // not saved yet (a timezone save also re-renders this panel).
+  if (!_settingsDirty) loadSchedulableRoles();
 
   // Refresh the practice timezone so the bulk selector reflects the saved value.
   await loadTimezone();
@@ -3514,6 +3529,12 @@ if (_mainTabsEl) {
     var btn = path.find(function(n) { return n.classList && n.classList.contains('tab-button'); });
     if (!btn || !_mainTabsEl.shadowRoot || !_mainTabsEl.shadowRoot.contains(btn)) return;
     var toName = _tabNames.find(function(k) { return _tabIndexMap[k] === parseInt(btn.dataset.index, 10); });
+    if (toName && toName === _activeTab) {
+      // Re-selecting the open tab would reset its form or reload its settings.
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     if (!toName || _confirmLeave(toName)) {
       if (toName && toName !== _activeTab && _activeTab === 'editor') _formDirty = false;
       return;
@@ -3572,5 +3593,6 @@ window.addEventListener('popstate', function() {
   // availability tab (mirrors the Cancel button).
   history.pushState({tab: 'pa-admin'}, '', location.href);
   _skipDirtyCheck = true;
+  _settingsDirty = false;
   showTab('availability');
 });

@@ -212,6 +212,10 @@ body {
 
 /* Bulk import controls: template, file picker and upload on one row, with the
    technical note underneath in small muted text. */
+/* Shown when saved roles match no active staff and the Provider role type is
+   deciding who is bookable instead. */
+.roles-fallback-note { font-size: 12px; color: var(--hold); margin-top: 6px; }
+
 .bulk-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .bulk-link { font-size: inherit; color: var(--cyan); text-decoration: none; margin-left: 4px; }
 .bulk-link:hover { text-decoration: underline; }

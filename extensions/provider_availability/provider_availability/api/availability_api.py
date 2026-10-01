@@ -38,6 +38,7 @@ from provider_availability.engine.storage import clear_my_view, get_my_view, set
 from provider_availability.engine.roles import (
     get_available_roles,
     get_effective_schedulable_roles,
+    is_provider_type_fallback_active,
     get_schedulable_provider_ids,
     get_schedulable_staff,
 )
@@ -76,6 +77,7 @@ from provider_availability.engine.storage import (
     set_practice_timezone,
     set_provider_timezone,
     set_schedulable_roles,
+    set_seen_schedulable_ids,
 )
 from provider_availability.api._auth import is_authorized
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
@@ -225,6 +227,9 @@ def _reconcile_availability_to_roles() -> list[Effect]:
     effects: list[Effect] = []
     for pid in provider_ids:
         effects.extend(sync_provider_availability(pid, schedulable_ids=schedulable_ids))
+    # The background job compares against this, so a role save is not
+    # reconciled a second time on its next tick.
+    set_seen_schedulable_ids(sorted(schedulable_ids))
     log.info(
         "reconcile_availability_to_roles: reconciled %d providers (%d schedulable)",
         len(provider_ids), len(schedulable_ids),
@@ -1420,6 +1425,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             JSONResponse({
                 "schedulable_roles": get_effective_schedulable_roles(),
                 "configured": get_schedulable_roles() is not None,
+                "fallback_active": is_provider_type_fallback_active(),
                 "available": get_available_roles(),
             })
         ]

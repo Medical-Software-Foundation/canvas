@@ -7,6 +7,7 @@ from provider_availability.engine.roles import (
     get_effective_schedulable_roles,
     get_schedulable_codes,
     get_schedulable_staff,
+    is_provider_type_fallback_active,
     is_schedulable_staff,
 )
 from provider_availability.engine.storage import (
@@ -182,3 +183,23 @@ class TestGetAvailableRoles:
             result = get_available_roles()
 
             assert result[0]["code"] == "CC"
+
+
+class TestProviderTypeFallbackActive:
+    def test_unconfigured_is_not_the_fallback(self):
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=None), \
+             patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
+            assert is_provider_type_fallback_active() is False
+            assert mock_staff.mock_calls == []
+
+    def test_saved_roles_matching_nobody_is_the_fallback(self):
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC"]), \
+             patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
+            mock_staff.filter.return_value.prefetch_related.return_value = [_staff(["MD"], role_type="PROVIDER")]
+            assert is_provider_type_fallback_active() is True
+
+    def test_saved_roles_with_a_holder_is_not_the_fallback(self):
+        with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC"]), \
+             patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
+            mock_staff.filter.return_value.prefetch_related.return_value = [_staff(["CC"])]
+            assert is_provider_type_fallback_active() is False
