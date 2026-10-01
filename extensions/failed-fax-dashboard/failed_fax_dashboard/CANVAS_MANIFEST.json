@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "failed_fax_dashboard",
     "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Shows each row's attempts and task, lets staff resend a note fax, reassign or comment on the row's task, or dismiss it, and creates a task for each new failure.",
     "components": {
@@ -46,7 +46,7 @@
             },
             {
                 "class": "failed_fax_dashboard.handlers.fax_alert_cron:FaxAlertCron",
-                "description": "Every 10 minutes, creates a task for each new failed fax, moves it to each new sender, and closes it once a later attempt is delivered.",
+                "description": "Every 5 minutes, creates a task for each new failed fax, moves it to each new sender, and closes it once a later attempt is delivered.",
                 "data_access": {
                     "event": "",
                     "read": [

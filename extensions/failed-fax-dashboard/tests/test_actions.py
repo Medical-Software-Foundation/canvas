@@ -20,7 +20,8 @@ pytestmark = pytest.mark.django_db
 
 
 def data(effect: Any) -> dict[str, Any]:
-    return json.loads(effect.payload)["data"]
+    payload: dict[str, Any] = json.loads(effect.payload)["data"]
+    return payload
 
 
 def resend_body(event: Any, **overrides: Any) -> dict[str, Any]:

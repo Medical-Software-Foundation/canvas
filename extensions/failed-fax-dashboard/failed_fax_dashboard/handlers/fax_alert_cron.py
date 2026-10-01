@@ -7,9 +7,9 @@ from failed_fax_dashboard.services.alerts import alert_effects
 
 
 class FaxAlertCron(CronTask):
-    """Every 10 minutes, find failed faxes the job hasn't handled and keep their tasks current."""
+    """Every 5 minutes, find failed faxes the job hasn't handled and keep their tasks current."""
 
-    SCHEDULE = "*/10 * * * *"
+    SCHEDULE = "*/5 * * * *"
 
     def execute(self) -> list[Effect]:
         """Return the task effects for new failures and newly delivered faxes."""

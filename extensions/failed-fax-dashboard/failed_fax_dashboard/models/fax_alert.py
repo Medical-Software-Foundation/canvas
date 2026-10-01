@@ -30,6 +30,12 @@ class FaxAlert(CustomModel):
 
 
 class AlertStart(CustomModel):
-    """When the scheduled job first ran. Failures that arrived before this get no task."""
+    """When the scheduled job first ran, and when it last ran.
+
+    Failures that arrived before ``started_at`` get no task. Each run reads only what
+    changed since ``last_run_at`` (less a small overlap), so a run's work stays small
+    however long the plugin has been installed.
+    """
 
     started_at: DateTimeField = DateTimeField()
+    last_run_at: DateTimeField = DateTimeField(null=True)

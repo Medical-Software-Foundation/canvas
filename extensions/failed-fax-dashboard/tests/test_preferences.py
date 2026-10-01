@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from failed_fax_dashboard.models import DashboardPreference
@@ -35,7 +37,7 @@ def test_nothing_saved_means_the_defaults_for_both_tabs() -> None:
 
 def test_settings_are_saved_per_staff_member_and_replaced_on_the_next_save() -> None:
     first, second = make_staff("A", "One"), make_staff("B", "Two")
-    saved = {
+    saved: dict[str, Any] = {
         "sent": {
             "q": "delgado",
             "kinds": ["note"],

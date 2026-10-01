@@ -101,6 +101,37 @@ def test_order_and_letter_rows_link_to_the_note(type_key: str) -> None:
     assert rows()[0].link_url == f"/patient/{patient.id}?noteId={note.dbid}"
 
 
+@pytest.mark.parametrize(
+    ("type_key", "schema_key", "anchor_type", "command_type"),
+    [
+        ("referral", "refer", "referral", "refer"),
+        ("imaging_order", "imagingOrder", "imagingorder", "imagingOrder"),
+        ("lab_order", "labOrder", "laborder", "labOrder"),
+    ],
+)
+def test_order_rows_link_to_their_command_inside_the_note(
+    type_key: str, schema_key: str, anchor_type: str, command_type: str
+) -> None:
+    from canvas_sdk.v1.data import Command
+
+    event = make_event(type_key)
+    item = getattr(event, type_key)
+    command = Command.objects.create(
+        note=item.note,
+        patient=item.patient,
+        schema_key=schema_key,
+        state="committed",
+        data={},
+        anchor_object_type=anchor_type,
+        anchor_object_dbid=item.dbid,
+    )
+
+    assert rows()[0].link_url == (
+        f"/patient/{item.patient.id}?noteId={item.note.dbid}"
+        f"&commandType={command_type}&commandId={item.dbid}&commandUuid={command.id}"
+    )
+
+
 def test_data_integration_row_links_to_its_own_document() -> None:
     event = make_event("integration_task")
 

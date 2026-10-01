@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from canvas_sdk.v1.data import Fax, FaxDirection, ServiceProvider
+from canvas_sdk.v1.data import Command, Fax, FaxDirection, ServiceProvider
 
 from failed_fax_dashboard.models import FaxDismissal
 from failed_fax_dashboard.services.contacts import (
@@ -207,11 +207,47 @@ def failed_events(spec: SourceSpec, cutoff: datetime) -> list[Any]:
     return list(queryset)
 
 
-def item_link(spec: SourceSpec, event: Any, patient: Any, note: Any) -> str | None:
-    """Where the row's item link goes."""
+def command_ids(spec: SourceSpec, events: list[Any]) -> dict[int, str]:
+    """Command id for each faxed item that is a note command, keyed by the item's dbid.
+
+    One query per item type. Items that aren't commands (notes, letters, documents) get none.
+    """
+    if spec.anchor_type is None or not events:
+        return {}
+    dbids = {getattr(event, spec.item_field).dbid for event in events}
+    return {
+        anchor: str(command_id)
+        for anchor, command_id in Command.objects.filter(
+            anchor_object_type=spec.anchor_type, anchor_object_dbid__in=dbids
+        ).values_list("anchor_object_dbid", "id")
+    }
+
+
+def item_link(
+    spec: SourceSpec,
+    event: Any,
+    patient: Any,
+    note: Any,
+    commands: dict[int, str] | None = None,
+) -> str | None:
+    """Where the row's item link goes.
+
+    Orders and referrals open their command inside the note, the same link Canvas's own
+    permalinks use. Without a matching command they fall back to the note.
+    """
     if spec.type_key == "integration_task":
         return f"{DATA_INTEGRATION_PATH}/{event.integration_task_id}"
-    return note_link(patient, note)
+    base = note_link(patient, note)
+    if base is None or spec.command_type is None:
+        return base
+    item = getattr(event, spec.item_field)
+    command_id = (commands or {}).get(item.dbid)
+    if command_id is None:
+        return base
+    return (
+        f"{base}&commandType={spec.command_type}&commandId={item.dbid}"
+        f"&commandUuid={command_id}"
+    )
 
 
 def collect_sent(cutoff: datetime) -> list[SentRow]:
@@ -229,6 +265,7 @@ def collect_sent(cutoff: datetime) -> list[SentRow]:
         if not newest:
             continue
         histories = load_attempts(spec, [key[0] for key in newest])
+        commands = command_ids(spec, list(newest.values()))
         for key, event in newest.items():
             attempts = histories.get(key, [])
             if not attempts or any(
@@ -247,7 +284,7 @@ def collect_sent(cutoff: datetime) -> list[SentRow]:
                     e164=key[1],
                     attempts=attempts,
                     patient=patient,
-                    link_url=item_link(spec, event, patient, walk(event, spec.note_path)),
+                    link_url=item_link(spec, event, patient, walk(event, spec.note_path), commands),
                 )
             )
     directory = directory_matches([row.number for row in rows])

@@ -20,6 +20,7 @@ from failed_fax_dashboard.services.failures import (
     WINDOW_DAYS,
     dismissed_keys,
     event_number,
+    command_ids,
     item_link,
 )
 from failed_fax_dashboard.services.history import FAXED, Attempt, Sender, load_attempts
@@ -39,6 +40,9 @@ LABEL = "Failed fax"
 FALLBACK_TEAM_SETTING = "FAILED_FAX_FALLBACK_TEAM"
 RECEIVED_TEAM_SETTING = "RECEIVED_FAX_TASK_TEAM"
 RECEIVED_PROBLEM = "Only part of the fax arrived"
+# Each run re-reads this far back past the previous run, so a fax whose result lands
+# while a run is in progress (or a run that was skipped) is still picked up.
+RUN_OVERLAP = timedelta(minutes=15)
 
 
 def _plural(count: int | None, word: str) -> str:
@@ -117,9 +121,17 @@ def _assignee_name(assignee: str, attempt: Attempt, fallback: Team | None) -> st
 
 
 def sent_failure_effects(
-    secrets: dict[str, Any], environment: dict[str, Any], start: datetime, now: datetime
+    secrets: dict[str, Any],
+    environment: dict[str, Any],
+    start: datetime,
+    now: datetime,
+    since: datetime | None = None,
 ) -> list[Effect]:
-    """Create or update tasks for sent faxes that failed after the job's start time."""
+    """Create or update tasks for sent faxes whose failure was recorded since ``since``.
+
+    ``start`` (the job's first run) still bounds dismissals and the no-backfill rule.
+    """
+    since = since or start
     fallback = find_team(secrets, FALLBACK_TEAM_SETTING)
     zone = practice_zone(environment)
     due = due_today(now, zone)
@@ -131,7 +143,7 @@ def sent_failure_effects(
             spec.model.objects.filter(
                 event_type=FAXED,
                 delivered_by_fax=False,
-                modified__gt=start,
+                modified__gt=since,
                 **spec.item_filters,
             )
             .exclude(**spec.item_excludes)
@@ -141,6 +153,7 @@ def sent_failure_effects(
         if not events:
             continue
         histories = load_attempts(spec, [getattr(event, f"{spec.item_field}_id") for event in events])
+        commands = command_ids(spec, events)
         alerts = {
             (alert.item_id, alert.fax_number): alert
             for alert in FaxAlert.objects.filter(
@@ -172,7 +185,7 @@ def sent_failure_effects(
             if not assignee:
                 continue
             patient = walk(event, spec.patient_path)
-            link = item_link(spec, event, patient, walk(event, spec.note_path))
+            link = item_link(spec, event, patient, walk(event, spec.note_path), commands)
             task = live_tasks.get(alert.task_id) if alert is not None else None
             fresh = alert is not None and alert.task_id in made_now
 
@@ -223,10 +236,13 @@ def sent_failure_effects(
     return effects
 
 
-def close_delivered_effects(now: datetime, environment: dict[str, Any]) -> list[Effect]:
-    """Close the task of every alert whose item was later delivered to the same number."""
+def close_delivered_effects(
+    now: datetime, environment: dict[str, Any], since: datetime | None = None
+) -> list[Effect]:
+    """Close the task of every open alert whose item was delivered to the same number since ``since``."""
     zone = practice_zone(environment)
     horizon = now - timedelta(days=WINDOW_DAYS)
+    since = max(since, horizon) if since is not None else horizon
     effects: list[Effect] = []
     open_alerts = FaxAlert.objects.filter(closed=False, last_handled_at__gte=horizon).exclude(
         source_type=RECEIVED_TYPE
@@ -243,7 +259,7 @@ def close_delivered_effects(now: datetime, environment: dict[str, Any]) -> list[
             spec.model.objects.filter(
                 event_type=FAXED,
                 delivered_by_fax=True,
-                created__gte=horizon,
+                modified__gt=since,
                 **{f"{spec.item_field}__id__in": [item for item, _ in alerts]},
             )
             .select_related("fax", spec.item_field)
@@ -267,9 +283,14 @@ def close_delivered_effects(now: datetime, environment: dict[str, Any]) -> list[
 
 
 def received_failure_effects(
-    secrets: dict[str, Any], environment: dict[str, Any], start: datetime, now: datetime
+    secrets: dict[str, Any],
+    environment: dict[str, Any],
+    start: datetime,
+    now: datetime,
+    since: datetime | None = None,
 ) -> list[Effect]:
-    """One task per received fax that arrived in part after the job's start time."""
+    """One task per received fax that arrived in part since ``since`` (and after the start)."""
+    since = since or start
     team = find_team(secrets, RECEIVED_TEAM_SETTING)
     if team is None:
         return []
@@ -277,7 +298,7 @@ def received_failure_effects(
     faxes = [
         fax
         for fax in Fax.objects.filter(
-            direction=FaxDirection.INBOUND, success=False, modified__gt=start
+            direction=FaxDirection.INBOUND, success=False, modified__gt=since
         ).order_by("created")
         if (RECEIVED_TYPE, str(fax.id)) not in dismissed
     ]
@@ -332,7 +353,12 @@ def alert_effects(
     if start_row is None:
         start_row = AlertStart.objects.create(started_at=moment)
     start = start_row.started_at
-    effects = sent_failure_effects(secrets, environment, start, moment)
-    effects.extend(received_failure_effects(secrets, environment, start, moment))
-    effects.extend(close_delivered_effects(moment, environment))
+    # Read only what changed since the previous run (less the overlap), never before the start.
+    previous = start_row.last_run_at
+    since = max(start, previous - RUN_OVERLAP) if previous is not None else start
+    effects = sent_failure_effects(secrets, environment, start, moment, since)
+    effects.extend(received_failure_effects(secrets, environment, start, moment, since))
+    effects.extend(close_delivered_effects(moment, environment, since))
+    start_row.last_run_at = moment
+    start_row.save(update_fields=["last_run_at"])
     return effects

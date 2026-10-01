@@ -19,7 +19,7 @@ Each row shows the recipient or sender (click the name for a contact card), the 
 
 ## Automatic tasks
 
-A scheduled job runs every 10 minutes. For each new failure it makes one task per item and fax number, assigned to the sender and labeled "Failed fax". A later failure moves the same task to that attempt's sender, reopens it, and adds a comment. A later delivered attempt closes it. Failures from before the job first ran get no task.
+A scheduled job runs every 5 minutes and reads only failures recorded since its previous run (with a 15-minute overlap). For each new failure it makes one task per item and fax number, assigned to the sender and labeled "Failed fax". A later failure moves the same task to that attempt's sender, reopens it, and adds a comment. A later delivered attempt closes it. Failures from before the job first ran get no task.
 
 - Sent fax with no staff sender (for example one sent by another plugin): the team named in `FAILED_FAX_FALLBACK_TEAM`. Empty: no task.
 - Received fax that only partly arrived: the team named in `RECEIVED_FAX_TASK_TEAM`. Empty: no task.

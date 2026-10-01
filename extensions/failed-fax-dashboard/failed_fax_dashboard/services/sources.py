@@ -46,6 +46,10 @@ class SourceSpec:
     # Card note shown with the contact, and the item as written in a sentence.
     contact_source: str = "Matched in your contact directory"
     noun: str = ""
+    # For items that are note commands: the chart's command type key and the Command
+    # anchor type, so links open the command itself instead of just its note.
+    command_type: str | None = None
+    anchor_type: str | None = None
 
 
 def _live_item(prefix: str) -> dict[str, Any]:
@@ -79,6 +83,8 @@ SOURCES: tuple[SourceSpec, ...] = (
         contact_path=("referral", "service_provider"),
         contact_source="From the referral",
         noun="referral",
+        command_type="refer",
+        anchor_type="referral",
     ),
     SourceSpec(
         type_key="imaging_order",
@@ -98,6 +104,8 @@ SOURCES: tuple[SourceSpec, ...] = (
         contact_path=("imaging_order", "imaging_center"),
         contact_source="From the imaging order",
         noun="imaging order",
+        command_type="imagingOrder",
+        anchor_type="imagingorder",
     ),
     SourceSpec(
         type_key="lab_order",
@@ -111,6 +119,8 @@ SOURCES: tuple[SourceSpec, ...] = (
         lab_name_path=("lab_order", "ontology_lab_partner"),
         contact_source="Lab from the order, details from your contact directory",
         noun="lab order",
+        command_type="labOrder",
+        anchor_type="laborder",
     ),
     SourceSpec(
         type_key="letter",

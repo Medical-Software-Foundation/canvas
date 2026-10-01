@@ -403,7 +403,7 @@ def test_received_faxes_never_close_or_move() -> None:
     assert FaxAlert.objects.get().closed is False
 
 
-def test_the_cron_handler_runs_every_ten_minutes_and_returns_the_alert_effects() -> None:
+def test_the_cron_handler_runs_every_five_minutes_and_returns_the_alert_effects() -> None:
     make_event("note", originator=make_staff().user)
     started()
     on_time = datetime(2026, 10, 1, 12, 10, tzinfo=timezone.utc)
@@ -413,7 +413,7 @@ def test_the_cron_handler_runs_every_ten_minutes_and_returns_the_alert_effects()
         event = SimpleNamespace(target=SimpleNamespace(id=moment.isoformat()))
         return FaxAlertCron(event, secrets={}, environment=ENVIRONMENT)
 
-    assert FaxAlertCron.SCHEDULE == "*/10 * * * *"
+    assert FaxAlertCron.SCHEDULE == "*/5 * * * *"
     assert handler(off_time).compute() == []
     assert [EffectType.Name(effect.type) for effect in handler(on_time).compute()] == [
         "CREATE_TASK",
@@ -479,3 +479,64 @@ def test_a_run_skips_failures_older_than_the_last_handled_one() -> None:
     touch(older, 0)
 
     assert run() == []
+
+
+def last_ran(minutes_ago: float) -> None:
+    AlertStart.objects.update(last_run_at=NOW - timedelta(minutes=minutes_ago))
+
+
+def test_each_run_reads_only_failures_recorded_since_the_previous_run() -> None:
+    started(hours_ago=5)
+    last_ran(60)
+    sender = make_staff()
+    stale = make_event("note", originator=sender.user, number="+15555550101")
+    touch(stale, 3)  # after the start, but long before the previous run
+    fresh = make_event("note", originator=sender.user, number="+15555550102")
+    touch(fresh, 0.1)
+
+    effects = run()
+
+    assert [name for name, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    assert [alert.fax_number for alert in FaxAlert.objects.all()] == ["+15555550102"]
+    assert AlertStart.objects.get().last_run_at == NOW
+
+
+def test_a_failure_recorded_just_before_the_previous_run_is_still_picked_up() -> None:
+    started(hours_ago=5)
+    last_ran(5)
+    event = make_event("note", originator=make_staff().user)
+    type(event).objects.filter(pk=event.pk).update(modified=NOW - timedelta(minutes=12))
+
+    assert [name for name, _ in run()] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+
+
+def test_the_first_run_after_an_upgrade_reads_from_the_start() -> None:
+    started(hours_ago=5)  # last_run_at is empty, as on a plugin installed before this field existed
+    event = make_event("note", originator=make_staff().user)
+    touch(event, 3)
+
+    assert [name for name, _ in run()] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+
+
+def test_a_task_comment_for_a_referral_links_to_the_referral_command() -> None:
+    from canvas_sdk.v1.data import Command
+
+    started()
+    event = make_event("referral", originator=make_staff().user)
+    referral = event.referral
+    command = Command.objects.create(
+        note=referral.note,
+        patient=referral.patient,
+        schema_key="refer",
+        state="committed",
+        data={},
+        anchor_object_type="referral",
+        anchor_object_dbid=referral.dbid,
+    )
+
+    comment = next(data for name, data in run() if name == "CREATE_TASK_COMMENT")
+
+    assert (
+        f"/patient/{referral.patient.id}?noteId={referral.note.dbid}"
+        f"&commandType=refer&commandId={referral.dbid}&commandUuid={command.id}"
+    ) in comment["body"]
