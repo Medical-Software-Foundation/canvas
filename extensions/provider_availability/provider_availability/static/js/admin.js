@@ -800,11 +800,21 @@ document.addEventListener('click', function(e) {
   if (roles && roles.contains(hit)) _settingsDirty = true;
 }, true);
 
+// While the page itself fills the editor (opening it blank, or loading a rule,
+// block or hold), the controls it sets announce changes that are not the
+// user's. Every editor loader fills the form in the same task that switches
+// tabs, so ignoring changes until that task ends covers them all. Origin
+// cannot be judged from the event: the page's checkbox and dropdown controls
+// re-send even a user's change as a page-generated event.
+var _pageIsFilling = false;
+function _fillingForm() {
+  _pageIsFilling = true;
+  setTimeout(function() { _pageIsFilling = false; }, 0);
+}
+
 // Dropdowns, checkboxes and date pickers report "change" rather than "input".
 document.addEventListener('change', function(e) {
-  // The page sets dropdowns itself when it loads a rule or hold for editing;
-  // those changes are not the user's.
-  if (!e.isTrusted) return;
+  if (_pageIsFilling) return;
   var editor = document.getElementById('panel-editor');
   if (editor && editor.contains(e.target)) _formDirty = true;
 });
@@ -837,6 +847,7 @@ function _confirmLeave(toName) {
 
 function showTab(name) {
   if (!_confirmLeave(name)) return;
+  _fillingForm();
   _formDirty = false;
 
   showTab._inProgress = true;
@@ -3079,6 +3090,8 @@ async function saveSchedulableRoles() {
   if (data && data.error) { showMsg(data.error, 'error'); return; }
   _settingsDirty = false;
   showMsg('Schedulable roles saved', 'success');
+  // Re-read so the "no active staff hold these roles" note matches what was saved.
+  loadSchedulableRoles();
   // Reflect the change immediately — refresh the provider pickers without a page reload.
   await loadProviders();
 }
@@ -3553,6 +3566,7 @@ if (_mainTabsEl) {
     // programmatic showTab still sees a clean state.
     var calledFromShowTab = !!showTab._inProgress;
     showTab._fromEvent = true;
+    _fillingForm();
     if (name === 'editor') {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {

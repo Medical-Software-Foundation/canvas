@@ -482,10 +482,12 @@ def refresh_all_ttls() -> int:
     if tz_val is not None:
         cache.set(PRACTICE_TZ_KEY, tz_val, timeout_seconds=CACHE_TTL_SECONDS)
 
-    # Refresh schedulable roles
-    roles_val = cache.get(SCHEDULABLE_ROLES_KEY)
-    if roles_val is not None:
-        cache.set(SCHEDULABLE_ROLES_KEY, roles_val, timeout_seconds=CACHE_TTL_SECONDS)
+    # Refresh schedulable roles, and the bookable set the background job last
+    # reconciled against (if it lapsed, the next change would go unapplied)
+    for key in (SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY):
+        val = cache.get(key)
+        if val is not None:
+            cache.set(key, val, timeout_seconds=CACHE_TTL_SECONDS)
 
     # Refresh provider timezones
     tz_index = _get_provider_tz_index()

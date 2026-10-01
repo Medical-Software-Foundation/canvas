@@ -419,6 +419,27 @@ class TestRefreshHoldBlocks:
             assert result == []
 
 
+class TestScheduleLookupFailure:
+    def test_a_failed_lookup_still_runs_the_other_refreshes(self):
+        handler = CacheRefreshTask(MagicMock())
+        lead_effect = MagicMock()
+
+        with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
+             patch(f"{CR_MODULE}.get_schedulable_staff", side_effect=RuntimeError("db down")), \
+             patch(f"{CR_MODULE}._ensure_provider_calendars") as mock_cal, \
+             patch(f"{CR_MODULE}._reconcile_if_schedulable_changed") as mock_rec, \
+             patch(f"{CR_MODULE}._daily_resync", return_value=[]) as mock_resync, \
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[lead_effect]):
+
+            result = handler.execute()
+
+            assert result == [lead_effect]
+            assert mock_resync.mock_calls == [call()]
+            assert mock_cal.mock_calls == []
+            assert mock_rec.mock_calls == []
+
+
 class TestReconcileWhenSchedulableChanges:
     """Who is bookable can change outside the plugin (a role edit, an
     activation, the Provider role type fallback switching). Availability is

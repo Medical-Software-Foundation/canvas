@@ -56,13 +56,20 @@ class CacheRefreshTask(CronTask):
         # Detect day rollover BEFORE _daily_resync (which updates the sync date).
         day_changed = get_last_sync_date() != date.today().isoformat()
 
-        schedulable = get_schedulable_staff()
-        effects = _ensure_provider_calendars(schedulable)
+        try:
+            schedulable = get_schedulable_staff()
+        except Exception:
+            # A failed lookup must not stop the lead-time, daily and hold
+            # refreshes below, which do not depend on it.
+            log.exception("CacheRefreshTask: schedulable staff lookup failed")
+            schedulable = None
+        effects = _ensure_provider_calendars(schedulable) if schedulable is not None else []
 
         # Who is bookable changes outside the plugin too: a role edited on a
         # staff record, someone activated or deactivated, or the Provider role
         # type fallback switching on or off. Rebuild availability when it does.
-        effects.extend(_reconcile_if_schedulable_changed({str(s.id) for s in schedulable}))
+        if schedulable is not None:
+            effects.extend(_reconcile_if_schedulable_changed({str(s.id) for s in schedulable}))
 
         # Daily re-sync: when the date changes, re-sync all rules
         # so recurrence_ends_at advances for effective_end enforcement
