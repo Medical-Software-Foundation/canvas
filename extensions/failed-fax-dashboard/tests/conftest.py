@@ -77,13 +77,20 @@ def call_api() -> CallApi:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def fax_dismissal_table(django_db_setup: None, django_db_blocker: Any) -> Iterator[None]:
+def custom_data_tables(django_db_setup: None, django_db_blocker: Any) -> Iterator[None]:
     """The test database is built without plugin custom data tables, so create ours once."""
     from django.db import connection
 
-    from failed_fax_dashboard.models import FaxDismissal
+    from failed_fax_dashboard.models import (
+        AlertStart,
+        DashboardPreference,
+        FaxAlert,
+        FaxDismissal,
+        FaxResend,
+    )
 
     with django_db_blocker.unblock():
         with connection.schema_editor() as editor:
-            editor.create_model(FaxDismissal)
+            for model in (AlertStart, DashboardPreference, FaxAlert, FaxDismissal, FaxResend):
+                editor.create_model(model)
     yield

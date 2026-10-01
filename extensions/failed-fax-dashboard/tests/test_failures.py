@@ -1,358 +1,447 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Any
 
 import pytest
 from canvas_sdk.test_utils.factories import (
     CanvasUserFactory,
     FaxFactory,
-    StaffFactory,
+    ImagingOrderFactory,
+    LabOrderFactory,
+    ReferralFactory,
+    ServiceProviderFactory,
 )
+from canvas_sdk.v1.data import FaxDirection
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
 
-from failed_fax_dashboard.models import FaxDismissal
+from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
 from failed_fax_dashboard.services.failures import (
-    failed_fax_page,
-    normalize_number,
-    person_name,
-    sender_name,
+    attach_tasks,
+    collect_received,
+    collect_sent,
+    cutoff_for,
 )
-from tests.helpers import make_event
+from tests.helpers import make_alert, make_bot, make_event, make_staff
+from canvas_sdk.test_utils.factories import TaskFactory
 
 pytestmark = pytest.mark.django_db
 
 
-def test_failed_note_fax_row_has_all_columns() -> None:
-    staff = StaffFactory.create()
-    event = make_event("note", originator=staff.user, reason="Line busy")
+def rows() -> list[Any]:
+    return collect_sent(cutoff_for(None))
+
+
+def test_failed_note_fax_row_has_the_facts_the_dashboard_shows() -> None:
+    sender = make_staff()
+    event = make_event("note", originator=sender.user, reason="Line busy")
     note = event.note
 
-    result = failed_fax_page()
+    tested = rows()
 
-    expected = {
-        "key": f"note:{event.id}",
-        "type": "note",
-        "type_label": "Note",
-        "direction": "sent",
-        "source_id": str(event.id),
-        "patient_name": f"{note.patient.first_name} {note.patient.last_name}",
-        "fax_number": "+15555550100",
-        "sender": f"{staff.first_name} {staff.last_name}",
-        "occurred_at": event.created.isoformat(),
-        "pages": event.fax.fax_pages,
-        "reason": "Line busy",
-        "link_url": f"/patient/{note.patient.id}?noteId={note.dbid}",
-        "link_label": "Open note",
-        "can_resend": True,
-    }
-    assert result["rows"] == [expected]
-    assert result["total"] == 1
-    assert result["window_days"] == 90
+    assert len(tested) == 1
+    row = tested[0]
+    assert row.key == f"note:{event.id}"
+    assert row.patient_name == f"{note.patient.first_name} {note.patient.last_name}"
+    assert row.number == "+15555550100"
+    assert row.latest.sender.label == "Dana Whitfield"
+    assert row.problem_text == "Line busy"
+    assert row.pages == event.fax.fax_pages
+    assert row.link_url == f"/patient/{note.patient.id}?noteId={note.dbid}"
+    assert [attempt.outcome for attempt in row.attempts] == ["failed"]
 
 
 @pytest.mark.parametrize("delivered", [None, True])
-def test_pending_and_delivered_faxes_are_not_listed(delivered: bool | None) -> None:
+def test_pending_and_delivered_faxes_are_not_rows(delivered: bool | None) -> None:
     make_event("note", delivered=delivered)
 
-    result = failed_fax_page()
-
-    assert result["rows"] == []
-    assert result["total"] == 0
-    assert result["total_pages"] == 1
+    assert rows() == []
 
 
-def test_printed_events_are_not_listed() -> None:
+def test_printed_events_are_not_rows() -> None:
     make_event("note", event_type="PRINTED")
 
-    assert failed_fax_page()["rows"] == []
+    assert rows() == []
 
 
-def test_failures_older_than_90_days_are_not_listed() -> None:
+def test_failures_older_than_90_days_are_not_rows() -> None:
     make_event("note", age_days=91)
     recent = make_event("note", age_days=89)
 
-    result = failed_fax_page()
-
-    assert [row["source_id"] for row in result["rows"]] == [str(recent.id)]
-
-
-@pytest.mark.parametrize(
-    ("type_key", "label", "can_resend"),
-    [
-        ("note", "Note", True),
-        ("referral", "Referral", False),
-        ("imaging_order", "Imaging order", False),
-        ("lab_order", "Lab order", False),
-        ("letter", "Letter", False),
-        ("integration_task", "Data Integration document", False),
-    ],
-)
-def test_every_item_type_is_listed(type_key: str, label: str, can_resend: bool) -> None:
-    event = make_event(type_key)
-
-    result = failed_fax_page()
-
-    assert len(result["rows"]) == 1
-    row = result["rows"][0]
-    assert row["type"] == type_key
-    assert row["type_label"] == label
-    assert row["can_resend"] is can_resend
-    assert row["source_id"] == str(event.id)
-    assert row["patient_name"]
+    assert [row.event.id for row in rows()] == [recent.id]
 
 
 @pytest.mark.parametrize(
     ("type_key", "label"),
     [
-        ("referral", "Open note"),
-        ("imaging_order", "Open note"),
-        ("lab_order", "Open note"),
-        ("letter", "Open letter"),
+        ("note", "Note"),
+        ("referral", "Referral"),
+        ("imaging_order", "Imaging order"),
+        ("lab_order", "Lab order"),
+        ("letter", "Letter"),
+        ("integration_task", "Data Integration document"),
     ],
 )
-def test_order_and_letter_rows_link_to_the_note(type_key: str, label: str) -> None:
+def test_every_item_type_is_a_row(type_key: str, label: str) -> None:
+    event = make_event(type_key)
+
+    tested = rows()
+
+    assert [(row.spec.type_key, row.spec.label, row.event.id) for row in tested] == [
+        (type_key, label, event.id)
+    ]
+    assert tested[0].patient_name
+
+
+@pytest.mark.parametrize("type_key", ["referral", "imaging_order", "lab_order", "letter"])
+def test_order_and_letter_rows_link_to_the_note(type_key: str) -> None:
     event = make_event(type_key)
     item = getattr(event, type_key)
     note = item.note
     patient = note.patient if type_key == "letter" else item.patient
 
-    row = failed_fax_page()["rows"][0]
-
-    assert row["link_url"] == f"/patient/{patient.id}?noteId={note.dbid}"
-    assert row["link_label"] == label
+    assert rows()[0].link_url == f"/patient/{patient.id}?noteId={note.dbid}"
 
 
-def test_data_integration_row_links_to_the_queue() -> None:
-    make_event("integration_task")
+def test_data_integration_row_links_to_its_own_document() -> None:
+    event = make_event("integration_task")
 
-    row = failed_fax_page()["rows"][0]
-
-    assert row["link_url"] == "/data-integration"
-    assert row["link_label"] == "Open Data Integration"
+    assert rows()[0].link_url == f"/data-integration/{event.integration_task.dbid}"
 
 
-def test_lab_order_without_a_note_has_no_link() -> None:
-    event = make_event("lab_order")
-    event.lab_order.note = None
-    event.lab_order.save()
-
-    assert failed_fax_page()["rows"][0]["link_url"] is None
-
-
-def test_later_delivery_to_same_number_clears_the_row() -> None:
+def test_a_later_delivery_to_the_same_number_clears_the_row() -> None:
     failed = make_event("note", age_days=2)
-    make_event("note", delivered=True, age_days=1, note=failed.note)
+    make_event("note", delivered=True, note=failed.note, age_days=1)
 
-    assert failed_fax_page()["rows"] == []
-
-
-def test_later_delivery_matches_number_ignoring_formatting() -> None:
-    failed = make_event("note", number="+1 (555) 555-0100", age_days=2)
-    make_event("note", delivered=True, number="15555550100", age_days=1, note=failed.note)
-
-    assert failed_fax_page()["rows"] == []
+    assert rows() == []
 
 
-def test_delivery_to_a_different_number_does_not_clear_the_row() -> None:
+def test_a_delivery_to_another_number_does_not_clear_the_row() -> None:
     failed = make_event("note", age_days=2)
-    make_event("note", delivered=True, number="+15555559999", age_days=1, note=failed.note)
+    make_event("note", delivered=True, note=failed.note, number="+15555550199", age_days=1)
 
-    assert len(failed_fax_page()["rows"]) == 1
-
-
-def test_delivery_for_a_different_item_does_not_clear_the_row() -> None:
-    make_event("note", age_days=2)
-    make_event("note", delivered=True, age_days=1)
-
-    assert len(failed_fax_page()["rows"]) == 1
+    assert [row.event.id for row in rows()] == [failed.id]
 
 
-def test_delivery_before_the_failure_does_not_clear_the_row() -> None:
-    failed = make_event("note", age_days=1)
-    make_event("note", delivered=True, age_days=2, note=failed.note)
+def test_a_delivery_before_the_failure_does_not_clear_the_row() -> None:
+    first = make_event("note", delivered=True, age_days=3)
+    failed = make_event("note", note=first.note, age_days=1)
 
-    assert len(failed_fax_page()["rows"]) == 1
+    assert [row.event.id for row in rows()] == [failed.id]
 
 
-def test_dismissed_rows_are_hidden() -> None:
-    event = make_event("referral")
+def test_formatting_of_the_number_does_not_split_attempts() -> None:
+    first = make_event("note", number="(555) 555-0100", age_days=2)
+    second = make_event("note", note=first.note, number="+15555550100", age_days=1)
+
+    tested = rows()
+
+    assert len(tested) == 1
+    assert tested[0].event.id == second.id
+    assert len(tested[0].attempts) == 2
+
+
+def test_attempts_of_one_item_and_number_make_one_row_in_order() -> None:
+    sender = make_staff()
+    other = make_staff("Marcus", "Bell")
+    first = make_event("note", originator=sender.user, reason="No answer", age_days=3)
+    second = make_event("note", note=first.note, originator=other.user, reason="Busy", age_days=2)
+    pending = make_event("note", note=first.note, originator=other.user, delivered=None, age_days=1)
+
+    tested = rows()
+
+    assert len(tested) == 1
+    row = tested[0]
+    assert row.event.id == second.id
+    assert [attempt.event_id for attempt in row.attempts] == [
+        str(first.id),
+        str(second.id),
+        str(pending.id),
+    ]
+    assert [attempt.outcome for attempt in row.attempts] == ["failed", "failed", "pending"]
+    assert row.pending is True
+    assert row.problem_text == "Resent, waiting for delivery"
+
+
+def test_two_numbers_for_one_item_are_two_rows() -> None:
+    first = make_event("note")
+    make_event("note", note=first.note, number="+15555550199")
+
+    assert len(rows()) == 2
+
+
+def test_dismissed_row_is_hidden_until_a_newer_failure() -> None:
+    event = make_event("note", age_days=2)
     FaxDismissal.objects.create(
-        source_type="referral",
+        source_type="note",
         source_id=str(event.id),
-        dismissed_by="staff-1",
-        dismissed_at=datetime.now(timezone.utc),
+        dismissed_by="x",
+        dismissed_at=event.created + timedelta(hours=1),
     )
+    assert rows() == []
 
-    assert failed_fax_page()["rows"] == []
+    newer = make_event("note", note=event.note, age_days=1)
+
+    assert [row.event.id for row in rows()] == [newer.id]
 
 
-def test_dismissal_of_one_type_does_not_hide_another_type() -> None:
+def test_deleted_notes_and_letters_on_deleted_notes_are_not_rows() -> None:
+    note_event = make_event("note")
+    letter_event = make_event("letter")
+    CurrentNoteStateEvent.objects.create(note=note_event.note, state=NoteStates.DELETED)
+    CurrentNoteStateEvent.objects.create(note=letter_event.letter.note, state=NoteStates.DELETED)
+
+    assert rows() == []
+
+
+def test_notes_in_a_live_state_stay_rows() -> None:
+    event = make_event("note")
+    CurrentNoteStateEvent.objects.create(note=event.note, state=NoteStates.LOCKED)
+
+    assert len(rows()) == 1
+
+
+def test_entered_in_error_and_deleted_orders_are_not_rows() -> None:
+    referral = make_event("referral")
+    referral.referral.entered_in_error = CanvasUserFactory.create()
+    referral.referral.save()
+    imaging = make_event("imaging_order")
+    imaging.imaging_order.deleted = True
+    imaging.imaging_order.save()
+
+    assert rows() == []
+
+
+def test_event_without_a_fax_record_still_makes_a_row() -> None:
+    event = make_event("note")
+    type(event).objects.filter(pk=event.pk).update(fax=None)
+
+    tested = rows()
+
+    assert len(tested) == 1
+    assert tested[0].number == ""
+    assert tested[0].pages is None
+    assert tested[0].contact is None
+
+
+def test_dismissal_of_one_item_type_does_not_hide_another() -> None:
     event = make_event("referral")
     FaxDismissal.objects.create(
         source_type="note",
         source_id=str(event.id),
-        dismissed_by="staff-1",
-        dismissed_at=datetime.now(timezone.utc),
+        dismissed_by="x",
+        dismissed_at=event.created,
     )
 
-    assert len(failed_fax_page()["rows"]) == 1
+    assert len(rows()) == 1
 
 
-def test_entered_in_error_referral_is_hidden() -> None:
-    event = make_event("referral")
-    event.referral.entered_in_error = CanvasUserFactory.create()
-    event.referral.save()
+def test_resend_from_the_dashboard_is_credited_to_the_person_who_clicked() -> None:
+    bot = make_bot()
+    clicker = make_staff("Marcus", "Bell")
+    first = make_event("note", originator=make_staff().user, age_days=3)
+    resent = make_event("note", note=first.note, originator=bot.user, age_days=1)
+    FaxResend.objects.create(
+        note_id=first.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        resent_at=resent.created - timedelta(minutes=1),
+    )
 
-    assert failed_fax_page()["rows"] == []
+    row = rows()[0]
 
-
-def test_deleted_order_is_hidden() -> None:
-    event = make_event("imaging_order")
-    event.imaging_order.deleted = True
-    event.imaging_order.save()
-
-    assert failed_fax_page()["rows"] == []
-
-
-def test_fax_on_a_deleted_note_is_hidden() -> None:
-    event = make_event("note")
-    CurrentNoteStateEvent.objects.create(note=event.note, state=NoteStates.DELETED)
-
-    assert failed_fax_page()["rows"] == []
+    assert row.latest.sender.label == "Resent by Marcus Bell"
+    assert row.latest.sender.kind == "resent"
+    assert row.sender_staff_ids == {clicker.id}
 
 
-def test_letter_fax_on_a_deleted_note_is_hidden() -> None:
-    event = make_event("letter")
-    CurrentNoteStateEvent.objects.create(note=event.letter.note, state=NoteStates.DELETED)
+def test_unclaimed_bot_fax_is_sent_automatically() -> None:
+    bot = make_bot()
+    make_event("note", originator=bot.user)
 
-    assert failed_fax_page()["rows"] == []
+    row = rows()[0]
 
-
-def test_fax_on_a_live_note_stays_visible() -> None:
-    event = make_event("note")
-    CurrentNoteStateEvent.objects.create(note=event.note, state=NoteStates.LOCKED)
-
-    assert len(failed_fax_page()["rows"]) == 1
+    assert row.latest.sender.label == "Sent automatically"
+    assert row.sender_staff_ids == set()
+    assert row.sender_sort == ""
 
 
-def test_event_without_a_fax_record_still_lists() -> None:
-    event = make_event("note")
-    type(event).objects.filter(pk=event.pk).update(fax=None)
+def test_fax_with_no_staff_originator_is_an_unknown_sender() -> None:
+    make_event("note", originator=None)
+    make_event("note", originator=CanvasUserFactory.create())
 
-    row = failed_fax_page()["rows"][0]
-
-    assert row["fax_number"] == ""
-    assert row["pages"] is None
+    assert [row.latest.sender.label for row in rows()] == ["Unknown sender", "Unknown sender"]
 
 
-def test_sender_name_is_empty_without_originator_or_staff_record() -> None:
-    no_originator = make_event("note", originator=None)
-    patient_user = make_event("note", originator=CanvasUserFactory.create())
+def test_two_clicks_are_credited_in_click_order() -> None:
+    bot = make_bot()
+    first_click = make_staff("Ann", "Aaron")
+    second_click = make_staff("Ben", "Baker")
+    start = make_event("note", originator=make_staff().user, age_days=4)
+    one = make_event("note", note=start.note, originator=bot.user, age_days=2)
+    two = make_event("note", note=start.note, originator=bot.user, age_days=1)
+    for person, minutes in ((second_click, 1), (first_click, 2)):
+        FaxResend.objects.create(
+            note_id=start.note.dbid,
+            staff_id=person.dbid,
+            fax_number="+15555550100",
+            resent_at=one.created - timedelta(minutes=minutes),
+        )
+    attempts = rows()[0].attempts
 
-    rows = {row["source_id"]: row for row in failed_fax_page()["rows"]}
-
-    assert rows[str(no_originator.id)]["sender"] == ""
-    assert rows[str(patient_user.id)]["sender"] == ""
-
-
-def test_received_failures_are_listed() -> None:
-    failed = FaxFactory.create(direction="I", success=False, from_fax_number="+15555550111", fax_pages=3)
-
-    result = failed_fax_page()
-
-    assert result["rows"] == [
-        {
-            "key": f"received_fax:{failed.id}",
-            "type": "received_fax",
-            "type_label": "Received fax",
-            "direction": "received",
-            "source_id": str(failed.id),
-            "patient_name": "",
-            "fax_number": "+15555550111",
-            "sender": "",
-            "occurred_at": failed.date_utc.isoformat(),
-            "pages": 3,
-            "reason": "",
-            "link_url": "/data-integration",
-            "link_label": "Open Data Integration",
-            "can_resend": False,
-        }
-    ]
+    assert [attempt.event_id for attempt in attempts[1:]] == [str(one.id), str(two.id)]
+    assert [attempt.sender.name for attempt in attempts[1:]] == ["Ann Aaron", "Ben Baker"]
 
 
-def test_received_fax_without_a_receive_time_uses_created() -> None:
-    failed = FaxFactory.create(direction="I", success=False, date_utc=None)
+def test_contact_comes_from_the_referral_provider() -> None:
+    provider = ServiceProviderFactory.create(first_name="Lakeview Orthopedics", last_name="")
+    referral = ReferralFactory.create(service_provider=provider)
+    make_event("referral", referral=referral)
 
-    row = failed_fax_page()["rows"][0]
+    contact = rows()[0].contact
 
-    assert row["occurred_at"] == failed.created.isoformat()
-
-
-def test_successful_received_and_outbound_faxes_are_not_listed_as_received() -> None:
-    FaxFactory.create(direction="I", success=True)
-    FaxFactory.create(direction="O", success=False)
-
-    assert failed_fax_page()["rows"] == []
+    assert contact is not None
+    assert contact.name == "Lakeview Orthopedics"
+    assert contact.source == "From the referral"
+    assert contact.phone == provider.business_phone
 
 
-def test_dismissed_received_fax_is_hidden() -> None:
-    failed = FaxFactory.create(direction="I", success=False)
+def test_contact_comes_from_the_imaging_center() -> None:
+    provider = ServiceProviderFactory.create(first_name="Summit", last_name="Imaging")
+    order = ImagingOrderFactory.create(imaging_center=provider)
+    make_event("imaging_order", imaging_order=order)
+
+    contact = rows()[0].contact
+
+    assert contact is not None
+    assert (contact.name, contact.source) == ("Summit Imaging", "From the imaging order")
+
+
+def test_lab_contact_uses_the_order_name_and_directory_details() -> None:
+    directory = ServiceProviderFactory.create(
+        first_name="Northgate", last_name="", business_fax="(555) 555-0100", specialty="Laboratory"
+    )
+    order = LabOrderFactory.create(ontology_lab_partner="Northgate Labs")
+    make_event("lab_order", lab_order=order, number="+15555550100")
+
+    contact = rows()[0].contact
+
+    assert contact is not None
+    assert contact.name == "Northgate Labs"
+    assert contact.phone == directory.business_phone
+    assert contact.address == directory.business_address
+    assert contact.specialty == "Laboratory"
+    assert contact.source == "Lab from the order, details from your contact directory"
+
+
+def test_lab_contact_without_a_directory_match_has_the_name_only() -> None:
+    order = LabOrderFactory.create(ontology_lab_partner="Northgate Labs")
+    make_event("lab_order", lab_order=order)
+
+    contact = rows()[0].contact
+
+    assert contact is not None
+    assert (contact.name, contact.phone, contact.address) == ("Northgate Labs", "", "")
+
+
+def test_note_contact_is_matched_in_the_directory_on_the_last_ten_digits() -> None:
+    provider = ServiceProviderFactory.create(business_fax="1 (555) 555-0100")
+    make_event("note", number="+15555550100")
+
+    row = rows()[0]
+
+    assert row.contact is not None
+    assert row.contact.source == "Matched in your contact directory"
+    assert row.contact.name == f"{provider.first_name} {provider.last_name}"
+    assert row.directory is not None
+
+
+def test_two_directory_matches_means_no_contact() -> None:
+    ServiceProviderFactory.create(business_fax="555-555-0100")
+    ServiceProviderFactory.create(business_fax="(555) 555 0100")
+    make_event("note", number="+15555550100")
+
+    row = rows()[0]
+
+    assert row.contact is None
+    assert row.party_name == "+15555550100"
+
+
+def test_inactive_directory_entries_are_ignored() -> None:
+    ServiceProviderFactory.create(business_fax="555-555-0100", is_active=False)
+    make_event("note", number="+15555550100")
+
+    assert rows()[0].contact is None
+
+
+def test_received_rows_are_inbound_faxes_that_failed() -> None:
+    bad = FaxFactory.create(direction=FaxDirection.INBOUND, success=False, from_fax_number="+15555550111")
+    FaxFactory.create(direction=FaxDirection.INBOUND, success=True)
+    FaxFactory.create(direction=FaxDirection.OUTBOUND, success=False)
+
+    tested = collect_received(cutoff_for(None))
+
+    assert [row.fax.id for row in tested] == [bad.id]
+    assert tested[0].key == f"received_fax:{bad.id}"
+    assert tested[0].problem_text == "Only part of the fax arrived"
+    assert tested[0].pages == bad.fax_pages
+    assert tested[0].when == bad.date_utc
+
+
+def test_received_rows_skip_old_and_dismissed_faxes() -> None:
+    old = FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
+    type(old).objects.filter(pk=old.pk).update(created=old.created - timedelta(days=100))
+    dismissed = FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
     FaxDismissal.objects.create(
         source_type="received_fax",
-        source_id=str(failed.id),
-        dismissed_by="staff-1",
-        dismissed_at=datetime.now(timezone.utc),
+        source_id=str(dismissed.id),
+        dismissed_by="x",
+        dismissed_at=dismissed.created,
     )
+    kept = FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
 
-    assert failed_fax_page()["rows"] == []
-
-
-def test_rows_are_newest_first_across_types_and_paginate() -> None:
-    oldest = make_event("note", age_days=5)
-    middle = make_event("referral", age_days=3)
-    newest = make_event("letter", age_days=1)
-
-    first = failed_fax_page(page=1, page_size=2)
-    second = failed_fax_page(page=2, page_size=2)
-
-    assert [row["source_id"] for row in first["rows"]] == [str(newest.id), str(middle.id)]
-    assert [row["source_id"] for row in second["rows"]] == [str(oldest.id)]
-    assert first["total"] == 3
-    assert first["total_pages"] == 2
-    assert second["page"] == 2
+    assert [row.fax.id for row in collect_received(cutoff_for(None))] == [kept.id]
 
 
-def test_page_and_page_size_are_clamped() -> None:
+def test_received_sender_comes_from_the_directory() -> None:
+    provider = ServiceProviderFactory.create(business_fax="555-555-0111")
+    FaxFactory.create(direction=FaxDirection.INBOUND, success=False, from_fax_number="+15555550111")
+
+    row = collect_received(cutoff_for(None))[0]
+
+    assert row.contact is not None
+    assert row.contact.name == f"{provider.first_name} {provider.last_name}"
+    assert row.party_name == row.contact.name
+
+
+def test_tasks_attach_to_sent_and_received_rows() -> None:
+    event = make_event("note")
+    task = TaskFactory.create(title="Fax didn't go through: Note to +15555550100")
+    make_alert(event, "note", task)
+    fax = FaxFactory.create(direction=FaxDirection.INBOUND, success=False, from_fax_number="+15555550111")
+    received_task = TaskFactory.create(patient=None)
+    FaxAlert.objects.create(
+        source_type="received_fax",
+        item_id=str(fax.id),
+        fax_number="+15555550111",
+        task_id=str(received_task.id),
+        last_handled_event_id=str(fax.id),
+        last_handled_at=fax.created,
+    )
+    sent = rows()
+    received = collect_received(cutoff_for(None))
+
+    attach_tasks(sent, received)
+
+    assert sent[0].task is not None and sent[0].task.id == str(task.id)
+    assert received[0].task is not None and received[0].task.id == str(received_task.id)
+    assert received[0].task.url is None
+
+
+def test_rows_without_an_alert_have_no_task() -> None:
     make_event("note")
+    sent = rows()
 
-    result = failed_fax_page(page=0, page_size=5000)
+    attach_tasks(sent, [])
 
-    assert result["page"] == 1
-    assert result["page_size"] == 100
+    assert sent[0].task is None
 
-
-def test_listing_uses_a_bounded_number_of_queries(django_assert_max_num_queries: Any) -> None:
-    for _ in range(5):
-        make_event("referral")
-        make_event("note")
-
-    with django_assert_max_num_queries(25):
-        result = failed_fax_page()
-
-    assert result["total"] == 10
-
-
-def test_helpers() -> None:
-    assert normalize_number("+1 (555) 555-0100") == "15555550100"
-    assert normalize_number(None) == ""
-    assert person_name(None) == ""
-    assert sender_name(make_event("note", originator=None)) == ""
-    staff = StaffFactory.create()
-    assert person_name(staff) == f"{staff.first_name} {staff.last_name}"
-
-
-def test_failed_fax_page_accepts_a_reference_time() -> None:
-    make_event("note", age_days=10)
-    future = datetime.now(timezone.utc) + timedelta(days=85)
-
-    assert failed_fax_page(now=future)["rows"] == []
 
