@@ -2,23 +2,58 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "failed_fax_dashboard",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Lets front desk, referral coordinators, and Data Integration staff resend a note fax, create a follow-up task, or dismiss a row.",
     "components": {
-        "handlers": [
+        "applications": [
             {
-                "class": "failed_fax_dashboard.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "failed_fax_dashboard.applications.fax_dashboard_app:FailedFaxDashboardApp",
+                "name": "Failed Faxes",
+                "description": "Opens the failed-fax dashboard.",
+                "scope": "global",
+                "icon": "assets/failed-fax-dashboard-icon.png"
             }
         ],
-        "commands": [],
-        "content": [],
-        "effects": [],
-        "views": []
+        "handlers": [
+            {
+                "class": "failed_fax_dashboard.api.dashboard_api:FailedFaxDashboardAPI",
+                "description": "Serves the dashboard page and its data, resend, follow-up task, and dismiss endpoints to logged-in staff.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Fax",
+                        "NoteActionEvent",
+                        "ReferralActionEvent",
+                        "ImagingOrderActionEvent",
+                        "LabOrderActionEvent",
+                        "LetterActionEvent",
+                        "IntegrationTaskActionEvent",
+                        "Note",
+                        "Referral",
+                        "ImagingOrder",
+                        "LabOrder",
+                        "Letter",
+                        "IntegrationTask",
+                        "Patient",
+                        "Staff",
+                        "Team",
+                        "ServiceProvider"
+                    ],
+                    "write": []
+                }
+            }
+        ]
     },
-    "variables": [],
+    "variables": [
+        {"name": "FAX_DASHBOARD_STAFF_IDS", "default": ""},
+        {"name": "namespace_read_write_access_key", "sensitive": false}
+    ],
+    "custom_data": {
+        "namespace": "canvas_medical__failed_fax_dashboard",
+        "access": "read_write"
+    },
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
-    "readme": "./README.md"
+    "readme": "README.md"
 }

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Failed faxes</title>
+  <link rel="stylesheet" href="{{ asset_base }}/styles.css?v={{ cache_bust }}">
+</head>
+<body data-base="{{ asset_base }}">
+  <header class="page-header">
+    <h1>Failed faxes</h1>
+    <p class="subtitle">Faxes sent from Canvas that were not delivered, and faxes received only in part, from the last <span id="window-days">90</span> days. Newest first.</p>
+  </header>
+
+  <main>
+    <div id="status" class="status" role="status"></div>
+    <div class="table-wrap">
+      <table id="fax-table" hidden>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Patient</th>
+            <th>Fax number</th>
+            <th>Sent by</th>
+            <th>Time</th>
+            <th>Pages</th>
+            <th>Reason</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="fax-rows"></tbody>
+      </table>
+    </div>
+    <nav class="pager" id="pager" hidden>
+      <button type="button" id="prev-page">Previous</button>
+      <span id="page-label"></span>
+      <button type="button" id="next-page">Next</button>
+    </nav>
+  </main>
+
+  <div id="overlay" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-body"></div>
+      <p id="dialog-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" id="dialog-cancel" class="secondary">Cancel</button>
+        <button type="button" id="dialog-submit" class="primary">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ asset_base }}/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>

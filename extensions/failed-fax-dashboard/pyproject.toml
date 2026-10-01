@@ -19,5 +19,10 @@ dev = [
     "pytest-mock>=3.12.0",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.coverage.run]
+source = ["failed_fax_dashboard"]
+branch = true
 omit = ["tests/*"]
