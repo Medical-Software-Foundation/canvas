@@ -512,6 +512,7 @@ function _renderBlockDateChips() {
     chip.textContent = d;
     var x = document.createElement('button');
     x.type = 'button';
+    x.className = 'date-chip-remove';
     x.textContent = '×';
     x.style.cssText = 'background:none;border:0;cursor:pointer;font-size:16px;line-height:1;padding:0 0 0 2px;color:var(--text-muted);';
     x.onclick = function() { _blockDateChips.splice(idx, 1); _renderBlockDateChips(); };
@@ -771,14 +772,47 @@ let msProvider, msLocation, msVisitType, msBlockProvider, msBlockLocation, msFil
 /* ---------- Tab management ---------- */
 
 let _formDirty = false;
+let _settingsDirty = false;
 let _skipDirtyCheck = false;
 
+// The browser shows its own "Reload site?" box; pages cannot change its text
+// or buttons.
 window.addEventListener('beforeunload', function(e) {
-  if (_formDirty) {
+  if (_formDirty || _settingsDirty) {
     e.preventDefault();
     e.returnValue = '';
   }
 });
+
+// Changes made by clicking rather than typing: picker options and chips,
+// adding or removing time windows, block date chips, overrides, and the rule
+// type cards. Listened for in the capture phase because several of these
+// controls stop the click from bubbling.
+var _DIRTY_CLICK_SELECTOR = '.ms-option, .ms-chip-remove, .remove-time, .date-chip-remove, .type-card, ' +
+  '[onclick^="add"], [onclick^="saveOverride"], [onclick^="deleteOverride"]';
+document.addEventListener('click', function(e) {
+  var hit = e.target && e.target.closest ? e.target.closest(_DIRTY_CLICK_SELECTOR) : null;
+  if (!hit) return;
+  var editor = document.getElementById('panel-editor');
+  if (editor && editor.contains(hit)) _formDirty = true;
+  var roles = document.getElementById('ms-schedulable-roles');
+  if (roles && roles.contains(hit)) _settingsDirty = true;
+}, true);
+
+// Dropdowns, checkboxes and date pickers report "change" rather than "input".
+document.addEventListener('change', function(e) {
+  var editor = document.getElementById('panel-editor');
+  if (editor && editor.contains(e.target)) _formDirty = true;
+});
+
+// Remember the open tab for this browser tab, so a refresh reopens it. The
+// address hash alone is lost, because Canvas rebuilds the app's frame from
+// its launch address on a refresh.
+var _LAST_TAB_KEY = 'provider_availability:last-tab';
+function _rememberTab(name) {
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  try { sessionStorage.setItem(_LAST_TAB_KEY, name); } catch (e) {}
+}
 
 var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2 };
 var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings' };
@@ -819,7 +853,7 @@ function showTab(name) {
   } else {
     showTab._fromEvent = false;
   }
-  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  _rememberTab(name);
 }
 showTab._fromEvent = false;
 
@@ -3022,6 +3056,7 @@ async function saveSchedulableRoles() {
   var codes = msSchedulableRoles.getValue();
   var data = await apiCall('/roles', { method: 'PUT', body: JSON.stringify({ schedulable_roles: codes }) });
   if (data && data.error) { showMsg(data.error, 'error'); return; }
+  _settingsDirty = false;
   showMsg('Schedulable roles saved', 'success');
   // Reflect the change immediately — refresh the provider pickers without a page reload.
   await loadProviders();
@@ -3031,6 +3066,7 @@ async function saveSchedulableRoles() {
 /* ---------- Settings panel ---------- */
 
 async function renderSettingsPanel() {
+  _settingsDirty = false;
   // Load the schedulable-role checklist.
   loadSchedulableRoles();
 
@@ -3485,12 +3521,15 @@ if (_mainTabsEl) {
     if (!calledFromShowTab) {
       showTab._fromEvent = false;
     }
-    try { history.replaceState(null, '', '#' + name); } catch (ex) {}
+    _rememberTab(name);
   });
 }
 
 // Restore active tab from URL hash
 var _initHash = location.hash.replace('#', '');
+if (!_initHash) {
+  try { _initHash = sessionStorage.getItem(_LAST_TAB_KEY) || ''; } catch (e) {}
+}
 if (_initHash === 'settings' || _initHash === 'editor') {
   showTab(_initHash);
 } else if (_initHash === 'bulk-import') {
