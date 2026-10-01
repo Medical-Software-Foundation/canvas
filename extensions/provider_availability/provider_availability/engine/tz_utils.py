@@ -6,7 +6,7 @@ interpreted in the provider's timezone, then converted to UTC for Canvas events.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from provider_availability.engine.storage import get_practice_timezone, get_provider_timezone

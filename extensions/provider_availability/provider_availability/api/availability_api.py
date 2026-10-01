@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time
 from http import HTTPStatus
 
 from logger import log
@@ -43,12 +42,9 @@ from provider_availability.engine.roles import (
 )
 from provider_availability.engine.models import (
     AdminBlock,
-    BookingInterval,
-    BufferTime,
     DateOverride,
     ProviderAvailabilityRule,
     RecurringBlock,
-    TimeWindow,
 )
 from provider_availability.engine.overlap import check_rule_overlap
 from provider_availability.engine.storage import (

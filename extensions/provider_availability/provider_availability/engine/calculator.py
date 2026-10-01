@@ -20,7 +20,6 @@ from provider_availability.engine.models import (
     AvailableSlot,
     DAYS_OF_WEEK,
     ProviderAvailabilityRule,
-    TimeWindow,
     date_in_pattern,
 )
 from provider_availability.engine.event_sync import AVAILABILITY_TITLE

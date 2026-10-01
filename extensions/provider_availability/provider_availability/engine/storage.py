@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from canvas_sdk.caching.plugins import get_cache
-from logger import log
 
 from provider_availability.engine.models import AdminBlock, ProviderAvailabilityRule, RecurringBlock
 
