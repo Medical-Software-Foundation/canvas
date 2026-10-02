@@ -5,6 +5,7 @@ from typing import Any
 
 from canvas_sdk.v1.data import ServiceProvider
 
+from failed_fax_dashboard.services.saved_directory import SAVED_DIRECTORY_SOURCE, SavedContact
 from failed_fax_dashboard.services.sources import SourceSpec, walk
 from failed_fax_dashboard.services.util import chunked, last_ten
 
@@ -37,14 +38,19 @@ class Contact:
         }
 
 
-def provider_name(provider: ServiceProvider) -> str:
+def provider_name(provider: ServiceProvider | SavedContact) -> str:
     """A person's full name, or the organization's name (organizations have no last name)."""
     if provider.last_name:
         return f"{provider.first_name} {provider.last_name}".strip()
     return provider.first_name or provider.practice_name or ""
 
 
-def contact_from_provider(provider: ServiceProvider, source: str) -> Contact:
+def list_source(provider: ServiceProvider | SavedContact) -> str:
+    """Which contact list a match came from, as the card says it."""
+    return SAVED_DIRECTORY_SOURCE if isinstance(provider, SavedContact) else DIRECTORY_SOURCE
+
+
+def contact_from_provider(provider: ServiceProvider | SavedContact, source: str) -> Contact:
     """Build a contact card from a directory entry."""
     return Contact(
         name=provider_name(provider),
@@ -81,24 +87,32 @@ def directory_matches(numbers: list[str]) -> dict[str, ServiceProvider]:
     return {digits: matches[0] for digits, matches in found.items() if len(matches) == 1}
 
 
-def sent_contact(
-    spec: SourceSpec, event: Any, number: str, directory: ServiceProvider | None
-) -> Contact | None:
-    """The recipient of a sent fax, taken from the item when it names one."""
+def needs_lookup(spec: SourceSpec, event: Any) -> bool:
+    """Whether a sent fax's card needs a contact list match (the item names no recipient)."""
+    return walk(event, spec.contact_path) is None
+
+
+def sent_contact(spec: SourceSpec, event: Any, number: str, directory: ServiceProvider | SavedContact | None) -> Contact | None:
+    """The recipient of a sent fax.
+
+    The item's own recipient when it names one, else the one contact with the fax number.
+    A lab order's lab name is only the fallback: "Generic Lab" is a placeholder, and the
+    real recipient is the contact picked in the fax pop-up.
+    """
     named = walk(event, spec.contact_path)
     if named is not None:
         return contact_from_provider(named, spec.contact_source)
+    if directory is not None:
+        return contact_from_provider(directory, list_source(directory))
     lab_name = walk(event, spec.lab_name_path)
     if lab_name:
         return Contact(
             name=lab_name,
-            specialty=directory.specialty or "" if directory else "",
+            specialty="",
             practice="",
-            phone=directory.business_phone or "" if directory else "",
+            phone="",
             fax=number,
-            address=directory.business_address or "" if directory else "",
+            address="",
             source=spec.contact_source,
         )
-    if directory is not None:
-        return contact_from_provider(directory, DIRECTORY_SOURCE)
     return None

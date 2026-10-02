@@ -21,7 +21,8 @@ from failed_fax_dashboard.services.actions import (
     build_reassign,
     build_resend,
     build_resend_takeover,
-    dismiss_row,
+    dismiss_rows,
+    restore_rows,
 )
 from failed_fax_dashboard.services.dashboard import dashboard_page
 from failed_fax_dashboard.services.preferences import TABS, reset_views, save_views
@@ -174,11 +175,22 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/dismiss")
     def dismiss(self) -> list[Response | Effect]:
-        """Dismiss a row so it no longer appears."""
+        """Dismiss rows so they no longer appear, closing each one's open task."""
         if not self._is_allowed():
             return self._forbidden()
         try:
-            dismiss_row(self._body(), staff_id=self._staff_id())
+            effects = dismiss_rows(self._body(), staff_id=self._staff_id())
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
-        return [JSONResponse({"ok": True})]
+        return [JSONResponse({"ok": True}), *effects]
+
+    @api.post("/restore")
+    def restore(self) -> list[Response | Effect]:
+        """Bring dismissed rows back, reopening the tasks their dismissal closed."""
+        if not self._is_allowed():
+            return self._forbidden()
+        try:
+            effects = restore_rows(self._body(), staff_id=self._staff_id())
+        except ActionError as error:
+            return [JSONResponse({"error": error.message}, status_code=error.status)]
+        return [JSONResponse({"ok": True}), *effects]

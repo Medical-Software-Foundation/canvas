@@ -40,10 +40,8 @@ class Sender:
 
     @property
     def label(self) -> str:
-        """How the dashboard and task comments word the sender."""
-        if self.kind == KIND_RESENT:
-            return f"Resent by {self.name}"
-        if self.kind == KIND_STAFF:
+        """How the dashboard words the sender. A resend shows the person, since the attempt list shows it was resent."""
+        if self.kind in (KIND_STAFF, KIND_RESENT):
             return self.name
         if self.kind == KIND_AUTO:
             return "Sent automatically"

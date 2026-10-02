@@ -17,7 +17,7 @@ pytestmark = pytest.mark.django_db
 RESTRICTED = {"FAX_DASHBOARD_STAFF_IDS": "staff-1"}
 
 GET_PATHS = ["/index", "/styles.css", "/app.js", "/failures", "/people"]
-POST_PATHS = ["/resend", "/dismiss", "/preferences", "/tasks/reassign", "/tasks/comment"]
+POST_PATHS = ["/resend", "/dismiss", "/restore", "/preferences", "/tasks/reassign", "/tasks/comment"]
 
 
 def test_open_by_default_serves_the_page(call_api: CallApi) -> None:
@@ -237,20 +237,23 @@ def test_reassign_and_comment_errors(call_api: CallApi) -> None:
     assert (comment[0], comment[1], comment[2]) == (404, {"error": "Task not found"}, [])
 
 
-def test_dismiss_endpoint_records_the_staff_member(call_api: CallApi) -> None:
+def test_dismiss_and_restore_endpoints_record_the_staff_member(call_api: CallApi) -> None:
+    staff = make_staff("Dana", "Whitfield")
     failed = FaxFactory.create(direction="I", success=False)
+    keys = {"keys": [f"received_fax:{failed.id}"]}
 
-    status, body, effects = call_api(
-        "POST", "/dismiss", staff_id="dismisser",
-        body={"source_type": "received_fax", "source_id": str(failed.id)},
-    )
+    dismissed = call_api("POST", "/dismiss", staff_id=staff.id, body=keys)
+    assert dismissed == (200, {"ok": True}, [])
+    assert FaxDismissal.objects.get().dismissed_by == staff.id
 
-    assert (status, body, effects) == (200, {"ok": True}, [])
-    assert FaxDismissal.objects.get().dismissed_by == "dismisser"
+    restored = call_api("POST", "/restore", staff_id=staff.id, body=keys)
+    assert restored == (200, {"ok": True}, [])
+    assert FaxDismissal.objects.count() == 0
 
 
 def test_dismiss_endpoint_validation_error(call_api: CallApi) -> None:
-    status, body, _ = call_api("POST", "/dismiss", body={"source_type": "bogus"})
+    staff = make_staff()
+    status, body, _ = call_api("POST", "/dismiss", staff_id=staff.id, body={"keys": ["bogus:1"]})
 
     assert status == 400
     assert body == {"error": "Unknown item type"}
@@ -263,7 +266,7 @@ def test_malformed_and_non_object_bodies_are_rejected_cleanly(call_api: CallApi)
     assert bad_status == 400
     assert bad_body == {"error": "Request body must be valid JSON"}
     assert list_status == 400
-    assert list_body == {"error": "Unknown item type"}
+    assert list_body == {"error": "Choose at least one row"}
 
 
 def test_removed_routes_are_gone(call_api: CallApi) -> None:

@@ -10,12 +10,16 @@ class FaxDismissal(CustomModel):
     ``source_type`` is the row's item type key (for example ``note`` or
     ``received_fax``) and ``source_id`` is the id of the failed record: the
     action event for a sent fax, or the Fax for a received fax.
+
+    ``closed_task_id`` is the task the dismissal closed, so a restore reopens only that
+    one. Dismissals saved before the field existed read it as empty (None).
     """
 
     source_type: TextField = TextField()
     source_id: TextField = TextField()
     dismissed_by: TextField = TextField()
     dismissed_at: DateTimeField = DateTimeField()
+    closed_task_id: TextField = TextField(default="", null=True)
 
     class Meta:
         constraints = [

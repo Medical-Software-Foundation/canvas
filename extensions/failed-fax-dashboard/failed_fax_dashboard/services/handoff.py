@@ -93,7 +93,7 @@ def to_team(
             author_id=author_id,
         ).apply(),
     ]
-    earlier = [part for part in alert.previous_task_ids.split(",") if part]
+    earlier = [part for part in (alert.previous_task_ids or "").split(",") if part]
     alert.previous_task_ids = ",".join([*earlier, old_id])
     alert.task_id = new_id
     alert.assignee = f"{TEAM_PREFIX}{team.id}"

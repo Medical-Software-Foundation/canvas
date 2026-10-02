@@ -23,15 +23,18 @@ from failed_fax_dashboard.services.failures import (
     collect_sent,
     cutoff_for,
     directory_name,
+    recent_dismissals,
 )
 from failed_fax_dashboard.services.history import Attempt
 from failed_fax_dashboard.services.preferences import clean_tab_view, load_views
+from failed_fax_dashboard.services.routing import provider_ids, role_holders, routed_holder, routing_from
 from failed_fax_dashboard.services.sources import SOURCES
 from failed_fax_dashboard.services.tasks import (
     ASSIGNEE_STAFF,
     ASSIGNEE_TEAM,
     TaskInfo,
     is_mine,
+    load_tasks,
     team_ids_of,
     task_comments,
 )
@@ -113,8 +116,29 @@ def _attempt_json(attempt: Attempt, index: int) -> dict[str, Any]:
     }
 
 
+def _earlier_json(
+    task: TaskInfo, comments: dict[str, list[dict[str, Any]]], earlier: dict[str, TaskInfo]
+) -> list[dict[str, Any]]:
+    """The tasks this one replaced, oldest first, each with its holder, link, and comments."""
+    groups = []
+    for number, task_id in enumerate(task.earlier_ids, start=1):
+        info = earlier.get(task_id)
+        groups.append(
+            {
+                "number": number,
+                "id": task_id,
+                "assignee_name": info.assignee_name if info is not None else "",
+                "url": info.url if info is not None else None,
+                "comments": comments.get(task_id, []),
+            }
+        )
+    return groups
+
+
 def _task_json(
-    task: TaskInfo, comments: list[dict[str, Any]]
+    task: TaskInfo,
+    comments: dict[str, list[dict[str, Any]]],
+    earlier: dict[str, TaskInfo] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": task.id,
@@ -128,7 +152,8 @@ def _task_json(
             "id": task.assignee_id,
             "name": task.assignee_name,
         },
-        "comments": comments,
+        "comments": comments.get(task.id, []),
+        "earlier": _earlier_json(task, comments, earlier or {}),
     }
 
 
@@ -141,6 +166,8 @@ def expected_owner(
     start: datetime | None,
     fallback: Team | None,
     received_team: Team | None,
+    providers: set[str] | None = None,
+    holders: dict[str, Staff] | None = None,
 ) -> Owner | None:
     """Where the scheduled job will put this row's task on its next run, or None.
 
@@ -153,6 +180,10 @@ def expected_owner(
         if row.event.modified <= start:
             return None
         attempt = next((item for item in row.attempts if item.event_id == str(row.event.id)), row.latest)
+        patient_id = str(row.patient.id) if row.patient is not None else None
+        holder = routed_holder(attempt.sender.staff_id, patient_id, providers or set(), holders or {})
+        if holder is not None:
+            return (ASSIGNEE_STAFF, str(holder.id))
         if attempt.sender.is_person:
             return (ASSIGNEE_STAFF, attempt.sender.staff_id)
         return (ASSIGNEE_TEAM, str(fallback.id)) if fallback is not None else None
@@ -179,7 +210,11 @@ def row_is_mine(row: SentRow | ReceivedRow, owner: Owner | None, staff_id: str, 
 
 
 def _sent_json(
-    row: SentRow, mine: bool, comments: dict[str, list[dict[str, Any]]], task_pending: bool = False
+    row: SentRow,
+    mine: bool,
+    comments: dict[str, list[dict[str, Any]]],
+    task_pending: bool = False,
+    earlier: dict[str, TaskInfo] | None = None,
 ) -> dict[str, Any]:
     latest = row.latest
     is_note = row.spec.type_key == "note"
@@ -213,13 +248,17 @@ def _sent_json(
         "resend_pending": is_note and row.pending,
         "directory_name": directory_name(row),
         "mine": mine,
-        "task": _task_json(task, comments.get(task.id, [])) if task is not None else None,
+        "task": _task_json(task, comments, earlier) if task is not None else None,
         "task_pending": task_pending,
     }
 
 
 def _received_json(
-    row: ReceivedRow, mine: bool, comments: dict[str, list[dict[str, Any]]], task_pending: bool = False
+    row: ReceivedRow,
+    mine: bool,
+    comments: dict[str, list[dict[str, Any]]],
+    task_pending: bool = False,
+    earlier: dict[str, TaskInfo] | None = None,
 ) -> dict[str, Any]:
     task = row.task
     return {
@@ -234,7 +273,7 @@ def _received_json(
         "pages": row.pages,
         "link_url": row.link_url,
         "mine": mine,
-        "task": _task_json(task, comments.get(task.id, [])) if task is not None else None,
+        "task": _task_json(task, comments, earlier) if task is not None else None,
         "task_pending": task_pending,
     }
 
@@ -292,6 +331,9 @@ def dashboard_page(
     cutoff = cutoff_for(now)
     saved_views = load_views(staff_id)
     view = view_from_params(tab, params, saved_views[tab])
+    # Show dismissed is for this visit only, so it isn't part of the saved settings.
+    show_dismissed = params.get("dismissed") == "1"
+    view = {**view, "dismissed": show_dismissed}
 
     sent = collect_sent(cutoff)
     received = collect_received(cutoff)
@@ -305,11 +347,32 @@ def dashboard_page(
     received_team = find_team(settings, RECEIVED_TEAM_SETTING, quiet=True)
 
     rows: list[SentRow] | list[ReceivedRow] = sent if tab == "sent" else received
+    dismissers: dict[str, str] = {}
+    if show_dismissed:
+        recent = recent_dismissals(now)
+        if tab == "sent":
+            rows = collect_sent(cutoff, recent)
+            attach_tasks(rows, [])
+        else:
+            rows = collect_received(cutoff, recent)
+            attach_tasks([], rows)
+        dismisser_ids = {row.dismissal.dismissed_by for row in rows if row.dismissal is not None}
+        dismissers = {str(staff.id): person_name(staff) for staff in Staff.objects.filter(id__in=dismisser_ids)}
     sorts: dict[str, Any] = SENT_SORTS if tab == "sent" else RECEIVED_SORTS
     shown = [row for row in rows if matches(row, view, staff_id)]
     shown.sort(key=sorts[view["sort"]["key"]], reverse=view["sort"]["dir"] == -1)
 
-    owners = {row.key: expected_owner(row, start, fallback, received_team) for row in shown}
+    # Rows still waiting for their task follow whoever will get it, including a provider's
+    # failure that goes to the patient's care team member.
+    routing = routing_from(settings)
+    waiting = [row for row in shown if isinstance(row, SentRow) and row.task is None]
+    providers = provider_ids(routing, {sender for row in waiting for sender in row.sender_staff_ids})
+    holders = role_holders(
+        routing, {str(row.patient.id) for row in waiting if row.patient is not None and row.sender_staff_ids & providers}
+    )
+    owners = {
+        row.key: expected_owner(row, start, fallback, received_team, providers, holders) for row in shown
+    }
     mine_rows = [row for row in shown if row_is_mine(row, owners[row.key], staff_id, teams)]
     mine_keys = {row.key for row in mine_rows}
     rest_rows = [row for row in shown if row.key not in mine_keys]
@@ -327,20 +390,23 @@ def dashboard_page(
     task_ids = [row.task.id for row in page_rows if row.task is not None]
     earlier_ids = [earlier for row in page_rows if row.task is not None for earlier in row.task.earlier_ids]
     comments = task_comments(task_ids + earlier_ids, staff_id)
-    # A task that replaced an earlier one shows the earlier thread first, marked as such.
-    for row in page_rows:
-        if row.task is not None and row.task.earlier_ids:
-            older = [{**comment, "earlier": True} for earlier in row.task.earlier_ids for comment in comments.get(earlier, [])]
-            comments[row.task.id] = older + comments.get(row.task.id, [])
+    # Tasks a hand-off replaced: their holder and link, shown above the current thread.
+    earlier = load_tasks(earlier_ids) if earlier_ids else {}
 
     payload_rows = []
     for row in page_rows:
         is_row_mine = row.key in mine_keys
         pending = owners[row.key] is not None
         if isinstance(row, SentRow):
-            payload_rows.append(_sent_json(row, is_row_mine, comments, pending))
+            payload = _sent_json(row, is_row_mine, comments, pending, earlier)
         else:
-            payload_rows.append(_received_json(row, is_row_mine, comments, pending))
+            payload = _received_json(row, is_row_mine, comments, pending, earlier)
+        if row.dismissal is not None:
+            payload["dismissed"] = {
+                "by": dismissers.get(row.dismissal.dismissed_by, "Unknown staff"),
+                "at": row.dismissal.dismissed_at.isoformat(),
+            }
+        payload_rows.append(payload)
 
     return {
         "tab": tab,

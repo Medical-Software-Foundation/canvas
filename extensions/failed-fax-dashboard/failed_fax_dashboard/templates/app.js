@@ -55,6 +55,7 @@
       parts.push("q=" + encodeURIComponent(v.q));
       if (v.kinds && v.kinds.length) parts.push("kinds=" + encodeURIComponent(v.kinds.join(",")));
       if (v.people.length) parts.push("people=" + encodeURIComponent(v.people.join(",")));
+      if (v.dismissed) parts.push("dismissed=1");
       parts.push("sort=" + v.sort.key, "dir=" + v.sort.dir);
       var folded = [];
       if (v.collapsed.mine) folded.push("mine");
@@ -75,8 +76,9 @@
       me = res.me;
       kindList = res.kinds;
       pageNo[tab] = res.page;
-      if (saved) { views = res.views; }
-      views[tab] = res.view;
+      // Only a saved-settings load replaces the filters. Otherwise the screen's own copy
+      // stays, because the filter controls hold it and every click edits it in place.
+      if (saved) { views = res.views; views[tab] = res.view; renderFilters(); }
       renderRows();
     }).catch(function (err) {
       if (id !== requestId) return;
@@ -159,7 +161,7 @@
   }
   function whoLabel(row) { return row.sender.label; }
   function byLine(row) {
-    if (row.sender.kind === "staff") return "By " + row.sender.label;
+    if (row.sender.kind === "staff" || row.sender.kind === "resent") return "By " + row.sender.label;
     return row.sender.label;
   }
 
@@ -175,10 +177,31 @@
     return b;
   }
   function acts(first, row) {
+    // While rows are ticked, the bar is the only place to dismiss or restore.
+    if (pickedKeys().length) return td("acts", [el("div", { class: "acts-grid" }, [first || el("span"), el("span")])]);
+    if (row.dismissed) {
+      var r = el("button", { type: "button", class: "btn restore-btn", text: "Restore" });
+      r.addEventListener("click", function () { restore(row); });
+      return td("acts", [r]);
+    }
     return td("acts", [el("div", { class: "acts-grid" }, [
       first || el("span"),
       iconBtn("dismiss", "Dismiss", "quiet", function () { dismiss(row); })
     ])]);
+  }
+  // ---- Selection for bulk dismiss -----------------------------------------
+  var picked = {};
+  function pickedKeys() { return Object.keys(picked).filter(function (k) { return picked[k]; }); }
+  function pickBox(f) {
+    var box = el("input", { type: "checkbox", "aria-label": "Select " + (f.patient_name || f.fax_number) });
+    box.checked = !!picked[f.key];
+    box.addEventListener("change", function () { picked[f.key] = box.checked; renderRows(); });
+    return td("pick", [box]);
+  }
+  function dismissedLine(f) {
+    if (!f.dismissed) return null;
+    var d = new Date(f.dismissed.at).toLocaleDateString([], { month: "short", day: "numeric" });
+    return el("span", { class: "sub dismissed-by", text: "Dismissed by " + f.dismissed.by + ", " + d });
   }
 
   var CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
@@ -267,6 +290,10 @@
     wrap.appendChild(b); wrap.appendChild(panel);
     return wrap;
   }
+  // A task's comments plus those of the tasks it replaced.
+  function allComments(t) {
+    return (t.earlier || []).reduce(function (all, g) { return all.concat(g.comments); }, []).concat(t.comments);
+  }
   var SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
   var barCount = null;
   function personLabel(value) {
@@ -301,6 +328,10 @@
     peopleGroups.push({ name: "Staff", items: people.staff.map(function (p) { return { value: p.value, label: p.name }; }) });
     filtersEl.appendChild(multiSelect("f-person", tab === "sent" ? "Sent by or assigned to" : "Assigned to", "Anyone", peopleGroups,
       F.people, personLabel, function () { changed(true); }));
+    var showBox = el("input", { type: "checkbox", id: "f-dismissed" });
+    showBox.checked = !!F.dismissed;
+    showBox.addEventListener("change", function () { F.dismissed = showBox.checked; picked = {}; changed(true); });
+    filtersEl.appendChild(el("label", { class: "show-dismissed", for: "f-dismissed" }, [showBox, "Show dismissed"]));
     filtersEl.appendChild(el("span", { class: "spacer" }));
     barCount = el("span", { class: "bar-count", "aria-live": "polite" });
     filtersEl.appendChild(barCount);
@@ -374,7 +405,7 @@
     var tg = el("button", { type: "button", class: "thread-toggle", "aria-expanded": String(open), "aria-controls": threadId, "aria-label": (open ? "Hide" : "Show") + " comments" });
     tg.innerHTML = CHEVRON;
     tg.addEventListener("click", toggleThread);
-    var countBtn = el("button", { type: "button", class: "count-btn", "aria-controls": threadId, text: t.comments.length ? plural(t.comments.length, "comment") : "No comments" });
+    var countBtn = el("button", { type: "button", class: "count-btn", "aria-controls": threadId, text: allComments(t).length ? plural(allComments(t).length, "comment") : "No comments" });
     countBtn.addEventListener("click", toggleThread);
     // Due date: gray while on time, red with its age once past.
     var due = null;
@@ -401,19 +432,33 @@
     var body = el("div", { id: threadId });
     if (!open) body.hidden = true;
     card.appendChild(body);
-    if (t.comments.length) {
+    if (allComments(t).length) {
       var thread = el("ol", { class: "thread", "aria-label": "Task comments" });
-      t.comments.forEach(function (c) {
+      function addComment(c) {
         var av = el("span", { class: "avatar" + (c.automatic ? " auto" : ""), "aria-hidden": "true" });
         if (c.automatic) av.innerHTML = BOT; else av.textContent = initials(c.author);
         thread.appendChild(el("li", {}, [
           av,
           el("div", {}, [
-            el("div", { class: "c-head" }, [el("b", { text: c.mine ? c.author + " (you)" : c.author }), stamp(new Date(c.at)), c.earlier ? el("span", { class: "c-earlier", text: "Earlier task" }) : null]),
+            el("div", { class: "c-head" }, [el("b", { text: c.mine ? c.author + " (you)" : c.author }), stamp(new Date(c.at))]),
             el("div", { class: "bubble" + (c.mine ? " mine" : "") }, [linkify(c.body)])
           ])
         ]));
+      }
+      // After a hand-off, each task's comments sit under a divider naming that task.
+      function addDivider(text, url) {
+        thread.appendChild(el("li", { class: "task-divider" }, [
+          el("span", { text: text }),
+          url ? el("a", { href: url, target: "_blank", rel: "noopener", text: "Open task" }) : null
+        ]));
+      }
+      var earlier = t.earlier || [];
+      earlier.forEach(function (g) {
+        addDivider("Earlier task " + g.number + (g.assignee_name ? ", assigned to " + g.assignee_name : ""), g.url);
+        g.comments.forEach(addComment);
       });
+      if (earlier.length) addDivider("Current task, assigned to " + t.assignee.name, null);
+      t.comments.forEach(addComment);
       body.appendChild(thread);
     }
     var textId = "comment-" + threadId;
@@ -530,14 +575,32 @@
     panelEl.textContent = "";
     pagerEl.hidden = true;
     var rows = result.rows, view = views[tab];
+    // Drop picks for rows no longer on screen.
+    var onScreen = {}; rows.forEach(function (r) { onScreen[r.key] = true; });
+    Object.keys(picked).forEach(function (k) { if (!onScreen[k]) delete picked[k]; });
+    var chosen = pickedKeys();
+    if (chosen.length) {
+      var bulk = view.dismissed
+        ? btn("Restore " + chosen.length, "primary", function () { restoreMany(chosen); })
+        : btn("Dismiss " + chosen.length, "primary", function () { dismissMany(chosen); });
+      var clear = el("button", { type: "button", class: "linkish", text: "Clear selection" });
+      clear.addEventListener("click", function () { picked = {}; renderRows(); });
+      panelEl.appendChild(el("div", { class: "select-bar", role: "region", "aria-label": "Selected rows" }, [
+        el("span", { class: "select-count", text: chosen.length + " selected" }), el("span", { class: "spacer" }), bulk, clear
+      ]));
+    }
 
+    if (view.dismissed) {
+      hintEl.textContent = "Rows dismissed in the last 30 days. Restoring one brings it back and reopens its task.";
+      if (!rows.length) { if (barCount) barCount.textContent = ""; return empty("Nothing dismissed in the last 30 days", "Dismissed rows show here for 30 days so they can be restored."); }
+    }
     if (tab === "sent") {
-      hintEl.textContent = "Outgoing faxes that didn't reach the recipient. Whoever sent it gets a task automatically. A row clears on its own once the same item is delivered.";
-      if (!totals.sent) { if (barCount) barCount.textContent = ""; return empty("No failed sent faxes", "Everything sent in the last 90 days was delivered."); }
+      if (!view.dismissed) hintEl.textContent = "Outgoing faxes that didn't reach the recipient. Whoever sent it gets a task automatically. A row clears on its own once the same item is delivered.";
+      if (!totals.sent && !view.dismissed) { if (barCount) barCount.textContent = ""; return empty("No failed sent faxes", "Everything sent in the last 90 days was delivered."); }
       filterCount(result.shown, totals.sent);
       if (!result.shown) return empty("No failed faxes match these filters", "Change the search or clear the filters to see all " + totals.sent + ".");
       var tbody = el("tbody");
-      grouped(tbody, rows, 10, function (f) {
+      grouped(tbody, rows, 11, function (f) {
         var resend = null;
         if (f.can_resend) resend = iconBtn("send", "Resend", "primary", function () { openResend(f); });
         else if (f.resend_pending) {
@@ -549,11 +612,12 @@
         var n = f.attempts.length;
         var open = !!expanded[f.key];
         var at = new Date(f.occurred_at);
-        tbody.appendChild(el("tr", { id: "row-" + domId(f), class: open ? "has-history" : "" }, [
+        tbody.appendChild(el("tr", { id: "row-" + domId(f), class: (open ? "has-history" : "") + (picked[f.key] ? " picked" : "") }, [
+          pickBox(f),
           td("toggle", [toggleBtn(f)]),
           td("patient", [f.patient_name]),
           td("", [itemLink(f.type_label, f.link_url), f.pages === null ? null : sub(plural(f.pages, "page"))]),
-          td(pending ? "problem pending" : "problem", [f.problem.text]),
+          td(pending ? "problem pending" : "problem", [f.problem.text, dismissedLine(f)]),
           recipientCell(f.contact, f.fax_number, domId(f)),
           td("wide-only", [whoLabel(f), taskLine(f)]),
           td("muted", [when(at), sub(byLine(f)), taskLine(f, "narrow-only")]),
@@ -561,37 +625,38 @@
           el("td", { class: "attempt-count" + (n > 1 ? " repeat" : ""), "aria-label": plural(n, "attempt") }, [String(n)]),
           acts(resend, f)
         ]));
-        if (open) tbody.appendChild(historyRow(f, 10));
+        if (open) tbody.appendChild(historyRow(f, 11));
       });
       panelEl.appendChild(el("table", { class: "sent-table" }, [
-        el("thead", {}, [el("tr", {}, [el("th", { scope: "col", "aria-label": "Details" }), sortTh("Patient", "patient"), sortTh("Item", "item"), sortTh("Problem", "problem"), sortTh("Recipient", "recipient"), sortTh("Sent by", "sender", "wide-only"), sortTh("When", "when"), sortTh("Pages", "pages", "num wide-only"), sortTh("Attempts", "attempts", "attempt-count"), el("th", { scope: "col" })])]),
+        el("thead", {}, [el("tr", {}, [el("th", { scope: "col", class: "pick", "aria-label": "Select" }), el("th", { scope: "col", "aria-label": "Details" }), sortTh("Patient", "patient"), sortTh("Item", "item"), sortTh("Problem", "problem"), sortTh("Recipient", "recipient"), sortTh("Sent by", "sender", "wide-only"), sortTh("When", "when"), sortTh("Pages", "pages", "num wide-only"), sortTh("Attempts", "attempts", "attempt-count"), el("th", { scope: "col" })])]),
         tbody
       ]));
     } else {
-      hintEl.textContent = "Faxes that only partly arrived. The pages that came through are in Data Integration, and the team you choose gets a task to ask the sender to fax again.";
-      if (!totals.received) { if (barCount) barCount.textContent = ""; return empty("No incomplete received faxes", "Every fax received in the last 90 days arrived in full."); }
+      if (!view.dismissed) hintEl.textContent = "Faxes that only partly arrived. The pages that came through are in Data Integration, and the team you choose gets a task to ask the sender to fax again.";
+      if (!totals.received && !view.dismissed) { if (barCount) barCount.textContent = ""; return empty("No incomplete received faxes", "Every fax received in the last 90 days arrived in full."); }
       filterCount(result.shown, totals.received);
       if (!result.shown) return empty("No received faxes match these filters", "Change the search or clear the filters to see all " + totals.received + ".");
       var rb = el("tbody");
-      grouped(rb, rows, 8, function (f) {
+      grouped(rb, rows, 9, function (f) {
         var ropen = !!expanded[f.key];
-        rb.appendChild(el("tr", { id: "row-" + domId(f), class: ropen ? "has-history" : "" }, [
+        rb.appendChild(el("tr", { id: "row-" + domId(f), class: (ropen ? "has-history" : "") + (picked[f.key] ? " picked" : "") }, [
+          pickBox(f),
           td("toggle", [toggleBtn(f)]),
           recipientCell(f.contact, f.fax_number, domId(f)),
-          td("problem", [f.problem.text]),
+          td("problem", [f.problem.text, dismissedLine(f)]),
           td("num", [f.pages === null ? "" : String(f.pages)]),
           td("muted", [when(new Date(f.occurred_at))]),
           td("", [itemLink("View in Data Integration", f.link_url)]),
           td("", [taskWho(f)]),
           acts(null, f)
         ]));
-        if (ropen) rb.appendChild(historyRow(f, 8));
+        if (ropen) rb.appendChild(historyRow(f, 9));
       });
       // Set widths so the spare space is shared, instead of all of it going to Problem.
-      var rcols = el("colgroup", {}, ["44px", "16%", "18%", "11%", "12%", "18%", "21%", "84px"].map(function (w) { return el("col", { style: "width:" + w }); }));
+      var rcols = el("colgroup", {}, ["40px", "44px", "16%", "18%", "11%", "12%", "18%", "21%", "84px"].map(function (w) { return el("col", { style: "width:" + w }); }));
       panelEl.appendChild(el("table", { class: "received-table" }, [
         rcols,
-        el("thead", {}, [el("tr", {}, [el("th", { scope: "col", "aria-label": "Details" }), sortTh("Sender", "recipient"), sortTh("Problem", "problem"), sortTh("Pages arrived", "pages", "num"), sortTh("When", "when"), th("Document"), sortTh("Task assigned to", "task"), el("th", { scope: "col" })])]),
+        el("thead", {}, [el("tr", {}, [el("th", { scope: "col", class: "pick", "aria-label": "Select" }), el("th", { scope: "col", "aria-label": "Details" }), sortTh("Sender", "recipient"), sortTh("Problem", "problem"), sortTh("Pages arrived", "pages", "num"), sortTh("When", "when"), th("Document"), sortTh("Task assigned to", "task"), el("th", { scope: "col" })])]),
         rb
       ]));
     }
@@ -605,7 +670,16 @@
       var b = el("button", { type: "button", class: "group-btn", "aria-expanded": String(!collapsed) }, [g[1], el("span", { class: "group-count", text: String(g[2]) })]);
       b.insertAdjacentHTML("afterbegin", CHEVRON);
       b.addEventListener("click", function () { view.collapsed[key] = !collapsed; changed(true); });
-      tbody.appendChild(el("tr", { class: "group-row" }, [el("td", { colspan: String(cols) }, [b])]));
+      var sectionRows = rows.filter(function (r) { return (key === "mine") === !!r.mine; });
+      var all = null;
+      if (sectionRows.length && !collapsed) {
+        all = el("input", { type: "checkbox", "aria-label": "Select all in " + g[1] });
+        var n = sectionRows.filter(function (r) { return picked[r.key]; }).length;
+        all.checked = n === sectionRows.length;
+        all.indeterminate = n > 0 && n < sectionRows.length;
+        all.addEventListener("change", function () { sectionRows.forEach(function (r) { picked[r.key] = all.checked; }); renderRows(); });
+      }
+      tbody.appendChild(el("tr", { class: "group-row" }, [el("td", { class: "pick" }, all ? [all] : []), el("td", { colspan: String(cols - 1) }, [b])]));
       if (collapsed) return;
       if (!g[2]) {
         tbody.appendChild(el("tr", { class: "group-empty" }, [el("td", { colspan: String(cols), text: key === "mine" ? "Nothing is assigned to you right now." : "Nothing else matches." })]));
@@ -642,7 +716,7 @@
 
   function openDialog(title, context, nodes, submitText, handler) {
     lastFocus = document.activeElement;
-    titleEl.textContent = title; contextEl.textContent = context;
+    titleEl.textContent = title; contextEl.textContent = context; contextEl.hidden = !context;
     bodyEl.textContent = ""; nodes.forEach(function (n) { bodyEl.appendChild(n); });
     errorEl.textContent = ""; submitEl.textContent = submitText; submitEl.disabled = false; onSubmit = handler;
     scrim.hidden = false;
@@ -680,8 +754,8 @@
       if (!number.value.trim()) return "Add a fax number to resend.";
       return request("POST", "/resend", { event_id: f.source_id, recipient_name: name.value.trim(), recipient_fax_number: number.value.trim() }).then(function () {
         var now = new Date().toISOString();
-        f.attempts.push({ at: now, number: f.attempts.length + 1, who: "Resent by " + me.name, outcome: "pending", reason: "" });
-        f.sender = { label: "Resent by " + me.name, kind: "resent" };
+        f.attempts.push({ at: now, number: f.attempts.length + 1, who: me.name, outcome: "pending", reason: "" });
+        f.sender = { label: me.name, kind: "resent" };
         f.occurred_at = now;
         f.problem = { pending: true, text: "Resent, waiting for delivery" };
         f.task_with = null;
@@ -700,21 +774,65 @@
     });
   }
 
+  function confirmText(n) {
+    return el("div", { class: "confirm-text" }, [
+      el("p", { text: n === 1
+        ? "Your selection will be removed from this list and its task will be closed."
+        : "The selected faxes will be removed from this list and their tasks will be closed." }),
+      el("p", { class: "confirm-sub", text: "Dismissed faxes can be restored for 30 days." })
+    ]);
+  }
+  function sendDismiss(keys) {
+    return request("POST", "/dismiss", { keys: keys }).then(function () {
+      picked = {};
+      return load(false).then(function () {
+        toastUndo(keys.length === 1 ? "Dismissed. Task closed." : keys.length + " dismissed. Tasks closed.", keys);
+      });
+    });
+  }
   function dismiss(f) {
-    var row = document.getElementById("row-" + domId(f));
-    request("POST", "/dismiss", { source_type: f.source_type, source_id: f.source_id }).then(function () {
-      var done = function () { load(false).then(function () { toast("Dismissed. It won't show here again."); }); };
-      if (row && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) { row.classList.add("leaving"); setTimeout(done, 200); } else { done(); }
+    var what = f.type_label ? f.type_label + (f.patient_name ? " for " + f.patient_name : "") : "Received fax from " + f.fax_number;
+    openDialog("Dismiss this failed fax?", what, [confirmText(1)], "Dismiss", function () { return sendDismiss([f.key]); });
+  }
+  function dismissMany(keys) {
+    openDialog("Dismiss " + keys.length + " failed faxes?", "", [confirmText(keys.length)], "Dismiss " + keys.length, function () { return sendDismiss(keys); });
+  }
+  function restoreMany(keys) {
+    request("POST", "/restore", { keys: keys }).then(function () {
+      picked = {};
+      return load(false).then(function () {
+        toastUndo(keys.length === 1 ? "Restored. Task reopened." : keys.length + " restored. Tasks reopened.", keys, "/dismiss");
+      });
     }).catch(function (err) { toast(err.message); });
   }
+  function restore(f) { restoreMany([f.key]); }
 
   var toastEl = document.getElementById("toast"), toastTimer = null;
   function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.hidden = true; }, 3200); }
+  function toastUndo(msg, keys, undoPath) {
+    toastEl.textContent = "";
+    var undo = el("button", { type: "button", class: "toast-undo", text: "Undo" });
+    undo.addEventListener("click", function () {
+      toastEl.hidden = true;
+      var back = undoPath || "/restore";
+      request("POST", back, { keys: keys }).then(function () {
+        return load(false).then(function () {
+          if (back === "/restore") toast(keys.length === 1 ? "Restored. Task reopened." : keys.length + " restored. Tasks reopened.");
+          else toast(keys.length === 1 ? "Dismissed again. Task closed." : keys.length + " dismissed again. Tasks closed.");
+        });
+      });
+    });
+    toastEl.appendChild(el("span", { text: msg }));
+    toastEl.appendChild(undo);
+    toastEl.hidden = false; clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 10000);
+  }
 
   document.querySelectorAll(".tab").forEach(function (t) {
     t.addEventListener("click", function () {
       if (t.dataset.tab === tab || !views) return;
       tab = t.dataset.tab;
+      picked = {};
       renderFilters();
       load(false);
     });

@@ -279,7 +279,7 @@ def test_resend_from_the_dashboard_is_credited_to_the_person_who_clicked() -> No
 
     row = rows()[0]
 
-    assert row.latest.sender.label == "Resent by Marcus Bell"
+    assert row.latest.sender.label == "Marcus Bell"
     assert row.latest.sender.kind == "resent"
     assert row.sender_staff_ids == {clicker.id}
 
@@ -346,7 +346,7 @@ def test_contact_comes_from_the_imaging_center() -> None:
     assert (contact.name, contact.source) == ("Summit Imaging", "From the imaging order")
 
 
-def test_lab_contact_uses_the_order_name_and_directory_details() -> None:
+def test_lab_contact_is_the_matched_directory_contact_not_the_order_lab() -> None:
     directory = ServiceProviderFactory.create(
         first_name="Northgate", last_name="", business_fax="(555) 555-0100", specialty="Laboratory"
     )
@@ -356,11 +356,11 @@ def test_lab_contact_uses_the_order_name_and_directory_details() -> None:
     contact = rows()[0].contact
 
     assert contact is not None
-    assert contact.name == "Northgate Labs"
+    assert contact.name == "Northgate"
     assert contact.phone == directory.business_phone
     assert contact.address == directory.business_address
     assert contact.specialty == "Laboratory"
-    assert contact.source == "Lab from the order, details from your contact directory"
+    assert contact.source == "Matched in your contact directory"
 
 
 def test_lab_contact_without_a_directory_match_has_the_name_only() -> None:
@@ -371,6 +371,14 @@ def test_lab_contact_without_a_directory_match_has_the_name_only() -> None:
 
     assert contact is not None
     assert (contact.name, contact.phone, contact.address) == ("Northgate Labs", "", "")
+    assert contact.source == "Lab from the order"
+
+
+def test_matched_lab_row_is_still_found_by_the_order_lab_name() -> None:
+    ServiceProviderFactory.create(first_name="Northgate", last_name="", business_fax="(555) 555-0100")
+    make_event("lab_order", lab_order=LabOrderFactory.create(ontology_lab_partner="Generic Lab"))
+
+    assert "generic lab" in rows()[0].search_text
 
 
 def test_note_contact_is_matched_in_the_directory_on_the_last_ten_digits() -> None:

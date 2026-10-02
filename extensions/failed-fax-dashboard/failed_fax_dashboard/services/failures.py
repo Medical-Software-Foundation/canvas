@@ -8,14 +8,16 @@ from canvas_sdk.v1.data import Command, Fax, FaxDirection, ServiceProvider
 
 from failed_fax_dashboard.models import FaxDismissal
 from failed_fax_dashboard.services.contacts import (
-    DIRECTORY_SOURCE,
     Contact,
     contact_from_provider,
     directory_matches,
+    list_source,
+    needs_lookup,
     provider_name,
     sent_contact,
 )
 from failed_fax_dashboard.services.history import FAXED, Attempt, load_attempts
+from failed_fax_dashboard.services.saved_directory import SavedContact, saved_matches
 from failed_fax_dashboard.services.sources import (
     DATA_INTEGRATION_PATH,
     RECEIVED_TYPE,
@@ -32,6 +34,8 @@ from failed_fax_dashboard.services.tasks import (
 from failed_fax_dashboard.services.util import last_ten, name_key, person_name, to_e164
 
 WINDOW_DAYS = 90
+# How long a dismissed row can still be seen, and restored, under Show dismissed.
+DISMISSED_DAYS = 30
 
 RECEIVED_PROBLEM = "Only part of the fax arrived"
 PENDING_PROBLEM = "Resent, waiting for delivery"
@@ -57,8 +61,9 @@ class SentRow:
     patient: Any
     link_url: str | None
     contact: Contact | None = None
-    directory: ServiceProvider | None = None
+    directory: ServiceProvider | SavedContact | None = None
     task: TaskInfo | None = None
+    dismissal: FaxDismissal | None = None
 
     @property
     def key(self) -> str:
@@ -117,7 +122,8 @@ class SentRow:
     def search_text(self) -> str:
         """Lowercase text the search box looks in."""
         contact = self.contact.name if self.contact is not None else ""
-        return " ".join([self.patient_name, contact, self.spec.label]).lower()
+        lab = walk(self.event, self.spec.lab_name_path) or ""
+        return " ".join([self.patient_name, contact, lab, self.spec.label]).lower()
 
     @property
     def sender_staff_ids(self) -> set[str]:
@@ -136,6 +142,7 @@ class ReceivedRow:
     contact: Contact | None = None
     task: TaskInfo | None = None
     link_url: str = DATA_INTEGRATION_PATH
+    dismissal: FaxDismissal | None = None
 
     @property
     def key(self) -> str:
@@ -184,6 +191,15 @@ def dismissed_keys(cutoff: datetime) -> set[tuple[str, str]]:
     return set(
         FaxDismissal.objects.filter(dismissed_at__gte=cutoff).values_list("source_type", "source_id")
     )
+
+
+def recent_dismissals(now: datetime | None) -> dict[tuple[str, str], FaxDismissal]:
+    """Dismissals from the last ``DISMISSED_DAYS``, by (source type, record id)."""
+    since = (now or datetime.now(timezone.utc)) - timedelta(days=DISMISSED_DAYS)
+    return {
+        (dismissal.source_type, dismissal.source_id): dismissal
+        for dismissal in FaxDismissal.objects.filter(dismissed_at__gte=since)
+    }
 
 
 def event_number(event: Any) -> str:
@@ -250,10 +266,21 @@ def item_link(
     )
 
 
-def collect_sent(cutoff: datetime) -> list[SentRow]:
+def contact_lists(numbers: list[str]) -> dict[str, ServiceProvider | SavedContact]:
+    """Contact list matches by last 10 digits: the instance's own list first, then the Saved Directory."""
+    found: dict[str, ServiceProvider | SavedContact] = dict(directory_matches(numbers))
+    rest = [number for number in numbers if last_ten(number) not in found]
+    found.update(saved_matches(rest))
+    return found
+
+
+def collect_sent(
+    cutoff: datetime, show: dict[tuple[str, str], FaxDismissal] | None = None
+) -> list[SentRow]:
     """Failed sent faxes: one row per item and number, minus cleared and dismissed ones.
 
-    A row clears when a later attempt to the same number was delivered.
+    A row clears when a later attempt to the same number was delivered. With ``show``,
+    only the dismissed rows in it are returned instead (the Show dismissed view).
     """
     dismissed = dismissed_keys(cutoff)
     rows: list[SentRow] = []
@@ -272,7 +299,10 @@ def collect_sent(cutoff: datetime) -> list[SentRow]:
                 attempt.delivered is True and attempt.created > event.created for attempt in attempts
             ):
                 continue
-            if (spec.type_key, str(event.id)) in dismissed:
+            row_id = (spec.type_key, str(event.id))
+            if show is None and row_id in dismissed:
+                continue
+            if show is not None and row_id not in show:
                 continue
             patient = walk(event, spec.patient_path)
             rows.append(
@@ -285,26 +315,32 @@ def collect_sent(cutoff: datetime) -> list[SentRow]:
                     attempts=attempts,
                     patient=patient,
                     link_url=item_link(spec, event, patient, walk(event, spec.note_path), commands),
+                    dismissal=show.get(row_id) if show is not None else None,
                 )
             )
-    directory = directory_matches([row.number for row in rows])
+    looked_up = [row for row in rows if needs_lookup(row.spec, row.event)]
+    directory = contact_lists([row.number for row in looked_up])
+    looked_up_ids = {id(row) for row in looked_up}
     for row in rows:
-        row.directory = directory.get(last_ten(row.number))
+        if id(row) in looked_up_ids:
+            row.directory = directory.get(last_ten(row.number))
         row.contact = sent_contact(row.spec, row.event, row.number, row.directory)
     return rows
 
 
-def collect_received(cutoff: datetime) -> list[ReceivedRow]:
-    """Inbound faxes that failed to arrive in full, minus dismissed ones."""
+def collect_received(
+    cutoff: datetime, show: dict[tuple[str, str], FaxDismissal] | None = None
+) -> list[ReceivedRow]:
+    """Inbound faxes that failed to arrive in full, minus dismissed ones (or only ``show``'s)."""
     dismissed = dismissed_keys(cutoff)
     faxes = [
         fax
         for fax in Fax.objects.filter(
             direction=FaxDirection.INBOUND, success=False, created__gte=cutoff
         ).order_by("created")
-        if (RECEIVED_TYPE, str(fax.id)) not in dismissed
+        if ((RECEIVED_TYPE, str(fax.id)) in show if show is not None else (RECEIVED_TYPE, str(fax.id)) not in dismissed)
     ]
-    directory = directory_matches([fax.from_fax_number for fax in faxes])
+    directory = contact_lists([fax.from_fax_number for fax in faxes])
     rows: list[ReceivedRow] = []
     for fax in faxes:
         provider = directory.get(last_ten(fax.from_fax_number))
@@ -313,7 +349,8 @@ def collect_received(cutoff: datetime) -> list[ReceivedRow]:
                 fax=fax,
                 number=fax.from_fax_number,
                 e164=to_e164(fax.from_fax_number),
-                contact=contact_from_provider(provider, DIRECTORY_SOURCE) if provider else None,
+                contact=contact_from_provider(provider, list_source(provider)) if provider else None,
+                dismissal=show.get((RECEIVED_TYPE, str(fax.id))) if show is not None else None,
             )
         )
     return rows

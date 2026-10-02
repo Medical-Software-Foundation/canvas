@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from canvas_generated.messages.effects_pb2 import EffectType
 from canvas_sdk.test_utils.factories import FaxFactory, StaffFactory, TaskFactory, TeamFactory
+from canvas_sdk.v1.data import Task
 
 from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
 from failed_fax_dashboard.services.actions import (
@@ -13,8 +14,8 @@ from failed_fax_dashboard.services.actions import (
     build_reassign,
     build_resend,
     build_resend_takeover,
-    dismiss_row,
 )
+from failed_fax_dashboard.services.handoff import to_team
 from tests.helpers import make_alert, make_event, make_staff
 
 pytestmark = pytest.mark.django_db
@@ -107,43 +108,6 @@ def test_a_send_to_another_number_does_not_block_resend() -> None:
     assert build_resend(resend_body(failed), staff_id=clicker.id).type == EffectType.FAX_NOTE
 
 
-def test_dismiss_records_who_and_when_and_is_idempotent() -> None:
-    event = make_event("referral")
-    payload = {"source_type": "referral", "source_id": str(event.id)}
-
-    dismiss_row(payload, staff_id="dismisser")
-    dismiss_row(payload, staff_id="someone-else")
-
-    saved = FaxDismissal.objects.get()
-    assert (saved.source_type, saved.source_id, saved.dismissed_by) == ("referral", str(event.id), "dismisser")
-    assert saved.dismissed_at > datetime.now(timezone.utc) - timedelta(minutes=1)
-
-
-def test_dismiss_a_received_fax() -> None:
-    fax = FaxFactory.create(direction="I", success=False)
-
-    dismiss_row({"source_type": "received_fax", "source_id": str(fax.id)}, staff_id="x")
-
-    assert FaxDismissal.objects.get().source_id == str(fax.id)
-
-
-@pytest.mark.parametrize(
-    ("payload", "message"),
-    [
-        ({"source_type": "bogus"}, "Unknown item type"),
-        ({"source_type": "note", "source_id": "nope"}, "Invalid id"),
-        ({"source_type": "note", "source_id": "5c6e0f4a-5d3e-4f4e-8f27-0f5f4b1b2c3d"}, "Fax record not found"),
-        ({"source_type": "received_fax", "source_id": "5c6e0f4a-5d3e-4f4e-8f27-0f5f4b1b2c3d"}, "Fax record not found"),
-    ],
-)
-def test_dismiss_rejects_bad_input(payload: dict[str, Any], message: str) -> None:
-    with pytest.raises(ActionError) as caught:
-        dismiss_row(payload, staff_id="x")
-
-    assert caught.value.message == message
-    assert FaxDismissal.objects.count() == 0
-
-
 def alerted_task(**task_fields: Any) -> Any:
     event = make_event("note")
     task = TaskFactory.create(**task_fields)
@@ -208,6 +172,20 @@ def test_reassign_from_a_person_to_a_team_closes_their_task_and_opens_one_for_th
     assert alert.task_id == new_task["id"]
     assert alert.previous_task_ids == str(task.id)
     assert alert.assignee == f"team:{team.id}"
+
+
+def test_team_hand_off_works_on_an_alert_saved_before_earlier_tasks_were_recorded() -> None:
+    # Alerts saved before the field existed read it as None, not "".
+    holder = make_staff("Thomas", "Pickles")
+    team = TeamFactory.create(name="Front Desk")
+    task = alerted_task(assignee=holder, team=None)
+    alert = FaxAlert.objects.get()
+    alert.previous_task_ids = None
+
+    handoff = to_team(alert, Task.objects.get(id=task.id), team, by="Dana Whitfield", author_id=holder.id)
+
+    assert len(handoff.effects) == 4
+    assert FaxAlert.objects.get().previous_task_ids == str(task.id)
 
 
 @pytest.mark.parametrize(

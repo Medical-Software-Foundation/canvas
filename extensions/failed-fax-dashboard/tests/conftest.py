@@ -9,10 +9,51 @@ import pytest
 from canvas_sdk.events import EventType
 
 import failed_fax_dashboard.api.dashboard_api as dashboard_api
+import failed_fax_dashboard.services.saved_directory as saved_directory
 
 CallApi = Callable[..., tuple[int, Any, list[Any]]]
 
 PLUGIN_DIR = Path(dashboard_api.__file__).resolve().parent.parent
+
+
+class FakeCache:
+    """The plugin cache, which needs the Canvas runtime, as a dict."""
+
+    def __init__(self) -> None:
+        self.values: dict[str, Any] = {}
+
+    def get_many(self, keys: Any) -> dict[str, Any]:
+        return {f"failed_fax_dashboard:{key}": self.values[key] for key in keys if key in self.values}
+
+    def set(self, key: str, value: Any, timeout_seconds: int | None = None) -> None:
+        self.values[key] = value
+
+
+class FakeSavedDirectory:
+    """The Saved Directory service: contacts to answer with, and the paths asked for."""
+
+    def __init__(self) -> None:
+        self.contacts: list[dict[str, Any]] = []
+        self.status_code = 200
+        self.error: Exception | None = None
+        self.paths: list[str] = []
+
+    def get_json(self, path: str) -> Any:
+        self.paths.append(path)
+        if self.error is not None:
+            raise self.error
+        body = {"results": self.contacts}
+        return SimpleNamespace(status_code=self.status_code, json=lambda: body)
+
+
+@pytest.fixture(autouse=True)
+def saved_directory_service(monkeypatch: pytest.MonkeyPatch) -> FakeSavedDirectory:
+    """Every test gets an empty Saved Directory and a fresh cache, so nothing calls out."""
+    service = FakeSavedDirectory()
+    cache = FakeCache()
+    monkeypatch.setattr(saved_directory, "science_http", service)
+    monkeypatch.setattr(saved_directory, "get_cache", lambda: cache)
+    return service
 
 
 @pytest.fixture(autouse=True)

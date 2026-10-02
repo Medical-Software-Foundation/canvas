@@ -7,7 +7,7 @@ from uuid import UUID
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.fax import FaxNoteEffect
-from canvas_sdk.effects.task import AddTaskComment, UpdateTask
+from canvas_sdk.effects.task import AddTaskComment, TaskStatus, UpdateTask
 from canvas_sdk.v1.data import Fax, FaxDirection, Staff, Task, Team
 
 from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
@@ -23,6 +23,8 @@ from failed_fax_dashboard.services.util import (
 )
 
 MAX_COMMENT = 5000
+# Most rows one bulk dismiss or restore may carry.
+MAX_ROWS = 200
 
 
 class ActionError(Exception):
@@ -143,20 +145,110 @@ def build_resend_takeover(payload: dict[str, Any], staff_id: str) -> list[Effect
     ]
 
 
-def dismiss_row(payload: dict[str, Any], staff_id: str) -> None:
-    """Record that staff dismissed a row. Dismissing twice is harmless."""
-    source_type = _text(payload, "source_type")
-    if source_type not in TYPE_LABELS:
-        raise ActionError("Unknown item type")
+def _row_keys(payload: dict[str, Any]) -> list[tuple[str, Any]]:
+    """The rows a dismiss or restore names, as (item type, record id).
+
+    The body carries ``keys``, each the row's key ``"{item type}:{record id}"``.
+    """
+    keys = payload.get("keys")
+    if not isinstance(keys, list) or not keys:
+        raise ActionError("Choose at least one row")
+    if len(keys) > MAX_ROWS:
+        raise ActionError(f"Choose at most {MAX_ROWS} rows at a time")
+    parsed: list[tuple[str, Any]] = []
+    for key in keys:
+        source_type, _, source_id = str(key).partition(":")
+        if source_type not in TYPE_LABELS:
+            raise ActionError("Unknown item type")
+        parsed.append((source_type, source_id))
+    return parsed
+
+
+def _record_and_alert(source_type: str, source_id: Any) -> tuple[str, FaxAlert | None]:
+    """The failed record's id and the alert (task) for its item and number."""
     if source_type == RECEIVED_TYPE:
-        record_id = load_received_fax(payload.get("source_id")).id
-    else:
-        record_id = load_sent_event(source_type, payload.get("source_id"))[1].id
-    FaxDismissal.objects.get_or_create(
+        fax = load_received_fax(source_id)
+        alert = FaxAlert.objects.filter(
+            source_type=RECEIVED_TYPE, item_id=str(fax.id), fax_number=to_e164(fax.from_fax_number)
+        ).first()
+        return str(fax.id), alert
+    spec, event = load_sent_event(source_type, source_id)
+    number = event.fax.to_fax_number if event.fax is not None else ""
+    alert = FaxAlert.objects.filter(
         source_type=source_type,
-        source_id=str(record_id),
-        defaults={"dismissed_by": staff_id, "dismissed_at": datetime.now(timezone.utc)},
-    )
+        item_id=str(getattr(event, spec.item_field).id),
+        fax_number=to_e164(number),
+    ).first()
+    return str(event.id), alert
+
+
+def dismiss_rows(payload: dict[str, Any], staff_id: str) -> list[Effect]:
+    """Dismiss rows and close each one's open task, with a comment naming who dismissed it.
+
+    Dismissing a row twice is harmless and closes nothing the second time.
+    """
+    keys = _row_keys(payload)
+    actor = _actor(staff_id)
+    rows = [_record_and_alert(source_type, source_id) + (source_type,) for source_type, source_id in keys]
+    alerts = [alert for _, alert, _ in rows if alert is not None]
+    open_ids = {
+        str(task_id)
+        for task_id in Task.objects.filter(
+            id__in=[alert.task_id for alert in alerts], status="OPEN"
+        ).values_list("id", flat=True)
+    }
+    now = datetime.now(timezone.utc)
+    effects: list[Effect] = []
+    for record_id, alert, source_type in rows:
+        dismissal, created = FaxDismissal.objects.get_or_create(
+            source_type=source_type,
+            source_id=record_id,
+            defaults={"dismissed_by": actor.id, "dismissed_at": now},
+        )
+        if not created or alert is None or alert.task_id not in open_ids:
+            continue
+        effects.append(UpdateTask(id=alert.task_id, status=TaskStatus.CLOSED).apply())
+        effects.append(
+            AddTaskComment(
+                task_id=alert.task_id,
+                body=f"Dismissed from the Failed Faxes dashboard by {person_name(actor)}.",
+                author_id=actor.id,
+            ).apply()
+        )
+        dismissal.closed_task_id = alert.task_id
+        dismissal.save()
+        alert.closed = True
+        alert.save()
+        open_ids.discard(alert.task_id)
+    return effects
+
+
+def restore_rows(payload: dict[str, Any], staff_id: str) -> list[Effect]:
+    """Bring dismissed rows back and reopen the tasks their dismissal closed.
+
+    A task that was already closed before the dismissal, or that a later failure has
+    since replaced, stays as it is.
+    """
+    keys = _row_keys(payload)
+    actor = _actor(staff_id)
+    # Load every row before changing any, so one bad key changes nothing.
+    rows = [(source_type,) + _record_and_alert(source_type, source_id) for source_type, source_id in keys]
+    effects: list[Effect] = []
+    for source_type, record_id, alert in rows:
+        dismissal = FaxDismissal.objects.filter(source_type=source_type, source_id=record_id).first()
+        if dismissal is None:
+            continue
+        closed_id = dismissal.closed_task_id or ""
+        dismissal.delete()
+        if not closed_id or alert is None or alert.task_id != closed_id:
+            continue
+        effects.append(UpdateTask(id=closed_id, status=TaskStatus.OPEN).apply())
+        effects.append(
+            AddTaskComment(task_id=closed_id, body=f"Task reopened by {person_name(actor)}.", author_id=actor.id).apply()
+        )
+        alert.closed = False
+        alert.save()
+    return effects
 
 
 def _alert_for_task(task_id: str) -> FaxAlert:

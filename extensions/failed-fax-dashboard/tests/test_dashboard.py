@@ -126,6 +126,36 @@ def test_task_payload_has_status_due_assignee_link_and_comments() -> None:
     assert payload["comments"][0]["body"].startswith("No answer.")
 
 
+def test_earlier_tasks_come_with_their_number_holder_link_and_comments() -> None:
+    me = make_staff("Me", "Myself")
+    first_holder = make_staff("Ann", "Aaron")
+    second_holder = make_staff("Ben", "Baker")
+    team = TeamFactory.create(name="Referrals")
+    event = make_event("note")
+    first = TaskFactory.create(assignee=first_holder, team=None, patient=event.note.patient)
+    second = TaskFactory.create(assignee=second_holder, team=None, patient=event.note.patient)
+    current = TaskFactory.create(assignee=None, team=team, patient=event.note.patient)
+    TaskCommentFactory.create(task=first, creator=me, body="first thread")
+    TaskCommentFactory.create(task=second, creator=me, body="second thread")
+    TaskCommentFactory.create(task=current, creator=me, body="current thread")
+    make_alert(event, "note", current, previous_task_ids=f"{first.id},{second.id}")
+
+    payload = page(staff_id=me.id)["rows"][0]["task"]
+
+    assert [c["body"] for c in payload["comments"]] == ["current thread"]
+    assert [(g["number"], g["assignee_name"], g["url"]) for g in payload["earlier"]] == [
+        (1, "Ann Aaron", f"/patient/{event.note.patient.id}?taskId={first.id}"),
+        (2, "Ben Baker", f"/patient/{event.note.patient.id}?taskId={second.id}"),
+    ]
+    assert [[c["body"] for c in g["comments"]] for g in payload["earlier"]] == [["first thread"], ["second thread"]]
+
+
+def test_a_task_with_no_hand_off_has_no_earlier_tasks() -> None:
+    event_with_task(assignee=make_staff())
+
+    assert page()["rows"][0]["task"]["earlier"] == []
+
+
 def test_closed_task_reports_its_status() -> None:
     event, task = event_with_task(assignee=make_staff())
     type(task).objects.filter(pk=task.pk).update(status="CLOSED")

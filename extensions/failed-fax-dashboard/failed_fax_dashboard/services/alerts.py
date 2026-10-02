@@ -25,6 +25,13 @@ from failed_fax_dashboard.services.failures import (
     item_link,
 )
 from failed_fax_dashboard.services.history import FAXED, Attempt, Sender, load_attempts
+from failed_fax_dashboard.services.routing import (
+    provider_ids,
+    role_holders,
+    routed_holder,
+    routing_from,
+    warn_if_unknown_role,
+)
 from failed_fax_dashboard.services.sources import RECEIVED_TYPE, SOURCES, SourceSpec, walk
 from failed_fax_dashboard.services.util import (
     STAFF_PREFIX,
@@ -121,7 +128,9 @@ def _current_assignee_name(task: Task) -> str:
     return "no one"
 
 
-def _assignee_name(assignee: str, attempt: Attempt, fallback: Team | None) -> str:
+def _assignee_name(assignee: str, attempt: Attempt, fallback: Team | None, holder: Staff | None = None) -> str:
+    if holder is not None:
+        return person_name(holder)
     if assignee.startswith(STAFF_PREFIX):
         return attempt.sender.name
     return fallback.name if fallback is not None else ""
@@ -140,6 +149,8 @@ def sent_failure_effects(
     """
     since = since or start
     fallback = find_team(secrets, FALLBACK_TEAM_SETTING)
+    routing = routing_from(secrets)
+    warn_if_unknown_role(routing)
     zone = practice_zone(environment)
     due = due_today(now, zone)
     dismissed = dismissed_keys(start)
@@ -174,6 +185,18 @@ def sent_failure_effects(
                 id__in=[alert.task_id for alert in alerts.values()]
             ).select_related("assignee", "team")
         }
+        # A provider's failure goes to the patient's care team member in the configured role.
+        senders = {
+            attempt.sender.staff_id
+            for history in histories.values()
+            for attempt in history
+            if attempt.sender.is_person
+        }
+        providers = provider_ids(routing, senders)
+        patients = {
+            str(patient.id) for patient in (walk(event, spec.patient_path) for event in events) if patient is not None
+        }
+        holders = role_holders(routing, patients) if providers else {}
         made_now: set[str] = set()
         for event in events:
             number = event_number(event)
@@ -188,17 +211,25 @@ def sent_failure_effects(
             alert = alerts.get((item_id, e164))
             if alert is not None and event.created <= alert.last_handled_at:
                 continue
-            assignee = _sent_assignee(attempt.sender, fallback)
+            patient = walk(event, spec.patient_path)
+            holder = routed_holder(
+                attempt.sender.staff_id, str(patient.id) if patient is not None else None, providers, holders
+            )
+            assignee = f"{STAFF_PREFIX}{holder.id}" if holder is not None else _sent_assignee(attempt.sender, fallback)
             if not assignee:
                 continue
-            patient = walk(event, spec.patient_path)
+            routed_note = (
+                f"Sent by {attempt.sender.name}. Assigned to {person_name(holder)}, the patient's {routing.care_team_role}."
+                if holder is not None
+                else ""
+            )
             link = item_link(spec, event, patient, walk(event, spec.note_path), commands)
             task = live_tasks.get(alert.task_id) if alert is not None else None
             fresh = alert is not None and alert.task_id in made_now
 
             if alert is None or (task is None and not fresh):
                 task_id = str(uuid4())
-                comment = _failure_comment(spec, attempt, link, environment, "")
+                comment = _failure_comment(spec, attempt, link, environment, routed_note)
                 fields: dict[str, Any] = {
                     "id": task_id,
                     "title": f"Fax didn't go through: {spec.label} to {number}",
@@ -225,7 +256,9 @@ def sent_failure_effects(
                 else:
                     current, before = alert.assignee, "the previous sender"
                 if current != assignee:
-                    moved = f"Moved from {before} to {_assignee_name(assignee, attempt, fallback)}."
+                    moved = f"Moved from {before} to {_assignee_name(assignee, attempt, fallback, holder)}."
+                if routed_note:
+                    moved = f"{moved} {routed_note}".strip()
                 comment = _failure_comment(spec, attempt, link, environment, moved)
                 if assignee.startswith(STAFF_PREFIX) or fallback is None:
                     effects.append(
