@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import json
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
 from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
+from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
 from provider_availability.engine.admin_calendar import deterministic_calendar_id
+from provider_availability.engine.roles import (
+    get_schedulable_provider_ids,
+    get_schedulable_staff,
+)
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_block_effects,
@@ -26,9 +33,20 @@ from provider_availability.engine.storage import (
     get_all_recurring_blocks,
     get_all_rules,
     get_rules_for_provider,
+    get_synced_version,
     is_first_install,
     mark_installed,
+    set_synced_version,
 )
+
+
+def _current_plugin_version() -> str:
+    """Read plugin_version from the packaged manifest (sandbox-safe file read)."""
+    try:
+        return str(json.loads(render_to_string("CANVAS_MANIFEST.json")).get("plugin_version", ""))
+    except Exception:
+        log.exception("OnPluginInstalled: could not read plugin version from manifest")
+        return ""
 
 
 class OnStaffActivated(BaseProtocol):
@@ -46,14 +64,13 @@ class OnStaffActivated(BaseProtocol):
             log.warning("OnStaffActivated: staff not found for id %s", staff_id)
             return []
 
-        # Only create calendars for providers
-        role = staff.top_role_abbreviation
-        if not role or role.upper() not in ("MD", "DO", "NP", "PA"):
+        # Only create calendars for staff in a schedulable role (configurable
+        # per practice by role internal code; until configured, the Provider role type).
+        if str(staff.id) not in get_schedulable_provider_ids():
             log.info(
-                "OnStaffActivated: %s %s (role=%s) not a schedulable provider, skipping",
+                "OnStaffActivated: %s %s not in a schedulable role, skipping",
                 staff.first_name,
                 staff.last_name,
-                role,
             )
             return []
 
@@ -144,8 +161,8 @@ class OnPluginInstalled(BaseProtocol):
         # Step 1: Create Clinic calendars for all active providers
         cal_created = 0
         cal_skipped = 0
-        active_staff = Staff.objects.filter(active=True, roles__role_type="PROVIDER").distinct()
-        log.info("OnPluginInstalled: checking %d active providers for Clinic calendars", active_staff.count())
+        active_staff = get_schedulable_staff()
+        log.info("OnPluginInstalled: checking %d schedulable staff for Clinic calendars", len(active_staff))
 
         for staff in active_staff:
             try:
@@ -190,11 +207,29 @@ class OnPluginInstalled(BaseProtocol):
             cal_skipped,
         )
 
-        # Step 2: Read cached data
+        # Step 2: Decide whether a full event resync is warranted.
+        # A full resync rebuilds every plugin event across all calendars,
+        # which is expensive at scale. It's only needed when the plugin is
+        # first installed or when the code that generates events changed
+        # (i.e. a new plugin version). A config-only redeploy at the same
+        # version leaves the existing events correct, so we skip the batch.
+        first_install = is_first_install()
+        current_version = _current_plugin_version()
+        synced_version = get_synced_version()
+        should_full_sync = first_install or synced_version != current_version
+
+        if not should_full_sync:
+            log.info(
+                "OnPluginInstalled: redeploy at unchanged version %s — skipping full "
+                "resync (existing events already reflect this version)",
+                current_version,
+            )
+            return effects
+
+        # Step 3: Read stored data for the full sync.
         rules = get_all_rules()
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
-        first_install = is_first_install()
 
         if not (rules or blocks or recurring_blocks):
             log.warning(
@@ -202,6 +237,7 @@ class OnPluginInstalled(BaseProtocol):
             )
             if first_install:
                 mark_installed()
+            set_synced_version(current_version)
             return effects
 
         rules_synced = 0
@@ -213,25 +249,34 @@ class OnPluginInstalled(BaseProtocol):
             mark_installed()
         log.info(
             "OnPluginInstalled: %s — reconciling plugin events (non-destructive)",
-            "first install" if first_install else "redeploy",
+            "first install" if first_install else f"version change to {current_version}",
         )
 
-        # Step 3: Per-entity reconciliation. We deliberately do NOT sweep every
+        # Step 4: Per-entity reconciliation. We deliberately do NOT sweep every
         # event off the Clinic/Admin calendars — that would delete events this
         # plugin didn't create (manual entries, other plugins, external sync).
         # Each builder below deletes only its OWN prior events (scoped by the
         # plugin's titles / the entity's time range) before recreating, so a
         # redeploy repairs drift without collateral deletion or duplicates.
+        # Only currently-schedulable providers get availability rebuilt;
+        # sync_provider_availability clears it for everyone else.
+        schedulable_ids = {str(s.id) for s in active_staff}
         provider_ids_synced: set[str] = set()
         for rule in rules:
             try:
                 # sync_provider_availability deletes this provider's "Available"
                 # events (preserving past) then rebuilds — safe to call directly.
                 if rule.provider_id not in provider_ids_synced:
-                    effects.extend(sync_provider_availability(rule.provider_id))
+                    effects.extend(
+                        sync_provider_availability(rule.provider_id, schedulable_ids=schedulable_ids)
+                    )
                     provider_ids_synced.add(rule.provider_id)
                 rules_synced += 1
-                if rule.is_active and rule.booking_interval.min_lead_hours > 0:
+                if (
+                    rule.is_active
+                    and rule.booking_interval.min_lead_hours > 0
+                    and rule.provider_id in schedulable_ids
+                ):
                     effects.extend(build_lead_time_block_effects(rule))
                     lead_time_count += 1
             except Exception:
@@ -266,9 +311,12 @@ class OnPluginInstalled(BaseProtocol):
                     rb.provider_id,
                 )
 
+        set_synced_version(current_version)
+
         log.info(
-            "OnPluginInstalled: first_install=%s, synced %d rules, %d lead-time, %d blocks, %d recurring blocks, %d total effects",
+            "OnPluginInstalled: first_install=%s, version=%s, synced %d rules, %d lead-time, %d blocks, %d recurring blocks, %d total effects",
             first_install,
+            current_version,
             rules_synced,
             lead_time_count,
             blocks_synced,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 from datetime import UTC, date, datetime
+from typing import Any, cast
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
@@ -21,6 +22,7 @@ from provider_availability.engine.admin_calendar import (
     deterministic_calendar_id,
     get_admin_calendar_id,
     get_admin_calendars,
+    resolve_provider_name,
 )
 from provider_availability.engine.models import (
     AdminBlock,
@@ -29,6 +31,7 @@ from provider_availability.engine.models import (
     RecurringBlock,
     date_in_pattern,
 )
+from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.storage import get_event_ids, get_rules_for_provider
 from provider_availability.engine.tz_utils import localize_naive, provider_tz, to_utc
 
@@ -71,14 +74,59 @@ HOLD_TITLE_PREFIXES = ["Hold Block", "Same Day Hold", "Next Day Hold", "Same-Day
 LEAD_TIME_DRIFT_THRESHOLD_SECONDS = 300  # 5 minutes
 
 
-def sync_provider_availability(provider_id: str) -> list[Effect]:
+def _location_name(location_id: str | None) -> str:
+    """Resolve a location's display name, or '' for provider-level (no location)."""
+    if not location_id:
+        return ""
+    try:
+        return PracticeLocation.objects.get(id=location_id).full_name or ""
+    except PracticeLocation.DoesNotExist:
+        return ""
+
+
+def sync_provider_availability(
+    provider_id: str, schedulable_ids: set[str] | None = None
+) -> list[Effect]:
     """Delete all availability events and recreate for ALL active rules.
 
     This is the correct entry point for syncing availability. It handles
     multiple rules per provider without accidentally deleting sibling rules.
+
+    Availability is gated on the schedulable set: a provider who is not in it
+    has their events cleared and NOT recreated, because a de-scheduled provider
+    must not be bookable. Rule definitions are left untouched, so re-adding the
+    role restores availability on the next sync.
+
+    ``schedulable_ids`` is an optional pre-computed set, for callers syncing
+    many providers in a loop so the role lookup runs once rather than once per
+    provider. When omitted it is computed here on purpose: the gate has to hold
+    on every path, and a caller that forgets to pass it would otherwise leave a
+    de-scheduled provider bookable.
+
+    An empty schedulable set means the role configuration is missing or was
+    saved empty, not that every provider is de-scheduled. Clearing the whole
+    instance's availability on a configuration mistake is worse than leaving it
+    in place, so the gate is skipped and a warning is logged.
     """
     effects: list[Effect] = []
     effects.extend(build_delete_effects(provider_id))
+
+    if schedulable_ids is None:
+        schedulable_ids = get_schedulable_provider_ids()
+
+    if not schedulable_ids:
+        log.warning(
+            "sync_provider_availability: provider=%s, schedulable set is empty, "
+            "skipping the gate rather than clearing all availability",
+            provider_id,
+        )
+    elif provider_id not in schedulable_ids:
+        log.info(
+            "sync_provider_availability: provider=%s not schedulable — cleared "
+            "availability, skipping recreate",
+            provider_id,
+        )
+        return effects
 
     rules = get_rules_for_provider(provider_id)
     total_events = 0
@@ -164,9 +212,10 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
     tz = ZoneInfo(rule.timezone) if rule.timezone else provider_tz(rule.provider_id)
     interval = max(1, rule.recurrence_interval)
     event_count = 0
+    provider_name = resolve_provider_name(rule.provider_id)  # resolve once, reuse per location
 
     for location_id in location_ids:
-        calendar_id, cal_effects = _get_calendar_id(rule.provider_id, location_id)
+        calendar_id, cal_effects = _get_calendar_id(rule.provider_id, location_id, provider_name)
         effects.extend(cal_effects)
 
         if is_daily:
@@ -343,6 +392,27 @@ def _compute_recurring_segments(
     return segments
 
 
+def _series_end(evt: Any) -> datetime | None:
+    """When the event's whole series finishes, or None if it never does.
+
+    A one-off event finishes when its single occurrence ends. A recurring event
+    finishes at ``recurrence_ends_at``; when that is null the series is
+    open-ended and is therefore never fully past.
+
+    ``ends_at`` describes only the FIRST occurrence of a recurring event, so
+    using it as the series boundary misclassifies any long-running series whose
+    first occurrence has passed. That was PLUGIN-478: such a series was skipped
+    by the delete while the create step still ran, leaving the provider
+    advertising the same availability twice.
+    """
+    if getattr(evt, "recurrence_ends_at", None):
+        return cast(datetime, evt.recurrence_ends_at)
+    if getattr(evt, "recurrence", None):
+        return None
+    ends_at = getattr(evt, "ends_at", None)
+    return cast(datetime, ends_at) if ends_at else None
+
+
 def build_delete_effects(provider_id: str) -> list[Effect]:
     """Delete all 'Available' events on the provider's Clinic calendars.
 
@@ -375,9 +445,11 @@ def build_delete_effects(provider_id: str) -> list[Effect]:
         title=AVAILABILITY_TITLE,
         is_cancelled=False,
     ):
-        # Preserve fully-past events for historical reporting
-        end_boundary = getattr(evt, "recurrence_ends_at", None) or evt.ends_at
-        if end_boundary and end_boundary < now:
+        # Preserve fully-past events for historical reporting. The boundary is
+        # the end of the SERIES, not of the first occurrence, so an open-ended
+        # recurring series is never treated as finished.
+        series_end = _series_end(evt)
+        if series_end is not None and series_end < now:
             continue
         effects.append(EventEffect(event_id=str(evt.id)).delete())
 
@@ -410,17 +482,16 @@ def _next_weekday(from_date: date, weekday_int: int) -> date:
 
 
 def _get_calendar_id(
-    provider_id: str, location_id: str | None
+    provider_id: str, location_id: str | None, provider_name: str | None = None
 ) -> tuple[str, list[Effect]]:
     """Get or create a Clinic calendar for a provider+location.
 
+    Pass provider_name to skip the Staff lookup (resolve once before a loop).
+
     Returns (calendar_id, effects_needed_to_create).
     """
-    try:
-        staff = Staff.objects.get(id=provider_id)
-        provider_name = staff.full_name
-    except Staff.DoesNotExist:
-        provider_name = ""
+    if provider_name is None:
+        provider_name = resolve_provider_name(provider_id)
 
     location_name = ""
     if location_id:
@@ -491,8 +562,9 @@ def build_block_event_effects(block: AdminBlock) -> list[Effect]:
     else:
         location_ids = [None]  # provider-level (no location)
 
+    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
         if not calendar_id:
             log.warning("build_block_event_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
@@ -633,7 +705,8 @@ def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect
     if min_lead <= 0:
         return []
 
-    calendar_id, cal_effects = get_admin_calendar_id(rule.provider_id)
+    provider_name = resolve_provider_name(rule.provider_id)  # resolve once for both calendar lookups
+    calendar_id, cal_effects = get_admin_calendar_id(rule.provider_id, provider_name=provider_name)
     if not calendar_id:
         return []
 
@@ -687,7 +760,7 @@ def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect
         pass
 
     # Check if existing lead-time events are still close enough to skip rebuild
-    admin_cal_ids = [c.id for c in get_admin_calendars(rule.provider_id)]
+    admin_cal_ids = [c.id for c in get_admin_calendars(rule.provider_id, provider_name)]
     existing_events = (
         list(
             EventModel.objects.filter(
@@ -824,8 +897,9 @@ def build_recurring_block_sync_effects(block: RecurringBlock) -> list[Effect]:
     override_map = _get_provider_override_map(block.provider_id)
 
     event_count = 0
+    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
         if not calendar_id:
             log.warning("build_recurring_block_sync_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
@@ -950,7 +1024,6 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
 
     tz = ZoneInfo(block.timezone) if block.timezone else provider_tz(block.provider_id)
     hold_type_label = "Same Day Hold" if block.hold_type == "same_day" else "Next Day Hold"
-    title = hold_type_label + (": " + block.reason if block.reason else "")
 
     # Determine the range
     range_start = block.effective_start if block.effective_start and block.effective_start > today else today
@@ -967,13 +1040,23 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
         location_ids = [None]  # provider-level (no location)
 
     event_count = 0
+    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
         if not calendar_id:
             log.warning("_build_hold_block_events: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
 
         effects.extend(cal_effects)
+
+        # Label each event with its location so multi-location holds are
+        # distinguishable in the merged (all-locations) calendar view.
+        loc_name = _location_name(loc_id)
+        title = hold_type_label
+        if loc_name:
+            title += " — " + loc_name
+        if block.reason:
+            title += ": " + block.reason
 
         is_daily = block.recurrence_frequency == "daily"
         current_date = range_start

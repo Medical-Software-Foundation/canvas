@@ -13,14 +13,13 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data import Event
 
 from provider_availability.engine.models import (
     AvailableSlot,
     DAYS_OF_WEEK,
     ProviderAvailabilityRule,
-    TimeWindow,
     date_in_pattern,
 )
 from provider_availability.engine.event_sync import AVAILABILITY_TITLE
@@ -34,8 +33,18 @@ def calculate_available_slots(
     start_date: date,
     end_date: date,
     now: datetime | None = None,
+    *,
+    admin_blocks: list | None = None,
+    recurring_blocks: list | None = None,
+    provider_name: str | None = None,
 ) -> list[AvailableSlot]:
-    """Calculate available slots for a rule within a date range."""
+    """Calculate available slots for a rule within a date range.
+
+    admin_blocks / recurring_blocks / provider_name are provider-level and
+    identical across a provider's rules; callers computing slots for many rules
+    should fetch them once and pass them in (see get_available_slots_for_provider)
+    to avoid re-reading them per rule.
+    """
     if not rule.is_active:
         return []
 
@@ -92,12 +101,13 @@ def calculate_available_slots(
 
     # Add Schedule Event blocks
     schedule_event_blocks = _get_schedule_event_blocks(
-        rule.provider_id, effective_start, effective_end
+        rule.provider_id, effective_start, effective_end, provider_name
     )
     blocked_intervals.extend(schedule_event_blocks)
 
     # Add plugin-managed admin blocks (normalize TZ to naive provider-TZ)
-    admin_blocks = get_blocks_for_provider(rule.provider_id)
+    if admin_blocks is None:
+        admin_blocks = get_blocks_for_provider(rule.provider_id)
     for block in admin_blocks:
         block_start = to_provider_naive(block.start, rule.provider_id)
         block_end = to_provider_naive(block.end, rule.provider_id)
@@ -106,7 +116,8 @@ def calculate_available_slots(
 
     # Add hold-type recurring blocks (dynamically enforced, not via calendar events)
     today = now.date()
-    recurring_blocks = get_recurring_blocks_for_provider(rule.provider_id)
+    if recurring_blocks is None:
+        recurring_blocks = get_recurring_blocks_for_provider(rule.provider_id)
     for rb in recurring_blocks:
         if not rb.is_active or rb.hold_type == "none":
             continue  # non-hold blocks handled via calendar events
@@ -217,6 +228,12 @@ def get_available_slots_for_provider(
     """
     all_slots: list[AvailableSlot] = []
 
+    # Provider-level data is identical across a provider's rules — fetch once
+    # per provider instead of once per rule.
+    blocks_cache: dict[str, list] = {}
+    rblocks_cache: dict[str, list] = {}
+    name_cache: dict[str, str] = {}
+
     for rule in rules:
         if location_id:
             if rule.location_ids and location_id not in rule.location_ids:
@@ -224,7 +241,21 @@ def get_available_slots_for_provider(
         if visit_type:
             if rule.visit_types and visit_type not in rule.visit_types:
                 continue
-        all_slots.extend(calculate_available_slots(rule, start_date, end_date, now))
+
+        pid = rule.provider_id
+        if pid not in blocks_cache:
+            blocks_cache[pid] = get_blocks_for_provider(pid)
+            rblocks_cache[pid] = get_recurring_blocks_for_provider(pid)
+            name_cache[pid] = get_provider_display(pid).get("name", "")
+
+        all_slots.extend(
+            calculate_available_slots(
+                rule, start_date, end_date, now,
+                admin_blocks=blocks_cache[pid],
+                recurring_blocks=rblocks_cache[pid],
+                provider_name=name_cache[pid],
+            )
+        )
 
     all_slots.sort(key=lambda s: s.start)
     return all_slots
@@ -236,17 +267,27 @@ def _get_appointments(
     end: datetime,
     location_id: str = "",
 ) -> list[tuple[datetime, int]]:
-    """Fetch existing appointments from Canvas data."""
-    filters = {
+    """Fetch the appointments that genuinely occupy the provider's time.
+
+    A cancelled appointment no longer occupies its slot, and one staff marked
+    entered-in-error never should have existed, so neither blocks booking.
+    This result is what slot calculation subtracts from the provider's
+    schedule, so counting either one leaves time permanently unbookable with
+    no visible cause.
+    """
+    filters: dict[str, object] = {
         "provider__id": provider_id,
         "start_time__gte": start,
         "start_time__lte": end,
+        "entered_in_error__isnull": True,
     }
     if location_id:
         filters["location__id"] = location_id
 
-    appointments = Appointment.objects.filter(**filters).values_list(
-        "start_time", "duration_minutes"
+    appointments = (
+        Appointment.objects.filter(**filters)
+        .exclude(status=AppointmentProgressStatus.CANCELLED)
+        .values_list("start_time", "duration_minutes")
     )
     return [(to_provider_naive(appt_start, provider_id), duration) for appt_start, duration in appointments]
 
@@ -255,6 +296,7 @@ def _get_schedule_event_blocks(
     provider_id: str,
     start: datetime,
     end: datetime,
+    provider_name: str | None = None,
 ) -> list[tuple[datetime, datetime]]:
     """Fetch Canvas Schedule Events that block the provider's time.
 
@@ -263,10 +305,12 @@ def _get_schedule_event_blocks(
     windows (on the Clinic calendar with title=AVAILABILITY_TITLE) are
     the open baseline and must NOT be treated as blockers — exclude
     those specifically. Any other event on a Clinic calendar (manual,
-    FHIR, Google sync, another plugin) is a real blocker.
+    FHIR, Google sync, another plugin) is a real blocker. Pass
+    provider_name to skip the per-call name lookup when computing many
+    rules for the same provider.
     """
-    display = get_provider_display(provider_id)
-    provider_name = display.get("name", "")
+    if provider_name is None:
+        provider_name = get_provider_display(provider_id).get("name", "")
     if not provider_name:
         return []
 

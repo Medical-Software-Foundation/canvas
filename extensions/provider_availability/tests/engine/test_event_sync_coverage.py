@@ -290,12 +290,13 @@ class TestComputeRecurringSegmentsOffPattern:
 
 
 class TestBuildBlockEventEffectsLocations:
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
     def test_per_location_events(
-        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve
     ):
         """Block with location_ids creates one event per location (line 479)."""
         from provider_availability.engine.models import AdminBlock
@@ -325,8 +326,8 @@ class TestBuildBlockEventEffectsLocations:
             assert all(c.kwargs["title"] == "Offsite" for c in mock_event_effect.call_args_list)
 
         assert mock_get_admin_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-A"),
-            call(PROVIDER_ID, "loc-B"),
+            call(PROVIDER_ID, "loc-A", "Dr X"),
+            call(PROVIDER_ID, "loc-B", "Dr X"),
         ]
         assert len(result) == 2
 
@@ -588,13 +589,14 @@ class TestBuildRecurringBlockSyncDailyAndLocations:
         with patch(f"{MODULE}.get_rules_for_provider", return_value=[]):
             yield
 
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
     @patch(f"{MODULE}.build_delete_recurring_block_effects")
     def test_per_location_calendars(
-        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc
+        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve
     ):
         """Recurring block with location_ids creates events per location (line 818)."""
         mock_delete.return_value = []
@@ -627,8 +629,8 @@ class TestBuildRecurringBlockSyncDailyAndLocations:
             assert cal_ids == ["admin-cal-A", "admin-cal-B"]
 
         assert mock_get_admin_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-A"),
-            call(PROVIDER_ID, "loc-B"),
+            call(PROVIDER_ID, "loc-A", "Dr X"),
+            call(PROVIDER_ID, "loc-B", "Dr X"),
         ]
         # 1 weekly event per location = 2
         assert len(result) == 2
@@ -847,6 +849,41 @@ class TestBuildHoldBlockEvents:
 
         # Dates 03-03, 03-04, 03-05 each get one event = 3
         assert len(result) == 3
+
+    @patch(f"{MODULE}._location_name", return_value="Cool Clinic")
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.date_in_pattern", return_value=True)
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    def test_hold_title_includes_location_name(
+        self, mock_get_admin_cal, mock_tz, mock_pattern, mock_localize, mock_to_utc, mock_loc_name
+    ):
+        """A hold on a specific location labels its events with the location name."""
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+
+        block = RecurringBlock(
+            id="rb-loc",
+            provider_id=PROVIDER_ID,
+            location_ids=["loc-1"],
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(10, 0))],
+            reason="Hold",
+            hold_type="next_day",
+            effective_end=date(2026, 3, 5),
+        )
+
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_event_effect:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            mock_event_effect.return_value.create.return_value = MagicMock()
+
+            _build_hold_block_events(block)
+
+            titles = {c.kwargs["title"] for c in mock_event_effect.call_args_list}
+            assert titles == {"Next Day Hold — Cool Clinic: Hold"}
 
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))

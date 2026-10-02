@@ -93,16 +93,21 @@ def _windows_for_day(rule: ProviderAvailabilityRule, day: date) -> tuple[str, li
 def check_rule_overlap(
     rule: ProviderAvailabilityRule,
     exclude_rule_id: str = "",
+    existing_rules: list[ProviderAvailabilityRule] | None = None,
 ) -> str | None:
     """Check if a rule overlaps with existing rules for the same provider.
 
     Returns a conflict description string if overlap found, else None.
 
+    Pass existing_rules (the provider's saved rules) to skip the per-call cache
+    read — callers validating many rules at once should fetch once and reuse.
+
     Honors recurrence frequency / interval — two rules with non-coinciding
     occurrences (e.g. weekly interval=2 anchored on alternating weeks) are
     not flagged.
     """
-    existing_rules = get_rules_for_provider(rule.provider_id)
+    if existing_rules is None:
+        existing_rules = get_rules_for_provider(rule.provider_id)
 
     for existing in existing_rules:
         if existing.id == exclude_rule_id:

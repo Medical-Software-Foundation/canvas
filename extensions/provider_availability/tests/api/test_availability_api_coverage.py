@@ -15,9 +15,12 @@ from datetime import date, datetime, time
 from http import HTTPStatus
 from unittest.mock import MagicMock, call, patch
 
+import pytest
+
 from provider_availability.api.availability_api import (
     AvailabilityAPI,
     _check_write_access,
+    _sort_providers_you_first,
 )
 from provider_availability.engine.models import (
     AdminBlock,
@@ -45,6 +48,20 @@ def _parse(response) -> tuple[dict, int]:
     return body, response.status_code
 
 
+def _session_headers(staff_id: str = "staff-1", user_type: str = "Staff") -> dict[str, str]:
+    """The headers Canvas uses to identify the signed-in user.
+
+    Canvas sends identity as request headers, not as an attribute on the
+    request object. Tests that set a `staff_id` attribute passed while
+    production denied everyone, so building real headers here is what keeps
+    these tests honest.
+    """
+    return {
+        "canvas-logged-in-user-id": staff_id,
+        "canvas-logged-in-user-type": user_type,
+    }
+
+
 def _make_handler(
     query_params: dict | None = None,
     path_params: dict | None = None,
@@ -57,7 +74,7 @@ def _make_handler(
     handler.request.query_params = query_params or {}
     handler.request.path_params = path_params or {}
     handler.request.json.return_value = json_body or {}
-    handler.request.staff_id = staff_id
+    handler.request.headers = _session_headers(staff_id)
     handler.secrets = {}
     return handler
 
@@ -663,6 +680,51 @@ class TestSetProviderTz:
         assert code == HTTPStatus.FORBIDDEN
 
 
+# ── clear_provider_tz ──────────────────────────────────────────────────────
+
+
+class TestClearProviderTz:
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.get_practice_timezone", return_value="US/Pacific")
+    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"])
+    @patch(f"{MODULE}.get_all_recurring_blocks")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"])
+    @patch(f"{MODULE}.clear_provider_timezone")
+    def test_clears_override_and_resyncs(
+        self, mock_clear, mock_sync, mock_get_rb, mock_rb_sync, mock_default_tz, mock_access
+    ):
+        matching = RecurringBlock(id="rb1", provider_id=PROVIDER_ID)
+        other = RecurringBlock(id="rb2", provider_id=PROVIDER_ID_2)
+        mock_get_rb.return_value = [matching, other]
+
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID})
+        result = handler.clear_provider_tz()
+
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert data["explicit"] is False
+        assert data["timezone"] == "US/Pacific"
+        assert data["provider_id"] == PROVIDER_ID
+        assert "sync-fx" in result
+        assert "rb-fx" in result
+        assert mock_clear.mock_calls == [call(PROVIDER_ID)]
+        assert mock_sync.mock_calls == [call(PROVIDER_ID)]
+        # Only the matching provider's recurring block is re-synced
+        assert mock_rb_sync.mock_calls == [call(matching)]
+
+    @patch(f"{MODULE}._check_write_access")
+    def test_write_access_denied(self, mock_access):
+        from canvas_sdk.effects.simple_api import JSONResponse
+
+        mock_access.return_value = [
+            JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)
+        ]
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID})
+        result = handler.clear_provider_tz()
+        _, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+
+
 # ── set_provider_tz_bulk ───────────────────────────────────────────────────
 
 
@@ -1254,6 +1316,12 @@ class TestFormBlockHelpers:
 
 
 class TestBuildPreloadedDataWithData:
+    @pytest.fixture(autouse=True)
+    def _no_saved_view(self):
+        """The saved view reads the plugin cache, which tests have no context for."""
+        with patch(f"{MODULE}.get_my_view", return_value=[]):
+            yield
+
     @patch(f"{MODULE}.generate_template_csv", return_value="csv")
     @patch(f"{MODULE}.get_all_provider_timezones", return_value={PROVIDER_ID: "US/Pacific"})
     @patch(f"{MODULE}.get_provider_displays", return_value={PROVIDER_ID: {"name": "Dr. Smith"}})
@@ -1314,3 +1382,232 @@ class TestBuildPreloadedDataWithData:
         assert prov["rules"][0]["visit_type_names"] == ["Follow-up"]
         assert len(prov["blocks"]) == 1
         assert len(prov["recurring_blocks"]) == 1
+
+
+# ── Schedulable roles endpoints ────────────────────────────────────────────
+
+
+class TestSchedulableRolesEndpoints:
+    @patch(f"{MODULE}.get_available_roles", return_value=[
+        {"code": "CC", "name": "Care Coordinator", "abbreviation": "", "domain": "HYB", "staff_count": 8},
+    ])
+    @patch(f"{MODULE}.get_schedulable_roles", return_value=None)
+    @patch(f"{MODULE}.get_effective_schedulable_roles", return_value=["LCSW", "MD"])
+    @patch(f"{MODULE}.is_provider_type_fallback_active", return_value=False)
+    def test_get_roles(self, mock_fallback, mock_effective, mock_get, mock_avail):
+        """Before roles are saved, the selection shows the Provider-type codes in effect."""
+        handler = _make_handler()
+        result = handler.get_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["schedulable_roles"] == ["LCSW", "MD"]
+        assert data["configured"] is False
+        assert data["available"][0]["code"] == "CC"
+        assert data["fallback_active"] is False
+        assert mock_effective.mock_calls == [call()]
+        assert mock_get.mock_calls == [call()]
+        assert mock_avail.mock_calls == [call()]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_normalizes_and_saves(self, mock_set, mock_reconcile, mock_access):
+        handler = _make_handler(json_body={"schedulable_roles": ["cc", " md ", ""]})
+        result = handler.set_roles()
+
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert data["schedulable_roles"] == ["CC", "MD"]
+        assert mock_set.mock_calls == [call(["CC", "MD"])]
+        # Saving roles reconciles availability so the change takes effect now.
+        assert mock_reconcile.mock_calls == [call()]
+
+    @patch(f"{MODULE}.sync_provider_availability", return_value=["fx"])
+    @patch(f"{MODULE}.set_seen_schedulable_ids")
+    @patch(f"{MODULE}.get_all_rules")
+    @patch(f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID})
+    def test_reconcile_availability_clears_descheduled_and_syncs_schedulable(
+        self, mock_sched, mock_rules, mock_seen, mock_sync
+    ):
+        from provider_availability.api.availability_api import _reconcile_availability_to_roles
+
+        schedulable_rule = ProviderAvailabilityRule(id="r1", provider_id=PROVIDER_ID)
+        descheduled_rule = ProviderAvailabilityRule(id="r2", provider_id=PROVIDER_ID_2)
+        mock_rules.return_value = [schedulable_rule, descheduled_rule]
+
+        effects = _reconcile_availability_to_roles()
+
+        # Both providers are re-synced with the schedulable set passed through;
+        # sync_provider_availability clears the de-scheduled one internally.
+        assert effects == ["fx", "fx"]
+        called_pids = {c.args[0] for c in mock_sync.call_args_list}
+        assert called_pids == {PROVIDER_ID, PROVIDER_ID_2}
+        for c in mock_sync.call_args_list:
+            assert c.kwargs["schedulable_ids"] == {PROVIDER_ID}
+        # Recorded so the background job does not reconcile the same change again.
+        assert mock_seen.mock_calls == [call([PROVIDER_ID])]
+
+    @patch(f"{MODULE}._check_write_access", return_value=["DENIED"])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_respects_write_access(self, mock_set, mock_access):
+        handler = _make_handler(json_body={"schedulable_roles": ["CC"]})
+        result = handler.set_roles()
+
+        assert result == ["DENIED"]
+        assert mock_set.mock_calls == []
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_set_roles_rejects_non_list(self, mock_access):
+        handler = _make_handler(json_body={"schedulable_roles": "MD,DO"})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "must be a list" in data["error"]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_rejects_empty_list(self, mock_set, mock_reconcile, mock_access):
+        """An empty set would de-schedule every provider at once."""
+        handler = _make_handler(json_body={"schedulable_roles": []})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "at least one" in data["error"].lower()
+        assert mock_set.mock_calls == []
+        assert mock_reconcile.mock_calls == []
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}._reconcile_availability_to_roles", return_value=[])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_rejects_blanks_only(self, mock_set, mock_reconcile, mock_access):
+        """Entries that are only whitespace normalize away to nothing."""
+        handler = _make_handler(json_body={"schedulable_roles": ["", "  ", "\t"]})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert mock_set.mock_calls == []
+        assert mock_reconcile.mock_calls == []
+
+
+class TestProviderSortOrder:
+    def test_viewer_is_pinned_first_and_flagged(self):
+        """A provider should not have to hunt the list for their own row."""
+        rows = [
+            {"provider_id": "p-zed", "provider_name": "Zed Adams"},
+            {"provider_id": "staff-1", "provider_name": "Wendy Yandura"},
+            {"provider_id": "p-amy", "provider_name": "Amy Brooks"},
+        ]
+
+        result = _sort_providers_you_first(rows, "staff-1")
+
+        assert [r["provider_id"] for r in result] == ["staff-1", "p-amy", "p-zed"]
+        assert [r["is_you"] for r in result] == [True, False, False]
+
+    def test_others_stay_alphabetical_when_the_viewer_is_not_a_provider(self):
+        rows = [
+            {"provider_id": "p-zed", "provider_name": "Zed Adams"},
+            {"provider_id": "p-amy", "provider_name": "Amy Brooks"},
+        ]
+
+        result = _sort_providers_you_first(rows, "staff-99")
+
+        assert [r["provider_id"] for r in result] == ["p-amy", "p-zed"]
+        assert all(r["is_you"] is False for r in result)
+
+    def test_unidentified_viewer_pins_nobody(self):
+        rows = [{"provider_id": "p-amy", "provider_name": "Amy Brooks"}]
+
+        result = _sort_providers_you_first(rows, "")
+
+        assert result[0]["is_you"] is False
+
+    def test_blank_names_sort_last(self):
+        rows = [
+            {"provider_id": "p-blank", "provider_name": ""},
+            {"provider_id": "p-amy", "provider_name": "Amy Brooks"},
+        ]
+
+        result = _sort_providers_you_first(rows, "")
+
+        assert [r["provider_id"] for r in result] == ["p-amy", "p-blank"]
+
+
+class TestSavedView:
+    @patch(f"{MODULE}.get_my_view", return_value=["p1", "p2"])
+    def test_get_returns_the_viewers_saved_providers(self, mock_get):
+        handler = _make_handler(staff_id="staff-1")
+
+        result = handler.get_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["provider_ids"] == ["p1", "p2"]
+        assert mock_get.mock_calls == [call("staff-1")]
+
+    @patch(f"{MODULE}.clear_my_view")
+    @patch(f"{MODULE}.set_my_view")
+    def test_save_uses_the_session_staff_id_not_the_body(self, mock_set, mock_clear):
+        """One person must not be able to overwrite another person's saved view."""
+        handler = _make_handler(
+            json_body={"provider_ids": ["p1"], "staff_id": "someone-else"},
+            staff_id="staff-1",
+        )
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert mock_set.mock_calls == [call("staff-1", ["p1"])]
+        assert mock_clear.mock_calls == []
+
+    @patch(f"{MODULE}.clear_my_view")
+    @patch(f"{MODULE}.set_my_view")
+    def test_empty_selection_means_show_everyone(self, mock_set, mock_clear):
+        handler = _make_handler(json_body={"provider_ids": []}, staff_id="staff-1")
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["provider_ids"] == []
+        assert mock_set.mock_calls == []
+        assert mock_clear.mock_calls == [call("staff-1")]
+
+    @patch(f"{MODULE}.clear_my_view")
+    @patch(f"{MODULE}.set_my_view")
+    def test_blank_entries_are_dropped(self, mock_set, mock_clear):
+        handler = _make_handler(
+            json_body={"provider_ids": ["p1", "", "  ", "p2"]}, staff_id="staff-1"
+        )
+
+        result = handler.save_saved_view()
+
+        data, _ = _parse(result[0])
+        assert data["provider_ids"] == ["p1", "p2"]
+        assert mock_set.mock_calls == [call("staff-1", ["p1", "p2"])]
+
+    @patch(f"{MODULE}.set_my_view")
+    def test_rejects_a_non_list(self, mock_set):
+        handler = _make_handler(json_body={"provider_ids": "p1,p2"}, staff_id="staff-1")
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "must be a list" in data["error"]
+        assert mock_set.mock_calls == []
+
+    @patch(f"{MODULE}.set_my_view")
+    def test_rejects_when_the_viewer_cannot_be_identified(self, mock_set):
+        handler = _make_handler(json_body={"provider_ids": ["p1"]}, staff_id="")
+
+        result = handler.save_saved_view()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert mock_set.mock_calls == []

@@ -28,8 +28,12 @@ class TestRenderAdminPage:
         html = render_admin_page(data)
         assert "value/with/slashes" in html
 
-    def test_includes_bulk_import_tab_and_panel(self):
+    def test_bulk_import_is_a_settings_section_not_a_tab(self):
+        """Bulk import is a set-once task, so it sits inside Settings."""
         html = render_admin_page(None)
-        assert "panel-bulk-import" in html
-        assert "Bulk Import" in html
-        assert 'onclick="bulkUploadValidate()"' in html
+        settings = html[html.index('<canvas-tab-panel id="panel-settings">'):]
+        settings = settings[: settings.index("</canvas-tab-panel>")]
+        assert 'id="settings-bulk-import"' in settings
+        assert 'onclick="bulkUploadValidate()"' in settings
+        assert "panel-bulk-import" not in html
+        assert html.count("<canvas-tab for=") == 3

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time
 from http import HTTPStatus
 
 from logger import log
@@ -34,17 +33,24 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
 )
+from provider_availability.api._auth import current_staff_id as _signed_in_staff_id
+from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
+from provider_availability.engine.roles import (
+    get_available_roles,
+    get_effective_schedulable_roles,
+    is_provider_type_fallback_active,
+    get_schedulable_provider_ids,
+    get_schedulable_staff,
+)
 from provider_availability.engine.models import (
     AdminBlock,
-    BookingInterval,
-    BufferTime,
     DateOverride,
     ProviderAvailabilityRule,
     RecurringBlock,
-    TimeWindow,
 )
 from provider_availability.engine.overlap import check_rule_overlap
 from provider_availability.engine.storage import (
+    clear_provider_timezone,
     delete_block,
     delete_recurring_block,
     delete_rule_by_id,
@@ -64,11 +70,14 @@ from provider_availability.engine.storage import (
     get_rule_by_id,
     get_rules_by_group,
     get_rules_for_provider,
+    get_schedulable_roles,
     save_block,
     save_recurring_block,
     save_rule,
     set_practice_timezone,
     set_provider_timezone,
+    set_schedulable_roles,
+    set_seen_schedulable_ids,
 )
 from provider_availability.api._auth import is_authorized
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
@@ -204,6 +213,67 @@ def _check_write_access(request: object, secrets: dict | None = None) -> list[Re
     ]
 
 
+def _reconcile_availability_to_roles() -> list[Effect]:
+    """Re-sync every provider-with-rules against the current schedulable set.
+
+    Schedulable providers get their availability events (re)generated;
+    non-schedulable providers get theirs cleared. ``sync_provider_availability``
+    is gated on the same set, so it clears (and does not recreate) events for
+    providers who are no longer schedulable. Rule definitions are untouched, so
+    re-adding a role restores availability automatically.
+    """
+    schedulable_ids = get_schedulable_provider_ids()
+    provider_ids = {r.provider_id for r in get_all_rules()}
+    effects: list[Effect] = []
+    for pid in provider_ids:
+        effects.extend(sync_provider_availability(pid, schedulable_ids=schedulable_ids))
+    # The background job compares against this, so a role save is not
+    # reconciled a second time on its next tick.
+    set_seen_schedulable_ids(sorted(schedulable_ids))
+    log.info(
+        "reconcile_availability_to_roles: reconciled %d providers (%d schedulable)",
+        len(provider_ids), len(schedulable_ids),
+    )
+    return effects
+
+
+def _include_viewer(provider_ids: set[str], schedulable_ids: set[str], staff_id: str) -> None:
+    """Add the viewer to the overview when they are a schedulable provider.
+
+    The overview otherwise lists only providers with saved rules or blocks, so a
+    provider who has set nothing up yet would have no "Your availability" row to
+    start from. Non-schedulable viewers (an admin, say) get no row at all.
+    """
+    if staff_id and staff_id in schedulable_ids:
+        provider_ids.add(staff_id)
+
+
+def _mark_viewer(providers: list[dict], staff_id: str) -> list[dict]:
+    """Flag the viewer in the provider dropdown list so the page can leave them
+    out of the filter: their own section always shows, so filtering it is moot."""
+    for p in providers:
+        p["is_you"] = bool(staff_id) and str(p.get("id")) == staff_id
+    return providers
+
+
+def _sort_providers_you_first(providers: list[dict], staff_id: str) -> list[dict]:
+    """Alphabetical by name, with the viewer's own row pinned to the top.
+
+    Pinning is deliberately independent of any saved view: a provider must not
+    be able to hide their own availability by saving a view that omits them,
+    which is the confusing outcome the pin exists to prevent. ``is_you`` is set
+    on every row so the UI can show the viewer's row in its own section.
+    """
+    for p in providers:
+        p["is_you"] = bool(staff_id) and p.get("provider_id") == staff_id
+
+    def sort_key(p: dict) -> tuple[int, str]:
+        name = p["provider_name"].lower() if p["provider_name"] else "zzz"
+        return (0 if p["is_you"] else 1, name)
+
+    return sorted(providers, key=sort_key)
+
+
 class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     """API endpoints for availability queries and rule management."""
 
@@ -216,7 +286,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         """Return all active providers for dropdown population."""
         log.info("list_providers endpoint called")
         try:
-            providers = get_active_providers()
+            providers = _mark_viewer(get_active_providers(), _signed_in_staff_id(self.request))
             log.info("list_providers returning %d providers", len(providers))
         except Exception:
             log.exception("list_providers failed")
@@ -275,14 +345,24 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
 
-        # Collect all provider IDs
+        # Only show providers who are currently in a schedulable role. A provider
+        # who was de-scheduled (their role removed) drops off this screen, but
+        # their saved rules/blocks are kept (non-destructive) — re-adding the
+        # role brings them back with their configuration intact.
+        schedulable_ids = {str(s.id) for s in get_schedulable_staff()}
+
+        # Collect all provider IDs (restricted to currently-schedulable staff)
         provider_ids = set()
         for r in rules:
-            provider_ids.add(r.provider_id)
+            if r.provider_id in schedulable_ids:
+                provider_ids.add(r.provider_id)
         for b in blocks:
-            provider_ids.add(b.provider_id)
+            if b.provider_id in schedulable_ids:
+                provider_ids.add(b.provider_id)
         for rb in recurring_blocks:
-            provider_ids.add(rb.provider_id)
+            if rb.provider_id in schedulable_ids:
+                provider_ids.add(rb.provider_id)
+        _include_viewer(provider_ids, schedulable_ids, _signed_in_staff_id(self.request))
 
         displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
 
@@ -313,21 +393,27 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }
 
         for r in rules:
+            if r.provider_id not in providers:
+                continue
             d = r.to_dict()
             d["location_names"] = [locations.get(lid, lid) for lid in r.location_ids]
             d["visit_type_names"] = [visit_types.get(vt, vt) for vt in r.visit_types]
             providers[r.provider_id]["rules"].append(d)
 
         for b in blocks:
+            if b.provider_id not in providers:
+                continue
             providers[b.provider_id]["blocks"].append(b.to_dict())
 
         for rb in recurring_blocks:
+            if rb.provider_id not in providers:
+                continue
             providers[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
-        # Sort providers alphabetically by name
-        sorted_providers = sorted(
-            providers.values(),
-            key=lambda p: p["provider_name"].lower() if p["provider_name"] else "zzz",
+        # Alphabetical, with the viewer's own row first (the page shows it in
+        # its own section).
+        sorted_providers = _sort_providers_you_first(
+            list(providers.values()), _signed_in_staff_id(self.request)
         )
 
         return [JSONResponse({"providers": sorted_providers})]
@@ -366,6 +452,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         location_id = params.get("location_id", "")
         visit_type = params.get("visit_type", "")
+
+        # A provider no longer in a schedulable role is not bookable.
+        if provider_id not in get_schedulable_provider_ids():
+            log.info("available-slots: provider=%s not schedulable, returning no slots", provider_id)
+            return [JSONResponse({"slots": [], "count": 0})]
 
         rules = get_rules_for_provider(provider_id)
         log.info(
@@ -413,10 +504,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         visit_type = params.get("visit_type", "")
 
         all_rules = get_all_rules()
+        schedulable_ids = get_schedulable_provider_ids()
 
         # Group by provider
         providers_with_slots: dict[str, int] = {}
         for rule in all_rules:
+            # De-scheduled providers are not bookable.
+            if rule.provider_id not in schedulable_ids:
+                continue
             if location_id:
                 if rule.location_ids and location_id not in rule.location_ids:
                     continue
@@ -1321,6 +1416,112 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }),
         ]
 
+    # ── Schedulable roles ─────────────────────────────────────────────
+
+    @api.get("/roles")
+    def get_roles(self) -> list[Response | Effect]:
+        """Return configured schedulable role codes and the roles in this instance."""
+        return [
+            JSONResponse({
+                "schedulable_roles": get_effective_schedulable_roles(),
+                "configured": get_schedulable_roles() is not None,
+                "fallback_active": is_provider_type_fallback_active(),
+                "available": get_available_roles(),
+            })
+        ]
+
+    @api.put("/roles")
+    def set_roles(self) -> list[Response | Effect]:
+        """Replace the set of schedulable role internal codes."""
+        return self._save_roles(self.request.json())
+
+    def _save_roles(self, body: dict) -> list[Response | Effect]:
+        """Shared by the API route and the form fallback."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        codes = body.get("schedulable_roles")
+        if not isinstance(codes, list):
+            return [
+                JSONResponse(
+                    {"error": "schedulable_roles must be a list of role internal codes"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        if not normalized:
+            # An empty set would de-schedule every provider at once, clearing
+            # availability instance-wide on one click. Reject rather than store it.
+            return [
+                JSONResponse(
+                    {"error": "At least one schedulable role is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        set_schedulable_roles(normalized)
+        log.info("set_roles: set %d schedulable roles", len(normalized))
+
+        # Reconcile availability against the new role set so the change takes
+        # effect immediately: providers who are no longer schedulable have their
+        # availability events cleared (no longer bookable), and providers who
+        # became schedulable have theirs (re)generated from their saved rules.
+        effects = _reconcile_availability_to_roles()
+
+        return [
+            *effects,
+            JSONResponse({
+                "message": "Schedulable roles updated",
+                "schedulable_roles": normalized,
+            }),
+        ]
+
+    # ── Per-staff saved view ──────────────────────────────────────────
+
+    @api.get("/my-view")
+    def get_saved_view(self) -> list[Response | Effect]:
+        """Return the provider ids this viewer saved as their default view."""
+        return [JSONResponse({"provider_ids": get_my_view(_signed_in_staff_id(self.request))})]
+
+    @api.put("/my-view")
+    def save_saved_view(self) -> list[Response | Effect]:
+        """Save the viewer's default view.
+
+        The staff id comes from the session, never from the request body, so one
+        person cannot overwrite another's saved view. There is no write-access
+        check because this changes only what the viewer sees, not any shared
+        configuration.
+        """
+        return self._save_view(self.request.json())
+
+    def _save_view(self, body: dict) -> list[Response | Effect]:
+        """Shared by the API route and the form fallback."""
+        staff_id = _signed_in_staff_id(self.request)
+        if not staff_id:
+            return [
+                JSONResponse(
+                    {"error": "Could not identify the signed-in user"},
+                    status_code=HTTPStatus.FORBIDDEN,
+                )
+            ]
+
+        provider_ids = body.get("provider_ids")
+        if not isinstance(provider_ids, list):
+            return [
+                JSONResponse(
+                    {"error": "provider_ids must be a list of provider ids"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        cleaned = [str(pid).strip() for pid in provider_ids if str(pid).strip()]
+        if cleaned:
+            set_my_view(staff_id, cleaned)
+        else:
+            # An empty selection means "show everyone", not "show nobody".
+            clear_my_view(staff_id)
+        log.info("my_view: saved %d providers", len(cleaned))
+        return [JSONResponse({"provider_ids": cleaned})]
+
     # ── Per-provider timezone ─────────────────────────────────────────
 
     @api.get("/provider-timezone")
@@ -1385,6 +1586,28 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "timezone": tz_name,
         })]
 
+    @api.delete("/provider-timezone/<provider_id>")
+    def clear_provider_tz(self) -> list[Response | Effect]:
+        """Clear a provider's explicit timezone, reverting to the practice default."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        provider_id = self.request.path_params["provider_id"]
+        clear_provider_timezone(provider_id)
+        # Re-sync so the provider's events move to the practice-default timezone.
+        effects: list[Effect] = list(sync_provider_availability(provider_id))
+        for rb in get_all_recurring_blocks():
+            if rb.provider_id == provider_id:
+                effects.extend(build_recurring_block_sync_effects(rb))
+        default_tz = get_practice_timezone()
+        log.info("clear_provider_tz: provider %s → default (%s), %d sync effects", provider_id, default_tz, len(effects))
+        return [*effects, JSONResponse({
+            "message": f"Provider now uses the practice default ({default_tz})",
+            "provider_id": provider_id,
+            "timezone": default_tz,
+            "explicit": False,
+        })]
+
     @api.put("/provider-timezones/bulk")
     def set_provider_tz_bulk(self) -> list[Response | Effect]:
         """Set the same timezone for multiple providers at once."""
@@ -1441,7 +1664,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def _build_preloaded_data(self) -> dict:
         """Gather all data needed for the initial page render."""
         try:
-            providers = get_active_providers()
+            providers = _mark_viewer(get_active_providers(), _signed_in_staff_id(self.request))
         except Exception:
             providers = []
         try:
@@ -1460,13 +1683,22 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
 
+        # Restrict the overview to currently-schedulable providers (the
+        # `providers` list above is already the schedulable set). De-scheduled
+        # providers drop off the screen; their saved rules are kept.
+        schedulable_ids = {str(p["id"]) for p in providers}
+
         provider_ids = set()
         for r in rules:
-            provider_ids.add(r.provider_id)
+            if r.provider_id in schedulable_ids:
+                provider_ids.add(r.provider_id)
         for b in blocks:
-            provider_ids.add(b.provider_id)
+            if b.provider_id in schedulable_ids:
+                provider_ids.add(b.provider_id)
         for rb in recurring_blocks:
-            provider_ids.add(rb.provider_id)
+            if rb.provider_id in schedulable_ids:
+                provider_ids.add(rb.provider_id)
+        _include_viewer(provider_ids, schedulable_ids, _signed_in_staff_id(self.request))
 
         displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
 
@@ -1488,20 +1720,25 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }
 
         for r in rules:
+            if r.provider_id not in overview:
+                continue
             d = r.to_dict()
             d["location_names"] = [loc_map.get(lid, lid) for lid in r.location_ids]
             d["visit_type_names"] = [vt_map.get(vt, vt) for vt in r.visit_types]
             overview[r.provider_id]["rules"].append(d)
 
         for b in blocks:
+            if b.provider_id not in overview:
+                continue
             overview[b.provider_id]["blocks"].append(b.to_dict())
 
         for rb in recurring_blocks:
+            if rb.provider_id not in overview:
+                continue
             overview[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
-        sorted_overview = sorted(
-            overview.values(),
-            key=lambda p: p["provider_name"].lower() if p["provider_name"] else "zzz",
+        sorted_overview = _sort_providers_you_first(
+            list(overview.values()), _signed_in_staff_id(self.request)
         )
 
         return {
@@ -1510,6 +1747,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "visit_types": {"visit_types": visit_types, "count": len(visit_types)},
             "timezone": {"timezone": tz, "available": COMMON_TIMEZONES},
             "overview": {"providers": sorted_overview},
+            "my_view": {"provider_ids": get_my_view(_signed_in_staff_id(self.request))},
             "csv_template": generate_template_csv(),
         }
 
@@ -1605,8 +1843,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return self._form_set_timezone(body)
         if method == "PUT" and p == "provider-timezone":
             return self._form_set_provider_timezone(body)
+        if method == "DELETE" and p.startswith("provider-timezone/"):
+            parts = p.split("/")
+            if len(parts) == 2:
+                return self._form_clear_provider_timezone(parts[1])
         if method == "PUT" and p == "provider-timezones/bulk":
             return self._form_set_provider_tz_bulk(body)
+        if method == "PUT" and p == "roles":
+            return self._save_roles(body)
+        if method == "PUT" and p == "my-view":
+            return self._save_view(body)
         return [JSONResponse({"error": f"Unknown: {method} /{p}"}, status_code=HTTPStatus.BAD_REQUEST)]
 
     def _form_create_rule(self, body: dict) -> list[Response | Effect]:
@@ -1933,6 +2179,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 all_fx.extend(build_recurring_block_sync_effects(rb))
         log.info("form_set_provider_tz: provider %s → %s", provider_id, tz_name)
         return [*all_fx, JSONResponse({"message": f"Provider timezone set to {tz_name}"})]
+
+    def _form_clear_provider_timezone(self, provider_id: str) -> list[Response | Effect]:
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        if not provider_id:
+            return [JSONResponse({"error": "provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        clear_provider_timezone(provider_id)
+        all_fx: list[Effect] = list(sync_provider_availability(provider_id))
+        for rb in get_all_recurring_blocks():
+            if rb.provider_id == provider_id:
+                all_fx.extend(build_recurring_block_sync_effects(rb))
+        default_tz = get_practice_timezone()
+        log.info("form_clear_provider_tz: provider %s → default (%s)", provider_id, default_tz)
+        return [*all_fx, JSONResponse({"message": f"Provider now uses the practice default ({default_tz})"})]
 
     def _form_set_provider_tz_bulk(self, body: dict) -> list[Response | Effect]:
         denied = _check_write_access(self.request, self.secrets)

@@ -325,6 +325,18 @@ class TestTTLRefresh:
         result = refresh_all_ttls()
         assert result == 1
 
+    def test_refresh_renews_the_seen_bookable_set(self, patch_cache):
+        """If this record lapsed, the next bookability change would be recorded
+        but never applied, so it is renewed with the other saved settings."""
+        from provider_availability.engine.storage import SCHEDULABLE_SEEN_KEY, set_seen_schedulable_ids
+
+        set_seen_schedulable_ids(["b", "a"])
+        patch_cache.set.reset_mock()
+
+        refresh_all_ttls()
+
+        assert call(SCHEDULABLE_SEEN_KEY, ["a", "b"], timeout_seconds=CACHE_TTL_SECONDS) in patch_cache.set.mock_calls
+
     def test_refresh_cleans_stale_keys(self, patch_cache):
         """If a cached rule has expired (returns None), it should be removed from the index."""
         # Manually set up a stale index entry

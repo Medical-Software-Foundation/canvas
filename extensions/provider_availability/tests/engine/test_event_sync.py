@@ -131,6 +131,14 @@ class TestWeekdayOccurrences:
 
 
 class TestSyncProviderAvailability:
+    @pytest.fixture(autouse=True)
+    def _schedulable_provider(self):
+        """These tests cover rule syncing; the gate is just a precondition."""
+        with patch(
+            f"{MODULE}.get_schedulable_provider_ids", return_value={PROVIDER_ID}
+        ):
+            yield
+
     @patch(f"{MODULE}._build_rule_events")
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.build_delete_effects")
@@ -272,6 +280,85 @@ class TestSyncProviderAvailability:
 # ── build_sync_effects ────────────────────────────────────────────────
 
 
+class TestSyncProviderAvailabilityGate:
+    """The schedulable gate: a de-scheduled provider must not stay bookable."""
+
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_gate_holds_when_caller_omits_the_set(
+        self, mock_ids, mock_delete, mock_get_rules
+    ):
+        """Omitting the argument must still gate, not skip the check."""
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+        mock_ids.return_value = {"a-different-provider"}
+
+        result = sync_provider_availability(PROVIDER_ID)
+
+        assert mock_ids.mock_calls == [call()]
+        assert mock_delete.mock_calls == [call(PROVIDER_ID)]
+        assert mock_get_rules.mock_calls == []
+        assert result == [delete_effect]
+
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_supplied_set_avoids_the_role_lookup(
+        self, mock_ids, mock_delete, mock_get_rules
+    ):
+        """Loop callers pass the set so the lookup runs once, not per provider."""
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+
+        result = sync_provider_availability(
+            PROVIDER_ID, schedulable_ids={"a-different-provider"}
+        )
+
+        assert mock_ids.mock_calls == []
+        assert mock_get_rules.mock_calls == []
+        assert result == [delete_effect]
+
+    @patch(f"{MODULE}._build_rule_events")
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_empty_set_skips_the_gate_instead_of_clearing_everyone(
+        self, mock_ids, mock_delete, mock_get_rules, mock_build_events, sample_rule
+    ):
+        """An empty set is a config mistake, not grounds to clear all providers."""
+        mock_ids.return_value = set()
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+        event_effect = MagicMock()
+        mock_build_events.return_value = [event_effect]
+        mock_get_rules.return_value = [sample_rule]
+
+        result = sync_provider_availability(PROVIDER_ID)
+
+        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert result == [delete_effect, event_effect]
+
+    @patch(f"{MODULE}._build_rule_events")
+    @patch(f"{MODULE}.get_rules_for_provider")
+    @patch(f"{MODULE}.build_delete_effects")
+    @patch(f"{MODULE}.get_schedulable_provider_ids")
+    def test_schedulable_provider_still_syncs(
+        self, mock_ids, mock_delete, mock_get_rules, mock_build_events, sample_rule
+    ):
+        mock_ids.return_value = {PROVIDER_ID}
+        delete_effect = MagicMock()
+        mock_delete.return_value = [delete_effect]
+        event_effect = MagicMock()
+        mock_build_events.return_value = [event_effect]
+        mock_get_rules.return_value = [sample_rule]
+
+        result = sync_provider_availability(PROVIDER_ID)
+
+        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert result == [delete_effect, event_effect]
+
+
 class TestBuildSyncEffects:
     @patch(f"{MODULE}._build_rule_events")
     @patch(f"{MODULE}.build_delete_effects")
@@ -355,10 +442,12 @@ class TestBuildDeleteEffects:
         mock_evt1.id = "evt-uuid-1"
         mock_evt1.ends_at = future
         mock_evt1.recurrence_ends_at = None
+        mock_evt1.recurrence = None
         mock_evt2 = MagicMock()
         mock_evt2.id = "evt-uuid-2"
         mock_evt2.ends_at = future
         mock_evt2.recurrence_ends_at = None
+        mock_evt2.recurrence = None
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt1, mock_evt2]))
@@ -391,10 +480,12 @@ class TestBuildDeleteEffects:
         mock_evt1.id = "evt-1"
         mock_evt1.ends_at = future
         mock_evt1.recurrence_ends_at = None
+        mock_evt1.recurrence = None
         mock_evt2 = MagicMock()
         mock_evt2.id = "evt-2"
         mock_evt2.ends_at = future
         mock_evt2.recurrence_ends_at = None
+        mock_evt2.recurrence = None
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt1, mock_evt2]))
@@ -455,9 +546,67 @@ class TestBuildDeleteEffects:
         mock_evt.id = "evt-past"
         mock_evt.ends_at = past
         mock_evt.recurrence_ends_at = None
+        mock_evt.recurrence = None
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt]))
+
+        with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
+             patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
+             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_staff_objects.get.return_value = mock_staff
+            mock_cal_objects.filter.return_value = [mock_cal]
+            mock_event_objects.filter.return_value = mock_qs
+
+            result = build_delete_effects(PROVIDER_ID)
+
+            assert result == []
+
+    def _delete_setup(self, events):
+        """Staff, one Clinic calendar, and a queryset over the given events."""
+        mock_staff = MagicMock()
+        mock_staff.full_name = "Jane Doe"
+        mock_cal = MagicMock()
+        mock_cal.id = "cal-1"
+        mock_cal.title = "Jane Doe: Clinic"
+        mock_qs = MagicMock()
+        mock_qs.__iter__ = MagicMock(return_value=iter(events))
+        return mock_staff, mock_cal, mock_qs
+
+    def test_open_ended_series_with_a_past_first_occurrence_is_deleted(self):
+        """PLUGIN-478. ends_at on a recurring event is the end of the FIRST
+        occurrence, so an open-ended series that began long ago must not be
+        mistaken for finished. Skipping it left the create step to add a second
+        copy of the same availability."""
+        past = datetime.now(UTC) - dt.timedelta(days=90)
+        evt = MagicMock()
+        evt.id = "evt-open-ended"
+        evt.ends_at = past
+        evt.recurrence_ends_at = None
+        evt.recurrence = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
+        mock_staff, mock_cal, mock_qs = self._delete_setup([evt])
+
+        with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
+             patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
+             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_staff_objects.get.return_value = mock_staff
+            mock_cal_objects.filter.return_value = [mock_cal]
+            mock_event_objects.filter.return_value = mock_qs
+
+            result = build_delete_effects(PROVIDER_ID)
+
+            assert len(result) == 1
+
+    def test_bounded_series_that_has_fully_ended_is_preserved(self):
+        """A recurring series whose recurrence_ends_at has passed really is
+        finished, so it stays for historical reporting."""
+        past = datetime.now(UTC) - dt.timedelta(days=90)
+        evt = MagicMock()
+        evt.id = "evt-bounded-past"
+        evt.ends_at = past
+        evt.recurrence_ends_at = datetime.now(UTC) - dt.timedelta(days=30)
+        evt.recurrence = "FREQ=WEEKLY"
+        mock_staff, mock_cal, mock_qs = self._delete_setup([evt])
 
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
@@ -485,6 +634,7 @@ class TestBuildDeleteEffects:
         mock_evt.id = "evt-recurring"
         mock_evt.ends_at = past_start
         mock_evt.recurrence_ends_at = future_end
+        mock_evt.recurrence = "FREQ=WEEKLY"
 
         mock_qs = MagicMock()
         mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt]))
@@ -742,12 +892,13 @@ class TestBuildRuleEvents:
         # = 2 event effects
         assert len(result) == 2
 
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}._get_calendar_id")
     def test_no_locations_uses_all_active(
-        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve
     ):
         from zoneinfo import ZoneInfo
 
@@ -778,10 +929,12 @@ class TestBuildRuleEvents:
 
         # 1 day x 2 locations = 2 event effects
         assert len(result) == 2
+        # provider_name resolved once and passed into each per-location call
         assert mock_get_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-1"),
-            call(PROVIDER_ID, "loc-2"),
+            call(PROVIDER_ID, "loc-1", "Dr X"),
+            call(PROVIDER_ID, "loc-2", "Dr X"),
         ]
+        assert mock_resolve.mock_calls == [call(PROVIDER_ID)]
 
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
@@ -1124,12 +1277,13 @@ class TestBuildRuleEvents:
 
 
 class TestBuildBlockEventEffects:
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Dr X")
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
     def test_creates_block_event(
-        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, sample_block
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc, mock_resolve, sample_block
     ):
         from zoneinfo import ZoneInfo
 
@@ -1138,7 +1292,7 @@ class TestBuildBlockEventEffects:
 
         result = build_block_event_effects(sample_block)
 
-        assert mock_get_admin_cal.mock_calls == [call(sample_block.provider_id, None)]
+        assert mock_get_admin_cal.mock_calls == [call(sample_block.provider_id, None, "Dr X")]
         assert len(result) == 1  # 1 event effect (no cal effects)
 
     @patch(f"{MODULE}.provider_tz")

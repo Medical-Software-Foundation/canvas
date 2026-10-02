@@ -35,12 +35,14 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
     <canvas-tab for="panel-availability" active><canvas-tab-label>Availability</canvas-tab-label></canvas-tab>
     <canvas-tab for="panel-editor"><canvas-tab-label>Add / Edit</canvas-tab-label></canvas-tab>
     <canvas-tab for="panel-settings"><canvas-tab-label>Settings</canvas-tab-label></canvas-tab>
-    <canvas-tab for="panel-bulk-import"><canvas-tab-label>Bulk Import</canvas-tab-label></canvas-tab>
 
   <!-- Availability Panel -->
   <canvas-tab-panel id="panel-availability">
     <div class="filter-bar">
       <div id="ms-filter-provider" class="multi-select" style="flex:1;max-width:400px;"></div>
+      <button class="btn" onclick="saveMyView()" title="Remember this selection as the providers you see by default">Save as my view</button>
+      <button class="btn" onclick="showAllProviders()" title="Clear the filter and show every provider">Show all</button>
+      <button class="btn" id="toggle-expired" onclick="toggleExpired()" title="Expired rules and blocks are hidden by default">Show expired</button>
       <button class="btn btn-expand-collapse" onclick="toggleAllCards()">Expand All</button>
     </div>
     <div id="legend-bar-container" class="legend-bar"></div>
@@ -155,11 +157,11 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <div class="field">
                 <label>Start Time <span class="req">*</span></label>
-                <canvas-input type="time" id="single_start_time"></canvas-input>
+                <span id="single_start_time_wrap"></span>
               </div>
               <div class="field">
                 <label>End Time <span class="req">*</span></label>
-                <canvas-input type="time" id="single_end_time"></canvas-input>
+                <span id="single_end_time_wrap"></span>
               </div>
             </div>
           </div>
@@ -337,11 +339,11 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
               </div>
               <div class="field" id="block-start-time-field">
                 <label>Start Time <span class="req">*</span></label>
-                <canvas-input type="time" id="block_start_time"></canvas-input>
+                <span id="block_start_time_wrap"></span>
               </div>
               <div class="field" id="block-end-time-field">
                 <label>End Time <span class="req">*</span></label>
-                <canvas-input type="time" id="block_end_time"></canvas-input>
+                <span id="block_end_time_wrap"></span>
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr auto;align-items:end;margin-top:6px;">
@@ -490,7 +492,7 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="panel-header">
         <div class="panel-header-left">
           <div class="panel-title">Settings</div>
-          <div class="panel-subtitle">Configure access control and provider timezones.</div>
+          <div class="panel-subtitle">Configure access control, schedulable roles, provider timezones, and bulk import.</div>
         </div>
       </div>
       <div class="panel-body">
@@ -506,7 +508,26 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
           </p>
         </div>
 
-        
+        <!-- Schedulable roles -->
+        <div>
+          <div class="section-label">Schedulable Roles</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+            Choose which staff roles can be scheduled. Staff in a selected role get a Clinic calendar
+            and appear in the provider pickers. Includes non-clinical roles, matched by role code.
+          </p>
+          <div class="form-row" style="grid-template-columns:1fr auto;align-items:start;gap:12px;">
+            <div class="field">
+              <label>Roles</label>
+              <div id="ms-schedulable-roles" class="multi-select"></div>
+              <div id="roles-fallback-note" class="roles-fallback-note" style="display:none;">
+                None of the saved roles are held by active staff, so everyone with a Provider role type is bookable.
+              </div>
+            </div>
+            <canvas-button onclick="saveSchedulableRoles()" style="white-space:nowrap;margin-top:22px;">Save Roles</canvas-button>
+          </div>
+        </div>
+
+
         <!-- Bulk assignment -->
         <div>
           <div class="section-label">Set All Providers</div>
@@ -530,69 +551,56 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
         </div>
 
+        <!-- Bulk import: rarely used, so it lives with the other set-once settings -->
+        <div id="settings-bulk-import">
+          <div class="section-label">Bulk Import</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Load availability, blocks, and holds for many staff at once from a spreadsheet.</p>
 
-      </div>
-    </div>
-  </canvas-tab-panel>
-
-  <!-- Bulk Import Panel -->
-  <canvas-tab-panel id="panel-bulk-import">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-header-left">
-          <div class="panel-title">Bulk Import</div>
-          <div class="panel-subtitle">Upload a CSV to load availability, blocks, and holds for many staff at once.</div>
-        </div>
-      </div>
-      <div class="panel-body">
-
-        <!-- Step 1: upload -->
-        <div id="bulk-step-upload">
-          <div class="section-label">CSV File</div>
-          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
-            One row per time window; rows for the same staff key and settings merge into one rule.
-            Staff are keyed by <strong>staff_key</strong> (Canvas Staff UUID).
-            <a href="#" onclick="bulkDownloadTemplate();return false;">Download template</a>
-          </p>
-          <input type="file" id="bulk-file" accept=".csv" onchange="bulkFileSelect(event)">
-          <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
-          <div style="margin-top:16px;">
-            <button type="button" id="bulk-validate-btn" class="btn" disabled onclick="bulkUploadValidate()"
-              style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Upload &amp; Validate</button>
+          <!-- Step 1: upload -->
+          <div id="bulk-step-upload">
+            <input type="file" id="bulk-file" accept=".csv" onchange="bulkFileSelect(event)" style="display:none;">
+            <div class="bulk-actions">
+              <button type="button" class="bulk-btn" onclick="document.getElementById('bulk-file').click()">Choose CSV file</button>
+              <span id="bulk-file-name" class="bulk-file-name">No file chosen</span>
+              <button type="button" id="bulk-validate-btn" class="bulk-btn bulk-btn-primary" disabled onclick="bulkUploadValidate()">Upload &amp; Validate</button>
+            </div>
+            <p class="bulk-hint">One row per time window. Each row names the staff member by their Canvas staff key. <a href="#" class="bulk-link" onclick="bulkDownloadTemplate();return false;">Download template</a></p>
+            <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
           </div>
-        </div>
 
-        <!-- Step 2: preview -->
-        <div id="bulk-step-preview" style="display:none;">
-          <div id="bulk-summary" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;"></div>
-          <div id="bulk-error-section" style="display:none;">
-            <div class="section-label">Rows with errors</div>
-            <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
-              <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <thead><tr>
-                  <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);">Row</th>
-                  <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);">Errors</th>
-                </tr></thead>
-                <tbody id="bulk-error-body"></tbody>
-              </table>
+          <!-- Step 2: preview -->
+          <div id="bulk-step-preview" style="display:none;">
+            <div id="bulk-summary" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;"></div>
+            <div id="bulk-error-section" style="display:none;">
+              <div class="section-label">Rows with errors</div>
+              <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                  <thead><tr>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);">Row</th>
+                    <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);">Errors</th>
+                  </tr></thead>
+                  <tbody id="bulk-error-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <p style="font-size:13px;color:var(--text-muted);margin-top:16px;">Only valid records will be loaded. Rows with errors are skipped.</p>
+            <div style="display:flex;gap:12px;margin-top:16px;">
+              <button type="button" class="btn" onclick="bulkReset()"
+                style="background:var(--surface-2,#e8e8e8);color:var(--text);padding:10px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer;">Back</button>
+              <button type="button" id="bulk-commit-btn" class="btn" onclick="bulkConfirmCommit()"
+                style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Confirm &amp; Load</button>
             </div>
           </div>
-          <p style="font-size:13px;color:var(--text-muted);margin-top:16px;">Only valid records will be loaded. Rows with errors are skipped.</p>
-          <div style="display:flex;gap:12px;margin-top:16px;">
+
+          <!-- Step 3: results -->
+          <div id="bulk-step-results" style="display:none;">
+            <div class="section-label">Import complete</div>
+            <div id="bulk-results-msg" style="font-size:14px;margin:8px 0 16px;"></div>
             <button type="button" class="btn" onclick="bulkReset()"
-              style="background:var(--surface-2,#e8e8e8);color:var(--text);padding:10px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer;">Back</button>
-            <button type="button" id="bulk-commit-btn" class="btn" onclick="bulkConfirmCommit()"
-              style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Confirm &amp; Load</button>
+              style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Upload another file</button>
           </div>
         </div>
 
-        <!-- Step 3: results -->
-        <div id="bulk-step-results" style="display:none;">
-          <div class="section-label">Import complete</div>
-          <div id="bulk-results-msg" style="font-size:14px;margin:8px 0 16px;"></div>
-          <button type="button" class="btn" onclick="bulkReset()"
-            style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Upload another file</button>
-        </div>
 
       </div>
     </div>

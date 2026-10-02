@@ -46,6 +46,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.overlap import check_rule_overlap
 from provider_availability.engine.storage import (
+    get_all_rules,
     get_rules_for_provider,
     save_block,
     save_recurring_block,
@@ -108,12 +109,21 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
             parsed.valid_rows, valid_staff_ids, location_map, visit_type_map
         )
 
+        # Fetch every saved rule once and group by provider, so the per-record
+        # overlap check reuses one read instead of re-scanning the rule index
+        # for each of potentially hundreds of CSV rows.
+        rules_by_provider: dict[str, list[ProviderAvailabilityRule]] = {}
+        for existing in get_all_rules():
+            rules_by_provider.setdefault(existing.provider_id, []).append(existing)
+
         ok_records: list[dict] = []
         overlap_errors: list[dict] = []
         for rec in records:
             if rec["kind"] == "rule":
                 rule = ProviderAvailabilityRule.from_dict(rec)
-                conflict = check_rule_overlap(rule)
+                conflict = check_rule_overlap(
+                    rule, existing_rules=rules_by_provider.get(rule.provider_id, [])
+                )
                 if conflict:
                     overlap_errors.append(
                         {"row_number": min(rec["source_rows"]), "errors": [conflict]}

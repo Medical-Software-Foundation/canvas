@@ -198,6 +198,38 @@ body {
 .pip-hold { background: var(--hold-bg); color: var(--hold); border: 1px solid var(--hold-border); }
 .pip-override { background: var(--override-bg); color: var(--override); border: 1px solid var(--override-border); }
 
+/* Headings that split the Availability tab into the viewer's own row and
+   everyone else. Same uppercase muted treatment as the table headers. */
+.overview-section-title {
+  margin: 24px 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.overview-section-title:first-child { margin-top: 0; }
+
+/* Bulk import controls: template, file picker and upload on one row, with the
+   technical note underneath in small muted text. */
+/* Shown when saved roles match no active staff and the Provider role type is
+   deciding who is bookable instead. */
+.roles-fallback-note { font-size: 12px; color: var(--hold); margin-top: 6px; }
+
+.bulk-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bulk-link { font-size: inherit; color: var(--cyan); text-decoration: none; margin-left: 4px; }
+.bulk-link:hover { text-decoration: underline; }
+.bulk-btn {
+  font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--text-head); border: 1px solid var(--border);
+}
+.bulk-btn:hover:not(:disabled) { border-color: var(--cyan); }
+/* Upload stays quiet until there is a file to upload. */
+.bulk-btn-primary:not(:disabled) { background: var(--cyan); border-color: var(--cyan); color: #fff; }
+.bulk-btn:disabled { color: var(--text-muted); cursor: default; }
+.bulk-file-name { font-size: 13px; color: var(--text-muted); }
+.bulk-hint { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+
 .provider-header-right { display: flex; align-items: center; gap: 8px; }
 .chevron { width: 18px; height: 18px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; margin-left: 4px; }
 .provider-card.collapsed .chevron { transform: rotate(-90deg); }
@@ -426,6 +458,18 @@ body {
 .time-input:focus { border-color: var(--teal-deep); box-shadow: 0 0 0 2px rgba(33,133,208,0.2); }
 .time-sep { color: var(--text-muted); font-size: 13px; font-weight: 600; }
 
+/* Time field (typed) */
+.time-combo { display: block; width: 100%; }
+.day-time-inputs .time-combo { flex: 1; }
+.time-combo-input {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 10px; border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-family: var(--font-family, lato, sans-serif); font-size: 14px; color: var(--text-body);
+  outline: none; transition: border-color 0.15s;
+}
+.time-combo-input:focus { border-color: var(--teal-deep); box-shadow: 0 0 0 2px rgba(33,133,208,0.2); }
+
 .remove-time {
   background: none; border: none; cursor: pointer; color: var(--text-muted);
   padding: 5px; border-radius: 5px; display: flex; align-items: center;
@@ -433,8 +477,14 @@ body {
 }
 .remove-time:hover { color: var(--block); background: var(--block-bg); }
 
+/* Confirmation modal */
+#confirm-message {
+  margin: 0; padding: 8px 2px 20px;
+  font-size: 14px; line-height: 1.55; color: var(--text-body);
+}
+
 /* Settings grid */
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .setting-item {
   background: var(--surface-alt); border: 1.5px solid var(--border);
   border-radius: var(--radius-sm); padding: 14px 16px;

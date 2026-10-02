@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from http import HTTPStatus
-from unittest.mock import DEFAULT, MagicMock, patch
+from unittest.mock import DEFAULT, MagicMock, call, patch
 
 from provider_availability.api.csv_import_api import CSVImportAPI
+from provider_availability.engine.models import ProviderAvailabilityRule
 
 CSV_MODULE = "provider_availability.api.csv_import_api"
 
@@ -52,6 +53,7 @@ def _patch_lookups():
         get_active_staff_ids=MagicMock(return_value=STAFF_IDS),
         get_active_locations=MagicMock(return_value=LOCATIONS),
         get_scheduleable_visit_types=MagicMock(return_value=VISIT_TYPES),
+        get_all_rules=MagicMock(return_value=[]),
     )
 
 
@@ -136,6 +138,24 @@ def test_validate_flags_overlap_and_excludes_record():
     assert body["record_count"] == 0
     assert body["error_count"] == 1
     assert "Overlapping" in body["errors"][0]["errors"][0]
+
+
+def test_validate_fetches_rules_once_and_passes_them_to_overlap():
+    """Overlap check reuses one get_all_rules() read instead of a per-row scan."""
+    handler = _handler()
+    saved = ProviderAvailabilityRule(id="r-saved", provider_id="1234567890")
+    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+    _set_upload(handler, csv)
+    with _patch_lookups(), \
+         patch(CSV_MODULE + ".get_all_rules", return_value=[saved]) as mock_all_rules, \
+         patch(CSV_MODULE + ".check_rule_overlap", return_value=None) as mock_overlap:
+        handler.validate_upload()
+
+    # Rules index read exactly once for the whole upload.
+    assert mock_all_rules.mock_calls == [call()]
+    # The overlap check received the provider's pre-fetched rules (no self-fetch).
+    assert mock_overlap.call_count == 1
+    assert mock_overlap.call_args_list[0].kwargs["existing_rules"] == [saved]
 
 
 def test_validate_counts_blocks_and_rblocks():
