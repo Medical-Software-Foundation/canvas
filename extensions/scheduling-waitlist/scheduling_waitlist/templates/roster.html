@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Scheduling Waitlist</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ asset_base }}/roster.css?v={{ cache_bust }}" />
+</head>
+<body>
+  <div id="wl-app">
+    <header class="wl-header">
+      <div class="wl-header-title">
+        <h1>Scheduling Waitlist</h1>
+        <p class="wl-subtitle">Patients waiting to be scheduled, most urgent and longest waiting first</p>
+      </div>
+      <div class="wl-header-actions">
+        <button type="button" id="wl-add" class="wl-btn wl-btn-primary">Add to waitlist</button>
+        {% comment %}
+          Hidden until the host modal hands over its message port, because that
+          port is the only way to close the modal. A button that cannot do what it
+          says is worse than no button, and the roster is also reachable outside a
+          modal, where there is nothing to close.
+        {% endcomment %}
+        <button type="button" id="wl-close" class="wl-btn wl-btn-quiet" hidden>Close</button>
+      </div>
+    </header>
+
+    <form class="wl-filters" id="wl-filters" role="search" aria-label="Filter the waitlist">
+      <div class="wl-field wl-field-search">
+        <label for="wl-q">Search</label>
+        <input type="search" id="wl-q" name="q" placeholder="Patient name" autocomplete="off" />
+      </div>
+      <div class="wl-field">
+        <label for="wl-status">Status</label>
+        <select id="wl-status" name="status"></select>
+      </div>
+      <div class="wl-field">
+        <label for="wl-appointment-type">Service</label>
+        <select id="wl-appointment-type" name="appointment_type_id"></select>
+      </div>
+      <div class="wl-field">
+        <label for="wl-provider">Provider</label>
+        <select id="wl-provider" name="provider_id"></select>
+      </div>
+      <div class="wl-field">
+        <label for="wl-location">Location</label>
+        <select id="wl-location" name="location_id"></select>
+      </div>
+      <div class="wl-field">
+        <label for="wl-priority">Priority</label>
+        <select id="wl-priority" name="priority"></select>
+      </div>
+      <div class="wl-field wl-field-actions">
+        <button type="button" id="wl-reset" class="wl-btn wl-btn-quiet">Reset</button>
+      </div>
+    </form>
+
+    <p class="wl-status" id="wl-status-line" aria-live="polite">Loading the waitlist&hellip;</p>
+
+    <div class="wl-table-wrap">
+      <table class="wl-table">
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Service</th>
+            <th scope="col">Provider</th>
+            <th scope="col">Location</th>
+            <th scope="col">Priority</th>
+            <th scope="col">Prefers</th>
+            {% comment %}
+              Next to Waiting on purpose: "waiting 40 days" and "seen last week"
+              are the two halves of one question, and a reader comparing them
+              should not have to cross the table to do it.
+            {% endcomment %}
+            <th scope="col">Next appointment</th>
+            <th scope="col">Waiting</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="wl-visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="wl-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="wl-pager" id="wl-pager" hidden>
+      <button type="button" id="wl-prev" class="wl-btn wl-btn-quiet">Previous</button>
+      <span id="wl-range"></span>
+      <button type="button" id="wl-next" class="wl-btn wl-btn-quiet">Next</button>
+    </div>
+  </div>
+
+  <dialog id="wl-edit-dialog" class="wl-dialog" aria-labelledby="wl-edit-title"></dialog>
+  <dialog id="wl-add-dialog" class="wl-dialog" aria-labelledby="wl-add-title"></dialog>
+  {% comment %}
+    Removal is confirmed in here rather than with window.confirm. The roster is
+    embedded in a host modal, so a native dialog is drawn by the browser at the
+    top of the window, detached from the page that asked the question.
+  {% endcomment %}
+  <dialog id="wl-confirm-dialog" class="wl-dialog wl-dialog-narrow" aria-labelledby="wl-confirm-title"></dialog>
+
+  <div id="wl-toast" class="wl-toast" role="status" aria-live="polite" hidden></div>
+
+  {% comment %}
+    |safe is required, not an oversight. Django's template engine autoescapes by
+    default, which turns the JSON string delimiters into &quot; and makes
+    JSON.parse throw -- the page then starts with no apiBase and refuses to run.
+    services/html.py:safe_json has already escaped <, > and & to \u00xx
+    precisely so this value can be emitted unescaped.
+
+    Written as a comment tag rather than a hash comment: the hash form is
+    single-line only, so a multi-line one leaks its remaining lines into the
+    page as visible text. The tag form also does not nest, which is why this
+    note names the tags in prose instead of quoting them.
+  {% endcomment %}
+  <script id="wl-config" type="application/json">{{ config_json|safe }}</script>
+  <script src="{{ asset_base }}/roster.js?v={{ cache_bust }}" defer></script>
+</body>
+</html>
