@@ -2,7 +2,7 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.1.11",
     "name": "failed_fax_dashboard",
-    "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Shows each row's attempts and task, lets staff resend a note fax, reassign or comment on the row's task, or dismiss it, and creates a task for each new failure.",
+    "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Creates a task for each new failure, assigned to the sender or, for a provider, to a chosen care team role. Shows each row's attempts and task, lets staff resend a note fax, reassign or comment on the task, and dismiss rows one at a time or in bulk (closing their tasks), with restore for 30 days.",
     "components": {
         "applications": [
             {
@@ -16,7 +16,7 @@
         "handlers": [
             {
                 "class": "failed_fax_dashboard.api.dashboard_api:FailedFaxDashboardAPI",
-                "description": "Serves the dashboard page and its data, resend, task reassign and comment, saved settings, and dismiss endpoints to logged-in staff.",
+                "description": "Serves the dashboard page and its data, resend, task reassign and comment, saved settings, and dismiss and restore endpoints to logged-in staff.",
                 "data_access": {
                     "event": "",
                     "read": [
@@ -39,14 +39,17 @@
                         "Team",
                         "Task",
                         "TaskComment",
-                        "ServiceProvider"
+                        "ServiceProvider",
+                        "StaffRole",
+                        "CareTeamMembership",
+                        "CareTeamRole"
                     ],
                     "write": []
                 }
             },
             {
                 "class": "failed_fax_dashboard.handlers.fax_alert_cron:FaxAlertCron",
-                "description": "Every 5 minutes, creates a task for each new failed fax, moves it to each new sender, and closes it once a later attempt is delivered.",
+                "description": "Every 5 minutes, creates a task for each new failed fax (for a provider's fax, assigned to a chosen care team role), moves it to each new sender, and closes it once a later attempt is delivered.",
                 "data_access": {
                     "event": "",
                     "read": [
@@ -69,7 +72,10 @@
                         "Team",
                         "Task",
                         "TaskComment",
-                        "ServiceProvider"
+                        "ServiceProvider",
+                        "StaffRole",
+                        "CareTeamMembership",
+                        "CareTeamRole"
                     ],
                     "write": []
                 }
@@ -108,7 +114,7 @@
     },
     "tags": {},
     "references": [],
-    "license": "MIT",
+    "license": "",
     "diagram": false,
     "readme": "README.md"
 }

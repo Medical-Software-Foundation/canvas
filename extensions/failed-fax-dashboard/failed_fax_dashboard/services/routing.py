@@ -1,7 +1,7 @@
 """Who gets a failed fax's task when a provider sent it.
 
-A provider's failed fax goes to the patient's care team member in a named role (Brigade:
-"Care Navigator - Primary"), so the provider isn't the one chasing it. With no one in that
+A provider's failed fax goes to the patient's care team member in a named role (for
+example "Care Coordinator"), so the provider isn't the one chasing it. With no one in that
 role, or when the sender isn't a provider, the task goes to the sender as usual. Both
 settings must be set for any rerouting.
 """
