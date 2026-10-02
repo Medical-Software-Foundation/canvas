@@ -149,7 +149,7 @@
     return span;
   }
   function taskWho(row) {
-    if (!row.task) return el("span", { class: "muted", text: "No task" });
+    if (!row.task) return el("span", { class: "muted", text: row.task_pending ? "Being made" : "No task" });
     return el("span", { class: "alerted" }, [nameNode(row.task.assignee.name, row.task.assignee.kind === "team")]);
   }
   function taskLine(row, cls) {
@@ -442,7 +442,7 @@
     var cellKids = [];
     if (row.attempts) { cellKids.push(el("h4", { class: "section-title", text: "Fax attempts" })); cellKids.push(attemptList(row)); }
     cellKids.push(el("h4", { class: "section-title", text: "Task" }));
-    cellKids.push(row.task ? taskBox(row) : el("p", { class: "no-task", text: "No task was made for this fax." }));
+    cellKids.push(row.task ? taskBox(row) : el("p", { class: "no-task", text: row.task_pending ? "The task for this fax is being made and will appear within 5 minutes." : "No task was made for this fax." }));
     return el("tr", { class: "history-row", id: "history-" + domId(row) }, [el("td", { colspan: String(cols) }, cellKids)]);
   }
   function attemptList(row) {

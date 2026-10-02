@@ -3,7 +3,14 @@
 from datetime import datetime
 from typing import Any, Callable
 
-from canvas_sdk.v1.data import ServiceProvider, Staff
+from canvas_sdk.v1.data import ServiceProvider, Staff, Team
+
+from failed_fax_dashboard.models import AlertStart
+from failed_fax_dashboard.services.alerts import (
+    FALLBACK_TEAM_SETTING,
+    RECEIVED_TEAM_SETTING,
+    find_team,
+)
 
 from failed_fax_dashboard.services.contacts import DIRECTORY_SOURCE, contact_from_provider
 from failed_fax_dashboard.services.documents import document_path, match_documents
@@ -125,8 +132,47 @@ def _task_json(
     }
 
 
+# Who a row's task will go to while the scheduled job hasn't made it yet: (kind, id).
+Owner = tuple[str, str]
+
+
+def expected_owner(
+    row: SentRow | ReceivedRow,
+    start: datetime | None,
+    fallback: Team | None,
+    received_team: Team | None,
+) -> Owner | None:
+    """Where the scheduled job will put this row's task on its next run, or None.
+
+    None when the row already has a task, when its failure was recorded before the job's
+    first run (those never get one), or when no one would get the task.
+    """
+    if row.task is not None or start is None:
+        return None
+    if isinstance(row, SentRow):
+        if row.event.modified <= start:
+            return None
+        attempt = next((item for item in row.attempts if item.event_id == str(row.event.id)), row.latest)
+        if attempt.sender.is_person:
+            return (ASSIGNEE_STAFF, attempt.sender.staff_id)
+        return (ASSIGNEE_TEAM, str(fallback.id)) if fallback is not None else None
+    if row.fax.modified <= start or received_team is None:
+        return None
+    return (ASSIGNEE_TEAM, str(received_team.id))
+
+
+def row_is_mine(row: SentRow | ReceivedRow, owner: Owner | None, staff_id: str, teams: set[str]) -> bool:
+    """Whether the row's task is, or is about to be, assigned to the viewer or their team."""
+    if row.task is not None:
+        return is_mine(row.task, staff_id, teams)
+    if owner is None:
+        return False
+    kind, owner_id = owner
+    return owner_id == staff_id if kind == ASSIGNEE_STAFF else owner_id in teams
+
+
 def _sent_json(
-    row: SentRow, mine: bool, comments: dict[str, list[dict[str, Any]]]
+    row: SentRow, mine: bool, comments: dict[str, list[dict[str, Any]]], task_pending: bool = False
 ) -> dict[str, Any]:
     latest = row.latest
     is_note = row.spec.type_key == "note"
@@ -161,11 +207,12 @@ def _sent_json(
         "directory_name": directory_name(row),
         "mine": mine,
         "task": _task_json(task, comments.get(task.id, [])) if task is not None else None,
+        "task_pending": task_pending,
     }
 
 
 def _received_json(
-    row: ReceivedRow, mine: bool, comments: dict[str, list[dict[str, Any]]]
+    row: ReceivedRow, mine: bool, comments: dict[str, list[dict[str, Any]]], task_pending: bool = False
 ) -> dict[str, Any]:
     task = row.task
     return {
@@ -181,6 +228,7 @@ def _received_json(
         "link_url": row.link_url,
         "mine": mine,
         "task": _task_json(task, comments.get(task.id, [])) if task is not None else None,
+        "task_pending": task_pending,
     }
 
 
@@ -227,8 +275,13 @@ def dashboard_page(
     params: Any,
     staff_id: str,
     now: datetime | None = None,
+    secrets: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Everything the dashboard needs for one tab at the requested filter, sort, and page."""
+    """Everything the dashboard needs for one tab at the requested filter, sort, and page.
+
+    A failure the scheduled job hasn't reached yet is sectioned under whoever its task will
+    go to, so it doesn't move between sections a few minutes later.
+    """
     cutoff = cutoff_for(now)
     saved_views = load_views(staff_id)
     view = view_from_params(tab, params, saved_views[tab])
@@ -238,14 +291,21 @@ def dashboard_page(
     attach_tasks(sent, received)
     me = Staff.objects.filter(id=staff_id).first()
     teams = team_ids_of(me)
+    start_row = AlertStart.objects.first()
+    start = start_row.started_at if start_row is not None else None
+    settings = secrets or {}
+    fallback = find_team(settings, FALLBACK_TEAM_SETTING, quiet=True)
+    received_team = find_team(settings, RECEIVED_TEAM_SETTING, quiet=True)
 
     rows: list[SentRow] | list[ReceivedRow] = sent if tab == "sent" else received
     sorts: dict[str, Any] = SENT_SORTS if tab == "sent" else RECEIVED_SORTS
     shown = [row for row in rows if matches(row, view, staff_id)]
     shown.sort(key=sorts[view["sort"]["key"]], reverse=view["sort"]["dir"] == -1)
 
-    mine_rows = [row for row in shown if is_mine(row.task, staff_id, teams)]
-    rest_rows = [row for row in shown if not is_mine(row.task, staff_id, teams)]
+    owners = {row.key: expected_owner(row, start, fallback, received_team) for row in shown}
+    mine_rows = [row for row in shown if row_is_mine(row, owners[row.key], staff_id, teams)]
+    mine_keys = {row.key for row in mine_rows}
+    rest_rows = [row for row in shown if row.key not in mine_keys]
     ordered = [] if view["collapsed"]["mine"] else list(mine_rows)
     if not view["collapsed"]["rest"]:
         ordered.extend(rest_rows)
@@ -259,15 +319,15 @@ def dashboard_page(
         _link_documents(page_rows)  # type: ignore[arg-type]
     task_ids = [row.task.id for row in page_rows if row.task is not None]
     comments = task_comments(task_ids, staff_id)
-    mine_keys = {row.key for row in mine_rows}
 
     payload_rows = []
     for row in page_rows:
         is_row_mine = row.key in mine_keys
+        pending = owners[row.key] is not None
         if isinstance(row, SentRow):
-            payload_rows.append(_sent_json(row, is_row_mine, comments))
+            payload_rows.append(_sent_json(row, is_row_mine, comments, pending))
         else:
-            payload_rows.append(_received_json(row, is_row_mine, comments))
+            payload_rows.append(_received_json(row, is_row_mine, comments, pending))
 
     return {
         "tab": tab,

@@ -50,14 +50,19 @@ def _plural(count: int | None, word: str) -> str:
     return f"{amount} {word}" + ("" if amount == 1 else "s")
 
 
-def find_team(secrets: dict[str, Any], setting: str) -> Team | None:
-    """The team named in a setting, matched exactly. Empty or unknown names give None."""
+def find_team(secrets: dict[str, Any], setting: str, *, quiet: bool = False) -> Team | None:
+    """The team named in a setting, matched exactly. Empty or unknown names give None.
+
+    The scheduled job warns about a name that matches no team or several; page loads pass
+    ``quiet`` so the warning isn't repeated on every view.
+    """
     name = (secrets.get(setting) or "").strip()
     if not name:
         return None
     teams = list(Team.objects.filter(name=name)[:2])
     if len(teams) != 1:
-        log.warning(f"{setting} is '{name}', which matches {len(teams)} teams. No task made.")
+        if not quiet:
+            log.warning(f"{setting} is '{name}', which matches {len(teams)} teams. No task made.")
         return None
     return teams[0]
 

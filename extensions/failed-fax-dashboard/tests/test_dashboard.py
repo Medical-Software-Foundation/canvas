@@ -448,3 +448,82 @@ def test_a_task_with_no_assignee_has_no_owner_and_no_patient_link() -> None:
     assert (info.assignee_kind, info.assignee_name, info.assignee_sort, info.url) == ("", "", "", None)
     assert is_mine(info, "me", set()) is False
     assert is_mine(None, "me", set()) is False
+
+
+def job_started(hours_ago: float = 1) -> None:
+    from datetime import datetime, timezone
+
+    from failed_fax_dashboard.models import AlertStart
+
+    AlertStart.objects.all().delete()
+    AlertStart.objects.create(started_at=datetime.now(timezone.utc) - timedelta(hours=hours_ago))
+
+
+def test_a_failure_waiting_for_its_task_is_under_the_sender_right_away() -> None:
+    job_started()
+    me = make_staff("Dana", "Whitfield")
+    other = make_staff("Marcus", "Bell")
+    mine = make_event("note", originator=me.user, number="+15555550101")
+    theirs = make_event("note", originator=other.user, number="+15555550102")
+
+    result = page(staff_id=me.id)
+
+    assert result["counts"] == {"mine": 1, "rest": 1}
+    rows = {row["source_id"]: row for row in result["rows"]}
+    assert rows[str(mine.id)]["mine"] is True
+    assert rows[str(mine.id)]["task_pending"] is True
+    assert rows[str(theirs.id)]["mine"] is False
+    assert rows[str(theirs.id)]["task_pending"] is True
+
+
+def test_a_failure_from_before_the_job_started_stays_under_everything_else() -> None:
+    me = make_staff("Dana", "Whitfield")
+    event = make_event("note", originator=me.user)
+    type(event).objects.filter(pk=event.pk).update(modified=event.modified - timedelta(hours=3))
+    job_started(hours_ago=1)
+
+    result = page(staff_id=me.id)
+
+    assert result["counts"] == {"mine": 0, "rest": 1}
+    assert result["rows"][0]["task_pending"] is False
+
+
+def test_once_the_task_exists_the_row_follows_its_assignee_not_the_sender() -> None:
+    job_started()
+    me = make_staff("Dana", "Whitfield")
+    other = make_staff("Marcus", "Bell")
+    event_with_task(assignee=other, originator=me.user)
+
+    result = page(staff_id=me.id)
+
+    assert result["counts"] == {"mine": 0, "rest": 1}
+    assert result["rows"][0]["task_pending"] is False
+
+
+def test_a_waiting_failure_with_no_staff_sender_goes_to_the_fallback_team() -> None:
+    job_started()
+    me = make_staff("Dana", "Whitfield")
+    front_desk = TeamFactory.create(name="Front Desk")
+    front_desk.members.add(me)
+    make_event("note", originator=make_bot().user)
+
+    with_team = dashboard_page("sent", {}, me.id, secrets={"FAILED_FAX_FALLBACK_TEAM": "Front Desk"})
+    without_team = dashboard_page("sent", {}, me.id, secrets={})
+
+    assert with_team["counts"] == {"mine": 1, "rest": 0}
+    assert with_team["rows"][0]["task_pending"] is True
+    assert without_team["counts"] == {"mine": 0, "rest": 1}
+    assert without_team["rows"][0]["task_pending"] is False
+
+
+def test_a_waiting_received_fax_goes_to_the_received_team() -> None:
+    job_started()
+    me = make_staff("Dana", "Whitfield")
+    records = TeamFactory.create(name="Medical Records")
+    records.members.add(me)
+    FaxFactory.create(direction=FaxDirection.INBOUND, success=False, from_fax_number="+15555550111")
+
+    result = dashboard_page("received", {}, me.id, secrets={"RECEIVED_FAX_TASK_TEAM": "Medical Records"})
+
+    assert result["counts"] == {"mine": 1, "rest": 0}
+    assert result["rows"][0]["task_pending"] is True

@@ -108,7 +108,9 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             return self._forbidden()
         params = self.request.query_params
         tab = params.get("tab")
-        data = dashboard_page(tab if tab in TABS else "sent", params, self._staff_id())
+        data = dashboard_page(
+            tab if tab in TABS else "sent", params, self._staff_id(), secrets=dict(self.secrets)
+        )
         return [JSONResponse(data)]
 
     @api.get("/people")
