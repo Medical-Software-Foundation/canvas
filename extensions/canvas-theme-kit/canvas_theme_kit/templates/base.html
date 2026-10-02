@@ -1,0 +1,105 @@
+{% comment %} ==========================================================================
+   REFERENCE COPY — this template is never rendered by canvas_theme_kit.
+
+   Canvas resolves templates against a hard plugin-directory boundary
+   (`Engine(dirs=[plugin_dir])`, which raises PermissionError on any path that
+   escapes it), so a consuming plugin cannot `{% extends %}` this file across
+   the boundary. COPY it into the consuming plugin as its own
+   templates/base.html.
+
+   ---------------------------------------------------------------------------
+   Why there are two style layers, not one
+   ---------------------------------------------------------------------------
+
+   1. INLINE TOKEN BLOCK (first paint, zero network requests)
+      `ctk_tokens_css` is rendered server-side by the consuming handler, which
+      reads the active revision's tokens out of the SHARED custom-data
+      namespace. Because it is inline, the very first paint already has the
+      right colors and spacing — there is no moment where the page is styled
+      by the browser defaults while a stylesheet is in flight.
+
+   2. LINKED STYLESHEET (everything else, cached, never blocking)
+      `core.css` carries the full authored CSS. It is served with
+      `max-age=300, stale-while-revalidate=86400`, so the browser paints from
+      its cached copy and revalidates in the background. Nothing in that policy
+      forbids serving stale, which is what keeps the round trip off the render
+      path.
+
+   Order matters: the inline block must come BEFORE the link, so the linked
+   stylesheet can override tokens rather than the other way round.
+
+   ---------------------------------------------------------------------------
+   What the consuming handler must do
+   ---------------------------------------------------------------------------
+
+   Declare the shared namespace in the consumer's CANVAS_MANIFEST.json:
+
+       "custom_data": {
+           "namespace": "canvas_theme_kit__themes",
+           "access": "read"
+       },
+       "variables": [
+           { "name": "namespace_read_access_key", "sensitive": true }
+       ]
+
+   Then render with the token block in context:
+
+       from canvas_sdk.caching.plugins import get_cache
+       from canvas_sdk.templates import render_to_string
+
+       def _tokens_css(slug: str = "default") -> str:
+           # Cached so a page render costs no database round trip. Keep the TTL
+           # short: it bounds how long a published change takes to reach a
+           # server-rendered page.
+           cache = get_cache()
+           key = f"ctk:tokens:{slug}"
+           cached = cache.get(key)
+           if cached is not None:
+               return str(cached)
+           # ThemeRevision is readable through the shared namespace.
+           revision = (
+               ThemeRevision.objects.filter(theme__slug=slug, is_active=True)
+               .order_by("-revision")
+               .first()
+           )
+           rendered = render_tokens_css(revision.tokens or {}) if revision else ":root{}"
+           cache.set(key, rendered, timeout_seconds=60)
+           return rendered
+
+       html = render_to_string("templates/base.html", {"ctk_tokens_css": _tokens_css()})
+
+   Hold only `namespace_read_access_key` in a consumer. The read-write key
+   belongs to canvas_theme_kit alone — a consumer never needs to publish.
+   ========================================================================== {% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}{% endblock %}</title>
+
+    {# Layer 1: correct tokens on first paint, no request. #}
+    <style>{{ ctk_tokens_css|safe }}</style>
+
+    {% comment %} Layer 2: the full stylesheet. Same-origin, so the consumer needs no
+       url_permissions entry. An external host WOULD require one. {% endcomment %}
+    <link
+      rel="stylesheet"
+      href="/plugin-io/api/canvas_theme_kit/assets/default/core.css"
+    />
+
+    {% block head %}{% endblock %}
+  </head>
+
+  <body class="ctk-page">
+    <main>{% block content %}{% endblock %}</main>
+
+    <script src="/plugin-io/api/canvas_theme_kit/assets/core.js"></script>
+
+    {% comment %} Note Applications and modals render in an iframe that does not auto-size.
+       Uncomment for those surfaces. {% endcomment %}
+    {# <script>CanvasThemeKit.autoResize();</script> #}
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>
