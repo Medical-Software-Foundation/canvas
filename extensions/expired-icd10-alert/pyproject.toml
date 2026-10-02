@@ -1,0 +1,41 @@
+# Local development and testing only — Canvas plugin packaging uses CANVAS_MANIFEST.json.
+
+[project]
+name = "expired-icd10-alert"
+version = "0.0.0"
+description = "Annotates patient conditions with an EXPIRED tag when the ICD-10 code has been deleted from the current CMS code set."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Canvas Medical", email = "engineering@canvasmedical.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["expired_icd10_alert"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*", ".venv/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
