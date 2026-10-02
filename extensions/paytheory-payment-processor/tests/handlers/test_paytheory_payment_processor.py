@@ -105,6 +105,15 @@ class TestCardFieldsHtml:
         assert 'postMessage' in html
         assert 'pt-submit' in html
 
+    def test_includes_payor_id_in_iframe_url(self, processor):
+        html = processor._card_fields_html(payor_id="payor-xyz")
+        assert 'src="/plugin-io/api/paytheory_payment_processor/card-form/?payor_id=payor-xyz"' in html
+
+    def test_no_payor_id_omits_query_param(self, processor):
+        html = processor._card_fields_html(payor_id=None)
+        assert 'src="/plugin-io/api/paytheory_payment_processor/card-form/"' in html
+        assert 'payor_id' not in html
+
 
 class TestPaymentForm:
     def test_returns_form_with_iframe(self, processor):
@@ -114,6 +123,14 @@ class TestPaymentForm:
         assert 'id="submit"' in result.content
         assert result.intent == "pay"
 
+    def test_includes_payor_id_for_patient(self, processor, mock_patient):
+        processor.api.get_payor_id.return_value = "payor-abc"
+
+        result = processor.payment_form(patient=mock_patient)
+
+        assert 'payor_id=payor-abc' in result.content
+        assert result.intent == "pay"
+
 
 class TestAddCardForm:
     def test_returns_form_with_iframe(self, processor):
@@ -121,6 +138,14 @@ class TestAddCardForm:
 
         assert '/plugin-io/api/paytheory_payment_processor/card-form/' in result.content
         assert 'id="submit"' in result.content
+        assert result.intent == "add_card"
+
+    def test_includes_payor_id_for_patient(self, processor, mock_patient):
+        processor.api.get_payor_id.return_value = "payor-abc"
+
+        result = processor.add_card_form(patient=mock_patient)
+
+        assert 'payor_id=payor-abc' in result.content
         assert result.intent == "add_card"
 
 
