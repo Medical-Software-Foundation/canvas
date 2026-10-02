@@ -1083,12 +1083,17 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
         titles_to_delete = [title]
         if RECURRING_BLOCK_TITLE != title:
             titles_to_delete.append(RECURRING_BLOCK_TITLE)
+        # Titles are shared with one-off blocks and with other recurring blocks
+        # that use the same reason, so scope the match to recurring events that
+        # start inside this block's effective range.
+        scope = _recurring_block_event_scope(block)
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
         if cal_ids:
             for evt in EventModel.objects.filter(
                 calendar__id__in=cal_ids,
                 title__in=titles_to_delete,
                 is_cancelled=False,
+                **scope,
             ):
                 effects.append(EventEffect(event_id=str(evt.id)).delete())
             # Also clean up hold block events
@@ -1114,3 +1119,22 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
     if effects:
         log.info("build_delete_recurring_block_effects: provider=%s, %d delete effects", provider_id, len(effects))
     return effects
+
+
+def _recurring_block_event_scope(block: RecurringBlock) -> dict:
+    """ORM filter kwargs that limit a title match to this block's own events.
+
+    Recurring block events always carry a recurrence rule and one-off block
+    events never do. Events are anchored at or after effective_start and end
+    by effective_end, so a start outside that range belongs to another block.
+    """
+    scope: dict = {"recurrence__contains": "FREQ="}
+    if not block.effective_start and not block.effective_end:
+        return scope
+    tz = ZoneInfo(block.timezone) if block.timezone else provider_tz(block.provider_id)
+    if block.effective_start:
+        scope["starts_at__gte"] = to_utc(localize_naive(datetime.combine(block.effective_start, dt.time.min), tz))
+    if block.effective_end:
+        day_after = block.effective_end + dt.timedelta(days=1)
+        scope["starts_at__lt"] = to_utc(localize_naive(datetime.combine(day_after, dt.time.min), tz))
+    return scope
