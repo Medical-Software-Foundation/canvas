@@ -3079,8 +3079,23 @@ async function loadSchedulableRoles() {
   });
   msSchedulableRoles.setItems(items);
   msSchedulableRoles.setValue(configured);
+  _showRolesFallbackNote(data.fallback_active);
+}
+
+function _showRolesFallbackNote(active) {
   var note = document.getElementById('roles-fallback-note');
-  if (note) note.style.display = data.fallback_active ? 'block' : 'none';
+  if (note) note.style.display = active ? 'block' : 'none';
+}
+
+// After a save the picker already shows what was saved, so only the note needs
+// refreshing. The picker is left alone: a reload landing after the user's next
+// pick would silently undo it. A failed refresh says nothing, because the save
+// itself succeeded.
+async function _refreshRolesFallbackNote() {
+  try {
+    var data = await apiCall('/roles');
+    if (data && !data.error) _showRolesFallbackNote(data.fallback_active);
+  } catch (e) {}
 }
 
 async function saveSchedulableRoles() {
@@ -3090,8 +3105,8 @@ async function saveSchedulableRoles() {
   if (data && data.error) { showMsg(data.error, 'error'); return; }
   _settingsDirty = false;
   showMsg('Schedulable roles saved', 'success');
-  // Re-read so the "no active staff hold these roles" note matches what was saved.
-  loadSchedulableRoles();
+  // Re-check so the "no active staff hold these roles" note matches what was saved.
+  _refreshRolesFallbackNote();
   // Reflect the change immediately — refresh the provider pickers without a page reload.
   await loadProviders();
 }
