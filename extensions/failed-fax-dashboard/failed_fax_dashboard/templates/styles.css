@@ -54,6 +54,11 @@ tr.leaving td { opacity: 0; transition: opacity 200ms ease; }
 
 td.patient { font-weight: 600; color: var(--ink); }
 td.problem { white-space: normal; min-width: 150px; color: var(--fail); font-weight: 600; }
+/* Long item names and "Task with {team}" wrap, so the row buttons stay on screen. */
+.sent-table td.item { white-space: normal; min-width: 110px; }
+.sent-table td.sender { white-space: normal; min-width: 140px; }
+.sent-table .recipient { white-space: normal; min-width: 150px; }
+.sent-table .recipient .number { white-space: nowrap; }
 .received-table td.problem { color: var(--amber); }
 td.problem.pending { color: var(--blue); }
 td.num, th.num { text-align: center; }

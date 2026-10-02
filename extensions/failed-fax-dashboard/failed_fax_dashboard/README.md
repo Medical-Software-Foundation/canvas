@@ -2,6 +2,10 @@
 
 A dashboard that lists every fax that failed across the practice, with one-click follow-up.
 
+![The Sent tab: failed faxes grouped into rows assigned to you and everything else, with each row's patient, item, problem, recipient, sender, time, pages, and attempts](docs/dashboard.png)
+
+The screenshot uses made-up patients, staff, and contacts.
+
 ## What it does
 
 Adds a "Failed Faxes" app to the app drawer. It opens a dashboard with two tabs from the last 90 days:
