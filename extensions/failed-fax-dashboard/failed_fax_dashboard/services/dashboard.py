@@ -335,9 +335,14 @@ def dashboard_page(
     show_dismissed = params.get("dismissed") == "1"
     view = {**view, "dismissed": show_dismissed}
 
-    sent = collect_sent(cutoff)
-    received = collect_received(cutoff)
-    attach_tasks(sent, received)
+    # One pass builds the live rows (for the tab counts) and, under Show dismissed, the
+    # recently dismissed rows too.
+    recent = recent_dismissals(now) if show_dismissed else None
+    sent_all = collect_sent(cutoff, recent)
+    received_all = collect_received(cutoff, recent)
+    attach_tasks(sent_all, received_all)
+    sent = [row for row in sent_all if row.dismissal is None]
+    received = [row for row in received_all if row.dismissal is None]
     me = Staff.objects.filter(id=staff_id).first()
     teams = team_ids_of(me)
     start_row = AlertStart.objects.first()
@@ -349,13 +354,10 @@ def dashboard_page(
     rows: list[SentRow] | list[ReceivedRow] = sent if tab == "sent" else received
     dismissers: dict[str, str] = {}
     if show_dismissed:
-        recent = recent_dismissals(now)
         if tab == "sent":
-            rows = collect_sent(cutoff, recent)
-            attach_tasks(rows, [])
+            rows = [row for row in sent_all if row.dismissal is not None]
         else:
-            rows = collect_received(cutoff, recent)
-            attach_tasks([], rows)
+            rows = [row for row in received_all if row.dismissal is not None]
         dismisser_ids = {row.dismissal.dismissed_by for row in rows if row.dismissal is not None}
         dismissers = {str(staff.id): person_name(staff) for staff in Staff.objects.filter(id__in=dismisser_ids)}
     sorts: dict[str, Any] = SENT_SORTS if tab == "sent" else RECEIVED_SORTS

@@ -218,6 +218,7 @@ def failed_events(spec: SourceSpec, cutoff: datetime) -> list[Any]:
         )
         .exclude(**spec.item_excludes)
         .select_related("fax", "originator__staff", *spec.select_related)
+        .defer(*spec.defer)
         .order_by("created")
     )
     return list(queryset)
@@ -280,7 +281,8 @@ def collect_sent(
     """Failed sent faxes: one row per item and number, minus cleared and dismissed ones.
 
     A row clears when a later attempt to the same number was delivered. With ``show``,
-    only the dismissed rows in it are returned instead (the Show dismissed view).
+    the dismissed rows in it are returned too, each carrying its dismissal, so the Show
+    dismissed view and the live counts come from one pass.
     """
     dismissed = dismissed_keys(cutoff)
     rows: list[SentRow] = []
@@ -300,9 +302,7 @@ def collect_sent(
             ):
                 continue
             row_id = (spec.type_key, str(event.id))
-            if show is None and row_id in dismissed:
-                continue
-            if show is not None and row_id not in show:
+            if row_id in dismissed and (show is None or row_id not in show):
                 continue
             patient = walk(event, spec.patient_path)
             rows.append(
@@ -331,14 +331,14 @@ def collect_sent(
 def collect_received(
     cutoff: datetime, show: dict[tuple[str, str], FaxDismissal] | None = None
 ) -> list[ReceivedRow]:
-    """Inbound faxes that failed to arrive in full, minus dismissed ones (or only ``show``'s)."""
+    """Inbound faxes that failed to arrive in full, minus dismissed ones (``show``'s are kept)."""
     dismissed = dismissed_keys(cutoff)
     faxes = [
         fax
         for fax in Fax.objects.filter(
             direction=FaxDirection.INBOUND, success=False, created__gte=cutoff
         ).order_by("created")
-        if ((RECEIVED_TYPE, str(fax.id)) in show if show is not None else (RECEIVED_TYPE, str(fax.id)) not in dismissed)
+        if (RECEIVED_TYPE, str(fax.id)) not in dismissed or (show is not None and (RECEIVED_TYPE, str(fax.id)) in show)
     ]
     directory = contact_lists([fax.from_fax_number for fax in faxes])
     rows: list[ReceivedRow] = []

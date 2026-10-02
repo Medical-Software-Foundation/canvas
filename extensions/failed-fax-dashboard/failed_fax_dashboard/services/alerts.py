@@ -166,6 +166,7 @@ def sent_failure_effects(
             )
             .exclude(**spec.item_excludes)
             .select_related("fax", "originator__staff", *spec.select_related)
+            .defer(*spec.defer)
             .order_by("created")
         )
         if not events:

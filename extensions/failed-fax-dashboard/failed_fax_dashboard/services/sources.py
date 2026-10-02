@@ -33,6 +33,9 @@ class SourceSpec:
     patient_path: tuple[str, ...] | None
     note_path: tuple[str, ...] | None
     select_related: tuple[str, ...]
+    # Large text columns on the joined rows that nothing here reads: the note's body and
+    # a letter's text. Deferred so a page load doesn't pull them for every failed fax.
+    defer: tuple[str, ...] = ()
     # Filters/excludes that drop retracted or deleted items.
     item_filters: dict[str, Any] = field(default_factory=dict)
     item_excludes: dict[str, Any] = field(default_factory=dict)
@@ -52,6 +55,11 @@ class SourceSpec:
     anchor_type: str | None = None
 
 
+def _note_body(path: str) -> tuple[str, ...]:
+    """The note's body columns, reached through ``path`` from the action event."""
+    return (f"{path}___body", f"{path}___body_content")
+
+
 def _live_item(prefix: str) -> dict[str, Any]:
     """Filters that drop entered-in-error and deleted orders."""
     return {f"{prefix}__entered_in_error__isnull": True, f"{prefix}__deleted": False}
@@ -66,6 +74,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         patient_path=("note", "patient"),
         note_path=("note",),
         select_related=("note__patient",),
+        defer=_note_body("note"),
         item_excludes={"note__current_state__state": NoteStates.DELETED},
         noun="note",
     ),
@@ -77,6 +86,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         patient_path=("referral", "patient"),
         note_path=("referral", "note"),
         select_related=("referral__patient", "referral__note", "referral__service_provider"),
+        defer=_note_body("referral__note"),
         item_filters=_live_item("referral"),
         link_path=("referral",),
         link_type=AddTask.LinkableObjectType.REFERRAL,
@@ -98,6 +108,7 @@ SOURCES: tuple[SourceSpec, ...] = (
             "imaging_order__note",
             "imaging_order__imaging_center",
         ),
+        defer=_note_body("imaging_order__note"),
         item_filters=_live_item("imaging_order"),
         link_path=("imaging_order",),
         link_type=AddTask.LinkableObjectType.IMAGING,
@@ -115,6 +126,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         patient_path=("lab_order", "patient"),
         note_path=("lab_order", "note"),
         select_related=("lab_order__patient", "lab_order__note"),
+        defer=_note_body("lab_order__note"),
         item_filters=_live_item("lab_order"),
         lab_name_path=("lab_order", "ontology_lab_partner"),
         contact_source="Lab from the order",
@@ -130,6 +142,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         patient_path=("letter", "note", "patient"),
         note_path=("letter", "note"),
         select_related=("letter__note__patient",),
+        defer=("letter__content", *_note_body("letter__note")),
         item_excludes={"letter__note__current_state__state": NoteStates.DELETED},
         noun="letter",
     ),

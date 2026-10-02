@@ -58,6 +58,7 @@ def load_sent_event(source_type: str, source_id: Any) -> tuple[Any, Any]:
     event = (
         spec.model.objects.filter(id=_parse_uuid(source_id, "id"))
         .select_related("fax", *spec.select_related)
+        .defer(*spec.defer)
         .first()
     )
     if event is None:
