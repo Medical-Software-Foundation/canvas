@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.2",
+    "name": "doxy_in_chart",
+    "description": "Launches a doxy.me telehealth visit in the right chart pane from a note action button.",
+    "url_permissions": [
+        {
+            "url": "https://doxy.me/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "MICROPHONE", "SCRIPTS", "CAMERA"]
+        }
+    ],
+    "components": {
+        "protocols": [
+            {
+                "class": "doxy_in_chart.protocols.doxy_in_chart:DoxyMeTelehealthLaunchActionButton",
+                "description": "A protocol that launches a doxy.me telehealth meeting in the sidebar of a Canvas chart.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Note", "Appointment"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
