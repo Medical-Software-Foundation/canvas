@@ -1,0 +1,33 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "labcorp-draw-guidance"
+version = "0.0.0"
+description = "Surfaces Labcorp tube/draw guidance (tube type, count, draw volume) for in-progress Labcorp lab orders via an always-visible note header button that opens the breakdown in the right chart pane."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Allison Leitner", email = "allison.leitner@canvasmedical.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+source = ["labcorp_draw_guidance"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
