@@ -1,0 +1,30 @@
+<!--
+  "My Resources", for patients.
+
+  The referrer policy is a privacy control rather than boilerplate: without it,
+  a third-party health site receives this portal URL in the Referer header and
+  learns that a patient looked at a resource about a particular condition. Each
+  link carries rel="noreferrer" as well, so the protection survives a page
+  served without this meta tag.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
+<title>My Resources</title>
+<link rel="stylesheet" href="{{ asset_base }}/portal.css?v={{ cache_bust }}" />
+
+<div id="prp-app">
+  <h1>My resources</h1>
+  <p class="prp-intro">Information and links shared with you by your care team.</p>
+
+  <ul class="prp-list" id="prp-list"></ul>
+  <div class="prp-empty" id="prp-empty" hidden></div>
+
+  <h2 class="prp-withdrawn-heading" id="prp-withdrawn-heading" hidden>No longer available</h2>
+  <div id="prp-withdrawn"></div>
+
+  <p class="prp-error" id="prp-error" role="alert"></p>
+</div>
+
+<script id="prp-config" type="application/json">{{ config_json|safe }}</script>
+<script src="{{ asset_base }}/portal.js?v={{ cache_bust }}" defer></script>
