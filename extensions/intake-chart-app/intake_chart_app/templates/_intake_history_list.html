@@ -1,0 +1,42 @@
+<div class="ic-section ic-section--editable" id="section-{{ section_id }}"
+     data-multi-section="{{ section_id }}" data-row-prefix="{{ row_prefix }}">
+  <div class="ic-section-header">
+    <h2 class="ic-section-title">{{ title }}</h2>
+    <span class="ic-section-status" id="status-{{ section_id }}"></span>
+  </div>
+  <div class="ic-editable-body">
+    <p class="ic-help">{{ help_text }}</p>
+    <div class="ic-rows">
+      {% comment %}History rows are read-only: no Confirm / Edit / Remove buttons, no data-action toggles. Just the summary label. The container must always render even when ``rows`` is empty — ``+ Add to draft`` appends new rows here, and ``rowsContainer()`` in intake.js returns null if .ic-rows is missing (the click handler then silently drops the new row).{% endcomment %}
+      {% for row in rows %}
+        <div class="ic-row" data-row-id="{{ row.row_id }}" data-action="confirm">
+          <div class="ic-row-summary">
+            <span class="ic-row-label">{{ row.label }}</span>
+          </div>
+        </div>
+      {% empty %}
+        {% if not hide_empty_placeholder %}
+          <p class="ic-empty ic-rows-empty">None on record.</p>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div class="ic-add-row" data-add-template data-required-field="{{ required_add_field }}">
+      <h3 class="ic-add-title">+ Add new entry</h3>
+      <div class="ic-row-fields">
+        {% for f in add_fields %}{% include "templates/_intake_field.html" with field=f %}{% endfor %}
+      </div>
+      <div class="ic-add-actions">
+        <button type="button" class="ic-add-btn"
+                data-add-row="{{ section_id }}"
+                data-required-field="{{ required_add_field }}"
+                disabled>{{ add_button_label }}</button>
+      </div>
+      <div class="ic-add-hint-row">
+        <span class="ic-add-hint" data-add-hint hidden>{{ add_hint_text }}</span>
+      </div>
+    </div>
+    <div class="ic-save-row">
+      <span class="ic-status" id="save-status-{{ section_id }}"></span>
+    </div>
+  </div>
+</div>
