@@ -1,0 +1,39 @@
+[project]
+authors = [
+  {email = "engineering@vicert.com", name = "Vicert Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Scheduling modal with recurring appointment support, provider license filtering, and FHIR availability analysis."
+license = "MIT"
+name = "scheduling-modal-with-recurring-support"
+readme = "scheduling_modal_with_recurring_support/README.md"
+requires-python = ">=3.11"
+version = "0.0.124"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["scheduling_modal_with_recurring_support"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = false
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]
