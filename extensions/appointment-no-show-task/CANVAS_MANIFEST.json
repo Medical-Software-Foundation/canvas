@@ -1,0 +1,29 @@
+{
+  "sdk_version": "0.1.4",
+  "plugin_version": "0.0.1",
+  "name": "appointment_no_show_task",
+  "description": "Automatically creates a task for the specified team when an appointment is marked as no-show",
+  "components": {
+    "protocols": [
+      {
+        "class": "appointment_no_show_task.protocols.no_show_creates_task:NoShowCreatesTask",
+        "description": "Creates a Task for specified team in response to an appointment being marked as no-show",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      }
+    ],
+    "commands": [],
+    "content": [],
+    "effects": [],
+    "views": []
+  },
+  "secrets": ["TEAM_NAME", "LABELS"],
+  "tags": {},
+  "references": [],
+  "license": "",
+  "diagram": false,
+  "readme": "./README.md"
+}
