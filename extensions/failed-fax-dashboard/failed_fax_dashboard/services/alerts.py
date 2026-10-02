@@ -16,6 +16,7 @@ from logger import log
 
 from failed_fax_dashboard.models import AlertStart, FaxAlert
 from failed_fax_dashboard.services.documents import document_path, match_documents
+from failed_fax_dashboard.services.handoff import to_person, to_team
 from failed_fax_dashboard.services.failures import (
     WINDOW_DAYS,
     dismissed_keys,
@@ -76,11 +77,12 @@ def _sent_assignee(sender: Sender, fallback: Team | None) -> str:
     return ""
 
 
-def _assign_fields(assignee: str) -> dict[str, str | None]:
-    """The assignee/team pair for a task effect. The unused side is cleared."""
+def _assign_fields(assignee: str) -> dict[str, str]:
+    """The one assignee field for a new task. Never send the unused side: the SDK turns
+    ``None`` into ``{"id": None}``, which Canvas rejects along with the whole effect."""
     if assignee.startswith(STAFF_PREFIX):
-        return {"assignee_id": assignee[len(STAFF_PREFIX) :], "team_id": None}
-    return {"assignee_id": None, "team_id": assignee[len(TEAM_PREFIX) :]}
+        return {"assignee_id": assignee[len(STAFF_PREFIX) :]}
+    return {"team_id": assignee[len(TEAM_PREFIX) :]}
 
 
 def _failure_comment(
@@ -225,11 +227,14 @@ def sent_failure_effects(
                 if current != assignee:
                     moved = f"Moved from {before} to {_assignee_name(assignee, attempt, fallback)}."
                 comment = _failure_comment(spec, attempt, link, environment, moved)
-                effects.append(
-                    UpdateTask(
-                        id=task_id, due=due, status=TaskStatus.OPEN, **_assign_fields(assignee)
-                    ).apply()
-                )
+                if assignee.startswith(STAFF_PREFIX) or fallback is None:
+                    effects.append(
+                        to_person(task_id, assignee[len(STAFF_PREFIX) :], due=due, status=TaskStatus.OPEN).apply()
+                    )
+                else:
+                    handoff = to_team(alert, task, fallback, due=due, reopen=True)
+                    effects.extend(handoff.effects)
+                    task_id = handoff.task_id
                 effects.append(AddTaskComment(task_id=task_id, body=comment).apply())
 
             alert.last_handled_event_id = str(event.id)

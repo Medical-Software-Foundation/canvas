@@ -272,6 +272,7 @@ ol.thread li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 1
 .avatar.auto svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .c-head { font-size: 13px; color: var(--muted); }
 .c-head b { margin-right: 8px; color: var(--ink); font-weight: 600; }
+.c-earlier { margin-left: 8px; padding: 0 6px; border-radius: 4px; background: #EEF2F6; color: var(--muted); font-size: 11px; font-weight: 700; }
 .bubble { display: inline-block; max-width: 100%; margin-top: 5px; padding: 9px 14px; border-radius: 4px 12px 12px 12px; background: #F1F4F7; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
 .bubble.mine { background: #E6F2FB; }
 .bubble a { color: var(--blue); }

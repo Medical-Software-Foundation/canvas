@@ -325,7 +325,13 @@ def dashboard_page(
     if tab == "received":
         _link_documents(page_rows)  # type: ignore[arg-type]
     task_ids = [row.task.id for row in page_rows if row.task is not None]
-    comments = task_comments(task_ids, staff_id)
+    earlier_ids = [earlier for row in page_rows if row.task is not None for earlier in row.task.earlier_ids]
+    comments = task_comments(task_ids + earlier_ids, staff_id)
+    # A task that replaced an earlier one shows the earlier thread first, marked as such.
+    for row in page_rows:
+        if row.task is not None and row.task.earlier_ids:
+            older = [{**comment, "earlier": True} for earlier in row.task.earlier_ids for comment in comments.get(earlier, [])]
+            comments[row.task.id] = older + comments.get(row.task.id, [])
 
     payload_rows = []
     for row in page_rows:

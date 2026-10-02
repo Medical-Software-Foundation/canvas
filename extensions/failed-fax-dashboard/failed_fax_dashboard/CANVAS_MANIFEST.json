@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.1.3",
+    "plugin_version": "0.1.4",
     "name": "failed_fax_dashboard",
     "description": "Dashboard listing faxes that failed across the practice: sent faxes that were not delivered and received faxes that arrived only in part. Shows each row's attempts and task, lets staff resend a note fax, reassign or comment on the row's task, or dismiss it, and creates a task for each new failure.",
     "components": {

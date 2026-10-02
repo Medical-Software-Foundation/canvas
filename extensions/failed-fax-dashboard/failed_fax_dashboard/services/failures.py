@@ -1,6 +1,6 @@
 """Finds failed sent and received faxes: one row per item and fax number."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -319,16 +319,23 @@ def collect_received(cutoff: datetime) -> list[ReceivedRow]:
     return rows
 
 
+def _with_earlier(task: TaskInfo | None, alert: Any) -> TaskInfo | None:
+    """The row's task, carrying the ids of tasks it replaced."""
+    if task is None or alert is None or not alert.previous_task_ids:
+        return task
+    return replace(task, earlier_ids=tuple(part for part in alert.previous_task_ids.split(",") if part))
+
+
 def attach_tasks(sent: list[SentRow], received: list[ReceivedRow]) -> None:
     """Give each row the automatic task the scheduled job made for it, if any."""
     alerts = load_alerts([row.item_id for row in sent] + [str(row.fax.id) for row in received])
     tasks = load_tasks([alert.task_id for alert in alerts.values()])
     for sent_row in sent:
         alert = alerts.get(alert_key(sent_row.spec.type_key, sent_row.item_id, sent_row.e164))
-        sent_row.task = tasks.get(alert.task_id) if alert is not None else None
+        sent_row.task = _with_earlier(tasks.get(alert.task_id) if alert is not None else None, alert)
     for received_row in received:
         alert = alerts.get(alert_key(RECEIVED_TYPE, str(received_row.fax.id), received_row.e164))
-        received_row.task = tasks.get(alert.task_id) if alert is not None else None
+        received_row.task = _with_earlier(tasks.get(alert.task_id) if alert is not None else None, alert)
 
 
 def directory_name(row: SentRow) -> str:

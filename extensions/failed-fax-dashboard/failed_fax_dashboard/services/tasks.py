@@ -35,6 +35,8 @@ class TaskInfo:
     assignee_name: str
     assignee_sort: str
     patient_key: str
+    # Tasks this one replaced after a hand-off to a team, oldest first.
+    earlier_ids: tuple[str, ...] = ()
 
     @property
     def is_open(self) -> bool:

@@ -409,7 +409,7 @@
         thread.appendChild(el("li", {}, [
           av,
           el("div", {}, [
-            el("div", { class: "c-head" }, [el("b", { text: c.mine ? c.author + " (you)" : c.author }), stamp(new Date(c.at))]),
+            el("div", { class: "c-head" }, [el("b", { text: c.mine ? c.author + " (you)" : c.author }), stamp(new Date(c.at)), c.earlier ? el("span", { class: "c-earlier", text: "Earlier task" }) : null]),
             el("div", { class: "bubble" + (c.mine ? " mine" : "") }, [linkify(c.body)])
           ])
         ]));

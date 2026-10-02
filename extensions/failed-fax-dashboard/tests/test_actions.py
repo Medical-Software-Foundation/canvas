@@ -144,9 +144,9 @@ def test_dismiss_rejects_bad_input(payload: dict[str, Any], message: str) -> Non
     assert FaxDismissal.objects.count() == 0
 
 
-def alerted_task() -> Any:
+def alerted_task(**task_fields: Any) -> Any:
     event = make_event("note")
-    task = TaskFactory.create()
+    task = TaskFactory.create(**task_fields)
     make_alert(event, "note", task)
     return task
 
@@ -159,7 +159,8 @@ def test_reassign_to_a_person_updates_the_task_and_comments_as_the_clicker() -> 
     effects = build_reassign({"task_id": str(task.id), "assignee": f"staff:{target.id}"}, staff_id=clicker.id)
 
     assert [effect.type for effect in effects] == [EffectType.UPDATE_TASK, EffectType.CREATE_TASK_COMMENT]
-    assert data(effects[0]) == {"id": str(task.id), "assignee": {"id": target.id}, "team": {"id": None}}
+    # Only the side being set: the SDK sends a cleared side as {"id": None}, which Canvas rejects.
+    assert data(effects[0]) == {"id": str(task.id), "assignee": {"id": target.id}}
     assert data(effects[1]) == {
         "task": {"id": str(task.id)},
         "body": "Reassigned to Cy Clark by Dana Whitfield.",
@@ -168,16 +169,45 @@ def test_reassign_to_a_person_updates_the_task_and_comments_as_the_clicker() -> 
     assert FaxAlert.objects.get().assignee == f"staff:{target.id}"
 
 
-def test_reassign_to_a_team_clears_the_person() -> None:
+def test_reassign_to_a_team_sets_only_the_team_when_no_person_holds_the_task() -> None:
     clicker = make_staff()
     team = TeamFactory.create(name="Front Desk")
-    task = alerted_task()
+    task = alerted_task(assignee=None, team=TeamFactory.create(name="Medical Records"))
 
     effects = build_reassign({"task_id": str(task.id), "assignee": f"team:{team.id}"}, staff_id=clicker.id)
 
-    assert data(effects[0]) == {"id": str(task.id), "assignee": {"id": None}, "team": {"id": str(team.id)}}
+    assert [effect.type for effect in effects] == [EffectType.UPDATE_TASK, EffectType.CREATE_TASK_COMMENT]
+    assert data(effects[0]) == {"id": str(task.id), "team": {"id": str(team.id)}}
     assert data(effects[1])["body"].startswith("Reassigned to Front Desk by ")
     assert FaxAlert.objects.get().assignee == f"team:{team.id}"
+
+
+def test_reassign_from_a_person_to_a_team_closes_their_task_and_opens_one_for_the_team() -> None:
+    clicker = make_staff("Dana", "Whitfield")
+    holder = make_staff("Thomas", "Pickles")
+    team = TeamFactory.create(name="Front Desk")
+    task = alerted_task(assignee=holder, team=None, title="Fax didn't go through: Note to +15555550100")
+
+    effects = build_reassign({"task_id": str(task.id), "assignee": f"team:{team.id}"}, staff_id=clicker.id)
+
+    assert [effect.type for effect in effects] == [
+        EffectType.UPDATE_TASK,
+        EffectType.CREATE_TASK_COMMENT,
+        EffectType.CREATE_TASK,
+        EffectType.CREATE_TASK_COMMENT,
+    ]
+    close, old_note, new_task, new_note = (data(effect) for effect in effects)
+    assert close == {"id": str(task.id), "status": "CLOSED"}
+    assert old_note["body"] == "Handed to Front Desk by Dana Whitfield. Continued in a new task assigned to Front Desk."
+    assert new_task["title"] == "Fax didn't go through: Note to +15555550100"
+    assert new_task["team"] == {"id": str(team.id)}
+    assert new_task.get("assignee") in (None, {"id": None})  # creating a task reads an empty id as no one
+    assert new_note["task"] == {"id": new_task["id"]}
+    assert new_note["body"].startswith("Continued from a task that was assigned to Thomas Pickles.")
+    alert = FaxAlert.objects.get()
+    assert alert.task_id == new_task["id"]
+    assert alert.previous_task_ids == str(task.id)
+    assert alert.assignee == f"team:{team.id}"
 
 
 @pytest.mark.parametrize(

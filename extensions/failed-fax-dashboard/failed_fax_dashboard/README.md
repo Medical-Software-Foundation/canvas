@@ -27,6 +27,10 @@ A scheduled job runs every 5 minutes and reads only failures recorded since its 
 
 From the expanded row, staff can click the assignee to reassign the task and add comments. Both are written under their own name.
 
+## Reassigning to a team
+
+The SDK can't remove a person from a task. When a task held by a person moves to a team (from the dashboard, or by the scheduled job's fallback team), the plugin closes the person's task and opens a new one for the team. The new task points back to the old one, and the dashboard shows both threads. Moves to a person, and team-to-team moves, update the same task.
+
 ## Resend (notes only)
 
 Resend opens a short form prefilled with the failed number and, when exactly one directory contact has that number, the recipient name. The fax is sent as Canvas Bot. The plugin remembers who clicked, so the row, the history, and the task comments show "Resent by {name}".

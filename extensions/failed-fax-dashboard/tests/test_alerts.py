@@ -123,7 +123,7 @@ def test_a_new_failure_moves_the_same_task_to_the_new_sender_and_reopens_it() ->
     update, comment = effects[0][1], effects[1][1]
     assert update["id"] == task_id
     assert update["assignee"] == {"id": second_sender.id}
-    assert update["team"] == {"id": None}
+    assert "team" not in update
     assert update["status"] == "OPEN"
     assert update["due"]
     assert comment["task"] == {"id": task_id}
@@ -467,7 +467,19 @@ def test_moving_to_the_fallback_team_names_the_team() -> None:
 
     effects = run({"FAILED_FAX_FALLBACK_TEAM": "Front Desk"})
 
-    assert "Moved from Dana Whitfield to Front Desk." in effects[1][1]["body"]
+    # Dana holds the task and can't be removed, so hers is closed and a team task replaces it.
+    assert [kind for kind, _ in effects] == [
+        "UPDATE_TASK",
+        "CREATE_TASK_COMMENT",
+        "CREATE_TASK",
+        "CREATE_TASK_COMMENT",
+        "CREATE_TASK_COMMENT",
+    ]
+    assert effects[0][1] == {"id": task_id, "status": "CLOSED"}
+    new_id = effects[2][1]["id"]
+    assert effects[4][1]["task"] == {"id": new_id}
+    assert "Moved from Dana Whitfield to Front Desk." in effects[4][1]["body"]
+    assert FaxAlert.objects.get().task_id == new_id
 
 
 def test_a_run_skips_failures_older_than_the_last_handled_one() -> None:

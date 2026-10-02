@@ -8,9 +8,10 @@ from uuid import UUID
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.fax import FaxNoteEffect
 from canvas_sdk.effects.task import AddTaskComment, UpdateTask
-from canvas_sdk.v1.data import Fax, FaxDirection, Staff, Team
+from canvas_sdk.v1.data import Fax, FaxDirection, Staff, Task, Team
 
 from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
+from failed_fax_dashboard.services.handoff import to_person, to_team
 from failed_fax_dashboard.services.history import FAXED
 from failed_fax_dashboard.services.sources import RECEIVED_TYPE, SOURCES_BY_KEY, TYPE_LABELS
 from failed_fax_dashboard.services.util import (
@@ -133,7 +134,7 @@ def build_resend_takeover(payload: dict[str, Any], staff_id: str) -> list[Effect
     alert.save()
     name = person_name(actor)
     return [
-        UpdateTask(id=alert.task_id, assignee_id=actor.id, team_id=None).apply(),
+        to_person(alert.task_id, actor.id).apply(),
         AddTaskComment(
             task_id=alert.task_id,
             body=f"{name} resent the fax and took over this task.",
@@ -185,23 +186,30 @@ def build_reassign(payload: dict[str, Any], staff_id: str) -> list[Effect]:
         if target is None:
             raise ActionError("Assignee not found", HTTPStatus.NOT_FOUND)
         name = person_name(target)
-        update = UpdateTask(id=alert.task_id, assignee_id=target.id, team_id=None)
-    elif choice.startswith(TEAM_PREFIX):
-        team = Team.objects.filter(id=_parse_uuid(choice[len(TEAM_PREFIX) :], "team id")).first()
-        if team is None:
-            raise ActionError("Assignee not found", HTTPStatus.NOT_FOUND)
-        name = team.name
-        update = UpdateTask(id=alert.task_id, assignee_id=None, team_id=str(team.id))
-    else:
+        alert.assignee = choice
+        alert.save()
+        comment = AddTaskComment(
+            task_id=alert.task_id,
+            body=f"Reassigned to {name} by {person_name(actor)}.",
+            author_id=actor.id,
+        )
+        return [to_person(alert.task_id, target.id).apply(), comment.apply()]
+    if not choice.startswith(TEAM_PREFIX):
         raise ActionError("Choose a person or a team")
-    alert.assignee = choice
-    alert.save()
+    team = Team.objects.filter(id=_parse_uuid(choice[len(TEAM_PREFIX) :], "team id")).first()
+    if team is None:
+        raise ActionError("Assignee not found", HTTPStatus.NOT_FOUND)
+    task = Task.objects.filter(id=alert.task_id).select_related("assignee", "patient").first()
+    if task is not None and task.assignee is not None:
+        # A person holds it and can't be removed: close theirs and open one for the team.
+        return to_team(alert, task, team, by=person_name(actor), author_id=actor.id).effects
+    handoff = to_team(alert, task, team)
     comment = AddTaskComment(
-        task_id=alert.task_id,
-        body=f"Reassigned to {name} by {person_name(actor)}.",
+        task_id=handoff.task_id,
+        body=f"Reassigned to {team.name} by {person_name(actor)}.",
         author_id=actor.id,
     )
-    return [update.apply(), comment.apply()]
+    return [*handoff.effects, comment.apply()]
 
 
 def build_comment(payload: dict[str, Any], staff_id: str) -> Effect:

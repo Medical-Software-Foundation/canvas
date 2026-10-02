@@ -20,6 +20,9 @@ class FaxAlert(CustomModel):
     last_handled_at: DateTimeField = DateTimeField()
     assignee: TextField = TextField(default="")
     closed: BooleanField = BooleanField(default=False)
+    # Comma-separated ids of tasks this one replaced (a hand-off from a person to a team
+    # closes the person's task and opens a new one), oldest first.
+    previous_task_ids: TextField = TextField(default="")
 
     class Meta:
         constraints = [
