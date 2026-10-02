@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.154.1",
-    "plugin_version": "2.0.1",
+    "plugin_version": "2.1.0",
     "name": "patient_panel",
     "description": "Patient panel management dashboard with filtering, tasks, gaps, and clinical notes",
     "url_permissions": [],
@@ -213,9 +213,6 @@
         "HIGHLIGHT_THRESHOLD_DAYS_RED",
         "PAGE_SIZE",
         "INSURANCES",
-        "FHIR_CLIENT_ID",
-        "FHIR_CLIENT_SECRET",
-        "CANVAS_INSTANCE_URL",
         "PANEL_CONFIG",
         "INSTANCE_TIMEZONE",
         "FLAG_COLOR_LABELS",

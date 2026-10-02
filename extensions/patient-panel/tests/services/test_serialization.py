@@ -17,7 +17,12 @@ from canvas_sdk.v1.data.patient import PatientMetadata as PatientMetadataRecord
 
 from patient_panel.services.columns import enrich_columns_for_render
 from patient_panel.services.patient_query import build_base_queryset
-from patient_panel.services.serialization import process_patient, resolve_metadata_value
+from patient_panel.services.serialization import (
+    DEFAULT_AVATAR,
+    _patient_photo_url,
+    process_patient,
+    resolve_metadata_value,
+)
 
 
 class TestResolveMetadataValue:
@@ -115,8 +120,10 @@ class TestProcessPatient:
 
         assert data["id"] == patient.id
         assert data["url"] == f"/patient/{patient.id}"
-        # built-in patient cell
-        assert "photo_url" in data["patient"] and "name" in data["patient"]
+        # built-in patient cell — a bare factory patient has no photo, so the
+        # DB-backed photo_url resolves to the default avatar.
+        assert data["patient"]["photo_url"] == DEFAULT_AVATAR
+        assert "name" in data["patient"]
         # count columns default to 0 with no related rows
         assert data["conditions"] == {"count": 0}
         assert data["active_status"] in ("Active", "Inactive")
@@ -194,3 +201,21 @@ class TestProcessPatient:
         data = process_patient(annotated, _SECRETS, cols, {}, {}, _ctx())
         assert data["risk_score"] == ""
         assert data["services"] == []
+
+
+class TestPatientPhotoUrl:
+    def test_reads_photo_url_property(self) -> None:
+        class _P:
+            @property
+            def photo_url(self) -> str:
+                return "https://signed.example/abc.jpg"
+
+        assert _patient_photo_url(_P()) == "https://signed.example/abc.jpg"
+
+    def test_falls_back_to_default_avatar_on_error(self) -> None:
+        class _P:
+            @property
+            def photo_url(self) -> str:
+                raise ValueError("AWS credentials not configured")
+
+        assert _patient_photo_url(_P()) == DEFAULT_AVATAR
