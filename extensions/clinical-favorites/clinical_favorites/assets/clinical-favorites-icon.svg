@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="starGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="none" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M30 14 L30 40 C30 54 42 64 50 64 C58 64 70 54 70 40 L70 14"/>
+    <path d="M50 64 L50 76"/>
+  </g>
+
+  <circle cx="50" cy="82" r="11" fill="#1e3a8a"/>
+  <circle cx="50" cy="82" r="6" fill="#3b82f6"/>
+
+  <circle cx="30" cy="14" r="4" fill="#1e3a8a"/>
+  <circle cx="70" cy="14" r="4" fill="#1e3a8a"/>
+
+  <polygon points="50,6 58,24 78,26 63,40 67,60 50,50 33,60 37,40 22,26 42,24"
+           fill="url(#starGradient)" stroke="#1e40af" stroke-width="2" stroke-linejoin="round"/>
+</svg>

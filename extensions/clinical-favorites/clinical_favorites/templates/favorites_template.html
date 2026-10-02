@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Favorites</title>
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="/plugin-io/api/clinical_favorites/routes/static/canvas-plugin-ui.css?v={{ cache_bust }}">
+    <link rel="stylesheet" href="/plugin-io/api/clinical_favorites/routes/static/favorites.css?v={{ cache_bust }}">
+    <script src="/plugin-io/api/clinical_favorites/routes/static/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+</head>
+<body>
+    <!-- Add / Edit Favorite Modal -->
+    <canvas-modal id="favorite-modal" size="medium">
+        <canvas-modal-header id="modal-title-header" dismissable>Add favorite</canvas-modal-header>
+        <canvas-modal-content>
+            <div id="form-banner" style="margin-bottom: 16px;"></div>
+            <form id="favorite-form">
+                <input type="hidden" id="form-favorite-id">
+                <input type="hidden" id="form-favorite-type" value="medication">
+                <input type="hidden" id="form-fdb-code">
+                <input type="hidden" id="form-representative-ndc">
+                <input type="hidden" id="form-ncpdp-qualifier">
+                <input type="hidden" id="form-condition-code">
+                <input type="hidden" id="form-pharmacy-ncpdp">
+                <input type="hidden" id="form-pharmacy-name">
+                <input type="hidden" id="form-is-shared" value="true">
+                <button type="submit" style="display:none;" aria-hidden="true"></button>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div class="medication-only">
+                        <canvas-combobox id="med-combobox" label="Medication" placeholder="Search for a medication..."></canvas-combobox>
+                    </div>
+                    <div class="condition-only">
+                        <canvas-combobox id="condition-combobox" label="Condition" placeholder="Search ICD 10 conditions..."></canvas-combobox>
+                    </div>
+                    <canvas-input id="form-display-name" label="Display name" placeholder="e.g., Tylenol 500mg 14 day"></canvas-input>
+                    <canvas-combobox id="group-combobox" label="Group" placeholder="e.g., GLP 1, Antibiotics, Cardiology" creatable creatable-label="New group"></canvas-combobox>
+                    <div class="form-row form-row-label">
+                        <canvas-input id="form-label" label="Label" placeholder="e.g., Starting, PRN, Nausea" maxlength="20" style="flex: 2;"></canvas-input>
+                        <canvas-dropdown id="form-label-color" label="Label color" style="flex: 1; display: none;">
+                            <canvas-option value="gray" selected>Gray</canvas-option>
+                            <canvas-option value="green">Green</canvas-option>
+                            <canvas-option value="purple">Purple</canvas-option>
+                            <canvas-option value="blue">Blue</canvas-option>
+                            <canvas-option value="amber">Amber</canvas-option>
+                            <canvas-option value="rose">Rose</canvas-option>
+                        </canvas-dropdown>
+                    </div>
+                    <div class="medication-only">
+                        <canvas-textarea id="form-sig" label="SIG (Instructions)" placeholder="e.g., Take 1 tablet by mouth every 6 hours as needed" rows="4"></canvas-textarea>
+                    </div>
+                    <canvas-inline-row class="medication-only">
+                        <canvas-input id="form-days-supply" label="Days supply" type="number" min="1" max="365"></canvas-input>
+                        <canvas-input id="form-quantity" label="Quantity" type="number" min="1" step="0.5"></canvas-input>
+                    </canvas-inline-row>
+                    <canvas-inline-row class="medication-only">
+                        <canvas-dropdown id="form-unit" label="Unit" placeholder="Select unit..." empty-state="Select a medication first" style="flex: 2;"></canvas-dropdown>
+                        <canvas-input id="form-refills" label="Refills" type="number" min="0" max="99" value="0"></canvas-input>
+                    </canvas-inline-row>
+                    <div>
+                        <div class="form-label">Visibility</div>
+                        <div style="display: flex; gap: 16px;">
+                            <canvas-radio name="form-visibility" label="Shared" value="true" checked></canvas-radio>
+                            <canvas-radio name="form-visibility" label="Private" value="false"></canvas-radio>
+                        </div>
+                        <div class="form-hint">Shared favorites are visible to all staff. Private favorites are only visible to you.</div>
+                    </div>
+                    <div class="medication-only">
+                        <canvas-combobox id="pharmacy-combobox" label="Default pharmacy" placeholder="Search for a pharmacy..."></canvas-combobox>
+                    </div>
+                </div>
+            </form>
+        </canvas-modal-content>
+        <canvas-modal-footer>
+            <canvas-button variant="ghost" id="modal-cancel-btn">Cancel</canvas-button>
+            <canvas-button variant="primary" id="form-submit-btn">Save favorite</canvas-button>
+        </canvas-modal-footer>
+    </canvas-modal>
+
+    <!-- Bulk Import Modal -->
+    <canvas-modal id="bulk-import-modal" size="medium">
+        <canvas-modal-header dismissable>Bulk import favorites</canvas-modal-header>
+        <canvas-modal-content>
+            <div id="bulk-import-banner"></div>
+            <p style="margin: 0 0 16px; font-size: 14px;">Provide a JSON array of favorites.</p>
+            <canvas-textarea id="bulk-import-input" auto-resize rows="8" max-rows="16" label="JSON input" placeholder='[{"favorite_type": "medication", "display_name": "...", "fdb_code": "...", "sig": "...", "days_supply": 30, "quantity_to_dispense": "1", "unit": "tablet", "representative_ndc": "...", "ncpdp_quantity_qualifier_code": "00"}, {"favorite_type": "condition", "display_name": "...", "code": "E11.9"}]'></canvas-textarea>
+            <div id="bulk-import-preview" style="display: none; margin-top: 24px;">
+                <div id="bulk-import-preview-summary" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;"></div>
+                <div id="bulk-import-preview-grid" style="display: flex; flex-direction: column; gap: 6px; padding: 4px 0;"></div>
+            </div>
+        </canvas-modal-content>
+        <canvas-modal-footer>
+            <canvas-button variant="ghost" id="bulk-import-cancel-btn">Cancel</canvas-button>
+            <canvas-button variant="primary" id="bulk-import-submit-btn">Import selected</canvas-button>
+        </canvas-modal-footer>
+    </canvas-modal>
+
+    <!-- Delete Confirmation Modal -->
+    <canvas-modal id="delete-confirm-modal" size="small" persistent>
+        <canvas-modal-header>Delete favorite</canvas-modal-header>
+        <canvas-modal-content>
+            <p style="margin: 0 0 16px; font-size: 14px;">This cannot be undone. Type <strong><span id="delete-confirm-name"></span></strong> to confirm.</p>
+            <canvas-input id="delete-confirm-input" label="Type to confirm"></canvas-input>
+            <div id="delete-confirm-banner" style="margin-top: 16px;"></div>
+        </canvas-modal-content>
+        <canvas-modal-footer>
+            <canvas-button variant="ghost" id="delete-confirm-cancel-btn">Cancel</canvas-button>
+            <canvas-button variant="danger" id="delete-confirm-submit-btn" disabled>Delete</canvas-button>
+        </canvas-modal-footer>
+    </canvas-modal>
+
+    <div class="header">
+        <div class="header-top">
+            <h1 class="header-title">Clinical Favorites</h1>
+        </div>
+    </div>
+
+    <div class="manage-mode-only">
+        <!-- List View -->
+        <div class="manage-section">
+            <div class="fav-type-bar">
+                <canvas-tabs id="type-tabs-manage" class="type-tabs">
+                    <canvas-tab for="type-manage-medication" active>
+                        <canvas-tab-label>Medications</canvas-tab-label>
+                    </canvas-tab>
+                    <canvas-tab for="type-manage-condition">
+                        <canvas-tab-label>Conditions</canvas-tab-label>
+                    </canvas-tab>
+                    <canvas-tab-panel id="type-manage-medication"></canvas-tab-panel>
+                    <canvas-tab-panel id="type-manage-condition"></canvas-tab-panel>
+                </canvas-tabs>
+                <div class="fav-type-actions">
+                    <canvas-button id="add-favorite-btn" variant="primary" size="sm">Add favorite</canvas-button>
+                    <canvas-button id="bulk-import-btn" variant="ghost" size="sm">Bulk import</canvas-button>
+                </div>
+            </div>
+            <div class="fav-scope-bar">
+                <canvas-tabs id="scope-tabs-manage" class="type-tabs">
+                    <canvas-tab for="scope-manage-all" active>
+                        <canvas-tab-label>All</canvas-tab-label>
+                    </canvas-tab>
+                    <canvas-tab for="scope-manage-mine">
+                        <canvas-tab-label>Mine</canvas-tab-label>
+                    </canvas-tab>
+                    <canvas-tab for="scope-manage-shared">
+                        <canvas-tab-label>Shared</canvas-tab-label>
+                    </canvas-tab>
+                    <canvas-tab-panel id="scope-manage-all"></canvas-tab-panel>
+                    <canvas-tab-panel id="scope-manage-mine"></canvas-tab-panel>
+                    <canvas-tab-panel id="scope-manage-shared"></canvas-tab-panel>
+                </canvas-tabs>
+                <div class="fav-scope-controls">
+                    <canvas-input id="manage-search-input" type="search" placeholder="Search favorites"></canvas-input>
+                    <canvas-dropdown id="manage-sort" inline-role="natural">
+                        <canvas-option value="name" selected>A to Z</canvas-option>
+                        <canvas-option value="newest">Newest</canvas-option>
+                        <canvas-option value="oldest">Oldest</canvas-option>
+                    </canvas-dropdown>
+                    <canvas-button id="manage-toggle-all-btn" variant="ghost">Expand all</canvas-button>
+                </div>
+            </div>
+            <div id="manage-banner" style="margin-bottom: 8px;"></div>
+            <div id="favorites-list" style="display: flex; flex-direction: column; gap: 8px; padding: 4px 0;">
+                <canvas-loader centered role="status" aria-label="Loading favorites"></canvas-loader>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.FAVORITES_BOOT = { staffId: "{{ staff_id }}", surface: "manage" };
+    </script>
+    <script src="/plugin-io/api/clinical_favorites/routes/static/favorites.js?v={{ cache_bust }}"></script>
+</body>
+</html>
