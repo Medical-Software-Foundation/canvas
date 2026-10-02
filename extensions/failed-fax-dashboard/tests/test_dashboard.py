@@ -476,16 +476,32 @@ def test_a_failure_waiting_for_its_task_is_under_the_sender_right_away() -> None
     assert rows[str(theirs.id)]["task_pending"] is True
 
 
-def test_a_failure_from_before_the_job_started_stays_under_everything_else() -> None:
+def test_a_failure_from_before_the_job_started_is_under_the_person_who_sent_it() -> None:
     me = make_staff("Dana", "Whitfield")
-    event = make_event("note", originator=me.user)
-    type(event).objects.filter(pk=event.pk).update(modified=event.modified - timedelta(hours=3))
+    other = make_staff("Marcus", "Bell")
+    event = make_event("note", originator=me.user, number="+15555550101")
+    theirs = make_event("note", originator=other.user, number="+15555550102")
+    for old in (event, theirs):
+        type(old).objects.filter(pk=old.pk).update(modified=old.modified - timedelta(hours=3))
     job_started(hours_ago=1)
 
     result = page(staff_id=me.id)
 
-    assert result["counts"] == {"mine": 0, "rest": 1}
-    assert result["rows"][0]["task_pending"] is False
+    assert result["counts"] == {"mine": 1, "rest": 1}
+    assert all(row["task_pending"] is False and row["task"] is None for row in result["rows"])
+
+
+def test_the_task_holder_shows_while_a_resend_is_waiting() -> None:
+    sender = make_staff("Thomas", "Pickles")
+    resender = make_staff("Dana", "Whitfield")
+    failed, _ = event_with_task(assignee=sender, originator=sender.user)
+    pending = make_event("note", delivered=None, note=failed.note)
+    FaxResend.objects.create(note_id=failed.note.dbid, staff_id=resender.dbid, fax_number="+15555550100", resent_at=pending.created - timedelta(seconds=1))
+
+    row = page(staff_id=resender.id)["rows"][0]
+
+    assert row["problem"]["pending"] is True
+    assert row["task_with"] == {"name": "Thomas Pickles", "team": False}
 
 
 def test_once_the_task_exists_the_row_follows_its_assignee_not_the_sender() -> None:

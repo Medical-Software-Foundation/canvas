@@ -162,13 +162,20 @@ def expected_owner(
 
 
 def row_is_mine(row: SentRow | ReceivedRow, owner: Owner | None, staff_id: str, teams: set[str]) -> bool:
-    """Whether the row's task is, or is about to be, assigned to the viewer or their team."""
+    """Whether the row belongs to the viewer.
+
+    With a task: the task's assignee. Waiting for its task: whoever the task will go to.
+    Never getting a task (failed before the job started): the person who sent it.
+    """
     if row.task is not None:
         return is_mine(row.task, staff_id, teams)
-    if owner is None:
-        return False
-    kind, owner_id = owner
-    return owner_id == staff_id if kind == ASSIGNEE_STAFF else owner_id in teams
+    if owner is not None:
+        kind, owner_id = owner
+        return owner_id == staff_id if kind == ASSIGNEE_STAFF else owner_id in teams
+    if isinstance(row, SentRow):
+        attempt = next((item for item in row.attempts if item.event_id == str(row.event.id)), row.latest)
+        return attempt.sender.is_person and attempt.sender.staff_id == staff_id
+    return False
 
 
 def _sent_json(
@@ -178,7 +185,7 @@ def _sent_json(
     is_note = row.spec.type_key == "note"
     task = row.task
     task_with = None
-    if task is not None and task.assignee_kind and not row.pending:
+    if task is not None and task.assignee_kind:
         with_sender = (
             task.assignee_kind == ASSIGNEE_STAFF
             and latest.sender.is_person

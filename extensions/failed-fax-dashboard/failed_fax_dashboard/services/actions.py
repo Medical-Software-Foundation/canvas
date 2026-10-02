@@ -115,6 +115,33 @@ def build_resend(payload: dict[str, Any], staff_id: str, now: datetime | None = 
     ).apply()
 
 
+def build_resend_takeover(payload: dict[str, Any], staff_id: str) -> list[Effect]:
+    """Move the row's task to whoever clicked Resend, since they've taken the fax on.
+
+    Nothing to do when the row has no task yet, the task is closed, or it's already theirs.
+    """
+    event = _failed_note_event(payload.get("event_id"))
+    actor = _actor(staff_id)
+    failed_number = to_e164(event.fax.to_fax_number if event.fax is not None else "")
+    alert: FaxAlert | None = FaxAlert.objects.filter(
+        source_type="note", item_id=str(event.note.id), fax_number=failed_number, closed=False
+    ).first()
+    mine = f"{STAFF_PREFIX}{actor.id}"
+    if alert is None or alert.assignee == mine:
+        return []
+    alert.assignee = mine
+    alert.save()
+    name = person_name(actor)
+    return [
+        UpdateTask(id=alert.task_id, assignee_id=actor.id, team_id=None).apply(),
+        AddTaskComment(
+            task_id=alert.task_id,
+            body=f"{name} resent the fax and took over this task.",
+            author_id=actor.id,
+        ).apply(),
+    ]
+
+
 def dismiss_row(payload: dict[str, Any], staff_id: str) -> None:
     """Record that staff dismissed a row. Dismissing twice is harmless."""
     source_type = _text(payload, "source_type")

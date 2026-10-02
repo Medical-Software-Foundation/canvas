@@ -12,6 +12,7 @@ from failed_fax_dashboard.services.actions import (
     build_comment,
     build_reassign,
     build_resend,
+    build_resend_takeover,
     dismiss_row,
 )
 from tests.helpers import make_alert, make_event, make_staff
@@ -255,3 +256,38 @@ def test_unknown_item_type_cannot_be_loaded() -> None:
 
     with pytest.raises(ActionError, match="Unknown item type"):
         load_sent_event("bogus", "x")
+
+
+def test_resending_moves_an_open_task_to_whoever_resent() -> None:
+    from canvas_sdk.test_utils.factories import TaskFactory
+
+    from tests.helpers import make_alert
+
+    sender = make_staff("Thomas", "Pickles")
+    clicker = make_staff("Dana", "Whitfield")
+    event = make_event("note", originator=sender.user)
+    task = TaskFactory.create(assignee=sender)
+    alert = make_alert(event, "note", task, assignee=f"staff:{sender.id}")
+
+    effects = build_resend_takeover(resend_body(event), staff_id=clicker.id)
+
+    assert [EffectType.Name(effect.type) for effect in effects] == ["UPDATE_TASK", "CREATE_TASK_COMMENT"]
+    assert data(effects[0])["assignee"]["id"] == clicker.id
+    assert data(effects[1])["body"] == "Dana Whitfield resent the fax and took over this task."
+    alert.refresh_from_db()
+    assert alert.assignee == f"staff:{clicker.id}"
+    assert build_resend_takeover(resend_body(event), staff_id=clicker.id) == []
+
+
+def test_resending_leaves_closed_tasks_and_untasked_rows_alone() -> None:
+    from canvas_sdk.test_utils.factories import TaskFactory
+
+    from tests.helpers import make_alert
+
+    clicker = make_staff("Dana", "Whitfield")
+    untasked = make_event("note", number="+15555550101")
+    closed = make_event("note", number="+15555550102")
+    make_alert(closed, "note", TaskFactory.create(), closed=True, assignee="staff:someone")
+
+    assert build_resend_takeover(resend_body(untasked), staff_id=clicker.id) == []
+    assert build_resend_takeover(resend_body(closed), staff_id=clicker.id) == []

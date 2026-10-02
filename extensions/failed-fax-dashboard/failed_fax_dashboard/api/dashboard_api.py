@@ -20,6 +20,7 @@ from failed_fax_dashboard.services.actions import (
     build_comment,
     build_reassign,
     build_resend,
+    build_resend_takeover,
     dismiss_row,
 )
 from failed_fax_dashboard.services.dashboard import dashboard_page
@@ -141,10 +142,13 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_allowed():
             return self._forbidden()
         try:
-            effect = build_resend(self._body(), staff_id=self._staff_id())
+            body = self._body()
+            # Check and record the resend first, so a rejected resend never moves the task.
+            effect = build_resend(body, staff_id=self._staff_id())
+            takeover = build_resend_takeover(body, staff_id=self._staff_id())
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
-        return [JSONResponse({"ok": True}), effect]
+        return [JSONResponse({"ok": True}), effect, *takeover]
 
     @api.post("/tasks/reassign")
     def reassign(self) -> list[Response | Effect]:

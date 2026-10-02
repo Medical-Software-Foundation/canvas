@@ -33,3 +33,12 @@ def test_missing_staff_id_is_denied_when_secret_is_set() -> None:
 def test_allowed_staff_ids_parses_the_list() -> None:
     tested = allowed_staff_ids({"FAX_DASHBOARD_STAFF_IDS": "A, b,,C"})
     assert tested == {"a", "b", "c"}
+
+
+def test_staff_ids_match_with_or_without_dashes() -> None:
+    from failed_fax_dashboard.services.access import is_staff_allowed
+
+    secrets = {"FAX_DASHBOARD_STAFF_IDS": "4150CD20-DE8A-470A-A570-A852859AC87E"}
+
+    assert is_staff_allowed(secrets, "4150cd20de8a470aa570a852859ac87e") is True
+    assert is_staff_allowed(secrets, "57f3668ea9f84f3980e772ea8451af38") is False

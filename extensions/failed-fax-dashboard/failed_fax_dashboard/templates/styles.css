@@ -98,11 +98,13 @@ th.attempt-count { text-align: center; }
 .contact-card a { color: var(--blue); font-weight: 600; text-decoration: none; }
 .contact-card a:hover { text-decoration: underline; }
 .contact-card .source { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
-tr.history-row td { padding: 6px 24px 22px 56px; background: #F8FAFC; white-space: normal; border-bottom: 1px solid var(--line-strong); }
+tr.history-row td { padding: 6px 24px 22px 56px; background: #EAF0F5; white-space: normal; border-bottom: 1px solid var(--line-strong); box-shadow: inset 0 1px 0 #DCE4EC; }
+tbody tr.has-history > td, tbody tr.has-history:hover > td { background: #EAF0F5; }
 tr.has-history td { border-bottom-color: transparent; }
 ol.attempt-list { list-style: none; margin: 0; padding: 4px 0 0; position: relative; }
 ol.attempt-list::before { content: ""; position: absolute; left: 6px; top: 14px; bottom: 14px; width: 2px; background: var(--line-strong); }
 ol.attempt-list li { position: relative; display: grid; grid-template-columns: 220px 300px 170px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 8px 0 8px 28px; }
+.attempt-head { display: grid; grid-template-columns: 220px 300px 170px minmax(0, 1fr); gap: 12px; padding: 0 0 6px 28px; border-bottom: 1px solid var(--line-strong); margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
 ol.attempt-list li::before { content: ""; position: absolute; left: 0; top: 13px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--panel); background: var(--fail); box-shadow: 0 0 0 1px var(--line-strong); }
 ol.attempt-list li.pending::before { background: var(--blue); }
 ol.attempt-list li.delivered::before { background: var(--ok); }
@@ -117,6 +119,7 @@ ol.attempt-list li.delivered::before { background: var(--ok); }
 @media (max-width: 1240px) {
   tr.history-row td { padding-left: 24px; }
   ol.attempt-list li { grid-template-columns: 1fr; gap: 2px; }
+  .attempt-head { display: none; }
   td { white-space: normal; }
   td.acts, td.attempt-count, .recipient .number, time { white-space: nowrap; }
   td.problem { min-width: 120px; }

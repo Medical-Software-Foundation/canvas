@@ -11,9 +11,16 @@ STAFF_IDS_SECRET = "FAX_DASHBOARD_STAFF_IDS"
 
 
 def allowed_staff_ids(secrets: dict[str, str]) -> set[str]:
-    """Return the lowercase staff ids listed in the secret (empty set when unset)."""
+    """Return the staff ids listed in the secret (empty set when unset).
+
+    Ids are compared lowercase with dashes removed, so a key pasted as a dashed UUID still matches.
+    """
     raw = secrets.get(STAFF_IDS_SECRET) or ""
-    return {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return {_clean(part) for part in raw.split(",") if part.strip()}
+
+
+def _clean(staff_id: str) -> str:
+    return staff_id.strip().lower().replace("-", "")
 
 
 def is_staff_allowed(secrets: dict[str, str], staff_id: str | None) -> bool:
@@ -23,4 +30,4 @@ def is_staff_allowed(secrets: dict[str, str], staff_id: str | None) -> bool:
         return True
     if not staff_id:
         return False
-    return staff_id.strip().lower() in allowed
+    return _clean(staff_id) in allowed

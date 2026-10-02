@@ -440,7 +440,11 @@
   }
   function historyRow(row, cols) {
     var cellKids = [];
-    if (row.attempts) { cellKids.push(el("h4", { class: "section-title", text: "Fax attempts" })); cellKids.push(attemptList(row)); }
+    if (row.attempts) {
+      cellKids.push(el("h4", { class: "section-title", text: "Fax attempts" }));
+      cellKids.push(el("div", { class: "attempt-head", "aria-hidden": "true" }, [el("span", { text: "Sent" }), el("span", { text: "Sent by" }), el("span", { text: "Result" }), el("span", { text: "Reason" })]));
+      cellKids.push(attemptList(row));
+    }
     cellKids.push(el("h4", { class: "section-title", text: "Task" }));
     cellKids.push(row.task ? taskBox(row) : el("p", { class: "no-task", text: row.task_pending ? "The task for this fax is being made and will appear within 5 minutes." : "No task was made for this fax." }));
     return el("tr", { class: "history-row", id: "history-" + domId(row) }, [el("td", { colspan: String(cols) }, cellKids)]);
@@ -682,6 +686,14 @@
         f.problem = { pending: true, text: "Resent, waiting for delivery" };
         f.task_with = null;
         f.can_resend = false; f.resend_pending = true;
+        // The server moves an open task to whoever resent; mirror that here.
+        if (f.task && f.task.is_open && !(f.task.assignee.kind === "staff" && f.task.assignee.id === me.id)) {
+          var wasMine = f.mine;
+          f.task.assignee = { kind: "staff", id: me.id, name: me.name };
+          f.task.comments.push({ author: me.name, mine: true, automatic: false, at: now, body: me.name + " resent the fax and took over this task." });
+          f.mine = true;
+          if (!wasMine && result) { result.counts.mine += 1; result.counts.rest -= 1; }
+        }
         expanded[f.key] = true; renderRows();
         toast("Resent to " + name.value.trim() + ". The row clears once it's delivered.");
       });
