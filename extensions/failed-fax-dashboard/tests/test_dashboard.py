@@ -117,7 +117,7 @@ def test_task_payload_has_status_due_assignee_link_and_comments() -> None:
     assert payload["title"] == task.title
     assert payload["is_open"] is True
     assert payload["assignee"] == {"kind": "staff", "id": other.id, "name": "Cy Clark"}
-    assert payload["url"] == f"/patient/{task.patient.id}?taskId={task.id}"
+    assert payload["url"] == f"/patient/{task.patient.id}?taskId={task.dbid}&taskStatus=OPEN"
     assert [(c["author"], c["automatic"], c["mine"]) for c in payload["comments"]] == [
         ("Automatic", True, False),
         ("Me Myself", False, True),
@@ -144,8 +144,8 @@ def test_earlier_tasks_come_with_their_number_holder_link_and_comments() -> None
 
     assert [c["body"] for c in payload["comments"]] == ["current thread"]
     assert [(g["number"], g["assignee_name"], g["url"]) for g in payload["earlier"]] == [
-        (1, "Ann Aaron", f"/patient/{event.note.patient.id}?taskId={first.id}"),
-        (2, "Ben Baker", f"/patient/{event.note.patient.id}?taskId={second.id}"),
+        (1, "Ann Aaron", f"/patient/{event.note.patient.id}?taskId={first.dbid}&taskStatus={first.status}"),
+        (2, "Ben Baker", f"/patient/{event.note.patient.id}?taskId={second.dbid}&taskStatus={second.status}"),
     ]
     assert [[c["body"] for c in g["comments"]] for g in payload["earlier"]] == [["first thread"], ["second thread"]]
 
@@ -164,6 +164,7 @@ def test_closed_task_reports_its_status() -> None:
 
     assert payload["status"] == "CLOSED"
     assert payload["is_open"] is False
+    assert payload["url"] == f"/patient/{task.patient.id}?taskId={task.dbid}&taskStatus=CLOSED"
 
 
 def test_task_with_line_names_whoever_holds_the_task_besides_the_latest_sender() -> None:

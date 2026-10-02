@@ -37,6 +37,8 @@ class TaskInfo:
     patient_key: str
     # Tasks this one replaced after a hand-off to a team, oldest first.
     earlier_ids: tuple[str, ...] = ()
+    # The task's number, which is what the chart's task link reads.
+    dbid: int = 0
 
     @property
     def is_open(self) -> bool:
@@ -45,10 +47,14 @@ class TaskInfo:
 
     @property
     def url(self) -> str | None:
-        """Path that opens the task in the patient's chart (tasks with no patient have none)."""
-        if not self.patient_key:
+        """Path that opens the task in the patient's chart (tasks with no patient have none).
+
+        The chart reads ``taskId`` as the task's number and only looks among tasks with the
+        ``taskStatus`` given, the same form Canvas's own task permalinks use.
+        """
+        if not self.patient_key or not self.dbid:
             return None
-        return f"/patient/{self.patient_key}?taskId={self.id}"
+        return f"/patient/{self.patient_key}?taskId={self.dbid}&taskStatus={self.status}"
 
 
 def alert_key(source_type: str, item_id: str, e164: str) -> tuple[str, str, str]:
@@ -87,6 +93,7 @@ def task_info(task: Task) -> TaskInfo:
         assignee_name=name,
         assignee_sort=sort,
         patient_key=task.patient.id if task.patient is not None else "",
+        dbid=task.dbid,
     )
 
 
