@@ -2,18 +2,17 @@
 Shared utility functions for the BP CPT2 extension.
 """
 
-import json
 from datetime import datetime
 from typing import Optional
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.billing_line_item import AddBillingLineItem, UpdateBillingLineItem
-from canvas_sdk.v1.data import Note, Observation, Assessment, BillingLineItem, Command, Medication
+from canvas_sdk.effects.billing_line_item import UpdateBillingLineItem
+from canvas_sdk.v1.data import Note, Observation, Assessment, BillingLineItem
 from logger import log
 
 
-# BP CPT/HCPCS Code Definitions - Individual codes as constants
+# CPT II codes used by HEDIS Controlling High Blood Pressure (CBP)
 # Systolic BP codes
 CPT_3074F = "3074F"  # Systolic BP < 130 mmHg
 CPT_3075F = "3075F"  # Systolic BP 130-139 mmHg
@@ -24,35 +23,23 @@ CPT_3078F = "3078F"  # Diastolic BP < 80 mmHg
 CPT_3079F = "3079F"  # Diastolic BP 80-89 mmHg
 CPT_3080F = "3080F"  # Diastolic BP >= 90 mmHg
 
-# BP control status codes
-HCPCS_G8783 = "G8783"  # BP documented and controlled
-HCPCS_G8784 = "G8784"  # BP documented but not controlled
-HCPCS_G8752 = "G8752"  # Most recent BP < 140/90 (can coexist with control status)
-
-# BP not documented codes
-HCPCS_G8950 = "G8950"  # BP not documented, reason not given
-HCPCS_G8951 = "G8951"  # BP not documented, documented reason
-
-# Treatment plan codes
-HCPCS_G8753 = "G8753"  # BP >= 140/90 and treatment plan documented
-HCPCS_G8754 = "G8754"  # BP >= 140/90 and no treatment plan, reason not given
-HCPCS_G8755 = "G8755"  # BP >= 140/90 and no treatment plan, documented reason
+# HCPCS codes for MIPS Quality ID #236, Controlling High Blood Pressure
+HCPCS_G8752 = "G8752"  # Most recent systolic BP < 140 mmHg
+HCPCS_G8753 = "G8753"  # Most recent systolic BP >= 140 mmHg
+HCPCS_G8754 = "G8754"  # Most recent diastolic BP < 90 mmHg
+HCPCS_G8755 = "G8755"  # Most recent diastolic BP >= 90 mmHg
 
 # Code categories - codes within the same category are mutually exclusive
 SYSTOLIC_CODES = {CPT_3074F, CPT_3075F, CPT_3077F}
 DIASTOLIC_CODES = {CPT_3078F, CPT_3079F, CPT_3080F}
-CONTROL_STATUS_CODES = {HCPCS_G8783, HCPCS_G8784}
-NOT_DOCUMENTED_CODES = {HCPCS_G8950, HCPCS_G8951}
-TREATMENT_PLAN_CODES = {HCPCS_G8753, HCPCS_G8754, HCPCS_G8755}
+MIPS_236_SYSTOLIC_CODES = {HCPCS_G8752, HCPCS_G8753}
+MIPS_236_DIASTOLIC_CODES = {HCPCS_G8754, HCPCS_G8755}
 
-# All BP-related codes (union of all categories plus G8752)
 BP_RELATED_CODES = (
     SYSTOLIC_CODES |
     DIASTOLIC_CODES |
-    CONTROL_STATUS_CODES |
-    NOT_DOCUMENTED_CODES |
-    TREATMENT_PLAN_CODES |
-    {HCPCS_G8752}
+    MIPS_236_SYSTOLIC_CODES |
+    MIPS_236_DIASTOLIC_CODES
 )
 
 
@@ -140,154 +127,6 @@ def get_blood_pressure_readings(note: Note) -> tuple[Optional[float], Optional[f
     log.info(f"Note {note.id} - Final BP readings (minimum of {len(bp_observations)} observation(s)) - Systolic: {systolic_value}, Diastolic: {diastolic_value}")
 
     return systolic_value, diastolic_value
-
-
-def prepare_note_commands_data(note: Note) -> str:
-    """Extract and format all commands from the note for LLM analysis."""
-    commands = Command.objects.filter(note=note)
-
-    commands_data = []
-    for cmd in commands:
-        cmd_info = {
-            "schema_key": cmd.schema_key,
-            "data": cmd.data if cmd.data else {}
-        }
-        commands_data.append(cmd_info)
-
-    if not commands_data:
-        return "No commands documented in this note."
-
-    return json.dumps(commands_data, indent=2)
-
-
-def prepare_medications_data(patient_id: str) -> str:
-    """Extract and format active medications for LLM analysis."""
-    medications = Medication.objects.for_patient(patient_id).filter(deleted=False)
-
-    medications_data = []
-    for med in medications:
-        med_info = {
-            "name": med.fhir_medication_display if hasattr(med, 'fhir_medication_display') else str(med),
-            "status": med.status if hasattr(med, 'status') else "unknown"
-        }
-        medications_data.append(med_info)
-
-    if not medications_data:
-        return "No active medications documented for this patient."
-
-    return json.dumps(medications_data, indent=2)
-
-
-def analyze_treatment_plan(
-    openai_api_key: Optional[str],
-    commands_data: str,
-    medications_data: str,
-    systolic: float,
-    diastolic: float
-) -> dict:
-    """
-    Use LLM to analyze if blood pressure treatment plan is documented.
-
-    Args:
-        openai_api_key: OpenAI API key for LLM analysis
-        commands_data: JSON string of note commands
-        medications_data: JSON string of patient medications
-        systolic: Systolic blood pressure reading
-        diastolic: Diastolic blood pressure reading
-
-    Returns dict with:
-        - has_treatment_plan (bool): Whether a treatment plan is documented
-        - has_documented_reason (bool): Whether there's a documented reason for no treatment plan
-        - explanation (str): Brief explanation of the analysis
-    """
-    from bp_cpt2.llm_openai import LlmOpenai
-
-    # Check API key
-    if not openai_api_key:
-        log.error("OPENAI_API_KEY not provided")
-        return {
-            "has_treatment_plan": False,
-            "has_documented_reason": False,
-            "explanation": "Unable to analyze: OpenAI API key not configured"
-        }
-
-    llm = LlmOpenai(api_key=openai_api_key, model="gpt-4")
-
-    system_prompt = """You are a clinical documentation analyst specializing in hypertension management.
-Your task is to analyze clinical note data to determine if a blood pressure treatment plan is documented.
-
-A treatment plan is considered documented if ANY of the following are present:
-1. New or adjusted antihypertensive medications prescribed or planned
-2. Lifestyle modifications specifically for blood pressure control (e.g., diet changes, exercise, salt restriction)
-3. Follow-up plans specifically for blood pressure monitoring or management
-4. Referrals to specialists for hypertension management
-5. Patient education about blood pressure control
-
-If NO treatment plan is found, check if there's a documented reason why (e.g., "patient declined",
-"awaiting specialist consult", "recent medication change, monitoring before adjustment").
-
-You must respond with valid JSON in the following format:
-```json
-{
-    "has_treatment_plan": true/false,
-    "has_documented_reason": true/false,
-    "explanation": "brief explanation of your analysis"
-}
-```"""
-
-    user_prompt = f"""Analyze the following clinical data for blood pressure treatment plan documentation.
-
-Patient's Blood Pressure: {systolic}/{diastolic} mmHg (UNCONTROLLED - requires treatment plan)
-
-Clinical Note Commands:
-{commands_data}
-
-Active Medications:
-{medications_data}
-
-Based on this information, determine:
-1. Is there a documented treatment plan for blood pressure management?
-2. If no treatment plan, is there a documented reason why?
-
-Provide your analysis in JSON format."""
-
-    # Use chat_with_json to get structured response
-    result = llm.chat_with_json(
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        max_retries=3
-    )
-
-    if result["success"]:
-        return result["data"]
-    else:
-        log.error(f"LLM analysis failed: {result['error']}")
-        return {
-            "has_treatment_plan": False,
-            "has_documented_reason": False,
-            "explanation": f"LLM analysis failed: {result['error']}"
-        }
-
-
-def determine_treatment_code(analysis_result: dict) -> Optional[str]:
-    """
-    Determine the appropriate treatment billing code based on LLM analysis.
-
-    Returns:
-        HCPCS_G8753: Treatment plan documented
-        HCPCS_G8754: No treatment plan, reason not given
-        HCPCS_G8755: No treatment plan, documented reason
-        None: Should not add treatment code
-    """
-    has_treatment_plan = analysis_result.get("has_treatment_plan", False)
-    has_documented_reason = analysis_result.get("has_documented_reason", False)
-
-    if has_treatment_plan:
-        return HCPCS_G8753
-    elif has_documented_reason:
-        return HCPCS_G8755
-    else:
-        return HCPCS_G8754
 
 
 def get_hypertension_related_assessments(note: Note, openai_api_key: Optional[str]) -> list[str]:
@@ -392,30 +231,20 @@ If none of the assessments are hypertension-related, return an empty array."""
 def process_bp_billing_for_note(
     note: Note,
     openai_api_key: Optional[str],
-    include_treatment_codes: bool = True,
     was_just_locked: bool = False
 ) -> list[Effect]:
     """
-    Process BP-related billing codes for a note.
-
-    This function handles:
-    1. Updating assessment links for existing BP billing codes
-    2. Analyzing treatment plans for uncontrolled BP (if include_treatment_codes is True)
-    3. Adding appropriate treatment plan codes (if include_treatment_codes is True)
-    4. Optionally pushing charges (if was_just_locked is True)
+    Link the note's hypertension-related assessments to its BP billing codes.
 
     Args:
         note: Note object to process
         openai_api_key: OpenAI API key for LLM analysis
-        include_treatment_codes: Whether to analyze and add treatment plan codes
         was_just_locked: Whether this is being called immediately after a note lock event
-                         (controls both cache deduplication and charge pushing)
+                         (controls cache deduplication)
 
     Returns:
         List of Effect objects
     """
-    from canvas_sdk.effects.note import Note as NoteEffect
-
     # Check cache for duplicate lock processing
     if was_just_locked:
         try:
@@ -439,9 +268,6 @@ def process_bp_billing_for_note(
 
     effects = []
 
-    # Get hypertension-related assessments ONCE for all operations
-    hypertension_assessments = get_hypertension_related_assessments(note, openai_api_key)
-
     # Get existing BP-related billing line items
     existing_bp_billing_items = BillingLineItem.objects.filter(
         note_id=note.dbid,
@@ -449,6 +275,7 @@ def process_bp_billing_for_note(
     )
 
     if existing_bp_billing_items.exists():
+        hypertension_assessments = get_hypertension_related_assessments(note, openai_api_key)
         log.info(f"Note {note.id} - Found {existing_bp_billing_items.count()} BP billing codes to update with {len(hypertension_assessments)} hypertension-related assessments")
 
         for billing_item in existing_bp_billing_items:
@@ -482,75 +309,5 @@ def process_bp_billing_for_note(
             )
             effects.append(update_effect.apply())
             log.info(f"Updated billing code {billing_item.cpt} with {len(combined_assessment_ids)} total assessments (preserved {len(existing_assessment_ids)} existing, {len(hypertension_assessments)} hypertension-related) for note {note.id}")
-
-    # Get BP readings for this note
-    systolic, diastolic = get_blood_pressure_readings(note)
-
-    # Only analyze treatment codes if enabled
-    if not include_treatment_codes:
-        log.info(f"Note {note.id} - Treatment plan codes disabled, skipping treatment plan analysis")
-        return effects
-
-    # Only add treatment codes if BP is uncontrolled (>= 140/90)
-    if systolic is None or diastolic is None:
-        log.info(f"No BP readings found for note {note.id}, skipping treatment plan analysis")
-        return effects
-
-    if systolic < 140 and diastolic < 90:
-        log.info(f"BP is controlled ({systolic}/{diastolic}), no treatment plan codes needed")
-        return effects
-
-    log.info(f"BP is uncontrolled ({systolic}/{diastolic}), analyzing treatment plan")
-
-    # Prepare data for LLM analysis
-    commands_data = prepare_note_commands_data(note)
-    medications_data = prepare_medications_data(str(patient.id))
-
-    # Analyze with LLM
-    analysis_result = analyze_treatment_plan(
-        openai_api_key=openai_api_key,
-        commands_data=commands_data,
-        medications_data=medications_data,
-        systolic=systolic,
-        diastolic=diastolic
-    )
-
-    log.info(f"Treatment plan analysis result: {analysis_result}")
-
-    # Determine appropriate treatment code
-    treatment_code = determine_treatment_code(analysis_result)
-
-    if not treatment_code:
-        log.info("No treatment code determined")
-        return effects
-
-    # Check if this code already exists
-    existing_codes = set(
-        BillingLineItem.objects.filter(
-            note_id=note.dbid
-        ).values_list("cpt", flat=True)
-    )
-
-    if treatment_code in existing_codes:
-        log.info(f"Treatment code {treatment_code} already exists for note {note.id}, skipping")
-        return effects
-
-    # Create billing line item effect
-    billing_item = AddBillingLineItem(
-        note_id=str(note.id),
-        cpt=treatment_code,
-        units=1,
-        assessment_ids=hypertension_assessments,
-        modifiers=[]
-    )
-
-    log.info(f"Added treatment billing code {treatment_code} for patient {patient.id}: {analysis_result.get('explanation')}")
-
-    effects.append(billing_item.apply())
-
-    # Only push charges if note was just locked and is billable
-    if was_just_locked and note.note_type_version and note.note_type_version.is_billable:
-        note_effect = NoteEffect(instance_id=str(note.id))
-        effects.append(note_effect.push_charges())
 
     return effects

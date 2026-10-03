@@ -11,14 +11,8 @@ from bp_cpt2.utils import to_bool
 
 class BloodPressureNoteButtonHandler(ActionButton):
     """
-    Action button handler that processes BP billing codes when clicked.
-
-    This handler provides a manual trigger to:
-    - Update assessment links for existing BP billing codes
-    - Analyze treatment plans for uncontrolled BP
-    - Add appropriate treatment plan codes (G8753-G8755)
-
-    Unlike the note state handler, this does NOT push charges - it only adds the billing codes.
+    Action button handler that links the note's hypertension-related assessments
+    to its BP billing codes before the note is locked.
     """
 
     BUTTON_TITLE = "BP CPT-II"
@@ -65,16 +59,14 @@ class BloodPressureNoteButtonHandler(ActionButton):
 
         # Check if note is billable
         if note.note_type_version and not note.note_type_version.is_billable:
-            log.info(f"Skipping BP treatment analysis for note {note_id} - note type is not billable")
+            log.info(f"Skipping BP assessment linking for note {note_id} - note type is not billable")
             return []
 
         # Use shared utility function to process BP billing codes
         openai_api_key = self.secrets.get('OPENAI_API_KEY')
-        include_treatment_codes = to_bool(self.secrets.get('INCLUDE_TREATMENT_PLAN_CODES', ''))
 
         return process_bp_billing_for_note(
             note=note,
             openai_api_key=openai_api_key,
-            include_treatment_codes=include_treatment_codes,
-            was_just_locked=False  # Manual button click: don't push charges or use cache
+            was_just_locked=False  # Manual button click: don't use cache
         )
