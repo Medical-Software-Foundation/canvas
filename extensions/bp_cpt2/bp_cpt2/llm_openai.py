@@ -2,7 +2,7 @@
 Simplified OpenAI LLM wrapper for BP CPT2 extension.
 
 This module provides a lightweight interface to OpenAI's chat completion API,
-designed specifically for analyzing clinical notes to determine treatment plan documentation.
+used to identify the hypertension-related diagnoses on a clinical note.
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from canvas_sdk.test_utils.factories import PatientFactory
-from canvas_sdk.v1.data import Note, Observation, Assessment
+from canvas_sdk.v1.data import Note, Observation, Assessment, Condition, ConditionCoding
 
 from bp_cpt2.bp_claim_coder import get_blood_pressure_readings, get_hypertension_related_assessments, process_bp_billing_for_note
 
@@ -389,6 +389,91 @@ def test_get_hypertension_related_assessments_no_api_key() -> None:
     assert result == []
 
 
+def create_hypertension_assessment() -> tuple[Note, Assessment]:
+    """Create a note with one assessment whose condition has an ICD-10 and a SNOMED coding."""
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+    condition = Condition.objects.create(
+        patient=patient,
+        deleted=False,
+        clinical_status="active",
+        surgical=False,
+        onset_date=datetime.now(timezone.utc).date(),
+        resolution_date=datetime.now(timezone.utc).date()
+    )
+    ConditionCoding.objects.create(condition=condition, system="ICD-10", code="I10", display="Essential hypertension")
+    ConditionCoding.objects.create(condition=condition, system="SNOMED", code="59621000", display="Essential hypertension")
+    assessment = Assessment.objects.create(
+        id=uuid.uuid4(),
+        note=note,
+        patient_id=patient.dbid,
+        condition=condition,
+        originator_id=1,
+        deleted=False
+    )
+    return note, assessment
+
+
+def test_get_hypertension_related_assessments_returns_llm_ids() -> None:
+    """
+    Test that the assessment IDs the LLM marks as hypertension-related are returned,
+    and that only ICD-10 codings are sent to the LLM.
+    """
+    note, assessment = create_hypertension_assessment()
+
+    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
+        mock_llm_class.return_value.chat_with_json.return_value = {
+            "success": True,
+            "data": {"hypertension_related_assessment_ids": [str(assessment.id)]}
+        }
+        result = get_hypertension_related_assessments(note, "test-api-key")
+
+    assert result == [str(assessment.id)]
+    mock_llm_class.assert_called_once_with(api_key="test-api-key")
+    user_prompt = mock_llm_class.return_value.chat_with_json.call_args.kwargs["user_prompt"]
+    assert "I10" in user_prompt
+    assert "59621000" not in user_prompt
+
+
+def test_get_hypertension_related_assessments_without_api_key_skips_llm() -> None:
+    """
+    Test that no LLM call is made when assessments have codings but no API key is configured.
+    """
+    note, _ = create_hypertension_assessment()
+
+    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
+        result = get_hypertension_related_assessments(note, None)
+
+    assert result == []
+    mock_llm_class.assert_not_called()
+
+
+def test_get_hypertension_related_assessments_llm_failures_return_empty() -> None:
+    """
+    Test that failed, malformed, or raising LLM calls link no assessments.
+    """
+    note, _ = create_hypertension_assessment()
+
+    responses = [
+        {"success": False, "error": "API error"},
+        {"success": True, "data": {"hypertension_related_assessment_ids": "not-a-list"}},
+    ]
+    for response in responses:
+        with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
+            mock_llm_class.return_value.chat_with_json.return_value = response
+            assert get_hypertension_related_assessments(note, "test-api-key") == []
+
+    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
+        mock_llm_class.return_value.chat_with_json.side_effect = RuntimeError("timeout")
+        assert get_hypertension_related_assessments(note, "test-api-key") == []
+
+
 def test_process_bp_billing_cache_hit() -> None:
     """
     Test that process_bp_billing_for_note skips processing when cache key exists.
@@ -426,7 +511,6 @@ def test_process_bp_billing_cache_hit() -> None:
         result = process_bp_billing_for_note(
             note=note,
             openai_api_key="test-key",
-            include_treatment_codes=False,
             was_just_locked=True
         )
 
@@ -472,7 +556,6 @@ def test_process_bp_billing_cache_miss_sets_key() -> None:
         result = process_bp_billing_for_note(
             note=note,
             openai_api_key="test-key",
-            include_treatment_codes=False,
             was_just_locked=True
         )
 
