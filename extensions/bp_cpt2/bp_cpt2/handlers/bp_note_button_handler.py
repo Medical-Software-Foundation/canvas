@@ -5,7 +5,7 @@ from canvas_sdk.v1.data.note import NoteStateChangeEvent, NoteStates
 
 from logger import log
 
-from bp_cpt2.bp_claim_coder import process_bp_billing_for_note
+from bp_cpt2.bp_claim_coder import get_llm_client, process_bp_billing_for_note
 from bp_cpt2.utils import to_bool
 
 
@@ -62,11 +62,8 @@ class BloodPressureNoteButtonHandler(ActionButton):
             log.info(f"Skipping BP assessment linking for note {note_id} - note type is not billable")
             return []
 
-        # Use shared utility function to process BP billing codes
-        openai_api_key = self.secrets.get('OPENAI_API_KEY')
-
         return process_bp_billing_for_note(
             note=note,
-            openai_api_key=openai_api_key,
+            llm=get_llm_client(self.secrets),
             was_just_locked=False  # Manual button click: don't use cache
         )

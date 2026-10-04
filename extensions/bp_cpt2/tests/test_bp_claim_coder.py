@@ -9,7 +9,9 @@ import pytest
 from canvas_sdk.test_utils.factories import PatientFactory
 from canvas_sdk.v1.data import Note, Observation, Assessment, Condition, ConditionCoding
 
-from bp_cpt2.bp_claim_coder import get_blood_pressure_readings, get_hypertension_related_assessments, process_bp_billing_for_note
+from bp_cpt2.bp_claim_coder import get_blood_pressure_readings, get_hypertension_related_assessments, get_llm_client, process_bp_billing_for_note
+from bp_cpt2.llm_anthropic import ANTHROPIC_API_BASE, LlmAnthropic
+from bp_cpt2.llm_openai import FIREWORKS_API_BASE, FIREWORKS_DEFAULT_MODEL, OPENAI_API_BASE, LlmOpenai
 
 
 def test_get_blood_pressure_readings_by_patient() -> None:
@@ -330,8 +332,10 @@ def test_get_hypertension_related_assessments_no_assessments() -> None:
     )
 
     # Call function - should return empty list without calling LLM
-    result = get_hypertension_related_assessments(note, "test-api-key")
+    llm = Mock()
+    result = get_hypertension_related_assessments(note, llm)
     assert result == []
+    llm.chat_with_json.assert_not_called()
 
 
 def test_get_hypertension_related_assessments_assessments_without_conditions() -> None:
@@ -359,14 +363,15 @@ def test_get_hypertension_related_assessments_assessments_without_conditions() -
     )
 
     # Call function - should return empty list because assessments have no conditions
-    result = get_hypertension_related_assessments(note, "test-api-key")
+    llm = Mock()
+    result = get_hypertension_related_assessments(note, llm)
     assert result == []
+    llm.chat_with_json.assert_not_called()
 
 
 def test_get_hypertension_related_assessments_no_api_key() -> None:
     """
-    Test get_hypertension_related_assessments without API key.
-    Covers lines 343-345 (missing API key path).
+    Test get_hypertension_related_assessments without an LLM client (no AI provider key configured).
     """
     # Create test patient and note
     patient = PatientFactory.create()
@@ -378,14 +383,10 @@ def test_get_hypertension_related_assessments_no_api_key() -> None:
         datetime_of_service=datetime.now(timezone.utc)
     )
 
-    # Call function without API key
+    # Call function without an LLM client
     result = get_hypertension_related_assessments(note, None)
 
     # Should return empty list
-    assert result == []
-
-    # Also test with empty string
-    result = get_hypertension_related_assessments(note, "")
     assert result == []
 
 
@@ -427,31 +428,26 @@ def test_get_hypertension_related_assessments_returns_llm_ids() -> None:
     """
     note, assessment = create_hypertension_assessment()
 
-    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
-        mock_llm_class.return_value.chat_with_json.return_value = {
-            "success": True,
-            "data": {"hypertension_related_assessment_ids": [str(assessment.id)]}
-        }
-        result = get_hypertension_related_assessments(note, "test-api-key")
+    llm = Mock()
+    llm.chat_with_json.return_value = {
+        "success": True,
+        "data": {"hypertension_related_assessment_ids": [str(assessment.id)]}
+    }
+    result = get_hypertension_related_assessments(note, llm)
 
     assert result == [str(assessment.id)]
-    mock_llm_class.assert_called_once_with(api_key="test-api-key")
-    user_prompt = mock_llm_class.return_value.chat_with_json.call_args.kwargs["user_prompt"]
+    user_prompt = llm.chat_with_json.call_args.kwargs["user_prompt"]
     assert "I10" in user_prompt
     assert "59621000" not in user_prompt
 
 
 def test_get_hypertension_related_assessments_without_api_key_skips_llm() -> None:
     """
-    Test that no LLM call is made when assessments have codings but no API key is configured.
+    Test that assessments with codings link nothing when no AI provider key is configured.
     """
     note, _ = create_hypertension_assessment()
 
-    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
-        result = get_hypertension_related_assessments(note, None)
-
-    assert result == []
-    mock_llm_class.assert_not_called()
+    assert get_hypertension_related_assessments(note, None) == []
 
 
 def test_get_hypertension_related_assessments_llm_failures_return_empty() -> None:
@@ -465,13 +461,58 @@ def test_get_hypertension_related_assessments_llm_failures_return_empty() -> Non
         {"success": True, "data": {"hypertension_related_assessment_ids": "not-a-list"}},
     ]
     for response in responses:
-        with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
-            mock_llm_class.return_value.chat_with_json.return_value = response
-            assert get_hypertension_related_assessments(note, "test-api-key") == []
+        llm = Mock()
+        llm.chat_with_json.return_value = response
+        assert get_hypertension_related_assessments(note, llm) == []
+        llm.chat_with_json.assert_called_once()
 
-    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
-        mock_llm_class.return_value.chat_with_json.side_effect = RuntimeError("timeout")
-        assert get_hypertension_related_assessments(note, "test-api-key") == []
+    llm = Mock()
+    llm.chat_with_json.side_effect = RuntimeError("timeout")
+    assert get_hypertension_related_assessments(note, llm) == []
+
+
+def test_get_llm_client_returns_none_without_a_provider_key() -> None:
+    """
+    Test that no client is built when no AI provider key is set or the keys are empty.
+    """
+    assert get_llm_client({}) is None
+    assert get_llm_client({"OPENAI_API_KEY": "", "ANTHROPIC_API_KEY": "", "FIREWORKS_API_KEY": "", "LLM_MODEL": "gpt-4o"}) is None
+
+
+def test_get_llm_client_builds_each_provider_with_its_defaults() -> None:
+    """
+    Test that each provider key builds a client for that provider's API and default model.
+    """
+    openai = get_llm_client({"OPENAI_API_KEY": "openai-key"})
+    assert type(openai) is LlmOpenai
+    assert (openai.api_key, openai.model, openai.base_url) == ("openai-key", "gpt-4", OPENAI_API_BASE)
+
+    anthropic = get_llm_client({"ANTHROPIC_API_KEY": "anthropic-key"})
+    assert type(anthropic) is LlmAnthropic
+    assert (anthropic.api_key, anthropic.model, anthropic.base_url) == ("anthropic-key", "claude-opus-5", ANTHROPIC_API_BASE)
+
+    fireworks = get_llm_client({"FIREWORKS_API_KEY": "fireworks-key"})
+    assert type(fireworks) is LlmOpenai
+    assert (fireworks.api_key, fireworks.model, fireworks.base_url) == ("fireworks-key", FIREWORKS_DEFAULT_MODEL, FIREWORKS_API_BASE)
+
+
+def test_get_llm_client_prefers_openai_then_anthropic_then_fireworks() -> None:
+    """
+    Test which provider is used when more than one key is set.
+    """
+    all_keys = {"OPENAI_API_KEY": "openai-key", "ANTHROPIC_API_KEY": "anthropic-key", "FIREWORKS_API_KEY": "fireworks-key"}
+    assert get_llm_client(all_keys).api_key == "openai-key"
+
+    del all_keys["OPENAI_API_KEY"]
+    assert get_llm_client(all_keys).api_key == "anthropic-key"
+
+
+def test_get_llm_client_uses_llm_model_override() -> None:
+    """
+    Test that LLM_MODEL replaces the provider's default model.
+    """
+    assert get_llm_client({"ANTHROPIC_API_KEY": "anthropic-key", "LLM_MODEL": "claude-sonnet-5"}).model == "claude-sonnet-5"
+    assert get_llm_client({"FIREWORKS_API_KEY": "fireworks-key", "LLM_MODEL": "accounts/fireworks/routers/glm-5p3-us"}).model == "accounts/fireworks/routers/glm-5p3-us"
 
 
 def test_process_bp_billing_cache_hit() -> None:
@@ -510,7 +551,7 @@ def test_process_bp_billing_cache_hit() -> None:
         # Call with was_just_locked=True to trigger cache check
         result = process_bp_billing_for_note(
             note=note,
-            openai_api_key="test-key",
+            llm=Mock(),
             was_just_locked=True
         )
 
@@ -555,7 +596,7 @@ def test_process_bp_billing_cache_miss_sets_key() -> None:
         # Call with was_just_locked=True to trigger cache check
         result = process_bp_billing_for_note(
             note=note,
-            openai_api_key="test-key",
+            llm=Mock(),
             was_just_locked=True
         )
 

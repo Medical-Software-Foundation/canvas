@@ -52,7 +52,7 @@ Triggers when vitals commands are committed. Retrieves systolic and diastolic bl
 
 #### BloodPressureNoteStateHandler
 
-Triggers when a billable note is locked. Uses an OpenAI LLM to find the note's hypertension-related assessments and links them to the BP billing codes as diagnosis pointers.
+Triggers when a billable note is locked. Uses an LLM from OpenAI, Anthropic or Fireworks (see Configuration) to find the note's hypertension-related assessments and links them to the BP billing codes as diagnosis pointers.
 
 **Event**: `NOTE_STATE_CHANGE_EVENT_UPDATED` (only processes when state is 'LKD')
 
@@ -66,10 +66,26 @@ A "BP CPT-II" button in the note header that runs the same diagnosis linking bef
 
 The plugin uses the following secrets configured in Canvas:
 
-#### OPENAI_API_KEY (Required)
-Your OpenAI API key for LLM access. It's used to identify the hypertension-related assessments to link to the BP billing codes. Without it, the codes are still added but no diagnoses are linked.
+#### AI Provider Key (Required for diagnosis linking)
+Set one of these to an API key for the provider you use. The plugin uses it to identify the hypertension-related assessments to link to the BP billing codes. Without one, the codes are still added but no diagnoses are linked.
 
-**Important**: The OpenAI API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin.
+| Secret | Provider | Default model | Where requests are processed |
+|---|---|---|---|
+| `OPENAI_API_KEY` | OpenAI | `gpt-4` | OpenAI's US endpoint |
+| `ANTHROPIC_API_KEY` | Anthropic | `claude-opus-5` | US-only inference |
+| `FIREWORKS_API_KEY` | Fireworks | `accounts/fireworks/routers/kimi-k3-us` | Fireworks' US-only endpoint |
+
+If more than one key is set, the plugin uses OpenAI, then Anthropic, then Fireworks.
+
+**Important**:
+- An OpenAI API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin.
+- Anthropic bills US-only inference at 1.1x its standard rates. With the default Anthropic model, a request that Anthropic's safety checks decline is re-run on Anthropic's recommended fallback model.
+- Each note's diagnosis codes are sent to the provider, so the account behind the key needs a Business Associate Agreement (BAA) with that provider.
+
+#### LLM_MODEL (Optional)
+Overrides the provider's default model, for example `claude-sonnet-5` with an Anthropic key.
+- With an Anthropic key, it must be a Claude 4.6 or later model. Earlier models don't support US-only inference.
+- With a Fireworks key, it must be one of Fireworks' US-only models, whose IDs end in `-us`.
 
 #### SHOW_BUTTON_FOR_MANUAL_TRIGGER (Optional)
 Shows the "BP CPT-II" note header button while the note can be edited.
@@ -92,7 +108,7 @@ Codes for MIPS Quality ID #317 (Screening for High Blood Pressure and Follow-Up 
 ### Diagnosis Pointers (Hypertension-Related Only)
 The note state handler uses AI to identify hypertension-related assessments and links them to billing codes. The handler:
 - Filters assessment condition codings to ICD-10 codes only
-- Uses an Open AI LLM to analyze which assessments are clearly hypertension-related
+- Uses the configured LLM to analyze which assessments are clearly hypertension-related
 - Only includes hypertension-related assessments in billing line items
 
 Assessments for conditions that are merely risk factors (like diabetes or obesity) or general complications are excluded from the billing codes.
@@ -108,15 +124,16 @@ uv run pytest tests/ --cov=.
 
 Name                                         Stmts   Miss  Cover
 ----------------------------------------------------------------
-bp_cpt2/bp_claim_coder.py                      125      2    98%
+bp_cpt2/bp_claim_coder.py                      134      2    99%
 bp_cpt2/handlers/__init__.py                     0      0   100%
-bp_cpt2/handlers/bp_note_button_handler.py      34      0   100%
-bp_cpt2/handlers/bp_note_state_handler.py       26      0   100%
+bp_cpt2/handlers/bp_note_button_handler.py      33      0   100%
+bp_cpt2/handlers/bp_note_state_handler.py       25      0   100%
 bp_cpt2/handlers/bp_vitals_handler.py           72      0   100%
-bp_cpt2/llm_openai.py                           64      0   100%
+bp_cpt2/llm_anthropic.py                        33      0   100%
+bp_cpt2/llm_openai.py                           69      0   100%
 bp_cpt2/utils.py                                 4      0   100%
 ----------------------------------------------------------------
-TOTAL                                          325      2    99%
+TOTAL                                          370      2    99%
 ```
 
 ## Installation
@@ -127,13 +144,17 @@ To install this plugin to a Canvas instance:
 uv run canvas install bp_cpt2 --host <your-host> \
   --secret OPENAI_API_KEY="<Your OpenAI API Key>"
 
+# Or use an Anthropic or Fireworks key instead
+uv run canvas install bp_cpt2 --host <your-host> \
+  --secret ANTHROPIC_API_KEY="<Your Anthropic API Key>"
+
 # Also show the "BP CPT-II" note header button
 uv run canvas install bp_cpt2 --host <your-host> \
   --secret OPENAI_API_KEY="<Your OpenAI API Key>" \
   --secret SHOW_BUTTON_FOR_MANUAL_TRIGGER="true"
 ```
 
-**Important**: The OpenAI API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin. You can verify your project's region in your OpenAI account settings.
+**Important**: If you use OpenAI, the API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin. You can verify your project's region in your OpenAI account settings.
 
 ## Watch the Agent in Action
 [![Watch the video](https://img.youtube.com/vi/bmPeq6rq1go/0.jpg)](https://www.youtube.com/watch?v=bmPeq6rq1go)

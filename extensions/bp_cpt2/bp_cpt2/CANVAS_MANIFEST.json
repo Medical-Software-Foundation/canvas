@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.75.0",
-    "plugin_version": "2.0.0",
+    "plugin_version": "2.1.0",
     "name": "bp_cpt2",
     "description": "Automatically adds the CPT II and HCPCS quality codes for blood pressure (HEDIS Controlling High Blood Pressure and MIPS measure 236) to a note when vitals are recorded, for practices that report blood pressure control",
     "components": {
@@ -25,6 +25,9 @@
     },
     "secrets": [
         "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "FIREWORKS_API_KEY",
+        "LLM_MODEL",
         "SHOW_BUTTON_FOR_MANUAL_TRIGGER",
         "AUTOMATIC_TRIGGER_ON_NOTE_LOCK"
     ],

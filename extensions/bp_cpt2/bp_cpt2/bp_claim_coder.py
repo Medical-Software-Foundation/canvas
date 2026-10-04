@@ -3,13 +3,16 @@ Shared utility functions for the BP CPT2 extension.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.billing_line_item import UpdateBillingLineItem
 from canvas_sdk.v1.data import Note, Observation, Assessment, BillingLineItem
 from logger import log
+
+from bp_cpt2.llm_anthropic import ANTHROPIC_DEFAULT_MODEL, LlmAnthropic
+from bp_cpt2.llm_openai import FIREWORKS_API_BASE, FIREWORKS_DEFAULT_MODEL, OPENAI_DEFAULT_MODEL, LlmOpenai
 
 
 # CPT II codes used by HEDIS Controlling High Blood Pressure (CBP)
@@ -129,19 +132,37 @@ def get_blood_pressure_readings(note: Note) -> tuple[Optional[float], Optional[f
     return systolic_value, diastolic_value
 
 
-def get_hypertension_related_assessments(note: Note, openai_api_key: Optional[str]) -> list[str]:
+def get_llm_client(secrets: dict[str, Any]) -> Optional[LlmOpenai]:
+    """
+    Build an LLM client from the first AI provider key configured: OpenAI, then Anthropic, then Fireworks.
+
+    LLM_MODEL overrides the provider's default model. Returns None when no provider key is set.
+    """
+    model = secrets.get('LLM_MODEL')
+    if secrets.get('OPENAI_API_KEY'):
+        return LlmOpenai(api_key=secrets['OPENAI_API_KEY'], model=model or OPENAI_DEFAULT_MODEL)
+    if secrets.get('ANTHROPIC_API_KEY'):
+        return LlmAnthropic(api_key=secrets['ANTHROPIC_API_KEY'], model=model or ANTHROPIC_DEFAULT_MODEL)
+    if secrets.get('FIREWORKS_API_KEY'):
+        return LlmOpenai(
+            api_key=secrets['FIREWORKS_API_KEY'],
+            model=model or FIREWORKS_DEFAULT_MODEL,
+            base_url=FIREWORKS_API_BASE
+        )
+    return None
+
+
+def get_hypertension_related_assessments(note: Note, llm: Optional[LlmOpenai]) -> list[str]:
     """
     Get assessment IDs that are related to hypertension using LLM analysis.
 
     Args:
         note: Note object to get assessments from
-        openai_api_key: OpenAI API key for LLM analysis
+        llm: LLM client from get_llm_client, or None when no AI provider key is configured
 
     Returns:
         List of assessment IDs (as strings) that are hypertension-related
     """
-    from bp_cpt2.llm_openai import LlmOpenai
-
     # Get all assessments for this note
     assessments = list(Assessment.objects.filter(note_id=note.dbid, deleted=False))
     if not assessments:
@@ -179,11 +200,9 @@ def get_hypertension_related_assessments(note: Note, openai_api_key: Optional[st
 
     # Use LLM to identify hypertension-related assessments
     try:
-        if not openai_api_key:
-            log.warning(f"Note {note.id} - OPENAI_API_KEY not configured, cannot filter hypertension-related assessments")
+        if not llm:
+            log.warning(f"Note {note.id} - No AI provider key configured, cannot filter hypertension-related assessments")
             return []
-
-        client = LlmOpenai(api_key=openai_api_key)
 
         system_prompt = "You are a medical coding assistant that helps identify hypertension-related diagnoses."
         user_prompt = f"""Analyze the following assessments and determine which ones are clearly related to hypertension (high blood pressure).
@@ -206,7 +225,7 @@ Do NOT include conditions that are merely risk factors for hypertension (like di
 
 If none of the assessments are hypertension-related, return an empty array."""
 
-        response = client.chat_with_json(system_prompt=system_prompt, user_prompt=user_prompt, max_retries=2)
+        response = llm.chat_with_json(system_prompt=system_prompt, user_prompt=user_prompt, max_retries=2)
 
         if response and isinstance(response, dict) and response.get('success'):
             response_data = response.get('data', {})
@@ -230,7 +249,7 @@ If none of the assessments are hypertension-related, return an empty array."""
 
 def process_bp_billing_for_note(
     note: Note,
-    openai_api_key: Optional[str],
+    llm: Optional[LlmOpenai],
     was_just_locked: bool = False
 ) -> list[Effect]:
     """
@@ -238,7 +257,7 @@ def process_bp_billing_for_note(
 
     Args:
         note: Note object to process
-        openai_api_key: OpenAI API key for LLM analysis
+        llm: LLM client from get_llm_client, or None when no AI provider key is configured
         was_just_locked: Whether this is being called immediately after a note lock event
                          (controls cache deduplication)
 
@@ -275,7 +294,7 @@ def process_bp_billing_for_note(
     )
 
     if existing_bp_billing_items.exists():
-        hypertension_assessments = get_hypertension_related_assessments(note, openai_api_key)
+        hypertension_assessments = get_hypertension_related_assessments(note, llm)
         log.info(f"Note {note.id} - Found {existing_bp_billing_items.count()} BP billing codes to update with {len(hypertension_assessments)} hypertension-related assessments")
 
         for billing_item in existing_bp_billing_items:

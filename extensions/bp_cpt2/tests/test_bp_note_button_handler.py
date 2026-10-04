@@ -265,4 +265,8 @@ def test_handle_links_assessments_without_lock_cache() -> None:
         effects = handler.handle()
 
     assert effects == []
-    mock_process.assert_called_once_with(note=note, openai_api_key='test-key', was_just_locked=False)
+    mock_process.assert_called_once()
+    call_kwargs = mock_process.call_args.kwargs
+    assert call_kwargs['note'] == note
+    assert call_kwargs['llm'].api_key == 'test-key'
+    assert call_kwargs['was_just_locked'] is False
