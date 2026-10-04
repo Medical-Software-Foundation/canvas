@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Vaccines</title>
+    <link rel="stylesheet" href="styles.css?v={{ cache_bust }}">
+    <script type="text/javascript" src="main.js?v={{ cache_bust }}" defer></script>
+</head>
+<body>
+    <div class="card-container">
+        <header class="card-header">
+            <div class="header-text">
+                <h1 class="page-title">Vaccine Record</h1>
+                {% if patient_name %}
+                <p class="patient-name">{{ patient_name }}</p>
+                {% endif %}
+            </div>
+            {% if rows %}
+            <button type="button" class="print-button" id="print-button">Print / Save as PDF</button>
+            {% endif %}
+        </header>
+
+        {% if rows %}
+        <ul class="vaccine-list">
+            {% for row in rows %}
+            <li class="vaccine-item">
+                <div class="vaccine-main">
+                    <span class="vaccine-name">{{ row.name }}</span>
+                    <span class="vaccine-source source-{% if row.source == 'Administered here' %}administered{% else %}reported{% endif %}">{{ row.source }}</span>
+                </div>
+                <div class="vaccine-meta">
+                    {% if row.date_display %}
+                    <span class="vaccine-date">{{ row.date_display }}</span>
+                    {% else %}
+                    <span class="vaccine-date vaccine-date--unknown">Date not recorded</span>
+                    {% endif %}
+                    {% if row.manufacturer %}<span class="vaccine-detail">Manufacturer: {{ row.manufacturer }}</span>{% endif %}
+                    {% if row.lot_number %}<span class="vaccine-detail">Lot: {{ row.lot_number }}</span>{% endif %}
+                    {% if row.route %}<span class="vaccine-detail">Route: {{ row.route }}</span>{% endif %}
+                    {% if row.comment %}<span class="vaccine-detail">{{ row.comment }}</span>{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No immunizations on file.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
