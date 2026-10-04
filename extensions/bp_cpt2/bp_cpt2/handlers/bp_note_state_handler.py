@@ -8,14 +8,18 @@ from logger import log
 
 from bp_cpt2.bp_claim_coder import get_llm_client, process_bp_billing_for_note
 
+# Signing records LKD and SGN together; SGN is a literal because older SDKs' NoteStates lack it
+LOCKED_STATES = (NoteStates.LOCKED, "SGN")
+
 
 class BloodPressureNoteStateHandler(BaseHandler):
     """
-    Handles note lock events by linking the note's hypertension-related assessments
+    Handles note lock and sign events by linking the note's hypertension-related assessments
     to the BP billing codes added by the vitals handler.
     """
 
     RESPONDS_TO = [
+        EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED),
         EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_UPDATED)
     ]
 
@@ -27,8 +31,8 @@ class BloodPressureNoteStateHandler(BaseHandler):
 
         log.info(f"Note {note_id} state change to: {new_note_state}")
 
-        # Only process when note is locked
-        if new_note_state != NoteStates.LOCKED:
+        # Only process when note is locked or signed
+        if new_note_state not in LOCKED_STATES:
             log.info(f"Skipping BP assessment linking for note {note_id} - state is {new_note_state}")
             return []
 

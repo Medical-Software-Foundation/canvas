@@ -52,9 +52,9 @@ Triggers when vitals commands are committed. Retrieves systolic and diastolic bl
 
 #### BloodPressureNoteStateHandler
 
-Triggers when a billable note is locked. Uses an LLM from OpenAI, Anthropic or Fireworks (see Configuration) to find the note's hypertension-related assessments and links them to the BP billing codes as diagnosis pointers.
+Triggers when a billable note is locked or signed. Uses an LLM from OpenAI, Anthropic or Fireworks (see Configuration) to find the note's hypertension-related assessments and links them to the BP billing codes as diagnosis pointers.
 
-**Event**: `NOTE_STATE_CHANGE_EVENT_UPDATED` (only processes when state is 'LKD')
+**Events**: `NOTE_STATE_CHANGE_EVENT_CREATED` and `NOTE_STATE_CHANGE_EVENT_UPDATED` (only processes when state is 'LKD' or 'SGN'). Signing a note records both states, and the plugin links diagnoses once per lock.
 
 #### BloodPressureNoteButtonHandler
 
@@ -127,13 +127,13 @@ Name                                         Stmts   Miss  Cover
 bp_cpt2/bp_claim_coder.py                      134      2    99%
 bp_cpt2/handlers/__init__.py                     0      0   100%
 bp_cpt2/handlers/bp_note_button_handler.py      33      0   100%
-bp_cpt2/handlers/bp_note_state_handler.py       25      0   100%
+bp_cpt2/handlers/bp_note_state_handler.py       26      0   100%
 bp_cpt2/handlers/bp_vitals_handler.py           72      0   100%
 bp_cpt2/llm_anthropic.py                        33      0   100%
 bp_cpt2/llm_openai.py                           69      0   100%
 bp_cpt2/utils.py                                 4      0   100%
 ----------------------------------------------------------------
-TOTAL                                          370      2    99%
+TOTAL                                          371      2    99%
 ```
 
 ## Installation

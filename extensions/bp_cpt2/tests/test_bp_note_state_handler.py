@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import Mock, patch, PropertyMock
 
+import pytest
 from canvas_sdk.effects import EffectType
 from canvas_sdk.events import EventType
 from canvas_sdk.test_utils.factories import PatientFactory
@@ -109,16 +110,35 @@ def test_skips_non_locked_non_pushed_states() -> None:
     assert len(effects) == 0, "Expected no billing codes for non-locked/pushed note state"
 
 
-def test_links_hypertension_assessments_on_lock() -> None:
+class FakeCache(dict):
+    """In-memory stand-in for the plugin cache."""
+
+    def set(self, key: str, value: str, timeout_seconds: int) -> None:
+        """Store the value, ignoring the timeout."""
+        self[key] = value
+
+
+def test_responds_to_note_state_records_being_created_and_updated() -> None:
     """
-    Test that locking a note links its hypertension-related assessments to every BP billing code,
+    Test that the handler hears a lock when its state record is first created, not only when it's updated.
+    """
+    assert BloodPressureNoteStateHandler.RESPONDS_TO == [
+        EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED),
+        EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_UPDATED),
+    ]
+
+
+@pytest.mark.parametrize("state", ["LKD", "SGN"])
+def test_links_hypertension_assessments_on_lock(state: str) -> None:
+    """
+    Test that locking or signing a note links its hypertension-related assessments to every BP billing code,
     without adding codes or pushing charges.
     """
     note = create_note_with_billing_codes([CPT_3077F, CPT_3080F, HCPCS_G8753, HCPCS_G8755])
     bp_item_ids = {str(item.id) for item in BillingLineItem.objects.filter(note_id=note.dbid)}
 
     handler = BloodPressureNoteStateHandler(
-        event=make_state_change_event(note, 'LKD'),
+        event=make_state_change_event(note, state),
         secrets={'OPENAI_API_KEY': 'test-key'}
     )
 
@@ -131,6 +151,23 @@ def test_links_hypertension_assessments_on_lock() -> None:
     payloads = [json.loads(effect.payload) for effect in effects]
     assert {payload["billing_line_item_id"] for payload in payloads} == bp_item_ids
     assert all(payload["data"] == {"assessment_ids": ["assessment-1"]} for payload in payloads)
+
+
+def test_signing_links_diagnoses_once() -> None:
+    """
+    Test that the locked and signed records from one signing link diagnoses only once.
+    """
+    note = create_note_with_billing_codes([CPT_3077F, HCPCS_G8753])
+    secrets = {'FIREWORKS_API_KEY': 'test-key'}
+
+    with patch.object(utils, 'get_cache', return_value=FakeCache()), \
+            patch.object(utils, 'get_hypertension_related_assessments', return_value=['assessment-1']) as mock_llm:
+        locked_effects = BloodPressureNoteStateHandler(event=make_state_change_event(note, 'LKD'), secrets=secrets).compute()
+        signed_effects = BloodPressureNoteStateHandler(event=make_state_change_event(note, 'SGN'), secrets=secrets).compute()
+
+    assert len(locked_effects) == 2
+    assert signed_effects == []
+    mock_llm.assert_called_once()
 
 
 def test_skips_llm_when_note_has_no_bp_codes() -> None:

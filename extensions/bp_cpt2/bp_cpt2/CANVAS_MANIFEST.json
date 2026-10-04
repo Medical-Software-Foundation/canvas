@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.75.0",
-    "plugin_version": "2.1.0",
+    "plugin_version": "2.1.1",
     "name": "bp_cpt2",
     "description": "Automatically adds the CPT II and HCPCS quality codes for blood pressure (HEDIS Controlling High Blood Pressure and MIPS measure 236) to a note when vitals are recorded, for practices that report blood pressure control",
     "components": {
@@ -11,7 +11,7 @@
             },
             {
                 "class": "bp_cpt2.handlers.bp_note_state_handler:BloodPressureNoteStateHandler",
-                "description": "When a billable note is locked, uses AI to link the note's hypertension diagnoses to its blood pressure codes"
+                "description": "When a billable note is locked or signed, uses AI to link the note's hypertension diagnoses to its blood pressure codes"
             },
             {
                 "class": "bp_cpt2.handlers.bp_note_button_handler:BloodPressureNoteButtonHandler",
@@ -28,8 +28,7 @@
         "ANTHROPIC_API_KEY",
         "FIREWORKS_API_KEY",
         "LLM_MODEL",
-        "SHOW_BUTTON_FOR_MANUAL_TRIGGER",
-        "AUTOMATIC_TRIGGER_ON_NOTE_LOCK"
+        "SHOW_BUTTON_FOR_MANUAL_TRIGGER"
     ],
     "tags": {},
     "references": [],
