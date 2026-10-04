@@ -1,0 +1,48 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "prescription_processing_dashboard",
+    "description": "Prescription Processing Dashboard for managing and processing prescriptions",
+    "url_permissions": [
+        {
+            "url": "https://www.canvasmedical.com/extensions",
+            "permissions": ["ALLOW_SAME_ORIGIN", "SCRIPTS"]
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "prescription_processing_dashboard.applications.prescription_processing_application:PrescriptionProcessingApplication",
+                "name": "Prescription Processing",
+                "description": "Dashboard for processing prescriptions",
+                "scope": "provider_menu_item",
+                "icon": "assets/prescription-icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "prescription_processing_dashboard.handlers.prescription_processing_web_app:PrescriptionProcessingWebApp",
+                "description": "Serves the Prescription Processing Dashboard",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Command",
+                        "Patient",
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
