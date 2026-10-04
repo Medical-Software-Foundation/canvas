@@ -1,0 +1,73 @@
+{% load static %}<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="/plugin-io/api/intake_chart_app/intake/static/intake.css">
+</head>
+<body>
+<div class="ic-container">
+  <div class="ic-header">
+    <span class="ic-badge">{{ note_type_name }}</span>
+    <h1>Intake</h1>
+  </div>
+
+  {# ---- Vitals ---- #}
+  <div class="ic-section" id="section-vitals">
+    <div class="ic-section-header">
+      <h2 class="ic-section-title">Vitals</h2>
+      <span class="ic-section-status" id="status-vitals"></span>
+    </div>
+    <form id="form-vitals" class="ic-form" onsubmit="return false;">
+      <div class="ic-grid">
+        {% for f in vitals_fields %}
+          <div class="ic-field">
+            <label class="ic-label" for="vitals_{{ f.id }}">{{ f.label }} <span class="ic-unit">({{ f.unit }})</span></label>
+            <input class="ic-input" type="number" step="{{ f.step }}"
+                   id="vitals_{{ f.id }}" name="{{ f.id }}" value="">
+          </div>
+        {% endfor %}
+      </div>
+      <div class="ic-save-row">
+        <span class="ic-status" id="save-status-vitals"></span>
+      </div>
+    </form>
+  </div>
+
+  {# ---- Active-list sections: Problems / Allergies / Medications ---- #}
+  {% comment %}
+    All three sections expose Resolve/Remove + Add new only. Edit affordances
+    were dropped in UAT — the SDK either has no native in-place edit
+    (Allergy / MedicationStatement) or the Update command didn't fire on
+    this instance (UpdateDiagnosis). Remove + Add new covers the workflow
+    end-to-end with no ambiguous half-commits.
+  {% endcomment %}
+  {% include "templates/_intake_active_list.html" with section_id="problems" title="Problems" help_text="Resolve a pre-filled active condition, or add a new diagnosis." row_prefix="condition" rows=problems_rows add_fields=problems_add_fields required_add_field="icd10_code" add_hint_text="Pick a diagnosis from the search results to enable Add." actions=problems_actions add_button_label="Add diagnosis" %}
+
+  {% include "templates/_intake_active_list.html" with section_id="allergies" title="Allergies" help_text="Remove a pre-filled allergy, or add a new one." row_prefix="allergy" rows=allergies_rows add_fields=allergies_add_fields required_add_field="allergen_code" add_hint_text="Pick an allergen from the search results to enable Add." actions=allergies_actions add_button_label="Add allergy" %}
+
+  {% include "templates/_intake_active_list.html" with section_id="medications" title="Medications" help_text="Remove a pre-filled medication, or add a new one." row_prefix="medication" rows=medications_rows add_fields=medications_add_fields required_add_field="fdb_code" add_hint_text="Pick a medication from the search results to enable Add." actions=medications_actions add_button_label="Add medication" %}
+
+  {# ---- Editable history panels ---- #}
+  {% include "templates/_intake_history_list.html" with section_id="medical_history" title="Past Medical History" help_text="Pre-filled entries are read-only — they already live on the chart. Use the form below to add new ones; new entries originate MedicalHistoryCommand on commit." row_prefix="medical_history" rows=medical_history_rows add_fields=medical_history_add_fields required_add_field="medical_history_code" add_hint_text="Pick a condition from the search results to enable Add." add_button_label="Add condition" %}
+
+  {% include "templates/_intake_history_list.html" with section_id="surgical_history" title="Surgical & Procedure History" help_text="Pre-filled entries are read-only. Add new procedures below; new entries originate PastSurgicalHistoryCommand on commit." row_prefix="surgical_history" rows=surgical_history_rows add_fields=surgical_history_add_fields required_add_field="surgical_history_code" add_hint_text="Pick a procedure from the search results to enable Add." add_button_label="Add procedure" %}
+
+  {% include "templates/_intake_history_list.html" with section_id="family_history" title="Family History" help_text="Existing family history is shown in the chart's Family History sidebar to the left. Add new entries below; relative is required, condition is optional ('None reported' is a valid row). Originates FamilyHistoryCommand on commit." row_prefix="family_history" rows=family_history_rows add_fields=family_history_add_fields required_add_field="relative" add_hint_text="Pick a relative to enable Add." hide_empty_placeholder=True add_button_label="Add family member" %}
+
+  {# ---- Social history — ATOD assessment ---- #}
+  {% include "templates/_intake_social_history.html" %}
+
+  <div class="ic-footer">
+    <button type="button" class="ic-commit-btn" id="commit-btn">Commit to Note</button>
+    <span class="ic-commit-status" id="commit-status"></span>
+  </div>
+
+  <div class="ic-meta">
+    note_uuid: <code>{{ note_uuid|default:"-" }}</code> · patient_id: <code>{{ patient_id|default:"-" }}</code>
+  </div>
+</div>
+
+{{ client_config|json_script:"intake-config" }}
+<script type="text/javascript" src="/plugin-io/api/intake_chart_app/intake/static/intake.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<div class="ic-field ic-field--full">
+  <label class="ic-label">{{ field.label }}</label>
+  {% if field.kind_prefix == "textarea" %}
+    <textarea class="ic-input ic-textarea" rows="2" data-row-field="{{ field.id }}"></textarea>
+  {% elif field.kind_prefix == "select" %}
+    <select class="ic-input" data-row-field="{{ field.id }}">
+      <option value=""></option>
+      {% for o in field.options %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+    </select>
+  {% elif field.kind_prefix == "search" %}
+    <div class="ic-search-wrap" data-search-kind="{{ field.search_kind }}">
+      <input class="ic-input ic-search-input" type="text" placeholder="Type to search..." autocomplete="off">
+      <div class="ic-search-results" hidden></div>
+      <input type="hidden" data-row-field="{{ field.id }}" value="">
+      <input type="hidden" data-row-field="{{ field.id }}__display" value="">
+      <div class="ic-search-picked" hidden></div>
+    </div>
+  {% elif field.kind_prefix == "date" %}
+    <input class="ic-input" type="date" data-row-field="{{ field.id }}" value="">
+  {% else %}
+    <input class="ic-input" type="text" data-row-field="{{ field.id }}" value="">
+  {% endif %}
+</div>
