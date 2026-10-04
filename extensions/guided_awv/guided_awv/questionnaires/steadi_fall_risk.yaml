@@ -1,0 +1,28 @@
+name: "STEADI Fall Risk Assessment"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "AWV_STEADI"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+questions:
+- content: "Falls in Past Year"
+  code_system: "INTERNAL"
+  code: "AWV_STEADI_FALLS"
+  responses_type: "SING"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Yes"
+    code: "AWV_STEADI_FALLS_YES"
+    value: '1'
+  - name: "No"
+    code: "AWV_STEADI_FALLS_NO"
+    value: '0'
+- content: "Overall Risk Level"
+  code_system: "INTERNAL"
+  code: "AWV_STEADI_RISK"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Risk Level"
+    code: "AWV_STEADI_RISK_RESP"
+    value: ''
