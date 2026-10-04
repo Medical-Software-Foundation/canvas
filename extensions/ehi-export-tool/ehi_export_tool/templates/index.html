@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EHI & C-CDA Export</title>
+  <link rel="stylesheet" href="{{ api_prefix }}/app/styles.css?v={{ cache_bust }}" />
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1 class="header__title">EHI &amp; C-CDA Export</h1>
+      <p class="header__subtitle">Export complete electronic health information per patient.</p>
+    </header>
+
+    <div id="status-banner" class="status-banner status-banner--hidden" role="alert"></div>
+
+    <div id="main-view">
+    <div class="intro">
+      <p class="intro__lead">Export patient records in either format: full <strong>EHI</strong> (every FHIR resource Canvas holds, as one NDJSON file per patient) or a <strong>C-CDA</strong> document (Continuity of Care or Referral, as XML). Choose the format with the <strong>Format</strong> selector below.</p>
+      <p class="intro__body">Search or filter the patient list, then export a single patient with the <strong>Export</strong> button, or tick several and use <strong>Export selected</strong> — or <strong>Export all matching</strong> to export everyone in the current filter. EHI exports run in the background; C-CDA documents are generated on demand and ready immediately.</p>
+      <p class="intro__note">💡 No matter how many patients you choose, exports are queued and run automatically in small batches in the background, so your Canvas instance is never overloaded. You don't need to keep this page open — come back any time to check progress and download finished files under <strong>Export runs</strong> or each patient's <strong>Last export</strong>.</p>
+    </div>
+    <div class="toolbar">
+      <div class="filters">
+        <div class="field field--grow">
+          <label class="field__label" for="search">Search</label>
+          <input id="search" type="search" class="field__input" placeholder="Patient name or ID…" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field__label" for="export-filter">Export status</label>
+          <select id="export-filter" class="field__input">
+            <option value="">Any</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="in_progress">In progress</option>
+            <option value="none">Not exported</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="active-filter">Patients</label>
+          <select id="active-filter" class="field__input">
+            <option value="active">Active only</option>
+            <option value="all">Include inactive</option>
+          </select>
+        </div>
+        <div class="field field--actions">
+          <button id="search-btn" class="btn btn--primary">Apply</button>
+          <button id="reset-btn" class="btn">Reset</button>
+        </div>
+      </div>
+      <div class="toolbar__row toolbar__row--selection">
+        <button id="clear-selection" class="btn btn--link">Clear selection</button>
+        <span id="selection-summary" class="selection-summary">0 selected</span>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="patient-table">
+        <thead>
+          <tr>
+            <th class="patient-table__check">
+              <input id="select-all-page" type="checkbox" title="Select all on this page" />
+            </th>
+            <th class="sortable" data-sort="last_name">Last name <span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="first_name">First name <span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="dob">DOB <span class="sort-ind"></span></th>
+            <th class="sortable" data-sort="active">Is Active <span class="sort-ind"></span></th>
+            <th class="sortable patient-table__id" data-sort="id">Patient ID <span class="sort-ind"></span></th>
+            <th>Last export</th>
+            <th>Export</th>
+          </tr>
+        </thead>
+        <tbody id="patient-rows"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state empty-state--hidden">No patients match your search.</div>
+    </div>
+
+    <div class="pager">
+      <button id="prev-page" class="btn" disabled>Previous</button>
+      <span id="page-info" class="pager__info">—</span>
+      <button id="next-page" class="btn" disabled>Next</button>
+    </div>
+
+    <footer class="actions">
+      <label class="actions__format">
+        <span class="actions__format-label">Format</span>
+        <select id="export-format" class="filter-select">
+          <option value="ehi">EHI — full record (NDJSON)</option>
+          <option value="continuity">C-CDA — Continuity of Care (XML)</option>
+          <option value="referral">C-CDA — Referral (XML)</option>
+        </select>
+      </label>
+      <span id="ccda-dates" class="actions__dates" style="display:none;">
+        <label class="actions__date">From <input id="ccda-start" type="date" class="text-input" /></label>
+        <label class="actions__date">To <input id="ccda-end" type="date" class="text-input" /></label>
+      </span>
+      <button id="export-btn" class="btn btn--primary" disabled>Export selected (0)</button>
+      <button id="export-all-btn" class="btn" disabled>Export all matching (0)</button>
+      <button id="zip-selected-btn" class="btn" disabled>Download .zip (0)</button>
+      <span id="export-hint" class="actions__hint">Exports queue and run in the background — track them under Export runs.</span>
+    </footer>
+
+    <!-- Export runs: kicked-off batches you can come back to and download -->
+    <section class="runs">
+      <div class="runs__header">
+        <h2 class="runs__title">Export runs</h2>
+        <button id="refresh-runs" class="btn btn--link">Refresh</button>
+      </div>
+      <p class="runs__hint">Exports run in the background — you can close this and come back. Open a run to monitor it and download per-patient files.</p>
+      <div id="runs-empty" class="runs__empty">No export runs yet.</div>
+      <table class="runs-table" id="runs-table" style="display:none;">
+        <thead>
+          <tr><th>Started</th><th>Started by</th><th>Progress</th><th class="runs-table__action"></th></tr>
+        </thead>
+        <tbody id="runs-rows"></tbody>
+      </table>
+      <div class="runs__more" id="runs-more" style="display:none;">
+        <button id="show-all-runs" class="btn">Show all runs</button>
+      </div>
+    </section>
+    </div><!-- /main-view -->
+
+    <!-- Full-page list of all export runs -->
+    <section id="all-runs-view" hidden>
+      <div class="run-view__top">
+        <button id="all-runs-back" class="btn">← Back to patients</button>
+        <h2 class="run-view__title">All export runs</h2>
+        <button id="all-runs-refresh" class="btn btn--link">Refresh</button>
+      </div>
+      <div class="run-filters">
+        <input id="all-runs-search" type="search" class="text-input run-filters__search"
+               placeholder="Filter by staff, or patient name or ID…" autocomplete="off" />
+        <select id="all-runs-progress" class="text-input run-filters__progress" aria-label="Filter by progress">
+          <option value="">All progress</option>
+          <option value="running">Running</option>
+          <option value="completed">Completed</option>
+          <option value="completed_with_errors">Completed with errors</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-runsort="started">Started <span class="sort-ind"></span></th>
+              <th class="sortable" data-runsort="started_by">Started by <span class="sort-ind"></span></th>
+              <th>Progress</th>
+              <th class="runs-table__action"></th>
+            </tr>
+          </thead>
+          <tbody id="all-runs-rows"></tbody>
+        </table>
+        <div id="all-runs-empty" class="empty-state empty-state--hidden">No export runs match.</div>
+      </div>
+      <div class="pager">
+        <button id="all-runs-prev" class="btn" disabled>Previous</button>
+        <span id="all-runs-page-info" class="pager__info">—</span>
+        <button id="all-runs-next" class="btn" disabled>Next</button>
+      </div>
+    </section>
+
+    <!-- Full-page view of a single export run -->
+    <section id="run-view" hidden>
+      <div class="run-view__top">
+        <button id="run-back" class="btn">← Back to patients</button>
+        <h2 id="run-title" class="run-view__title">Export run</h2>
+        <button id="run-zip-btn" class="btn">Download .zip</button>
+        <button id="run-refresh" class="btn btn--link">Refresh</button>
+      </div>
+      <div id="run-summary" class="run-summary"></div>
+      <div id="run-sync" class="runs-sync-hint" style="display:none;"></div>
+      <div class="run-filters">
+        <select id="run-status" class="filter-select">
+          <option value="">All statuses</option>
+          <option value="complete">Complete</option>
+          <option value="error">Failed</option>
+          <option value="in-progress">In progress</option>
+        </select>
+        <input id="run-search" type="search" class="toolbar__input run-filters__search" placeholder="Filter patients by name or ID…" autocomplete="off" />
+      </div>
+      <div class="table-wrap">
+        <table class="patient-table">
+          <thead>
+            <tr>
+              <th>Last name</th>
+              <th>First name</th>
+              <th>DOB</th>
+              <th>Is Active</th>
+              <th class="patient-table__id">Patient ID</th>
+              <th>Export</th>
+            </tr>
+          </thead>
+          <tbody id="run-rows"></tbody>
+        </table>
+        <div id="run-empty" class="empty-state empty-state--hidden">No patients match.</div>
+      </div>
+      <div class="pager">
+        <button id="run-prev" class="btn" disabled>Previous</button>
+        <span id="run-page-info" class="pager__info">—</span>
+        <button id="run-next" class="btn" disabled>Next</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="{{ api_prefix }}/app/main.js?v={{ cache_bust }}"></script>
+</body>
+</html>
