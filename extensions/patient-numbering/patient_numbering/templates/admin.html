@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #1a1f2c; }
+    h2 { font-size: 18px; margin: 0 0 16px; }
+    p { font-size: 14px; line-height: 1.5; margin: 0 0 12px; }
+    dl { display: grid; grid-template-columns: max-content auto; gap: 6px 16px; font-size: 14px; margin: 0 0 20px; }
+    dt { font-weight: 600; }
+    dd { margin: 0; }
+    button { background: #2f6fde; color: #fff; border: 0; border-radius: 4px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+    button:disabled { background: #9aa5b8; cursor: default; }
+    #message { margin-top: 12px; }
+    .error { color: #b42318; }
+  </style>
+</head>
+<body>
+{% if authorized %}
+  <h2>Patient Numbering</h2>
+  <p>Every patient gets a Patient ID (1, 2, 3...) shown in the profile's demographics. Existing patients are numbered in the order they were added. New patients are numbered once that is done.</p>
+  <dl>
+    <dt>Patients</dt><dd id="patients">{{ patients }}</dd>
+    <dt>Numbered</dt><dd id="numbered">{{ numbered }}</dd>
+    <dt>Remaining</dt><dd id="remaining">{{ remaining }}</dd>
+    <dt>New patients numbered automatically</dt><dd id="complete">{% if backfill_complete %}Yes{% else %}No, number existing patients first{% endif %}</dd>
+  </dl>
+  <button id="run" {% if backfill_complete and remaining == 0 %}disabled{% endif %}>Number existing patients</button>
+  <p id="message"></p>
+  <script>
+    const base = "/plugin-io/api/patient_numbering";
+    const button = document.getElementById("run");
+    const message = document.getElementById("message");
+
+    function show(status) {
+      document.getElementById("patients").textContent = status.patients;
+      document.getElementById("numbered").textContent = status.numbered;
+      document.getElementById("remaining").textContent = status.remaining;
+      document.getElementById("complete").textContent = status.backfill_complete
+        ? "Yes" : "No, number existing patients first";
+    }
+
+    async function run() {
+      button.disabled = true;
+      message.className = "";
+      try {
+        while (true) {
+          const response = await fetch(`${base}/backfill`, { method: "POST" });
+          if (!response.ok) throw new Error(`Request failed (${response.status})`);
+          const batch = await response.json();
+          message.textContent = `Numbered through ${batch.last ?? "-"}. ${batch.remaining} remaining.`;
+          if (batch.remaining === 0 || batch.assigned === 0) break;
+        }
+        const status = await (await fetch(`${base}/status`)).json();
+        show(status);
+        message.textContent = "Done. Every patient has a Patient ID.";
+      } catch (error) {
+        message.className = "error";
+        message.textContent = `${error.message}. Click again to continue where it stopped.`;
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener("click", run);
+  </script>
+{% else %}
+  <h2>Not authorized</h2>
+  <p>Ask an administrator to add your staff ID to the plugin's ADMIN_STAFF_IDS setting.</p>
+{% endif %}
+</body>
+</html>
