@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Theme Kit</title>
+<style>
+  :root {
+    --ui-bg: #ffffff;
+    --ui-fg: #16191d;
+    --ui-muted: #5b6472;
+    --ui-border: #d7dce3;
+    --ui-accent: #0b5fff;
+    --ui-danger: #b3261e;
+    --ui-ok: #1c7c48;
+    --ui-surface: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ui-fg);
+    background: var(--ui-bg);
+  }
+  .wrap { display: flex; flex-direction: column; min-height: 100vh; }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--ui-border);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 700; }
+  .grow { flex: 1; }
+  .cols { display: flex; flex: 1; min-height: 0; flex-wrap: wrap; }
+  .col { padding: 16px; min-width: 300px; }
+  .col-edit { flex: 3; border-right: 1px solid var(--ui-border); }
+  .col-side { flex: 2; background: var(--ui-surface); }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; font-size: 13px; }
+  .hint { color: var(--ui-muted); font-size: 12px; margin: 4px 0 0; }
+  textarea, select, input {
+    width: 100%; padding: 8px; font-size: 13px;
+    border: 1px solid var(--ui-border); border-radius: 6px;
+    background: var(--ui-bg); color: var(--ui-fg);
+  }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical; }
+  #css { min-height: 240px; }
+  #tokens { min-height: 140px; }
+  button {
+    font: inherit; font-weight: 600; padding: 8px 14px;
+    border: 1px solid var(--ui-border); border-radius: 6px;
+    background: var(--ui-bg); color: var(--ui-fg); cursor: pointer;
+  }
+  button.primary { background: var(--ui-accent); border-color: var(--ui-accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .msg { padding: 10px 12px; border-radius: 6px; margin-top: 12px; display: none; white-space: pre-wrap; }
+  .msg.err { display: block; background: #fdecea; color: var(--ui-danger); }
+  .msg.ok { display: block; background: #e7f4ec; color: var(--ui-ok); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--ui-border); }
+  th { color: var(--ui-muted); font-weight: 600; }
+  .tag { font-size: 11px; padding: 2px 6px; border-radius: 10px; background: var(--ui-accent); color: #fff; }
+  iframe { width: 100%; height: 260px; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Theme Kit</h1>
+    <select id="theme-picker" style="width:auto"></select>
+    <button id="new-theme" title="Create a new theme">+ New</button>
+    <span class="grow"></span>
+    <span id="perms" class="hint"></span>
+  </header>
+
+  <div class="cols">
+    <div class="col col-edit">
+      <label for="css">Stylesheet</label>
+      <textarea id="css" spellcheck="false" placeholder="/* CSS. @import and off-origin url() are rejected. */"></textarea>
+      <p class="hint">Token values are available as <code>var(--ctk-name)</code>.</p>
+
+      <label for="tokens">Design tokens (JSON)</label>
+      <textarea id="tokens" spellcheck="false" placeholder='"color-primary": "#0b5fff"'></textarea>
+      <p class="hint">Rendered into a <code>:root</code> block ahead of the stylesheet.
+        Tokens are only variable declarations — CSS has to reference them with
+        <code>var(--ctk-name)</code> before anything changes visually.</p>
+
+      <div class="row">
+        <button id="save">Save draft</button>
+        <button id="preview-btn">Refresh preview</button>
+        <button id="reset-draft" title="Restore the shipped starter tokens">Reset draft</button>
+        <span class="grow"></span>
+        <button id="publish" class="primary">Publish</button>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="col col-side">
+      <label>Preview — your DRAFT, not what is published</label>
+      <iframe id="preview" title="Draft preview"></iframe>
+      <p class="hint" id="live-state">Shows your unpublished draft immediately.
+        Published pages keep their cached stylesheet until you publish.</p>
+
+      <label>Revision history</label>
+      <table>
+        <thead><tr><th>Rev</th><th>Published</th><th>By</th><th></th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+      <p class="hint"><b>Roll back</b> republishes an old revision as a new one — it changes
+        what is live but deliberately leaves your draft alone, so the preview above will not
+        change. Use <b>Load</b> to pull a revision back into the draft.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var API = "/plugin-io/api/canvas_theme_kit/admin";
+  var PREVIEW = "/plugin-io/api/canvas_theme_kit/preview";
+
+  var el = function (id) { return document.getElementById(id); };
+  var state = { slug: null, canPublish: false, canEdit: false };
+
+  function show(kind, text) {
+    var m = el("msg");
+    m.className = "msg " + kind;
+    m.textContent = text;
+    if (kind === "ok") setTimeout(function () { m.className = "msg"; }, 4000);
+  }
+
+  function api(path, options) {
+    return fetch(API + path, Object.assign({
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin"
+    }, options || {})).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) throw new Error(body.error || ("Request failed: " + res.status));
+        return body;
+      });
+    });
+  }
+
+  function parseTokens() {
+    var raw = el("tokens").value.trim();
+    if (!raw) return {};
+    // Accept either a full JSON object or a bare list of "name": "value" pairs,
+    // so pasting a fragment out of a design doc does not error.
+    var text = raw.charAt(0) === "{" ? raw : "{" + raw + "}";
+    return JSON.parse(text);
+  }
+
+  function loadThemes() {
+    return api("/themes").then(function (data) {
+      var picker = el("theme-picker");
+      picker.innerHTML = "";
+      if (!data.themes.length) {
+        var opt = document.createElement("option");
+        opt.textContent = "No themes yet";
+        picker.appendChild(opt);
+        // A fresh install has no themes. Say what to do about it rather than
+        // leaving the editor looking broken.
+        show("err", 'No themes yet. Click "+ New" to create one.');
+        return;
+      }
+      data.themes.forEach(function (t) {
+        var opt = document.createElement("option");
+        opt.value = t.slug;
+        opt.textContent = t.title || t.slug;
+        picker.appendChild(opt);
+      });
+      state.slug = data.themes[0].slug;
+      picker.value = state.slug;
+      return loadTheme(state.slug);
+    });
+  }
+
+  function loadTheme(slug) {
+    return api("/themes/" + encodeURIComponent(slug)).then(function (t) {
+      state.slug = t.slug;
+      el("css").value = t.draft_css || "";
+      el("tokens").value = JSON.stringify(t.draft_tokens || {}, null, 2);
+      renderHistory(t.revisions || []);
+      var live = t.active_revision;
+      el("live-state").innerHTML = live
+        ? "Live now: <b>revision " + live + "</b>. The preview above shows your draft, which may differ."
+        : "<b>Nothing is published yet.</b> The preview shows your draft only.";
+      refreshPreview();
+    });
+  }
+
+  function renderHistory(revisions) {
+    var body = el("history");
+    body.innerHTML = "";
+    revisions.forEach(function (r) {
+      var tr = document.createElement("tr");
+
+      var rev = document.createElement("td");
+      rev.textContent = r.revision;
+      if (r.is_active) {
+        var tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = "live";
+        rev.appendChild(document.createTextNode(" "));
+        rev.appendChild(tag);
+      }
+      tr.appendChild(rev);
+
+      var when = document.createElement("td");
+      when.textContent = r.published_at ? r.published_at.slice(0, 16).replace("T", " ") : "";
+      tr.appendChild(when);
+
+      var who = document.createElement("td");
+      who.textContent = r.published_by || "";
+      tr.appendChild(who);
+
+      var act = document.createElement("td");
+      if (state.canEdit) {
+        var load = document.createElement("button");
+        load.textContent = "Load";
+        load.title = "Copy this revision into the draft for editing";
+        load.onclick = function () { loadIntoDraft(r.revision); };
+        act.appendChild(load);
+      }
+      if (!r.is_active && state.canPublish) {
+        var btn = document.createElement("button");
+        btn.textContent = "Roll back";
+        btn.title = "Republish this revision as a new one";
+        btn.style.marginLeft = "6px";
+        btn.onclick = function () { rollback(r.revision); };
+        act.appendChild(btn);
+      }
+      tr.appendChild(act);
+
+      body.appendChild(tr);
+    });
+  }
+
+  function refreshPreview() {
+    if (!state.slug) return;
+    var url = PREVIEW + "/" + encodeURIComponent(state.slug) + "/preview.css?t=" + Date.now();
+
+    // The sample markup consumes the standard tokens via var(), so editing a
+    // token is visible here. Tokens are only variable declarations — without
+    // something referencing them, nothing on the page would change.
+    //
+    // This block is emitted BEFORE the stylesheet link so that authored CSS
+    // overrides it rather than the other way round. Every var() carries a
+    // fallback, so the sample still renders for a theme that omits a token.
+    var demo = [
+      "body { margin: 0; padding: 16px;",
+      " font-family: var(--ctk-font-family, system-ui);",
+      " font-size: var(--ctk-font-size-base, 1rem);",
+      " line-height: var(--ctk-line-height-base, 1.5);",
+      " color: var(--ctk-color-fg, #16191d);",
+      " background: var(--ctk-color-bg, #ffffff); }",
+      "h1 { font-size: var(--ctk-font-size-xl, 1.5rem);",
+      " line-height: var(--ctk-line-height-tight, 1.2); margin: 0 0 12px; }",
+      "a { color: var(--ctk-color-accent, #0b5fff); }",
+      ".muted { color: var(--ctk-color-fg-muted, #5b6472);",
+      " font-size: var(--ctk-font-size-sm, .875rem); }",
+      "button { font: inherit; border: 0; cursor: pointer;",
+      " background: var(--ctk-color-accent, #0b5fff);",
+      " color: var(--ctk-color-accent-contrast, #ffffff);",
+      " border-radius: var(--ctk-radius-md, 8px);",
+      " padding: var(--ctk-space-2, .5rem) var(--ctk-space-4, 1rem); }",
+      ".card { margin-top: var(--ctk-space-4, 1rem);",
+      " padding: var(--ctk-space-4, 1rem);",
+      " background: var(--ctk-color-surface, #f6f8fa);",
+      " border: 1px solid var(--ctk-color-border, #d7dce3);",
+      " border-radius: var(--ctk-radius-md, 8px); }",
+      ".swatches { display: flex; gap: 8px; margin-top: 12px; }",
+      ".swatch { width: 40px; height: 40px;",
+      " border-radius: var(--ctk-radius-sm, 4px);",
+      " border: 1px solid var(--ctk-color-border, #d7dce3); }"
+    ].join("");
+
+    var doc = [
+      "<!DOCTYPE html><html><head><style>", demo, "</style>",
+      "<link rel='stylesheet' href='", url, "'></head><body>",
+      "<h1>Heading</h1>",
+      "<p>Body copy with a <a href='#'>link</a>.</p>",
+      "<p class='muted'>Muted secondary text.</p>",
+      "<button>Button</button>",
+      "<div class='card'>Surface card, using the border and radius tokens.",
+      "<div class='swatches'>",
+      "<div class='swatch' style='background:var(--ctk-color-accent,#0b5fff)'></div>",
+      "<div class='swatch' style='background:var(--ctk-color-success,#1c7c48)'></div>",
+      "<div class='swatch' style='background:var(--ctk-color-warning,#8a6100)'></div>",
+      "<div class='swatch' style='background:var(--ctk-color-danger,#b3261e)'></div>",
+      "</div></div>",
+      "</body></html>"
+    ].join("");
+    el("preview").srcdoc = doc;
+  }
+
+  function save() {
+    var tokens;
+    try { tokens = parseTokens(); }
+    catch (e) { show("err", "Tokens are not valid JSON: " + e.message); return Promise.resolve(); }
+
+    return api("/themes/" + encodeURIComponent(state.slug) + "/draft", {
+      method: "POST",
+      body: JSON.stringify({ css: el("css").value, tokens: tokens })
+    }).then(function () {
+      show("ok", "Draft saved. Preview updated; published pages are unchanged.");
+      refreshPreview();
+    }).catch(function (e) { show("err", e.message); });
+  }
+
+  function publish() {
+    if (!confirm("Publish this draft? It replaces the live stylesheet for every page using this theme.")) return;
+    save().then(function () {
+      return api("/themes/" + encodeURIComponent(state.slug) + "/publish", {
+        method: "POST",
+        body: JSON.stringify({ note: "" })
+      });
+    }).then(function (r) {
+      if (!r) return;
+      show("ok", "Published revision " + r.revision + ". Pages pick it up within about five minutes.");
+      return loadTheme(state.slug);
+    }).catch(function (e) { show("err", e.message); });
+  }
+
+  function rollback(revision) {
+    if (!confirm("Roll back to revision " + revision + "? This republishes it as a new revision.")) return;
+    api("/themes/" + encodeURIComponent(state.slug) + "/rollback", {
+      method: "POST",
+      body: JSON.stringify({ revision: revision })
+    }).then(function (r) {
+      show("ok", "Restored revision " + revision + " as revision " + r.revision + ".");
+      return loadTheme(state.slug);
+    }).catch(function (e) { show("err", e.message); });
+  }
+
+  function createTheme() {
+    var slug = prompt(
+      "Theme slug — lowercase letters, digits and hyphens (e.g. 'default' or 'clinic-b'):",
+      "default"
+    );
+    if (!slug) return;
+    api("/themes", {
+      method: "POST",
+      body: JSON.stringify({ slug: slug.trim(), title: slug.trim() })
+    }).then(function () {
+      show("ok", "Theme created with the starter token set. Edit, then Publish.");
+      return loadThemes();
+    }).catch(function (e) { show("err", e.message); });
+  }
+
+  function resetDraft() {
+    if (!confirm("Reset the draft to the shipped starter tokens? Unsaved token work is discarded. Nothing published changes.")) return;
+    api("/themes/" + encodeURIComponent(state.slug) + "/reset-draft", { method: "POST" })
+      .then(function () {
+        show("ok", "Draft reset to defaults. Publish when you want it live.");
+        return loadTheme(state.slug);
+      }).catch(function (e) { show("err", e.message); });
+  }
+
+  function loadIntoDraft(revision) {
+    if (!confirm("Load revision " + revision + " into the draft? Unsaved draft work is discarded. Nothing published changes.")) return;
+    api("/themes/" + encodeURIComponent(state.slug) + "/load-draft", {
+      method: "POST",
+      body: JSON.stringify({ revision: revision })
+    }).then(function () {
+      show("ok", "Revision " + revision + " loaded into the draft.");
+      return loadTheme(state.slug);
+    }).catch(function (e) { show("err", e.message); });
+  }
+
+  el("reset-draft").onclick = resetDraft;
+  el("new-theme").onclick = createTheme;
+  el("save").onclick = save;
+  el("publish").onclick = publish;
+  el("preview-btn").onclick = refreshPreview;
+  el("theme-picker").onchange = function (e) { loadTheme(e.target.value); };
+
+  api("/roles").then(function (r) {
+    state.canPublish = !!r.you_can_publish;
+    state.canEdit = !!r.you_can_edit;
+    el("perms").textContent = r.you_can_edit
+      ? (r.you_can_publish ? "editor + publisher" : "editor (cannot publish)")
+      : "not authorized";
+    el("publish").disabled = !r.you_can_publish;
+    el("save").disabled = !r.you_can_edit;
+    el("new-theme").disabled = !r.you_can_edit;
+    el("reset-draft").disabled = !r.you_can_edit;
+    return loadThemes();
+  }).catch(function (e) {
+    show("err", e.message);
+  });
+})();
+</script>
+</body>
+</html>
