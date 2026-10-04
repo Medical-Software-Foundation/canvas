@@ -13,7 +13,11 @@ per changed event, what it means for Canvas:
 
 3. **New Google events become admin holds.** An unmarked event (created by the provider in Google) is
    imported into Canvas as a schedule event (admin hold) blocking their availability. This is safe —
-   no patient, no scheduling-rule risk. Edits/removals of those holds flow back too.
+   no patient, no scheduling-rule risk. Edits/removals of those holds flow back too. An **all-day**
+   event becomes one hold **per covered day** (Canvas blocks a hold's date of service only, so a
+   single multi-day hold would leave every day after the first bookable); the covered set is
+   reconciled on every pull, so extending, shortening, or deleting the Google event adds and removes
+   the matching per-day holds.
 
 4. **410 recovery (§6.4).** An invalid sync token clears the cursor and flags a full resync.
 
@@ -30,8 +34,11 @@ from logger import log
 from gcal_sync.appointment_snapshot import GOOGLE_ORIGIN_SYSTEM, build_snapshot
 from gcal_sync.google.client import GoogleApiError
 from gcal_sync.inbound_holds import (
-    PRIVATE_EVENT_LABEL,
+    ALL_DAY_DURATION_MINUTES,
+    all_day_dates,
     build_hold_effect,
+    hold_external_id,
+    hold_title,
     ingest_all_day_events,
     ingest_private_events,
     is_all_day,
@@ -65,10 +72,7 @@ def _event_line(event: dict) -> str:
     """
     window = parse_event_window(event)
     when = arrow.get(window[0]).format("ddd MMM DD HH:mm") if window else "(no start)"
-    title = (
-        PRIVATE_EVENT_LABEL if is_private(event) else (event.get("summary") or "Busy")
-    )
-    return f"{when} \u2014 {title[:60]}"
+    return f"{when} \u2014 {hold_title(event)[:60]}"
 
 
 def _dry_trace(stats: dict, outcome: str, event: dict) -> None:
@@ -359,9 +363,11 @@ class InboundSync:
         status = event.get("status")
 
         if status == "cancelled":
-            # Remove only THIS provider's hold for the event (scoped); another attendee's hold for the
-            # same shared event id is left untouched.
-            effect = self._hold_delete_effect(google_event_id, provider_id)
+            # Remove only THIS provider's holds for the event (scoped); another attendee's hold for
+            # the same shared event id is left untouched. Plural because an all-day event expands
+            # into one hold per covered day — a cancellation delta carries no start/end, so we can't
+            # recompute the dates and instead remove every hold stamped with this event id.
+            effects = self._hold_delete_effects(google_event_id, provider_id)
             if not dry_run:
                 if existing is not None:
                     existing.delete()
@@ -369,15 +375,15 @@ class InboundSync:
                 # isn't wrongly treated as still-in-flight.
                 if pending is not None:
                     pending.delete()
-            if effect is None:
+            if not effects:
                 stats["ignored"] = stats["ignored"] + 1
                 return []
             _dry_trace(stats, "would remove hold", event)
             _event_log(
                 verbose, "remove hold", calendar_id, provider_id, google_event_id
             )
-            stats["holds_removed"] = stats["holds_removed"] + 1
-            return [effect]
+            stats["holds_removed"] = stats["holds_removed"] + len(effects)
+            return effects
 
         # Bounded window. A delta pull (any calendar with a sync token) carries no ``timeMax``, so
         # Google's ``singleEvents`` expansion returns a recurring event's instances with NO upper
@@ -396,6 +402,28 @@ class InboundSync:
             )
             stats["ignored"] = stats["ignored"] + 1
             return []
+
+        # All-day events are the multi-day case. Canvas blocks a hold's date of service and nothing
+        # after it, so one hold carrying a 5-day duration leaves days 2..5 bookable — a provider
+        # could be booked straight through their PTO. Reconcile a SET of per-day holds instead of a
+        # single hold; that branch owns create, update and stale-day removal together, because one
+        # Google edit routinely needs all three in the same pass.
+        dates = all_day_dates(event)
+        if dates:
+            return self._reconcile_all_day_holds(
+                calendar_id,
+                event,
+                dates,
+                existing,
+                pending,
+                note_type_id,
+                provider_id,
+                location_id,
+                stats,
+                force_rebuild,
+                dry_run,
+                verbose,
+            )
 
         # A live Canvas hold already exists for this event -> update it in place, never create a
         # second one. Keyed on the external id (Canvas's own record), so this holds even if the
@@ -477,25 +505,18 @@ class InboundSync:
         # once the marker predates the grace window (a genuine orphan whose create never applied) so
         # partial prior runs self-heal. The marker is per (calendar, event), so a co-attendee syncing
         # the same shared event can't clear it out from under this provider.
-        if pending is not None:
-            created_at = getattr(pending, "created_at", None)
-            if created_at is None or (
-                (arrow.utcnow() - arrow.get(created_at)).total_seconds()
-                < self._PENDING_CREATE_GRACE_SECONDS
-            ):
-                _dry_trace(stats, "skip (create already in flight)", event)
-                _event_log(
-                    verbose,
-                    "skip (create in flight)",
-                    calendar_id,
-                    provider_id,
-                    google_event_id,
-                )
-                stats["ignored"] = stats["ignored"] + 1
-                return []
+        if self._create_in_flight(pending):
+            _dry_trace(stats, "skip (create already in flight)", event)
+            _event_log(
+                verbose, "skip (create in flight)", calendar_id, provider_id, google_event_id
+            )
+            stats["ignored"] = stats["ignored"] + 1
+            return []
 
         # Brand-new Google event (or a genuine orphan past the grace window) -> create a Canvas
-        # admin hold, subject to the org's import filters.
+        # admin hold, subject to the org's import filters. All-day events are handled by the
+        # reconcile branch above, so this one only catches an all-day event whose dates wouldn't
+        # parse (``all_day_dates`` returned empty).
         if is_all_day(event) and not self._ingest_all_day:
             _dry_trace(stats, "skip (all-day event, not imported)", event)
             _event_log(
@@ -558,6 +579,186 @@ class InboundSync:
         stats["holds_created"] = stats["holds_created"] + 1
         return [effect]
 
+    def _reconcile_all_day_holds(
+        self,
+        calendar_id: str,
+        event: dict,
+        dates: list[str],
+        existing: InboundEventMapping | None,
+        pending: PendingHoldCreate | None,
+        note_type_id: str | None,
+        provider_id: str | None,
+        location_id: str | None,
+        stats: dict,
+        force_rebuild: bool = False,
+        dry_run: bool = False,
+        verbose: bool = False,
+    ) -> list[Effect]:
+        """Make this provider's holds for an all-day event match exactly the days it covers.
+
+        Canvas blocks a hold's date of service and nothing after it, so a multi-day all-day event
+        needs one hold per day. This reconciles the whole set in one pass: create the covered days
+        that have no hold, update the ones that do, and remove holds for days the event no longer
+        covers (the provider shortened or moved the PTO).
+
+        Per-day holds are keyed ``{event_id}:{date}``. A hold carrying the **bare** event id predates
+        this expansion, so it is adopted as the first covered day rather than duplicated — that is
+        what keeps an already-imported single-day event from gaining a second hold.
+        """
+        google_event_id = event["id"]
+        if not provider_id:
+            # Unmapped calendar: every hold lookup below is scoped to the provider, so there is
+            # nothing to resolve, update, or create.
+            stats["ignored"] = stats["ignored"] + 1
+            return []
+        live = self._live_holds_for_event(google_event_id, provider_id)
+
+        # Map each live hold onto the day it covers. A hold that lands on no covered day (the event
+        # shrank or moved), or on a day already covered (a pre-expansion hold plus its per-day
+        # replacement), is stale and gets removed.
+        live_by_date: dict[str, str] = {}
+        stale: list[str] = []
+        for value, canvas_id in sorted(live.items()):
+            date = dates[0] if value == google_event_id else value.split(":", 1)[1]
+            if date in dates and date not in live_by_date:
+                live_by_date[date] = canvas_id
+            else:
+                stale.append(canvas_id)
+
+        # No-op guard. Unlike the single-hold path, an unchanged content hash is not enough: the set
+        # of days must also already be complete, or a hold left over from before this fix (one hold,
+        # five days) would match on hash and the missing days would never be created.
+        new_hash = google_event_content_hash(event)
+        last_applied = (existing.last_applied_hash if existing is not None else "") or ""
+        content_changed = new_hash != last_applied
+        missing = [date for date in dates if date not in live_by_date]
+        if not content_changed and not missing and not stale:
+            _dry_trace(stats, "already current (no change)", event)
+            _event_log(
+                verbose,
+                "already current (no change)",
+                calendar_id,
+                provider_id,
+                google_event_id,
+            )
+            stats["holds_unchanged"] = stats["holds_unchanged"] + 1
+            return []
+
+        # Creates are the dedup-sensitive part: a re-delivered webhook must not mint a second hold
+        # while a previous pass's create is still applying. Updates and removals are idempotent, so
+        # the in-flight marker gates only the creates — and a partially-created set finishes itself
+        # once the marker ages past the grace window.
+        if missing and self._create_in_flight(pending):
+            _dry_trace(stats, "skip (create already in flight)", event)
+            _event_log(
+                verbose, "skip (create in flight)", calendar_id, provider_id, google_event_id
+            )
+            stats["ignored"] = stats["ignored"] + 1
+            return []
+
+        # Import filters gate NEW holds only. An org that turns all-day ingest off keeps the holds it
+        # already has in sync (and can still have them removed) rather than stranding them. Each
+        # filter logs its reason and empties ``missing``; the event is counted as ignored once at the
+        # bottom, and only if the pass ends up with nothing to do at all.
+        if missing and not self._ingest_all_day:
+            _dry_trace(stats, "skip (all-day event, not imported)", event)
+            _event_log(
+                verbose, "skip (all-day event)", calendar_id, provider_id, google_event_id
+            )
+            missing = []
+        if missing and not (note_type_id and location_id):
+            # No note type or no primary practice location — a hold cannot be built for any day, so
+            # say so once rather than failing the same way once per covered day.
+            _dry_trace(stats, "skip (could not build hold: no note type / location)", event)
+            _event_log(
+                verbose, "skip (could not build hold)", calendar_id, provider_id, google_event_id
+            )
+            missing = []
+        if missing and is_private(event) and not self._ingest_private:
+            _dry_trace(stats, "skip (private event, not imported)", event)
+            _event_log(
+                verbose, "skip (private event)", calendar_id, provider_id, google_event_id
+            )
+            missing = []
+
+        # Convergence guard, applied per day: one (provider, day) gets at most one hold for its whole
+        # life. A day whose hold was cancelled out-of-band stays cancelled unless this is a
+        # deliberate admin rebuild, so the create -> cancel -> re-create loop can't restart per day.
+        if not force_rebuild:
+            missing = [
+                date
+                for date in missing
+                if not self._external_value_exists(
+                    hold_external_id(google_event_id, date), provider_id
+                )
+            ]
+
+        effects: list[Effect] = []
+        for date in dates:
+            hold_id = live_by_date.get(date)
+            if hold_id is not None:
+                # Only re-issue an update when the Google event's content actually moved; re-saving
+                # an unchanged hold is pure write load (the same guard the single-hold path applies).
+                if content_changed:
+                    effects.append(self._day_hold_update_effect(hold_id, event, date))
+                    stats["holds_updated"] = stats["holds_updated"] + 1
+            elif date in missing:
+                effect = build_hold_effect(
+                    event, note_type_id, provider_id, location_id, date
+                )
+                if effect is None:
+                    stats["ignored"] = stats["ignored"] + 1
+                    continue
+                effects.append(effect)
+                stats["holds_created"] = stats["holds_created"] + 1
+        for canvas_id in stale:
+            effects.append(ScheduleEvent(instance_id=str(canvas_id)).delete())
+            stats["holds_removed"] = stats["holds_removed"] + 1
+
+        if not effects:
+            stats["ignored"] = stats["ignored"] + 1
+            return []
+
+        if not dry_run:
+            # Refresh the in-flight marker only when this pass actually issues creates, so an
+            # update-only pass can't push the grace window out and stall a later repair.
+            if missing:
+                PendingHoldCreate.objects.update_or_create(
+                    google_event_id=google_event_id,
+                    google_calendar_id=calendar_id,
+                    defaults={"created_at": arrow.utcnow().datetime},
+                )
+            InboundEventMapping.objects.update_or_create(
+                google_event_id=google_event_id,
+                defaults={
+                    "google_calendar_id": calendar_id,
+                    "last_applied_hash": new_hash,
+                },
+            )
+        _dry_trace(stats, f"would sync all-day event across {len(dates)} day(s)", event)
+        _event_log(
+            verbose,
+            f"reconcile all-day holds ({len(dates)} day(s))",
+            calendar_id,
+            provider_id,
+            google_event_id,
+        )
+        return effects
+
+    def _create_in_flight(self, pending: PendingHoldCreate | None) -> bool:
+        """Is a create for this (calendar, event) still inside the async-apply grace window?
+
+        ``created_at`` missing is treated as in flight: a marker we can't age is safer read as "the
+        create may still be applying" than as an invitation to re-issue it.
+        """
+        if pending is None:
+            return False
+        created_at = getattr(pending, "created_at", None)
+        return created_at is None or (
+            (arrow.utcnow() - arrow.get(created_at)).total_seconds()
+            < self._PENDING_CREATE_GRACE_SECONDS
+        )
+
     def _within_import_window(self, event: dict) -> bool:
         """Is this event's start within the same ``[now-1mo, now+6mo]`` window a full pull uses?
 
@@ -605,19 +806,80 @@ class InboundSync:
         Canvas hold for its whole life. Scoping is what lets each attendee of a shared event get their
         own hold instead of all-but-the-first being skipped.
         """
-        return AppointmentExternalIdentifier.objects.filter(
-            system=GOOGLE_ORIGIN_SYSTEM,
-            value=google_event_id,
-            appointment__provider__id=provider_id,
-        ).exists()
+        return bool(
+            AppointmentExternalIdentifier.objects.filter(
+                system=GOOGLE_ORIGIN_SYSTEM,
+                value=google_event_id,
+                appointment__provider__id=provider_id,
+            ).exists()
+        )
 
-    def _hold_delete_effect(
+    @staticmethod
+    def _live_holds_for_event(
+        google_event_id: str, provider_id: str | None
+    ) -> dict[str, str]:
+        """Map external-id value -> live Canvas hold id for this (provider, Google event).
+
+        Covers the bare event id (timed events, and all-day holds created before per-day expansion)
+        and every ``{event_id}:{date}`` an all-day event expands into. The DB filter is a prefix
+        match, which can also catch a *different* event whose id merely starts with this one, so the
+        exact separator check in Python is what makes the result precise.
+        """
+        rows = (
+            AppointmentExternalIdentifier.objects.filter(
+                system=GOOGLE_ORIGIN_SYSTEM,
+                value__startswith=google_event_id,
+                appointment__provider__id=provider_id,
+            )
+            .exclude(appointment__status="cancelled")
+            .values_list("value", "appointment__id")
+        )
+        prefix = f"{google_event_id}:"
+        return {
+            str(value): str(appointment_id)
+            for value, appointment_id in rows
+            if str(value) == google_event_id or str(value).startswith(prefix)
+        }
+
+    @staticmethod
+    def _external_value_exists(value: str, provider_id: str | None) -> bool:
+        """Has a hold ever existed FOR THIS PROVIDER under this exact external id (any status)?
+
+        The per-day equivalent of :meth:`_external_hold_exists` — the convergence backstop for one
+        day of an expanded all-day event.
+        """
+        return bool(
+            AppointmentExternalIdentifier.objects.filter(
+                system=GOOGLE_ORIGIN_SYSTEM,
+                value=value,
+                appointment__provider__id=provider_id,
+            ).exists()
+        )
+
+    @staticmethod
+    def _day_hold_update_effect(canvas_id: str, event: dict, date: str) -> Effect:
+        """Move an existing hold to cover exactly ``date``, one whole day."""
+        schedule_event = ScheduleEvent(instance_id=str(canvas_id))
+        schedule_event.start_time = arrow.get(date, "YYYY-MM-DD").to("UTC").datetime
+        schedule_event.duration_minutes = ALL_DAY_DURATION_MINUTES
+        schedule_event.description = hold_title(event)
+        return schedule_event.update()
+
+    def _hold_delete_effects(
         self, google_event_id: str, provider_id: str | None
-    ) -> Effect | None:
-        canvas_id = self._canvas_id_for_google_event(google_event_id, provider_id)
-        if not canvas_id:
-            return None
-        return ScheduleEvent(instance_id=str(canvas_id)).delete()
+    ) -> list[Effect]:
+        """Delete effects for every live hold this provider carries for the Google event.
+
+        A timed event has at most one; an all-day event has one per covered day. A cancellation
+        delta carries no start/end, so the days can't be recomputed — going by the stamped external
+        ids is the only way to remove the whole set.
+        """
+        return [
+            ScheduleEvent(instance_id=str(canvas_id)).delete()
+            for canvas_id in sorted(
+                self._live_holds_for_event(google_event_id, provider_id).values()
+            )
+        ]
 
     def _hold_update_effect(
         self, google_event_id: str, event: dict, provider_id: str | None
@@ -632,11 +894,8 @@ class InboundSync:
         schedule_event = ScheduleEvent(instance_id=str(canvas_id))
         schedule_event.start_time = start_time
         schedule_event.duration_minutes = duration_minutes
-        # Mask private/confidential titles on UPDATE too, not just on create — otherwise editing a
-        # private Google event would overwrite the "Busy" placeholder with its real (PHI-adjacent)
-        # title in Canvas.
-        if is_private(event):
-            schedule_event.description = PRIVATE_EVENT_LABEL
-        else:
-            schedule_event.description = (event.get("summary") or "Busy")[:255]
+        # ``hold_title`` masks private/confidential titles on UPDATE too, not just on create —
+        # otherwise editing a private Google event would overwrite the "Busy" placeholder with its
+        # real (PHI-adjacent) title in Canvas.
+        schedule_event.description = hold_title(event)
         return schedule_event.update()
