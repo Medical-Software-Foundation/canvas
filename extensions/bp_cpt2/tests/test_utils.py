@@ -116,8 +116,8 @@ def test_to_bool_returns_true_for_numeric_strings() -> None:
 def test_to_bool_real_world_usage() -> None:
     """Test to_bool with real-world secret values as used in the handlers."""
     # These simulate actual secret values from Canvas
-    assert to_bool('true') is True  # INCLUDE_TREATMENT_PLAN_CODES = 'true'
-    assert to_bool('false') is False  # INCLUDE_TREATMENT_PLAN_CODES = 'false'
+    assert to_bool('true') is True  # SHOW_BUTTON_FOR_MANUAL_TRIGGER = 'true'
+    assert to_bool('false') is False  # SHOW_BUTTON_FOR_MANUAL_TRIGGER = 'false'
     assert to_bool('yes') is True  # SHOW_BUTTON_FOR_MANUAL_TRIGGER = 'yes'
     assert to_bool('no') is False  # SHOW_BUTTON_FOR_MANUAL_TRIGGER = 'no'
     assert to_bool('') is False  # Secret not set or empty

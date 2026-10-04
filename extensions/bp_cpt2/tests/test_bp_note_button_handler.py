@@ -239,3 +239,34 @@ def test_handle_returns_empty_when_no_note_id_in_context() -> None:
     assert effects == []
 
 
+def test_handle_links_assessments_without_lock_cache() -> None:
+    """
+    Test that handle() processes a billable note without the lock-event cache.
+    """
+    # Create test patient and note
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        patient=patient,
+        created=datetime.now(timezone.utc),
+        modified=datetime.now(timezone.utc)
+    )
+
+    # Create mock context
+    mock_event = Mock()
+    mock_event.context = {'note_id': note.dbid}
+
+    # Create handler
+    handler = BloodPressureNoteButtonHandler(
+        event=mock_event,
+        secrets={'OPENAI_API_KEY': 'test-key'}
+    )
+
+    with patch('bp_cpt2.handlers.bp_note_button_handler.process_bp_billing_for_note', return_value=[]) as mock_process:
+        effects = handler.handle()
+
+    assert effects == []
+    mock_process.assert_called_once()
+    call_kwargs = mock_process.call_args.kwargs
+    assert call_kwargs['note'] == note
+    assert call_kwargs['llm'].api_key == 'test-key'
+    assert call_kwargs['was_just_locked'] is False
