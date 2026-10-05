@@ -690,8 +690,9 @@ class TestClearProviderTz:
     @patch(f"{MODULE}.get_all_recurring_blocks")
     @patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"])
     @patch(f"{MODULE}.clear_provider_timezone")
+    @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_clears_override_and_resyncs(
-        self, mock_clear, mock_sync, mock_get_rb, mock_rb_sync, mock_default_tz, mock_access
+        self, mock_get_blocks, mock_clear, mock_sync, mock_get_rb, mock_rb_sync, mock_default_tz, mock_access
     ):
         matching = RecurringBlock(id="rb1", provider_id=PROVIDER_ID)
         other = RecurringBlock(id="rb2", provider_id=PROVIDER_ID_2)
@@ -711,6 +712,51 @@ class TestClearProviderTz:
         assert mock_sync.mock_calls == [call(PROVIDER_ID)]
         # Only the matching provider's recurring block is re-synced
         assert mock_rb_sync.mock_calls == [call(matching)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.get_practice_timezone", return_value="US/Pacific")
+    @patch(f"{MODULE}.get_all_recurring_blocks", return_value=[])
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    def test_rebuilds_one_off_blocks_around_the_clear(
+        self, mock_sync, mock_get_rb, mock_default_tz, mock_access
+    ):
+        # Block events are deleted under the old TZ, then rebuilt under the practice
+        # default, so a block entered at 1:00 PM stays at 1:00 PM after the clear.
+        mine = AdminBlock(
+            id="b1",
+            provider_id=PROVIDER_ID,
+            start=datetime(2026, 10, 6, 13, 0),
+            end=datetime(2026, 10, 6, 14, 0),
+        )
+        theirs = AdminBlock(
+            id="b2",
+            provider_id=PROVIDER_ID_2,
+            start=datetime(2026, 10, 6, 13, 0),
+            end=datetime(2026, 10, 6, 14, 0),
+        )
+        order = MagicMock()
+        order.get_all_blocks.return_value = [mine, theirs]
+        order.build_delete_block_effects.return_value = ["del-blk"]
+        order.build_block_event_effects.return_value = ["new-blk"]
+        with (
+            patch(f"{MODULE}.get_all_blocks", order.get_all_blocks),
+            patch(f"{MODULE}.build_delete_block_effects", order.build_delete_block_effects),
+            patch(f"{MODULE}.clear_provider_timezone", order.clear_provider_timezone),
+            patch(f"{MODULE}.build_block_event_effects", order.build_block_event_effects),
+        ):
+            handler = _make_handler(path_params={"provider_id": PROVIDER_ID})
+            result = handler.clear_provider_tz()
+
+        _, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert result.index("del-blk") < result.index("new-blk")
+        # Only this provider's block, deleted before the clear and rebuilt after it
+        assert order.mock_calls == [
+            call.get_all_blocks(),
+            call.build_delete_block_effects(PROVIDER_ID, mine),
+            call.clear_provider_timezone(PROVIDER_ID),
+            call.build_block_event_effects(mine),
+        ]
 
     @patch(f"{MODULE}._check_write_access")
     def test_write_access_denied(self, mock_access):

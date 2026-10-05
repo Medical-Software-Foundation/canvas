@@ -1593,12 +1593,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if denied:
             return denied
         provider_id = self.request.path_params["provider_id"]
+        # Same as set_provider_tz: one-off blocks are naive wall-clock times, so delete
+        # their events while the old TZ is still in effect, then rebuild after the clear.
+        provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
+        effects: list[Effect] = []
+        for blk in provider_blocks:
+            effects.extend(build_delete_block_effects(provider_id, blk))
+
         clear_provider_timezone(provider_id)
         # Re-sync so the provider's events move to the practice-default timezone.
-        effects: list[Effect] = list(sync_provider_availability(provider_id))
+        effects.extend(sync_provider_availability(provider_id))
         for rb in get_all_recurring_blocks():
             if rb.provider_id == provider_id:
                 effects.extend(build_recurring_block_sync_effects(rb))
+        for blk in provider_blocks:
+            effects.extend(build_block_event_effects(blk))
         default_tz = get_practice_timezone()
         log.info("clear_provider_tz: provider %s → default (%s), %d sync effects", provider_id, default_tz, len(effects))
         return [*effects, JSONResponse({
