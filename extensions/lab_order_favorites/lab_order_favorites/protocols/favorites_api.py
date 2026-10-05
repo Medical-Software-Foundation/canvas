@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
+from django.db.models import Q
+
 from canvas_sdk.commands import LabOrderCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.note.note import Note as NoteEffect
@@ -39,6 +41,7 @@ from lab_order_favorites.services.providers import list_ordering_providers, reso
 # BOOKED covers a scheduled appointment that has not been checked in yet. Its
 # note is writable, so lab orders can be staged ahead of the visit and sent or
 # printed from the same note on the day of the draw.
+# See _open_notes_for_patient for how booked appointment notes are matched.
 OPEN_NOTE_STATES = [
     NoteStates.NEW,
     NoteStates.PUSHED,
@@ -56,6 +59,12 @@ LAB_ORDER_COMMENT_MAX_LENGTH = 128
 # notes and chart review notes. Messages and letters never lock, so a state-only
 # filter would surface them even though a lab order cannot be inserted there.
 INSERT_TARGET_CATEGORIES = [NoteTypeCategories.ENCOUNTER, NoteTypeCategories.REVIEW]
+
+# A booked appointment's note usually carries the "appointment" category until
+# check-in converts it to the visit's note type. Only BOOKED appointment notes are
+# targets: SCHEDULING is a booking still in progress, and canceled or no-show
+# appointments are not visits that will happen.
+BOOKED_APPOINTMENT_CATEGORY = NoteTypeCategories.APPOINTMENT
 
 
 class _FavoritesHelpers:
@@ -806,12 +815,15 @@ def _open_notes_for_patient(patient_id: str):  # type: ignore[no-untyped-def]
     open_note_ids = CurrentNoteStateEvent.objects.filter(
         state__in=OPEN_NOTE_STATES
     ).values_list("note_id", flat=True)
+    booked_note_ids = CurrentNoteStateEvent.objects.filter(
+        state=NoteStates.BOOKED
+    ).values_list("note_id", flat=True)
 
     return (
-        Note.objects.filter(
-            dbid__in=open_note_ids,
-            patient=patient,
-            note_type_version__category__in=INSERT_TARGET_CATEGORIES,
+        Note.objects.filter(patient=patient)
+        .filter(
+            Q(dbid__in=open_note_ids, note_type_version__category__in=INSERT_TARGET_CATEGORIES)
+            | Q(dbid__in=booked_note_ids, note_type_version__category=BOOKED_APPOINTMENT_CATEGORY)
         )
         .select_related("note_type_version")
         .order_by("-modified")

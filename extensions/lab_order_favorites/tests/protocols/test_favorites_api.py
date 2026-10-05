@@ -940,26 +940,50 @@ def test_open_notes_helper_non_uuid_returns_empty():
     assert list(favorites_api._open_notes_for_patient("not-a-uuid")) == []
 
 
-def test_open_notes_helper_builds_filtered_queryset():
-    patient = MagicMock()
-    note_qs = MagicMock()
-    note_qs.select_related.return_value.order_by.return_value = ["NOTE_QS"]
-    with patch.object(favorites_api.Patient.objects, "get", return_value=patient), \
-         patch.object(favorites_api.CurrentNoteStateEvent, "objects") as states, \
-         patch.object(favorites_api.Note, "objects") as notes:
-        states.filter.return_value.values_list.return_value = [1, 2]
-        notes.filter.return_value = note_qs
-        result = favorites_api._open_notes_for_patient("11111111-1111-1111-1111-111111111111")
-    assert result == ["NOTE_QS"]
-    assert notes.filter.call_args.kwargs["patient"] is patient
-    # The open-note state filter is the safety gate (no staging into locked/signed notes).
-    assert states.filter.call_args.kwargs["state__in"] == favorites_api.OPEN_NOTE_STATES
-    # Only encounter and chart review notes are insert targets - messages/letters,
-    # which never lock, are excluded by category.
-    assert (
-        notes.filter.call_args.kwargs["note_type_version__category__in"]
-        == favorites_api.INSERT_TARGET_CATEGORIES
-    )
+def _note_in_state(patient, category, state):
+    """Create a note of the given note type category whose current state is `state`."""
+    from canvas_sdk.test_utils.factories import NoteFactory, NoteTypeFactory
+
+    note = NoteFactory.create(patient=patient, note_type_version=NoteTypeFactory.create(category=category))
+    # The SDK reads the current state from a view over the state change events;
+    # in the test database it is a plain table, so set the row directly.
+    favorites_api.CurrentNoteStateEvent.objects.update_or_create(note=note, defaults={"state": state})
+    return note
+
+
+def test_open_notes_helper_filters_by_category_and_state():
+    from canvas_sdk.test_utils.factories import PatientFactory
+
+    Cat = favorites_api.NoteTypeCategories
+    St = favorites_api.NoteStates
+    patient = PatientFactory.create()
+    other_patient = PatientFactory.create()
+
+    open_visit = _note_in_state(patient, Cat.ENCOUNTER, St.NEW)
+    checked_in = _note_in_state(patient, Cat.ENCOUNTER, St.CONVERTED)
+    open_review = _note_in_state(patient, Cat.REVIEW, St.NEW)
+    booked_appointment = _note_in_state(patient, Cat.APPOINTMENT, St.BOOKED)
+    booked_encounter = _note_in_state(patient, Cat.ENCOUNTER, St.BOOKED)
+    excluded = [
+        _note_in_state(patient, Cat.ENCOUNTER, St.LOCKED),
+        _note_in_state(patient, Cat.APPOINTMENT, St.SCHEDULING),
+        _note_in_state(patient, Cat.APPOINTMENT, St.CANCELLED),
+        _note_in_state(patient, Cat.APPOINTMENT, St.NOSHOW),
+        _note_in_state(patient, Cat.MESSAGE, St.NEW),
+        _note_in_state(patient, Cat.LETTER, St.NEW),
+        _note_in_state(other_patient, Cat.APPOINTMENT, St.BOOKED),
+    ]
+
+    result = {n.dbid for n in favorites_api._open_notes_for_patient(str(patient.id))}
+
+    assert result == {
+        open_visit.dbid,
+        checked_in.dbid,
+        open_review.dbid,
+        booked_appointment.dbid,
+        booked_encounter.dbid,
+    }
+    assert not result & {n.dbid for n in excluded}
 
 
 # --- CreateChartReviewAPI ---
