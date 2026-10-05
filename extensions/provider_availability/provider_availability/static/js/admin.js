@@ -400,9 +400,17 @@ document.addEventListener('focusout', function (e) {
 function isExpiredRow(row) {
   return !!(row.effective_end && new Date(row.effective_end + 'T23:59:59') < new Date());
 }
+// A one-off block is expired once its end time has passed.
+function isExpiredBlock(b) {
+  return !!(b.end && new Date(b.end) < new Date());
+}
+// A date override is expired once its day has ended.
+function isExpiredOverride(ovr) {
+  return !!(ovr.date && new Date(ovr.date + 'T23:59:59') < new Date());
+}
 
-// Expired rules and recurring blocks are hidden by default: a provider's list
-// is dominated by finished one-day rules otherwise. Not persisted, so a reload
+// Expired rules, recurring blocks and holds, one-off blocks, and date overrides
+// are hidden by default: a provider's list is dominated by finished items otherwise. Not persisted, so a reload
 // returns to hiding them.
 function toggleExpired() {
   _showExpired = !_showExpired;
@@ -1345,15 +1353,17 @@ function renderAccordion() {
     const visibleRecurring = (p.recurring_blocks || []).filter(
       rb => _showExpired || !isExpiredRow(rb)
     );
+    const visibleBlocks = (p.blocks || []).filter(b => _showExpired || !isExpiredBlock(b));
+    const visibleOverrides = r => (r.date_overrides || []).filter(ovr => _showExpired || !isExpiredOverride(ovr));
 
     const availableCount = visibleRules.length;
     let overrideCount = 0;
     let holdCount = 0;
-    visibleRules.forEach(r => { overrideCount += (r.date_overrides || []).length; });
+    visibleRules.forEach(r => { overrideCount += visibleOverrides(r).length; });
     visibleRecurring.forEach(rb => {
       if (rb.hold_type && rb.hold_type !== 'none') holdCount++;
     });
-    const pureBlockCount = p.blocks.length + visibleRecurring.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
+    const pureBlockCount = visibleBlocks.length + visibleRecurring.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
     const hasData = availableCount > 0 || pureBlockCount > 0 || holdCount > 0;
 
     html += '<div class="provider-card">';
@@ -1500,7 +1510,7 @@ function renderAccordion() {
         rows.push({ typeOrder: 1, sortKey: r.effective_start || '0000-00-00', html: rowHtml });
 
         // Override rows pushed separately so they sort after ALL available rows
-        (r.date_overrides || []).forEach(function(ovr) {
+        visibleOverrides(r).forEach(function(ovr) {
           var ovrDateStr = fmtDate(ovr.date);
           var ovrDateObj = new Date(ovr.date + 'T12:00:00');
           var ovrDayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][ovrDateObj.getDay()];
@@ -1516,7 +1526,7 @@ function renderAccordion() {
           ovrHtml += '<td><div class="td-cell"><span class="time-text">' + ovrHours + '</span></div></td>';
           ovrHtml += '<td><div class="td-cell">' + ovrReasonHtml + '</div></td>';
           ovrHtml += '<td><div class="td-cell"><span class="date-range">' + ovrDateStr + '</span></div></td>';
-          var ovrExpired = new Date(ovr.date + 'T23:59:59') < new Date();
+          var ovrExpired = isExpiredOverride(ovr);
           ovrHtml += '<td><div class="td-cell"><span class="badge ' + (ovrExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
           ovrHtml += '<td><div class="td-cell"><div class="row-actions">';
           ovrHtml += '<button class="action-chip action-chip-edit" onclick="editOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',\'' + ovrJson + '\')">Edit</button>';
@@ -1528,7 +1538,7 @@ function renderAccordion() {
       });
 
       // One-off blocks
-      p.blocks.forEach(b => {
+      visibleBlocks.forEach(b => {
         const blockDateStr = (b.start || '').slice(0, 10);
         const blockDateParts = blockDateStr.split('-');
         const blockDateObj = new Date(Number(blockDateParts[0]), Number(blockDateParts[1]) - 1, Number(blockDateParts[2]));
@@ -1549,9 +1559,7 @@ function renderAccordion() {
         bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + bLocHtml + '</div></div>';
         bDetailHtml += '</div></div>';
 
-        // Single-event blocks expire once their end datetime is in the past.
-        const blockEndDate = b.end ? new Date(b.end) : null;
-        const blockExpired = blockEndDate && blockEndDate < new Date();
+        const blockExpired = isExpiredBlock(b);
 
         var rowHtml = '';
         rowHtml += '<tr class="row-blocked data-row" onclick="toggleRowDetail(this, event)">';

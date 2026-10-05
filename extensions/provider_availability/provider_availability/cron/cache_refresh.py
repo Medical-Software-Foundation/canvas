@@ -23,17 +23,26 @@ from provider_availability.engine.event_sync import (
     sync_provider_availability,
 )
 from provider_availability.engine.storage import (
+    delete_block,
+    delete_event_ids,
+    delete_recurring_block,
+    delete_rule_by_id,
+    get_all_blocks,
     get_all_recurring_blocks,
     get_all_rules,
     get_last_sync_date,
     get_seen_schedulable_ids,
     refresh_all_ttls,
     set_last_sync_date,
+    save_rule,
     set_seen_schedulable_ids,
     should_refresh_ttls,
 )
 
 LAST_SYNC_KEY = "pa:last_sync_date"
+
+# Expired items stay in the admin lists this long, then are dropped from them.
+EXPIRED_KEEP_DAYS = 30
 
 
 class CacheRefreshTask(CronTask):
@@ -83,6 +92,7 @@ class CacheRefreshTask(CronTask):
         # delete/create DB work) 287 extra times a day.
         if day_changed:
             effects.extend(_refresh_hold_blocks())
+            _prune_expired()
 
         return effects
 
@@ -127,6 +137,42 @@ def _daily_resync() -> list[Effect]:
         log.exception("daily_resync: error re-syncing rules")
 
     return effects
+
+
+def _prune_expired(today: date | None = None) -> int:
+    """Drop rules, overrides, blocks and holds that ended over EXPIRED_KEEP_DAYS ago.
+
+    Storage only: no calendar effects are emitted, so the past events these items
+    created stay on Canvas's calendars. Returns how many items were dropped.
+    """
+    cutoff = (today or date.today()) - timedelta(days=EXPIRED_KEEP_DAYS)
+    removed = 0
+    try:
+        for rule in get_all_rules():
+            if rule.effective_end and rule.effective_end < cutoff:
+                delete_rule_by_id(rule.provider_id, rule.id)
+                delete_event_ids(rule.id)
+                removed += 1
+                continue
+            kept = [o for o in rule.date_overrides if o.date >= cutoff]
+            if len(kept) < len(rule.date_overrides):
+                removed += len(rule.date_overrides) - len(kept)
+                rule.date_overrides = kept
+                save_rule(rule)
+        for block in get_all_blocks():
+            if block.end.date() < cutoff:
+                delete_block(block.provider_id, block.id)
+                delete_event_ids(block.id)
+                removed += 1
+        for rb in get_all_recurring_blocks():
+            if rb.effective_end and rb.effective_end < cutoff:
+                delete_recurring_block(rb.provider_id, rb.id)
+                delete_event_ids(rb.id)
+                removed += 1
+        log.info("_prune_expired: dropped %d items that ended before %s", removed, cutoff.isoformat())
+    except Exception:
+        log.exception("_prune_expired: error dropping expired items")
+    return removed
 
 
 def _refresh_lead_time_blocks() -> list[Effect]:
