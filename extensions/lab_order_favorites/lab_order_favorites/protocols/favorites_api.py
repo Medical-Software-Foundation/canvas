@@ -36,14 +36,21 @@ from lab_order_favorites.services.notes import (
 )
 from lab_order_favorites.services.providers import list_ordering_providers, resolve_provider
 
+# BOOKED covers a scheduled appointment that has not been checked in yet. Its
+# note is writable, so lab orders can be staged ahead of the visit and sent or
+# printed from the same note on the day of the draw.
 OPEN_NOTE_STATES = [
     NoteStates.NEW,
     NoteStates.PUSHED,
+    NoteStates.BOOKED,
     NoteStates.CONVERTED,
     NoteStates.UNLOCKED,
     NoteStates.RESTORED,
     NoteStates.UNDELETED,
 ]
+
+# The lab order command rejects comments longer than this (LabOrderCommand).
+LAB_ORDER_COMMENT_MAX_LENGTH = 128
 
 # Lab orders can only be staged into notes where they belong: encounter (visit)
 # notes and chart review notes. Messages and letters never lock, so a state-only
@@ -415,6 +422,7 @@ class OpenNotesAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRoute):
                 "id": str(note.id),
                 "title": note.title or (note.note_type_version.name if note.note_type_version else "Note"),
                 "modified": note.modified.isoformat() if note.modified else None,
+                "datetime_of_service": note.datetime_of_service.isoformat() if note.datetime_of_service else None,
             }
             for note in notes
         ]
@@ -456,10 +464,12 @@ class InsertFavoriteAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRoute
             self._service(), favorite_ids, staff_id, note_uuid, self._editor_keys()
         )
 
-        log.info(f"Inserted {len(inserted)} lab order(s), skipped {len(skipped)}, into note {note_uuid}")
+        log.info(
+            f"Staged {len(inserted)} favorite(s) as {len(effects)} lab order(s), skipped {len(skipped)}, into note {note_uuid}"
+        )
         message_parts = []
         if inserted:
-            message_parts.append(f"{len(inserted)} lab order(s) staged")
+            message_parts.append(f"{len(inserted)} favorite(s) staged as {len(effects)} lab order(s)")
         if skipped:
             message_parts.append(f"{len(skipped)} skipped")
         message = ", ".join(message_parts) if message_parts else "Nothing to insert"
@@ -469,6 +479,7 @@ class InsertFavoriteAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRoute
                 {
                     "message": message,
                     "note_uuid": note_uuid,
+                    "order_count": len(effects),
                     "inserted": inserted,
                     "skipped": skipped,
                     "success": True,
@@ -536,6 +547,7 @@ class CreateChartReviewAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRo
                     {
                         "chart_review_created": False,
                         "message": "No valid lab orders to stage",
+                        "order_count": 0,
                         "inserted": [],
                         "skipped": skipped,
                         "success": True,
@@ -553,14 +565,15 @@ class CreateChartReviewAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRo
         ).create()
 
         log.info(
-            f"Created chart review {note_uuid}, staged {len(inserted)} lab order(s), skipped {len(skipped)}"
+            f"Created chart review {note_uuid}, staged {len(inserted)} favorite(s) as {len(effects)} lab order(s), skipped {len(skipped)}"
         )
         return [
             JSONResponse(
                 {
                     "chart_review_created": True,
                     "note_uuid": note_uuid,
-                    "message": f"Chart review created with {len(inserted)} lab order(s) staged",
+                    "message": f"Chart review created with {len(effects)} lab order(s) staged",
+                    "order_count": len(effects),
                     "inserted": inserted,
                     "skipped": skipped,
                     "success": True,
@@ -578,16 +591,20 @@ def _stage_favorites(
     note_uuid: str,
     editor_keys: set[str],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Effect]]:
-    """Validate each favorite and build a staged LabOrderCommand for the note.
+    """Validate each favorite and build staged LabOrderCommands for the note.
 
     Returns ``(inserted, skipped, effects)``. A favorite is skipped (no effect
     built) when it no longer resolves, its partner is missing/inactive, or its
     saved test codes are stale. Shared with both the open-note insert and the
     chart review fallback so the validation rules stay identical.
+
+    Valid favorites that share a lab partner and ordering provider are combined
+    into one lab order (one requisition) rather than one order per favorite.
+    See ``_combine_into_orders`` for the merge rules.
     """
     inserted: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
-    effects: list[Effect] = []
+    staged: list[dict[str, Any]] = []
 
     for favorite_id in favorite_ids:
         favorite = service.get_favorite(favorite_id, staff_id)
@@ -615,20 +632,85 @@ def _stage_favorites(
         if saved_provider:
             provider, _reason = resolve_provider(saved_provider)
             ordering_provider_key = provider["id"] if provider else staff_id
-        effects.append(
-            LabOrderCommand(
-                note_uuid=note_uuid,
-                lab_partner=favorite["lab_partner_id"],
-                tests_order_codes=availability["valid"],
-                ordering_provider_key=ordering_provider_key,
-                diagnosis_codes=favorite.get("diagnosis_codes") or [],
-                fasting_required=bool(favorite.get("fasting_required", False)),
-                comment=favorite.get("comment") or "",
-            ).originate()
+        staged.append(
+            {
+                "lab_partner_id": favorite["lab_partner_id"],
+                "ordering_provider_key": ordering_provider_key,
+                "order_codes": availability["valid"],
+                "diagnosis_codes": favorite.get("diagnosis_codes") or [],
+                "fasting_required": bool(favorite.get("fasting_required", False)),
+                "comment": favorite.get("comment") or "",
+            }
         )
         inserted.append({"favorite_id": favorite_id, "name": favorite["name"], "test_count": len(availability["valid"])})
 
+    effects: list[Effect] = [
+        LabOrderCommand(
+            note_uuid=note_uuid,
+            lab_partner=order["lab_partner_id"],
+            tests_order_codes=order["order_codes"],
+            ordering_provider_key=order["ordering_provider_key"],
+            diagnosis_codes=order["diagnosis_codes"],
+            fasting_required=order["fasting_required"],
+            comment="; ".join(order["comments"]),
+        ).originate()
+        for order in _combine_into_orders(staged)
+    ]
     return inserted, skipped, effects
+
+
+def _combine_into_orders(staged: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge validated favorites into as few lab orders as the requisition allows.
+
+    Favorites combine when they share a lab partner and an ordering provider,
+    since both are printed on the requisition. Within an order:
+
+    - test codes and diagnosis codes are de-duplicated, first-seen order kept
+      (LabOrderCommand rejects a repeated test code)
+    - fasting is required if any combined favorite requires it
+    - distinct comments are joined with "; "
+
+    A favorite whose comment would push the joined comment past the command's
+    128-character limit starts a separate order instead of being truncated.
+    Orders are returned in the order their first favorite was selected.
+    """
+    orders: list[dict[str, Any]] = []
+    for item in staged:
+        comment = item["comment"].strip()
+        target = None
+        for order in orders:
+            if (order["lab_partner_id"], order["ordering_provider_key"]) != (
+                item["lab_partner_id"],
+                item["ordering_provider_key"],
+            ):
+                continue
+            if comment and comment not in order["comments"]:
+                if len("; ".join([*order["comments"], comment])) > LAB_ORDER_COMMENT_MAX_LENGTH:
+                    continue
+            target = order
+            break
+
+        if target is None:
+            target = {
+                "lab_partner_id": item["lab_partner_id"],
+                "ordering_provider_key": item["ordering_provider_key"],
+                "order_codes": [],
+                "diagnosis_codes": [],
+                "fasting_required": False,
+                "comments": [],
+            }
+            orders.append(target)
+
+        for code in item["order_codes"]:
+            if code not in target["order_codes"]:
+                target["order_codes"].append(code)
+        for code in item["diagnosis_codes"]:
+            if code not in target["diagnosis_codes"]:
+                target["diagnosis_codes"].append(code)
+        target["fasting_required"] = target["fasting_required"] or item["fasting_required"]
+        if comment and comment not in target["comments"]:
+            target["comments"].append(comment)
+    return orders
 
 
 def _resolve_provider_on_body(body: dict[str, Any]) -> JSONResponse | None:

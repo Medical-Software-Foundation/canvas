@@ -5,7 +5,8 @@
 Lab Order Favorites lets staff save reusable lab orders - a single test or a multi-test panel from one lab partner - and drop them into a patient's note as **staged** lab order commands, one or more at a time.
 
 - A global **configuration** app (in the provider menu) to create, edit, share, tag, and bulk-upload favorites, and optionally set a default ordering provider.
-- An in-chart **patient app** to search favorites, multi-select, pick a target open note, and insert each as a staged `Lab order` command.
+- An in-chart **patient app** to search favorites, multi-select, pick a target note, and insert them as staged `Lab order` commands. Target notes are the patient's open encounter and chart review notes, including booked appointments that have not been checked in yet, so orders can be staged ahead of the visit. With no target note, the app creates a chart review.
+- Favorites selected together are combined into one `Lab order` command (one requisition) per lab partner and ordering provider. Duplicate tests and diagnosis codes are listed once, fasting is required if any combined favorite requires it, and distinct comments are joined with `; `. A favorite whose comment would push the joined comment past the command's 128-character limit gets its own order.
 - Saved test codes are re-validated against the instance's live lab catalog at insert time. If the lab partner is inactive or a code is no longer offered, that favorite is skipped (never a partial order) and the owner/editor can fix it in place.
 - Favorites can be personal or shared; shared ones are searchable by name, tag, author, test, or lab.
 
