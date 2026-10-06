@@ -755,6 +755,101 @@ def test_sync_does_not_create_separate_patient_posting_for_pr() -> None:
         assert len(insurance_calls) == 1
 
 
+def test_insurance_pr_transfers_to_given_target() -> None:
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    service_lines = [
+        _candid_service_line(
+            primary_paid_amount_cents=7000,
+            deductible_cents=1500,
+            coinsurance_cents=500,
+            copay_cents=2000,
+        )
+    ]
+
+    default_txns = _build_insurance_transactions(service_lines, [li], CANVAS_CLAIM_ID)
+    secondary_txns = _build_insurance_transactions(
+        service_lines, [li], CANVAS_CLAIM_ID, pr_transfer_to="cov-secondary"
+    )
+
+    def pr_targets(txns: list) -> dict[str, str]:
+        return {
+            t.adjustment_code: t.transfer_remaining_balance_to
+            for t in txns
+            if t.adjustment_code in (PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY)
+        }
+
+    assert pr_targets(default_txns) == dict.fromkeys(
+        (PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY), "patient"
+    )
+    assert pr_targets(secondary_txns) == dict.fromkeys(
+        (PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY), "cov-secondary"
+    )
+
+
+def _sync_pr_transfer_targets(coverages: list, eras: list[dict]) -> list:
+    """Run a sync for a claim with PR amounts; return each PR txn's transfer target."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim(
+        [li],
+        coverages=coverages,
+        metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
+    )
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9500,
+                coinsurance_cents=2000,
+                copay_cents=500,
+            )
+        ],
+        eras=eras,
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        primary_call = next(
+            c
+            for c in ce.post_payment.call_args_list
+            if c.kwargs["claim_coverage_id"] == "cov-primary"
+        )
+        return [
+            t.transfer_remaining_balance_to
+            for t in primary_call.kwargs["line_item_transactions"]
+            if t.adjustment_code in (PR_COINSURANCE, PR_COPAY)
+        ]
+
+
+def test_sync_moves_pr_to_secondary_when_claim_has_secondary() -> None:
+    targets = _sync_pr_transfer_targets(
+        coverages=[
+            _fake_coverage("cov-primary", "Primary"),
+            _fake_coverage("cov-secondary", "Secondary"),
+        ],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    assert targets == ["cov-secondary", "cov-secondary"]
+
+
+def test_sync_moves_pr_to_patient_without_secondary() -> None:
+    targets = _sync_pr_transfer_targets(
+        coverages=[_fake_coverage("cov-primary", "Primary")],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    assert targets == ["patient", "patient"]
+
+
 # ---------------------------------------------------------------------------
 # Multi-encounter / cross-encounter dedup
 # ---------------------------------------------------------------------------

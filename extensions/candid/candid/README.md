@@ -60,7 +60,7 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Triggers:**
 - **Event-driven:** When a claim enters the **Patient Balance** queue, the plugin asynchronously POSTs to its own `/sync-patient-payments` SimpleAPI route to pull just the patient payments for that claim (full ERA/adjudication sync is left to the nightly cron)
 - **Manual:** The "Sync Now" button on the claim timeline application POSTs to `/claim-detail`, which runs a full adjudication sync inline
-- **Nightly cron (2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, and **PatientBalance** queues that have Candid encounter metadata, then runs full adjudication sync on each
+- **Nightly cron (starts 2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position is kept in the plugin cache (`candid_nightly_sync_cursor`), and a cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
 
 A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candid_sync_history` metadata — see [Sync history backfill](#sync-history-backfill).
 
@@ -72,8 +72,8 @@ A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candi
   - **Primary insurance** -- charged, allowed, payment, contractual CO-45 write-off (charged minus allowed), ERA + manual adjustments
   - **Secondary/Tertiary insurance** -- separate `post_payment` per payer, only when that tier's amounts increase
 - **Contractual adjustment:** The difference between `charge_amount_cents` and `allowed_amount_cents` is posted as a CO-45 write-off on the insurance posting
-- **Patient responsibility:** Deductible (PR-1), coinsurance (PR-2), and copay (PR-3) amounts from the service lines are posted as transfer adjustments on the insurance posting (not as separate patient postings)
-- **Balance transfers:** Based on the encounter's `next_responsible_party`, remaining balance is transferred to the appropriate party:
+- **Patient responsibility:** Deductible (PR-1), coinsurance (PR-2), and copay (PR-3) amounts from the service lines are posted as transfer adjustments on the primary posting (not as separate patient postings). Like Canvas's own ERA posting, they transfer to the claim's next coverage (the secondary) when it has one, and to the patient only when it doesn't. When the secondary pays, its payment posts against that balance; whatever the secondary leaves unpaid stays on the secondary for a biller to transfer or write off
+- **Balance transfers:** For ERA and manual adjustments, based on the encounter's `next_responsible_party`, remaining balance is transferred to the appropriate party:
   - `"patient"` → transfers to patient
   - `"secondary"` → transfers to secondary coverage
   - `"tertiary"` → transfers to tertiary coverage
@@ -156,7 +156,7 @@ candid/
     dashboard.html / .css / .js        # full-page Candid claims dashboard
     claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
-    nightly_sync.py           # 2 AM daily: sync all claims in 3 queues
+    nightly_sync.py           # starts 2 AM daily: syncs pending claims in hourly batches
   adjudication_sync.py        # Core sync logic: pull ERA + patient payments, post to Canvas
   effect_helpers.py           # Shared: banners, metadata keys, success/failure handlers
 ```

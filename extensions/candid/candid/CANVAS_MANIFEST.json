@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.0.2",
     "name": "candid",
     "description": "Submits claims to Candid's API, pulls adjudication data, posts payments/adjustments back to Canvas, and reports patient payments.",
     "url_permissions": [],
@@ -40,7 +40,7 @@
             },
             {
                 "class": "candid.cron.nightly_sync:NightlyCandidSync",
-                "description": "Nightly cron (2 AM) that syncs adjudication data for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance, and PatientBalance."
+                "description": "Nightly cron (starts 2 AM) that syncs adjudication data for claims in FiledAwaitingResponse, AdjudicatedOpenBalance, PatientBalance, and RejectedNeedsReview, one batch per hour."
             },
             {
                 "class": "candid.api.websocket:CandidTimelineWebSocket",

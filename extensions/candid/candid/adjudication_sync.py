@@ -209,12 +209,15 @@ def _build_insurance_transactions(
     line_items: list,
     canvas_claim_id: str,
     transfer_to: str | None = None,
+    pr_transfer_to: str = PATIENT_COVERAGE_ID,
 ) -> list[LineItemTransaction]:
     """Build insurance payment + adjustment transactions from encounter service lines.
 
     When ``transfer_to`` is set (e.g. ``"patient"`` or a coverage UUID),
     adjustment transactions include ``transfer_remaining_balance_to`` so the
     remaining balance moves to the appropriate payer after insurance pays.
+    Patient responsibility (deductible, coinsurance, copay) moves to
+    ``pr_transfer_to``.
     """
     txns: list[LineItemTransaction] = []
     line_items_by_id = {str(li.id): li for li in line_items}
@@ -281,9 +284,6 @@ def _build_insurance_transactions(
                     )
                 )
 
-        # Patient responsibility (deductible, coinsurance, copay) always
-        # transfers to the patient — these are the patient's share regardless
-        # of what next_responsible_party says about the remaining balance.
         for cents_field, pr_code in (
             ("deductible_cents", PR_DEDUCTIBLE),
             ("coinsurance_cents", PR_COINSURANCE),
@@ -296,7 +296,7 @@ def _build_insurance_transactions(
                         claim_line_item_id=line_item_id,
                         adjustment=amount,
                         adjustment_code=pr_code,
-                        transfer_remaining_balance_to="patient",
+                        transfer_remaining_balance_to=pr_transfer_to,
                     )
                 )
 
@@ -481,9 +481,8 @@ def _resolve_transfer_target(state: _SyncState, next_responsible: str) -> str | 
     """Determine where the remaining balance transfers after this insurance posting.
 
     For adjustments (CO-45 etc.) the transfer goes to whoever is next
-    responsible. For patient responsibility amounts (deductible, coinsurance,
-    copay) the transfer always goes to patient — see
-    ``_build_insurance_transactions`` which handles PR codes separately.
+    responsible. Patient responsibility amounts (deductible, coinsurance,
+    copay) are routed separately — see ``_post_era_payments``.
     """
     if next_responsible == "patient":
         return "patient"
@@ -527,11 +526,13 @@ def _post_era_payments(
         and state.primary_id
     ):
         primary_era = _era_at(all_eras, 0)
+        # Like Canvas's ERA posting: PR goes to the next coverage, else the patient.
         insurance_txns = _build_insurance_transactions(
             service_lines,
             state.line_items,
             state.canvas_claim_id,
             transfer_to=transfer_to,
+            pr_transfer_to=state.secondary_id or PATIENT_COVERAGE_ID,
         )
         if insurance_txns:
             _append_payment_effect(state, state.primary_id, insurance_txns, primary_era)

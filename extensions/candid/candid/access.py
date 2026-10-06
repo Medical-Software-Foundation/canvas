@@ -11,7 +11,7 @@ automation (submit, sync, payment reporting, nightly cron) runs with no logged-i
 user and is intentionally left ungated.
 """
 
-from collections.abc import Mapping
+from __future__ import annotations
 
 from canvas_sdk.v1.data.staff import Staff
 
@@ -37,7 +37,7 @@ def _role_tokens(role: object) -> set[str]:
     }
 
 
-def staff_can_access_dashboard(staff_key: str | None, secrets: Mapping[str, str]) -> bool:
+def staff_can_access_dashboard(staff_key: str | None, secrets: dict[str, str]) -> bool:
     """Return whether the given staff member may access the Candid Dashboard.
 
     Fails open when neither allowlist is set. Once a staff-key and/or role

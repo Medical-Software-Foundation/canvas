@@ -42,11 +42,12 @@ CMS-1500 forms limit claims to 12 diagnosis codes per encounter. When a claim ha
 
 ### When adjudication data arrives from Candid
 
-A nightly sync runs at **2:00 AM** to check all claims in Filed Awaiting Response, Adjudicated Open Balance, and Patient Balance queues. When new ERA (Electronic Remittance Advice) data is found:
+A nightly sync starts at **2:00 AM** to check all claims in Filed Awaiting Response, Adjudicated Open Balance, Patient Balance, and Rejected Needs Review queues, working through them in hourly batches until every claim has been checked. When new ERA (Electronic Remittance Advice) data is found:
 
 - Insurance payments are posted to the claim (charged, allowed, paid amounts per service line)
 - Payer adjustments are posted with their CARC codes (e.g. CO-45, PR-1)
-- If the remaining balance is the patient's responsibility, the balance transfers to the patient
+- The deductible, coinsurance, and copay from the primary move to the secondary insurance when the claim has one, and to the patient when it doesn't
+- When the secondary pays, its payment is posted to the secondary. Anything the secondary doesn't pay stays on the secondary for you to transfer to the patient or write off
 - The claim moves to **Patient Balance** or **Adjudicated Open Balance** depending on the remaining balances
 - The status banner updates (e.g. "Candid: Era Received | Last synced 2026-05-01")
 
