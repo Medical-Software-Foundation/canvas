@@ -104,5 +104,7 @@ class NightlyCandidSync(CronTask):
                 log.warning(f"Candid nightly sync: failed for claim {claim.id}: {e}")
 
         cache.delete(CURSOR_CACHE_KEY)
-        log.info(f"Candid nightly sync: synced {synced}/{processed} claims, cycle complete")
+        log.info(
+            f"Candid nightly sync: synced {synced}/{processed} claims, cycle complete"
+        )
         return effects
