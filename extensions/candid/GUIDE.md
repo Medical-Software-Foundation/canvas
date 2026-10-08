@@ -102,7 +102,7 @@ The timeline refreshes automatically after syncing.
 
 ## Candid Claims Dashboard
 
-The **Candid Dashboard** is a full-page application accessible from the Canvas provider menu. It gives you an overview of all claims that have been submitted to Candid.
+The **Candid Dashboard** is a full-page application accessible from the top of the Canvas provider menu. It gives you an overview of all claims that have been submitted to Candid.
 
 ### What You See
 
@@ -211,7 +211,7 @@ The Candid Dashboard lists every claim submitted to Candid, so some practices wa
 Once either variable is set:
 
 - A staff member gets in if their key is listed, or if any role they hold is listed. Everyone else is denied.
-- A denied staff member still sees **Candid Dashboard** in the provider menu, and clicking it does nothing. Canvas gives provider-menu apps no way to hide themselves from individual users, so the enforced boundary is the dashboard itself rather than the menu.
+- **Candid Dashboard** appears in the provider menu only for staff who are allowed in. If a denied staff member opens the dashboard some other way, they see a "not authorized" page instead of the claims list.
 - A variable holding only commas or spaces counts as unset, and access stays open to everyone.
 - A typo denies the person you meant to allow rather than admitting someone you did not. If an allowlist accidentally excludes everyone, correct or clear the variable to restore access.
 

@@ -49,6 +49,10 @@
             {
                 "class": "candid.api.app:CandidAppAssets",
                 "description": "Serves HTML/CSS/JS for the Candid dashboard and claim-timeline applications."
+            },
+            {
+                "class": "candid.applications.candid_dashboard:CandidDashboard",
+                "description": "Lists all claims submitted to Candid with their current status."
             }
         ],
         "commands": [],
@@ -62,13 +66,6 @@
                 "description": "Shows Candid submission, adjudication, and payment activity for the current claim.",
                 "icon": "assets/candid-icon.png",
                 "scope": "global"
-            },
-            {
-                "class": "candid.applications.candid_dashboard:CandidDashboard",
-                "name": "Candid Dashboard",
-                "description": "Lists all claims submitted to Candid with their current status.",
-                "icon": "assets/candid-icon.png",
-                "scope": "provider_menu_item"
             }
         ]
     },
