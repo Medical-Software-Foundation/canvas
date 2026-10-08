@@ -4,49 +4,92 @@ import json
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
+from canvas_sdk.effects import EffectType
+from canvas_sdk.events import EventType
+from canvas_sdk.handlers.application import ApplicationScope
+
 from candid.access import ALLOWED_STAFF_KEYS_SECRET
 from candid.api.app import CandidAppAssets
 from candid.api.dashboard import CandidDashboardAPI
 from candid.applications.candid_dashboard import CandidDashboard
+
+DENIED_MESSAGE = "You are not authorized to access the Candid Dashboard."
 
 
 def _headers_get(staff_key):
     return lambda k, d=None: staff_key if k == "canvas-logged-in-user-id" else d
 
 
-# --- CandidDashboard.on_open (provider-menu launcher) ---
+# --- CandidDashboard (provider-menu application) ---
 
 
 def _dashboard_app(staff_key, secrets, user_type="Staff"):
     app = CandidDashboard.__new__(CandidDashboard)
     app.secrets = secrets
     app.event = MagicMock()
-    app.event.context = {"user": {"id": staff_key, "type": user_type}}
+    app.event.context = {
+        "user": {"id": staff_key, "type": user_type},
+        "scope": ApplicationScope.PROVIDER_MENU,
+    }
     return app
 
 
-def test_on_open_returns_no_effect_when_denied():
+def _menu_entry(app):
+    app.event.type = EventType.APPLICATION__ON_GET
+    effects = app.compute()
+    assert len(effects) == 1
+    assert effects[0].type == EffectType.SHOW_APPLICATION
+    return json.loads(effects[0].payload)["data"]
+
+
+def test_menu_entry_hidden_for_unlisted_staff():
     app = _dashboard_app("staff-9", {ALLOWED_STAFF_KEYS_SECRET: "staff-1"})
-    assert app.on_open() == []
+    entry = _menu_entry(app)
+    assert entry["visible"] is False
+
+
+def test_menu_entry_shown_at_top_for_allowed_staff():
+    app = _dashboard_app("staff-1", {ALLOWED_STAFF_KEYS_SECRET: "staff-1"})
+    entry = _menu_entry(app)
+    assert entry["visible"] is True
+    assert entry["name"] == "Candid Dashboard"
+    assert entry["menu_position"] == "top"
+
+
+def test_menu_entry_shown_when_unconfigured():
+    app = _dashboard_app("anyone", {})
+    assert _menu_entry(app)["visible"] is True
+
+
+def _modal_data(effect):
+    assert effect.type == EffectType.LAUNCH_MODAL
+    return json.loads(effect.payload)["data"]
+
+
+def test_on_open_shows_denied_page_when_denied():
+    app = _dashboard_app("staff-9", {ALLOWED_STAFF_KEYS_SECRET: "staff-1"})
+    data = _modal_data(app.on_open())
+    assert data["content"] == DENIED_MESSAGE
+    assert data["url"] is None
 
 
 def test_on_open_denied_for_non_staff_user():
     app = _dashboard_app("pat-1", {ALLOWED_STAFF_KEYS_SECRET: "staff-1"}, user_type="Patient")
-    assert app.on_open() == []
+    data = _modal_data(app.on_open())
+    assert data["content"] == DENIED_MESSAGE
+    assert data["url"] is None
 
 
-def test_on_open_launches_modal_when_allowed():
+def test_on_open_launches_dashboard_when_allowed():
     app = _dashboard_app("staff-1", {ALLOWED_STAFF_KEYS_SECRET: "staff-1"})
-    with patch("candid.applications.candid_dashboard.LaunchModalEffect") as MockModal:
-        MockModal.return_value.apply.return_value = "effect"
-        assert app.on_open() == "effect"
+    data = _modal_data(app.on_open())
+    assert data["url"] == "/plugin-io/api/candid/app/dashboard"
 
 
-def test_on_open_launches_modal_when_unconfigured():
+def test_on_open_launches_dashboard_when_unconfigured():
     app = _dashboard_app("anyone", {})
-    with patch("candid.applications.candid_dashboard.LaunchModalEffect") as MockModal:
-        MockModal.return_value.apply.return_value = "effect"
-        assert app.on_open() == "effect"
+    data = _modal_data(app.on_open())
+    assert data["url"] == "/plugin-io/api/candid/app/dashboard"
 
 
 # --- CandidDashboardAPI (aggregated claim data) ---
