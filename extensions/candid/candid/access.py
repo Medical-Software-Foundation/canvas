@@ -11,7 +11,7 @@ automation (submit, sync, payment reporting, nightly cron) runs with no logged-i
 user and is intentionally left ungated.
 """
 
-from canvas_sdk.v1.data.staff import Staff, StaffRole
+from canvas_sdk.v1.data.staff import StaffRole
 
 ALLOWED_STAFF_KEYS_SECRET = "CANDID_DASHBOARD_ALLOWED_STAFF_KEYS"
 ALLOWED_ROLES_SECRET = "CANDID_DASHBOARD_ALLOWED_ROLES"
@@ -50,7 +50,5 @@ def staff_can_access_dashboard(staff_key: str | None, secrets: dict[str, str]) -
     if not allowed_roles:
         return False
 
-    staff = Staff.objects.filter(id=staff_key).first()
-    if staff is None:
-        return False
-    return any(_role_tokens(role) & allowed_roles for role in staff.roles.all())
+    roles = StaffRole.objects.filter(staff__id=staff_key)
+    return any(_role_tokens(role) & allowed_roles for role in roles)
