@@ -479,6 +479,7 @@ function filterItems(providers, items) {
 // view, which means "show everyone" rather than "show nobody".
 async function saveMyView() {
   var ids = msFilterProvider ? msFilterProvider.getValue() : [];
+  if (msFilterProvider && msFilterProvider.isAll()) ids = [];
   var data = await apiCall('/my-view', { method: 'PUT', body: JSON.stringify({ provider_ids: ids }) });
   if (data && data.error) { showMsg(data.error, 'error'); return; }
   _savedView = ids.map(String);
@@ -492,11 +493,6 @@ async function saveMyView() {
 
 // Clear the filter so every provider shows. Deliberately not persisted: the
 // next page load returns to the saved view.
-function showAllProviders() {
-  if (msFilterProvider) msFilterProvider.setValue([]);
-  renderAccordion();
-}
-
 /* ---------- Daily mode flat time-windows editor ---------- */
 
 function addDailyTimeWindow(containerId, startVal, endVal) {
@@ -696,6 +692,11 @@ class MultiSelect {
     this.displayKey = options.displayKey || 'name';
     this.valueKey = options.valueKey || 'id';
     this.extraDisplayKey = options.extraDisplayKey || null;
+    // summaryNoun: once more than 3 items are picked, the field shows one summary
+    // chip ("All providers", "12 of 15 providers") instead of a chip per item.
+    // startAll: with nothing picked yet, every item starts checked.
+    this.summaryNoun = options.summaryNoun || null;
+    this.startAll = !!options.startAll;
     this.items = [];
     this.selected = [];
     this.filterText = '';
@@ -731,7 +732,20 @@ class MultiSelect {
     });
   }
 
-  setItems(items) { this.items = items; this.renderDropdown(); }
+  setItems(items) {
+    const wasAll = this.items.length > 0 && this.isAll();
+    this.items = items;
+    if (this.startAll && (wasAll || this.selected.length === 0)) {
+      this.selected = items.map(i => String(i[this.valueKey]));
+      this.updateChips();
+    }
+    this.renderDropdown();
+  }
+
+  // True when every item is picked.
+  isAll() {
+    return this.items.length > 0 && this.items.every(i => this.selected.includes(String(i[this.valueKey])));
+  }
 
   open() { this.isOpen = true; this.dropdown.classList.add('open'); this.renderDropdown(); }
   close() { this.isOpen = false; this.dropdown.classList.remove('open'); this.filterText = ''; this.input.value = ''; }
@@ -747,8 +761,9 @@ class MultiSelect {
     this.dropdown.innerHTML = '';
     if (filtered.length === 0) { this.dropdown.innerHTML = '<div class="ms-empty">No matches</div>'; return; }
 
-    // Select All option
-    if (filtered.length > 1 && !filter) {
+    // Select All option. While searching it reads "Select all matches (N)" and
+    // checks or unchecks only the names showing, so a search plus one click picks a group.
+    if (filtered.length > 1 || filter) {
       const allVals = filtered.map(i => String(i[this.valueKey]));
       const allSelected = allVals.every(v => this.selected.includes(v));
       const selAll = document.createElement('div');
@@ -760,7 +775,7 @@ class MultiSelect {
       cb.checked = allSelected;
       selAll.appendChild(cb);
       const span = document.createElement('span');
-      span.textContent = 'Select All';
+      span.textContent = filter ? 'Select all matches (' + filtered.length + ')' : 'Select All';
       selAll.appendChild(span);
       selAll.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -801,6 +816,16 @@ class MultiSelect {
 
   updateChips() {
     this.chipsArea.innerHTML = '';
+    if (this.summaryNoun && this.selected.length > 3) {
+      const chip = document.createElement('span');
+      chip.className = 'ms-chip';
+      chip.textContent = this.isAll()
+        ? 'All ' + this.summaryNoun
+        : this.selected.length + ' of ' + this.items.length + ' ' + this.summaryNoun;
+      this.chipsArea.appendChild(chip);
+      this.input.placeholder = '';
+      return;
+    }
     this.selected.forEach(val => {
       const item = this.items.find(i => String(i[this.valueKey]) === val);
       const label = item ? (item[this.displayKey] || val) : val;
@@ -3510,14 +3535,14 @@ document.addEventListener('input', function(e) {
 
 /* ---------- Initialize ---------- */
 
-msProvider = new MultiSelect('ms-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
-msLocation = new MultiSelect('ms-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
-msVisitType = new MultiSelect('ms-visit-type', { placeholder: 'Search visit types...', displayKey: 'name', valueKey: 'id' });
-msBlockProvider = new MultiSelect('ms-block-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
-msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
-msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
-msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
-msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
+msProvider = new MultiSelect('ms-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
+msLocation = new MultiSelect('ms-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
+msVisitType = new MultiSelect('ms-visit-type', { placeholder: 'Search visit types...', displayKey: 'name', valueKey: 'id', summaryNoun: 'visit types' });
+msBlockProvider = new MultiSelect('ms-block-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
+msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
+msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
+msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
+msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers', startAll: true });
 msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
 
 buildTimeOptions();
