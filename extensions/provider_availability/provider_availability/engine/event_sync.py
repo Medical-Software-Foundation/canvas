@@ -778,16 +778,20 @@ def _block_outside_override(block_windows: list, override_windows: list) -> bool
 # ── Recurring block sync ──────────────────────────────────────────────
 
 
-def build_recurring_block_sync_effects(block: RecurringBlock) -> list[Effect]:
+def build_recurring_block_sync_effects(block: RecurringBlock, previous: RecurringBlock | None = None) -> list[Effect]:
     """Create recurring weekly Administrative events for a RecurringBlock.
 
     Similar pattern to build_sync_effects but creates blocking events on
     Administrative calendars instead of availability events on Clinic calendars.
+
+    On an edit, pass the block as it was stored before the edit as `previous`.
+    The delete matches events by title and dates, so building it from the
+    edited block misses the old events whenever the reason or dates changed.
     """
     effects: list[Effect] = []
 
     # Delete old recurring block events first
-    effects.extend(build_delete_recurring_block_effects(block.provider_id, block))
+    effects.extend(build_delete_recurring_block_effects(block.provider_id, previous or block))
 
     is_daily = block.recurrence_frequency == "daily"
     has_schedule = bool(block.time_windows) if is_daily else bool(block.weekly_schedule)
@@ -1054,41 +1058,29 @@ def build_hold_block_refresh_effects(block: RecurringBlock) -> list[Effect]:
 def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock | None = None) -> list[Effect]:
     """Delete recurring block events from the provider's Admin calendars.
 
-    If a specific block is given, first try stored event IDs, then fall back
-    to matching by the block's actual title (reason). Also searches for
-    the legacy RECURRING_BLOCK_TITLE to clean up orphaned events.
+    If a specific block is given, matches by the block's actual title
+    (reason). Also searches for the legacy RECURRING_BLOCK_TITLE to clean up
+    orphaned events.
     """
     effects: list[Effect] = []
 
     if block:
-        stored_ids = get_event_ids(block.id)
-        if stored_ids:
-            for eid in stored_ids:
-                effects.append(EventEffect(event_id=eid).delete())
-            log.info("build_delete_recurring_block_effects: block=%s, deleted %d events by stored IDs", block.id, len(effects))
-            # Also clean up any hold block events
-            cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-            if block.hold_type != "none" and cal_ids:
-                for prefix in HOLD_TITLE_PREFIXES:
-                    for evt in EventModel.objects.filter(
-                        calendar__id__in=cal_ids,
-                        title__startswith=prefix,
-                        is_cancelled=False,
-                    ):
-                        effects.append(EventEffect(event_id=str(evt.id)).delete())
-            return effects
-
-        # Fall back: match by the block's actual title AND legacy title
+        # Match by the block's actual title AND legacy title
         title = block.reason if block.reason else "Blocked"
         titles_to_delete = [title]
         if RECURRING_BLOCK_TITLE != title:
             titles_to_delete.append(RECURRING_BLOCK_TITLE)
+        # Titles are shared with one-off blocks and with other recurring blocks
+        # that use the same reason, so scope the match to recurring events that
+        # start inside this block's effective range.
+        scope = _recurring_block_event_scope(block)
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
         if cal_ids:
             for evt in EventModel.objects.filter(
                 calendar__id__in=cal_ids,
                 title__in=titles_to_delete,
                 is_cancelled=False,
+                **scope,
             ):
                 effects.append(EventEffect(event_id=str(evt.id)).delete())
             # Also clean up hold block events
@@ -1114,3 +1106,25 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
     if effects:
         log.info("build_delete_recurring_block_effects: provider=%s, %d delete effects", provider_id, len(effects))
     return effects
+
+
+def _recurring_block_event_scope(block: RecurringBlock) -> dict:
+    """ORM filter kwargs that limit a title match to this block's own events.
+
+    Recurring block events always carry a recurrence rule and one-off block
+    events never do. Events are anchored at or after effective_start and end
+    by effective_end, so a start well outside that range belongs to another
+    block. The bounds are widened by a day on each side so that events
+    created under a different timezone still fall inside them.
+    """
+    scope: dict = {"recurrence__contains": "FREQ="}
+    if not block.effective_start and not block.effective_end:
+        return scope
+    tz = ZoneInfo(block.timezone) if block.timezone else provider_tz(block.provider_id)
+    if block.effective_start:
+        day_before = block.effective_start - dt.timedelta(days=1)
+        scope["starts_at__gte"] = to_utc(localize_naive(datetime.combine(day_before, dt.time.min), tz))
+    if block.effective_end:
+        two_days_after = block.effective_end + dt.timedelta(days=2)
+        scope["starts_at__lt"] = to_utc(localize_naive(datetime.combine(two_days_after, dt.time.min), tz))
+    return scope

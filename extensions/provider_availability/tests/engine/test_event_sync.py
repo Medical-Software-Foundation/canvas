@@ -36,6 +36,7 @@ from provider_availability.engine.event_sync import (
     build_delete_block_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
+    _recurring_block_event_scope,
     build_lead_time_block_effects,
     build_recurring_block_sync_effects,
     build_sync_effects,
@@ -1772,23 +1773,10 @@ class TestBuildRecurringBlockSyncEffects:
 
 
 class TestBuildDeleteRecurringBlockEffects:
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_used(self, mock_get_ids, sample_recurring_block):
-        mock_get_ids.return_value = ["evt-1", "evt-2", "evt-3"]
-
-        result = build_delete_recurring_block_effects(
-            PROVIDER_ID, sample_recurring_block
-        )
-
-        assert mock_get_ids.mock_calls == [call(sample_recurring_block.id)]
-        assert len(result) == 3
-
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_fallback_to_title_match(
-        self, mock_get_ids, mock_get_admin_cals, sample_recurring_block
+        self, mock_get_admin_cals, sample_recurring_block
     ):
-        mock_get_ids.return_value = []
 
         mock_cal = MagicMock()
         mock_cal.id = "admin-cal-1"
@@ -1809,6 +1797,7 @@ class TestBuildDeleteRecurringBlockEffects:
             calendar__id__in=["admin-cal-1"],
             title__in=["Lunch", RECURRING_BLOCK_TITLE],
             is_cancelled=False,
+            recurrence__contains="FREQ=",
         )
         assert len(result) == 1
 
@@ -1834,11 +1823,9 @@ class TestBuildDeleteRecurringBlockEffects:
         assert len(result) == 1
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_no_events_returns_empty(
-        self, mock_get_ids, mock_get_admin_cals, sample_recurring_block
+        self, mock_get_admin_cals, sample_recurring_block
     ):
-        mock_get_ids.return_value = []
         mock_get_admin_cals.return_value = []
 
         result = build_delete_recurring_block_effects(
@@ -1848,12 +1835,10 @@ class TestBuildDeleteRecurringBlockEffects:
         assert result == []
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_fallback_block_with_empty_reason(
-        self, mock_get_ids, mock_get_admin_cals
+        self, mock_get_admin_cals
     ):
         """Block with empty reason uses 'Blocked' as title to match."""
-        mock_get_ids.return_value = []
         mock_get_admin_cals.return_value = []
 
         block = RecurringBlock(
@@ -1869,12 +1854,10 @@ class TestBuildDeleteRecurringBlockEffects:
         assert result == []
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_fallback_block_with_empty_reason_searches_blocked_and_legacy(
-        self, mock_get_ids, mock_get_admin_cals
+        self, mock_get_admin_cals
     ):
         """Block with empty reason searches for both 'Blocked' and RECURRING_BLOCK_TITLE."""
-        mock_get_ids.return_value = []
 
         mock_cal = MagicMock()
         mock_cal.id = "admin-cal-1"
@@ -1900,6 +1883,7 @@ class TestBuildDeleteRecurringBlockEffects:
             calendar__id__in=["admin-cal-1"],
             title__in=["Blocked", RECURRING_BLOCK_TITLE],
             is_cancelled=False,
+            recurrence__contains="FREQ=",
         )
         assert len(result) == 1
 
@@ -1912,12 +1896,10 @@ class TestBuildDeleteRecurringBlockEffects:
         assert result == []
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_fallback_multiple_calendars(
-        self, mock_get_ids, mock_get_admin_cals, sample_recurring_block
+        self, mock_get_admin_cals, sample_recurring_block
     ):
         """Fallback title-match searches across all admin calendars."""
-        mock_get_ids.return_value = []
 
         mock_cal1 = MagicMock()
         mock_cal1.id = "cal-1"
@@ -3078,35 +3060,10 @@ class TestBuildHoldBlockRefreshEffects:
 class TestBuildDeleteRecurringBlockHoldCleanup:
     @patch(f"{MODULE}.EventModel")
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_path_also_cleans_hold_events(
-        self, mock_get_ids, mock_get_cals, mock_event_model, sample_recurring_block
-    ):
-        sample_recurring_block.hold_type = "same_day"
-        mock_get_ids.return_value = ["stored-1", "stored-2"]
-        cal = MagicMock()
-        cal.id = "admin-cal-1"
-        mock_get_cals.return_value = [cal]
-        hold_evt = MagicMock()
-        hold_evt.id = "hold-1"
-        mock_event_model.objects.filter.side_effect = (
-            [[hold_evt]] + [[] for _ in range(10)]
-        )
-
-        result = build_delete_recurring_block_effects(
-            sample_recurring_block.provider_id, sample_recurring_block
-        )
-        # 2 stored-id deletes + 1 hold-event delete
-        assert len(result) == 3
-
-    @patch(f"{MODULE}.EventModel")
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_title_fallback_path_also_cleans_hold_events(
-        self, mock_get_ids, mock_get_cals, mock_event_model, sample_recurring_block
+        self, mock_get_cals, mock_event_model, sample_recurring_block
     ):
         sample_recurring_block.hold_type = "next_day"
-        mock_get_ids.return_value = []  # force title-fallback path
         cal = MagicMock()
         cal.id = "admin-cal-1"
         mock_get_cals.return_value = [cal]
@@ -3123,3 +3080,114 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         )
         # 1 title-match delete + 1 hold-event delete
         assert len(result) == 2
+
+
+# ── recurring block delete scope ──────────────────────────────────────
+
+
+class TestRecurringBlockDeleteScope:
+    """A recurring block's delete must not reach one-off blocks or other
+    recurring blocks that happen to share its reason text."""
+
+    @patch(f"{MODULE}.get_admin_calendars")
+    def test_blank_reason_recurring_block_skips_blank_reason_one_off_blocks(
+        self, mock_get_admin_cals
+    ):
+        """A one-off block with no reason is also titled "Blocked". Saving a
+        recurring block with no reason must not delete it, so the match is
+        limited to events that carry a recurrence rule."""
+        mock_cal = MagicMock()
+        mock_cal.id = "admin-cal-1"
+        mock_get_admin_cals.return_value = [mock_cal]
+        block = RecurringBlock(
+            id="rb-1",
+            provider_id=PROVIDER_ID,
+            weekly_schedule={"monday": [TimeWindow(dt.time(8, 0), dt.time(17, 0))]},
+            reason="",
+            is_active=True,
+        )
+
+        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_event_objects.filter.return_value = []
+            build_delete_recurring_block_effects(PROVIDER_ID, block)
+
+        kwargs = mock_event_objects.filter.call_args.kwargs
+        assert kwargs["title__in"] == ["Blocked", RECURRING_BLOCK_TITLE]
+        assert kwargs["recurrence__contains"] == "FREQ="
+
+    @patch(f"{MODULE}.get_admin_calendars")
+    def test_bounded_block_scopes_to_recurring_events_in_its_dates(
+        self, mock_get_admin_cals
+    ):
+        mock_cal = MagicMock()
+        mock_cal.id = "admin-cal-1"
+        mock_get_admin_cals.return_value = [mock_cal]
+        block = RecurringBlock(
+            id="rb-nov",
+            provider_id=PROVIDER_ID,
+            reason="PTO",
+            is_active=True,
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(dt.time(7, 0), dt.time(19, 0))],
+            effective_start=date(2026, 11, 20),
+            effective_end=date(2026, 11, 23),
+            timezone="America/New_York",
+        )
+
+        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_event_objects.filter.return_value = []
+            build_delete_recurring_block_effects(PROVIDER_ID, block)
+
+        # Nov 20-23 widened by a day on each side: midnight Eastern on Nov 19
+        # through midnight Eastern on Nov 25.
+        assert mock_event_objects.filter.call_args == call(
+            calendar__id__in=["admin-cal-1"],
+            title__in=["PTO", RECURRING_BLOCK_TITLE],
+            is_cancelled=False,
+            recurrence__contains="FREQ=",
+            starts_at__gte=datetime(2026, 11, 19, 5, 0, tzinfo=UTC),
+            starts_at__lt=datetime(2026, 11, 25, 5, 0, tzinfo=UTC),
+        )
+
+    def test_bounds_cover_events_created_before_a_move_east(self):
+        """Events created at 07:00 Honolulu (UTC-10) on Nov 20-23, then the
+        block's timezone changed to Kiritimati (UTC+14). Unwidened, the upper
+        bound would be Nov 23 10:00 UTC and miss the Nov 23 17:00 UTC event."""
+        block = RecurringBlock(
+            id="rb-nov",
+            provider_id=PROVIDER_ID,
+            reason="PTO",
+            effective_start=date(2026, 11, 20),
+            effective_end=date(2026, 11, 23),
+            timezone="Pacific/Kiritimati",
+        )
+
+        scope = _recurring_block_event_scope(block)
+
+        assert scope["starts_at__gte"] <= datetime(2026, 11, 20, 17, 0, tzinfo=UTC)
+        assert datetime(2026, 11, 23, 17, 0, tzinfo=UTC) < scope["starts_at__lt"]
+
+    def test_bounds_cover_events_created_before_a_move_west(self):
+        """Events created at 07:00 Kiritimati (UTC+14) on Nov 20-23, then the
+        block's timezone changed to Honolulu (UTC-10). Unwidened, the lower
+        bound would be Nov 20 10:00 UTC and miss the Nov 19 17:00 UTC event."""
+        block = RecurringBlock(
+            id="rb-nov",
+            provider_id=PROVIDER_ID,
+            reason="PTO",
+            effective_start=date(2026, 11, 20),
+            effective_end=date(2026, 11, 23),
+            timezone="Pacific/Honolulu",
+        )
+
+        scope = _recurring_block_event_scope(block)
+
+        assert scope["starts_at__gte"] <= datetime(2026, 11, 19, 17, 0, tzinfo=UTC)
+        assert datetime(2026, 11, 22, 17, 0, tzinfo=UTC) < scope["starts_at__lt"]
+
+    @patch(f"{MODULE}.provider_tz")
+    def test_unbounded_block_does_not_look_up_timezone(self, mock_provider_tz):
+        block = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, reason="Lunch")
+
+        assert _recurring_block_event_scope(block) == {"recurrence__contains": "FREQ="}
+        mock_provider_tz.assert_not_called()

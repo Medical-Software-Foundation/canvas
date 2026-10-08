@@ -1114,46 +1114,10 @@ class TestBuildHoldBlockRefreshEffects:
 
 class TestBuildDeleteRecurringBlockHoldCleanup:
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_plus_hold_cleanup(
-        self, mock_get_ids, mock_get_admin_cals
-    ):
-        """Stored-ID path also cleans up hold events when hold_type != none (lines 1068-1076)."""
-        mock_get_ids.return_value = ["stored-1", "stored-2"]
-
-        mock_cal = MagicMock()
-        mock_cal.id = "admin-cal-1"
-        mock_get_admin_cals.return_value = [mock_cal]
-
-        hold_evt = MagicMock()
-        hold_evt.id = "hold-evt-1"
-
-        block = RecurringBlock(
-            id="rb-1",
-            provider_id=PROVIDER_ID,
-            reason="Hold",
-            hold_type="same_day",
-        )
-
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            # One hold event on the first prefix, empty for the rest
-            side = [[hold_evt]] + [[] for _ in HOLD_TITLE_PREFIXES[1:]]
-            mock_event_objects.filter.side_effect = side
-
-            result = build_delete_recurring_block_effects(PROVIDER_ID, block)
-
-        assert mock_get_ids.mock_calls == [call(block.id)]
-        # 2 stored-ID deletes + 1 hold-event delete = 3
-        assert len(result) == 3
-        assert mock_event_objects.filter.call_count == len(HOLD_TITLE_PREFIXES)
-
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_title_fallback_plus_hold_cleanup(
-        self, mock_get_ids, mock_get_admin_cals
+        self, mock_get_admin_cals
     ):
         """Title-fallback path also cleans up hold events when hold_type != none (lines 1092-1099)."""
-        mock_get_ids.return_value = []  # no stored IDs -> title fallback
 
         mock_cal = MagicMock()
         mock_cal.id = "admin-cal-1"
