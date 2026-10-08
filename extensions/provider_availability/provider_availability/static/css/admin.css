@@ -569,6 +569,10 @@ body {
 #confirm-message { margin: 0; line-height: 1.6; }
 
 /* Alerts */
+.expired-banner { background: #f6f7f9; border: 1px solid var(--border, #e2e5ea); color: inherit; gap: 12px; flex-wrap: wrap; }
+.expired-banner .expired-text { flex: 1; min-width: 260px; }
+.expired-banner .expired-text a { color: var(--color-secondary, #2185D0); cursor: pointer; text-decoration: underline; }
+.expired-banner .expired-actions { display: flex; gap: 8px; }
 .alert { padding: 12px 18px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 14px; font-weight: 500; position: relative; display: flex; align-items: center; justify-content: space-between; }
 .alert-success { background: var(--avail-bg); color: var(--avail); border: 1px solid var(--avail-border); }
 .alert-error { background: var(--block-bg); color: var(--block); border: 1px solid var(--block-border); }

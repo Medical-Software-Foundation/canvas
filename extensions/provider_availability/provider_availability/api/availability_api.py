@@ -35,6 +35,7 @@ from provider_availability.engine.lookups import (
 )
 from provider_availability.api._auth import current_staff_id as _signed_in_staff_id
 from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
+from provider_availability.engine.expired import expired_summary, remove_expired, snooze_expired
 from provider_availability.engine.roles import (
     get_available_roles,
     get_effective_schedulable_roles,
@@ -1522,6 +1523,51 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         log.info("my_view: saved %d providers", len(cleaned))
         return [JSONResponse({"provider_ids": cleaned})]
 
+    # ── Expired items ─────────────────────────────────────────────────
+
+    def _expired_scope(self) -> list[str]:
+        """Providers whose expired items this viewer may clear: every bookable provider today."""
+        if not is_authorized(self.secrets, self.request):
+            return []
+        return [str(p["id"]) for p in get_active_providers()]
+
+    def _expired_body_ids(self) -> list[str] | None:
+        """The provider_ids in the request body, limited to the viewer's scope. None if malformed."""
+        ids = self.request.json().get("provider_ids")
+        if not isinstance(ids, list):
+            return None
+        scope = set(self._expired_scope())
+        return [str(pid) for pid in ids if str(pid) in scope]
+
+    @api.get("/expired-summary")
+    def get_expired_summary(self) -> list[Response | Effect]:
+        """How many items ended over 30 days ago, for providers the viewer can edit and has not snoozed."""
+        return [JSONResponse(expired_summary(self._expired_scope()))]
+
+    @api.post("/expired/remove")
+    def remove_expired_items(self) -> list[Response | Effect]:
+        """Drop those items from the plugin's lists. Their past calendar events stay in Canvas."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        ids = self._expired_body_ids()
+        if ids is None:
+            return [JSONResponse({"error": "provider_ids must be a list of provider ids"}, status_code=HTTPStatus.BAD_REQUEST)]
+        removed = remove_expired(ids)
+        return [JSONResponse({"removed": removed, "message": f"Removed {removed} expired items from the list"})]
+
+    @api.post("/expired/snooze")
+    def snooze_expired_items(self) -> list[Response | Effect]:
+        """Hide the question for these providers for 30 days."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        ids = self._expired_body_ids()
+        if ids is None:
+            return [JSONResponse({"error": "provider_ids must be a list of provider ids"}, status_code=HTTPStatus.BAD_REQUEST)]
+        until = snooze_expired(ids)
+        return [JSONResponse({"until": until.isoformat()})]
+
     # ── Per-provider timezone ─────────────────────────────────────────
 
     @api.get("/provider-timezone")
@@ -1750,6 +1796,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             list(overview.values()), _signed_in_staff_id(self.request)
         )
 
+        # The expired-items banner is optional: if its lookup fails, the page loads without it.
+        try:
+            expired = expired_summary(schedulable_ids if is_authorized(self.secrets, self.request) else [])
+        except Exception:
+            log.exception("preload: expired summary failed")
+            expired = {"count": 0, "provider_ids": []}
+
         return {
             "providers": {"providers": providers, "count": len(providers)},
             "locations": {"locations": locations, "count": len(locations)},
@@ -1757,6 +1810,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "timezone": {"timezone": tz, "available": COMMON_TIMEZONES},
             "overview": {"providers": sorted_overview},
             "my_view": {"provider_ids": get_my_view(_signed_in_staff_id(self.request))},
+            "expired": expired,
             "csv_template": generate_template_csv(),
         }
 

@@ -412,6 +412,49 @@ function isExpiredOverride(ovr) {
 // Expired rules, recurring blocks and holds, one-off blocks, and date overrides
 // are hidden by default: a provider's list is dominated by finished items otherwise. Not persisted, so a reload
 // returns to hiding them.
+// Banner offering to clear items that ended over 30 days ago, for providers the
+// viewer can edit. "Ask again in 30 days" snoozes those providers only.
+var _expiredSummary = { count: 0, provider_ids: [] };
+
+function renderExpiredBanner() {
+  var el = document.getElementById('expired-banner');
+  if (!el) return;
+  var n = _expiredSummary.count || 0;
+  if (!n) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = '<span class="expired-text"><a onclick="reviewExpired()">' + n + (n === 1 ? ' item' : ' items') +
+    '</a> ended more than 30 days ago. Their past calendar entries stay in Canvas either way.</span>' +
+    '<span class="expired-actions"><button class="btn" onclick="snoozeExpired()">Ask again in 30 days</button>' +
+    '<button class="btn btn-danger" onclick="removeExpired()">Remove from list</button></span>';
+  el.style.display = '';
+}
+
+async function loadExpiredBanner() {
+  var data = await apiCall('/expired-summary');
+  if (data && typeof data.count === 'number') { _expiredSummary = data; renderExpiredBanner(); }
+}
+
+function reviewExpired() {
+  if (!_showExpired) toggleExpired();
+}
+
+async function removeExpired() {
+  var n = _expiredSummary.count;
+  if (!confirm('Remove ' + n + (n === 1 ? ' expired item' : ' expired items') + ' from this list? Their past calendar entries stay in Canvas.')) return;
+  var data = await apiCall('/expired/remove', { method: 'POST', body: JSON.stringify({ provider_ids: _expiredSummary.provider_ids }) });
+  if (data.error) { showMsg(data.error, 'error'); return; }
+  showMsg(data.message || 'Removed', 'success');
+  _expiredSummary = { count: 0, provider_ids: [] };
+  renderExpiredBanner();
+  await loadOverview();
+}
+
+async function snoozeExpired() {
+  var data = await apiCall('/expired/snooze', { method: 'POST', body: JSON.stringify({ provider_ids: _expiredSummary.provider_ids }) });
+  if (data.error) { showMsg(data.error, 'error'); return; }
+  _expiredSummary = { count: 0, provider_ids: [] };
+  renderExpiredBanner();
+}
+
 function toggleExpired() {
   _showExpired = !_showExpired;
   var btn = document.getElementById('toggle-expired');
@@ -3532,6 +3575,8 @@ try {
 
     // Land on the saved default view. Empty means show everyone.
     _savedView = ((P.my_view && P.my_view.provider_ids) || []).map(String);
+
+    if (P.expired) { _expiredSummary = P.expired; renderExpiredBanner(); }
     if (_savedView.length && msFilterProvider) msFilterProvider.setValue(_savedView.slice());
 
     renderAccordion();
@@ -3545,6 +3590,7 @@ try {
     // Fallback: fetch from API
     Promise.all([loadProviders(), loadLocations(), loadVisitTypes(), loadTimezone()]).then(function() {
       loadOverview();
+      loadExpiredBanner();
     });
   }
 } catch (initErr) {

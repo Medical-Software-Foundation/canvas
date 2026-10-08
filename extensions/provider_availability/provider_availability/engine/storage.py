@@ -14,6 +14,7 @@ RECURRING_BLOCK_INDEX_KEY = "pa:recurring_blocks:index"
 EVENT_IDS_PREFIX = "pa:event_ids:"
 SCHEDULABLE_ROLES_KEY = "pa:schedulable_roles"
 SCHEDULABLE_SEEN_KEY = "pa:schedulable_ids_seen"
+EXPIRED_SNOOZE_KEY = "pa:expired_snoozed"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
@@ -378,6 +379,20 @@ def set_last_sync_date(date_str: str) -> None:
     cache.set(LAST_SYNC_KEY, date_str, timeout_seconds=CACHE_TTL_SECONDS)
 
 
+# ── Expired-item snoozes ───────────────────────────────────────────────
+
+
+def get_expired_snoozes() -> dict[str, str]:
+    """Provider id → ISO date until which the expired-items question stays hidden."""
+    val = _get_cache().get(EXPIRED_SNOOZE_KEY)
+    return dict(val) if isinstance(val, dict) else {}
+
+
+def set_expired_snoozes(snoozes: dict[str, str]) -> None:
+    """Store the snooze map. Kept alive past the cache TTL by refresh_all_ttls."""
+    _get_cache().set(EXPIRED_SNOOZE_KEY, snoozes, timeout_seconds=CACHE_TTL_SECONDS)
+
+
 # ── TTL refresh ────────────────────────────────────────────────────────
 
 
@@ -484,7 +499,7 @@ def refresh_all_ttls() -> int:
 
     # Refresh schedulable roles, and the bookable set the background job last
     # reconciled against (if it lapsed, the next change would go unapplied)
-    for key in (SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY):
+    for key in (SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY, EXPIRED_SNOOZE_KEY):
         val = cache.get(key)
         if val is not None:
             cache.set(key, val, timeout_seconds=CACHE_TTL_SECONDS)

@@ -42,9 +42,10 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
       <div id="ms-filter-provider" class="multi-select" style="flex:1;max-width:400px;"></div>
       <button class="btn" onclick="saveMyView()" title="Remember this selection as the providers you see by default">Save as my view</button>
       <button class="btn" onclick="showAllProviders()" title="Clear the filter and show every provider">Show all</button>
-      <button class="btn" id="toggle-expired" onclick="toggleExpired()" title="Expired items are hidden by default, and drop off this list 30 days after they end">Show expired</button>
+      <button class="btn" id="toggle-expired" onclick="toggleExpired()" title="Expired rules, blocks, holds and overrides are hidden by default">Show expired</button>
       <button class="btn btn-expand-collapse" onclick="toggleAllCards()">Expand All</button>
     </div>
+    <div id="expired-banner" class="alert expired-banner" style="display:none"></div>
     <div id="legend-bar-container" class="legend-bar"></div>
     <div class="provider-list" id="accordion-container">
       <div class="empty-state">Loading...</div>

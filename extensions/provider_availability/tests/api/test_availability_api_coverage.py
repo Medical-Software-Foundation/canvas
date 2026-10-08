@@ -1657,3 +1657,66 @@ class TestSavedView:
         data, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
         assert mock_set.mock_calls == []
+
+
+# ── expired items ──────────────────────────────────────────────────────
+
+
+class TestExpiredRoutes:
+    @patch(f"{MODULE}.expired_summary", return_value={"count": 3, "provider_ids": ["p1"]})
+    @patch(f"{MODULE}.get_active_providers", return_value=[{"id": "p1"}, {"id": "p2"}])
+    @patch(f"{MODULE}.is_authorized", return_value=True)
+    def test_summary_covers_every_bookable_provider(self, mock_auth, mock_providers, mock_summary):
+        data, code = _parse(_make_handler().get_expired_summary()[0])
+        assert code == HTTPStatus.OK
+        assert data == {"count": 3, "provider_ids": ["p1"]}
+        assert mock_summary.mock_calls == [call(["p1", "p2"])]
+
+    @patch(f"{MODULE}.expired_summary", return_value={"count": 0, "provider_ids": []})
+    @patch(f"{MODULE}.get_active_providers")
+    @patch(f"{MODULE}.is_authorized", return_value=False)
+    def test_summary_is_empty_for_someone_who_cannot_edit(self, mock_auth, mock_providers, mock_summary):
+        _make_handler().get_expired_summary()
+        assert mock_summary.mock_calls == [call([])]
+        assert mock_providers.mock_calls == []
+
+    @patch(f"{MODULE}.remove_expired", return_value=5)
+    @patch(f"{MODULE}.get_active_providers", return_value=[{"id": "p1"}, {"id": "p2"}])
+    @patch(f"{MODULE}.is_authorized", return_value=True)
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_remove_only_touches_providers_in_scope(self, mock_access, mock_auth, mock_providers, mock_remove):
+        handler = _make_handler(json_body={"provider_ids": ["p1", "not-bookable"]})
+        data, code = _parse(handler.remove_expired_items()[0])
+        assert code == HTTPStatus.OK
+        assert data["removed"] == 5
+        assert mock_remove.mock_calls == [call(["p1"])]
+
+    @patch(f"{MODULE}.snooze_expired", return_value=date(2026, 11, 4))
+    @patch(f"{MODULE}.get_active_providers", return_value=[{"id": "p1"}])
+    @patch(f"{MODULE}.is_authorized", return_value=True)
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_snooze_returns_the_date_it_ends(self, mock_access, mock_auth, mock_providers, mock_snooze):
+        handler = _make_handler(json_body={"provider_ids": ["p1"]})
+        data, code = _parse(handler.snooze_expired_items()[0])
+        assert code == HTTPStatus.OK
+        assert data == {"until": "2026-11-04"}
+        assert mock_snooze.mock_calls == [call(["p1"])]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_malformed_body_is_rejected(self, mock_access):
+        handler = _make_handler(json_body={"provider_ids": "p1"})
+        _, code = _parse(handler.remove_expired_items()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        _, code = _parse(handler.snooze_expired_items()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+
+    @patch(f"{MODULE}._check_write_access")
+    def test_write_access_denied(self, mock_access):
+        from canvas_sdk.effects.simple_api import JSONResponse
+
+        mock_access.return_value = [JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)]
+        handler = _make_handler(json_body={"provider_ids": ["p1"]})
+        _, code = _parse(handler.remove_expired_items()[0])
+        assert code == HTTPStatus.FORBIDDEN
+        _, code = _parse(handler.snooze_expired_items()[0])
+        assert code == HTTPStatus.FORBIDDEN

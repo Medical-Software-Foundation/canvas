@@ -10,15 +10,11 @@ from provider_availability.cron.cache_refresh import (
     CacheRefreshTask,
     _daily_resync,
     _ensure_provider_calendars,
-    _prune_expired,
     _refresh_hold_blocks,
     _refresh_lead_time_blocks,
 )
 from provider_availability.engine.models import (
-    AdminBlock,
     BookingInterval,
-    DateOverride,
-    RecurringBlock,
     ProviderAvailabilityRule,
     TimeWindow,
 )
@@ -33,9 +29,7 @@ class TestCacheRefreshTaskExecute:
     @pytest.fixture(autouse=True)
     def _no_schedulable_change(self):
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{CR_MODULE}._reconcile_if_schedulable_changed", return_value=[]), \
-             patch(f"{CR_MODULE}._prune_expired", return_value=0) as prune:
-            self.prune = prune
+             patch(f"{CR_MODULE}._reconcile_if_schedulable_changed", return_value=[]):
             yield
 
     def test_execute_calls_refresh_when_due(self):
@@ -96,7 +90,6 @@ class TestCacheRefreshTaskExecute:
             result = handler.execute()
             assert mock_hold.mock_calls == [call()]
             assert result == [hold_effect]
-            assert self.prune.mock_calls == [call()]
 
         # Same day → hold refresh skipped
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
@@ -108,8 +101,6 @@ class TestCacheRefreshTaskExecute:
             result = handler.execute()
             assert mock_hold2.mock_calls == []
             assert result == []
-            # Pruning is once a day too: still only the call from the day change
-            assert self.prune.mock_calls == [call()]
 
     def test_execute_aggregates_effects(self):
         handler = CacheRefreshTask(MagicMock())
@@ -475,55 +466,3 @@ class TestReconcileWhenSchedulableChanges:
             assert _reconcile_if_schedulable_changed({"a", "b"}) == ["sync"]
             assert mock_rec.mock_calls == [call()]
 
-
-class TestPruneExpired:
-    """Items that ended over 30 days ago leave the lists; nothing touches calendars."""
-
-    TODAY = date(2026, 10, 5)  # cutoff is 2026-09-05
-
-    def _rule(self, end, overrides=()):
-        return ProviderAvailabilityRule(
-            provider_id="p1", id="r-" + str(end), effective_end=end,
-            date_overrides=[DateOverride(date=d) for d in overrides],
-        )
-
-    def test_drops_only_items_past_the_cutoff(self):
-        old_rule = self._rule(date(2026, 9, 1))
-        recent_rule = self._rule(date(2026, 9, 20), overrides=[date(2026, 8, 1), date(2026, 9, 10)])
-        open_rule = self._rule(None)
-        old_block = AdminBlock(provider_id="p1", id="b-old", start=dt.datetime(2026, 9, 1, 9), end=dt.datetime(2026, 9, 1, 10))
-        edge_block = AdminBlock(provider_id="p1", id="b-edge", start=dt.datetime(2026, 9, 5, 9), end=dt.datetime(2026, 9, 5, 10))
-        old_rb = RecurringBlock(provider_id="p1", id="rb-old", effective_end=date(2026, 8, 31))
-        live_rb = RecurringBlock(provider_id="p1", id="rb-live", effective_end=None)
-
-        with patch(f"{CR_MODULE}.get_all_rules", return_value=[old_rule, recent_rule, open_rule]), \
-             patch(f"{CR_MODULE}.get_all_blocks", return_value=[old_block, edge_block]), \
-             patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[old_rb, live_rb]), \
-             patch(f"{CR_MODULE}.delete_rule_by_id") as del_rule, \
-             patch(f"{CR_MODULE}.delete_block") as del_block, \
-             patch(f"{CR_MODULE}.delete_recurring_block") as del_rb, \
-             patch(f"{CR_MODULE}.delete_event_ids") as del_ids, \
-             patch(f"{CR_MODULE}.save_rule") as save:
-            removed = _prune_expired(self.TODAY)
-
-        # old rule, one old override, old block, old recurring block
-        assert removed == 4
-        assert del_rule.mock_calls == [call("p1", old_rule.id)]
-        assert del_block.mock_calls == [call("p1", "b-old")]
-        assert del_rb.mock_calls == [call("p1", "rb-old")]
-        assert del_ids.mock_calls == [call(old_rule.id), call("b-old"), call("rb-old")]
-        # The recent rule keeps its in-window override and loses the old one
-        assert save.mock_calls == [call(recent_rule)]
-        assert [o.date for o in recent_rule.date_overrides] == [date(2026, 9, 10)]
-
-    def test_nothing_expired_saves_nothing(self):
-        with patch(f"{CR_MODULE}.get_all_rules", return_value=[self._rule(None)]), \
-             patch(f"{CR_MODULE}.get_all_blocks", return_value=[]), \
-             patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[]), \
-             patch(f"{CR_MODULE}.save_rule") as save:
-            assert _prune_expired(self.TODAY) == 0
-        assert save.mock_calls == []
-
-    def test_error_is_logged_not_raised(self):
-        with patch(f"{CR_MODULE}.get_all_rules", side_effect=RuntimeError("cache down")):
-            assert _prune_expired(self.TODAY) == 0
