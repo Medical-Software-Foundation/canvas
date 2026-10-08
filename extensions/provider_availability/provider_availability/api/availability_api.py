@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
@@ -1233,16 +1234,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse({"error": rec_err}, status_code=HTTPStatus.BAD_REQUEST)]
 
         block = RecurringBlock.from_dict(body)
+        # The delete has to match the events as they were stored, before the edit.
+        previous = get_recurring_block_by_id(provider_id, block_id)
         save_recurring_block(block)
-        all_effects: list[Effect] = list(build_recurring_block_sync_effects(block))
+        all_effects: list[Effect] = list(build_recurring_block_sync_effects(block, previous))
 
         updated_count = 1
         apply_to_group = body.get("apply_to_group", False)
         if apply_to_group and block.group_id:
             group_blocks = get_recurring_blocks_by_group(block.group_id)
-            for gb in group_blocks:
-                if gb.id == block.id:
+            for stored_gb in group_blocks:
+                if stored_gb.id == block.id:
                     continue
+                gb = dataclasses.replace(stored_gb)
                 gb.weekly_schedule = block.weekly_schedule
                 gb.reason = block.reason
                 gb.effective_start = block.effective_start
@@ -1252,7 +1256,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 gb.recurrence_interval = block.recurrence_interval
                 gb.time_windows = list(block.time_windows)
                 save_recurring_block(gb)
-                all_effects.extend(build_recurring_block_sync_effects(gb))
+                all_effects.extend(build_recurring_block_sync_effects(gb, stored_gb))
                 updated_count += 1
 
         return [
@@ -1871,20 +1875,23 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if not body.get("weekly_schedule"):
             return [JSONResponse({"error": "weekly_schedule required"}, status_code=HTTPStatus.BAD_REQUEST)]
         block = RecurringBlock.from_dict(body)
+        # The delete has to match the events as they were stored, before the edit.
+        previous = get_recurring_block_by_id(provider_id, block_id)
         save_recurring_block(block)
-        all_fx: list[Effect] = list(build_recurring_block_sync_effects(block))
+        all_fx: list[Effect] = list(build_recurring_block_sync_effects(block, previous))
         count = 1
         if body.get("apply_to_group") and block.group_id:
-            for gb in get_recurring_blocks_by_group(block.group_id):
-                if gb.id == block.id:
+            for stored_gb in get_recurring_blocks_by_group(block.group_id):
+                if stored_gb.id == block.id:
                     continue
+                gb = dataclasses.replace(stored_gb)
                 gb.weekly_schedule = block.weekly_schedule
                 gb.reason = block.reason
                 gb.effective_start = block.effective_start
                 gb.effective_end = block.effective_end
                 gb.is_active = block.is_active
                 save_recurring_block(gb)
-                all_fx.extend(build_recurring_block_sync_effects(gb))
+                all_fx.extend(build_recurring_block_sync_effects(gb, stored_gb))
                 count += 1
         return [*all_fx, JSONResponse({"message": f"Updated {count} recurring block(s)"})]
 

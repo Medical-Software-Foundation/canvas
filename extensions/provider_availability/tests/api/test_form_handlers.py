@@ -165,11 +165,12 @@ class TestDoDispatch:
         assert code == HTTPStatus.OK
         assert "created" in msg["message"].lower()
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.get_recurring_blocks_by_group", return_value=[])
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    def test_put_recurring_blocks(self, mock_fx, mock_grp, mock_save, mock_access):
+    def test_put_recurring_blocks(self, mock_fx, mock_grp, mock_save, mock_access, mock_get_previous):
         handler = _make_handler()
         body = {
             "id": "rb-1",
@@ -462,11 +463,12 @@ class TestGroupOperations:
         msg, _ = _parse(result[-1])
         assert "2" in msg["message"]
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
     @patch(f"{MODULE}.get_recurring_blocks_by_group")
-    def test_update_recurring_block_applies_to_group(self, mock_grp, mock_fx, mock_save, mock_access):
+    def test_update_recurring_block_applies_to_group(self, mock_grp, mock_fx, mock_save, mock_access, mock_get_previous):
         other_rb = RecurringBlock.from_dict({
             "id": "rb-2",
             "provider_id": "provider-2",

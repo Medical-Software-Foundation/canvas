@@ -1694,10 +1694,11 @@ class TestCreateRecurringBlock:
 
 
 class TestUpdateRecurringBlock:
+    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
-    def test_success(self, mock_save, mock_effects, mock_access):
+    def test_success(self, mock_save, mock_effects, mock_access, mock_get_previous):
         body = {
             "id": "rb1",
             "provider_id": PROVIDER_ID,
@@ -1710,7 +1711,8 @@ class TestUpdateRecurringBlock:
         assert code == HTTPStatus.OK
         assert "Updated 1 recurring block(s)" in data["message"]
         assert mock_save.mock_calls == [call(mock_save.call_args[0][0])]
-        assert mock_effects.mock_calls == [call(mock_effects.call_args[0][0])]
+        assert mock_get_previous.mock_calls == [call(PROVIDER_ID, "rb1")]
+        assert mock_effects.mock_calls == [call(mock_save.call_args[0][0], None)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_id_or_provider(self, mock_access):
@@ -1732,11 +1734,12 @@ class TestUpdateRecurringBlock:
         assert "weekly_schedule is required" in data["error"]
         assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.get_recurring_blocks_by_group")
-    def test_apply_to_group(self, mock_group, mock_save, mock_effects, mock_access):
+    def test_apply_to_group(self, mock_group, mock_save, mock_effects, mock_access, mock_get_previous):
         """When apply_to_group is True, updates all recurring blocks in the group."""
         group_block = RecurringBlock(
             id="rb2",
@@ -1763,11 +1766,12 @@ class TestUpdateRecurringBlock:
         # Effects called for both blocks
         assert len(mock_effects.mock_calls) == 2
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.get_recurring_blocks_by_group")
-    def test_apply_to_group_skips_self(self, mock_group, mock_save, mock_effects, mock_access):
+    def test_apply_to_group_skips_self(self, mock_group, mock_save, mock_effects, mock_access, mock_get_previous):
         """Group update skips the block being edited (same ID)."""
         same_block = RecurringBlock(
             id="rb1",
@@ -2211,3 +2215,134 @@ class TestServeStaticAssets:
         assert resp.status_code == HTTPStatus.OK
         assert resp.headers["Content-Type"] == "application/javascript"
         assert mock_render.mock_calls == [call("static/canvas-components.js")]
+
+
+# ── Editing a recurring block deletes the events it had before the edit ──
+
+SYNC = "provider_availability.engine.event_sync"
+
+
+def _stored_pto_block(block_id: str, provider_id: str) -> RecurringBlock:
+    """A November PTO block as it sits in storage before the edit."""
+    return RecurringBlock(
+        id=block_id,
+        provider_id=provider_id,
+        group_id="g1",
+        reason="PTO",
+        weekly_schedule={"monday": [TimeWindow(dt.time(9, 0), dt.time(12, 0))]},
+        effective_start=date(2026, 11, 1),
+        effective_end=date(2026, 11, 30),
+        timezone="America/New_York",
+    )
+
+
+def _edit_body(**changes: object) -> dict:
+    body: dict[str, object] = {
+        "id": "rb1",
+        "provider_id": PROVIDER_ID,
+        "group_id": "g1",
+        "reason": "PTO",
+        "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
+        "effective_start": "2026-11-01",
+        "effective_end": "2026-11-30",
+        "timezone": "America/New_York",
+    }
+    body.update(changes)
+    return body
+
+
+def _run_edit(via: str, body: dict) -> list:
+    handler: AvailabilityAPI = _make_handler(json_body=body)
+    if via == "json":
+        result: list = handler.update_recurring_block()
+        return result
+    return handler._form_update_recurring_block(body)
+
+
+# The stored Nov 1-30 block, widened by a day: midnight Eastern on Oct 31
+# (EDT) through midnight Eastern on Dec 2 (EST).
+STORED_NOV_START = datetime(2026, 10, 31, 4, 0, tzinfo=UTC)
+STORED_NOV_END = datetime(2026, 12, 2, 5, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("via", ["json", "form"])
+@patch(f"{MODULE}._check_write_access", return_value=None)
+@patch(f"{MODULE}.save_recurring_block")
+@patch(f"{MODULE}.get_recurring_blocks_by_group")
+@patch(f"{MODULE}.get_recurring_block_by_id")
+@patch(f"{SYNC}._get_provider_override_map", return_value={})
+@patch(f"{SYNC}.get_admin_calendar_id", return_value=(None, []))
+@patch(f"{SYNC}.get_admin_calendars")
+@patch(f"{SYNC}.EventModel")
+class TestRecurringBlockEditDeletesStoredEvents:
+    def _setup(self, mock_event_model, mock_get_cals):
+        cal = MagicMock()
+        cal.id = "admin-cal-1"
+        mock_get_cals.return_value = [cal]
+        mock_event_model.objects.filter.return_value = []
+        return mock_event_model.objects.filter
+
+    def test_narrowing_dates_deletes_the_series_from_the_old_start(
+        self, mock_event_model, mock_get_cals, mock_cal_id, mock_overrides,
+        mock_get_previous, mock_group, mock_save, mock_access, via,
+    ):
+        """Nov 1-30 edited to Nov 10-30 must still reach the Nov 1 series."""
+        event_filter = self._setup(mock_event_model, mock_get_cals)
+        mock_get_previous.return_value = _stored_pto_block("rb1", PROVIDER_ID)
+
+        _run_edit(via, _edit_body(effective_start="2026-11-10"))
+
+        assert mock_get_previous.mock_calls == [call(PROVIDER_ID, "rb1")]
+        assert event_filter.mock_calls == [
+            call(
+                calendar__id__in=["admin-cal-1"],
+                title__in=["PTO", "Recurring Block"],
+                is_cancelled=False,
+                recurrence__contains="FREQ=",
+                starts_at__gte=STORED_NOV_START,
+                starts_at__lt=STORED_NOV_END,
+            ),
+        ]
+        assert mock_save.call_args[0][0].effective_start == date(2026, 11, 10)
+
+    def test_changing_the_reason_deletes_the_old_titled_series(
+        self, mock_event_model, mock_get_cals, mock_cal_id, mock_overrides,
+        mock_get_previous, mock_group, mock_save, mock_access, via,
+    ):
+        event_filter = self._setup(mock_event_model, mock_get_cals)
+        mock_get_previous.return_value = _stored_pto_block("rb1", PROVIDER_ID)
+
+        _run_edit(via, _edit_body(reason="Vacation"))
+
+        assert [c.kwargs["title__in"] for c in event_filter.mock_calls] == [
+            ["PTO", "Recurring Block"],
+        ]
+        assert mock_save.call_args[0][0].reason == "Vacation"
+
+    def test_apply_to_group_deletes_each_group_block_as_stored(
+        self, mock_event_model, mock_get_cals, mock_cal_id, mock_overrides,
+        mock_get_previous, mock_group, mock_save, mock_access, via,
+    ):
+        event_filter = self._setup(mock_event_model, mock_get_cals)
+        mock_get_previous.return_value = _stored_pto_block("rb1", PROVIDER_ID)
+        stored_member = _stored_pto_block("rb2", PROVIDER_ID_2)
+        mock_group.return_value = [stored_member]
+
+        _run_edit(
+            via,
+            _edit_body(reason="Vacation", effective_start="2026-11-10", apply_to_group=True),
+        )
+
+        # One delete per block, both built from the stored PTO / Nov 1 values.
+        assert len(event_filter.mock_calls) == 2
+        for c in event_filter.mock_calls:
+            assert c.kwargs["title__in"] == ["PTO", "Recurring Block"]
+            assert c.kwargs["starts_at__gte"] == STORED_NOV_START
+        # The group member is saved with the edit applied, and the stored
+        # object the delete was built from is left as it was.
+        saved_member = mock_save.call_args_list[1][0][0]
+        assert saved_member.id == "rb2"
+        assert saved_member.reason == "Vacation"
+        assert saved_member.effective_start == date(2026, 11, 10)
+        assert stored_member.reason == "PTO"
+        assert stored_member.effective_start == date(2026, 11, 1)

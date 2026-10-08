@@ -1220,12 +1220,13 @@ class TestFormBlockHelpers:
         assert "del-blk" in result
         assert mock_del_block.mock_calls == [call(PROVIDER_ID, "b-old")]
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.get_recurring_blocks_by_group")
     def test_update_recurring_block_apply_to_group(
-        self, mock_group, mock_save, mock_effects, mock_access
+        self, mock_group, mock_save, mock_effects, mock_access, mock_get_previous
     ):
         member = RecurringBlock(
             id="rb2",
