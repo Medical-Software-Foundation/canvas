@@ -1,6 +1,7 @@
 """Shared fixtures for provider-availability tests."""
 
 import datetime as dt
+from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +17,27 @@ from provider_availability.engine.models import (
     RecurringBlock,
     TimeWindow,
 )
+
+
+_PLUGIN_DIR = Path(__file__).resolve().parent.parent / "provider_availability"
+
+
+def _render_plugin_template(template_name, context=None, **kwargs):
+    """Stand-in for the SDK's render_to_string, which needs a running plugin.
+
+    Renders the plugin's real file with a plain Django engine, so the tests
+    exercise the same template the plugin serves.
+    """
+    from django.template.engine import Engine
+
+    engine = Engine(dirs=[str(_PLUGIN_DIR)])
+    return engine.render_to_string(str(_PLUGIN_DIR / template_name.lstrip("/")), context=context)
+
+
+@pytest.fixture(autouse=True)
+def _admin_page_renders_from_file():
+    with patch("provider_availability.templates.admin_ui.render_to_string", side_effect=_render_plugin_template):
+        yield
 
 
 PROVIDER_ID = "provider-uuid-123"

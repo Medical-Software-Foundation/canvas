@@ -15,7 +15,7 @@ class TestRenderAdminPage:
     def test_without_preloaded_data(self):
         html = render_admin_page(None)
         assert "window.__PRELOADED__=" not in html
-        assert "{{PRELOADED_SCRIPT}}" not in html
+        assert "preloaded_script" not in html
 
     def test_escapes_script_tags(self):
         data = {"payload": "</script><script>alert(1)</script>"}
@@ -37,3 +37,26 @@ class TestRenderAdminPage:
         assert 'onclick="bulkUploadValidate()"' in settings
         assert "panel-bulk-import" not in html
         assert html.count("<canvas-tab for=") == 3
+
+    def test_every_placeholder_is_filled(self):
+        """The page is a Django template now; no placeholder should reach the browser."""
+        html = render_admin_page({"k": "v"})
+        assert "{{" not in html
+        assert "cache_bust" not in html
+        assert "admin.js?v=" in html
+
+    def test_stamp_is_taken_when_the_page_is_built(self):
+        """The asset stamp comes from the request, so an update can never leave an old one behind."""
+        from unittest.mock import patch
+        import datetime as dt
+
+        fixed = dt.datetime(2026, 10, 8, 22, 30, tzinfo=dt.timezone.utc)
+        with patch("provider_availability.templates.admin_ui.datetime") as mock_dt:
+            mock_dt.now.return_value = fixed
+            html = render_admin_page(None)
+        assert f"admin.js?v={int(fixed.timestamp())}" in html
+
+    def test_expired_banner_and_no_show_all_button(self):
+        html = render_admin_page(None)
+        assert 'id="expired-banner"' in html
+        assert "showAllProviders" not in html
