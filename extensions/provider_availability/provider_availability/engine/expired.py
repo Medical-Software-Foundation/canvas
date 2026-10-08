@@ -6,7 +6,6 @@ storage only, so the past calendar events it created stay in Canvas.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from datetime import date, timedelta
 
 from logger import log
@@ -34,7 +33,7 @@ def _cutoff(today: date) -> date:
     return today - timedelta(days=EXPIRED_KEEP_DAYS)
 
 
-def count_expired(provider_ids: Iterable[str], today: date | None = None) -> dict[str, int]:
+def count_expired(provider_ids: list[str], today: date | None = None) -> dict[str, int]:
     """Count items per provider that ended before the cutoff. Providers with none are left out."""
     wanted = set(provider_ids)
     cutoff = _cutoff(today or date.today())
@@ -58,7 +57,7 @@ def count_expired(provider_ids: Iterable[str], today: date | None = None) -> dic
     return counts
 
 
-def expired_summary(provider_ids: Iterable[str], today: date | None = None) -> dict:
+def expired_summary(provider_ids: list[str], today: date | None = None) -> dict:
     """What the banner offers: expired items for these providers, minus any still snoozed."""
     today = today or date.today()
     snoozes = get_expired_snoozes()
@@ -70,7 +69,7 @@ def expired_summary(provider_ids: Iterable[str], today: date | None = None) -> d
     return {"count": sum(counts.values()), "provider_ids": sorted(counts)}
 
 
-def remove_expired(provider_ids: Iterable[str], today: date | None = None) -> int:
+def remove_expired(provider_ids: list[str], today: date | None = None) -> int:
     """Drop these providers' items that ended before the cutoff. Storage only; returns how many."""
     wanted = set(provider_ids)
     cutoff = _cutoff(today or date.today())
@@ -102,7 +101,7 @@ def remove_expired(provider_ids: Iterable[str], today: date | None = None) -> in
     return removed
 
 
-def snooze_expired(provider_ids: Iterable[str], today: date | None = None) -> date:
+def snooze_expired(provider_ids: list[str], today: date | None = None) -> date:
     """Hide the question for these providers until SNOOZE_DAYS from today. Returns that date."""
     until = (today or date.today()) + timedelta(days=SNOOZE_DAYS)
     snoozes = get_expired_snoozes()

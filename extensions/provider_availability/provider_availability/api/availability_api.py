@@ -1798,7 +1798,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         # The expired-items banner is optional: if its lookup fails, the page loads without it.
         try:
-            expired = expired_summary(schedulable_ids if is_authorized(self.secrets, self.request) else [])
+            expired = expired_summary(list(schedulable_ids) if is_authorized(self.secrets, self.request) else [])
         except Exception:
             log.exception("preload: expired summary failed")
             expired = {"count": 0, "provider_ids": []}
