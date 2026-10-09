@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from canvas_sdk.caching.plugins import get_cache
-from logger import log
 
 from provider_availability.engine.models import AdminBlock, ProviderAvailabilityRule, RecurringBlock
 
@@ -14,10 +12,16 @@ INDEX_KEY = "pa:rules:index"
 BLOCK_INDEX_KEY = "pa:blocks:index"
 RECURRING_BLOCK_INDEX_KEY = "pa:recurring_blocks:index"
 EVENT_IDS_PREFIX = "pa:event_ids:"
+SCHEDULABLE_ROLES_KEY = "pa:schedulable_roles"
+SCHEDULABLE_SEEN_KEY = "pa:schedulable_ids_seen"
+EXPIRED_SNOOZE_KEY = "pa:expired_snoozed"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
+MY_VIEW_PREFIX = "pa:my_view:"
+MY_VIEW_INDEX_KEY = "pa:my_view:index"
 INSTALL_SENTINEL_KEY = "pa:installed"
+SYNCED_VERSION_KEY = "pa:synced_version"
 LAST_TTL_REFRESH_KEY = "pa:last_ttl_refresh"
 CACHE_TTL_SECONDS = 14 * 24 * 60 * 60 - 3600  # 14 days minus 1 hour buffer
 TTL_REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours between full TTL refreshes
@@ -375,6 +379,20 @@ def set_last_sync_date(date_str: str) -> None:
     cache.set(LAST_SYNC_KEY, date_str, timeout_seconds=CACHE_TTL_SECONDS)
 
 
+# ── Expired-item snoozes ───────────────────────────────────────────────
+
+
+def get_expired_snoozes() -> dict[str, str]:
+    """Provider id → ISO date until which the expired-items question stays hidden."""
+    val = _get_cache().get(EXPIRED_SNOOZE_KEY)
+    return dict(val) if isinstance(val, dict) else {}
+
+
+def set_expired_snoozes(snoozes: dict[str, str]) -> None:
+    """Store the snooze map. Kept alive past the cache TTL by refresh_all_ttls."""
+    _get_cache().set(EXPIRED_SNOOZE_KEY, snoozes, timeout_seconds=CACHE_TTL_SECONDS)
+
+
 # ── TTL refresh ────────────────────────────────────────────────────────
 
 
@@ -479,6 +497,15 @@ def refresh_all_ttls() -> int:
     if tz_val is not None:
         cache.set(PRACTICE_TZ_KEY, tz_val, timeout_seconds=CACHE_TTL_SECONDS)
 
+    # Refresh schedulable roles, the bookable set the background job last
+    # reconciled against (if it lapsed, the next change would go unapplied), and
+    # the version install last synced (if it lapsed, a same-version redeploy
+    # would rebuild every event)
+    for key in (SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY, EXPIRED_SNOOZE_KEY, SYNCED_VERSION_KEY):
+        val = cache.get(key)
+        if val is not None:
+            cache.set(key, val, timeout_seconds=CACHE_TTL_SECONDS)
+
     # Refresh provider timezones
     tz_index = _get_provider_tz_index()
     if tz_index:
@@ -488,6 +515,16 @@ def refresh_all_ttls() -> int:
             if tz_data is not None:
                 cache.set(tz_key, tz_data, timeout_seconds=CACHE_TTL_SECONDS)
         cache.set(PROVIDER_TZ_INDEX_KEY, tz_index, timeout_seconds=CACHE_TTL_SECONDS)
+
+    # Refresh saved per-staff views
+    view_index = _get_my_view_index()
+    if view_index:
+        for sid in view_index:
+            view_key = f"{MY_VIEW_PREFIX}{sid}"
+            view_data = cache.get(view_key)
+            if view_data is not None:
+                cache.set(view_key, view_data, timeout_seconds=CACHE_TTL_SECONDS)
+        cache.set(MY_VIEW_INDEX_KEY, view_index, timeout_seconds=CACHE_TTL_SECONDS)
 
     # Refresh install sentinel
     sentinel = cache.get(INSTALL_SENTINEL_KEY)
@@ -514,6 +551,42 @@ def set_practice_timezone(tz_name: str) -> None:
     """Store the practice timezone name."""
     cache = _get_cache()
     cache.set(PRACTICE_TZ_KEY, tz_name, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+# ── Schedulable roles ─────────────────────────────────────────────────
+
+def get_schedulable_roles() -> list[str] | None:
+    """Get the StaffRole internal codes a practice chose as schedulable.
+
+    Returns None when roles were never configured. Callers treat that as
+    "every staff member with a Provider role type", which is what the plugin
+    did before roles were configurable, so an upgrade changes nobody's
+    bookability until a practice saves its own list.
+    """
+    cache = _get_cache()
+    val = cache.get(SCHEDULABLE_ROLES_KEY)
+    if val is None:
+        return None
+    return list(val)
+
+
+def get_seen_schedulable_ids() -> list[str] | None:
+    """The schedulable staff ids availability was last reconciled against."""
+    cache = _get_cache()
+    val = cache.get(SCHEDULABLE_SEEN_KEY)
+    return None if val is None else list(val)
+
+
+def set_seen_schedulable_ids(ids: list[str]) -> None:
+    """Record the schedulable staff ids availability now reflects."""
+    cache = _get_cache()
+    cache.set(SCHEDULABLE_SEEN_KEY, sorted(ids), timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def set_schedulable_roles(codes: list[str]) -> None:
+    """Store the schedulable role internal codes."""
+    cache = _get_cache()
+    cache.set(SCHEDULABLE_ROLES_KEY, codes, timeout_seconds=CACHE_TTL_SECONDS)
 
 
 # ── Per-provider timezone ────────────────────────────────────────────
@@ -581,6 +654,68 @@ def _remove_from_provider_tz_index(provider_id: str) -> None:
         cache.set(PROVIDER_TZ_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
 
 
+# ── Per-staff saved view ──────────────────────────────────────────────
+#
+# The set of providers a staff member chose to see by default in the admin UI.
+# Per-staff rather than global: two people managing different providers should
+# not overwrite each other. An empty or absent list means "show everyone",
+# which is the behavior before anyone saves a view.
+
+
+def get_my_view(staff_id: str) -> list[str]:
+    """Get the provider ids this staff member saved as their default view."""
+    if not staff_id:
+        return []
+    cache = _get_cache()
+    data = cache.get(f"{MY_VIEW_PREFIX}{staff_id}")
+    return list(data) if data else []
+
+
+def set_my_view(staff_id: str, provider_ids: list[str]) -> None:
+    """Save this staff member's default view and index it for TTL refresh."""
+    if not staff_id:
+        return
+    cache = _get_cache()
+    cache.set(f"{MY_VIEW_PREFIX}{staff_id}", provider_ids, timeout_seconds=CACHE_TTL_SECONDS)
+    _add_to_my_view_index(staff_id)
+
+
+def clear_my_view(staff_id: str) -> None:
+    """Remove this staff member's saved view, reverting them to seeing everyone."""
+    if not staff_id:
+        return
+    cache = _get_cache()
+    cache.delete(f"{MY_VIEW_PREFIX}{staff_id}")
+    _remove_from_my_view_index(staff_id)
+
+
+def _get_my_view_index() -> list[str]:
+    """Get the list of staff ids that have a saved view."""
+    cache = _get_cache()
+    index = cache.get(MY_VIEW_INDEX_KEY)
+    if index is None:
+        return []
+    return list(index)
+
+
+def _add_to_my_view_index(staff_id: str) -> None:
+    """Add a staff id to the saved-view index."""
+    cache = _get_cache()
+    index = _get_my_view_index()
+    if staff_id not in index:
+        index.append(staff_id)
+    cache.set(MY_VIEW_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def _remove_from_my_view_index(staff_id: str) -> None:
+    """Remove a staff id from the saved-view index."""
+    cache = _get_cache()
+    index = _get_my_view_index()
+    if staff_id in index:
+        index.remove(staff_id)
+        cache.set(MY_VIEW_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
+
+
 # ── Install sentinel ──────────────────────────────────────────────────
 
 
@@ -594,3 +729,16 @@ def mark_installed() -> None:
     """Record that the plugin has been installed."""
     cache = _get_cache()
     cache.set(INSTALL_SENTINEL_KEY, "1", timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def get_synced_version() -> str:
+    """Return the plugin version whose events were last fully synced, or ''."""
+    cache = _get_cache()
+    val = cache.get(SYNCED_VERSION_KEY)
+    return str(val) if val else ""
+
+
+def set_synced_version(version: str) -> None:
+    """Record the plugin version that a full event sync was last run for."""
+    cache = _get_cache()
+    cache.set(SYNCED_VERSION_KEY, version, timeout_seconds=CACHE_TTL_SECONDS)

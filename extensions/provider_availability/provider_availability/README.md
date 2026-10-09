@@ -24,7 +24,7 @@ uv run canvas install provider_availability --host <your-host>
 
 The core admin UI and calculation engine work with no secrets. To enable the API-key-authenticated provisioning endpoints and restrict who can edit availability, set the secrets below under **Settings > Plugins > provider_availability** in your Canvas instance (see [Configuration options](#configuration-options)).
 
-After install, open **Provider Availability** from the provider menu to manage schedules, or use the **Bulk Import** tab to upload a CSV (see [Bulk CSV import](#bulk-csv-import)).
+After install, open **Provider Availability** from the provider menu to manage schedules, or use **Settings > Bulk Import** to upload a CSV (see [Bulk CSV import](#bulk-csv-import)).
 
 ## Configuration options
 
@@ -38,6 +38,12 @@ After install, open **Provider Availability** from the provider menu to manage s
 ### Practice and provider timezones
 
 Set a practice-level default timezone in the admin UI **Settings** tab, with optional per-provider overrides. All times are stored in UTC internally; changing a provider's timezone re-syncs all of their calendar events.
+
+### Schedulable roles
+
+Which staff can be scheduled is configurable per practice from the **Settings** tab under **Schedulable Roles**. Staff in a checked role get a Clinic calendar (on activation, plugin install, provisioning, and the daily cron) and appear in the provider pickers. Roles are matched by StaffRole **internal code** — always present, unlike the public abbreviation, so non-clinical roles (Care Coordinator, Office Manager, etc.) can be scheduled too. The checklist lists each role as `Name (CODE) — N staff` for every role active staff currently hold.
+
+Until you save a list, every staff member with a Provider role type is schedulable, the same as before roles were configurable. The Settings tab shows those roles' codes as the current selection. A saved list that matches no active staff falls back to the Provider role type rather than making nobody bookable. The set can also be read/written via the API: `GET`/`PUT /api/roles` (staff session, write-gated by `allowed-staff-keys`) and `GET`/`PUT /provision/roles` (API key).
 
 ## Screenshots
 
@@ -55,19 +61,21 @@ Set a practice-level default timezone in the admin UI **Settings** tab, with opt
 
 ## Features
 
-- **Admin UI**: Configure availability rules, blocks, and recurring blocks via an in-app panel (provider menu item), with Availability / Add-Edit / Settings / Bulk Import tabs.
+- **Admin UI**: Configure availability rules, blocks, and recurring blocks via an in-app panel (provider menu item), with Availability / Add-Edit / Settings tabs. Bulk import is a section of Settings.
 - **CSV Bulk Import**: Upload a CSV to load availability rules, one-off blocks, and recurring blocks for one or many staff at once, with per-row validation, overlap detection, and a preview before commit (see [Bulk CSV import](#bulk-csv-import)).
 - **REST API**: Query available slots, list providers, and manage rules/blocks programmatically.
 - **Calculation Engine**: Computes bookable time slots from weekly schedules, booking constraints, buffer times, and existing appointment conflicts.
 - **Calendar Sync**: Syncs rules and blocks to Canvas Calendar Events (Clinic = available, Administrative = blocked).
 - **Hold Types**: Recurring blocks with same-day or next-day hold release on a rolling 30-day window.
-- **Appointment Buffers**: Automatic pre/post buffer events on Administrative calendars when appointments are created/rescheduled/canceled.
+- **Your availability first**: The Availability tab shows the signed-in provider's own row in a "Your availability" section, above "Other providers". The provider filter and **Save as my view** apply only to other providers. The filter starts with every provider checked; **Select All** checks or unchecks everyone, and past 3 picks the field shows a count ("All providers", "12 of 15 providers"). Saving with everyone checked saves "everyone", so providers added later appear too. In every multi-select field, typing searches the list and **Select all matches** picks just the names showing; the provider, location and visit type fields show a count instead of one chip per name once more than 3 are picked. Expired rules, blocks, holds and date overrides are hidden until **Show expired** is clicked. Once items have been over for 30 days, a banner counts them for the providers the viewer can edit. **Review** opens a list of those items to pick from and **Remove selected**; **Ask again in 30 days** hides the items listed at that moment, so anything that ends later still brings the banner back. Removing drops items from the plugin's lists; the calendar events they created stay in Canvas.
+- **Appointment Buffers**: Pre/post buffer events on Administrative calendars for each patient appointment, drawn from the availability rule covering that appointment's day, time, and location. A rescheduled appointment's buffers move with it and follow the rule for its new day; a canceled appointment's buffers are removed, and come back if it is restored. Schedule events with no patient (lunch, meetings) never get buffers.
 - **Timezone Support**: Practice-level default with per-provider overrides; all times stored UTC internally.
+- **Configurable Schedulable Roles**: Choose which staff roles (by internal code, including non-clinical roles) can be scheduled, from the Settings tab. See [Schedulable roles](#schedulable-roles).
 - **Cache-backed Storage**: Rules stored in plugin cache with TTL refresh.
 
 ## Bulk CSV import
 
-Open the **Provider Availability** admin (provider menu) and select the **Bulk Import** tab to bulk-load availability from a spreadsheet. The flow is upload -> validate/preview -> commit. Download the template from the tab (or `GET /csv/template`).
+Open the **Provider Availability** admin (provider menu) and open **Settings**, then the **Bulk Import** section, to bulk-load availability from a spreadsheet. The flow is upload -> validate/preview -> commit. Download the template from that section (or `GET /csv/template`).
 
 ### How rows become records
 
@@ -114,17 +122,26 @@ Each row is validated for format and required fields, then the staff key is chec
 
 | Component | Handler Type | Description |
 |-----------|-------------|-------------|
-| `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI (includes the Bulk Import tab) |
+| `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI (bulk import is under Settings) |
 | `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, and admin UI/asset serving |
 | `CSVImportAPI` | SimpleAPI | Staff-session endpoints for the CSV bulk import (validate / commit / template) |
 | `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |
-| `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window (every 5 min) |
+| `CacheRefreshTask` | CronTask | Every 5 minutes: lead-time blocks, Clinic calendars for newly bookable staff, and re-syncing anyone who gained or lost bookability. Once a day: hold-block rolling window and rules starting or ending. Every 6 hours: cache TTL refresh |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
-| `OnPluginInstalled` | Protocol | Full sync of all cached rules/blocks to Calendar Events on install and redeploy |
+| `OnPluginInstalled` | Protocol | Creates missing Clinic calendars; on first install, or when the way events are drawn changes (`EVENT_LAYOUT_VERSION`), re-syncs all rules and blocks to Calendar Events. Other releases and redeploys skip the re-sync |
 | `OnAppointmentCreated` | Protocol | Creates buffer events on Administrative calendar |
 | `OnAppointmentRescheduled` | Protocol | Updates buffer events when appointment is rescheduled |
 | `OnAppointmentCanceled` | Protocol | Removes buffer events when appointment is canceled |
+| `OnAppointmentRestored` | Protocol | Redraws buffer events when a canceled appointment is restored |
+
+### When something fails in the background
+
+The 5-minute job and install keep going when one step or one provider fails, so everyone else still gets their updates. Every such failure logs one line in the same shape, `PA_JOB_FAILED <step> <provider id or "all">`, with the error below it. To find them in Elastic:
+
+```
+FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg, "PA_JOB_FAILED") | KEEP @timestamp, syslog5424_app, syslog5424_msg | LIMIT 50
+```
 
 ## API Endpoints
 

@@ -30,8 +30,8 @@ from provider_availability.engine.csv_import import (
 )
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
-    build_lead_time_block_effects,
-    build_recurring_block_sync_effects,
+    build_provider_lead_time_effects,
+    build_recurring_blocks_resync_effects,
     sync_provider_availability,
 )
 from provider_availability.engine.lookups import (
@@ -46,6 +46,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.overlap import check_rule_overlap
 from provider_availability.engine.storage import (
+    get_all_rules,
     get_rules_for_provider,
     save_block,
     save_recurring_block,
@@ -97,7 +98,15 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        content = file_part.content.decode("utf-8-sig")
+        try:
+            content = file_part.content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return [
+                JSONResponse(
+                    {"error": "The file isn't saved as UTF-8. In Excel, use Save As and pick \"CSV UTF-8\", then upload again."},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
         parsed = parse_csv(content)
 
         valid_staff_ids = get_active_staff_ids()
@@ -108,18 +117,7 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
             parsed.valid_rows, valid_staff_ids, location_map, visit_type_map
         )
 
-        ok_records: list[dict] = []
-        overlap_errors: list[dict] = []
-        for rec in records:
-            if rec["kind"] == "rule":
-                rule = ProviderAvailabilityRule.from_dict(rec)
-                conflict = check_rule_overlap(rule)
-                if conflict:
-                    overlap_errors.append(
-                        {"row_number": min(rec["source_rows"]), "errors": [conflict]}
-                    )
-                    continue
-            ok_records.append(rec)
+        ok_records, overlap_errors = _split_overlapping(records)
 
         errors = self._collect_errors(parsed.error_rows, resolution_errors, overlap_errors)
 
@@ -164,8 +162,31 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        # The preview can be stale or edited, so the checks run again before anything is saved.
+        valid_staff_ids = get_active_staff_ids()
+        unknown = sorted({str(r.get("provider_id", "")) for r in records} - valid_staff_ids)
+        if unknown:
+            return [
+                JSONResponse(
+                    {"error": f"{len(unknown)} provider(s) in this import are not active staff. Upload the file again."},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        try:
+            _, overlap_errors = _split_overlapping(records)
+        except (KeyError, TypeError, ValueError):
+            return [JSONResponse({"error": "These records could not be read. Upload the file again."}, status_code=HTTPStatus.BAD_REQUEST)]
+        if overlap_errors:
+            return [
+                JSONResponse(
+                    {"error": "Some rules overlap saved availability or each other. Upload the file again to see which.", "errors": overlap_errors},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
         effects: list[Effect] = []
         providers_touched: set[str] = set()
+        new_rblocks: list[RecurringBlock] = []
         created = {"rule": 0, "block": 0, "rblock": 0}
         now = datetime.now(UTC).isoformat()
 
@@ -185,15 +206,16 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
             elif kind == "rblock":
                 rblock = RecurringBlock.from_dict(rec)
                 save_recurring_block(rblock)
-                effects.extend(build_recurring_block_sync_effects(rblock))
+                new_rblocks.append(rblock)
                 created["rblock"] = created["rblock"] + 1
+
+        # Recurring blocks in one pass, so blocks sharing a reason or holds are drawn once each.
+        effects.extend(build_recurring_blocks_resync_effects(new_rblocks))
 
         # Sync each touched provider's availability once, then refresh lead-time blocks.
         for pid in providers_touched:
             effects.extend(sync_provider_availability(pid))
-            for r in get_rules_for_provider(pid):
-                if r.is_active and r.booking_interval.min_lead_hours > 0:
-                    effects.extend(build_lead_time_block_effects(r))
+            effects.extend(build_provider_lead_time_effects(pid, get_rules_for_provider(pid)))
 
         log.info(
             "csv commit: %d rules, %d blocks, %d recurring blocks",
@@ -231,3 +253,29 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         merged.extend(overlap)
         merged.sort(key=lambda item: item["row_number"])
         return merged
+
+
+def _split_overlapping(records: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Separate rule records that overlap saved rules, or earlier rules in the same file.
+
+    Every saved rule is read once and grouped by provider. Each accepted rule
+    joins its provider's list, so two rows in one file cannot both claim the
+    same hours.
+    """
+    rules_by_provider: dict[str, list[ProviderAvailabilityRule]] = {}
+    for existing in get_all_rules():
+        rules_by_provider.setdefault(existing.provider_id, []).append(existing)
+
+    ok_records: list[dict] = []
+    overlap_errors: list[dict] = []
+    for rec in records:
+        if rec["kind"] == "rule":
+            rule = ProviderAvailabilityRule.from_dict(rec)
+            accepted = rules_by_provider.setdefault(rule.provider_id, [])
+            conflict = check_rule_overlap(rule, existing_rules=accepted)
+            if conflict:
+                overlap_errors.append({"row_number": min(rec.get("source_rows") or [0]), "errors": [conflict]})
+                continue
+            accepted.append(rule)
+        ok_records.append(rec)
+    return ok_records, overlap_errors

@@ -1,6 +1,7 @@
 """Shared fixtures for provider-availability tests."""
 
 import datetime as dt
+from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +17,51 @@ from provider_availability.engine.models import (
     RecurringBlock,
     TimeWindow,
 )
+
+
+_PLUGIN_DIR = Path(__file__).resolve().parent.parent / "provider_availability"
+
+
+def _render_plugin_template(template_name, context=None, **kwargs):
+    """Stand-in for the SDK's render_to_string, which needs a running plugin.
+
+    Renders the plugin's real file with a plain Django engine, so the tests
+    exercise the same template the plugin serves.
+    """
+    from django.template.engine import Engine
+
+    engine = Engine(dirs=[str(_PLUGIN_DIR)])
+    return engine.render_to_string(str(_PLUGIN_DIR / template_name.lstrip("/")), context=context)
+
+
+@pytest.fixture(autouse=True)
+def _admin_page_renders_from_file():
+    with patch("provider_availability.templates.admin_ui.render_to_string", side_effect=_render_plugin_template):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _no_stored_recurring_blocks():
+    """Recurring-block resyncs redraw the provider's other blocks from storage,
+    which needs a running plugin. Default to none stored; tests that care patch it."""
+    with patch("provider_availability.engine.event_sync.get_recurring_blocks_for_provider", return_value=[]):
+        yield
+
+
+class QS(list):
+    """A list that answers the queryset calls the plugin makes on query results.
+
+    Tests stub ``Model.objects.filter`` with a plain list; code that asks for
+    ``.values_list("id", flat=True)`` needs this instead.
+    """
+
+    def values_list(self, *fields, flat=False):
+        if flat:
+            return [getattr(o, fields[0]) for o in self]
+        return [tuple(getattr(o, f) for f in fields) for o in self]
+
+    def order_by(self, *fields):
+        return self
 
 
 PROVIDER_ID = "provider-uuid-123"

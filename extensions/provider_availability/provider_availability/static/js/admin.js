@@ -26,6 +26,8 @@ let _providers = [];
 let _locations = [];
 let _visitTypes = [];
 let _overviewData = [];
+let _savedView = [];  // the viewer's saved default view, as loaded from the server
+let _showExpired = false;  // expired rows are hidden until asked for
 let _providerTzMap = {};  // {provider_id: {timezone, explicit}} — authoritative TZ state
 let _tzOptions = [];
 var _viewTz = null;  // null = practice TZ (default)
@@ -285,6 +287,304 @@ function _firstWindowFromSchedule(schedule) {
   return [];
 }
 
+/* ---------- Time field (typed, e.g. "9:07 AM") ---------- */
+
+function _pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+
+function _fmt12(v) {
+  var p = String(v).split(':');
+  if (p.length < 2) return v;
+  var h = parseInt(p[0], 10);
+  var min = p[1];
+  var ap = h < 12 ? 'AM' : 'PM';
+  var h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return h12 + ':' + min + ' ' + ap;
+}
+
+// Parse "9:07 AM", "9 am", "21:07", "9:07" -> canonical "HH:MM" (or "" if invalid).
+function parseTimeTo24(str) {
+  if (!str) return '';
+  var m = String(str).trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return '';
+  var h = parseInt(m[1], 10);
+  var min = m[2] ? parseInt(m[2], 10) : 0;
+  var ap = m[3];
+  if (min > 59) return '';
+  if (ap) {
+    if (h < 1 || h > 12) return '';
+    if (ap === 'pm' && h !== 12) h += 12;
+    if (ap === 'am' && h === 12) h = 0;
+  } else if (h > 23) {
+    return '';
+  }
+  return _pad2(h) + ':' + _pad2(min);
+}
+
+// 15-minute suggestions for the time fields. Options carry the same 12-hour
+// display text the visible input uses, so picking one flows through the
+// existing parse-on-input handler with no special casing. A datalist only
+// suggests, so typing an off-grid time such as "9:07 AM" still works exactly
+// as before. Order is plain chronological from 12:00 AM: a datalist cannot be
+// told where to scroll, so reordering it would only move the oddity around.
+var TIME_OPTIONS_ID = 'pa-time-options';
+
+function buildTimeOptions() {
+  if (document.getElementById(TIME_OPTIONS_ID)) return;
+  var dl = document.createElement('datalist');
+  dl.id = TIME_OPTIONS_ID;
+  var html = '';
+  for (var mins = 0; mins < 24 * 60; mins += 15) {
+    var canon = _pad2(Math.floor(mins / 60)) + ':' + _pad2(mins % 60);
+    html += '<option value="' + _fmt12(canon) + '"></option>';
+  }
+  dl.innerHTML = html;
+  document.body.appendChild(dl);
+}
+
+// A plain typed time field. The user types any time (e.g. "9:07 AM"); it is
+// parsed and normalized on blur. The canonical HH:MM value lives on the hidden
+// `.time-input` so existing read sites keep working unchanged.
+function timeFieldHtml(val, id) {
+  val = val || '';
+  var idAttr = id ? ' id="' + id + '"' : '';
+  var display = val ? _fmt12(val) : '';
+  return '<span class="time-combo">' +
+    '<input type="text" class="time-combo-input" autocomplete="off" list="' + TIME_OPTIONS_ID + '" placeholder="e.g. 9:00 AM" value="' + display + '">' +
+    '<input type="hidden" class="time-input"' + idAttr + ' value="' + val + '">' +
+    '</span>';
+}
+
+// Render a time field into a container span (used for the template-defined
+// Single Event / Blocked start & end fields). The hidden input keeps `id` so
+// existing `getElementById(id).value` reads keep working.
+function initTimeField(wrapId, fieldId) {
+  var wrap = document.getElementById(wrapId);
+  if (wrap) wrap.innerHTML = timeFieldHtml('', fieldId);
+}
+
+// Set a time field's value programmatically, syncing the visible input.
+function setTimeField(fieldId, val) {
+  var hidden = document.getElementById(fieldId);
+  if (!hidden) return;
+  var span = hidden.closest('.time-combo');
+  val = val || '';
+  hidden.value = val;
+  if (span) span.querySelector('.time-combo-input').value = val ? _fmt12(val) : '';
+}
+
+/* ----- typed-field behavior via event delegation (covers dynamic rows) ----- */
+
+// Keep the hidden canonical value in sync as the user types.
+document.addEventListener('input', function (e) {
+  var input = e.target.closest && e.target.closest('.time-combo-input');
+  if (!input) return;
+  input.closest('.time-combo').querySelector('.time-input').value = parseTimeTo24(input.value) || '';
+});
+
+// Normalize the typed text to a clean value when the field loses focus.
+document.addEventListener('focusout', function (e) {
+  var input = e.target.closest && e.target.closest('.time-combo-input');
+  if (!input) return;
+  var span = input.closest('.time-combo');
+  var canon = parseTimeTo24(input.value);
+  span.querySelector('.time-input').value = canon || '';
+  input.value = canon ? _fmt12(canon) : '';
+});
+
+/* ---------- Saved default view ---------- */
+
+// A row is expired once its end date has passed. One definition, used by both
+// the filtering below and the Expired badge, so the badge can never disagree
+// with what got hidden.
+function isExpiredRow(row) {
+  return !!(row.effective_end && new Date(row.effective_end + 'T23:59:59') < new Date());
+}
+// A one-off block is expired once its end time has passed.
+function isExpiredBlock(b) {
+  return !!(b.end && new Date(b.end) < new Date());
+}
+// A date override is expired once its day has ended.
+function isExpiredOverride(ovr) {
+  return !!(ovr.date && new Date(ovr.date + 'T23:59:59') < new Date());
+}
+
+// Expired rules, recurring blocks and holds, one-off blocks, and date overrides
+// are hidden by default: a provider's list is dominated by finished items otherwise. Not persisted, so a reload
+// returns to hiding them.
+// Banner offering to review items that ended over 30 days ago, for providers the
+// viewer can edit. Review opens a list to pick from; "Ask again in 30 days"
+// snoozes the items listed now, so anything that ends later still shows.
+var _expiredSummary = { count: 0, items: [] };
+var _expiredSel = {};
+var _EXPIRED_TYPES = {
+  available: ['chip-avail', SVG_CHECK, 'Available'],
+  blocked: ['chip-block', SVG_X, 'Blocked'],
+  hold: ['chip-hold', SVG_PAUSE, 'Hold'],
+  override: ['chip-override', SVG_OVERRIDE, 'Override'],
+};
+
+// Safe in element text and in attribute values, including inline handlers:
+// the browser decodes the entities back before running the handler.
+function _escHtml(text) {
+  return (text == null ? '' : String(text))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _expiredProviderName(pid) {
+  var p = (_providers || []).find(function(x) { return String(x.id) === String(pid); });
+  if (p) return p.name;
+  var o = (_overviewData || []).find(function(x) { return String(x.provider_id) === String(pid); });
+  return o ? o.provider_name : pid;
+}
+
+function renderExpiredBanner() {
+  var el = document.getElementById('expired-banner');
+  if (!el) return;
+  var n = _expiredSummary.count || 0;
+  if (!n) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = '<span class="expired-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>' +
+    '<span class="expired-text"><b>' + n + (n === 1 ? ' item' : ' items') + ' ended more than 30 days ago.</b> Their past calendar entries stay in Canvas either way.</span>' +
+    '<span class="expired-actions"><button class="btn" onclick="snoozeExpired()">Ask again in 30 days</button>' +
+    '<button class="btn btn-primary" onclick="openExpiredPanel()">Review</button></span>';
+  el.style.display = '';
+}
+
+async function loadExpiredBanner() {
+  var data = await apiCall('/expired-summary');
+  if (data && typeof data.count === 'number') { _expiredSummary = data; renderExpiredBanner(); }
+}
+
+function openExpiredPanel() {
+  _expiredSel = {};
+  renderExpiredPanel();
+  document.getElementById('expired-panel').classList.add('open');
+}
+
+function closeExpiredPanel() {
+  document.getElementById('expired-panel').classList.remove('open');
+}
+
+function renderExpiredPanel() {
+  var items = _expiredSummary.items || [];
+  var last = null;
+  document.getElementById('ep-rows').innerHTML = items.map(function(it, i) {
+    var t = _EXPIRED_TYPES[it.kind] || _EXPIRED_TYPES.blocked;
+    var next = last !== null && it.provider_id !== last;
+    last = it.provider_id;
+    return '<tr data-i="' + i + '" class="' + (_expiredSel[it.key] ? 'ep-sel ' : '') + (next ? 'ep-next-provider' : '') + '">' +
+      '<td><input type="checkbox"' + (_expiredSel[it.key] ? ' checked' : '') + '></td>' +
+      '<td>' + _escHtml(_expiredProviderName(it.provider_id)) + '</td>' +
+      '<td><span class="type-chip ' + t[0] + '">' + t[1] + '</span>' + t[2] + '</td>' +
+      '<td>' + _escHtml(it.when) + '</td>' +
+      '<td><div class="ep-reason" title="' + _escHtml(it.reason) + '">' + (it.reason ? _escHtml(it.reason) : '<span class="col-empty">—</span>') + '</div></td>' +
+      '<td>' + fmtDate(it.ended) + '</td></tr>';
+  }).join('');
+  document.querySelectorAll('#ep-rows tr').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var key = items[+tr.dataset.i].key;
+      _expiredSel[key] = !_expiredSel[key];
+      renderExpiredPanel();
+    });
+  });
+  var picked = items.filter(function(it) { return _expiredSel[it.key]; }).length;
+  document.getElementById('ep-count').textContent = picked ? picked + ' of ' + items.length + ' selected' : items.length + (items.length === 1 ? ' item' : ' items');
+  var all = document.getElementById('ep-all');
+  all.checked = picked > 0 && picked === items.length;
+  all.indeterminate = picked > 0 && picked < items.length;
+  var rm = document.getElementById('ep-remove');
+  rm.disabled = !picked;
+  rm.textContent = picked ? 'Remove ' + picked + ' selected' : 'Remove selected';
+  var sn = document.getElementById('ep-snooze');
+  sn.disabled = !picked;
+  sn.textContent = picked ? 'Ask again in 30 days (' + picked + ')' : 'Ask again in 30 days';
+}
+
+function toggleExpiredAll() {
+  var items = _expiredSummary.items || [];
+  var on = !items.every(function(it) { return _expiredSel[it.key]; });
+  items.forEach(function(it) { _expiredSel[it.key] = on; });
+  renderExpiredPanel();
+}
+
+async function removeExpired() {
+  var keys = (_expiredSummary.items || []).filter(function(it) { return _expiredSel[it.key]; }).map(function(it) { return it.key; });
+  if (!keys.length) return;
+  if (!confirm('Remove ' + keys.length + (keys.length === 1 ? ' item' : ' items') + ' from this list? Their past calendar entries stay in Canvas.')) return;
+  var data = await apiCall('/expired/remove', { method: 'POST', body: JSON.stringify({ keys: keys }) });
+  if (data.error) { showMsg(data.error, 'error'); return; }
+  showMsg(data.message || 'Removed', 'success');
+  var gone = {}; keys.forEach(function(k) { gone[k] = true; });
+  _expiredSummary.items = (_expiredSummary.items || []).filter(function(it) { return !gone[it.key]; });
+  _expiredSummary.count = _expiredSummary.items.length;
+  _expiredSel = {};
+  if (_expiredSummary.count) renderExpiredPanel(); else closeExpiredPanel();
+  renderExpiredBanner();
+  await loadOverview();
+}
+
+// From the banner, snoozes everything it counts. From the review panel,
+// snoozes only the items ticked there; the rest stay listed.
+async function snoozeExpired(selectedOnly) {
+  var items = _expiredSummary.items || [];
+  if (selectedOnly) items = items.filter(function(it) { return _expiredSel[it.key]; });
+  var keys = items.map(function(it) { return it.key; });
+  if (!keys.length) return;
+  var data = await apiCall('/expired/snooze', { method: 'POST', body: JSON.stringify({ keys: keys }) });
+  if (data.error) { showMsg(data.error, 'error'); return; }
+  var gone = {}; keys.forEach(function(k) { gone[k] = true; });
+  _expiredSummary.items = (_expiredSummary.items || []).filter(function(it) { return !gone[it.key]; });
+  _expiredSummary.count = _expiredSummary.items.length;
+  _expiredSel = {};
+  if (_expiredSummary.count && selectedOnly) renderExpiredPanel(); else closeExpiredPanel();
+  renderExpiredBanner();
+  if (data.until) showMsg('Hidden until ' + fmtDate(data.until) + '. Anything else that ends meanwhile still brings the banner back.', 'success');
+}
+
+// Escape closes the review panel.
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { var p = document.getElementById('expired-panel'); if (p && p.classList.contains('open')) closeExpiredPanel(); }
+});
+
+function toggleExpired() {
+  _showExpired = !_showExpired;
+  var btn = document.getElementById('toggle-expired');
+  if (btn) btn.textContent = _showExpired ? 'Hide expired' : 'Show expired';
+  renderAccordion();
+}
+
+
+// The provider filter and saved views cover other providers only. The viewer's
+// own row always shows in its own section, so offering them in the filter
+// would be a choice that does nothing.
+function filterItems(providers, items) {
+  var viewer = {};
+  providers.forEach(function(p) { if (p.is_you) viewer[String(p.id)] = true; });
+  return items.filter(function(it) { return !viewer[String(it.id)]; });
+}
+
+
+// Store whichever providers are selected in the filter as this user's default
+// view. Saved per staff member on the server, so two people managing different
+// providers do not overwrite each other. An empty selection clears the saved
+// view, which means "show everyone" rather than "show nobody".
+async function saveMyView() {
+  var ids = msFilterProvider ? msFilterProvider.getValue() : [];
+  if (msFilterProvider && msFilterProvider.isAll()) ids = [];
+  var data = await apiCall('/my-view', { method: 'PUT', body: JSON.stringify({ provider_ids: ids }) });
+  if (data && data.error) { showMsg(data.error, 'error'); return; }
+  _savedView = ids.map(String);
+  renderAccordion();
+  if (ids.length) {
+    showMsg('Saved ' + ids.length + ' provider' + (ids.length === 1 ? '' : 's') + ' as your default view', 'success');
+  } else {
+    showMsg('Default view cleared. You will see every provider.', 'success');
+  }
+}
+
+// Clear the filter so every provider shows. Deliberately not persisted: the
+// next page load returns to the saved view.
 /* ---------- Daily mode flat time-windows editor ---------- */
 
 function addDailyTimeWindow(containerId, startVal, endVal) {
@@ -294,9 +594,9 @@ function addDailyTimeWindow(containerId, startVal, endVal) {
   row.className = 'day-time-inputs';
   row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
   row.innerHTML =
-    '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+    timeFieldHtml(startVal) +
     '<span class="time-sep">→</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   var rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -351,6 +651,7 @@ function _renderBlockDateChips() {
     chip.textContent = d;
     var x = document.createElement('button');
     x.type = 'button';
+    x.className = 'date-chip-remove';
     x.textContent = '×';
     x.style.cssText = 'background:none;border:0;cursor:pointer;font-size:16px;line-height:1;padding:0 0 0 2px;color:var(--text-muted);';
     x.onclick = function() { _blockDateChips.splice(idx, 1); _renderBlockDateChips(); };
@@ -483,6 +784,11 @@ class MultiSelect {
     this.displayKey = options.displayKey || 'name';
     this.valueKey = options.valueKey || 'id';
     this.extraDisplayKey = options.extraDisplayKey || null;
+    // summaryNoun: once more than 3 items are picked, the field shows one summary
+    // chip ("All providers", "12 of 15 providers") instead of a chip per item.
+    // startAll: with nothing picked yet, every item starts checked.
+    this.summaryNoun = options.summaryNoun || null;
+    this.startAll = !!options.startAll;
     this.items = [];
     this.selected = [];
     this.filterText = '';
@@ -518,7 +824,20 @@ class MultiSelect {
     });
   }
 
-  setItems(items) { this.items = items; this.renderDropdown(); }
+  setItems(items) {
+    const wasAll = this.items.length > 0 && this.isAll();
+    this.items = items;
+    if (this.startAll && (wasAll || this.selected.length === 0)) {
+      this.selected = items.map(i => String(i[this.valueKey]));
+      this.updateChips();
+    }
+    this.renderDropdown();
+  }
+
+  // True when every item is picked.
+  isAll() {
+    return this.items.length > 0 && this.items.every(i => this.selected.includes(String(i[this.valueKey])));
+  }
 
   open() { this.isOpen = true; this.dropdown.classList.add('open'); this.renderDropdown(); }
   close() { this.isOpen = false; this.dropdown.classList.remove('open'); this.filterText = ''; this.input.value = ''; }
@@ -534,10 +853,14 @@ class MultiSelect {
     this.dropdown.innerHTML = '';
     if (filtered.length === 0) { this.dropdown.innerHTML = '<div class="ms-empty">No matches</div>'; return; }
 
-    // Select All option
-    if (filtered.length > 1 && !filter) {
+    // Select All option. While searching it reads "Select all matches (N)" and
+    // checks or unchecks only the names showing, so a search plus one click picks a group.
+    // When everyone is already checked (a filter that starts with all), that click
+    // narrows the selection to just the matches instead of unchecking them.
+    if (filtered.length > 1 || filter) {
       const allVals = filtered.map(i => String(i[this.valueKey]));
-      const allSelected = allVals.every(v => this.selected.includes(v));
+      const narrowing = !!filter && filtered.length < this.items.length && this.isAll();
+      const allSelected = !narrowing && allVals.every(v => this.selected.includes(v));
       const selAll = document.createElement('div');
       selAll.className = 'ms-option' + (allSelected ? ' selected' : '');
       selAll.style.fontWeight = '600';
@@ -547,11 +870,12 @@ class MultiSelect {
       cb.checked = allSelected;
       selAll.appendChild(cb);
       const span = document.createElement('span');
-      span.textContent = 'Select All';
+      span.textContent = filter ? 'Select all matches (' + filtered.length + ')' : 'Select All';
       selAll.appendChild(span);
       selAll.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (allSelected) { allVals.forEach(v => { const idx = this.selected.indexOf(v); if (idx >= 0) this.selected.splice(idx, 1); }); }
+        if (narrowing) { this.selected = allVals.slice(); }
+        else if (allSelected) { allVals.forEach(v => { const idx = this.selected.indexOf(v); if (idx >= 0) this.selected.splice(idx, 1); }); }
         else { allVals.forEach(v => { if (!this.selected.includes(v)) this.selected.push(v); }); }
         this.updateChips();
         this.renderDropdown();
@@ -588,12 +912,22 @@ class MultiSelect {
 
   updateChips() {
     this.chipsArea.innerHTML = '';
+    if (this.summaryNoun && this.selected.length > 3) {
+      const chip = document.createElement('span');
+      chip.className = 'ms-chip';
+      chip.textContent = this.isAll()
+        ? 'All ' + this.summaryNoun
+        : this.selected.length + ' of ' + this.items.length + ' ' + this.summaryNoun;
+      this.chipsArea.appendChild(chip);
+      this.input.placeholder = '';
+      return;
+    }
     this.selected.forEach(val => {
       const item = this.items.find(i => String(i[this.valueKey]) === val);
       const label = item ? (item[this.displayKey] || val) : val;
       const chip = document.createElement('span');
       chip.className = 'ms-chip';
-      chip.innerHTML = label + ' <span class="ms-chip-remove">&times;</span>';
+      chip.innerHTML = _escHtml(label) + ' <span class="ms-chip-remove">&times;</span>';
       chip.querySelector('.ms-chip-remove').addEventListener('click', (e) => { e.stopPropagation(); this.toggle(val); });
       this.chipsArea.appendChild(chip);
     });
@@ -605,33 +939,87 @@ class MultiSelect {
   clear() { this.selected = []; this.updateChips(); }
 }
 
-let msProvider, msLocation, msVisitType, msBlockProvider, msBlockLocation, msFilterProvider, msHoldProvider, msHoldLocation;
+let msProvider, msLocation, msVisitType, msBlockProvider, msBlockLocation, msFilterProvider, msHoldProvider, msHoldLocation, msSchedulableRoles;
 
 /* ---------- Tab management ---------- */
 
 let _formDirty = false;
+let _settingsDirty = false;
 let _skipDirtyCheck = false;
 
+// The browser shows its own "Reload site?" box; pages cannot change its text
+// or buttons.
 window.addEventListener('beforeunload', function(e) {
-  if (_formDirty) {
+  if (_formDirty || _settingsDirty) {
     e.preventDefault();
     e.returnValue = '';
   }
 });
 
-var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2, 'bulk-import': 3 };
-var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings', 'panel-bulk-import': 'bulk-import' };
+// Changes made by clicking rather than typing: picker options and chips,
+// adding or removing time windows, block date chips, overrides, and the rule
+// type cards. Listened for in the capture phase because several of these
+// controls stop the click from bubbling.
+var _DIRTY_CLICK_SELECTOR = '.ms-option, .ms-chip-remove, .remove-time, .date-chip-remove, .type-card, ' +
+  '[onclick^="add"], [onclick^="saveOverride"], [onclick^="deleteOverride"]';
+document.addEventListener('click', function(e) {
+  if (!e.isTrusted) return;
+  var hit = e.target && e.target.closest ? e.target.closest(_DIRTY_CLICK_SELECTOR) : null;
+  if (!hit) return;
+  var editor = document.getElementById('panel-editor');
+  if (editor && editor.contains(hit)) _formDirty = true;
+  var roles = document.getElementById('ms-schedulable-roles');
+  if (roles && roles.contains(hit)) _settingsDirty = true;
+}, true);
 
-function _isEditorVisible() {
-  var edPanel = document.getElementById('panel-editor');
-  return edPanel && !edPanel.hasAttribute('hidden');
+// While the page itself fills the editor (opening it blank, or loading a rule,
+// block or hold), the controls it sets announce changes that are not the
+// user's. Every editor loader fills the form in the same task that switches
+// tabs, so ignoring changes until that task ends covers them all. Origin
+// cannot be judged from the event: the page's checkbox and dropdown controls
+// re-send even a user's change as a page-generated event.
+var _pageIsFilling = false;
+function _fillingForm() {
+  _pageIsFilling = true;
+  setTimeout(function() { _pageIsFilling = false; }, 0);
+}
+
+// Dropdowns, checkboxes and date pickers report "change" rather than "input".
+document.addEventListener('change', function(e) {
+  if (_pageIsFilling) return;
+  var editor = document.getElementById('panel-editor');
+  if (editor && editor.contains(e.target)) _formDirty = true;
+});
+
+// Remember the open tab for this browser tab, so a refresh reopens it. The
+// address hash alone is lost, because Canvas rebuilds the app's frame from
+// its launch address on a refresh.
+var _LAST_TAB_KEY = 'provider_availability:last-tab';
+function _rememberTab(name) {
+  _activeTab = name;
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  try { sessionStorage.setItem(_LAST_TAB_KEY, name); } catch (e) {}
+}
+
+var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2 };
+var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings' };
+
+// Which tab is showing, kept by _rememberTab.
+var _activeTab = 'availability';
+
+// Ask before leaving a tab that has unsaved changes. Returns false to stay.
+function _confirmLeave(toName) {
+  if (_skipDirtyCheck || toName === _activeTab) return true;
+  var unsaved = (_activeTab === 'editor' && _formDirty) || (_activeTab === 'settings' && _settingsDirty);
+  if (!unsaved) return true;
+  if (!confirm('You have unsaved changes. Leave without saving?')) return false;
+  if (_activeTab === 'settings') _settingsDirty = false;
+  return true;
 }
 
 function showTab(name) {
-  // Unsaved changes prompt when leaving editor
-  if (_isEditorVisible() && name !== 'editor' && _formDirty && !_skipDirtyCheck) {
-    if (!confirm('You have unsaved changes. Leave without saving?')) return;
-  }
+  if (!_confirmLeave(name)) return;
+  _fillingForm();
   _formDirty = false;
 
   showTab._inProgress = true;
@@ -650,7 +1038,6 @@ function showTab(name) {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {
       renderSettingsPanel();
-    } else if (name === 'bulk-import') {
       bulkReset();
     } else {
       if (!_skipDirtyCheck) loadOverview();
@@ -659,13 +1046,14 @@ function showTab(name) {
   } else {
     showTab._fromEvent = false;
   }
-  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  _rememberTab(name);
 }
 showTab._fromEvent = false;
 
 function showMsg(msg, type) {
   const dismissBtn = '<button class="alert-dismiss" onclick="dismissMsg()">&times;</button>';
-  const alertHtml = '<div class="alert alert-' + type + '"><span>' + msg + '</span>' + dismissBtn + '</div>';
+  // Messages carry server and form-path text, so they are always shown as text.
+  const alertHtml = '<div class="alert alert-' + type + '"><span>' + _escHtml(msg) + '</span>' + dismissBtn + '</div>';
   const elTop = document.getElementById('status-msg');
   const elBot = document.getElementById('status-msg-bottom');
   if (elTop) elTop.innerHTML = alertHtml;
@@ -688,8 +1076,14 @@ const CSV_BASE = '/plugin-io/api/provider_availability/csv';
 var _bulkFile = null;
 var _bulkRecords = null;
 
+function _bulkShowFileName() {
+  var label = document.getElementById('bulk-file-name');
+  if (label) label.textContent = _bulkFile ? _bulkFile.name : 'No file chosen';
+}
+
 function bulkFileSelect(event) {
   _bulkFile = (event.target.files && event.target.files[0]) || null;
+  _bulkShowFileName();
   var btn = document.getElementById('bulk-validate-btn');
   if (btn) btn.disabled = !_bulkFile;
   var err = document.getElementById('bulk-upload-error');
@@ -708,6 +1102,7 @@ function bulkReset() {
   _bulkRecords = null;
   var input = document.getElementById('bulk-file');
   if (input) input.value = '';
+  _bulkShowFileName();
   var btn = document.getElementById('bulk-validate-btn');
   if (btn) btn.disabled = true;
   var err = document.getElementById('bulk-upload-error');
@@ -886,6 +1281,15 @@ function _formApiCall(path, opts) {
   addField('_path', path);
   if (opts.body) addField('_body', opts.body);
 
+  // The reload that follows is the save itself, not leaving with unsaved
+  // work, and it should land where a normal save would: Settings for Settings
+  // saves, Availability for everything else.
+  _formDirty = false;
+  _settingsDirty = false;
+  var p = String(path).replace(/^\//, '');
+  var landing = /^(roles|timezone|provider-timezone)/.test(p) ? 'settings' : 'availability';
+  try { sessionStorage.setItem(_LAST_TAB_KEY, landing); } catch (e) {}
+
   document.body.appendChild(form);
   form.submit();
 
@@ -962,7 +1366,7 @@ async function loadProviders() {
   if (msProvider) msProvider.setItems(items);
   if (msBlockProvider) msBlockProvider.setItems(items);
   if (msHoldProvider) msHoldProvider.setItems(items);
-  if (msFilterProvider) msFilterProvider.setItems(items);
+  if (msFilterProvider) msFilterProvider.setItems(filterItems(_providers, items));
 }
 
 async function loadLocations() {
@@ -1069,28 +1473,38 @@ function renderAccordion() {
 
   const selectedIds = msFilterProvider ? msFilterProvider.getValue() : [];
 
-  let providers = _overviewData;
+  // The viewer's own row lives in its own section and ignores the filter and
+  // saved view. Those narrow only the other providers.
+  const yours = _overviewData.filter(p => p.is_you);
+  let others = _overviewData.filter(p => !p.is_you);
   if (selectedIds.length > 0) {
-    providers = providers.filter(p => selectedIds.includes(p.provider_id));
+    others = others.filter(p => selectedIds.includes(p.provider_id));
   }
-
-  if (providers.length === 0) {
-    if (selectedIds.length > 0) {
-      container.innerHTML = '<div class="empty-state">No availability configured for the selected provider(s).<br><span style="font-size:13px;margin-top:6px;display:inline-block;">Use <strong>Add / Edit</strong> to set up rules.</span></div>';
-    } else {
-      container.innerHTML = '<div class="empty-state">No availability or blocks configured yet</div>';
-    }
-    return;
-  }
-
-  providers = providers.slice().sort(function(a, b) {
+  others = others.slice().sort(function(a, b) {
     var aLast = (a.provider_name || '').split(' ').slice(-1)[0].toLowerCase();
     var bLast = (b.provider_name || '').split(' ').slice(-1)[0].toLowerCase();
     return aLast.localeCompare(bLast);
   });
 
+  let othersEmpty = '';
+  if (others.length === 0) {
+    if (selectedIds.length > 0) {
+      othersEmpty = '<div class="empty-state">No availability configured for the selected provider(s).<br><span style="font-size:13px;margin-top:6px;display:inline-block;">Use <strong>Add / Edit</strong> to set up rules.</span></div>';
+    } else if (yours.length) {
+      othersEmpty = '<div class="empty-state">No other providers have availability or blocks configured yet</div>';
+    } else {
+      othersEmpty = '<div class="empty-state">No availability or blocks configured yet</div>';
+    }
+  }
+
+  const providers = yours.concat(others);
+
   let html = '';
+  if (yours.length) html += '<h3 class="overview-section-title">Your availability</h3>';
   providers.forEach((p, idx) => {
+    if (idx === yours.length) {
+      html += '<h3 class="overview-section-title">' + (yours.length ? 'Other providers' : 'Providers') + '</h3>';
+    }
     const pid = p.provider_id;
     const name = p.provider_name || pid.slice(0, 8) + '...';
     const initials = getInitials(name);
@@ -1098,14 +1512,23 @@ function renderAccordion() {
     // Count Available rules (one row per rule). Counting weekdays would
     // miss daily-frequency rules (which keep weekly_schedule empty), so
     // a "Mon-Fri" rule and an "Every 2 days" rule both count as 1 here.
-    const availableCount = (p.rules || []).length;
+    // Hide expired rows unless asked for, and count only what is shown: a
+    // count taken before filtering would read "3 available" above one row.
+    const visibleRules = (p.rules || []).filter(r => _showExpired || !isExpiredRow(r));
+    const visibleRecurring = (p.recurring_blocks || []).filter(
+      rb => _showExpired || !isExpiredRow(rb)
+    );
+    const visibleBlocks = (p.blocks || []).filter(b => _showExpired || !isExpiredBlock(b));
+    const visibleOverrides = r => (r.date_overrides || []).filter(ovr => _showExpired || !isExpiredOverride(ovr));
+
+    const availableCount = visibleRules.length;
     let overrideCount = 0;
     let holdCount = 0;
-    p.rules.forEach(r => { overrideCount += (r.date_overrides || []).length; });
-    p.recurring_blocks.forEach(rb => {
+    visibleRules.forEach(r => { overrideCount += visibleOverrides(r).length; });
+    visibleRecurring.forEach(rb => {
       if (rb.hold_type && rb.hold_type !== 'none') holdCount++;
     });
-    const pureBlockCount = p.blocks.length + p.recurring_blocks.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
+    const pureBlockCount = visibleBlocks.length + visibleRecurring.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
     const hasData = availableCount > 0 || pureBlockCount > 0 || holdCount > 0;
 
     html += '<div class="provider-card">';
@@ -1113,11 +1536,11 @@ function renderAccordion() {
     // Header
     html += '<div class="provider-card-header" onclick="toggleCard(this)">';
     html += '<div class="provider-info">';
-    html += '<div class="provider-avatar ' + avatarClass + '">' + initials + '</div>';
+    html += '<div class="provider-avatar ' + avatarClass + '">' + _escHtml(initials) + '</div>';
     var pTz = p.provider_timezone || _practiceTz;
     var pTzExplicit = p.provider_timezone_explicit;
     html += '<div class="provider-name-col">';
-    html += '<span class="provider-name">' + name + '</span>';
+    html += '<span class="provider-name">' + _escHtml(name) + '</span>';
     if (!_viewTz) {
       html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' (default)') + '</div>';
     }
@@ -1148,11 +1571,11 @@ function renderAccordion() {
       var rows = [];
 
       // Available rules — expandable rows
-      p.rules.forEach(r => {
+      visibleRules.forEach(r => {
         const schedule = r.weekly_schedule || {};
-        const isExpired = r.effective_end && new Date(r.effective_end + 'T23:59:59') < new Date();
+        const isExpired = isExpiredRow(r);
         const reasonChipHtml = r.reason
-          ? '<div class="chip-group"><span class="detail-tag tag-avail">' + r.reason + '</span></div>'
+          ? '<div class="chip-group"><span class="detail-tag tag-avail">' + _escHtml(r.reason) + '</span></div>'
           : '<span class="col-empty">\u2014</span>';
 
         // Build repeats cell
@@ -1175,7 +1598,7 @@ function renderAccordion() {
         var metaCols = vtNames.length > 0 ? 5 : 4;
         detailHtml += '<div class="detail-meta-grid" style="grid-template-columns:repeat(' + metaCols + ',1fr);">';
         detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Frequency</div><div class="detail-meta-value">' + frequencyLabel(r) + '</div></div>';
-        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (r.reason || '\u2014') + '</div></div>';
+        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (r.reason ? _escHtml(r.reason) : '\u2014') + '</div></div>';
         var buf = r.buffer_minutes || {};
         var booking = r.booking_interval || {};
         var bufParts = [];
@@ -1184,11 +1607,11 @@ function renderAccordion() {
         if (booking.min_lead_hours > 0) bufParts.push('<span class="detail-tag tag-buffer">' + booking.min_lead_hours + 'h Lead</span>');
         detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Buffers</div><div class="detail-meta-value">' + (bufParts.length > 0 ? '<div class="chip-group">' + bufParts.join(' ') + '</div>' : '\u2014') + '</div></div>';
         var locNames = resolveLocationNames(r.location_ids);
-        var locHtml = locNames.length > 0 ? '<div class="chip-group">' + locNames.map(function(n) { return '<span class="detail-tag tag-location">' + n + '</span>'; }).join('') + '</div>' : 'All';
+        var locHtml = locNames.length > 0 ? '<div class="chip-group">' + locNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
         detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + locHtml + '</div></div>';
         if (vtNames.length > 0) {
           detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Visit Types</div><div class="detail-meta-value"><div class="chip-group">';
-          vtNames.forEach(function(vt) { detailHtml += '<span class="detail-tag tag-visit-type">' + vt + '</span>'; });
+          vtNames.forEach(function(vt) { detailHtml += '<span class="detail-tag tag-visit-type">' + _escHtml(vt) + '</span>'; });
           detailHtml += '</div></div></div>';
         }
         detailHtml += '</div>';
@@ -1206,7 +1629,7 @@ function renderAccordion() {
         } else {
           groups = groupDaysByWindows(schedule);
         }
-        const ruleJson = JSON.stringify(JSON.stringify(r));
+        const ruleJson = _escHtml(JSON.stringify(JSON.stringify(r)));
 
         var rowHtml = '';
 
@@ -1252,7 +1675,7 @@ function renderAccordion() {
         rows.push({ typeOrder: 1, sortKey: r.effective_start || '0000-00-00', html: rowHtml });
 
         // Override rows pushed separately so they sort after ALL available rows
-        (r.date_overrides || []).forEach(function(ovr) {
+        visibleOverrides(r).forEach(function(ovr) {
           var ovrDateStr = fmtDate(ovr.date);
           var ovrDateObj = new Date(ovr.date + 'T12:00:00');
           var ovrDayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][ovrDateObj.getDay()];
@@ -1260,18 +1683,18 @@ function renderAccordion() {
             ? 'Closed'
             : ovr.time_windows.map(function(w) { return fmtHHMMConverted(w.start, pTz) + ' \u2013 ' + fmtHHMMConverted(w.end, pTz); }).join(', ');
           var ovrReasonHtml = ovr.reason
-            ? '<span class="detail-tag tag-override">' + ovr.reason + '</span>'
+            ? '<span class="detail-tag tag-override">' + _escHtml(ovr.reason) + '</span>'
             : '<span class="type-chip chip-override">Override</span>';
-          var ovrJson = JSON.stringify(ovr).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+          var ovrJson = _escHtml(JSON.stringify(JSON.stringify(ovr)));
           var ovrHtml = '<tr class="row-override">';
           ovrHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;"><span style="visibility:hidden">' + SVG_CHEVRON_RIGHT + '</span><span class="type-chip chip-override">' + SVG_OVERRIDE + '</span><span class="day-text">' + ovrDayAbbr + '</span></div></div></td>';
           ovrHtml += '<td><div class="td-cell"><span class="time-text">' + ovrHours + '</span></div></td>';
           ovrHtml += '<td><div class="td-cell">' + ovrReasonHtml + '</div></td>';
           ovrHtml += '<td><div class="td-cell"><span class="date-range">' + ovrDateStr + '</span></div></td>';
-          var ovrExpired = new Date(ovr.date + 'T23:59:59') < new Date();
+          var ovrExpired = isExpiredOverride(ovr);
           ovrHtml += '<td><div class="td-cell"><span class="badge ' + (ovrExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
           ovrHtml += '<td><div class="td-cell"><div class="row-actions">';
-          ovrHtml += '<button class="action-chip action-chip-edit" onclick="editOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',\'' + ovrJson + '\')">Edit</button>';
+          ovrHtml += '<button class="action-chip action-chip-edit" onclick="editOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',' + ovrJson + ')">Edit</button>';
           ovrHtml += '<button class="action-chip action-chip-delete" onclick="deleteOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',\'' + ovr.date + '\')">Delete</button>';
           ovrHtml += '</div></div></td>';
           ovrHtml += '</tr>';
@@ -1280,7 +1703,7 @@ function renderAccordion() {
       });
 
       // One-off blocks
-      p.blocks.forEach(b => {
+      visibleBlocks.forEach(b => {
         const blockDateStr = (b.start || '').slice(0, 10);
         const blockDateParts = blockDateStr.split('-');
         const blockDateObj = new Date(Number(blockDateParts[0]), Number(blockDateParts[1]) - 1, Number(blockDateParts[2]));
@@ -1288,22 +1711,20 @@ function renderAccordion() {
         const blockEffective = fmtDate(blockDateStr);
         const viewTz = _viewTz || pTz;
         const timeStr = convertIsoTime(b.start, pTz, viewTz) + ' \u2013 ' + convertIsoTime(b.end, pTz, viewTz);
-        const blockJson = JSON.stringify(JSON.stringify(b));
+        const blockJson = _escHtml(JSON.stringify(JSON.stringify(b)));
         const blockReasonChip = b.reason
-          ? '<span class="detail-tag tag-block">' + b.reason + '</span>'
+          ? '<span class="detail-tag tag-block">' + _escHtml(b.reason) + '</span>'
           : '<span class="col-empty">\u2014</span>';
 
         // Detail panel
         var bLocNames = resolveLocationNames(b.location_ids);
-        var bLocHtml = bLocNames.length > 0 ? '<div class="chip-group">' + bLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + n + '</span>'; }).join('') + '</div>' : 'All';
+        var bLocHtml = bLocNames.length > 0 ? '<div class="chip-group">' + bLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
         var bDetailHtml = '<div class="detail-panel"><div class="detail-meta-grid">';
-        bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (b.reason || '\u2014') + '</div></div>';
+        bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (b.reason ? _escHtml(b.reason) : '\u2014') + '</div></div>';
         bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + bLocHtml + '</div></div>';
         bDetailHtml += '</div></div>';
 
-        // Single-event blocks expire once their end datetime is in the past.
-        const blockEndDate = b.end ? new Date(b.end) : null;
-        const blockExpired = blockEndDate && blockEndDate < new Date();
+        const blockExpired = isExpiredBlock(b);
 
         var rowHtml = '';
         rowHtml += '<tr class="row-blocked data-row" onclick="toggleRowDetail(this, event)">';
@@ -1327,9 +1748,9 @@ function renderAccordion() {
       });
 
       // Recurring blocks — expandable rows
-      p.recurring_blocks.forEach(rb => {
+      visibleRecurring.forEach(rb => {
         const schedule = rb.weekly_schedule || {};
-        const isExpired = rb.effective_end && new Date(rb.effective_end + 'T23:59:59') < new Date();
+        const isExpired = isExpiredRow(rb);
         const isHold = rb.hold_type && rb.hold_type !== 'none';
         const holdLabels = { none: '', same_day: 'Same Day Hold', next_day: 'Next Day Hold' };
         const holdLabel = holdLabels[rb.hold_type || 'none'] || '';
@@ -1351,11 +1772,11 @@ function renderAccordion() {
         // Build inline chips: hold + reason
         let rbChipsHtml = '';
         if (holdLabel && rb.reason) {
-          rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + ': ' + rb.reason + '</span>';
+          rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + ': ' + _escHtml(rb.reason) + '</span>';
         } else if (holdLabel) {
           rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + '</span>';
         } else if (rb.reason) {
-          rbChipsHtml += '<span class="detail-tag tag-block">' + rb.reason + '</span>';
+          rbChipsHtml += '<span class="detail-tag tag-block">' + _escHtml(rb.reason) + '</span>';
         }
         if (!rbChipsHtml) rbChipsHtml = '<span class="col-empty">\u2014</span>';
         else rbChipsHtml = '<div class="chip-group">' + rbChipsHtml + '</div>';
@@ -1366,10 +1787,10 @@ function renderAccordion() {
         else if (holdLabel) rbReasonText = holdLabel;
         else if (rb.reason) rbReasonText = rb.reason;
         var rbLocNames = resolveLocationNames(rb.location_ids);
-        var rbLocHtml = rbLocNames.length > 0 ? '<div class="chip-group">' + rbLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + n + '</span>'; }).join('') + '</div>' : 'All';
+        var rbLocHtml = rbLocNames.length > 0 ? '<div class="chip-group">' + rbLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
         var rbDetailHtml = '<div class="detail-panel"><div class="detail-meta-grid" style="grid-template-columns:repeat(3,1fr);">';
         rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Frequency</div><div class="detail-meta-value">' + frequencyLabel(rb) + '</div></div>';
-        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (rbReasonText || '\u2014') + '</div></div>';
+        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (rbReasonText ? _escHtml(rbReasonText) : '\u2014') + '</div></div>';
         rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + rbLocHtml + '</div></div>';
         rbDetailHtml += '</div></div>';
 
@@ -1383,7 +1804,7 @@ function renderAccordion() {
         } else {
           groups = groupDaysByWindows(schedule);
         }
-        const rbJson = JSON.stringify(JSON.stringify(rb));
+        const rbJson = _escHtml(JSON.stringify(JSON.stringify(rb)));
 
         const rbRowClass = isHold ? 'row-hold' : 'row-blocked';
 
@@ -1429,6 +1850,10 @@ function renderAccordion() {
 
     html += '</div>';
   });
+  if (others.length === 0) {
+    if (yours.length) html += '<h3 class="overview-section-title">Other providers</h3>';
+    html += othersEmpty;
+  }
   container.innerHTML = html;
   // Restore expanded card state — collapse cards that weren't open before
   container.querySelectorAll('.provider-card').forEach(function(card) {
@@ -1534,9 +1959,9 @@ function addWindow(day, startVal, endVal) {
   group.style.flex = '1';
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -1591,9 +2016,9 @@ function addRecurringBlockWindow(day, startVal, endVal) {
   group.style.flex = '1';
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -1641,11 +2066,11 @@ function renderOverridesList() {
     const dateObj = new Date(dateStr + 'T12:00:00');
     const dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()];
     const detail = (o.time_windows || []).map(w => fmtHHMM(w.start) + ' \u2013 ' + fmtHHMM(w.end)).join(', ') || 'No hours';
-    const reasonLabel = o.reason ? ' \u2014 ' + o.reason : '';
+    const reasonLabel = o.reason ? ' \u2014 ' + _escHtml(o.reason) : '';
     html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--override-bg);border:1px solid var(--override-border);border-radius:6px;">';
     html += '<span style="font-weight:600;font-size:13px;min-width:120px;">' + dayAbbr + ', ' + fmtDate(dateStr) + '</span>';
     html += '<span style="font-size:13px;color:var(--text-muted);flex:1;">' + detail + reasonLabel + '</span>';
-    html += '<button type="button" class="action-chip action-chip-edit" style="font-size:12px;padding:3px 8px;" onclick=\'editOverrideInPlace(' + JSON.stringify(JSON.stringify(o)) + ')\'>Edit</button>';
+    html += '<button type="button" class="action-chip action-chip-edit" style="font-size:12px;padding:3px 8px;" onclick=\'editOverrideInPlace(' + _escHtml(JSON.stringify(JSON.stringify(o))) + ')\'>Edit</button>';
     html += '<button type="button" class="remove-time" onclick="deleteOverride(\'' + dateStr + '\')">' + SVG_X_SM + '</button>';
     html += '</div>';
   });
@@ -1694,9 +2119,9 @@ function addOverrideWindow(startVal, endVal) {
   group.style.marginBottom = '4px';
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -1728,7 +2153,8 @@ async function saveOverride() {
   // If editing an existing override and the date changed, delete the old one first
   var editingDate = document.getElementById('editing_override_date') ? document.getElementById('editing_override_date').value : '';
   if (editingDate && editingDate !== dateVal) {
-    await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides/' + editingDate, { method: 'DELETE' });
+    const moved = await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides/' + editingDate, { method: 'DELETE' });
+    if (moved.error) { showMsg(moved.error, 'error'); return; }
   }
   var ovrReason = document.getElementById('override_reason') ? document.getElementById('override_reason').value : '';
   const data = await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides', {
@@ -1860,14 +2286,14 @@ function resetForm() {
   syncDateFacade('rb_effective_start');
   syncDateFacade('rb_effective_end');
   document.getElementById('block_date').value = '';
-  document.getElementById('block_start_time').value = '';
-  document.getElementById('block_end_time').value = '';
+  setTimeField('block_start_time', '');
+  setTimeField('block_end_time', '');
   syncDateFacade('block_date');
 
   // Reset single event fields
   document.getElementById('single_date').value = '';
-  document.getElementById('single_start_time').value = '';
-  document.getElementById('single_end_time').value = '';
+  setTimeField('single_start_time', '');
+  setTimeField('single_end_time', '');
   syncDateFacade('single_date');
 
   // Reset the All-day checkbox and the multi-date chip queue
@@ -1960,8 +2386,8 @@ function editRule(ruleJson) {
     document.getElementById('single_date').value = r.effective_start;
     syncDateFacade('single_date');
     var win = schedule[activeDays[0]][0];
-    document.getElementById('single_start_time').value = win.start;
-    document.getElementById('single_end_time').value = win.end;
+    setTimeField('single_start_time', win.start);
+    setTimeField('single_end_time', win.end);
   } else {
     setScheduleMode('recurring');
     document.getElementById('effective_start').value = r.effective_start || '';
@@ -2080,8 +2506,8 @@ function editBlock(blockJson) {
 
   // Populate date/time from block start/end ISO strings
   document.getElementById('block_date').value = (b.start || '').slice(0, 10);
-  document.getElementById('block_start_time').value = (b.start || '').slice(11, 16);
-  document.getElementById('block_end_time').value = (b.end || '').slice(11, 16);
+  setTimeField('block_start_time', (b.start || '').slice(11, 16));
+  setTimeField('block_end_time', (b.end || '').slice(11, 16));
   syncDateFacade('block_date');
 
   // Restore the all-day checkbox from the saved block
@@ -2643,7 +3069,8 @@ function confirmDeleteRule(providerId, ruleId) {
   showConfirm('Delete this availability rule?', () => doDeleteRule(providerId, ruleId));
 }
 async function doDeleteRule(providerId, ruleId) {
-  await apiCall('/rules/' + providerId + '/' + ruleId, { method: 'DELETE' });
+  const data = await apiCall('/rules/' + providerId + '/' + ruleId, { method: 'DELETE' });
+  if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg('Rule deleted', 'success');
   loadOverview();
 }
@@ -2652,7 +3079,8 @@ function confirmDeleteBlock(providerId, blockId) {
   showConfirm('Delete this block?', () => doDeleteBlock(providerId, blockId));
 }
 async function doDeleteBlock(providerId, blockId) {
-  await apiCall('/blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  const data = await apiCall('/blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg('Block deleted', 'success');
   loadOverview();
 }
@@ -2661,7 +3089,8 @@ function confirmDeleteRecurringBlock(providerId, blockId) {
   showConfirm('Delete this recurring block?', () => doDeleteRecurringBlock(providerId, blockId));
 }
 async function doDeleteRecurringBlock(providerId, blockId) {
-  await apiCall('/recurring-blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  const data = await apiCall('/recurring-blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg('Recurring block deleted', 'success');
   loadOverview();
 }
@@ -2772,13 +3201,13 @@ function updateEditorTzConversionHint() {
 }
 
 async function loadTimezone() {
+  // A failed or empty response (expired session, form fallback mode) keeps the
+  // last known values, so the page never quietly switches the practice to UTC.
   try {
     const data = await apiCall('/timezone');
-    _practiceTz = data.timezone || 'UTC';
-    _tzOptions = data.available || [];
-  } catch (e) {
-    _practiceTz = 'UTC';
-  }
+    if (data && data.timezone) _practiceTz = data.timezone;
+    if (data && data.available && data.available.length) _tzOptions = data.available;
+  } catch (e) {}
 
   updateTzHints();
   updateEditorTzLabels();
@@ -2800,10 +3229,76 @@ function getEditorTimezone() {
 }
 
 
+/* ---------- Schedulable roles ---------- */
+
+function _roleItems(available) {
+  return (available || []).map(function(r) {
+    var base = r.name ? r.name + ' (' + r.code + ')' : r.code;
+    var count = r.staff_count ? ' — ' + r.staff_count + ' staff' : '';
+    return { code: r.code, name: base + count };
+  });
+}
+
+async function loadSchedulableRoles() {
+  if (!msSchedulableRoles) return;
+  var data = await apiCall('/roles');
+  if (!data || data.error) {
+    showMsg((data && data.error) || 'Could not load roles', 'error');
+    return;
+  }
+  var configured = (data.schedulable_roles || []).map(function(c) { return String(c).toUpperCase(); });
+  var items = _roleItems(data.available);
+  // Keep any configured code no active staff currently hold, so it isn't dropped.
+  configured.forEach(function(code) {
+    if (!items.some(function(i) { return String(i.code).toUpperCase() === code; })) {
+      items.push({ code: code, name: code + ' — no active staff' });
+    }
+  });
+  msSchedulableRoles.setItems(items);
+  msSchedulableRoles.setValue(configured);
+  _showRolesFallbackNote(data.fallback_active);
+}
+
+function _showRolesFallbackNote(active) {
+  var note = document.getElementById('roles-fallback-note');
+  if (note) note.style.display = active ? 'block' : 'none';
+}
+
+// After a save the picker already shows what was saved, so only the note needs
+// refreshing. The picker is left alone: a reload landing after the user's next
+// pick would silently undo it. A failed refresh says nothing, because the save
+// itself succeeded.
+async function _refreshRolesFallbackNote() {
+  try {
+    var data = await apiCall('/roles');
+    if (data && !data.error) _showRolesFallbackNote(data.fallback_active);
+  } catch (e) {}
+}
+
+async function saveSchedulableRoles() {
+  if (!msSchedulableRoles) return;
+  var codes = msSchedulableRoles.getValue();
+  var data = await apiCall('/roles', { method: 'PUT', body: JSON.stringify({ schedulable_roles: codes }) });
+  if (data && data.error) { showMsg(data.error, 'error'); return; }
+  _settingsDirty = false;
+  showMsg('Schedulable roles saved', 'success');
+  // Re-check so the "no active staff hold these roles" note matches what was saved.
+  _refreshRolesFallbackNote();
+  // Reflect the change immediately — refresh the provider pickers without a page reload.
+  await loadProviders();
+}
+
 
 /* ---------- Settings panel ---------- */
 
 async function renderSettingsPanel() {
+  // Load the schedulable-role checklist, unless the user has picks they have
+  // not saved yet (a timezone save also re-renders this panel).
+  if (!_settingsDirty) loadSchedulableRoles();
+
+  // Refresh the practice timezone so the bulk selector reflects the saved value.
+  await loadTimezone();
+
   // Populate bulk TZ dropdown
   var bulkSel = document.getElementById('bulk-tz-select');
   if (bulkSel && bulkSel.options.length === 0) {
@@ -2814,6 +3309,8 @@ async function renderSettingsPanel() {
       bulkSel.appendChild(opt);
     });
   }
+  // Reflect the current practice timezone (defaults to UTC), not the first option.
+  if (bulkSel) bulkSel.value = _practiceTz;
 
   // Ensure we have provider data
   if (_providers.length === 0) {
@@ -2851,9 +3348,9 @@ async function renderSettingsPanel() {
     var isExplicit = entry && entry.explicit;
     var currentTz = isExplicit ? entry.timezone : '';
     html += '<tr>';
-    html += '<td><strong>' + (p.name || p.id) + '</strong></td>';
+    html += '<td><strong>' + _escHtml(p.name || p.id) + '</strong></td>';
     html += '<td><select class="input provider-tz-dropdown" data-provider-id="' + p.id + '" onchange="saveProviderTz(this)">';
-    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>— Select timezone —</option>';
+    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice default (' + _practiceTz + ')</option>';
     COMMON_TZS.forEach(function(tz) {
       html += '<option value="' + tz + '"' + (tz === currentTz ? ' selected' : '') + '>' + tz + '</option>';
     });
@@ -2862,7 +3359,7 @@ async function renderSettingsPanel() {
     if (isExplicit) {
       html += '<span class="badge badge-active">Set</span>';
     } else {
-      html += '<span class="badge badge-expired">Not Set</span>';
+      html += '<span class="badge badge-expired" title="No override — using the practice default (' + _practiceTz + ')">Default</span>';
     }
     html += '</td>';
     html += '</tr>';
@@ -2874,17 +3371,26 @@ async function renderSettingsPanel() {
 async function saveProviderTz(selectEl) {
   var pid = selectEl.getAttribute('data-provider-id');
   var tz = selectEl.value;
-  if (!tz) return;
-  var data = await apiCall('/provider-timezone', {
-    method: 'PUT',
-    body: JSON.stringify({ provider_id: pid, timezone: tz }),
-  });
+  var data;
+  if (!tz) {
+    // "Practice default" selected — clear the explicit override.
+    data = await apiCall('/provider-timezone/' + pid, { method: 'DELETE' });
+  } else {
+    data = await apiCall('/provider-timezone', {
+      method: 'PUT',
+      body: JSON.stringify({ provider_id: pid, timezone: tz }),
+    });
+  }
   if (data.error) {
     showMsg(data.error, 'error');
   } else {
     showMsg(data.message || 'Timezone updated', 'success');
     // Update local TZ map directly — no overview dependency
-    _providerTzMap[pid] = { timezone: tz, explicit: true };
+    if (tz) {
+      _providerTzMap[pid] = { timezone: tz, explicit: true };
+    } else {
+      delete _providerTzMap[pid];
+    }
     // Also refresh overview for accordion display
     try {
       var ovData = await apiCall('/overview');
@@ -3081,9 +3587,9 @@ function addHoldWindow(day, startVal, endVal) {
   group.style.flex = '1';
   var wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
-  wrap.innerHTML = '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+  wrap.innerHTML = timeFieldHtml(startVal) +
     '<span class="time-sep">\u2192</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   var rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -3130,14 +3636,23 @@ document.addEventListener('input', function(e) {
 
 /* ---------- Initialize ---------- */
 
-msProvider = new MultiSelect('ms-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
-msLocation = new MultiSelect('ms-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
-msVisitType = new MultiSelect('ms-visit-type', { placeholder: 'Search visit types...', displayKey: 'name', valueKey: 'id' });
-msBlockProvider = new MultiSelect('ms-block-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
-msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
-msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
-msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
-msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
+msProvider = new MultiSelect('ms-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
+msLocation = new MultiSelect('ms-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
+msVisitType = new MultiSelect('ms-visit-type', { placeholder: 'Search visit types...', displayKey: 'name', valueKey: 'id', summaryNoun: 'visit types' });
+msBlockProvider = new MultiSelect('ms-block-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
+msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
+msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
+msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
+msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers', startAll: true });
+msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
+
+buildTimeOptions();
+
+// Template-defined time fields (Single Event / Blocked start & end)
+initTimeField('single_start_time_wrap', 'single_start_time');
+initTimeField('single_end_time_wrap', 'single_end_time');
+initTimeField('block_start_time_wrap', 'block_start_time');
+initTimeField('block_end_time_wrap', 'block_end_time');
 
 // Re-render accordion whenever filter MultiSelect changes
 const _origUpdateChips = msFilterProvider.updateChips.bind(msFilterProvider);
@@ -3165,7 +3680,7 @@ try {
     if (msProvider) msProvider.setItems(provItems);
     if (msBlockProvider) msBlockProvider.setItems(provItems);
     if (msHoldProvider) msHoldProvider.setItems(provItems);
-    if (msFilterProvider) msFilterProvider.setItems(provItems);
+    if (msFilterProvider) msFilterProvider.setItems(filterItems(_providers, provItems));
 
     _locations = (P.locations && P.locations.locations) || [];
     if (msLocation) { msLocation.setItems(_locations); msLocation.setValue(_locations.map(function(l) { return String(l.id); })); }
@@ -3183,6 +3698,14 @@ try {
 
     _overviewData = (P.overview && P.overview.providers) || [];
     _syncProviderTzMapFromOverview();
+
+    // Land on the saved default view. Empty means show everyone.
+    _savedView = ((P.my_view && P.my_view.provider_ids) || []).map(String);
+
+    // Its own request, so a failure there is reported without stopping the page.
+    loadExpiredBanner();
+    if (_savedView.length && msFilterProvider) msFilterProvider.setValue(_savedView.slice());
+
     renderAccordion();
 
     // Show flash message from form-action redirect
@@ -3194,6 +3717,7 @@ try {
     // Fallback: fetch from API
     Promise.all([loadProviders(), loadLocations(), loadVisitTypes(), loadTimezone()]).then(function() {
       loadOverview();
+      loadExpiredBanner();
     });
   }
 } catch (initErr) {
@@ -3205,6 +3729,29 @@ try {
 // Listen for user-initiated tab changes from the canvas-tabs component
 var _mainTabsEl = document.getElementById('main-tabs');
 if (_mainTabsEl) {
+  // A click on a tab header switches tabs inside the tab component, which
+  // never passes through showTab. Catch it first, in the capture phase, so
+  // leaving a tab with unsaved changes asks the same question.
+  var _tabNames = Object.keys(_tabIndexMap);
+  document.addEventListener('click', function(e) {
+    var path = e.composedPath ? e.composedPath() : [];
+    var btn = path.find(function(n) { return n.classList && n.classList.contains('tab-button'); });
+    if (!btn || !_mainTabsEl.shadowRoot || !_mainTabsEl.shadowRoot.contains(btn)) return;
+    var toName = _tabNames.find(function(k) { return _tabIndexMap[k] === parseInt(btn.dataset.index, 10); });
+    if (toName && toName === _activeTab) {
+      // Re-selecting the open tab would reset its form or reload its settings.
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    if (!toName || _confirmLeave(toName)) {
+      if (toName && toName !== _activeTab && _activeTab === 'editor') _formDirty = false;
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+
   _mainTabsEl.addEventListener('tab-change', function(e) {
     var panelId = e.detail && e.detail.panel;
     var name = _tabPanelMap[panelId] || 'availability';
@@ -3215,11 +3762,11 @@ if (_mainTabsEl) {
     // programmatic showTab still sees a clean state.
     var calledFromShowTab = !!showTab._inProgress;
     showTab._fromEvent = true;
+    _fillingForm();
     if (name === 'editor') {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {
       renderSettingsPanel();
-    } else if (name === 'bulk-import') {
       bulkReset();
     } else {
       if (!_skipDirtyCheck) loadOverview();
@@ -3228,14 +3775,22 @@ if (_mainTabsEl) {
     if (!calledFromShowTab) {
       showTab._fromEvent = false;
     }
-    try { history.replaceState(null, '', '#' + name); } catch (ex) {}
+    _rememberTab(name);
   });
 }
 
 // Restore active tab from URL hash
 var _initHash = location.hash.replace('#', '');
-if (_initHash === 'settings' || _initHash === 'editor' || _initHash === 'bulk-import') {
+if (!_initHash) {
+  try { _initHash = sessionStorage.getItem(_LAST_TAB_KEY) || ''; } catch (e) {}
+}
+if (_initHash === 'settings' || _initHash === 'editor') {
   showTab(_initHash);
+} else if (_initHash === 'bulk-import') {
+  // Bulk import used to be its own tab; an old link lands on its Settings section.
+  showTab('settings');
+  var bulkSection = document.getElementById('settings-bulk-import');
+  if (bulkSection) bulkSection.scrollIntoView();
 }
 
 // Intercept browser back/forward so it stays inside the admin and behaves like
@@ -3248,5 +3803,6 @@ window.addEventListener('popstate', function() {
   // availability tab (mirrors the Cancel button).
   history.pushState({tab: 'pa-admin'}, '', location.href);
   _skipDirtyCheck = true;
+  _settingsDirty = false;
   showTab('availability');
 });

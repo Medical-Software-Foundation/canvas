@@ -2,9 +2,11 @@
 
 import datetime as dt
 from datetime import date, timedelta
+import pytest
 from unittest.mock import MagicMock, call, patch
 
 from provider_availability.cron.cache_refresh import (
+    _reconcile_if_schedulable_changed,
     CacheRefreshTask,
     _daily_resync,
     _ensure_provider_calendars,
@@ -24,22 +26,32 @@ CR_MODULE = "provider_availability.cron.cache_refresh"
 class TestCacheRefreshTaskExecute:
     """Test that execute() orchestrates TTL refresh and delegates to helpers."""
 
+    @pytest.fixture(autouse=True)
+    def _no_schedulable_change(self):
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
+             patch(f"{CR_MODULE}._reconcile_if_schedulable_changed", return_value=[]):
+            yield
+
     def test_execute_calls_refresh_when_due(self):
         handler = CacheRefreshTask(MagicMock())
 
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=True) as mock_should, \
              patch(f"{CR_MODULE}.refresh_all_ttls", return_value=5) as mock_refresh, \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
              patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]) as mock_cal, \
              patch(f"{CR_MODULE}._daily_resync", return_value=[]) as mock_resync, \
-             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead:
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead, \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]) as mock_hold:
 
             result = handler.execute()
 
             assert mock_should.mock_calls == [call()]
             assert mock_refresh.mock_calls == [call()]
-            assert mock_cal.mock_calls == [call()]
+            assert mock_cal.mock_calls == [call([])]
             assert mock_resync.mock_calls == [call()]
             assert mock_lead.mock_calls == [call()]
+            # Same day → hold refresh is NOT run
+            assert mock_hold.mock_calls == []
             assert result == []
 
     def test_execute_skips_refresh_when_not_due(self):
@@ -47,14 +59,47 @@ class TestCacheRefreshTaskExecute:
 
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False) as mock_should, \
              patch(f"{CR_MODULE}.refresh_all_ttls") as mock_refresh, \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
              patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]) as mock_cal, \
              patch(f"{CR_MODULE}._daily_resync", return_value=[]) as mock_resync, \
-             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead:
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]) as mock_lead, \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]):
 
             result = handler.execute()
 
             assert mock_should.mock_calls == [call()]
             assert mock_refresh.mock_calls == []
+            assert result == []
+
+    def test_execute_refreshes_holds_only_on_day_change(self):
+        """Hold refresh runs when the day rolled over, and is skipped otherwise."""
+        handler = CacheRefreshTask(MagicMock())
+        hold_effect = MagicMock()
+
+        common = {
+            "should_refresh_ttls": patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False),
+            "cal": patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]),
+            "resync": patch(f"{CR_MODULE}._daily_resync", return_value=[]),
+            "lead": patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]),
+        }
+
+        # Day changed (last sync was yesterday) → hold refresh runs
+        with common["should_refresh_ttls"], common["cal"], common["resync"], common["lead"], \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value="2000-01-01"), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[hold_effect]) as mock_hold:
+            result = handler.execute()
+            assert mock_hold.mock_calls == [call()]
+            assert result == [hold_effect]
+
+        # Same day → hold refresh skipped
+        with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
+             patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]), \
+             patch(f"{CR_MODULE}._daily_resync", return_value=[]), \
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]), \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[hold_effect]) as mock_hold2:
+            result = handler.execute()
+            assert mock_hold2.mock_calls == []
             assert result == []
 
     def test_execute_aggregates_effects(self):
@@ -65,9 +110,11 @@ class TestCacheRefreshTaskExecute:
         lead_effect = MagicMock()
 
         with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
              patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[cal_effect]), \
              patch(f"{CR_MODULE}._daily_resync", return_value=[resync_effect]), \
-             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[lead_effect]):
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[lead_effect]), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]):
 
             result = handler.execute()
 
@@ -102,15 +149,36 @@ class TestDailyResync:
 
         with patch(f"{CR_MODULE}.get_last_sync_date", return_value=yesterday_str), \
              patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_starting_today]) as mock_rules, \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p1", "p2"}), \
              patch(f"{CR_MODULE}.sync_provider_availability", return_value=["effect1"]) as mock_sync, \
              patch(f"{CR_MODULE}.set_last_sync_date") as mock_set:
 
             result = _daily_resync()
 
             assert mock_rules.mock_calls == [call()]
-            assert mock_sync.mock_calls == [call("p1")]
+            assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1", "p2"})]
             assert mock_set.mock_calls == [call(today.isoformat())]
             assert result == ["effect1"]
+
+    def test_daily_rule_starting_today_is_synced(self):
+        """Daily rules keep their hours in time_windows and have no weekly schedule."""
+        today = date.today()
+        daily = MagicMock()
+        daily.is_active = True
+        daily.recurrence_frequency = "daily"
+        daily.weekly_schedule = {}
+        daily.time_windows = ["9-5"]
+        daily.effective_start = today
+        daily.effective_end = None
+        daily.provider_id = "p3"
+
+        with patch(f"{CR_MODULE}.get_last_sync_date", return_value=""), \
+             patch(f"{CR_MODULE}.get_all_rules", return_value=[daily]), \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p3"}), \
+             patch(f"{CR_MODULE}.sync_provider_availability", return_value=["fx"]) as mock_sync, \
+             patch(f"{CR_MODULE}.set_last_sync_date"):
+            assert _daily_resync() == ["fx"]
+            assert mock_sync.mock_calls == [call("p3", schedulable_ids={"p3"})]
 
     def test_syncs_rule_expiring_yesterday(self):
         today = date.today()
@@ -125,12 +193,13 @@ class TestDailyResync:
 
         with patch(f"{CR_MODULE}.get_last_sync_date", return_value=""), \
              patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_expired_yesterday]), \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p1", "p2"}), \
              patch(f"{CR_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
              patch(f"{CR_MODULE}.set_last_sync_date") as mock_set:
 
             result = _daily_resync()
 
-            assert mock_sync.mock_calls == [call("p2")]
+            assert mock_sync.mock_calls == [call("p2", schedulable_ids={"p1", "p2"})]
             assert mock_set.mock_calls == [call(today.isoformat())]
 
     def test_skips_inactive_rule(self):
@@ -192,13 +261,14 @@ class TestDailyResync:
 
         with patch(f"{CR_MODULE}.get_last_sync_date", return_value=""), \
              patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_a, rule_b]), \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p1"}), \
              patch(f"{CR_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
              patch(f"{CR_MODULE}.set_last_sync_date"):
 
             result = _daily_resync()
 
             # Only one call despite two matching rules for same provider
-            assert mock_sync.mock_calls == [call("p1")]
+            assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1"})]
 
     def test_exception_is_caught(self):
         """An exception in get_all_rules should be caught and return empty."""
@@ -229,17 +299,17 @@ class TestRefreshLeadTimeBlocks:
         lead_effect = MagicMock()
 
         with patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_with_lead, rule_no_lead, rule_inactive]) as mock_rules, \
-             patch(f"{CR_MODULE}.build_lead_time_block_effects", return_value=[lead_effect]) as mock_build:
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects", return_value=[lead_effect]) as mock_build:
 
             result = _refresh_lead_time_blocks()
 
             assert mock_rules.mock_calls == [call()]
-            assert mock_build.mock_calls == [call(rule_with_lead)]
+            assert mock_build.mock_calls == [call(rule_with_lead.provider_id, [rule_with_lead])]
             assert result == [lead_effect]
 
     def test_no_rules(self):
         with patch(f"{CR_MODULE}.get_all_rules", return_value=[]), \
-             patch(f"{CR_MODULE}.build_lead_time_block_effects") as mock_build:
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects") as mock_build:
 
             result = _refresh_lead_time_blocks()
 
@@ -257,38 +327,37 @@ class TestRefreshLeadTimeBlocks:
 class TestEnsureProviderCalendars:
     """Test _ensure_provider_calendars."""
 
+    def _mock_existing(self, mock_cal, existing_keys):
+        """Existing Clinic calendars, one per staff key, found by description."""
+        mock_cal.filter.return_value.values_list.return_value = [
+            (f"cal-{k}", f"Someone: Clinic", k) for k in existing_keys
+        ]
+
     def test_creates_calendar_for_provider_missing_one(self):
         staff = MagicMock()
         staff.id = "staff-uuid-1"
         staff.first_name = "Alice"
         staff.last_name = "Smith"
 
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
-             patch(f"{CR_MODULE}.uuid4", return_value="new-cal-uuid"):
-            mock_staff.filter.return_value.distinct.return_value = [staff]
-            mock_cal.filter.return_value.first.return_value = None
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]) as mock_sched, \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
+            self._mock_existing(mock_cal, [])  # no existing calendars
 
             result = _ensure_provider_calendars()
 
-            assert mock_staff.mock_calls == [
-                call.filter(active=True, roles__role_type="PROVIDER"),
-                call.filter().distinct(),
-            ]
-            assert mock_cal.mock_calls == [
-                call.filter(description="staff-uuid-1"),
-                call.filter().first(),
-            ]
+            assert mock_sched.mock_calls == [call()]
+            # single bulk lookup, not one query per provider
+            assert mock_cal.filter.call_count == 1
+            assert mock_cal.filter.return_value.values_list.mock_calls == [call("id", "title", "description")]
             assert len(result) == 1
 
     def test_skips_provider_with_existing_calendar(self):
         staff = MagicMock()
         staff.id = "staff-uuid-2"
 
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal:
-            mock_staff.filter.return_value.distinct.return_value = [staff]
-            mock_cal.filter.return_value.first.return_value = MagicMock()
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
+            self._mock_existing(mock_cal, ["staff-uuid-2"])  # already has one
 
             result = _ensure_provider_calendars()
 
@@ -305,12 +374,10 @@ class TestEnsureProviderCalendars:
         staff_b.first_name = "Bob"
         staff_b.last_name = "B"
 
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
-             patch(f"{CR_MODULE}.uuid4", return_value="cal-uuid"):
-            mock_staff.filter.return_value.distinct.return_value = [staff_a, staff_b]
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff_a, staff_b]), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             # staff_a has no calendar, staff_b has one
-            mock_cal.filter.return_value.first.side_effect = [None, MagicMock()]
+            self._mock_existing(mock_cal, ["staff-b"])
 
             result = _ensure_provider_calendars()
 
@@ -318,18 +385,15 @@ class TestEnsureProviderCalendars:
             assert len(result) == 1
 
     def test_no_active_providers(self):
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
-             patch(f"{CR_MODULE}.CalendarModel.objects"):
-            mock_staff.filter.return_value.distinct.return_value = []
-
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
+            self._mock_existing(mock_cal, [])
             result = _ensure_provider_calendars()
 
             assert result == []
 
     def test_exception_is_caught(self):
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.side_effect = RuntimeError("db error")
-
+        with patch(f"{CR_MODULE}.get_schedulable_staff", side_effect=RuntimeError("db error")):
             result = _ensure_provider_calendars()
 
             assert result == []
@@ -342,10 +406,10 @@ class TestRefreshHoldBlocks:
         block.hold_type = "same_day"
 
         with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[block]), \
-             patch(f"{CR_MODULE}.build_hold_block_refresh_effects", return_value=[MagicMock()]) as mock_build:
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects", return_value=[MagicMock()]) as mock_build:
             result = _refresh_hold_blocks()
 
-            mock_build.assert_called_once_with(block)
+            mock_build.assert_called_once_with(block.provider_id, [block])
             assert len(result) == 1
 
     def test_skips_inactive_blocks(self):
@@ -354,7 +418,7 @@ class TestRefreshHoldBlocks:
         block.hold_type = "same_day"
 
         with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[block]), \
-             patch(f"{CR_MODULE}.build_hold_block_refresh_effects") as mock_build:
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects") as mock_build:
             result = _refresh_hold_blocks()
 
             mock_build.assert_not_called()
@@ -366,8 +430,100 @@ class TestRefreshHoldBlocks:
         block.hold_type = "none"
 
         with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[block]), \
-             patch(f"{CR_MODULE}.build_hold_block_refresh_effects") as mock_build:
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects") as mock_build:
             result = _refresh_hold_blocks()
 
             mock_build.assert_not_called()
             assert result == []
+
+
+class TestScheduleLookupFailure:
+    def test_a_failed_lookup_still_runs_the_other_refreshes(self):
+        handler = CacheRefreshTask(MagicMock())
+        lead_effect = MagicMock()
+
+        with patch(f"{CR_MODULE}.should_refresh_ttls", return_value=False), \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
+             patch(f"{CR_MODULE}.get_schedulable_staff", side_effect=RuntimeError("db down")), \
+             patch(f"{CR_MODULE}._ensure_provider_calendars") as mock_cal, \
+             patch(f"{CR_MODULE}._reconcile_if_schedulable_changed") as mock_rec, \
+             patch(f"{CR_MODULE}._daily_resync", return_value=[]) as mock_resync, \
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[lead_effect]):
+
+            result = handler.execute()
+
+            assert result == [lead_effect]
+            assert mock_resync.mock_calls == [call()]
+            assert mock_cal.mock_calls == []
+            assert mock_rec.mock_calls == []
+
+
+class TestReconcileWhenSchedulableChanges:
+    """Who is bookable can change outside the plugin (a role edit, an
+    activation, the Provider role type fallback switching). Availability is
+    rebuilt when it does, and left alone when it does not."""
+
+    def test_first_tick_only_records_the_set(self):
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=None), \
+             patch(f"{CR_MODULE}.set_seen_schedulable_ids") as mock_set, \
+             patch("provider_availability.api.availability_api._reconcile_availability_to_roles") as mock_rec:
+            assert _reconcile_if_schedulable_changed({"b", "a"}) == []
+            assert mock_set.mock_calls == [call(["a", "b"])]
+            assert mock_rec.mock_calls == []
+
+    def test_unchanged_set_does_nothing(self):
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=["a", "b"]), \
+             patch("provider_availability.api.availability_api._reconcile_availability_to_roles") as mock_rec:
+            assert _reconcile_if_schedulable_changed({"a", "b"}) == []
+            assert mock_rec.mock_calls == []
+
+    def test_changed_set_rebuilds_only_who_changed(self):
+        """"b" became bookable and "c" stopped; "a" is unchanged and is not re-synced."""
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=["a", "c"]), \
+             patch("provider_availability.api.availability_api._reconcile_availability_to_roles",
+                   return_value=["sync"]) as mock_rec:
+            assert _reconcile_if_schedulable_changed({"a", "b"}) == ["sync"]
+            assert mock_rec.mock_calls == [call(only={"b", "c"})]
+
+
+
+class TestJobFailuresAreIsolatedAndFindable:
+    def test_one_providers_lead_time_failure_does_not_stop_the_others(self):
+        a, b = MagicMock(provider_id="p-bad"), MagicMock(provider_id="p-ok")
+        for r in (a, b):
+            r.is_active = True
+            r.booking_interval.min_lead_hours = 4
+
+        def build(pid, rules):
+            if pid == "p-bad":
+                raise ValueError("bad data")
+            return ["lead-ok"]
+
+        with patch(f"{CR_MODULE}.get_all_rules", return_value=[a, b]), \
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects", side_effect=build), \
+             patch("provider_availability.engine.job_errors.log") as mock_log:
+            assert _refresh_lead_time_blocks() == ["lead-ok"]
+        assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "lead_time", "p-bad")]
+
+    def test_one_providers_hold_failure_does_not_stop_the_others(self):
+        bad, ok = MagicMock(provider_id="p-bad"), MagicMock(provider_id="p-ok")
+        for b in (bad, ok):
+            b.is_active = True
+            b.hold_type = "same_day"
+
+        def build(pid, blocks):
+            if pid == "p-bad":
+                raise ValueError("bad data")
+            return ["hold-ok"]
+
+        with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[bad, ok]), \
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects", side_effect=build), \
+             patch("provider_availability.engine.job_errors.log") as mock_log:
+            assert _refresh_hold_blocks() == ["hold-ok"]
+        assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "hold_refresh", "p-bad")]
+
+    def test_step_wide_failure_names_all(self):
+        with patch(f"{CR_MODULE}.get_all_rules", side_effect=RuntimeError("cache down")), \
+             patch("provider_availability.engine.job_errors.log") as mock_log:
+            assert _refresh_lead_time_blocks() == []
+        assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "lead_time", "all")]

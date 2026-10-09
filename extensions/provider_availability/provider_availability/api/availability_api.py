@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time
 from http import HTTPStatus
+from typing import Any, Callable
 
 from logger import log
 
@@ -24,9 +24,11 @@ from provider_availability.engine.event_sync import (
     build_delete_block_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
-    build_lead_time_block_effects,
+    build_provider_lead_time_effects,
     build_recurring_block_sync_effects,
+    build_recurring_blocks_resync_effects,
     delete_provider_lead_time_events,
+    lead_time_rules,
     sync_provider_availability,
 )
 from provider_availability.engine.lookups import (
@@ -34,17 +36,25 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
 )
+from provider_availability.api._auth import current_staff_id as _signed_in_staff_id
+from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
+from provider_availability.engine.expired import expired_summary, list_expired, remove_expired, snooze_expired
+from provider_availability.engine.roles import (
+    get_available_roles,
+    get_effective_schedulable_roles,
+    is_provider_type_fallback_active,
+    get_schedulable_provider_ids,
+    get_schedulable_staff,
+)
 from provider_availability.engine.models import (
     AdminBlock,
-    BookingInterval,
-    BufferTime,
     DateOverride,
     ProviderAvailabilityRule,
     RecurringBlock,
-    TimeWindow,
 )
-from provider_availability.engine.overlap import check_rule_overlap
+from provider_availability.engine.overlap import check_override_overlap, check_rule_overlap
 from provider_availability.engine.storage import (
+    clear_provider_timezone,
     delete_block,
     delete_recurring_block,
     delete_rule_by_id,
@@ -64,11 +74,14 @@ from provider_availability.engine.storage import (
     get_rule_by_id,
     get_rules_by_group,
     get_rules_for_provider,
+    get_schedulable_roles,
     save_block,
     save_recurring_block,
     save_rule,
     set_practice_timezone,
     set_provider_timezone,
+    set_schedulable_roles,
+    set_seen_schedulable_ids,
 )
 from provider_availability.api._auth import is_authorized
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
@@ -204,6 +217,118 @@ def _check_write_access(request: object, secrets: dict | None = None) -> list[Re
     ]
 
 
+def _reconcile_availability_to_roles(only: set[str] | None = None) -> list[Effect]:
+    """Re-sync providers-with-rules against the current schedulable set.
+
+    ``only`` limits the re-sync to those providers, for when just a few people
+    gained or lost bookability; without it every provider with rules is re-synced.
+
+    Schedulable providers get their availability events (re)generated;
+    non-schedulable providers get theirs cleared. ``sync_provider_availability``
+    is gated on the same set, so it clears (and does not recreate) events for
+    providers who are no longer schedulable. Rule definitions are untouched, so
+    re-adding a role restores availability automatically.
+    """
+    schedulable_ids = get_schedulable_provider_ids()
+    provider_ids = {r.provider_id for r in get_all_rules()}
+    if only is not None:
+        provider_ids &= only
+    effects: list[Effect] = []
+    for pid in provider_ids:
+        effects.extend(sync_provider_availability(pid, schedulable_ids=schedulable_ids))
+    # The background job compares against this, so a role save is not
+    # reconciled a second time on its next tick.
+    set_seen_schedulable_ids(sorted(schedulable_ids))
+    log.info(
+        "reconcile_availability_to_roles: reconciled %d providers (%d schedulable)",
+        len(provider_ids), len(schedulable_ids),
+    )
+    return effects
+
+
+def _include_viewer(provider_ids: set[str], schedulable_ids: set[str], staff_id: str) -> None:
+    """Add the viewer to the overview when they are a schedulable provider.
+
+    The overview otherwise lists only providers with saved rules or blocks, so a
+    provider who has set nothing up yet would have no "Your availability" row to
+    start from. Non-schedulable viewers (an admin, say) get no row at all.
+    """
+    if staff_id and staff_id in schedulable_ids:
+        provider_ids.add(staff_id)
+
+
+def _mark_viewer(providers: list[dict], staff_id: str) -> list[dict]:
+    """Flag the viewer in the provider dropdown list so the page can leave them
+    out of the filter: their own section always shows, so filtering it is moot."""
+    for p in providers:
+        p["is_you"] = bool(staff_id) and str(p.get("id")) == staff_id
+    return providers
+
+
+def _sort_providers_you_first(providers: list[dict], staff_id: str) -> list[dict]:
+    """Alphabetical by name, with the viewer's own row pinned to the top.
+
+    Pinning is deliberately independent of any saved view: a provider must not
+    be able to hide their own availability by saving a view that omits them,
+    which is the confusing outcome the pin exists to prevent. ``is_you`` is set
+    on every row so the UI can show the viewer's row in its own section.
+    """
+    for p in providers:
+        p["is_you"] = bool(staff_id) and p.get("provider_id") == staff_id
+
+    def sort_key(p: dict) -> tuple[int, str]:
+        name = p["provider_name"].lower() if p["provider_name"] else "zzz"
+        return (0 if p["is_you"] else 1, name)
+
+    return sorted(providers, key=sort_key)
+
+
+class _FormRequest:
+    """What a route reads from its request, rebuilt from a form-action post.
+
+    A plain class: @dataclass fails to load in the sandbox in a module using
+    `from __future__ import annotations`.
+    """
+
+    headers: Any = None
+    path_params: dict = {}
+    query_params: dict = {}
+    body: dict = {}
+
+    def json(self) -> dict:
+        return self.body
+
+
+def _form_request(headers: Any, path_params: dict, body: dict, query_params: dict) -> _FormRequest:
+    request = _FormRequest()
+    request.headers = headers
+    request.path_params = path_params
+    request.body = body
+    request.query_params = query_params
+    return request
+
+
+def _set_request(handler: Any, request: Any) -> None:
+    """Replace the handler's request (a cached property, so plain assignment sets it)."""
+    handler.request = request
+
+
+def _match_path(pattern: str, path: str) -> dict | None:
+    """Path parameters if ``path`` fits ``pattern`` ("rules/<provider_id>"), else None."""
+    want, got = pattern.split("/"), path.split("/")
+    if len(want) != len(got):
+        return None
+    params: dict[str, str] = {}
+    for w, g in zip(want, got):
+        if w.startswith("<") and w.endswith(">"):
+            if not g:
+                return None
+            params[w[1:-1]] = g
+        elif w != g:
+            return None
+    return params
+
+
 class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     """API endpoints for availability queries and rule management."""
 
@@ -216,7 +341,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         """Return all active providers for dropdown population."""
         log.info("list_providers endpoint called")
         try:
-            providers = get_active_providers()
+            providers = _mark_viewer(get_active_providers(), _signed_in_staff_id(self.request))
             log.info("list_providers returning %d providers", len(providers))
         except Exception:
             log.exception("list_providers failed")
@@ -275,14 +400,24 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
 
-        # Collect all provider IDs
+        # Only show providers who are currently in a schedulable role. A provider
+        # who was de-scheduled (their role removed) drops off this screen, but
+        # their saved rules/blocks are kept (non-destructive) — re-adding the
+        # role brings them back with their configuration intact.
+        schedulable_ids = {str(s.id) for s in get_schedulable_staff()}
+
+        # Collect all provider IDs (restricted to currently-schedulable staff)
         provider_ids = set()
         for r in rules:
-            provider_ids.add(r.provider_id)
+            if r.provider_id in schedulable_ids:
+                provider_ids.add(r.provider_id)
         for b in blocks:
-            provider_ids.add(b.provider_id)
+            if b.provider_id in schedulable_ids:
+                provider_ids.add(b.provider_id)
         for rb in recurring_blocks:
-            provider_ids.add(rb.provider_id)
+            if rb.provider_id in schedulable_ids:
+                provider_ids.add(rb.provider_id)
+        _include_viewer(provider_ids, schedulable_ids, _signed_in_staff_id(self.request))
 
         displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
 
@@ -313,21 +448,27 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }
 
         for r in rules:
+            if r.provider_id not in providers:
+                continue
             d = r.to_dict()
             d["location_names"] = [locations.get(lid, lid) for lid in r.location_ids]
             d["visit_type_names"] = [visit_types.get(vt, vt) for vt in r.visit_types]
             providers[r.provider_id]["rules"].append(d)
 
         for b in blocks:
+            if b.provider_id not in providers:
+                continue
             providers[b.provider_id]["blocks"].append(b.to_dict())
 
         for rb in recurring_blocks:
+            if rb.provider_id not in providers:
+                continue
             providers[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
-        # Sort providers alphabetically by name
-        sorted_providers = sorted(
-            providers.values(),
-            key=lambda p: p["provider_name"].lower() if p["provider_name"] else "zzz",
+        # Alphabetical, with the viewer's own row first (the page shows it in
+        # its own section).
+        sorted_providers = _sort_providers_you_first(
+            list(providers.values()), _signed_in_staff_id(self.request)
         )
 
         return [JSONResponse({"providers": sorted_providers})]
@@ -361,11 +502,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        start_date = date.fromisoformat(start_str)
-        end_date = date.fromisoformat(end_str)
+        try:
+            start_date = date.fromisoformat(start_str)
+            end_date = date.fromisoformat(end_str)
+        except ValueError:
+            return [JSONResponse({"error": "start_date and end_date must be YYYY-MM-DD"}, status_code=HTTPStatus.BAD_REQUEST)]
 
         location_id = params.get("location_id", "")
         visit_type = params.get("visit_type", "")
+
+        # A provider no longer in a schedulable role is not bookable.
+        if provider_id not in get_schedulable_provider_ids():
+            log.info("available-slots: provider=%s not schedulable, returning no slots", provider_id)
+            return [JSONResponse({"slots": [], "count": 0})]
 
         rules = get_rules_for_provider(provider_id)
         log.info(
@@ -407,16 +556,23 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        start_date = date.fromisoformat(start_str)
-        end_date = date.fromisoformat(end_str)
+        try:
+            start_date = date.fromisoformat(start_str)
+            end_date = date.fromisoformat(end_str)
+        except ValueError:
+            return [JSONResponse({"error": "start_date and end_date must be YYYY-MM-DD"}, status_code=HTTPStatus.BAD_REQUEST)]
         location_id = params.get("location_id", "")
         visit_type = params.get("visit_type", "")
 
         all_rules = get_all_rules()
+        schedulable_ids = get_schedulable_provider_ids()
 
         # Group by provider
         providers_with_slots: dict[str, int] = {}
         for rule in all_rules:
+            # De-scheduled providers are not bookable.
+            if rule.provider_id not in schedulable_ids:
+                continue
             if location_id:
                 if rule.location_ids and location_id not in rule.location_ids:
                     continue
@@ -573,7 +729,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         sync_effects = sync_provider_availability(provider_id)
         if rule.is_active and rule.booking_interval.min_lead_hours > 0:
-            sync_effects.extend(build_lead_time_block_effects(rule))
+            sync_effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
 
         return [
             *sync_effects,
@@ -660,12 +816,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         all_effects: list[Effect] = []
         for pid in providers_to_sync:
             all_effects.extend(sync_provider_availability(pid))
-            has_lead_time = False
-            for r in get_rules_for_provider(pid):
-                if r.is_active and r.booking_interval.min_lead_hours > 0:
-                    all_effects.extend(build_lead_time_block_effects(r))
-                    has_lead_time = True
-            if not has_lead_time:
+            lead_rules = lead_time_rules(get_rules_for_provider(pid))
+            if lead_rules:
+                all_effects.extend(build_provider_lead_time_effects(pid, lead_rules))
+            else:
                 all_effects.extend(delete_provider_lead_time_events(pid))
 
         return [
@@ -688,13 +842,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         event_effects = sync_provider_availability(provider_id)
 
         # Refresh lead time blocks for remaining rules, or clean up orphans
-        remaining = get_rules_for_provider(provider_id)
-        has_lead_time = False
-        for r in remaining:
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                event_effects.extend(build_lead_time_block_effects(r))
-                has_lead_time = True
-        if not has_lead_time:
+        lead_rules = lead_time_rules(get_rules_for_provider(provider_id))
+        if lead_rules:
+            event_effects.extend(build_provider_lead_time_effects(provider_id, lead_rules))
+        else:
             event_effects.extend(delete_provider_lead_time_events(provider_id))
 
         return [
@@ -776,19 +927,20 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"error": f"No hours scheduled on {weekday_name.title()}s — override not applicable"},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
+        overlap_msg = check_override_overlap(rule, override)
+        if overlap_msg:
+            return [JSONResponse({"error": overlap_msg}, status_code=HTTPStatus.BAD_REQUEST)]
         # Replace existing override for the same date
         rule.date_overrides = [o for o in rule.date_overrides if o.date != override.date]
         rule.date_overrides.append(override)
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
         # Refresh lead time blocks (they now respect override windows)
-        for r in get_rules_for_provider(provider_id):
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(r))
+        effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         # Re-sync recurring blocks so they skip override dates
-        for rb in get_all_recurring_blocks():
-            if rb.provider_id == provider_id and rb.is_active:
-                effects.extend(build_recurring_block_sync_effects(rb))
+        effects.extend(build_recurring_blocks_resync_effects(
+            [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id and rb.is_active]
+        ))
         return [*effects, JSONResponse({"message": "Override saved"})]
 
     @api.delete("/rules/<provider_id>/<rule_id>/overrides/<override_date>")
@@ -802,18 +954,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         rule = get_rule_by_id(provider_id, rule_id)
         if not rule:
             return [JSONResponse({"error": "Rule not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        override_date = date.fromisoformat(self.request.path_params["override_date"])
+        try:
+            override_date = date.fromisoformat(self.request.path_params["override_date"])
+        except ValueError:
+            return [JSONResponse({"error": "The override date must be YYYY-MM-DD"}, status_code=HTTPStatus.BAD_REQUEST)]
         rule.date_overrides = [o for o in rule.date_overrides if o.date != override_date]
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
         # Refresh lead time blocks (override removed, revert to weekly schedule)
-        for r in get_rules_for_provider(provider_id):
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(r))
+        effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         # Re-sync recurring blocks so they restore events for removed override date
-        for rb in get_all_recurring_blocks():
-            if rb.provider_id == provider_id and rb.is_active:
-                effects.extend(build_recurring_block_sync_effects(rb))
+        effects.extend(build_recurring_blocks_resync_effects(
+            [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id and rb.is_active]
+        ))
         return [*effects, JSONResponse({"message": "Override removed"})]
 
     # ── Admin Block CRUD ───────────────────────────────────────────────
@@ -903,8 +1056,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     end_dt = datetime.combine(d, time(23, 59, 59))
                 else:
                     # parse start/end as time-of-day applied to this date
-                    start_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['start'][-8:] if 'T' in body['start'] else body['start']}")
-                    end_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['end'][-8:] if 'T' in body['end'] else body['end']}")
+                    try:
+                        start_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['start'][-8:] if 'T' in body['start'] else body['start']}")
+                        end_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['end'][-8:] if 'T' in body['end'] else body['end']}")
+                    except ValueError:
+                        return [JSONResponse({"error": "start and end must be times like 09:00"}, status_code=HTTPStatus.BAD_REQUEST)]
                 if start_dt >= end_dt:
                     return [
                         JSONResponse(
@@ -949,8 +1105,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        start_dt = datetime.fromisoformat(start_str)
-        end_dt = datetime.fromisoformat(end_str)
+        try:
+            start_dt = datetime.fromisoformat(start_str)
+            end_dt = datetime.fromisoformat(end_str)
+        except ValueError:
+            return [JSONResponse({"error": "start and end must be dates and times like 2026-07-04T09:00:00"}, status_code=HTTPStatus.BAD_REQUEST)]
 
         if start_dt >= end_dt:
             return [
@@ -1012,8 +1171,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        start_dt = datetime.fromisoformat(start_str)
-        end_dt = datetime.fromisoformat(end_str)
+        try:
+            start_dt = datetime.fromisoformat(start_str)
+            end_dt = datetime.fromisoformat(end_str)
+        except ValueError:
+            return [JSONResponse({"error": "start and end must be dates and times like 2026-07-04T09:00:00"}, status_code=HTTPStatus.BAD_REQUEST)]
 
         if start_dt >= end_dt:
             return [
@@ -1233,8 +1395,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse({"error": rec_err}, status_code=HTTPStatus.BAD_REQUEST)]
 
         block = RecurringBlock.from_dict(body)
+        before = get_recurring_block_by_id(provider_id, block_id)
         save_recurring_block(block)
-        all_effects: list[Effect] = list(build_recurring_block_sync_effects(block))
+        changed = [block]
+        previous = [before] if before else []
 
         updated_count = 1
         apply_to_group = body.get("apply_to_group", False)
@@ -1243,6 +1407,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             for gb in group_blocks:
                 if gb.id == block.id:
                     continue
+                previous.append(RecurringBlock.from_dict(gb.to_dict()))
                 gb.weekly_schedule = block.weekly_schedule
                 gb.reason = block.reason
                 gb.effective_start = block.effective_start
@@ -1252,8 +1417,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 gb.recurrence_interval = block.recurrence_interval
                 gb.time_windows = list(block.time_windows)
                 save_recurring_block(gb)
-                all_effects.extend(build_recurring_block_sync_effects(gb))
+                changed.append(gb)
                 updated_count += 1
+        # One pass for the whole group: blocks sharing a reason or holds share events.
+        all_effects: list[Effect] = build_recurring_blocks_resync_effects(changed, previous)
 
         return [
             *all_effects,
@@ -1321,6 +1488,158 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }),
         ]
 
+    # ── Schedulable roles ─────────────────────────────────────────────
+
+    @api.get("/roles")
+    def get_roles(self) -> list[Response | Effect]:
+        """Return configured schedulable role codes and the roles in this instance."""
+        return [
+            JSONResponse({
+                "schedulable_roles": get_effective_schedulable_roles(),
+                "configured": get_schedulable_roles() is not None,
+                "fallback_active": is_provider_type_fallback_active(),
+                "available": get_available_roles(),
+            })
+        ]
+
+    @api.put("/roles")
+    def set_roles(self) -> list[Response | Effect]:
+        """Replace the set of schedulable role internal codes."""
+        return self._save_roles(self.request.json())
+
+    def _save_roles(self, body: dict) -> list[Response | Effect]:
+        """Shared by the API route and the form fallback."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        codes = body.get("schedulable_roles")
+        if not isinstance(codes, list):
+            return [
+                JSONResponse(
+                    {"error": "schedulable_roles must be a list of role internal codes"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        if not normalized:
+            # An empty set would de-schedule every provider at once, clearing
+            # availability instance-wide on one click. Reject rather than store it.
+            return [
+                JSONResponse(
+                    {"error": "At least one schedulable role is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        set_schedulable_roles(normalized)
+        log.info("set_roles: set %d schedulable roles", len(normalized))
+
+        # Reconcile availability against the new role set so the change takes
+        # effect immediately: providers who are no longer schedulable have their
+        # availability events cleared (no longer bookable), and providers who
+        # became schedulable have theirs (re)generated from their saved rules.
+        effects = _reconcile_availability_to_roles()
+
+        return [
+            *effects,
+            JSONResponse({
+                "message": "Schedulable roles updated",
+                "schedulable_roles": normalized,
+            }),
+        ]
+
+    # ── Per-staff saved view ──────────────────────────────────────────
+
+    @api.get("/my-view")
+    def get_saved_view(self) -> list[Response | Effect]:
+        """Return the provider ids this viewer saved as their default view."""
+        return [JSONResponse({"provider_ids": get_my_view(_signed_in_staff_id(self.request))})]
+
+    @api.put("/my-view")
+    def save_saved_view(self) -> list[Response | Effect]:
+        """Save the viewer's default view.
+
+        The staff id comes from the session, never from the request body, so one
+        person cannot overwrite another's saved view. There is no write-access
+        check because this changes only what the viewer sees, not any shared
+        configuration.
+        """
+        return self._save_view(self.request.json())
+
+    def _save_view(self, body: dict) -> list[Response | Effect]:
+        """Shared by the API route and the form fallback."""
+        staff_id = _signed_in_staff_id(self.request)
+        if not staff_id:
+            return [
+                JSONResponse(
+                    {"error": "Could not identify the signed-in user"},
+                    status_code=HTTPStatus.FORBIDDEN,
+                )
+            ]
+
+        provider_ids = body.get("provider_ids")
+        if not isinstance(provider_ids, list):
+            return [
+                JSONResponse(
+                    {"error": "provider_ids must be a list of provider ids"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        cleaned = [str(pid).strip() for pid in provider_ids if str(pid).strip()]
+        if cleaned:
+            set_my_view(staff_id, cleaned)
+        else:
+            # An empty selection means "show everyone", not "show nobody".
+            clear_my_view(staff_id)
+        log.info("my_view: saved %d providers", len(cleaned))
+        return [JSONResponse({"provider_ids": cleaned})]
+
+    # ── Expired items ─────────────────────────────────────────────────
+
+    def _expired_scope(self) -> list[str]:
+        """Providers whose expired items this viewer may clear: every bookable provider today."""
+        if not is_authorized(self.secrets, self.request):
+            return []
+        return [str(p["id"]) for p in get_active_providers()]
+
+    def _expired_body_keys(self) -> list[str] | None:
+        """The item keys in the request body. None if malformed."""
+        keys = self.request.json().get("keys")
+        if not isinstance(keys, list):
+            return None
+        return [str(k) for k in keys]
+
+    @api.get("/expired-summary")
+    def get_expired_summary(self) -> list[Response | Effect]:
+        """Items that ended over 30 days ago, for providers the viewer can edit, minus snoozed ones."""
+        return [JSONResponse(expired_summary(self._expired_scope()))]
+
+    @api.post("/expired/remove")
+    def remove_expired_items(self) -> list[Response | Effect]:
+        """Drop the picked items from the plugin's lists. Their past calendar events stay in Canvas."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        keys = self._expired_body_keys()
+        if keys is None:
+            return [JSONResponse({"error": "keys must be a list of item keys"}, status_code=HTTPStatus.BAD_REQUEST)]
+        removed = remove_expired(keys, self._expired_scope())
+        noun = "item" if removed == 1 else "items"
+        return [JSONResponse({"removed": removed, "message": f"Removed {removed} expired {noun} from the list"})]
+
+    @api.post("/expired/snooze")
+    def snooze_expired_items(self) -> list[Response | Effect]:
+        """Hide the picked items for 30 days."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        keys = self._expired_body_keys()
+        if keys is None:
+            return [JSONResponse({"error": "keys must be a list of item keys"}, status_code=HTTPStatus.BAD_REQUEST)]
+        visible = {i["key"] for i in list_expired(self._expired_scope())}
+        until = snooze_expired([k for k in keys if k in visible])
+        return [JSONResponse({"until": until.isoformat()})]
+
     # ── Per-provider timezone ─────────────────────────────────────────
 
     @api.get("/provider-timezone")
@@ -1373,9 +1692,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         # Re-sync this provider's calendar events with the new timezone
         effects.extend(sync_provider_availability(provider_id))
-        for rb in get_all_recurring_blocks():
-            if rb.provider_id == provider_id:
-                effects.extend(build_recurring_block_sync_effects(rb))
+        effects.extend(build_recurring_blocks_resync_effects(
+            [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id]
+        ))
         for blk in provider_blocks:
             effects.extend(build_block_event_effects(blk))
         log.info("set_provider_tz: provider %s → %s, %d sync effects", provider_id, tz_name, len(effects))
@@ -1383,6 +1702,37 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "message": f"Provider timezone set to {tz_name}",
             "provider_id": provider_id,
             "timezone": tz_name,
+        })]
+
+    @api.delete("/provider-timezone/<provider_id>")
+    def clear_provider_tz(self) -> list[Response | Effect]:
+        """Clear a provider's explicit timezone, reverting to the practice default."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        provider_id = self.request.path_params["provider_id"]
+        # Same as set_provider_tz: one-off blocks are naive wall-clock times, so delete
+        # their events while the old TZ is still in effect, then rebuild after the clear.
+        provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
+        effects: list[Effect] = []
+        for blk in provider_blocks:
+            effects.extend(build_delete_block_effects(provider_id, blk))
+
+        clear_provider_timezone(provider_id)
+        # Re-sync so the provider's events move to the practice-default timezone.
+        effects.extend(sync_provider_availability(provider_id))
+        effects.extend(build_recurring_blocks_resync_effects(
+            [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id]
+        ))
+        for blk in provider_blocks:
+            effects.extend(build_block_event_effects(blk))
+        default_tz = get_practice_timezone()
+        log.info("clear_provider_tz: provider %s → default (%s), %d sync effects", provider_id, default_tz, len(effects))
+        return [*effects, JSONResponse({
+            "message": f"Provider now uses the practice default ({default_tz})",
+            "provider_id": provider_id,
+            "timezone": default_tz,
+            "explicit": False,
         })]
 
     @api.put("/provider-timezones/bulk")
@@ -1412,9 +1762,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         for pid in provider_ids:
             set_provider_timezone(pid, tz_name)
             effects.extend(sync_provider_availability(pid))
-        for rb in get_all_recurring_blocks():
-            if rb.provider_id in provider_ids:
-                effects.extend(build_recurring_block_sync_effects(rb))
+        effects.extend(build_recurring_blocks_resync_effects(
+            [rb for rb in get_all_recurring_blocks() if rb.provider_id in provider_ids]
+        ))
         for blk in provider_blocks:
             effects.extend(build_block_event_effects(blk))
         log.info("set_provider_tz_bulk: %d providers → %s, %d sync effects", len(provider_ids), tz_name, len(effects))
@@ -1441,7 +1791,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def _build_preloaded_data(self) -> dict:
         """Gather all data needed for the initial page render."""
         try:
-            providers = get_active_providers()
+            providers = _mark_viewer(get_active_providers(), _signed_in_staff_id(self.request))
         except Exception:
             providers = []
         try:
@@ -1460,13 +1810,22 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         blocks = get_all_blocks()
         recurring_blocks = get_all_recurring_blocks()
 
+        # Restrict the overview to currently-schedulable providers (the
+        # `providers` list above is already the schedulable set). De-scheduled
+        # providers drop off the screen; their saved rules are kept.
+        schedulable_ids = {str(p["id"]) for p in providers}
+
         provider_ids = set()
         for r in rules:
-            provider_ids.add(r.provider_id)
+            if r.provider_id in schedulable_ids:
+                provider_ids.add(r.provider_id)
         for b in blocks:
-            provider_ids.add(b.provider_id)
+            if b.provider_id in schedulable_ids:
+                provider_ids.add(b.provider_id)
         for rb in recurring_blocks:
-            provider_ids.add(rb.provider_id)
+            if rb.provider_id in schedulable_ids:
+                provider_ids.add(rb.provider_id)
+        _include_viewer(provider_ids, schedulable_ids, _signed_in_staff_id(self.request))
 
         displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
 
@@ -1488,20 +1847,25 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             }
 
         for r in rules:
+            if r.provider_id not in overview:
+                continue
             d = r.to_dict()
             d["location_names"] = [loc_map.get(lid, lid) for lid in r.location_ids]
             d["visit_type_names"] = [vt_map.get(vt, vt) for vt in r.visit_types]
             overview[r.provider_id]["rules"].append(d)
 
         for b in blocks:
+            if b.provider_id not in overview:
+                continue
             overview[b.provider_id]["blocks"].append(b.to_dict())
 
         for rb in recurring_blocks:
+            if rb.provider_id not in overview:
+                continue
             overview[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
 
-        sorted_overview = sorted(
-            overview.values(),
-            key=lambda p: p["provider_name"].lower() if p["provider_name"] else "zzz",
+        sorted_overview = _sort_providers_you_first(
+            list(overview.values()), _signed_in_staff_id(self.request)
         )
 
         return {
@@ -1510,6 +1874,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "visit_types": {"visit_types": visit_types, "count": len(visit_types)},
             "timezone": {"timezone": tz, "available": COMMON_TIMEZONES},
             "overview": {"providers": sorted_overview},
+            "my_view": {"provider_ids": get_my_view(_signed_in_staff_id(self.request))},
             "csv_template": generate_template_csv(),
         }
 
@@ -1520,6 +1885,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         Accepts form fields: _method, _path, _body (JSON string).
         Dispatches to write handler, then returns admin page with fresh data.
         """
+        # Same gate as the admin page: the response is the full page with every provider's schedule.
+        if not is_authorized(self.secrets, self.request):
+            return [HTMLResponse(ACCESS_DENIED_HTML, status_code=HTTPStatus.FORBIDDEN)]
         form = self.request.form_data()
         method = form.get("_method").value.upper() if form.get("_method") else "POST"
         path = form.get("_path").value if form.get("_path") else ""
@@ -1527,7 +1895,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         try:
             body = json.loads(body_str)
-        except Exception:
+        except json.JSONDecodeError:
             body = {}
 
         log.info("form-action: method=%s path=%s", method, path)
@@ -1565,394 +1933,47 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse({"error": "Server error"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
 
     def _do_dispatch(self, method: str, path: str, body: dict) -> list[Response | Effect]:
-        """Internal dispatcher for form-action writes."""
-        p = path.lstrip("/")
+        """Run a form-submitted write through the same route the page's fetch() would hit.
 
-        if method == "POST" and p == "rules":
-            return self._form_create_rule(body)
-        if method == "PUT" and p == "rules":
-            return self._form_update_rule(body)
-        # Override routes: rules/<pid>/<rid>/overrides[/<date>]
-        if p.startswith("rules/") and "/overrides" in p:
-            parts = p.split("/")
-            if method == "POST" and len(parts) == 4 and parts[3] == "overrides":
-                return self._form_add_override(parts[1], parts[2], body)
-            if method == "DELETE" and len(parts) == 5 and parts[3] == "overrides":
-                return self._form_remove_override(parts[1], parts[2], parts[4])
-        if method == "DELETE" and p.startswith("rules/"):
-            parts = p.split("/")
-            if len(parts) == 3:
-                return self._form_delete_rule(parts[1], parts[2])
-            if len(parts) == 2:
-                return self._form_delete_provider_rules(parts[1])
-        if method == "POST" and p == "blocks":
-            return self._form_create_block(body)
-        if method == "PUT" and p == "blocks":
-            return self._form_update_block(body)
-        if method == "DELETE" and p.startswith("blocks/"):
-            parts = p.split("/")
-            if len(parts) == 3:
-                return self._form_delete_block(parts[1], parts[2])
-        if method == "POST" and p == "recurring-blocks":
-            return self._form_create_recurring_block(body)
-        if method == "PUT" and p == "recurring-blocks":
-            return self._form_update_recurring_block(body)
-        if method == "DELETE" and p.startswith("recurring-blocks/"):
-            parts = p.split("/")
-            if len(parts) == 3:
-                return self._form_delete_recurring_block(parts[1], parts[2])
-        if method == "PUT" and p == "timezone":
-            return self._form_set_timezone(body)
-        if method == "PUT" and p == "provider-timezone":
-            return self._form_set_provider_timezone(body)
-        if method == "PUT" and p == "provider-timezones/bulk":
-            return self._form_set_provider_tz_bulk(body)
+        The routes read their body and path from ``self.request``, so for the
+        call it is swapped for one carrying the form's JSON body and the path's
+        parameters, keeping the signed-in staff member's headers.
+        """
+        routes: list[tuple[str, str, Callable[[], list[Response | Effect]]]] = [
+            ("POST", "rules", self.create_or_update_rule),
+            ("PUT", "rules", self.update_rule_group),
+            ("DELETE", "rules/<provider_id>/<rule_id>", self.delete_rule),
+            ("DELETE", "rules/<provider_id>", self.delete_provider_rules),
+            ("POST", "rules/<provider_id>/<rule_id>/overrides", self.add_override),
+            ("DELETE", "rules/<provider_id>/<rule_id>/overrides/<override_date>", self.remove_override),
+            ("POST", "blocks", self.create_block),
+            ("PUT", "blocks", self.update_block),
+            ("DELETE", "blocks/<provider_id>/<block_id>", self.delete_block_endpoint),
+            ("POST", "recurring-blocks", self.create_recurring_block),
+            ("PUT", "recurring-blocks", self.update_recurring_block),
+            ("DELETE", "recurring-blocks/<provider_id>/<block_id>", self.delete_recurring_block_endpoint),
+            ("PUT", "timezone", self.set_timezone),
+            ("PUT", "provider-timezone", self.set_provider_tz),
+            ("DELETE", "provider-timezone/<provider_id>", self.clear_provider_tz),
+            ("PUT", "provider-timezones/bulk", self.set_provider_tz_bulk),
+            ("PUT", "roles", self.set_roles),
+            ("PUT", "my-view", self.save_saved_view),
+            ("POST", "expired/remove", self.remove_expired_items),
+            ("POST", "expired/snooze", self.snooze_expired_items),
+        ]
+        p, _, query_string = path.strip("/").partition("?")
+        query = dict(pair.partition("=")[::2] for pair in query_string.split("&") if pair)
+        for route_method, pattern, route in routes:
+            params = _match_path(pattern, p) if route_method == method else None
+            if params is None:
+                continue
+            original = self.request
+            _set_request(self, _form_request(original.headers, params, body, query))
+            try:
+                return route()
+            finally:
+                _set_request(self, original)
         return [JSONResponse({"error": f"Unknown: {method} /{p}"}, status_code=HTTPStatus.BAD_REQUEST)]
-
-    def _form_create_rule(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        provider_id = body.get("provider_id", "")
-        if not provider_id:
-            return [JSONResponse({"error": "provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        body["updated_at"] = datetime.now(UTC).isoformat()
-        if "location_ids" not in body and "location_id" in body:
-            body["location_ids"] = [body.pop("location_id")] if body.get("location_id") else []
-        if "visit_types" not in body and "visit_type" in body:
-            body["visit_types"] = [body.pop("visit_type")] if body.get("visit_type") else []
-        for day, windows in body.get("weekly_schedule", {}).items():
-            for w in windows:
-                if w.get("start", "") >= w.get("end", ""):
-                    return [JSONResponse({"error": f"Invalid time window ({day})"}, status_code=HTTPStatus.BAD_REQUEST)]
-        rule = ProviderAvailabilityRule.from_dict(body)
-        overlap_msg = check_rule_overlap(rule, exclude_rule_id=rule.id if body.get("id") else "")
-        if overlap_msg:
-            return [JSONResponse({"error": overlap_msg}, status_code=HTTPStatus.BAD_REQUEST)]
-        save_rule(rule)
-        effects = sync_provider_availability(provider_id)
-        if rule.is_active and rule.booking_interval.min_lead_hours > 0:
-            effects.extend(build_lead_time_block_effects(rule))
-        return [*effects, JSONResponse({"message": "Rule saved"})]
-
-    def _form_update_rule(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        apply_to_group = body.pop("apply_to_group", False)
-        rule_id = body.get("id", "")
-        provider_id = body.get("provider_id", "")
-        if not rule_id or not provider_id:
-            return [JSONResponse({"error": "id and provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        body["updated_at"] = datetime.now(UTC).isoformat()
-
-        # Preserve date_overrides and timezone from existing rule when not in payload
-        existing = get_rule_by_id(provider_id, rule_id)
-        if existing:
-            if "date_overrides" not in body:
-                body["date_overrides"] = [o.to_dict() for o in existing.date_overrides]
-            if "timezone" not in body or body["timezone"] is None:
-                body["timezone"] = existing.timezone
-
-        rule = ProviderAvailabilityRule.from_dict(body)
-        overlap_msg = check_rule_overlap(rule, exclude_rule_id=rule.id)
-        if overlap_msg:
-            return [JSONResponse({"error": overlap_msg}, status_code=HTTPStatus.BAD_REQUEST)]
-        save_rule(rule)
-        providers_to_sync = {rule.provider_id}
-        count = 1
-        if apply_to_group and rule.group_id:
-            for gr in get_rules_by_group(rule.group_id):
-                if gr.id == rule.id:
-                    continue
-                gr.weekly_schedule = rule.weekly_schedule
-                gr.buffer_minutes = rule.buffer_minutes
-                gr.booking_interval = rule.booking_interval
-                gr.is_active = rule.is_active
-                gr.effective_start = rule.effective_start
-                gr.effective_end = rule.effective_end
-                gr.location_ids = rule.location_ids
-                gr.visit_types = rule.visit_types
-                gr.reason = rule.reason
-                gr.updated_at = rule.updated_at
-                save_rule(gr)
-                providers_to_sync.add(gr.provider_id)
-                count += 1
-        effects: list[Effect] = []
-        for pid in providers_to_sync:
-            effects.extend(sync_provider_availability(pid))
-            for r in get_rules_for_provider(pid):
-                if r.is_active and r.booking_interval.min_lead_hours > 0:
-                    effects.extend(build_lead_time_block_effects(r))
-        return [*effects, JSONResponse({"message": f"Updated {count} rule(s)"})]
-
-    def _form_delete_rule(self, provider_id: str, rule_id: str) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        delete_rule_by_id(provider_id, rule_id)
-        # Re-sync availability for remaining rules
-        effects = sync_provider_availability(provider_id)
-        # Refresh lead time blocks for remaining rules, or clean up if none left
-        remaining = get_rules_for_provider(provider_id)
-        has_lead_time = False
-        for r in remaining:
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(r))
-                has_lead_time = True
-        if not has_lead_time:
-            # Delete orphaned lead time events for this provider
-            effects.extend(delete_provider_lead_time_events(provider_id))
-        return [*effects, JSONResponse({"message": "Rule deleted"})]
-
-    def _form_delete_provider_rules(self, provider_id: str) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        effects = build_delete_effects(provider_id)
-        count = delete_rules_for_provider(provider_id)
-        return [*effects, JSONResponse({"message": f"Deleted {count} rules"})]
-
-    def _form_add_override(self, provider_id: str, rule_id: str, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        rule = get_rule_by_id(provider_id, rule_id)
-        if not rule:
-            return [JSONResponse({"error": "Rule not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        windows = body.get("time_windows", [])
-        if not windows:
-            return [JSONResponse(
-                {"error": "At least one time window is required"},
-                status_code=HTTPStatus.BAD_REQUEST,
-            )]
-        for w in windows:
-            if w.get("start", "") >= w.get("end", ""):
-                return [JSONResponse(
-                    {"error": "Invalid time window: start must be before end"},
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )]
-        override = DateOverride.from_dict(body)
-        # Validate override date falls on a scheduled weekday
-        day_names = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
-        weekday_name = day_names[override.date.weekday()]
-        if weekday_name not in rule.weekly_schedule:
-            return [JSONResponse(
-                {"error": f"No hours scheduled on {weekday_name.title()}s — override not applicable"},
-                status_code=HTTPStatus.BAD_REQUEST,
-            )]
-        rule.date_overrides = [o for o in rule.date_overrides if o.date != override.date]
-        rule.date_overrides.append(override)
-        save_rule(rule)
-        return [*sync_provider_availability(provider_id), JSONResponse({"message": "Override saved"})]
-
-    def _form_remove_override(self, provider_id: str, rule_id: str, date_str: str) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        rule = get_rule_by_id(provider_id, rule_id)
-        if not rule:
-            return [JSONResponse({"error": "Rule not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        override_date = date.fromisoformat(date_str)
-        rule.date_overrides = [o for o in rule.date_overrides if o.date != override_date]
-        save_rule(rule)
-        return [*sync_provider_availability(provider_id), JSONResponse({"message": "Override removed"})]
-
-    def _form_create_block(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        provider_id = body.get("provider_id", "")
-        start_str = body.get("start", "")
-        end_str = body.get("end", "")
-        if not provider_id or not start_str or not end_str:
-            return [JSONResponse({"error": "provider_id, start, end required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        start_dt = datetime.fromisoformat(start_str)
-        end_dt = datetime.fromisoformat(end_str)
-        if start_dt >= end_dt:
-            return [JSONResponse({"error": "Start must be before end"}, status_code=HTTPStatus.BAD_REQUEST)]
-        block = AdminBlock(
-            provider_id=provider_id, start=start_dt, end=end_dt,
-            reason=body.get("reason", ""), location_ids=body.get("location_ids", []),
-            group_id=body.get("group_id"),
-        )
-        save_block(block)
-        effects: list = []
-        replace_rb_id = body.get("replace_recurring_block_id")
-        if replace_rb_id:
-            old_rb = get_recurring_block_by_id(provider_id, replace_rb_id)
-            if old_rb:
-                effects.extend(build_delete_recurring_block_effects(provider_id, old_rb))
-            delete_recurring_block(provider_id, replace_rb_id)
-        effects.extend(build_block_event_effects(block))
-        return [*effects, JSONResponse({"message": "Block created"})]
-
-    def _form_update_block(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        block_id = body.get("id", "")
-        provider_id = body.get("provider_id", "")
-        start_str = body.get("start", "")
-        end_str = body.get("end", "")
-        if not block_id or not provider_id or not start_str or not end_str:
-            return [JSONResponse({"error": "id, provider_id, start, end required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        start_dt = datetime.fromisoformat(start_str)
-        end_dt = datetime.fromisoformat(end_str)
-        if start_dt >= end_dt:
-            return [JSONResponse({"error": "Start must be before end"}, status_code=HTTPStatus.BAD_REQUEST)]
-        old_block = get_block_by_id(provider_id, block_id)
-        del_fx: list[Effect] = build_delete_block_effects(provider_id, old_block) if old_block else []
-        block = AdminBlock(
-            id=block_id, provider_id=provider_id, start=start_dt, end=end_dt,
-            reason=body.get("reason", ""), location_ids=body.get("location_ids", []),
-            group_id=body.get("group_id"),
-        )
-        save_block(block)
-        all_fx = del_fx + list(build_block_event_effects(block))
-        count = 1
-        if body.get("apply_to_group") and block.group_id:
-            for gb in get_blocks_by_group(block.group_id):
-                if gb.id == block.id:
-                    continue
-                all_fx.extend(build_delete_block_effects(gb.provider_id, gb))
-                gb.start = block.start
-                gb.end = block.end
-                gb.reason = block.reason
-                save_block(gb)
-                all_fx.extend(build_block_event_effects(gb))
-                count += 1
-        return [*all_fx, JSONResponse({"message": f"Updated {count} block(s)"})]
-
-    def _form_delete_block(self, provider_id: str, block_id: str) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        blocks = get_blocks_for_provider(provider_id)
-        target = next((b for b in blocks if b.id == block_id), None)
-        effects = build_delete_block_effects(provider_id, target)
-        delete_block(provider_id, block_id)
-        return [*effects, JSONResponse({"message": "Block deleted"})]
-
-    def _form_create_recurring_block(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        provider_id = body.get("provider_id", "")
-        weekly_schedule = body.get("weekly_schedule", {})
-        if not provider_id:
-            return [JSONResponse({"error": "provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        if not weekly_schedule:
-            return [JSONResponse({"error": "weekly_schedule required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        for day, windows in weekly_schedule.items():
-            for w in windows:
-                if w.get("start", "") >= w.get("end", ""):
-                    return [JSONResponse({"error": f"Invalid time ({day})"}, status_code=HTTPStatus.BAD_REQUEST)]
-        block = RecurringBlock.from_dict(body)
-        save_recurring_block(block)
-        effects: list = []
-        replace_b_id = body.get("replace_block_id")
-        if replace_b_id:
-            old_block = get_block_by_id(provider_id, replace_b_id)
-            if old_block:
-                effects.extend(build_delete_block_effects(provider_id, old_block))
-            delete_block(provider_id, replace_b_id)
-        effects.extend(build_recurring_block_sync_effects(block))
-        return [*effects, JSONResponse({"message": "Recurring block created"})]
-
-    def _form_update_recurring_block(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        block_id = body.get("id", "")
-        provider_id = body.get("provider_id", "")
-        if not block_id or not provider_id:
-            return [JSONResponse({"error": "id and provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        if not body.get("weekly_schedule"):
-            return [JSONResponse({"error": "weekly_schedule required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        block = RecurringBlock.from_dict(body)
-        save_recurring_block(block)
-        all_fx: list[Effect] = list(build_recurring_block_sync_effects(block))
-        count = 1
-        if body.get("apply_to_group") and block.group_id:
-            for gb in get_recurring_blocks_by_group(block.group_id):
-                if gb.id == block.id:
-                    continue
-                gb.weekly_schedule = block.weekly_schedule
-                gb.reason = block.reason
-                gb.effective_start = block.effective_start
-                gb.effective_end = block.effective_end
-                gb.is_active = block.is_active
-                save_recurring_block(gb)
-                all_fx.extend(build_recurring_block_sync_effects(gb))
-                count += 1
-        return [*all_fx, JSONResponse({"message": f"Updated {count} recurring block(s)"})]
-
-    def _form_delete_recurring_block(self, provider_id: str, block_id: str) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        existing = get_recurring_block_by_id(provider_id, block_id)
-        effects = build_delete_recurring_block_effects(provider_id, existing)
-        delete_recurring_block(provider_id, block_id)
-        return [*effects, JSONResponse({"message": "Recurring block deleted"})]
-
-    def _form_set_timezone(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        tz_name = body.get("timezone", "")
-        if not tz_name or tz_name not in COMMON_TIMEZONES:
-            return [JSONResponse({"error": "Invalid timezone"}, status_code=HTTPStatus.BAD_REQUEST)]
-        set_practice_timezone(tz_name)
-        all_fx: list[Effect] = []
-        synced: set[str] = set()
-        for rule in get_all_rules():
-            if rule.provider_id not in synced:
-                all_fx.extend(sync_provider_availability(rule.provider_id))
-                synced.add(rule.provider_id)
-        for rb in get_all_recurring_blocks():
-            all_fx.extend(build_recurring_block_sync_effects(rb))
-        return [*all_fx, JSONResponse({"message": f"Timezone set to {tz_name}"})]
-
-    def _form_set_provider_timezone(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        provider_id = body.get("provider_id", "")
-        tz_name = body.get("timezone", "")
-        if not provider_id:
-            return [JSONResponse({"error": "provider_id required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        if not tz_name or tz_name not in COMMON_TIMEZONES:
-            return [JSONResponse({"error": "Invalid timezone"}, status_code=HTTPStatus.BAD_REQUEST)]
-        set_provider_timezone(provider_id, tz_name)
-        # Re-sync this provider's calendar events with the new timezone
-        all_fx: list[Effect] = list(sync_provider_availability(provider_id))
-        for rb in get_all_recurring_blocks():
-            if rb.provider_id == provider_id:
-                all_fx.extend(build_recurring_block_sync_effects(rb))
-        log.info("form_set_provider_tz: provider %s → %s", provider_id, tz_name)
-        return [*all_fx, JSONResponse({"message": f"Provider timezone set to {tz_name}"})]
-
-    def _form_set_provider_tz_bulk(self, body: dict) -> list[Response | Effect]:
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
-        provider_ids = body.get("provider_ids", [])
-        tz_name = body.get("timezone", "")
-        if not provider_ids:
-            return [JSONResponse({"error": "provider_ids required"}, status_code=HTTPStatus.BAD_REQUEST)]
-        if not tz_name or tz_name not in COMMON_TIMEZONES:
-            return [JSONResponse({"error": "Invalid timezone"}, status_code=HTTPStatus.BAD_REQUEST)]
-        all_fx: list[Effect] = []
-        for pid in provider_ids:
-            set_provider_timezone(pid, tz_name)
-            all_fx.extend(sync_provider_availability(pid))
-        for rb in get_all_recurring_blocks():
-            if rb.provider_id in provider_ids:
-                all_fx.extend(build_recurring_block_sync_effects(rb))
-        log.info("form_set_provider_tz_bulk: %d providers → %s", len(provider_ids), tz_name)
-        return [*all_fx, JSONResponse({"message": f"Timezone set to {tz_name} for {len(provider_ids)} providers"})]
 
     # ── Static assets ────────────────────────────────────────────────
 
