@@ -38,6 +38,24 @@
       <button class="btn btn-expand-collapse" onclick="toggleAllCards()">Expand All</button>
     </div>
     <div id="expired-banner" class="alert expired-banner" style="display:none"></div>
+    <div id="expired-panel" class="ep-scrim" onclick="if (event.target === this) closeExpiredPanel()">
+      <div class="ep-panel" role="dialog" aria-modal="true" aria-labelledby="ep-title">
+        <div class="ep-head">
+          <h2 id="ep-title">Items that ended more than 30 days ago</h2>
+          <p>Removing clears them from this list only. Their past calendar entries stay in Canvas.</p>
+        </div>
+        <div class="ep-list"><table>
+          <thead><tr><th><input type="checkbox" id="ep-all" title="Select all" onclick="event.stopPropagation(); toggleExpiredAll()"></th><th>Provider</th><th>Type</th><th>Days and hours</th><th>Reason</th><th>Ended</th></tr></thead>
+          <tbody id="ep-rows"></tbody>
+        </table></div>
+        <div class="ep-foot">
+          <span class="ep-count" id="ep-count"></span>
+          <button class="btn" onclick="closeExpiredPanel()">Close</button>
+          <button class="btn" onclick="snoozeExpired()">Ask again in 30 days</button>
+          <button class="btn btn-danger" id="ep-remove" onclick="removeExpired()" disabled>Remove selected</button>
+        </div>
+      </div>
+    </div>
     <div id="legend-bar-container" class="legend-bar"></div>
     <div class="provider-list" id="accordion-container">
       <div class="empty-state">Loading...</div>

@@ -59,4 +59,6 @@ class TestRenderAdminPage:
     def test_expired_banner_and_no_show_all_button(self):
         html = render_admin_page(None)
         assert 'id="expired-banner"' in html
+        assert 'id="expired-panel"' in html
+        assert 'onclick="removeExpired()"' in html
         assert "showAllProviders" not in html

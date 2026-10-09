@@ -35,7 +35,7 @@ from provider_availability.engine.lookups import (
 )
 from provider_availability.api._auth import current_staff_id as _signed_in_staff_id
 from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
-from provider_availability.engine.expired import expired_summary, remove_expired, snooze_expired
+from provider_availability.engine.expired import expired_summary, list_expired, remove_expired, snooze_expired
 from provider_availability.engine.roles import (
     get_available_roles,
     get_effective_schedulable_roles,
@@ -1531,41 +1531,42 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return []
         return [str(p["id"]) for p in get_active_providers()]
 
-    def _expired_body_ids(self) -> list[str] | None:
-        """The provider_ids in the request body, limited to the viewer's scope. None if malformed."""
-        ids = self.request.json().get("provider_ids")
-        if not isinstance(ids, list):
+    def _expired_body_keys(self) -> list[str] | None:
+        """The item keys in the request body. None if malformed."""
+        keys = self.request.json().get("keys")
+        if not isinstance(keys, list):
             return None
-        scope = set(self._expired_scope())
-        return [str(pid) for pid in ids if str(pid) in scope]
+        return [str(k) for k in keys]
 
     @api.get("/expired-summary")
     def get_expired_summary(self) -> list[Response | Effect]:
-        """How many items ended over 30 days ago, for providers the viewer can edit and has not snoozed."""
+        """Items that ended over 30 days ago, for providers the viewer can edit, minus snoozed ones."""
         return [JSONResponse(expired_summary(self._expired_scope()))]
 
     @api.post("/expired/remove")
     def remove_expired_items(self) -> list[Response | Effect]:
-        """Drop those items from the plugin's lists. Their past calendar events stay in Canvas."""
+        """Drop the picked items from the plugin's lists. Their past calendar events stay in Canvas."""
         denied = _check_write_access(self.request, self.secrets)
         if denied:
             return denied
-        ids = self._expired_body_ids()
-        if ids is None:
-            return [JSONResponse({"error": "provider_ids must be a list of provider ids"}, status_code=HTTPStatus.BAD_REQUEST)]
-        removed = remove_expired(ids)
-        return [JSONResponse({"removed": removed, "message": f"Removed {removed} expired items from the list"})]
+        keys = self._expired_body_keys()
+        if keys is None:
+            return [JSONResponse({"error": "keys must be a list of item keys"}, status_code=HTTPStatus.BAD_REQUEST)]
+        removed = remove_expired(keys, self._expired_scope())
+        noun = "item" if removed == 1 else "items"
+        return [JSONResponse({"removed": removed, "message": f"Removed {removed} expired {noun} from the list"})]
 
     @api.post("/expired/snooze")
     def snooze_expired_items(self) -> list[Response | Effect]:
-        """Hide the question for these providers for 30 days."""
+        """Hide the picked items for 30 days."""
         denied = _check_write_access(self.request, self.secrets)
         if denied:
             return denied
-        ids = self._expired_body_ids()
-        if ids is None:
-            return [JSONResponse({"error": "provider_ids must be a list of provider ids"}, status_code=HTTPStatus.BAD_REQUEST)]
-        until = snooze_expired(ids)
+        keys = self._expired_body_keys()
+        if keys is None:
+            return [JSONResponse({"error": "keys must be a list of item keys"}, status_code=HTTPStatus.BAD_REQUEST)]
+        visible = {i["key"] for i in list_expired(self._expired_scope())}
+        until = snooze_expired([k for k in keys if k in visible])
         return [JSONResponse({"until": until.isoformat()})]
 
     # ── Per-provider timezone ─────────────────────────────────────────
@@ -1801,7 +1802,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             expired = expired_summary(list(schedulable_ids) if is_authorized(self.secrets, self.request) else [])
         except Exception:
             log.exception("preload: expired summary failed")
-            expired = {"count": 0, "provider_ids": []}
+            expired = {"count": 0, "items": []}
 
         return {
             "providers": {"providers": providers, "count": len(providers)},

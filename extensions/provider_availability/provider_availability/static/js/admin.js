@@ -412,19 +412,40 @@ function isExpiredOverride(ovr) {
 // Expired rules, recurring blocks and holds, one-off blocks, and date overrides
 // are hidden by default: a provider's list is dominated by finished items otherwise. Not persisted, so a reload
 // returns to hiding them.
-// Banner offering to clear items that ended over 30 days ago, for providers the
-// viewer can edit. "Ask again in 30 days" snoozes those providers only.
-var _expiredSummary = { count: 0, provider_ids: [] };
+// Banner offering to review items that ended over 30 days ago, for providers the
+// viewer can edit. Review opens a list to pick from; "Ask again in 30 days"
+// snoozes the items listed now, so anything that ends later still shows.
+var _expiredSummary = { count: 0, items: [] };
+var _expiredSel = {};
+var _EXPIRED_TYPES = {
+  available: ['chip-avail', SVG_CHECK, 'Available'],
+  blocked: ['chip-block', SVG_X, 'Blocked'],
+  hold: ['chip-hold', SVG_PAUSE, 'Hold'],
+  override: ['chip-override', SVG_OVERRIDE, 'Override'],
+};
+
+function _escHtml(text) {
+  var d = document.createElement('div');
+  d.textContent = text == null ? '' : String(text);
+  return d.innerHTML;
+}
+
+function _expiredProviderName(pid) {
+  var p = (_providers || []).find(function(x) { return String(x.id) === String(pid); });
+  if (p) return p.name;
+  var o = (_overviewData || []).find(function(x) { return String(x.provider_id) === String(pid); });
+  return o ? o.provider_name : pid;
+}
 
 function renderExpiredBanner() {
   var el = document.getElementById('expired-banner');
   if (!el) return;
   var n = _expiredSummary.count || 0;
   if (!n) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.innerHTML = '<span class="expired-text"><a onclick="reviewExpired()">' + n + (n === 1 ? ' item' : ' items') +
-    '</a> ended more than 30 days ago. Their past calendar entries stay in Canvas either way.</span>' +
+  el.innerHTML = '<span class="expired-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>' +
+    '<span class="expired-text"><b>' + n + (n === 1 ? ' item' : ' items') + ' ended more than 30 days ago.</b> Their past calendar entries stay in Canvas either way.</span>' +
     '<span class="expired-actions"><button class="btn" onclick="snoozeExpired()">Ask again in 30 days</button>' +
-    '<button class="btn btn-danger" onclick="removeExpired()">Remove from list</button></span>';
+    '<button class="btn btn-primary" onclick="openExpiredPanel()">Review</button></span>';
   el.style.display = '';
 }
 
@@ -433,27 +454,86 @@ async function loadExpiredBanner() {
   if (data && typeof data.count === 'number') { _expiredSummary = data; renderExpiredBanner(); }
 }
 
-function reviewExpired() {
-  if (!_showExpired) toggleExpired();
+function openExpiredPanel() {
+  _expiredSel = {};
+  renderExpiredPanel();
+  document.getElementById('expired-panel').classList.add('open');
+}
+
+function closeExpiredPanel() {
+  document.getElementById('expired-panel').classList.remove('open');
+}
+
+function renderExpiredPanel() {
+  var items = _expiredSummary.items || [];
+  var last = null;
+  document.getElementById('ep-rows').innerHTML = items.map(function(it, i) {
+    var t = _EXPIRED_TYPES[it.kind] || _EXPIRED_TYPES.blocked;
+    var next = last !== null && it.provider_id !== last;
+    last = it.provider_id;
+    return '<tr data-i="' + i + '" class="' + (_expiredSel[it.key] ? 'ep-sel ' : '') + (next ? 'ep-next-provider' : '') + '">' +
+      '<td><input type="checkbox"' + (_expiredSel[it.key] ? ' checked' : '') + '></td>' +
+      '<td>' + _escHtml(_expiredProviderName(it.provider_id)) + '</td>' +
+      '<td><span class="type-chip ' + t[0] + '">' + t[1] + '</span>' + t[2] + '</td>' +
+      '<td>' + _escHtml(it.when) + '</td>' +
+      '<td><div class="ep-reason" title="' + _escHtml(it.reason) + '">' + (it.reason ? _escHtml(it.reason) : '<span class="col-empty">—</span>') + '</div></td>' +
+      '<td>' + fmtDate(it.ended) + '</td></tr>';
+  }).join('');
+  document.querySelectorAll('#ep-rows tr').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var key = items[+tr.dataset.i].key;
+      _expiredSel[key] = !_expiredSel[key];
+      renderExpiredPanel();
+    });
+  });
+  var picked = items.filter(function(it) { return _expiredSel[it.key]; }).length;
+  document.getElementById('ep-count').textContent = picked ? picked + ' of ' + items.length + ' selected' : items.length + (items.length === 1 ? ' item' : ' items');
+  var all = document.getElementById('ep-all');
+  all.checked = picked > 0 && picked === items.length;
+  all.indeterminate = picked > 0 && picked < items.length;
+  var rm = document.getElementById('ep-remove');
+  rm.disabled = !picked;
+  rm.textContent = picked ? 'Remove ' + picked + ' selected' : 'Remove selected';
+}
+
+function toggleExpiredAll() {
+  var items = _expiredSummary.items || [];
+  var on = !items.every(function(it) { return _expiredSel[it.key]; });
+  items.forEach(function(it) { _expiredSel[it.key] = on; });
+  renderExpiredPanel();
 }
 
 async function removeExpired() {
-  var n = _expiredSummary.count;
-  if (!confirm('Remove ' + n + (n === 1 ? ' expired item' : ' expired items') + ' from this list? Their past calendar entries stay in Canvas.')) return;
-  var data = await apiCall('/expired/remove', { method: 'POST', body: JSON.stringify({ provider_ids: _expiredSummary.provider_ids }) });
+  var keys = (_expiredSummary.items || []).filter(function(it) { return _expiredSel[it.key]; }).map(function(it) { return it.key; });
+  if (!keys.length) return;
+  if (!confirm('Remove ' + keys.length + (keys.length === 1 ? ' item' : ' items') + ' from this list? Their past calendar entries stay in Canvas.')) return;
+  var data = await apiCall('/expired/remove', { method: 'POST', body: JSON.stringify({ keys: keys }) });
   if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg(data.message || 'Removed', 'success');
-  _expiredSummary = { count: 0, provider_ids: [] };
+  var gone = {}; keys.forEach(function(k) { gone[k] = true; });
+  _expiredSummary.items = (_expiredSummary.items || []).filter(function(it) { return !gone[it.key]; });
+  _expiredSummary.count = _expiredSummary.items.length;
+  _expiredSel = {};
+  if (_expiredSummary.count) renderExpiredPanel(); else closeExpiredPanel();
   renderExpiredBanner();
   await loadOverview();
 }
 
 async function snoozeExpired() {
-  var data = await apiCall('/expired/snooze', { method: 'POST', body: JSON.stringify({ provider_ids: _expiredSummary.provider_ids }) });
+  var keys = (_expiredSummary.items || []).map(function(it) { return it.key; });
+  if (!keys.length) return;
+  var data = await apiCall('/expired/snooze', { method: 'POST', body: JSON.stringify({ keys: keys }) });
   if (data.error) { showMsg(data.error, 'error'); return; }
-  _expiredSummary = { count: 0, provider_ids: [] };
+  _expiredSummary = { count: 0, items: [] };
+  closeExpiredPanel();
   renderExpiredBanner();
+  if (data.until) showMsg('Hidden until ' + fmtDate(data.until) + '. Anything else that ends meanwhile still brings the banner back.', 'success');
 }
+
+// Escape closes the review panel.
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { var p = document.getElementById('expired-panel'); if (p && p.classList.contains('open')) closeExpiredPanel(); }
+});
 
 function toggleExpired() {
   _showExpired = !_showExpired;
