@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.23.17",
+    "plugin_version": "0.23.18",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {
@@ -120,6 +120,10 @@
         "effects": [],
         "views": []
     },
+    "variables": [
+        {"name": "simpleapi-api-key", "sensitive": true},
+        {"name": "allowed-staff-keys", "sensitive": false}
+    ],
     "secrets": [
         "simpleapi-api-key",
         "allowed-staff-keys"

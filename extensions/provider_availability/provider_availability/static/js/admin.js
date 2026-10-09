@@ -911,7 +911,7 @@ class MultiSelect {
       const label = item ? (item[this.displayKey] || val) : val;
       const chip = document.createElement('span');
       chip.className = 'ms-chip';
-      chip.innerHTML = label + ' <span class="ms-chip-remove">&times;</span>';
+      chip.innerHTML = _escHtml(label) + ' <span class="ms-chip-remove">&times;</span>';
       chip.querySelector('.ms-chip-remove').addEventListener('click', (e) => { e.stopPropagation(); this.toggle(val); });
       this.chipsArea.appendChild(chip);
     });
@@ -1519,11 +1519,11 @@ function renderAccordion() {
     // Header
     html += '<div class="provider-card-header" onclick="toggleCard(this)">';
     html += '<div class="provider-info">';
-    html += '<div class="provider-avatar ' + avatarClass + '">' + initials + '</div>';
+    html += '<div class="provider-avatar ' + avatarClass + '">' + _escHtml(initials) + '</div>';
     var pTz = p.provider_timezone || _practiceTz;
     var pTzExplicit = p.provider_timezone_explicit;
     html += '<div class="provider-name-col">';
-    html += '<span class="provider-name">' + name + '</span>';
+    html += '<span class="provider-name">' + _escHtml(name) + '</span>';
     if (!_viewTz) {
       html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' (default)') + '</div>';
     }
@@ -1558,7 +1558,7 @@ function renderAccordion() {
         const schedule = r.weekly_schedule || {};
         const isExpired = isExpiredRow(r);
         const reasonChipHtml = r.reason
-          ? '<div class="chip-group"><span class="detail-tag tag-avail">' + r.reason + '</span></div>'
+          ? '<div class="chip-group"><span class="detail-tag tag-avail">' + _escHtml(r.reason) + '</span></div>'
           : '<span class="col-empty">\u2014</span>';
 
         // Build repeats cell
@@ -1581,7 +1581,7 @@ function renderAccordion() {
         var metaCols = vtNames.length > 0 ? 5 : 4;
         detailHtml += '<div class="detail-meta-grid" style="grid-template-columns:repeat(' + metaCols + ',1fr);">';
         detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Frequency</div><div class="detail-meta-value">' + frequencyLabel(r) + '</div></div>';
-        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (r.reason || '\u2014') + '</div></div>';
+        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (r.reason ? _escHtml(r.reason) : '\u2014') + '</div></div>';
         var buf = r.buffer_minutes || {};
         var booking = r.booking_interval || {};
         var bufParts = [];
@@ -1590,11 +1590,11 @@ function renderAccordion() {
         if (booking.min_lead_hours > 0) bufParts.push('<span class="detail-tag tag-buffer">' + booking.min_lead_hours + 'h Lead</span>');
         detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Buffers</div><div class="detail-meta-value">' + (bufParts.length > 0 ? '<div class="chip-group">' + bufParts.join(' ') + '</div>' : '\u2014') + '</div></div>';
         var locNames = resolveLocationNames(r.location_ids);
-        var locHtml = locNames.length > 0 ? '<div class="chip-group">' + locNames.map(function(n) { return '<span class="detail-tag tag-location">' + n + '</span>'; }).join('') + '</div>' : 'All';
+        var locHtml = locNames.length > 0 ? '<div class="chip-group">' + locNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
         detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + locHtml + '</div></div>';
         if (vtNames.length > 0) {
           detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Visit Types</div><div class="detail-meta-value"><div class="chip-group">';
-          vtNames.forEach(function(vt) { detailHtml += '<span class="detail-tag tag-visit-type">' + vt + '</span>'; });
+          vtNames.forEach(function(vt) { detailHtml += '<span class="detail-tag tag-visit-type">' + _escHtml(vt) + '</span>'; });
           detailHtml += '</div></div></div>';
         }
         detailHtml += '</div>';
@@ -1666,7 +1666,7 @@ function renderAccordion() {
             ? 'Closed'
             : ovr.time_windows.map(function(w) { return fmtHHMMConverted(w.start, pTz) + ' \u2013 ' + fmtHHMMConverted(w.end, pTz); }).join(', ');
           var ovrReasonHtml = ovr.reason
-            ? '<span class="detail-tag tag-override">' + ovr.reason + '</span>'
+            ? '<span class="detail-tag tag-override">' + _escHtml(ovr.reason) + '</span>'
             : '<span class="type-chip chip-override">Override</span>';
           var ovrJson = JSON.stringify(ovr).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
           var ovrHtml = '<tr class="row-override">';
@@ -1696,14 +1696,14 @@ function renderAccordion() {
         const timeStr = convertIsoTime(b.start, pTz, viewTz) + ' \u2013 ' + convertIsoTime(b.end, pTz, viewTz);
         const blockJson = JSON.stringify(JSON.stringify(b));
         const blockReasonChip = b.reason
-          ? '<span class="detail-tag tag-block">' + b.reason + '</span>'
+          ? '<span class="detail-tag tag-block">' + _escHtml(b.reason) + '</span>'
           : '<span class="col-empty">\u2014</span>';
 
         // Detail panel
         var bLocNames = resolveLocationNames(b.location_ids);
-        var bLocHtml = bLocNames.length > 0 ? '<div class="chip-group">' + bLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + n + '</span>'; }).join('') + '</div>' : 'All';
+        var bLocHtml = bLocNames.length > 0 ? '<div class="chip-group">' + bLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
         var bDetailHtml = '<div class="detail-panel"><div class="detail-meta-grid">';
-        bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (b.reason || '\u2014') + '</div></div>';
+        bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (b.reason ? _escHtml(b.reason) : '\u2014') + '</div></div>';
         bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + bLocHtml + '</div></div>';
         bDetailHtml += '</div></div>';
 
@@ -1755,11 +1755,11 @@ function renderAccordion() {
         // Build inline chips: hold + reason
         let rbChipsHtml = '';
         if (holdLabel && rb.reason) {
-          rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + ': ' + rb.reason + '</span>';
+          rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + ': ' + _escHtml(rb.reason) + '</span>';
         } else if (holdLabel) {
           rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + '</span>';
         } else if (rb.reason) {
-          rbChipsHtml += '<span class="detail-tag tag-block">' + rb.reason + '</span>';
+          rbChipsHtml += '<span class="detail-tag tag-block">' + _escHtml(rb.reason) + '</span>';
         }
         if (!rbChipsHtml) rbChipsHtml = '<span class="col-empty">\u2014</span>';
         else rbChipsHtml = '<div class="chip-group">' + rbChipsHtml + '</div>';
@@ -1770,10 +1770,10 @@ function renderAccordion() {
         else if (holdLabel) rbReasonText = holdLabel;
         else if (rb.reason) rbReasonText = rb.reason;
         var rbLocNames = resolveLocationNames(rb.location_ids);
-        var rbLocHtml = rbLocNames.length > 0 ? '<div class="chip-group">' + rbLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + n + '</span>'; }).join('') + '</div>' : 'All';
+        var rbLocHtml = rbLocNames.length > 0 ? '<div class="chip-group">' + rbLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
         var rbDetailHtml = '<div class="detail-panel"><div class="detail-meta-grid" style="grid-template-columns:repeat(3,1fr);">';
         rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Frequency</div><div class="detail-meta-value">' + frequencyLabel(rb) + '</div></div>';
-        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (rbReasonText || '\u2014') + '</div></div>';
+        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (rbReasonText ? _escHtml(rbReasonText) : '\u2014') + '</div></div>';
         rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + rbLocHtml + '</div></div>';
         rbDetailHtml += '</div></div>';
 
@@ -3327,7 +3327,7 @@ async function renderSettingsPanel() {
     var isExplicit = entry && entry.explicit;
     var currentTz = isExplicit ? entry.timezone : '';
     html += '<tr>';
-    html += '<td><strong>' + (p.name || p.id) + '</strong></td>';
+    html += '<td><strong>' + _escHtml(p.name || p.id) + '</strong></td>';
     html += '<td><select class="input provider-tz-dropdown" data-provider-id="' + p.id + '" onchange="saveProviderTz(this)">';
     html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice default (' + _practiceTz + ')</option>';
     COMMON_TZS.forEach(function(tz) {
