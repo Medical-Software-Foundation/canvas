@@ -485,3 +485,45 @@ class TestReconcileWhenSchedulableChanges:
             assert _reconcile_if_schedulable_changed({"a", "b"}) == ["sync"]
             assert mock_rec.mock_calls == [call(only={"b", "c"})]
 
+
+
+class TestJobFailuresAreIsolatedAndFindable:
+    def test_one_providers_lead_time_failure_does_not_stop_the_others(self):
+        a, b = MagicMock(provider_id="p-bad"), MagicMock(provider_id="p-ok")
+        for r in (a, b):
+            r.is_active = True
+            r.booking_interval.min_lead_hours = 4
+
+        def build(pid, rules):
+            if pid == "p-bad":
+                raise ValueError("bad data")
+            return ["lead-ok"]
+
+        with patch(f"{CR_MODULE}.get_all_rules", return_value=[a, b]), \
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects", side_effect=build), \
+             patch("provider_availability.engine.job_errors.log") as mock_log:
+            assert _refresh_lead_time_blocks() == ["lead-ok"]
+        assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "lead_time", "p-bad")]
+
+    def test_one_providers_hold_failure_does_not_stop_the_others(self):
+        bad, ok = MagicMock(provider_id="p-bad"), MagicMock(provider_id="p-ok")
+        for b in (bad, ok):
+            b.is_active = True
+            b.hold_type = "same_day"
+
+        def build(pid, blocks):
+            if pid == "p-bad":
+                raise ValueError("bad data")
+            return ["hold-ok"]
+
+        with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[bad, ok]), \
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects", side_effect=build), \
+             patch("provider_availability.engine.job_errors.log") as mock_log:
+            assert _refresh_hold_blocks() == ["hold-ok"]
+        assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "hold_refresh", "p-bad")]
+
+    def test_step_wide_failure_names_all(self):
+        with patch(f"{CR_MODULE}.get_all_rules", side_effect=RuntimeError("cache down")), \
+             patch("provider_availability.engine.job_errors.log") as mock_log:
+            assert _refresh_lead_time_blocks() == []
+        assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "lead_time", "all")]

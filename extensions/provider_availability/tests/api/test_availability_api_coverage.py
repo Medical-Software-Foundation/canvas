@@ -254,6 +254,7 @@ class TestOverrideResyncBranches:
             is_active=True,
         )
 
+    @patch(f"{MODULE}.check_override_overlap", new=lambda *a, **k: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=["rb-fx"])
     @patch(f"{MODULE}.get_all_recurring_blocks")

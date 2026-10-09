@@ -10,6 +10,7 @@ from canvas_sdk.handlers.cron_task import CronTask
 from logger import log
 
 from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
+from provider_availability.engine.job_errors import log_job_failure
 from provider_availability.engine.roles import (
     get_schedulable_provider_ids,
     get_schedulable_staff,
@@ -59,7 +60,7 @@ class CacheRefreshTask(CronTask):
         except Exception:
             # A failed lookup must not stop the lead-time, daily and hold
             # refreshes below, which do not depend on it.
-            log.exception("CacheRefreshTask: schedulable staff lookup failed")
+            log_job_failure("schedulable_staff")
             schedulable = None
         effects = _ensure_provider_calendars(schedulable) if schedulable is not None else []
 
@@ -123,7 +124,7 @@ def _daily_resync() -> list[Effect]:
         set_last_sync_date(today_str)
         log.info("daily_resync: checked %d rules, re-synced %d providers", len(rules), len(providers_to_sync))
     except Exception:
-        log.exception("daily_resync: error re-syncing rules")
+        log_job_failure("daily_resync")
 
     return effects
 
@@ -138,9 +139,13 @@ def _refresh_lead_time_blocks() -> list[Effect]:
         for rule in lead_time_rules(get_all_rules()):
             by_provider.setdefault(rule.provider_id, []).append(rule)
         for provider_id, rules in by_provider.items():
-            effects.extend(build_provider_lead_time_effects(provider_id, rules))
+            # One provider's failure must not stop everyone else's lead time.
+            try:
+                effects.extend(build_provider_lead_time_effects(provider_id, rules))
+            except Exception:
+                log_job_failure("lead_time", provider_id)
     except Exception:
-        log.exception("_refresh_lead_time_blocks: error refreshing lead-time blocks")
+        log_job_failure("lead_time")
     return effects
 
 
@@ -160,9 +165,12 @@ def _refresh_hold_blocks() -> list[Effect]:
             if block.is_active and block.hold_type != "none":
                 by_provider.setdefault(block.provider_id, []).append(block)
         for provider_id, blocks in by_provider.items():
-            effects.extend(build_provider_hold_refresh_effects(provider_id, blocks))
+            try:
+                effects.extend(build_provider_hold_refresh_effects(provider_id, blocks))
+            except Exception:
+                log_job_failure("hold_refresh", provider_id)
     except Exception:
-        log.exception("_refresh_hold_blocks: error refreshing hold blocks")
+        log_job_failure("hold_refresh")
     return effects
 
 
@@ -188,7 +196,7 @@ def _reconcile_if_schedulable_changed(schedulable_ids: set[str]) -> list[Effect]
         # Only the people who gained or lost bookability; everyone else is unchanged.
         return _reconcile_availability_to_roles(only=schedulable_ids ^ set(seen))
     except Exception:
-        log.exception("_reconcile_if_schedulable_changed: error reconciling")
+        log_job_failure("role_reconcile")
         return []
 
 
@@ -203,6 +211,6 @@ def _ensure_provider_calendars(active_providers: list | None = None) -> list[Eff
         if created:
             log.info("ensure_calendars: created %d new Clinic calendars", created)
     except Exception:
-        log.exception("ensure_calendars: error checking/creating calendars")
+        log_job_failure("clinic_calendars")
 
     return effects

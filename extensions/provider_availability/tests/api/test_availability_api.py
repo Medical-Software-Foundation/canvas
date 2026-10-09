@@ -1169,6 +1169,7 @@ class TestOverrideEndpoints:
             is_active=True,
         )
 
+    @patch(f"{MODULE}.check_override_overlap", new=lambda *a, **k: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
@@ -1190,6 +1191,7 @@ class TestOverrideEndpoints:
         assert rule.date_overrides[0].date == date(2026, 4, 9)
         mock_save.assert_called_once_with(rule)
 
+    @patch(f"{MODULE}.check_override_overlap", new=lambda *a, **k: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])

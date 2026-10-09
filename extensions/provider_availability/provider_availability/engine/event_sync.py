@@ -60,6 +60,13 @@ DAY_TO_DAYS_OF_WEEK: dict[str, DaysOfWeek] = {
     "sunday": DaysOfWeek.Sunday,
 }
 
+# How calendar events are drawn. Install rebuilds every provider's events only
+# when this changes, not on every plugin version. Bump it when a change alters
+# the events themselves (titles, times, recurrence, which calendars), then
+# update tests/event_layout_lock.json; tests/test_event_layout.py fails until
+# the lock matches the drawing code.
+EVENT_LAYOUT_VERSION = 1
+
 AVAILABILITY_TITLE = "Available"
 BLOCK_TITLE = "Block"
 LEAD_TIME_TITLE = "Lead Time"

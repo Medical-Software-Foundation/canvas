@@ -129,11 +129,19 @@ Each row is validated for format and required fields, then the staff key is chec
 | `CacheRefreshTask` | CronTask | Every 5 minutes: lead-time blocks, Clinic calendars for newly bookable staff, and re-syncing anyone who gained or lost bookability. Once a day: hold-block rolling window and rules starting or ending. Every 6 hours: cache TTL refresh |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
-| `OnPluginInstalled` | Protocol | Creates missing Clinic calendars; on first install or a new version, re-syncs all rules and blocks to Calendar Events. A redeploy at the same version skips the re-sync |
+| `OnPluginInstalled` | Protocol | Creates missing Clinic calendars; on first install, or when the way events are drawn changes (`EVENT_LAYOUT_VERSION`), re-syncs all rules and blocks to Calendar Events. Other releases and redeploys skip the re-sync |
 | `OnAppointmentCreated` | Protocol | Creates buffer events on Administrative calendar |
 | `OnAppointmentRescheduled` | Protocol | Updates buffer events when appointment is rescheduled |
 | `OnAppointmentCanceled` | Protocol | Removes buffer events when appointment is canceled |
 | `OnAppointmentRestored` | Protocol | Redraws buffer events when a canceled appointment is restored |
+
+### When something fails in the background
+
+The 5-minute job and install keep going when one step or one provider fails, so everyone else still gets their updates. Every such failure logs one line in the same shape, `PA_JOB_FAILED <step> <provider id or "all">`, with the error below it. To find them in Elastic:
+
+```
+FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg, "PA_JOB_FAILED") | KEEP @timestamp, syslog5424_app, syslog5424_msg | LIMIT 50
+```
 
 ## API Endpoints
 

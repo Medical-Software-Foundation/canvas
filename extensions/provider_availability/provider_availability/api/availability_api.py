@@ -52,7 +52,7 @@ from provider_availability.engine.models import (
     ProviderAvailabilityRule,
     RecurringBlock,
 )
-from provider_availability.engine.overlap import check_rule_overlap
+from provider_availability.engine.overlap import check_override_overlap, check_rule_overlap
 from provider_availability.engine.storage import (
     clear_provider_timezone,
     delete_block,
@@ -927,6 +927,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"error": f"No hours scheduled on {weekday_name.title()}s — override not applicable"},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
+        overlap_msg = check_override_overlap(rule, override)
+        if overlap_msg:
+            return [JSONResponse({"error": overlap_msg}, status_code=HTTPStatus.BAD_REQUEST)]
         # Replace existing override for the same date
         rule.date_overrides = [o for o in rule.date_overrides if o.date != override.date]
         rule.date_overrides.append(override)

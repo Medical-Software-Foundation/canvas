@@ -168,7 +168,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark:
@@ -196,7 +196,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
@@ -221,7 +221,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
@@ -246,7 +246,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
@@ -282,7 +282,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[mock_rb]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark, \
@@ -325,7 +325,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"), \
@@ -374,7 +374,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[mock_rb]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=False), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="0.0.2"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="0.0.2"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
@@ -400,7 +400,7 @@ class TestOnPluginInstalled:
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
              patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.is_first_install", return_value=False), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="1.2.3"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="1.2.3"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="1.2.3"), \
              patch(f"{SL_MODULE}.get_all_rules") as mock_rules, \
              patch(f"{SL_MODULE}.sync_provider_availability") as mock_sync, \
@@ -429,7 +429,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=False), \
-             patch(f"{SL_MODULE}._current_plugin_version", return_value="0.0.2"), \
+             patch(f"{SL_MODULE}._event_layout_marker", return_value="0.0.2"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]), \

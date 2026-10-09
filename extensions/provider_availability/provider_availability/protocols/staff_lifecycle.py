@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-import json
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
-from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
 from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
+from provider_availability.engine.job_errors import log_job_failure
 from provider_availability.engine.roles import (
     get_schedulable_provider_ids,
     get_schedulable_staff,
 )
 from provider_availability.engine.event_sync import (
+    EVENT_LAYOUT_VERSION,
     build_block_event_effects,
     build_delete_block_effects,
     build_delete_effects,
@@ -37,13 +36,9 @@ from provider_availability.engine.storage import (
 )
 
 
-def _current_plugin_version() -> str:
-    """Read plugin_version from the packaged manifest (sandbox-safe file read)."""
-    try:
-        return str(json.loads(render_to_string("CANVAS_MANIFEST.json")).get("plugin_version", ""))
-    except Exception:
-        log.exception("OnPluginInstalled: could not read plugin version from manifest")
-        return ""
+def _event_layout_marker() -> str:
+    """What install compares to decide on a full rebuild: the event layout, not the plugin version."""
+    return f"events-{EVENT_LAYOUT_VERSION}"
 
 
 class OnStaffActivated(BaseProtocol):
@@ -142,7 +137,7 @@ class OnPluginInstalled(BaseProtocol):
             effects.extend(calendar_effects)
             cal_created = len(calendar_effects)
         except Exception:
-            log.exception("OnPluginInstalled: failed to check Clinic calendars")
+            log_job_failure("install_clinic_calendars")
         cal_skipped = len(active_staff) - cal_created
 
         log.info(
@@ -154,18 +149,18 @@ class OnPluginInstalled(BaseProtocol):
         # Step 2: Decide whether a full event resync is warranted.
         # A full resync rebuilds every plugin event across all calendars,
         # which is expensive at scale. It's only needed when the plugin is
-        # first installed or when the code that generates events changed
-        # (i.e. a new plugin version). A config-only redeploy at the same
-        # version leaves the existing events correct, so we skip the batch.
+        # first installed or when the way events are drawn changed
+        # (EVENT_LAYOUT_VERSION). Any other release, or a redeploy, leaves
+        # the existing events correct, so we skip the batch.
         first_install = is_first_install()
-        current_version = _current_plugin_version()
+        current_version = _event_layout_marker()
         synced_version = get_synced_version()
         should_full_sync = first_install or synced_version != current_version
 
         if not should_full_sync:
             log.info(
-                "OnPluginInstalled: redeploy at unchanged version %s — skipping full "
-                "resync (existing events already reflect this version)",
+                "OnPluginInstalled: event layout unchanged (%s), skipping full "
+                "resync (existing events already match it)",
                 current_version,
             )
             return effects
@@ -193,7 +188,7 @@ class OnPluginInstalled(BaseProtocol):
             mark_installed()
         log.info(
             "OnPluginInstalled: %s — reconciling plugin events (non-destructive)",
-            "first install" if first_install else f"version change to {current_version}",
+            "first install" if first_install else f"event layout change to {current_version}",
         )
 
         # Step 4: Per-entity reconciliation. We deliberately do NOT sweep every
@@ -227,11 +222,7 @@ class OnPluginInstalled(BaseProtocol):
                 ):
                     lead_time_count += 1
             except Exception:
-                log.exception(
-                    "OnPluginInstalled: failed to sync rule %s for provider %s",
-                    rule.id,
-                    rule.provider_id,
-                )
+                log_job_failure("install_rule", rule.provider_id)
 
         for block in blocks:
             try:
@@ -241,11 +232,7 @@ class OnPluginInstalled(BaseProtocol):
                 effects.extend(build_block_event_effects(block))
                 blocks_synced += 1
             except Exception:
-                log.exception(
-                    "OnPluginInstalled: failed to sync block %s for provider %s",
-                    block.id,
-                    block.provider_id,
-                )
+                log_job_failure("install_block", block.provider_id)
 
         # One pass per provider: blocks sharing a reason, and all holds, share events.
         rb_by_provider: dict[str, list] = {}
@@ -256,10 +243,7 @@ class OnPluginInstalled(BaseProtocol):
                 effects.extend(build_recurring_blocks_resync_effects(provider_rbs))
                 recurring_synced += len(provider_rbs)
             except Exception:
-                log.exception(
-                    "OnPluginInstalled: failed to sync recurring blocks for provider %s",
-                    rb_provider_id,
-                )
+                log_job_failure("install_recurring_blocks", rb_provider_id)
 
         set_synced_version(current_version)
 
