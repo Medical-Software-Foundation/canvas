@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import uuid
 
+from django.db.models import Q
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
 from canvas_sdk.effects.calendar import CalendarType
@@ -118,3 +120,32 @@ def get_admin_calendars(
     return list(
         CalendarModel.objects.filter(title__startswith=provider_name + ": Admin")
     )
+
+
+def missing_clinic_calendar_effects(staff_list: list[Staff]) -> list[Effect]:
+    """Create effects for staff with no provider-level Clinic calendar, found in one query.
+
+    A calendar counts as theirs if it has the deterministic id, the standard
+    "Name: Clinic" title, or their staff key as description on a Clinic title
+    (covers a renamed provider). New calendars get the deterministic id, so two
+    runners creating one at once write the same calendar.
+    """
+    wanted = {
+        str(s.id): (deterministic_calendar_id(str(s.id), CalendarType.Clinic, None), f"{s.full_name}: {CalendarType.Clinic}")
+        for s in staff_list
+    }
+    if not wanted:
+        return []
+    rows = CalendarModel.objects.filter(
+        Q(id__in=[cid for cid, _ in wanted.values()])
+        | Q(title__in=[title for _, title in wanted.values()])
+        | Q(description__in=list(wanted), title__endswith=f": {CalendarType.Clinic}")
+    ).values_list("id", "title", "description")
+    have_ids = {str(r[0]) for r in rows}
+    have_titles = {r[1] for r in rows}
+    have_keys = {r[2] for r in rows if r[1].endswith(f": {CalendarType.Clinic}")}
+    return [
+        CalendarEffect(id=cid, provider=key, type=CalendarType.Clinic, description=key).create()
+        for key, (cid, title) in wanted.items()
+        if cid not in have_ids and title not in have_titles and key not in have_keys
+    ]

@@ -40,6 +40,14 @@ def _admin_page_renders_from_file():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _no_stored_recurring_blocks():
+    """Recurring-block resyncs redraw the provider's other blocks from storage,
+    which needs a running plugin. Default to none stored; tests that care patch it."""
+    with patch("provider_availability.engine.event_sync.get_recurring_blocks_for_provider", return_value=[]):
+        yield
+
+
 class QS(list):
     """A list that answers the queryset calls the plugin makes on query results.
 

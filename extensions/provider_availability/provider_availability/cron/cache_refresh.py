@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from uuid import uuid4
 
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.calendar import Calendar as CalendarEffect
-from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.handlers.cron_task import CronTask
-from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from logger import log
 
+from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
 from provider_availability.engine.roles import (
     get_schedulable_provider_ids,
     get_schedulable_staff,
@@ -110,7 +107,8 @@ def _daily_resync() -> list[Effect]:
         rules = get_all_rules()
         providers_to_sync: set[str] = set()
         for rule in rules:
-            if not (rule.is_active and rule.weekly_schedule):
+            has_schedule = rule.time_windows if rule.recurrence_frequency == "daily" else rule.weekly_schedule
+            if not (rule.is_active and has_schedule):
                 continue
             # Rule just became active today
             if rule.effective_start and rule.effective_start == today:
@@ -187,7 +185,8 @@ def _reconcile_if_schedulable_changed(schedulable_ids: set[str]) -> list[Effect]
         )
         from provider_availability.api.availability_api import _reconcile_availability_to_roles
 
-        return _reconcile_availability_to_roles()
+        # Only the people who gained or lost bookability; everyone else is unchanged.
+        return _reconcile_availability_to_roles(only=schedulable_ids ^ set(seen))
     except Exception:
         log.exception("_reconcile_if_schedulable_changed: error reconciling")
         return []
@@ -199,37 +198,8 @@ def _ensure_provider_calendars(active_providers: list | None = None) -> list[Eff
     try:
         if active_providers is None:
             active_providers = get_schedulable_staff()
-        staff_keys = [str(s.id) for s in active_providers]
-
-        # One query for all existing calendars instead of one per provider.
-        existing_keys = set(
-            CalendarModel.objects.filter(description__in=staff_keys).values_list(
-                "description", flat=True
-            )
-        )
-
-        created = 0
-        for staff in active_providers:
-            staff_key = str(staff.id)
-            if staff_key in existing_keys:
-                continue
-
-            calendar_id = str(uuid4())
-            cal_effect = CalendarEffect(
-                id=calendar_id,
-                provider=staff_key,
-                type=CalendarType.Clinic,
-                description=staff_key,
-            ).create()
-            effects.append(cal_effect)
-            created += 1
-            log.info(
-                "ensure_calendars: created Clinic calendar for %s %s (%s)",
-                staff.first_name,
-                staff.last_name,
-                staff_key,
-            )
-
+        effects.extend(missing_clinic_calendar_effects(active_providers))
+        created = len(effects)
         if created:
             log.info("ensure_calendars: created %d new Clinic calendars", created)
     except Exception:

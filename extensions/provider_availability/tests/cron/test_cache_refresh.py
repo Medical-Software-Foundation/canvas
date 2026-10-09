@@ -160,6 +160,26 @@ class TestDailyResync:
             assert mock_set.mock_calls == [call(today.isoformat())]
             assert result == ["effect1"]
 
+    def test_daily_rule_starting_today_is_synced(self):
+        """Daily rules keep their hours in time_windows and have no weekly schedule."""
+        today = date.today()
+        daily = MagicMock()
+        daily.is_active = True
+        daily.recurrence_frequency = "daily"
+        daily.weekly_schedule = {}
+        daily.time_windows = ["9-5"]
+        daily.effective_start = today
+        daily.effective_end = None
+        daily.provider_id = "p3"
+
+        with patch(f"{CR_MODULE}.get_last_sync_date", return_value=""), \
+             patch(f"{CR_MODULE}.get_all_rules", return_value=[daily]), \
+             patch(f"{CR_MODULE}.get_schedulable_provider_ids", return_value={"p3"}), \
+             patch(f"{CR_MODULE}.sync_provider_availability", return_value=["fx"]) as mock_sync, \
+             patch(f"{CR_MODULE}.set_last_sync_date"):
+            assert _daily_resync() == ["fx"]
+            assert mock_sync.mock_calls == [call("p3", schedulable_ids={"p3"})]
+
     def test_syncs_rule_expiring_yesterday(self):
         today = date.today()
         yesterday = today - timedelta(days=1)
@@ -308,8 +328,10 @@ class TestEnsureProviderCalendars:
     """Test _ensure_provider_calendars."""
 
     def _mock_existing(self, mock_cal, existing_keys):
-        """Configure CalendarModel.objects.filter(...).values_list(...) to return keys."""
-        mock_cal.filter.return_value.values_list.return_value = existing_keys
+        """Existing Clinic calendars, one per staff key, found by description."""
+        mock_cal.filter.return_value.values_list.return_value = [
+            (f"cal-{k}", f"Someone: Clinic", k) for k in existing_keys
+        ]
 
     def test_creates_calendar_for_provider_missing_one(self):
         staff = MagicMock()
@@ -318,18 +340,15 @@ class TestEnsureProviderCalendars:
         staff.last_name = "Smith"
 
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]) as mock_sched, \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
-             patch(f"{CR_MODULE}.uuid4", return_value="new-cal-uuid"):
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             self._mock_existing(mock_cal, [])  # no existing calendars
 
             result = _ensure_provider_calendars()
 
             assert mock_sched.mock_calls == [call()]
             # single bulk lookup, not one query per provider
-            assert mock_cal.mock_calls == [
-                call.filter(description__in=["staff-uuid-1"]),
-                call.filter().values_list("description", flat=True),
-            ]
+            assert mock_cal.filter.call_count == 1
+            assert mock_cal.filter.return_value.values_list.mock_calls == [call("id", "title", "description")]
             assert len(result) == 1
 
     def test_skips_provider_with_existing_calendar(self):
@@ -337,7 +356,7 @@ class TestEnsureProviderCalendars:
         staff.id = "staff-uuid-2"
 
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]), \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal:
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             self._mock_existing(mock_cal, ["staff-uuid-2"])  # already has one
 
             result = _ensure_provider_calendars()
@@ -356,8 +375,7 @@ class TestEnsureProviderCalendars:
         staff_b.last_name = "B"
 
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff_a, staff_b]), \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
-             patch(f"{CR_MODULE}.uuid4", return_value="cal-uuid"):
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             # staff_a has no calendar, staff_b has one
             self._mock_existing(mock_cal, ["staff-b"])
 
@@ -368,7 +386,7 @@ class TestEnsureProviderCalendars:
 
     def test_no_active_providers(self):
         with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal:
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             self._mock_existing(mock_cal, [])
             result = _ensure_provider_calendars()
 
@@ -459,10 +477,11 @@ class TestReconcileWhenSchedulableChanges:
             assert _reconcile_if_schedulable_changed({"a", "b"}) == []
             assert mock_rec.mock_calls == []
 
-    def test_changed_set_rebuilds_availability(self):
-        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=["a"]), \
+    def test_changed_set_rebuilds_only_who_changed(self):
+        """"b" became bookable and "c" stopped; "a" is unchanged and is not re-synced."""
+        with patch(f"{CR_MODULE}.get_seen_schedulable_ids", return_value=["a", "c"]), \
              patch("provider_availability.api.availability_api._reconcile_availability_to_roles",
                    return_value=["sync"]) as mock_rec:
             assert _reconcile_if_schedulable_changed({"a", "b"}) == ["sync"]
-            assert mock_rec.mock_calls == [call()]
+            assert mock_rec.mock_calls == [call(only={"b", "c"})]
 

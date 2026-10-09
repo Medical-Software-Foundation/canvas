@@ -616,8 +616,11 @@ def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None
 
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
         if cal_ids:
-            # Match by converted UTC times across all the provider's Admin calendars
+            # Match by converted UTC times across all the provider's Admin calendars.
+            # One-off events only: a recurring block's series can start at the same time.
+            one_off = Q(recurring_parent_event__isnull=True) & (Q(recurrence__isnull=True) | Q(recurrence=""))
             for evt_id in EventModel.objects.filter(
+                one_off,
                 calendar__id__in=cal_ids,
                 is_cancelled=False,
                 starts_at=block_start_utc,
@@ -627,6 +630,7 @@ def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None
             # Also match by title if time match found nothing (handles TZ edge cases)
             if not effects:
                 for evt_id in EventModel.objects.filter(
+                    one_off,
                     calendar__id__in=cal_ids,
                     is_cancelled=False,
                     title=block_title,
@@ -695,17 +699,6 @@ def delete_provider_lead_time_events(provider_id: str) -> list[Effect]:
     ]
 
 
-def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect]:
-    """Lead-time blocks for one rule's provider, from this rule alone.
-
-    Callers that can see all of a provider's rules should use
-    build_provider_lead_time_effects with every lead-time rule: lead-time
-    events are per provider, so building them rule by rule makes each rule
-    delete the others' events.
-    """
-    return build_provider_lead_time_effects(rule.provider_id, [rule])
-
-
 def lead_time_rules(rules: list[ProviderAvailabilityRule]) -> list[ProviderAvailabilityRule]:
     """The active rules that keep a lead-time window closed."""
     return [r for r in rules if r.is_active and r.booking_interval.min_lead_hours > 0]
@@ -728,6 +721,8 @@ def _lead_intervals_for_rule(
     rule_is_daily = rule.recurrence_frequency == "daily"
     rule_interval = max(1, rule.recurrence_interval)
     while current_date <= end_date:
+        if rule.effective_end is not None and current_date > rule.effective_end:
+            break  # an ended rule keeps no lead-time window open
         override = override_lookup.get(current_date)
         if override is not None:
             if override.is_closed:
@@ -786,19 +781,22 @@ def build_provider_lead_time_effects(
     """
     rules = lead_time_rules(rules)
     if not rules:
-        return []
+        # Lead time turned off or no rules left: clear any Lead Time events still blocking.
+        return delete_provider_lead_time_events(provider_id)
 
     provider_name = resolve_provider_name(provider_id)  # resolve once for both calendar lookups
     calendar_id, cal_effects = get_admin_calendar_id(provider_id, provider_name=provider_name)
     if not calendar_id:
         return []
 
-    # Compute the desired windows in the provider's TZ
-    tz = provider_tz(provider_id)
-    now_local = datetime.now(tz)
-    lead_intervals = _merge_intervals(
-        [iv for rule in rules for iv in _lead_intervals_for_rule(rule, tz, now_local)]
-    )
+    # Each rule's windows in that rule's own timezone when it has one, like its
+    # availability events; otherwise the provider's.
+    default_tz = provider_tz(provider_id)
+    lead_intervals_raw: list[tuple[datetime, datetime]] = []
+    for rule in rules:
+        rule_tz = ZoneInfo(rule.timezone) if rule.timezone else default_tz
+        lead_intervals_raw.extend(_lead_intervals_for_rule(rule, rule_tz, datetime.now(rule_tz)))
+    lead_intervals = _merge_intervals(lead_intervals_raw)
 
     # Check if existing lead-time events are still close enough to skip rebuild
     admin_cal_ids = [c.id for c in get_admin_calendars(provider_id, provider_name)]
@@ -892,16 +890,86 @@ def _block_outside_override(block_windows: list, override_windows: list) -> bool
 # ── Recurring block sync ──────────────────────────────────────────────
 
 
-def build_recurring_block_sync_effects(block: RecurringBlock) -> list[Effect]:
-    """Create recurring weekly Administrative events for a RecurringBlock.
+def build_recurring_block_sync_effects(
+    block: RecurringBlock, previous: RecurringBlock | None = None
+) -> list[Effect]:
+    """Clear and redraw one recurring block's events. Pass the version before an edit as ``previous``."""
+    return build_recurring_blocks_resync_effects([block], [previous] if previous else None)
+
+
+def _recurring_block_title(block: RecurringBlock) -> str:
+    return block.reason if block.reason else "Blocked"
+
+
+def _recurring_event_ids(cal_ids: list, titles: set[str]) -> list[str]:
+    """Ids of recurring events (series and their edited occurrences) with these titles.
+
+    One-off blocks share titles with recurring blocks but never repeat, so they are left alone.
+    """
+    repeating = Q(recurring_parent_event__isnull=False) | (Q(recurrence__isnull=False) & ~Q(recurrence=""))
+    return [
+        str(eid)
+        for eid in EventModel.objects.filter(
+            repeating, calendar__id__in=cal_ids, title__in=sorted(titles), is_cancelled=False
+        ).values_list("id", flat=True)
+    ]
+
+
+def build_recurring_blocks_resync_effects(
+    blocks: list[RecurringBlock],
+    previous: list[RecurringBlock] | None = None,
+    removed_ids: set[str] | None = None,
+) -> list[Effect]:
+    """Clear and redraw recurring block events, once per provider.
+
+    Events can only be matched to a block by title (its reason) and hold
+    events only by their title prefix, so clearing one block clears every
+    block sharing its title. For each provider this deletes the events under
+    every title involved, and every hold event if a hold is involved, once;
+    then it redraws all of the provider's active blocks that use those
+    titles, not just the ones passed in. ``previous`` holds the versions
+    before an edit, so an old reason or an old hold type is cleared too.
+    ``removed_ids`` are blocks being deleted, which are not redrawn.
+    """
+    removed = removed_ids or set()
+    by_provider: dict[str, tuple[list[RecurringBlock], list[RecurringBlock]]] = {}
+    for b in blocks:
+        by_provider.setdefault(b.provider_id, ([], []))[0].append(b)
+    for b in previous or []:
+        by_provider.setdefault(b.provider_id, ([], []))[1].append(b)
+
+    effects: list[Effect] = []
+    for provider_id, (changed, old) in by_provider.items():
+        involved = changed + old
+        titles = {_recurring_block_title(b) for b in involved if b.hold_type == "none"}
+        clear_holds = any(b.hold_type != "none" for b in involved)
+        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+        if cal_ids:
+            if titles:
+                stale = _recurring_event_ids(cal_ids, titles | {RECURRING_BLOCK_TITLE})
+                effects.extend(EventEffect(event_id=eid).delete() for eid in stale)
+            if clear_holds:
+                effects.extend(EventEffect(event_id=eid).delete() for eid in _hold_event_ids(cal_ids))
+
+        current = {b.id: b for b in get_recurring_blocks_for_provider(provider_id)}
+        current.update({b.id: b for b in changed})
+        for block in current.values():
+            if block.id in removed:
+                continue
+            if (clear_holds and block.hold_type != "none") or (
+                block.hold_type == "none" and _recurring_block_title(block) in titles
+            ):
+                effects.extend(_draw_recurring_block_events(block))
+    return effects
+
+
+def _draw_recurring_block_events(block: RecurringBlock) -> list[Effect]:
+    """Create the Administrative events for one RecurringBlock, without clearing anything.
 
     Similar pattern to build_sync_effects but creates blocking events on
     Administrative calendars instead of availability events on Clinic calendars.
     """
     effects: list[Effect] = []
-
-    # Delete old recurring block events first
-    effects.extend(build_delete_recurring_block_effects(block.provider_id, block))
 
     is_daily = block.recurrence_frequency == "daily"
     has_schedule = bool(block.time_windows) if is_daily else bool(block.weekly_schedule)
@@ -1186,70 +1254,23 @@ def build_provider_hold_refresh_effects(
     return effects
 
 
-def build_hold_block_refresh_effects(block: RecurringBlock) -> list[Effect]:
-    """Refresh the hold events for one block's provider, from this block alone."""
-    return build_provider_hold_refresh_effects(block.provider_id, [block])
-
-
-def _rebuild_other_holds(provider_id: str, removed_block_id: str) -> list[Effect]:
-    """Recreate the provider's other hold blocks, whose events a hold cleanup just deleted."""
-    effects: list[Effect] = []
-    for other in get_recurring_blocks_for_provider(provider_id):
-        if other.id != removed_block_id and other.is_active and other.hold_type != "none":
-            effects.extend(_build_hold_block_events(other))
-    return effects
-
-
 def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock | None = None) -> list[Effect]:
-    """Delete recurring block events from the provider's Admin calendars.
+    """Delete a recurring block's events from the provider's Admin calendars.
 
-    If a specific block is given, first try stored event IDs, then fall back
-    to matching by the block's actual title (reason). Also searches for
-    the legacy RECURRING_BLOCK_TITLE to clean up orphaned events.
+    Other blocks that share its title, and the provider's other holds if it
+    is a hold, lose their events in the same cleanup and are redrawn. Without
+    a block, clears events under the legacy RECURRING_BLOCK_TITLE.
     """
-    effects: list[Effect] = []
-
     if block:
-        stored_ids = get_event_ids(block.id)
-        if stored_ids:
-            for eid in stored_ids:
-                effects.append(EventEffect(event_id=eid).delete())
-            log.info("build_delete_recurring_block_effects: block=%s, deleted %d events by stored IDs", block.id, len(effects))
-            # Also clean up any hold block events
-            cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-            if block.hold_type != "none" and cal_ids:
-                effects.extend(EventEffect(event_id=eid).delete() for eid in _hold_event_ids(cal_ids))
-                effects.extend(_rebuild_other_holds(provider_id, block.id))
-            return effects
+        return build_recurring_blocks_resync_effects([], [block], removed_ids={block.id})
 
-        # Fall back: match by the block's actual title AND legacy title
-        title = block.reason if block.reason else "Blocked"
-        titles_to_delete = [title]
-        if RECURRING_BLOCK_TITLE != title:
-            titles_to_delete.append(RECURRING_BLOCK_TITLE)
-        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-        if cal_ids:
-            for evt_id in EventModel.objects.filter(
-                calendar__id__in=cal_ids,
-                title__in=titles_to_delete,
-                is_cancelled=False,
-            ).values_list("id", flat=True):
-                effects.append(EventEffect(event_id=str(evt_id)).delete())
-            # Also clean up hold block events, then restore the provider's other holds
-            if block.hold_type != "none":
-                effects.extend(EventEffect(event_id=eid).delete() for eid in _hold_event_ids(cal_ids))
-                effects.extend(_rebuild_other_holds(provider_id, block.id))
-    else:
-        # No specific block — search by legacy title
-        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-        if cal_ids:
-            for evt_id in EventModel.objects.filter(
-                calendar__id__in=cal_ids,
-                title=RECURRING_BLOCK_TITLE,
-                is_cancelled=False,
-            ).values_list("id", flat=True):
-                effects.append(EventEffect(event_id=str(evt_id)).delete())
-
+    effects: list[Effect] = []
+    cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+    if cal_ids:
+        effects.extend(
+            EventEffect(event_id=eid).delete()
+            for eid in _recurring_event_ids(cal_ids, {RECURRING_BLOCK_TITLE})
+        )
     if effects:
         log.info("build_delete_recurring_block_effects: provider=%s, %d delete effects", provider_id, len(effects))
     return effects

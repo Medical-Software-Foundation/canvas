@@ -166,3 +166,43 @@ class TestGetAdminCalendars:
             result = get_admin_calendars("p1")
 
             assert result == []
+
+
+class TestMissingClinicCalendarEffects:
+    def _staff(self, key, name):
+        s = MagicMock()
+        s.id = key
+        s.full_name = name
+        return s
+
+    def test_one_query_and_only_missing_staff_get_a_calendar(self):
+        from provider_availability.engine.admin_calendar import (
+            deterministic_calendar_id,
+            missing_clinic_calendar_effects,
+        )
+
+        by_id = self._staff("k1", "Ann A")
+        by_title = self._staff("k2", "Bea B")
+        by_description = self._staff("k3", "Renamed C")
+        missing = self._staff("k4", "Dee D")
+        rows = [
+            (deterministic_calendar_id("k1", "Clinic", None), "Old Name: Clinic", ""),
+            ("legacy-2", "Bea B: Clinic", ""),
+            ("legacy-3", "Cee C: Clinic", "k3"),
+            ("admin-4", "Dee D: Administrative", "k4"),  # an Admin calendar is not a Clinic one
+        ]
+        with patch(f"{AC_MODULE}.CalendarModel.objects") as mock_cal:
+            mock_cal.filter.return_value.values_list.return_value = rows
+            effects = missing_clinic_calendar_effects([by_id, by_title, by_description, missing])
+
+        assert mock_cal.filter.call_count == 1
+        assert len(effects) == 1
+        assert '"description": "k4"' in effects[0].payload
+        assert deterministic_calendar_id("k4", "Clinic", None) in effects[0].payload
+
+    def test_no_staff_no_query(self):
+        from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
+
+        with patch(f"{AC_MODULE}.CalendarModel.objects") as mock_cal:
+            assert missing_clinic_calendar_effects([]) == []
+        assert mock_cal.mock_calls == []

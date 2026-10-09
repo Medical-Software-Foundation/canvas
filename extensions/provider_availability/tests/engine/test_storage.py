@@ -337,6 +337,17 @@ class TestTTLRefresh:
 
         assert call(SCHEDULABLE_SEEN_KEY, ["a", "b"], timeout_seconds=CACHE_TTL_SECONDS) in patch_cache.set.mock_calls
 
+    def test_refresh_renews_the_synced_version(self, patch_cache):
+        """If this lapsed, the next same-version redeploy would rebuild every event."""
+        from provider_availability.engine.storage import SYNCED_VERSION_KEY, set_synced_version
+
+        set_synced_version("0.23.20")
+        patch_cache.set.reset_mock()
+
+        refresh_all_ttls()
+
+        assert call(SYNCED_VERSION_KEY, "0.23.20", timeout_seconds=CACHE_TTL_SECONDS) in patch_cache.set.mock_calls
+
     def test_refresh_cleans_stale_keys(self, patch_cache):
         """If a cached rule has expired (returns None), it should be removed from the index."""
         # Manually set up a stale index entry

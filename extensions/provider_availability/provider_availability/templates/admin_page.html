@@ -51,7 +51,7 @@
         <div class="ep-foot">
           <span class="ep-count" id="ep-count"></span>
           <button class="btn" onclick="closeExpiredPanel()">Close</button>
-          <button class="btn" onclick="snoozeExpired()">Ask again in 30 days</button>
+          <button class="btn" id="ep-snooze" onclick="snoozeExpired(true)" disabled>Ask again in 30 days</button>
           <button class="btn btn-danger" id="ep-remove" onclick="removeExpired()" disabled>Remove selected</button>
         </div>
       </div>

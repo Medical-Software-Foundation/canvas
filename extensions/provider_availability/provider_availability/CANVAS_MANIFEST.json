@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.23.19",
+    "plugin_version": "0.23.20",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {
@@ -98,6 +98,15 @@
             {
                 "class": "provider_availability.protocols.appointment_buffer:OnAppointmentCanceled",
                 "description": "Removes buffer events from Administrative calendar when appointment is canceled",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Calendar", "Event"]
+                }
+            },
+            {
+                "class": "provider_availability.protocols.appointment_buffer:OnAppointmentRestored",
+                "description": "Redraws buffer events on Administrative calendar when a canceled appointment is restored",
                 "data_access": {
                     "event": "",
                     "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],

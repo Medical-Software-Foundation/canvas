@@ -68,7 +68,7 @@ Until you save a list, every staff member with a Provider role type is schedulab
 - **Calendar Sync**: Syncs rules and blocks to Canvas Calendar Events (Clinic = available, Administrative = blocked).
 - **Hold Types**: Recurring blocks with same-day or next-day hold release on a rolling 30-day window.
 - **Your availability first**: The Availability tab shows the signed-in provider's own row in a "Your availability" section, above "Other providers". The provider filter and **Save as my view** apply only to other providers. The filter starts with every provider checked; **Select All** checks or unchecks everyone, and past 3 picks the field shows a count ("All providers", "12 of 15 providers"). Saving with everyone checked saves "everyone", so providers added later appear too. In every multi-select field, typing searches the list and **Select all matches** picks just the names showing; the provider, location and visit type fields show a count instead of one chip per name once more than 3 are picked. Expired rules, blocks, holds and date overrides are hidden until **Show expired** is clicked. Once items have been over for 30 days, a banner counts them for the providers the viewer can edit. **Review** opens a list of those items to pick from and **Remove selected**; **Ask again in 30 days** hides the items listed at that moment, so anything that ends later still brings the banner back. Removing drops items from the plugin's lists; the calendar events they created stay in Canvas.
-- **Appointment Buffers**: Pre/post buffer events on Administrative calendars for each patient appointment, drawn from the availability rule covering that appointment's day, time, and location. A rescheduled appointment's buffers move with it and follow the rule for its new day; a canceled appointment's buffers are removed. Schedule events with no patient (lunch, meetings) never get buffers.
+- **Appointment Buffers**: Pre/post buffer events on Administrative calendars for each patient appointment, drawn from the availability rule covering that appointment's day, time, and location. A rescheduled appointment's buffers move with it and follow the rule for its new day; a canceled appointment's buffers are removed, and come back if it is restored. Schedule events with no patient (lunch, meetings) never get buffers.
 - **Timezone Support**: Practice-level default with per-provider overrides; all times stored UTC internally.
 - **Configurable Schedulable Roles**: Choose which staff roles (by internal code, including non-clinical roles) can be scheduled, from the Settings tab. See [Schedulable roles](#schedulable-roles).
 - **Cache-backed Storage**: Rules stored in plugin cache with TTL refresh.
@@ -126,13 +126,14 @@ Each row is validated for format and required fields, then the staff key is chec
 | `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, and admin UI/asset serving |
 | `CSVImportAPI` | SimpleAPI | Staff-session endpoints for the CSV bulk import (validate / commit / template) |
 | `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |
-| `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window (every 5 min) |
+| `CacheRefreshTask` | CronTask | Every 5 minutes: lead-time blocks, Clinic calendars for newly bookable staff, and re-syncing anyone who gained or lost bookability. Once a day: hold-block rolling window and rules starting or ending. Every 6 hours: cache TTL refresh |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
-| `OnPluginInstalled` | Protocol | Full sync of all cached rules/blocks to Calendar Events on install and redeploy |
+| `OnPluginInstalled` | Protocol | Creates missing Clinic calendars; on first install or a new version, re-syncs all rules and blocks to Calendar Events. A redeploy at the same version skips the re-sync |
 | `OnAppointmentCreated` | Protocol | Creates buffer events on Administrative calendar |
 | `OnAppointmentRescheduled` | Protocol | Updates buffer events when appointment is rescheduled |
 | `OnAppointmentCanceled` | Protocol | Removes buffer events when appointment is canceled |
+| `OnAppointmentRestored` | Protocol | Redraws buffer events when a canceled appointment is restored |
 
 ## API Endpoints
 

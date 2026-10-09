@@ -598,6 +598,7 @@ class TestGetAvailableSlotsForProvider:
         mock_event = MagicMock()
         mock_event.starts_at = datetime(2026, 3, 9, 10, 0)
         mock_event.ends_at = datetime(2026, 3, 9, 11, 0)
+        mock_event.recurrence = ""
 
         with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
              patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": "Dr. Jane Doe"}), \
@@ -656,6 +657,7 @@ class TestGetAvailableSlotsForProvider:
         foreign_event = MagicMock()
         foreign_event.starts_at = datetime(2026, 3, 9, 10, 0)
         foreign_event.ends_at = datetime(2026, 3, 9, 11, 0)
+        foreign_event.recurrence = ""
 
         with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
              patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": "Dr. Jane Doe"}), \
@@ -698,3 +700,44 @@ class TestGetAvailableSlotsForProvider:
                 now=datetime(2026, 3, 1, 0, 0),
             )
             assert slots[0].start < slots[1].start
+
+
+class TestRepeatingEventOccurrences:
+    """A series' row holds its first occurrence; later ones must block too."""
+
+    def _event(self, start, end, recurrence, until=None):
+        e = MagicMock()
+        e.starts_at, e.ends_at, e.recurrence, e.recurrence_ends_at = start, end, recurrence, until
+        return e
+
+    def test_weekly_lunch_blocks_a_later_week(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        lunch = self._event(datetime(2026, 1, 5, 12), datetime(2026, 1, 5, 13), "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
+        got = _occurrences(lunch, datetime(2026, 3, 9), datetime(2026, 3, 10))
+        assert got == [(datetime(2026, 3, 9, 12), datetime(2026, 3, 9, 13))]
+
+    def test_every_other_week_skips_the_off_week(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        biweekly = self._event(datetime(2026, 1, 5, 12), datetime(2026, 1, 5, 13), "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO")
+        assert _occurrences(biweekly, datetime(2026, 1, 12), datetime(2026, 1, 13)) == []
+        assert _occurrences(biweekly, datetime(2026, 1, 19), datetime(2026, 1, 20)) == [
+            (datetime(2026, 1, 19, 12), datetime(2026, 1, 19, 13))
+        ]
+
+    def test_daily_series_stops_at_its_end(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        daily = self._event(datetime(2026, 3, 1, 9), datetime(2026, 3, 1, 10), "FREQ=DAILY;INTERVAL=1",
+                            until=datetime(2026, 3, 3, 10))
+        got = _occurrences(daily, datetime(2026, 3, 1), datetime(2026, 3, 10))
+        assert [s.day for s, _ in got] == [1, 2, 3]
+
+    def test_one_off_is_returned_as_is(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        once = self._event(datetime(2026, 3, 9, 10), datetime(2026, 3, 9, 11), "")
+        assert _occurrences(once, datetime(2026, 3, 9), datetime(2026, 3, 10)) == [
+            (datetime(2026, 3, 9, 10), datetime(2026, 3, 9, 11))
+        ]

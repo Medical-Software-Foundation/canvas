@@ -19,6 +19,7 @@ from provider_availability.protocols.appointment_buffer import (
     OnAppointmentCanceled,
     OnAppointmentCreated,
     OnAppointmentRescheduled,
+    OnAppointmentRestored,
     _create_buffer_effects,
     _delete_buffer_effects,
     _buffer_minutes,
@@ -27,6 +28,7 @@ from provider_availability.protocols.appointment_buffer import (
     _on_appointment_canceled,
     _on_appointment_created,
     _on_appointment_rescheduled,
+    _on_appointment_restored,
 )
 
 
@@ -457,6 +459,30 @@ class TestOnAppointmentCreatedOwnership:
             assert from_rescheduled == ["gone", "drawn"]
             assert mock_create.mock_calls == [call(replacement)]
             assert mock_delete.mock_calls == [call(previous)]
+
+
+class TestOnAppointmentRestored:
+    def test_redraws_buffers_even_for_a_rescheduled_replacement(self):
+        appt = _future_appt()
+        appt.appointment_rescheduled_from = MagicMock()
+
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=appt), \
+             patch(f"{BUFFER_MODULE}._create_buffer_effects", side_effect=lambda a: ["drawn"]) as mock_create:
+            assert _on_appointment_restored("appt-1") == ["drawn"]
+            assert mock_create.mock_calls == [call(appt)]
+
+    def test_missing_appointment_does_nothing(self):
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=None), \
+             patch(f"{BUFFER_MODULE}._create_buffer_effects") as mock_create:
+            assert _on_appointment_restored("appt-1") == []
+            assert mock_create.mock_calls == []
+
+    def test_handler_delegates(self):
+        mock_event = MagicMock()
+        mock_event.target.id = "appt-4"
+        with patch(f"{BUFFER_MODULE}._on_appointment_restored", return_value=[]) as mock_fn:
+            assert OnAppointmentRestored(mock_event).compute() == []
+            assert mock_fn.mock_calls == [call("appt-4")]
 
 
 class TestOnAppointmentCanceled:

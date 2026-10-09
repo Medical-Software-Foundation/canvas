@@ -38,8 +38,8 @@ from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_block_effects,
     build_delete_recurring_block_effects,
-    build_hold_block_refresh_effects,
-    build_lead_time_block_effects,
+    build_provider_hold_refresh_effects,
+    build_provider_lead_time_effects,
     build_recurring_block_sync_effects,
 )
 from provider_availability.engine.models import BookingInterval
@@ -438,7 +438,7 @@ class TestBuildLeadTimeOverrideBranches:
             mock_datetime.combine = datetime.combine
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Closed override on the only in-window day -> no lead blocks
         assert result == []
@@ -480,7 +480,7 @@ class TestBuildLeadTimeOverrideBranches:
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
             mock_event_effect.return_value.create.return_value = MagicMock()
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
             # block is intersection of [10:00, 14:00] with override [9,17] = [10,14]
             init_call = mock_event_effect.call_args_list[0]
@@ -519,7 +519,7 @@ class TestBuildLeadTimeOverrideBranches:
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
             mock_event_effect.return_value.create.return_value = MagicMock()
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
             init_call = mock_event_effect.call_args_list[0]
             assert init_call.kwargs["title"] == "Lead Time"
@@ -1137,86 +1137,10 @@ class TestBuildHoldBlockRefreshEffects:
             mock_event_effect.return_value.create.return_value = MagicMock()
             mock_event_effect.return_value.delete.return_value = MagicMock()
 
-            result = build_hold_block_refresh_effects(block)
+            result = build_provider_hold_refresh_effects(block.provider_id, [block])
 
         # One query covers every hold title prefix
         assert mock_event_objects.filter.call_count == 1
         # 1 delete (existing) + 1 create (03-03) = 2
         assert len(result) == 2
 
-
-# ── build_delete_recurring_block_effects: hold cleanup (1069-1076, 1093-1099) ──
-
-
-class TestBuildDeleteRecurringBlockHoldCleanup:
-    @patch(f"{MODULE}.get_recurring_blocks_for_provider", new=lambda _pid: [])
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_plus_hold_cleanup(
-        self, mock_get_ids, mock_get_admin_cals
-    ):
-        """Stored-ID path also cleans up hold events when hold_type != none (lines 1068-1076)."""
-        mock_get_ids.return_value = ["stored-1", "stored-2"]
-
-        mock_cal = MagicMock()
-        mock_cal.id = "admin-cal-1"
-        mock_get_admin_cals.return_value = [mock_cal]
-
-        hold_evt = MagicMock()
-        hold_evt.id = "hold-evt-1"
-
-        block = RecurringBlock(
-            id="rb-1",
-            provider_id=PROVIDER_ID,
-            reason="Hold",
-            hold_type="same_day",
-        )
-
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = QS([hold_evt])
-
-            result = build_delete_recurring_block_effects(PROVIDER_ID, block)
-
-        assert mock_get_ids.mock_calls == [call(block.id)]
-        # 2 stored-ID deletes + 1 hold-event delete = 3
-        assert len(result) == 3
-        assert mock_event_objects.filter.call_count == 1
-
-    @patch(f"{MODULE}.get_recurring_blocks_for_provider", new=lambda _pid: [])
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_title_fallback_plus_hold_cleanup(
-        self, mock_get_ids, mock_get_admin_cals
-    ):
-        """Title-fallback path also cleans up hold events when hold_type != none (lines 1092-1099)."""
-        mock_get_ids.return_value = []  # no stored IDs -> title fallback
-
-        mock_cal = MagicMock()
-        mock_cal.id = "admin-cal-1"
-        mock_get_admin_cals.return_value = [mock_cal]
-
-        title_evt = MagicMock()
-        title_evt.id = "title-evt-1"
-        hold_evt = MagicMock()
-        hold_evt.id = "hold-evt-1"
-
-        block = RecurringBlock(
-            id="rb-1",
-            provider_id=PROVIDER_ID,
-            reason="Hold",
-            hold_type="next_day",
-        )
-
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            # First filter = title__in match, then one query for all hold prefixes.
-            mock_event_objects.filter.side_effect = [QS([title_evt]), QS([hold_evt])]
-
-            result = build_delete_recurring_block_effects(PROVIDER_ID, block)
-
-        # title match uses title__in with reason + legacy
-        title_call = mock_event_objects.filter.call_args_list[0]
-        assert title_call.kwargs["title__in"] == ["Hold", RECURRING_BLOCK_TITLE]
-        # 1 title delete + 1 hold delete = 2
-        assert len(result) == 2
-        # 1 title query + N prefix queries
-        assert mock_event_objects.filter.call_count == 2

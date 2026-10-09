@@ -26,10 +26,9 @@ class TestOnStaffActivated:
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
              patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"p1"}) as mock_sched, \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
-            mock_cal.filter.return_value.first.return_value = None
-            mock_cal.for_calendar_name.return_value.first.return_value = None
+            mock_cal.filter.return_value.values_list.return_value = []
 
             result = handler.compute()
 
@@ -67,10 +66,9 @@ class TestOnStaffActivated:
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
              patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"cc1"}), \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
-            mock_cal.filter.return_value.first.return_value = None
-            mock_cal.for_calendar_name.return_value.first.return_value = None
+            mock_cal.filter.return_value.values_list.return_value = []
 
             result = handler.compute()
 
@@ -89,9 +87,9 @@ class TestOnStaffActivated:
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
              patch(f"{SL_MODULE}.get_schedulable_provider_ids", return_value={"p1"}), \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
-            mock_cal.for_calendar_name.return_value.first.return_value = MagicMock()
+            mock_cal.filter.return_value.values_list.return_value = [("cal-1", "Jane Doe: Clinic", "")]
 
             result = handler.compute()
 
@@ -165,7 +163,7 @@ class TestOnPluginInstalled:
         handler = OnPluginInstalled(mock_event)
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
@@ -193,7 +191,7 @@ class TestOnPluginInstalled:
         staff1.last_name = "Doe"
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff1]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal, \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
@@ -201,10 +199,8 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}._current_plugin_version", return_value="1.0"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
-             patch(f"{SL_MODULE}.mark_installed"), \
-             patch(f"{SL_MODULE}.deterministic_calendar_id", return_value="new-cal-id"):
-            mock_cal.filter.return_value.first.return_value = None
-            mock_cal.for_calendar_name.return_value.first.return_value = None
+             patch(f"{SL_MODULE}.mark_installed"):
+            mock_cal.filter.return_value.values_list.return_value = []
 
             result = handler.compute()
 
@@ -220,7 +216,7 @@ class TestOnPluginInstalled:
         staff1.full_name = "Jane Doe"
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff1]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal, \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
@@ -229,7 +225,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
-            mock_cal.for_calendar_name.return_value.first.return_value = MagicMock()
+            mock_cal.filter.return_value.values_list.return_value = [("cal-1", "Jane Doe: Clinic", "")]
 
             result = handler.compute()
 
@@ -245,7 +241,7 @@ class TestOnPluginInstalled:
         staff1.full_name = "Jane Doe"
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff1]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects") as mock_cal, \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
@@ -254,7 +250,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value=""), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.mark_installed"):
-            mock_cal.for_calendar_name.side_effect = Exception("DB error")
+            mock_cal.filter.side_effect = Exception("DB error")
 
             result = handler.compute()
 
@@ -281,7 +277,7 @@ class TestOnPluginInstalled:
         sched_staff.id = "p1"
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[sched_staff]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[mock_rb]), \
@@ -294,7 +290,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"]) as mock_lead, \
              patch(f"{SL_MODULE}.build_delete_block_effects", return_value=["del-block-fx"]) as mock_del_block, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=["block-fx"]) as mock_block_fx, \
-             patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"]) as mock_rb_fx:
+             patch(f"{SL_MODULE}.build_recurring_blocks_resync_effects", return_value=["rb-fx"]) as mock_rb_fx:
 
             result = handler.compute()
 
@@ -306,7 +302,7 @@ class TestOnPluginInstalled:
             # then recreates — never a blanket calendar sweep.
             assert mock_del_block.mock_calls == [call("p1", mock_block)]
             assert mock_block_fx.mock_calls == [call(mock_block)]
-            assert mock_rb_fx.mock_calls == [call(mock_rb)]
+            assert mock_rb_fx.mock_calls == [call([mock_rb])]
             assert "sync-fx" in result
             assert "lead-fx" in result
             assert "del-block-fx" in result
@@ -324,7 +320,7 @@ class TestOnPluginInstalled:
         mock_rule.booking_interval.min_lead_hours = 0
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
@@ -373,7 +369,7 @@ class TestOnPluginInstalled:
         sched_staff.id = "p1"
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[sched_staff]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[mock_rb]), \
@@ -385,7 +381,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.build_provider_lead_time_effects", return_value=[]) as mock_lead, \
              patch(f"{SL_MODULE}.build_delete_block_effects", return_value=[]) as mock_del_block, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=[]) as mock_block_fx, \
-             patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=[]) as mock_rb_fx:
+             patch(f"{SL_MODULE}.build_recurring_blocks_resync_effects", return_value=[]) as mock_rb_fx:
 
             handler.compute()
 
@@ -394,7 +390,7 @@ class TestOnPluginInstalled:
             mock_lead.assert_called_once_with("p1", [mock_rule])
             mock_del_block.assert_called_once_with("p1", mock_block)
             mock_block_fx.assert_called_once_with(mock_block)
-            mock_rb_fx.assert_called_once_with(mock_rb)
+            mock_rb_fx.assert_called_once_with([mock_rb])
 
     def test_redeploy_same_version_skips_full_sync(self):
         """A config-only redeploy at the same version must NOT rebuild events."""
@@ -402,7 +398,7 @@ class TestOnPluginInstalled:
         handler = OnPluginInstalled(mock_event)
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.is_first_install", return_value=False), \
              patch(f"{SL_MODULE}._current_plugin_version", return_value="1.2.3"), \
              patch(f"{SL_MODULE}.get_synced_version", return_value="1.2.3"), \
@@ -428,7 +424,7 @@ class TestOnPluginInstalled:
         mock_rule.booking_interval.min_lead_hours = 24
 
         with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
-             patch(f"{SL_MODULE}.CalendarModel.objects"), \
+             patch("provider_availability.engine.admin_calendar.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \

@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data import Event
+from django.db.models import Q
 
 from provider_availability.engine.models import (
     AvailableSlot,
@@ -314,16 +315,66 @@ def _get_schedule_event_blocks(
     if not provider_name:
         return []
 
+    # One-off events that overlap the range, plus repeating series that started
+    # before its end and have not finished before its start; a series' row holds
+    # only its first occurrence, so the later ones are expanded here.
+    repeating = Q(recurrence__isnull=False) & ~Q(recurrence="")
+    still_running = Q(recurrence_ends_at__isnull=True) | Q(recurrence_ends_at__gt=start)
     events = Event.objects.filter(
+        Q(ends_at__gt=start) | (repeating & still_running),
         calendar__title__startswith=provider_name + ":",
         starts_at__lt=end,
-        ends_at__gt=start,
         is_cancelled=False,
     ).exclude(
         calendar__title__startswith=provider_name + ": Clinic",
         title=AVAILABILITY_TITLE,
     )
-    return [(to_provider_naive(e.starts_at, provider_id), to_provider_naive(e.ends_at, provider_id)) for e in events]
+    return [
+        (to_provider_naive(s, provider_id), to_provider_naive(e, provider_id))
+        for event in events
+        for s, e in _occurrences(event, start, end)
+    ]
+
+
+_BYDAY = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+
+def _occurrences(event: Event, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+    """Occurrences of an event that overlap [start, end).
+
+    Handles the recurrences Canvas events use (FREQ=DAILY or WEEKLY, INTERVAL,
+    BYDAY). Occurrences step in UTC from the series start, and an occurrence
+    moved or removed on its own is still counted, so this can over-block but
+    never under-block.
+    """
+    if not event.recurrence:
+        return [(event.starts_at, event.ends_at)]
+    parts = dict(p.split("=", 1) for p in event.recurrence.split(";") if "=" in p)
+    interval = max(1, int(parts.get("INTERVAL") or 1))
+    length = event.ends_at - event.starts_at
+    stop = min(end, event.recurrence_ends_at) if event.recurrence_ends_at else end
+    first = event.starts_at
+
+    if parts.get("FREQ") == "DAILY":
+        step, offsets = timedelta(days=interval), [timedelta(0)]
+    elif parts.get("FREQ") == "WEEKLY":
+        days = [_BYDAY[d] for d in parts.get("BYDAY", "").split(",") if d in _BYDAY] or [first.weekday()]
+        step = timedelta(weeks=interval)
+        offsets = sorted(timedelta(days=(d - first.weekday()) % 7) for d in days)
+    else:
+        return [(event.starts_at, event.ends_at)]
+
+    # Skip whole periods that end before the range starts.
+    skip = max(0, int((start - length - first) / step))
+    period = first + skip * step
+    found: list[tuple[datetime, datetime]] = []
+    while period < stop:
+        for offset in offsets:
+            occ = period + offset
+            if first <= occ < stop and occ + length > start:
+                found.append((occ, occ + length))
+        period += step
+    return found
 
 
 def _build_blocked_intervals(

@@ -5,16 +5,13 @@ from __future__ import annotations
 import json
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.calendar import Calendar as CalendarEffect
-from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.templates import render_to_string
-from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
-from provider_availability.engine.admin_calendar import deterministic_calendar_id
+from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
 from provider_availability.engine.roles import (
     get_schedulable_provider_ids,
     get_schedulable_staff,
@@ -24,7 +21,7 @@ from provider_availability.engine.event_sync import (
     build_delete_block_effects,
     build_delete_effects,
     build_provider_lead_time_effects,
-    build_recurring_block_sync_effects,
+    build_recurring_blocks_resync_effects,
     sync_provider_availability,
 )
 from provider_availability.engine.storage import (
@@ -74,37 +71,14 @@ class OnStaffActivated(BaseProtocol):
             )
             return []
 
-        provider_name = staff.full_name
-        calendar_id = deterministic_calendar_id(staff_key, CalendarType.Clinic, None)
-        existing = (
-            CalendarModel.objects.filter(id=calendar_id).first()
-            or CalendarModel.objects.for_calendar_name(
-                provider_name=provider_name,
-                calendar_type=CalendarType.Clinic,
-                location=None,
-            ).first()
-        )
-        if existing:
-            log.info(
-                "OnStaffActivated: Clinic calendar already exists for %s %s",
-                staff.first_name,
-                staff.last_name,
-            )
-            return []
-
-        cal_effect = CalendarEffect(
-            id=calendar_id,
-            provider=staff_key,
-            type=CalendarType.Clinic,
-            description=staff_key,
-        ).create()
-
+        effects = missing_clinic_calendar_effects([staff])
         log.info(
-            "OnStaffActivated: created Clinic calendar for %s %s",
+            "OnStaffActivated: %s Clinic calendar for %s %s",
+            "created" if effects else "already has a",
             staff.first_name,
             staff.last_name,
         )
-        return [cal_effect]
+        return effects
 
 
 class OnStaffDeactivated(BaseProtocol):
@@ -159,47 +133,17 @@ class OnPluginInstalled(BaseProtocol):
         effects: list[Effect] = []
 
         # Step 1: Create Clinic calendars for all active providers
-        cal_created = 0
-        cal_skipped = 0
         active_staff = get_schedulable_staff()
         log.info("OnPluginInstalled: checking %d schedulable staff for Clinic calendars", len(active_staff))
-
-        for staff in active_staff:
-            try:
-                staff_key = str(staff.id)
-                provider_name = staff.full_name
-                calendar_id = deterministic_calendar_id(staff_key, CalendarType.Clinic, None)
-                existing = (
-                    CalendarModel.objects.filter(id=calendar_id).first()
-                    or CalendarModel.objects.for_calendar_name(
-                        provider_name=provider_name,
-                        calendar_type=CalendarType.Clinic,
-                        location=None,
-                    ).first()
-                )
-
-                if existing:
-                    cal_skipped += 1
-                    continue
-
-                cal_effect = CalendarEffect(
-                    id=calendar_id,
-                    provider=staff_key,
-                    type=CalendarType.Clinic,
-                    description=staff_key,
-                ).create()
-                effects.append(cal_effect)
-                cal_created += 1
-                log.info(
-                    "OnPluginInstalled: created Clinic calendar for %s %s",
-                    staff.first_name,
-                    staff.last_name,
-                )
-            except Exception:
-                log.exception(
-                    "OnPluginInstalled: failed to create calendar for staff %s",
-                    staff.id,
-                )
+        # One query for everyone, not two per staff member.
+        cal_created = 0
+        try:
+            calendar_effects = missing_clinic_calendar_effects(active_staff)
+            effects.extend(calendar_effects)
+            cal_created = len(calendar_effects)
+        except Exception:
+            log.exception("OnPluginInstalled: failed to check Clinic calendars")
+        cal_skipped = len(active_staff) - cal_created
 
         log.info(
             "OnPluginInstalled: calendars created=%d, skipped=%d",
@@ -303,15 +247,18 @@ class OnPluginInstalled(BaseProtocol):
                     block.provider_id,
                 )
 
+        # One pass per provider: blocks sharing a reason, and all holds, share events.
+        rb_by_provider: dict[str, list] = {}
         for rb in recurring_blocks:
+            rb_by_provider.setdefault(rb.provider_id, []).append(rb)
+        for rb_provider_id, provider_rbs in rb_by_provider.items():
             try:
-                effects.extend(build_recurring_block_sync_effects(rb))
-                recurring_synced += 1
+                effects.extend(build_recurring_blocks_resync_effects(provider_rbs))
+                recurring_synced += len(provider_rbs)
             except Exception:
                 log.exception(
-                    "OnPluginInstalled: failed to sync recurring block %s for provider %s",
-                    rb.id,
-                    rb.provider_id,
+                    "OnPluginInstalled: failed to sync recurring blocks for provider %s",
+                    rb_provider_id,
                 )
 
         set_synced_version(current_version)

@@ -88,6 +88,15 @@ class OnAppointmentCanceled(BaseProtocol):
         return _on_appointment_canceled(self.event.target.id)
 
 
+class OnAppointmentRestored(BaseProtocol):
+    """Redraw buffer events when a canceled appointment is restored."""
+
+    RESPONDS_TO = EventType.Name(EventType.APPOINTMENT_RESTORED)
+
+    def compute(self) -> list[Effect]:
+        return _on_appointment_restored(self.event.target.id)
+
+
 def _load_appointment(appointment_id: str) -> Appointment | None:
     """Fetch an appointment, skipping records staff marked entered-in-error.
 
@@ -433,4 +442,20 @@ def _on_appointment_rescheduled(appointment_id: str) -> list[Effect]:
         "BUFFER: rescheduled appt %s, replacement=%s, %d effects",
         appointment_id, replacement.id if replacement else None, len(effects),
     )
+    return effects
+
+
+def _on_appointment_restored(appointment_id: str) -> list[Effect]:
+    """Redraw the buffers that canceling removed.
+
+    Unlike a new booking, a restored appointment owns its buffers even if it
+    replaced another: the reschedule that drew them is long over, and the
+    cancel removed them.
+    """
+    appt = _load_appointment(appointment_id)
+    if appt is None:
+        return []
+
+    effects = _create_buffer_effects(appt)
+    log.info("BUFFER: restored appt %s, %d effects", appointment_id, len(effects))
     return effects

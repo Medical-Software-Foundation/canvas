@@ -73,434 +73,89 @@ def _make_form_handler(method: str, path: str, body: dict) -> AvailabilityAPI:
 # ── _do_dispatch routing ──────────────────────────────────────────────
 
 
+_ROUTES = [
+    ("POST", "rules", "create_or_update_rule", {}),
+    ("PUT", "rules", "update_rule_group", {}),
+    ("DELETE", "rules/p1/r1", "delete_rule", {"provider_id": "p1", "rule_id": "r1"}),
+    ("DELETE", "rules/p1", "delete_provider_rules", {"provider_id": "p1"}),
+    ("POST", "rules/p1/r1/overrides", "add_override", {"provider_id": "p1", "rule_id": "r1"}),
+    ("DELETE", "rules/p1/r1/overrides/2026-05-01", "remove_override",
+     {"provider_id": "p1", "rule_id": "r1", "override_date": "2026-05-01"}),
+    ("POST", "blocks", "create_block", {}),
+    ("PUT", "blocks", "update_block", {}),
+    ("DELETE", "blocks/p1/b1", "delete_block_endpoint", {"provider_id": "p1", "block_id": "b1"}),
+    ("POST", "recurring-blocks", "create_recurring_block", {}),
+    ("PUT", "recurring-blocks", "update_recurring_block", {}),
+    ("DELETE", "recurring-blocks/p1/rb1", "delete_recurring_block_endpoint", {"provider_id": "p1", "block_id": "rb1"}),
+    ("PUT", "timezone", "set_timezone", {}),
+    ("PUT", "provider-timezone", "set_provider_tz", {}),
+    ("DELETE", "provider-timezone/p1", "clear_provider_tz", {"provider_id": "p1"}),
+    ("PUT", "provider-timezones/bulk", "set_provider_tz_bulk", {}),
+    ("PUT", "roles", "set_roles", {}),
+    ("PUT", "my-view", "save_saved_view", {}),
+    ("POST", "expired/remove", "remove_expired_items", {}),
+    ("POST", "expired/snooze", "snooze_expired_items", {}),
+]
+
+
 class TestDoDispatch:
-    @patch(f"{MODULE}.get_rules_for_provider", new=lambda _pid: [])
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_rule")
-    @patch(f"{MODULE}.check_rule_overlap", return_value="")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    def test_post_rules(self, mock_sync, mock_overlap, mock_save, mock_access):
+    """The backup form path runs the same route the page's fetch() would, with the form's body and path."""
+
+    @pytest.mark.parametrize("method,path,route,params", _ROUTES)
+    def test_routes_to_the_api_handler(self, method, path, route, params):
         handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]},
-        }
-        result = handler._do_dispatch("POST", "rules", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "saved" in msg["message"].lower()
+        original = handler.request
+        seen = {}
+
+        def fake_route():
+            seen["body"] = handler.request.json()
+            seen["params"] = handler.request.path_params
+            seen["headers"] = handler.request.headers
+            return ["done"]
+
+        with patch.object(AvailabilityAPI, route, lambda self: fake_route()):
+            result = handler._do_dispatch(method, "/" + path, {"x": 1})
+
+        assert result == ["done"]
+        assert seen == {"body": {"x": 1}, "params": params, "headers": original.headers}
+        # The real request is back once the route returns.
+        assert handler.request is original
+
+    def test_request_is_restored_when_the_route_raises(self):
+        handler = _make_handler()
+        original = handler.request
+
+        def boom(self):
+            raise ValueError("bad")
+
+        with patch.object(AvailabilityAPI, "create_block", boom), pytest.raises(ValueError):
+            handler._do_dispatch("POST", "blocks", {})
+        assert handler.request is original
+
+    def test_unknown_path(self):
+        handler = _make_handler()
+        msg, code = _parse(handler._do_dispatch("POST", "nope", {})[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Unknown: POST /nope" in msg["error"]
+
+    def test_method_must_match(self):
+        handler = _make_handler()
+        msg, code = _parse(handler._do_dispatch("GET", "blocks", {})[0])
+        assert code == HTTPStatus.BAD_REQUEST
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_rule")
-    @patch(f"{MODULE}.check_rule_overlap", return_value="")
-    @patch(f"{MODULE}.get_rules_by_group", return_value=[])
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
-    @patch(f"{MODULE}.get_rule_by_id", return_value=None)
-    def test_put_rules(self, mock_get_rule, mock_get_rules, mock_sync, mock_grp, mock_overlap, mock_save, mock_access):
-        handler = _make_handler()
-        body = {"id": "rule-1", "provider_id": PROVIDER_ID, "weekly_schedule": {}}
-        result = handler._do_dispatch("PUT", "rules", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
-    @patch(f"{MODULE}.delete_rule_by_id")
-    def test_delete_rule(self, mock_del, mock_get_rules, mock_sync, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch("DELETE", f"rules/{PROVIDER_ID}/rule-1", {})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "deleted" in msg["message"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_delete_effects", return_value=[])
-    @patch(f"{MODULE}.delete_rules_for_provider", return_value=3)
-    def test_delete_provider_rules(self, mock_del, mock_fx, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch("DELETE", f"rules/{PROVIDER_ID}", {})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "3" in msg["message"]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_block")
-    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    def test_post_blocks(self, mock_fx, mock_save, mock_access):
-        handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "start": "2026-03-10T09:00:00",
-            "end": "2026-03-10T17:00:00",
-        }
-        result = handler._do_dispatch("POST", "blocks", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "created" in msg["message"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.get_block_by_id", return_value=None)
-    @patch(f"{MODULE}.save_block")
-    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    def test_put_blocks(self, mock_fx, mock_save, mock_get, mock_access):
-        handler = _make_handler()
-        body = {
-            "id": "block-1",
-            "provider_id": PROVIDER_ID,
-            "start": "2026-03-10T09:00:00",
-            "end": "2026-03-10T17:00:00",
-        }
-        result = handler._do_dispatch("PUT", "blocks", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.get_blocks_for_provider", return_value=[])
     @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.get_blocks_by_group", return_value=[])
+    @patch(f"{MODULE}.get_blocks_for_provider")
     @patch(f"{MODULE}.delete_block")
-    def test_delete_block(self, mock_del, mock_fx, mock_get, mock_access):
+    def test_real_route_reads_path_and_query(self, mock_delete, mock_blocks, mock_group, mock_build, mock_access):
+        """End to end through an unpatched route: the swapped request carries the ids and the query."""
+        mock_blocks.return_value = [AdminBlock(id="b1", provider_id="p1", group_id="g1",
+                                               start=datetime(2026, 7, 4, 9, tzinfo=UTC), end=datetime(2026, 7, 4, 10, tzinfo=UTC))]
         handler = _make_handler()
-        result = handler._do_dispatch("DELETE", f"blocks/{PROVIDER_ID}/block-1", {})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_recurring_block")
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    def test_post_recurring_blocks(self, mock_fx, mock_save, mock_access):
-        handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]},
-        }
-        result = handler._do_dispatch("POST", "recurring-blocks", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "created" in msg["message"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_recurring_block")
-    @patch(f"{MODULE}.get_recurring_blocks_by_group", return_value=[])
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    def test_put_recurring_blocks(self, mock_fx, mock_grp, mock_save, mock_access):
-        handler = _make_handler()
-        body = {
-            "id": "rb-1",
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]},
-        }
-        result = handler._do_dispatch("PUT", "recurring-blocks", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.get_recurring_block_by_id", return_value=None)
-    @patch(f"{MODULE}.build_delete_recurring_block_effects", return_value=[])
-    @patch(f"{MODULE}.delete_recurring_block")
-    def test_delete_recurring_block(self, mock_del, mock_fx, mock_get, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch("DELETE", f"recurring-blocks/{PROVIDER_ID}/rb-1", {})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.set_practice_timezone")
-    @patch(f"{MODULE}.get_all_rules", return_value=[])
-    @patch(f"{MODULE}.get_all_recurring_blocks", return_value=[])
-    def test_put_timezone(self, mock_rbs, mock_rules, mock_set, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch("PUT", "timezone", {"timezone": "US/Eastern"})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        mock_set.assert_called_once_with("US/Eastern")
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_rule")
-    @patch(f"{MODULE}.get_rule_by_id")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    def test_post_override(self, mock_sync, mock_get, mock_save, mock_access):
-        rule = ProviderAvailabilityRule.from_dict({
-            "id": "rule-1", "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"thursday": [{"start": "09:00", "end": "15:00"}]},
-        })
-        mock_get.return_value = rule
-        handler = _make_handler()
-        body = {"date": "2026-04-09", "time_windows": [{"start": "12:00", "end": "17:00"}]}
-        result = handler._do_dispatch("POST", f"rules/{PROVIDER_ID}/rule-1/overrides", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "saved" in msg["message"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_rule")
-    @patch(f"{MODULE}.get_rule_by_id")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    def test_delete_override(self, mock_sync, mock_get, mock_save, mock_access):
-        rule = ProviderAvailabilityRule.from_dict({
-            "id": "rule-1", "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"thursday": [{"start": "09:00", "end": "15:00"}]},
-            "date_overrides": [{"date": "2026-04-09", "time_windows": [{"start": "09:00", "end": "12:00"}]}],
-        })
-        mock_get.return_value = rule
-        handler = _make_handler()
-        result = handler._do_dispatch("DELETE", f"rules/{PROVIDER_ID}/rule-1/overrides/2026-04-09", {})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "removed" in msg["message"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.get_rule_by_id")
-    def test_post_override_wrong_weekday(self, mock_get, mock_access):
-        rule = ProviderAvailabilityRule.from_dict({
-            "id": "rule-1", "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"thursday": [{"start": "09:00", "end": "15:00"}]},
-        })
-        mock_get.return_value = rule
-        handler = _make_handler()
-        # 2026-04-06 is a Monday — rule only has Thursday
-        body = {"date": "2026-04-06", "time_windows": [{"start": "09:00", "end": "12:00"}]}
-        result = handler._do_dispatch("POST", f"rules/{PROVIDER_ID}/rule-1/overrides", body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "monday" in msg["error"].lower()
-
-    def test_unknown_route_returns_400(self):
-        handler = _make_handler()
-        result = handler._do_dispatch("POST", "nonexistent", {})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "unknown" in msg["error"].lower()
-
-
-# ── Validation ────────────────────────────────────────────────────────
-
-
-class TestFormValidation:
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_rule_missing_provider(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_create_rule({})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "provider_id" in msg["error"]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_rule_invalid_time_window(self, mock_access):
-        handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"monday": [{"start": "17:00", "end": "09:00"}]},
-        }
-        result = handler._form_create_rule(body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "invalid" in msg["error"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_rule")
-    @patch(f"{MODULE}.check_rule_overlap", return_value="Overlaps with existing rule")
-    def test_create_rule_overlap_rejected(self, mock_overlap, mock_save, mock_access):
-        handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]},
-        }
-        result = handler._form_create_rule(body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "overlap" in msg["error"].lower()
-        mock_save.assert_not_called()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_block_missing_fields(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_create_block({"provider_id": PROVIDER_ID})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_block_start_after_end(self, mock_access):
-        handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "start": "2026-03-10T17:00:00",
-            "end": "2026-03-10T09:00:00",
-        }
-        result = handler._form_create_block(body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "before" in msg["error"].lower()
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_update_block_missing_fields(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_update_block({"id": "b-1"})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_update_block_start_after_end(self, mock_access):
-        handler = _make_handler()
-        body = {
-            "id": "b-1",
-            "provider_id": PROVIDER_ID,
-            "start": "2026-03-10T17:00:00",
-            "end": "2026-03-10T09:00:00",
-        }
-        result = handler._form_update_block(body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_update_rule_missing_id(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_update_rule({"provider_id": PROVIDER_ID})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_recurring_block_missing_provider(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_create_recurring_block({})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_recurring_block_missing_schedule(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_create_recurring_block({"provider_id": PROVIDER_ID})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_create_recurring_block_invalid_time(self, mock_access):
-        handler = _make_handler()
-        body = {
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"monday": [{"start": "17:00", "end": "09:00"}]},
-        }
-        result = handler._form_create_recurring_block(body)
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_update_recurring_block_missing_fields(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_update_recurring_block({"id": "rb-1"})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_update_recurring_block_missing_schedule(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_update_recurring_block({
-            "id": "rb-1", "provider_id": PROVIDER_ID,
-        })
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_set_timezone_invalid(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_set_timezone({"timezone": "Fake/Zone"})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_set_timezone_empty(self, mock_access):
-        handler = _make_handler()
-        result = handler._form_set_timezone({"timezone": ""})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.BAD_REQUEST
-
-
-# ── Group operations ──────────────────────────────────────────────────
-
-
-class TestGroupOperations:
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_rule")
-    @patch(f"{MODULE}.check_rule_overlap", return_value="")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
-    @patch(f"{MODULE}.get_rules_by_group")
-    @patch(f"{MODULE}.get_rule_by_id", return_value=None)
-    def test_update_rule_applies_to_group(self, mock_get_rule, mock_grp, mock_get_rules, mock_sync, mock_overlap, mock_save, mock_access):
-        other_rule = ProviderAvailabilityRule.from_dict({
-            "id": "rule-2",
-            "provider_id": "provider-2",
-            "weekly_schedule": {},
-        })
-        mock_grp.return_value = [other_rule]
-
-        handler = _make_handler()
-        body = {
-            "id": "rule-1",
-            "provider_id": PROVIDER_ID,
-            "group_id": "grp-1",
-            "apply_to_group": True,
-            "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]},
-        }
-        result = handler._form_update_rule(body)
-        msg, _ = _parse(result[-1])
-        assert "2" in msg["message"]  # Updated 2 rule(s)
-        assert mock_save.call_count == 2
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_block")
-    @patch(f"{MODULE}.get_block_by_id", return_value=None)
-    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
-    @patch(f"{MODULE}.get_blocks_by_group")
-    def test_update_block_applies_to_group(self, mock_grp, mock_del_fx, mock_fx, mock_get, mock_save, mock_access):
-        other_block = AdminBlock(
-            id="block-2",
-            provider_id="provider-2",
-            start=datetime(2026, 3, 10, 9, 0),
-            end=datetime(2026, 3, 10, 17, 0),
-            group_id="grp-1",
-        )
-        mock_grp.return_value = [other_block]
-
-        handler = _make_handler()
-        body = {
-            "id": "block-1",
-            "provider_id": PROVIDER_ID,
-            "start": "2026-03-10T10:00:00",
-            "end": "2026-03-10T16:00:00",
-            "group_id": "grp-1",
-            "apply_to_group": True,
-        }
-        result = handler._form_update_block(body)
-        msg, _ = _parse(result[-1])
-        assert "2" in msg["message"]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.save_recurring_block")
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    @patch(f"{MODULE}.get_recurring_blocks_by_group")
-    def test_update_recurring_block_applies_to_group(self, mock_grp, mock_fx, mock_save, mock_access):
-        other_rb = RecurringBlock.from_dict({
-            "id": "rb-2",
-            "provider_id": "provider-2",
-            "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]},
-            "group_id": "grp-1",
-        })
-        mock_grp.return_value = [other_rb]
-
-        handler = _make_handler()
-        body = {
-            "id": "rb-1",
-            "provider_id": PROVIDER_ID,
-            "weekly_schedule": {"tuesday": [{"start": "10:00", "end": "15:00"}]},
-            "group_id": "grp-1",
-            "apply_to_group": True,
-        }
-        result = handler._form_update_recurring_block(body)
-        msg, _ = _parse(result[-1])
-        assert "2" in msg["message"]
+        handler._do_dispatch("DELETE", "blocks/p1/b1?apply_to_group=true", {})
+        assert mock_delete.mock_calls == [call("p1", "b1")]
+        assert mock_group.mock_calls == [call("g1")]
 
 
 # ── handle_form_action ────────────────────────────────────────────────
@@ -646,114 +301,3 @@ class TestStaticAssets:
 # ── Timezone sync with rules/blocks ───────────────────────────────────
 
 
-class TestTimezoneSync:
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.set_practice_timezone")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    @patch(f"{MODULE}.get_all_rules")
-    @patch(f"{MODULE}.get_all_recurring_blocks")
-    def test_set_timezone_syncs_all_providers(self, mock_rbs, mock_rules, mock_rb_sync, mock_sync, mock_set, mock_access):
-        rule1 = ProviderAvailabilityRule.from_dict({"provider_id": "p1", "weekly_schedule": {}})
-        rule2 = ProviderAvailabilityRule.from_dict({"provider_id": "p2", "weekly_schedule": {}})
-        rb1 = RecurringBlock.from_dict({"provider_id": "p1", "weekly_schedule": {"monday": [{"start": "09:00", "end": "17:00"}]}})
-        mock_rules.return_value = [rule1, rule2]
-        mock_rbs.return_value = [rb1]
-
-        handler = _make_handler()
-        result = handler._form_set_timezone({"timezone": "US/Eastern"})
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        # Should sync each unique provider once
-        assert mock_sync.call_count == 2
-        mock_rb_sync.assert_called_once()
-
-
-class TestFormProviderTimezone:
-    """Cover the provider-timezone form-action dispatch handlers."""
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
-    @patch(f"{MODULE}.set_provider_timezone")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    @patch(f"{MODULE}.get_all_recurring_blocks")
-    def test_set_provider_timezone_success(
-        self, mock_rbs, mock_build, mock_sync, mock_set, mock_access
-    ):
-        rb = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, is_active=True)
-        mock_rbs.return_value = [rb]
-        handler = _make_handler()
-        result = handler._do_dispatch(
-            "PUT", "provider-timezone",
-            {"provider_id": PROVIDER_ID, "timezone": "US/Pacific"},
-        )
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "US/Pacific" in msg["message"]
-        assert mock_set.mock_calls == [call(PROVIDER_ID, "US/Pacific")]
-        assert mock_build.mock_calls == [call(rb)]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_set_provider_timezone_missing_provider(self, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch("PUT", "provider-timezone", {"timezone": "US/Pacific"})
-        msg, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "provider_id required" in msg["error"]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
-    def test_set_provider_timezone_invalid_tz(self, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch(
-            "PUT", "provider-timezone",
-            {"provider_id": PROVIDER_ID, "timezone": "Mars/Olympus"},
-        )
-        msg, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "Invalid timezone" in msg["error"]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
-    @patch(f"{MODULE}.set_provider_timezone")
-    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
-    @patch(f"{MODULE}.get_all_recurring_blocks")
-    def test_set_provider_tz_bulk_success(
-        self, mock_rbs, mock_build, mock_sync, mock_set, mock_access
-    ):
-        rb = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, is_active=True)
-        mock_rbs.return_value = [rb]
-        handler = _make_handler()
-        result = handler._do_dispatch(
-            "PUT", "provider-timezones/bulk",
-            {"provider_ids": [PROVIDER_ID, "p2"], "timezone": "US/Pacific"},
-        )
-        msg, code = _parse(result[-1])
-        assert code == HTTPStatus.OK
-        assert "2 providers" in msg["message"]
-        assert mock_set.mock_calls == [call(PROVIDER_ID, "US/Pacific"), call("p2", "US/Pacific")]
-        assert mock_build.mock_calls == [call(rb)]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    def test_set_provider_tz_bulk_missing_ids(self, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch(
-            "PUT", "provider-timezones/bulk", {"provider_ids": [], "timezone": "US/Pacific"},
-        )
-        msg, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "provider_ids required" in msg["error"]
-
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
-    def test_set_provider_tz_bulk_invalid_tz(self, mock_access):
-        handler = _make_handler()
-        result = handler._do_dispatch(
-            "PUT", "provider-timezones/bulk",
-            {"provider_ids": [PROVIDER_ID], "timezone": "Mars/Olympus"},
-        )
-        msg, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "Invalid timezone" in msg["error"]

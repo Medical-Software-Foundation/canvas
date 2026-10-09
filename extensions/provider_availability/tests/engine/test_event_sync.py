@@ -34,11 +34,11 @@ from provider_availability.engine.event_sync import (
     _build_rule_events,
     _get_calendar_id,
     build_block_event_effects,
-    build_hold_block_refresh_effects,
+    build_provider_hold_refresh_effects,
     build_delete_block_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
-    build_lead_time_block_effects,
+    build_provider_lead_time_effects,
     build_recurring_block_sync_effects,
     build_sync_effects,
     delete_all_lead_time_events,
@@ -1613,14 +1613,15 @@ class TestBuildRecurringBlockSyncEffects:
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
-    @patch(f"{MODULE}.build_delete_recurring_block_effects")
+    @patch(f"{MODULE}.get_admin_calendars", new=lambda *a, **k: [MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}._recurring_event_ids")
     def test_creates_recurring_events(
-        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+        self, mock_stale, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
         sample_recurring_block,
     ):
         from zoneinfo import ZoneInfo
 
-        mock_delete.return_value = []
+        mock_stale.return_value = []
         mock_tz.return_value = ZoneInfo("US/Eastern")
         mock_get_admin_cal.return_value = ("admin-cal-1", [])
 
@@ -1630,80 +1631,74 @@ class TestBuildRecurringBlockSyncEffects:
 
             result = build_recurring_block_sync_effects(sample_recurring_block)
 
-        assert mock_delete.mock_calls == [
-            call(sample_recurring_block.provider_id, sample_recurring_block),
-        ]
+        # Clears events under the block's title (and the legacy title) before drawing
+        assert mock_stale.mock_calls == [call(["admin-cal-1"], {"Lunch", RECURRING_BLOCK_TITLE})]
         # sample_recurring_block: friday 12-13 = 1 event
         assert len(result) == 1
 
-    @patch(f"{MODULE}.build_delete_recurring_block_effects")
-    def test_inactive_block_only_deletes(
-        self, mock_delete, sample_recurring_block
-    ):
+    @patch(f"{MODULE}.get_admin_calendars", new=lambda *a, **k: [MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}._recurring_event_ids", return_value=["old-1"])
+    def test_inactive_block_only_deletes(self, mock_stale, sample_recurring_block):
         sample_recurring_block.is_active = False
-        mock_delete.return_value = [MagicMock()]
 
         result = build_recurring_block_sync_effects(sample_recurring_block)
 
-        assert mock_delete.mock_calls == [
-            call(sample_recurring_block.provider_id, sample_recurring_block),
-        ]
-        # Only delete effects, no create effects
+        # Only the delete, no create
         assert len(result) == 1
 
-    @patch(f"{MODULE}.build_delete_recurring_block_effects")
+    @patch(f"{MODULE}._build_hold_block_events", return_value=[])
+    @patch(f"{MODULE}.get_admin_calendars", new=lambda *a, **k: [MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}._hold_event_ids", return_value=[])
+    @patch(f"{MODULE}._recurring_event_ids")
     def test_hold_type_skips_calendar_events(
-        self, mock_delete, sample_recurring_block
+        self, mock_stale, mock_holds, mock_build_hold, sample_recurring_block
     ):
         sample_recurring_block.hold_type = "soft"
-        mock_delete.return_value = []
 
         result = build_recurring_block_sync_effects(sample_recurring_block)
 
-        assert mock_delete.mock_calls == [
-            call(sample_recurring_block.provider_id, sample_recurring_block),
-        ]
+        # A hold clears hold events, not recurring events by title, and draws hold events
+        assert mock_stale.mock_calls == []
+        assert mock_holds.mock_calls == [call(["admin-cal-1"])]
+        assert mock_build_hold.mock_calls == [call(sample_recurring_block)]
         assert result == []
 
-    @patch(f"{MODULE}.build_delete_recurring_block_effects")
-    def test_hold_type_hard_skips_calendar_events(
-        self, mock_delete, sample_recurring_block
-    ):
+    @patch(f"{MODULE}._build_hold_block_events", return_value=[])
+    @patch(f"{MODULE}.get_admin_calendars", new=lambda *a, **k: [MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}._hold_event_ids", return_value=[])
+    def test_hold_type_hard_skips_calendar_events(self, mock_holds, mock_build_hold, sample_recurring_block):
         sample_recurring_block.hold_type = "hard"
-        mock_delete.return_value = []
 
         result = build_recurring_block_sync_effects(sample_recurring_block)
 
         assert result == []
 
-    @patch(f"{MODULE}.build_delete_recurring_block_effects")
-    def test_no_weekly_schedule_only_deletes(self, mock_delete):
+    @patch(f"{MODULE}.get_admin_calendars", new=lambda *a, **k: [MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}._recurring_event_ids", return_value=["old-1"])
+    def test_no_weekly_schedule_only_deletes(self, mock_stale):
         block = RecurringBlock(
             id="rb-1",
             provider_id=PROVIDER_ID,
             weekly_schedule={},
             is_active=True,
         )
-        del_eff = MagicMock()
-        mock_delete.return_value = [del_eff]
 
         result = build_recurring_block_sync_effects(block)
 
-        assert result == [del_eff]
+        assert len(result) == 1
 
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
     @patch(f"{MODULE}.provider_tz")
     @patch(f"{MODULE}.get_admin_calendar_id")
-    @patch(f"{MODULE}.build_delete_recurring_block_effects")
+    @patch(f"{MODULE}.get_admin_calendars", new=lambda *a, **k: [MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}._recurring_event_ids", return_value=["old-1"])
     def test_no_admin_calendar_returns_delete_effects(
-        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+        self, mock_stale, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
         sample_recurring_block,
     ):
         from zoneinfo import ZoneInfo
 
-        del_eff = MagicMock()
-        mock_delete.return_value = [del_eff]
         mock_tz.return_value = ZoneInfo("US/Eastern")
         mock_get_admin_cal.return_value = ("", [])
 
@@ -1713,8 +1708,8 @@ class TestBuildRecurringBlockSyncEffects:
 
             result = build_recurring_block_sync_effects(sample_recurring_block)
 
-        # Only delete effects returned since no admin calendar
-        assert result == [del_eff]
+        # Only the delete, since there is no admin calendar to draw on
+        assert len(result) == 1
 
     @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
     @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
@@ -1915,17 +1910,6 @@ class TestBuildRecurringBlockSyncEffects:
 
 
 class TestBuildDeleteRecurringBlockEffects:
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_used(self, mock_get_ids, sample_recurring_block):
-        mock_get_ids.return_value = ["evt-1", "evt-2", "evt-3"]
-
-        result = build_delete_recurring_block_effects(
-            PROVIDER_ID, sample_recurring_block
-        )
-
-        assert mock_get_ids.mock_calls == [call(sample_recurring_block.id)]
-        assert len(result) == 3
-
     @patch(f"{MODULE}.get_admin_calendars")
     @patch(f"{MODULE}.get_event_ids")
     def test_fallback_to_title_match(
@@ -1948,11 +1932,13 @@ class TestBuildDeleteRecurringBlockEffects:
             )
 
         # Should match by block's reason ("Lunch") AND legacy RECURRING_BLOCK_TITLE
-        assert mock_event_objects.filter.call_args == call(
+        # Repeating events only, so one-off blocks with the same reason survive
+        assert mock_event_objects.filter.call_args.kwargs == dict(
             calendar__id__in=["admin-cal-1"],
             title__in=["Lunch", RECURRING_BLOCK_TITLE],
             is_cancelled=False,
         )
+        assert "recurrence" in str(mock_event_objects.filter.call_args.args[0])
         assert len(result) == 1
 
     @patch(f"{MODULE}.get_admin_calendars")
@@ -1969,9 +1955,9 @@ class TestBuildDeleteRecurringBlockEffects:
 
             result = build_delete_recurring_block_effects(PROVIDER_ID, block=None)
 
-        assert mock_event_objects.filter.call_args == call(
+        assert mock_event_objects.filter.call_args.kwargs == dict(
             calendar__id__in=["admin-cal-1"],
-            title=RECURRING_BLOCK_TITLE,
+            title__in=[RECURRING_BLOCK_TITLE],
             is_cancelled=False,
         )
         assert len(result) == 1
@@ -2039,7 +2025,7 @@ class TestBuildDeleteRecurringBlockEffects:
             result = build_delete_recurring_block_effects(PROVIDER_ID, block)
 
         # "Blocked" != RECURRING_BLOCK_TITLE so both should be in the list
-        assert mock_event_objects.filter.call_args == call(
+        assert mock_event_objects.filter.call_args.kwargs == dict(
             calendar__id__in=["admin-cal-1"],
             title__in=["Blocked", RECURRING_BLOCK_TITLE],
             is_cancelled=False,
@@ -2103,7 +2089,7 @@ class TestBuildLeadTimeBlockEffects:
             },
         )
 
-        result = build_lead_time_block_effects(rule)
+        result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         assert result == []
 
@@ -2117,7 +2103,7 @@ class TestBuildLeadTimeBlockEffects:
             },
         )
 
-        result = build_lead_time_block_effects(rule)
+        result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         assert result == []
 
@@ -2134,7 +2120,7 @@ class TestBuildLeadTimeBlockEffects:
             },
         )
 
-        result = build_lead_time_block_effects(rule)
+        result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         assert result == []
 
@@ -2168,7 +2154,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_datetime.combine = datetime.combine
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Should create a lead-time block from 10:00 to 14:00 (4h lead)
         # intersected with 9:00-17:00 working hours = 10:00-14:00
@@ -2221,7 +2207,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_qs.order_by.return_value = [existing_evt]
             mock_event_objects.filter.return_value = mock_qs
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Should skip rebuild since drift is within threshold (< 300 seconds)
         # Returns only cal_effects (empty list)
@@ -2272,7 +2258,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_qs.order_by.return_value = [existing_evt]
             mock_event_objects.filter.return_value = mock_qs
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Should rebuild: 1 delete + 1 create = 2 effects
         assert len(result) == 2
@@ -2326,7 +2312,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_qs.order_by.return_value = [existing_evt1, existing_evt2]
             mock_event_objects.filter.return_value = mock_qs
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Count mismatch (2 existing vs 1 interval) triggers rebuild
         # 2 deletes + 1 create = 3 effects
@@ -2376,7 +2362,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_qs.order_by.return_value = [existing_evt]
             mock_event_objects.filter.return_value = mock_qs
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Should delete the existing lead-time event (cleanup)
         assert len(result) == 1  # 1 delete effect
@@ -2427,7 +2413,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_event_objects.filter.return_value = mock_qs
 
             # This should not crash even with naive datetimes
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # The function should handle naive datetimes without crashing.
         # Whether it skips or rebuilds depends on the TZ math, but no exception.
@@ -2464,7 +2450,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_datetime.combine = datetime.combine
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Should create 1 block: 10:00-12:00 (intersect [10, 12] with [9, 17])
         assert len(result) == 1
@@ -2502,7 +2488,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_datetime.combine = datetime.combine
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # Monday 10:00-17:00 + Tuesday 9:00-16:00 = 2 blocks
         assert len(result) == 2
@@ -2538,7 +2524,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_datetime.combine = datetime.combine
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         assert result[0] is cal_eff
         # cal_eff + 1 create = 2
@@ -2575,7 +2561,7 @@ class TestBuildLeadTimeBlockEffects:
             mock_datetime.combine = datetime.combine
             mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-            result = build_lead_time_block_effects(rule)
+            result = build_provider_lead_time_effects(rule.provider_id, [rule])
 
         # No overlap, no existing events -> empty
         assert result == []
@@ -3197,7 +3183,7 @@ class TestBuildHoldBlockRefreshEffects:
             recreate = MagicMock()
             mock_build_hold.return_value = [recreate]
 
-            result = build_hold_block_refresh_effects(sample_recurring_block)
+            result = build_provider_hold_refresh_effects(sample_recurring_block.provider_id, [sample_recurring_block])
 
         # 1 delete effect + 1 recreate effect
         assert len(result) == 2
@@ -3210,7 +3196,7 @@ class TestBuildHoldBlockRefreshEffects:
         self, mock_get_cals, mock_build_hold, sample_recurring_block
     ):
         sample_recurring_block.hold_type = "same_day"
-        result = build_hold_block_refresh_effects(sample_recurring_block)
+        result = build_provider_hold_refresh_effects(sample_recurring_block.provider_id, [sample_recurring_block])
         assert result == []
         assert mock_build_hold.mock_calls == [call(sample_recurring_block)]
 
@@ -3219,15 +3205,13 @@ class TestBuildHoldBlockRefreshEffects:
 
 
 class TestBuildDeleteRecurringBlockHoldCleanup:
-    @patch(f"{MODULE}.get_recurring_blocks_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}.EventModel")
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_path_also_cleans_hold_events(
-        self, mock_get_ids, mock_get_cals, mock_event_model, sample_recurring_block
+    def test_hold_delete_clears_hold_events_only(
+        self, mock_get_cals, mock_event_model, sample_recurring_block
     ):
+        """A hold's events carry hold titles, not its reason, so only hold events are cleared, in one query."""
         sample_recurring_block.hold_type = "same_day"
-        mock_get_ids.return_value = ["stored-1", "stored-2"]
         cal = MagicMock()
         cal.id = "admin-cal-1"
         mock_get_cals.return_value = [cal]
@@ -3238,18 +3222,17 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         result = build_delete_recurring_block_effects(
             sample_recurring_block.provider_id, sample_recurring_block
         )
-        # 2 stored-id deletes + 1 hold-event delete
-        assert len(result) == 3
 
-    @patch(f"{MODULE}.get_recurring_blocks_for_provider", new=lambda _pid: [])
+        assert mock_event_model.objects.filter.call_count == 1
+        assert len(result) == 1
+
     @patch(f"{MODULE}.EventModel")
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_title_fallback_path_also_cleans_hold_events(
-        self, mock_get_ids, mock_get_cals, mock_event_model, sample_recurring_block
+    def test_hold_turned_plain_clears_both(
+        self, mock_get_cals, mock_event_model, sample_recurring_block
     ):
-        sample_recurring_block.hold_type = "next_day"
-        mock_get_ids.return_value = []  # force title-fallback path
+        """Editing a hold into an ordinary block clears its old hold events and its title's events."""
+        before = RecurringBlock(id=sample_recurring_block.id, provider_id=PROVIDER_ID, reason="Lunch", hold_type="next_day")
         cal = MagicMock()
         cal.id = "admin-cal-1"
         mock_get_cals.return_value = [cal]
@@ -3258,9 +3241,9 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         hold_evt = MagicMock()
         hold_evt.id = "hold-1"
         mock_event_model.objects.filter.side_effect = [QS([title_evt]), QS([hold_evt])]
+        sample_recurring_block.is_active = False  # nothing to draw
 
-        result = build_delete_recurring_block_effects(
-            sample_recurring_block.provider_id, sample_recurring_block
-        )
-        # 1 title-match delete + 1 hold-event delete
+        result = build_recurring_block_sync_effects(sample_recurring_block, before)
+
+        assert mock_event_model.objects.filter.call_count == 2
         assert len(result) == 2

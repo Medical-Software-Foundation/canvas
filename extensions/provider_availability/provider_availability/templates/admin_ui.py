@@ -15,9 +15,11 @@ from canvas_sdk.templates import render_to_string
 def render_admin_page(preloaded: dict | None = None) -> str:
     """Return the admin UI HTML with optional pre-rendered data."""
     if preloaded:
-        # Escape </script> in JSON to prevent injection
+        # No "<" at all inside the script: "</script>" would end it early and
+        # "<!--<script" would make the browser swallow the next script tag.
+        # "\u003c" is the same character to JSON and JavaScript.
         raw = json.dumps(preloaded, default=str)
-        safe_json = raw.replace("</", "<\\/")
+        safe_json = raw.replace("<", "\\u003c")
         script_tag = f"<script>window.__PRELOADED__={safe_json};</script>"
     else:
         script_tag = ""

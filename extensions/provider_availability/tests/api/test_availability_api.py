@@ -1773,8 +1773,9 @@ class TestCreateRecurringBlock:
 
 
 class TestUpdateRecurringBlock:
+    @patch(f"{MODULE}.get_recurring_block_by_id", new=lambda *_: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
+    @patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
     def test_success(self, mock_save, mock_effects, mock_access):
         body = {
@@ -1789,7 +1790,7 @@ class TestUpdateRecurringBlock:
         assert code == HTTPStatus.OK
         assert "Updated 1 recurring block(s)" in data["message"]
         assert mock_save.mock_calls == [call(mock_save.call_args[0][0])]
-        assert mock_effects.mock_calls == [call(mock_effects.call_args[0][0])]
+        assert mock_effects.mock_calls == [call([mock_save.call_args[0][0]], [])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_id_or_provider(self, mock_access):
@@ -1811,8 +1812,9 @@ class TestUpdateRecurringBlock:
         assert "weekly_schedule is required" in data["error"]
         assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", new=lambda *_: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
+    @patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.get_recurring_blocks_by_group")
     def test_apply_to_group(self, mock_group, mock_save, mock_effects, mock_access):
@@ -1839,11 +1841,14 @@ class TestUpdateRecurringBlock:
         assert "Updated 2 recurring block(s)" in data["message"]
         assert len(mock_save.mock_calls) == 2
         assert mock_group.mock_calls == [call("g1")]
-        # Effects called for both blocks
-        assert len(mock_effects.mock_calls) == 2
+        # One resync for the edited block and its group member, with the member's prior version
+        assert len(mock_effects.mock_calls) == 1
+        changed, previous = mock_effects.call_args[0]
+        assert len(changed) == 2 and len(previous) == 1
 
+    @patch(f"{MODULE}.get_recurring_block_by_id", new=lambda *_: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
+    @patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[])
     @patch(f"{MODULE}.save_recurring_block")
     @patch(f"{MODULE}.get_recurring_blocks_by_group")
     def test_apply_to_group_skips_self(self, mock_group, mock_save, mock_effects, mock_access):
@@ -2051,7 +2056,7 @@ class TestSetProviderTimezone:
     @patch(f"{MODULE}.set_provider_timezone")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[MagicMock()])
     @patch(f"{MODULE}.get_all_recurring_blocks")
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[MagicMock()])
+    @patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[MagicMock()])
     @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_success_resyncs_provider_and_blocks(
         self, mock_get_blocks, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
@@ -2069,7 +2074,7 @@ class TestSetProviderTimezone:
         assert mock_set.mock_calls == [call(PROVIDER_ID, "US/Pacific")]
         assert mock_sync.mock_calls == [call(PROVIDER_ID)]
         # Only the matching provider's recurring block is re-synced
-        assert mock_build_rb.mock_calls == [call(rb_match)]
+        assert mock_build_rb.mock_calls == [call([rb_match])]
         # 1 sync effect + 1 recurring-block effect + final JSONResponse
         assert len(result) == 3
 
@@ -2157,7 +2162,7 @@ class TestSetProviderTimezoneBulk:
     @patch(f"{MODULE}.set_provider_timezone")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_all_recurring_blocks")
-    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[MagicMock()])
+    @patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[MagicMock()])
     @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_success_sets_all(
         self, mock_get_blocks, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
@@ -2180,7 +2185,7 @@ class TestSetProviderTimezoneBulk:
             call(PROVIDER_ID_2, "US/Pacific"),
         ]
         assert mock_sync.mock_calls == [call(PROVIDER_ID), call(PROVIDER_ID_2)]
-        assert mock_build_rb.mock_calls == [call(rb_match)]
+        assert mock_build_rb.mock_calls == [call([rb_match])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])

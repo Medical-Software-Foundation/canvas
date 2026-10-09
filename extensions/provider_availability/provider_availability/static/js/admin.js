@@ -424,10 +424,12 @@ var _EXPIRED_TYPES = {
   override: ['chip-override', SVG_OVERRIDE, 'Override'],
 };
 
+// Safe in element text and in attribute values, including inline handlers:
+// the browser decodes the entities back before running the handler.
 function _escHtml(text) {
-  var d = document.createElement('div');
-  d.textContent = text == null ? '' : String(text);
-  return d.innerHTML;
+  return (text == null ? '' : String(text))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function _expiredProviderName(pid) {
@@ -494,6 +496,9 @@ function renderExpiredPanel() {
   var rm = document.getElementById('ep-remove');
   rm.disabled = !picked;
   rm.textContent = picked ? 'Remove ' + picked + ' selected' : 'Remove selected';
+  var sn = document.getElementById('ep-snooze');
+  sn.disabled = !picked;
+  sn.textContent = picked ? 'Ask again in 30 days (' + picked + ')' : 'Ask again in 30 days';
 }
 
 function toggleExpiredAll() {
@@ -519,13 +524,20 @@ async function removeExpired() {
   await loadOverview();
 }
 
-async function snoozeExpired() {
-  var keys = (_expiredSummary.items || []).map(function(it) { return it.key; });
+// From the banner, snoozes everything it counts. From the review panel,
+// snoozes only the items ticked there; the rest stay listed.
+async function snoozeExpired(selectedOnly) {
+  var items = _expiredSummary.items || [];
+  if (selectedOnly) items = items.filter(function(it) { return _expiredSel[it.key]; });
+  var keys = items.map(function(it) { return it.key; });
   if (!keys.length) return;
   var data = await apiCall('/expired/snooze', { method: 'POST', body: JSON.stringify({ keys: keys }) });
   if (data.error) { showMsg(data.error, 'error'); return; }
-  _expiredSummary = { count: 0, items: [] };
-  closeExpiredPanel();
+  var gone = {}; keys.forEach(function(k) { gone[k] = true; });
+  _expiredSummary.items = (_expiredSummary.items || []).filter(function(it) { return !gone[it.key]; });
+  _expiredSummary.count = _expiredSummary.items.length;
+  _expiredSel = {};
+  if (_expiredSummary.count && selectedOnly) renderExpiredPanel(); else closeExpiredPanel();
   renderExpiredBanner();
   if (data.until) showMsg('Hidden until ' + fmtDate(data.until) + '. Anything else that ends meanwhile still brings the banner back.', 'success');
 }
@@ -843,9 +855,12 @@ class MultiSelect {
 
     // Select All option. While searching it reads "Select all matches (N)" and
     // checks or unchecks only the names showing, so a search plus one click picks a group.
+    // When everyone is already checked (a filter that starts with all), that click
+    // narrows the selection to just the matches instead of unchecking them.
     if (filtered.length > 1 || filter) {
       const allVals = filtered.map(i => String(i[this.valueKey]));
-      const allSelected = allVals.every(v => this.selected.includes(v));
+      const narrowing = !!filter && filtered.length < this.items.length && this.isAll();
+      const allSelected = !narrowing && allVals.every(v => this.selected.includes(v));
       const selAll = document.createElement('div');
       selAll.className = 'ms-option' + (allSelected ? ' selected' : '');
       selAll.style.fontWeight = '600';
@@ -859,7 +874,8 @@ class MultiSelect {
       selAll.appendChild(span);
       selAll.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (allSelected) { allVals.forEach(v => { const idx = this.selected.indexOf(v); if (idx >= 0) this.selected.splice(idx, 1); }); }
+        if (narrowing) { this.selected = allVals.slice(); }
+        else if (allSelected) { allVals.forEach(v => { const idx = this.selected.indexOf(v); if (idx >= 0) this.selected.splice(idx, 1); }); }
         else { allVals.forEach(v => { if (!this.selected.includes(v)) this.selected.push(v); }); }
         this.updateChips();
         this.renderDropdown();
@@ -1036,7 +1052,8 @@ showTab._fromEvent = false;
 
 function showMsg(msg, type) {
   const dismissBtn = '<button class="alert-dismiss" onclick="dismissMsg()">&times;</button>';
-  const alertHtml = '<div class="alert alert-' + type + '"><span>' + msg + '</span>' + dismissBtn + '</div>';
+  // Messages carry server and form-path text, so they are always shown as text.
+  const alertHtml = '<div class="alert alert-' + type + '"><span>' + _escHtml(msg) + '</span>' + dismissBtn + '</div>';
   const elTop = document.getElementById('status-msg');
   const elBot = document.getElementById('status-msg-bottom');
   if (elTop) elTop.innerHTML = alertHtml;
@@ -1612,7 +1629,7 @@ function renderAccordion() {
         } else {
           groups = groupDaysByWindows(schedule);
         }
-        const ruleJson = JSON.stringify(JSON.stringify(r));
+        const ruleJson = _escHtml(JSON.stringify(JSON.stringify(r)));
 
         var rowHtml = '';
 
@@ -1668,7 +1685,7 @@ function renderAccordion() {
           var ovrReasonHtml = ovr.reason
             ? '<span class="detail-tag tag-override">' + _escHtml(ovr.reason) + '</span>'
             : '<span class="type-chip chip-override">Override</span>';
-          var ovrJson = JSON.stringify(ovr).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+          var ovrJson = _escHtml(JSON.stringify(JSON.stringify(ovr)));
           var ovrHtml = '<tr class="row-override">';
           ovrHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;"><span style="visibility:hidden">' + SVG_CHEVRON_RIGHT + '</span><span class="type-chip chip-override">' + SVG_OVERRIDE + '</span><span class="day-text">' + ovrDayAbbr + '</span></div></div></td>';
           ovrHtml += '<td><div class="td-cell"><span class="time-text">' + ovrHours + '</span></div></td>';
@@ -1677,7 +1694,7 @@ function renderAccordion() {
           var ovrExpired = isExpiredOverride(ovr);
           ovrHtml += '<td><div class="td-cell"><span class="badge ' + (ovrExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
           ovrHtml += '<td><div class="td-cell"><div class="row-actions">';
-          ovrHtml += '<button class="action-chip action-chip-edit" onclick="editOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',\'' + ovrJson + '\')">Edit</button>';
+          ovrHtml += '<button class="action-chip action-chip-edit" onclick="editOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',' + ovrJson + ')">Edit</button>';
           ovrHtml += '<button class="action-chip action-chip-delete" onclick="deleteOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',\'' + ovr.date + '\')">Delete</button>';
           ovrHtml += '</div></div></td>';
           ovrHtml += '</tr>';
@@ -1694,7 +1711,7 @@ function renderAccordion() {
         const blockEffective = fmtDate(blockDateStr);
         const viewTz = _viewTz || pTz;
         const timeStr = convertIsoTime(b.start, pTz, viewTz) + ' \u2013 ' + convertIsoTime(b.end, pTz, viewTz);
-        const blockJson = JSON.stringify(JSON.stringify(b));
+        const blockJson = _escHtml(JSON.stringify(JSON.stringify(b)));
         const blockReasonChip = b.reason
           ? '<span class="detail-tag tag-block">' + _escHtml(b.reason) + '</span>'
           : '<span class="col-empty">\u2014</span>';
@@ -1787,7 +1804,7 @@ function renderAccordion() {
         } else {
           groups = groupDaysByWindows(schedule);
         }
-        const rbJson = JSON.stringify(JSON.stringify(rb));
+        const rbJson = _escHtml(JSON.stringify(JSON.stringify(rb)));
 
         const rbRowClass = isHold ? 'row-hold' : 'row-blocked';
 
@@ -2049,11 +2066,11 @@ function renderOverridesList() {
     const dateObj = new Date(dateStr + 'T12:00:00');
     const dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()];
     const detail = (o.time_windows || []).map(w => fmtHHMM(w.start) + ' \u2013 ' + fmtHHMM(w.end)).join(', ') || 'No hours';
-    const reasonLabel = o.reason ? ' \u2014 ' + o.reason : '';
+    const reasonLabel = o.reason ? ' \u2014 ' + _escHtml(o.reason) : '';
     html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--override-bg);border:1px solid var(--override-border);border-radius:6px;">';
     html += '<span style="font-weight:600;font-size:13px;min-width:120px;">' + dayAbbr + ', ' + fmtDate(dateStr) + '</span>';
     html += '<span style="font-size:13px;color:var(--text-muted);flex:1;">' + detail + reasonLabel + '</span>';
-    html += '<button type="button" class="action-chip action-chip-edit" style="font-size:12px;padding:3px 8px;" onclick=\'editOverrideInPlace(' + JSON.stringify(JSON.stringify(o)) + ')\'>Edit</button>';
+    html += '<button type="button" class="action-chip action-chip-edit" style="font-size:12px;padding:3px 8px;" onclick=\'editOverrideInPlace(' + _escHtml(JSON.stringify(JSON.stringify(o))) + ')\'>Edit</button>';
     html += '<button type="button" class="remove-time" onclick="deleteOverride(\'' + dateStr + '\')">' + SVG_X_SM + '</button>';
     html += '</div>';
   });
@@ -2136,7 +2153,8 @@ async function saveOverride() {
   // If editing an existing override and the date changed, delete the old one first
   var editingDate = document.getElementById('editing_override_date') ? document.getElementById('editing_override_date').value : '';
   if (editingDate && editingDate !== dateVal) {
-    await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides/' + editingDate, { method: 'DELETE' });
+    const moved = await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides/' + editingDate, { method: 'DELETE' });
+    if (moved.error) { showMsg(moved.error, 'error'); return; }
   }
   var ovrReason = document.getElementById('override_reason') ? document.getElementById('override_reason').value : '';
   const data = await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides', {
@@ -3051,7 +3069,8 @@ function confirmDeleteRule(providerId, ruleId) {
   showConfirm('Delete this availability rule?', () => doDeleteRule(providerId, ruleId));
 }
 async function doDeleteRule(providerId, ruleId) {
-  await apiCall('/rules/' + providerId + '/' + ruleId, { method: 'DELETE' });
+  const data = await apiCall('/rules/' + providerId + '/' + ruleId, { method: 'DELETE' });
+  if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg('Rule deleted', 'success');
   loadOverview();
 }
@@ -3060,7 +3079,8 @@ function confirmDeleteBlock(providerId, blockId) {
   showConfirm('Delete this block?', () => doDeleteBlock(providerId, blockId));
 }
 async function doDeleteBlock(providerId, blockId) {
-  await apiCall('/blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  const data = await apiCall('/blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg('Block deleted', 'success');
   loadOverview();
 }
@@ -3069,7 +3089,8 @@ function confirmDeleteRecurringBlock(providerId, blockId) {
   showConfirm('Delete this recurring block?', () => doDeleteRecurringBlock(providerId, blockId));
 }
 async function doDeleteRecurringBlock(providerId, blockId) {
-  await apiCall('/recurring-blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  const data = await apiCall('/recurring-blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
+  if (data.error) { showMsg(data.error, 'error'); return; }
   showMsg('Recurring block deleted', 'success');
   loadOverview();
 }
@@ -3681,7 +3702,8 @@ try {
     // Land on the saved default view. Empty means show everyone.
     _savedView = ((P.my_view && P.my_view.provider_ids) || []).map(String);
 
-    if (P.expired) { _expiredSummary = P.expired; renderExpiredBanner(); }
+    // Its own request, so a failure there is reported without stopping the page.
+    loadExpiredBanner();
     if (_savedView.length && msFilterProvider) msFilterProvider.setValue(_savedView.slice());
 
     renderAccordion();

@@ -155,7 +155,7 @@ def test_validate_fetches_rules_once_and_passes_them_to_overlap():
     assert mock_all_rules.mock_calls == [call()]
     # The overlap check received the provider's pre-fetched rules (no self-fetch).
     assert mock_overlap.call_count == 1
-    assert mock_overlap.call_args_list[0].kwargs["existing_rules"] == [saved]
+    assert mock_overlap.call_args_list[0].kwargs["existing_rules"][0] is saved
 
 
 def test_validate_counts_blocks_and_rblocks():
@@ -220,13 +220,17 @@ def test_commit_saves_rule_block_rblock_and_syncs():
         save_block=DEFAULT,
         save_recurring_block=DEFAULT,
         build_block_event_effects=DEFAULT,
-        build_recurring_block_sync_effects=DEFAULT,
+        build_recurring_blocks_resync_effects=DEFAULT,
         sync_provider_availability=DEFAULT,
         build_provider_lead_time_effects=DEFAULT,
         get_rules_for_provider=DEFAULT,
+        get_active_staff_ids=DEFAULT,
+        get_all_rules=DEFAULT,
     ) as mocks:
+        mocks["get_active_staff_ids"].return_value = {"prov-1"}
+        mocks["get_all_rules"].return_value = []
         mocks["build_block_event_effects"].return_value = ["blk-eff"]
-        mocks["build_recurring_block_sync_effects"].return_value = ["rb-eff"]
+        mocks["build_recurring_blocks_resync_effects"].return_value = ["rb-eff"]
         mocks["sync_provider_availability"].return_value = ["sync-eff"]
         mocks["build_provider_lead_time_effects"].return_value = ["lead-eff"]
         mocks["get_rules_for_provider"].return_value = []
@@ -270,7 +274,11 @@ def test_commit_refreshes_lead_time_for_active_rules():
         sync_provider_availability=DEFAULT,
         build_provider_lead_time_effects=DEFAULT,
         get_rules_for_provider=DEFAULT,
+        get_active_staff_ids=DEFAULT,
+        get_all_rules=DEFAULT,
     ) as mocks:
+        mocks["get_active_staff_ids"].return_value = {"prov-1"}
+        mocks["get_all_rules"].return_value = []
         mocks["sync_provider_availability"].return_value = []
         mocks["build_provider_lead_time_effects"].return_value = ["lead-eff"]
         mocks["get_rules_for_provider"].return_value = [saved_rule]
@@ -278,3 +286,63 @@ def test_commit_refreshes_lead_time_for_active_rules():
 
     mocks["build_provider_lead_time_effects"].assert_called_once_with("prov-1", [saved_rule])
     assert "lead-eff" in result
+
+
+def _commit_handler(records):
+    return _handler(json_body={"records": records})
+
+
+_RULE = {
+    "kind": "rule", "provider_id": "prov-1", "location_ids": [], "visit_types": [],
+    "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]}, "time_windows": [],
+    "buffer_minutes": {"pre": 0, "post": 0},
+    "booking_interval": {"min_lead_hours": 0, "slot_granularity_minutes": 15},
+    "recurrence_frequency": "weekly", "recurrence_interval": 1,
+    "effective_start": None, "effective_end": None, "reason": "", "is_active": True,
+    "source_rows": [2],
+}
+
+
+def test_validate_rejects_two_overlapping_rows_in_one_file():
+    """The second row claims the same Monday hours as the first; only the first survives."""
+    first, second = dict(_RULE, source_rows=[2]), dict(_RULE, source_rows=[3])
+    with patch(CSV_MODULE + ".get_all_rules", return_value=[]):
+        from provider_availability.api.csv_import_api import _split_overlapping
+
+        ok, errors = _split_overlapping([first, second])
+    assert ok == [first]
+    assert [e["row_number"] for e in errors] == [3]
+
+
+def test_commit_rejects_inactive_provider_and_saves_nothing():
+    handler = _commit_handler([dict(_RULE, provider_id="gone")])
+    with patch(CSV_MODULE + "._check_write_access", return_value=None), \
+         patch(CSV_MODULE + ".get_active_staff_ids", return_value={"prov-1"}), \
+         patch(CSV_MODULE + ".save_rule") as mock_save:
+        body, code = _parse(handler.commit_records()[-1])
+    assert code == 400
+    assert "not active staff" in body["error"]
+    assert mock_save.mock_calls == []
+
+
+def test_commit_rechecks_overlap_and_saves_nothing():
+    handler = _commit_handler([_RULE])
+    with patch(CSV_MODULE + "._check_write_access", return_value=None), \
+         patch(CSV_MODULE + ".get_active_staff_ids", return_value={"prov-1"}), \
+         patch(CSV_MODULE + ".get_all_rules", return_value=[]), \
+         patch(CSV_MODULE + ".check_rule_overlap", return_value="Overlapping availability on Monday"), \
+         patch(CSV_MODULE + ".save_rule") as mock_save:
+        body, code = _parse(handler.commit_records()[-1])
+    assert code == 400
+    assert body["errors"][0]["errors"] == ["Overlapping availability on Monday"]
+    assert mock_save.mock_calls == []
+
+
+def test_validate_non_utf8_file_is_a_clear_400():
+    handler = _handler()
+    _set_upload(handler, "x")
+    handler.request.form_data.return_value["file"].content = "caf\u00e9".encode("cp1252")
+    with _patch_lookups():
+        body, code = _parse(handler.validate_upload()[0])
+    assert code == 400
+    assert "UTF-8" in body["error"]

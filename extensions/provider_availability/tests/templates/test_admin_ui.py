@@ -21,7 +21,22 @@ class TestRenderAdminPage:
         data = {"payload": "</script><script>alert(1)</script>"}
         html = render_admin_page(data)
         assert "</script><script>" not in html
-        assert "<\\/script>" in html
+        assert "\\u003c/script>" in html
+
+    def test_comment_open_in_data_cannot_swallow_the_page_script(self):
+        """A reason containing "<!--<script" would otherwise eat the admin.js tag."""
+        html = render_admin_page({"reason": "x<!--<script"})
+        preload = html[html.index("window.__PRELOADED__="):]
+        preload = preload[: preload.index("</script>")]
+        assert "<" not in preload
+
+    def test_escaped_data_reads_back_unchanged(self):
+        import json
+
+        data = {"reason": "a<b </script> <!--"}
+        html = render_admin_page(data)
+        preload = html[html.index("window.__PRELOADED__=") + len("window.__PRELOADED__="):]
+        assert json.loads(preload[: preload.index(";</script>")]) == data
 
     def test_preserves_data_integrity(self):
         data = {"key": "value/with/slashes"}
