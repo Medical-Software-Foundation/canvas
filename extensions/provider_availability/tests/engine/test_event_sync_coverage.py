@@ -17,6 +17,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.conftest import QS
+
 from canvas_sdk.effects.calendar import EventRecurrence
 
 from provider_availability.engine.models import (
@@ -27,7 +29,6 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.event_sync import (
     AVAILABILITY_TITLE,
-    HOLD_TITLE_PREFIXES,
     RECURRING_BLOCK_TITLE,
     _block_outside_override,
     _build_hold_block_events,
@@ -354,7 +355,7 @@ class TestBuildDeleteBlockEffectsTitleFallback:
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
             # First filter (time-range) returns nothing, second (title) returns the event
-            mock_event_objects.filter.side_effect = [[], [mock_evt]]
+            mock_event_objects.filter.side_effect = [QS([]), QS([mock_evt])]
 
             result = build_delete_block_effects(PROVIDER_ID, sample_block)
 
@@ -394,7 +395,7 @@ class TestBuildDeleteBlockEffectsTitleFallback:
         )
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.side_effect = [[], [mock_evt]]
+            mock_event_objects.filter.side_effect = [QS([]), QS([mock_evt])]
 
             result = build_delete_block_effects(PROVIDER_ID, block)
 
@@ -1132,16 +1133,14 @@ class TestBuildHoldBlockRefreshEffects:
              patch(f"{MODULE}.EventEffect") as mock_event_effect:
             mock_date.today.return_value = date(2026, 3, 2)
             mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
-            # First prefix returns one existing event, remaining prefixes empty
-            side = [[existing_evt]] + [[] for _ in HOLD_TITLE_PREFIXES[1:]]
-            mock_event_objects.filter.side_effect = side
+            mock_event_objects.filter.return_value = QS([existing_evt])
             mock_event_effect.return_value.create.return_value = MagicMock()
             mock_event_effect.return_value.delete.return_value = MagicMock()
 
             result = build_hold_block_refresh_effects(block)
 
-        # One prefix query per HOLD_TITLE_PREFIXES entry
-        assert mock_event_objects.filter.call_count == len(HOLD_TITLE_PREFIXES)
+        # One query covers every hold title prefix
+        assert mock_event_objects.filter.call_count == 1
         # 1 delete (existing) + 1 create (03-03) = 2
         assert len(result) == 2
 
@@ -1150,6 +1149,7 @@ class TestBuildHoldBlockRefreshEffects:
 
 
 class TestBuildDeleteRecurringBlockHoldCleanup:
+    @patch(f"{MODULE}.get_recurring_blocks_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}.get_admin_calendars")
     @patch(f"{MODULE}.get_event_ids")
     def test_stored_ids_plus_hold_cleanup(
@@ -1173,17 +1173,16 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         )
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            # One hold event on the first prefix, empty for the rest
-            side = [[hold_evt]] + [[] for _ in HOLD_TITLE_PREFIXES[1:]]
-            mock_event_objects.filter.side_effect = side
+            mock_event_objects.filter.return_value = QS([hold_evt])
 
             result = build_delete_recurring_block_effects(PROVIDER_ID, block)
 
         assert mock_get_ids.mock_calls == [call(block.id)]
         # 2 stored-ID deletes + 1 hold-event delete = 3
         assert len(result) == 3
-        assert mock_event_objects.filter.call_count == len(HOLD_TITLE_PREFIXES)
+        assert mock_event_objects.filter.call_count == 1
 
+    @patch(f"{MODULE}.get_recurring_blocks_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}.get_admin_calendars")
     @patch(f"{MODULE}.get_event_ids")
     def test_title_fallback_plus_hold_cleanup(
@@ -1209,10 +1208,8 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         )
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            # First filter = title__in match, then one hold event on first prefix,
-            # empty for remaining prefixes.
-            side = [[title_evt], [hold_evt]] + [[] for _ in HOLD_TITLE_PREFIXES[1:]]
-            mock_event_objects.filter.side_effect = side
+            # First filter = title__in match, then one query for all hold prefixes.
+            mock_event_objects.filter.side_effect = [QS([title_evt]), QS([hold_evt])]
 
             result = build_delete_recurring_block_effects(PROVIDER_ID, block)
 
@@ -1222,4 +1219,4 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         # 1 title delete + 1 hold delete = 2
         assert len(result) == 2
         # 1 title query + N prefix queries
-        assert mock_event_objects.filter.call_count == 1 + len(HOLD_TITLE_PREFIXES)
+        assert mock_event_objects.filter.call_count == 2

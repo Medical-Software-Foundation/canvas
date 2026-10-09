@@ -18,8 +18,9 @@ from provider_availability.engine.roles import (
     get_schedulable_staff,
 )
 from provider_availability.engine.event_sync import (
-    build_hold_block_refresh_effects,
-    build_lead_time_block_effects,
+    build_provider_hold_refresh_effects,
+    build_provider_lead_time_effects,
+    lead_time_rules,
     sync_provider_availability,
 )
 from provider_availability.engine.storage import (
@@ -133,10 +134,13 @@ def _refresh_lead_time_blocks() -> list[Effect]:
     """Refresh lead-time blocks for all rules with min_lead_hours > 0."""
     effects: list[Effect] = []
     try:
-        rules = get_all_rules()
-        for rule in rules:
-            if rule.is_active and rule.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(rule))
+        # One pass per provider: lead-time events are per provider, so building
+        # them rule by rule made each rule delete the others' events every tick.
+        by_provider: dict[str, list] = {}
+        for rule in lead_time_rules(get_all_rules()):
+            by_provider.setdefault(rule.provider_id, []).append(rule)
+        for provider_id, rules in by_provider.items():
+            effects.extend(build_provider_lead_time_effects(provider_id, rules))
     except Exception:
         log.exception("_refresh_lead_time_blocks: error refreshing lead-time blocks")
     return effects
@@ -151,10 +155,14 @@ def _refresh_hold_blocks() -> list[Effect]:
     """
     effects: list[Effect] = []
     try:
-        blocks = get_all_recurring_blocks()
-        for block in blocks:
+        # One pass per provider: hold events are found by title per provider, so
+        # refreshing block by block deleted the same events once per hold block.
+        by_provider: dict[str, list] = {}
+        for block in get_all_recurring_blocks():
             if block.is_active and block.hold_type != "none":
-                effects.extend(build_hold_block_refresh_effects(block))
+                by_provider.setdefault(block.provider_id, []).append(block)
+        for provider_id, blocks in by_provider.items():
+            effects.extend(build_provider_hold_refresh_effects(provider_id, blocks))
     except Exception:
         log.exception("_refresh_hold_blocks: error refreshing hold blocks")
     return effects

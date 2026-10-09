@@ -97,13 +97,14 @@ class TestGetSchedulableStaff:
 
         with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["MD", "CC"]), \
              patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.return_value.prefetch_related.return_value = [provider, admin, coordinator]
+            mock_staff.filter.return_value.only.return_value.prefetch_related.return_value = [provider, admin, coordinator]
 
             result = get_schedulable_staff()
 
             assert mock_staff.mock_calls == [
                 call.filter(active=True),
-                call.filter().prefetch_related("roles"),
+                call.filter().only("id", "first_name", "last_name", "npi_number"),
+                call.filter().only().prefetch_related("roles"),
             ]
             assert result == [provider, coordinator]
 
@@ -116,7 +117,7 @@ class TestGetSchedulableStaff:
 
         with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=None), \
              patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.return_value.prefetch_related.return_value = [therapist, physician, admin]
+            mock_staff.filter.return_value.only.return_value.prefetch_related.return_value = [therapist, physician, admin]
 
             assert get_schedulable_staff() == [therapist, physician]
 
@@ -126,7 +127,7 @@ class TestGetSchedulableStaff:
 
         with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC"]), \
              patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.return_value.prefetch_related.return_value = [physician, admin]
+            mock_staff.filter.return_value.only.return_value.prefetch_related.return_value = [physician, admin]
 
             assert get_schedulable_staff() == [physician]
 
@@ -195,11 +196,11 @@ class TestProviderTypeFallbackActive:
     def test_saved_roles_matching_nobody_is_the_fallback(self):
         with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC"]), \
              patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.return_value.prefetch_related.return_value = [_staff(["MD"], role_type="PROVIDER")]
+            mock_staff.filter.return_value.only.return_value.prefetch_related.return_value = [_staff(["MD"], role_type="PROVIDER")]
             assert is_provider_type_fallback_active() is True
 
     def test_saved_roles_with_a_holder_is_not_the_fallback(self):
         with patch(f"{ROLES_MODULE}.get_schedulable_roles", return_value=["CC"]), \
              patch(f"{ROLES_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.return_value.prefetch_related.return_value = [_staff(["CC"])]
+            mock_staff.filter.return_value.only.return_value.prefetch_related.return_value = [_staff(["CC"])]
             assert is_provider_type_fallback_active() is False

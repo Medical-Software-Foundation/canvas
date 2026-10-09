@@ -23,9 +23,10 @@ from provider_availability.engine.event_sync import (
     build_delete_block_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
-    build_lead_time_block_effects,
+    build_provider_lead_time_effects,
     build_recurring_block_sync_effects,
     delete_provider_lead_time_events,
+    lead_time_rules,
     sync_provider_availability,
 )
 from provider_availability.engine.lookups import (
@@ -669,7 +670,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         sync_effects = sync_provider_availability(provider_id)
         if rule.is_active and rule.booking_interval.min_lead_hours > 0:
-            sync_effects.extend(build_lead_time_block_effects(rule))
+            sync_effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
 
         return [
             *sync_effects,
@@ -756,12 +757,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         all_effects: list[Effect] = []
         for pid in providers_to_sync:
             all_effects.extend(sync_provider_availability(pid))
-            has_lead_time = False
-            for r in get_rules_for_provider(pid):
-                if r.is_active and r.booking_interval.min_lead_hours > 0:
-                    all_effects.extend(build_lead_time_block_effects(r))
-                    has_lead_time = True
-            if not has_lead_time:
+            lead_rules = lead_time_rules(get_rules_for_provider(pid))
+            if lead_rules:
+                all_effects.extend(build_provider_lead_time_effects(pid, lead_rules))
+            else:
                 all_effects.extend(delete_provider_lead_time_events(pid))
 
         return [
@@ -784,13 +783,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         event_effects = sync_provider_availability(provider_id)
 
         # Refresh lead time blocks for remaining rules, or clean up orphans
-        remaining = get_rules_for_provider(provider_id)
-        has_lead_time = False
-        for r in remaining:
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                event_effects.extend(build_lead_time_block_effects(r))
-                has_lead_time = True
-        if not has_lead_time:
+        lead_rules = lead_time_rules(get_rules_for_provider(provider_id))
+        if lead_rules:
+            event_effects.extend(build_provider_lead_time_effects(provider_id, lead_rules))
+        else:
             event_effects.extend(delete_provider_lead_time_events(provider_id))
 
         return [
@@ -878,9 +874,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
         # Refresh lead time blocks (they now respect override windows)
-        for r in get_rules_for_provider(provider_id):
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(r))
+        effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         # Re-sync recurring blocks so they skip override dates
         for rb in get_all_recurring_blocks():
             if rb.provider_id == provider_id and rb.is_active:
@@ -903,9 +897,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
         # Refresh lead time blocks (override removed, revert to weekly schedule)
-        for r in get_rules_for_provider(provider_id):
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(r))
+        effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         # Re-sync recurring blocks so they restore events for removed override date
         for rb in get_all_recurring_blocks():
             if rb.provider_id == provider_id and rb.is_active:
@@ -1942,7 +1934,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
         if rule.is_active and rule.booking_interval.min_lead_hours > 0:
-            effects.extend(build_lead_time_block_effects(rule))
+            effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         return [*effects, JSONResponse({"message": "Rule saved"})]
 
     def _form_update_rule(self, body: dict) -> list[Response | Effect]:
@@ -1991,9 +1983,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         effects: list[Effect] = []
         for pid in providers_to_sync:
             effects.extend(sync_provider_availability(pid))
-            for r in get_rules_for_provider(pid):
-                if r.is_active and r.booking_interval.min_lead_hours > 0:
-                    effects.extend(build_lead_time_block_effects(r))
+            effects.extend(build_provider_lead_time_effects(pid, get_rules_for_provider(pid)))
         return [*effects, JSONResponse({"message": f"Updated {count} rule(s)"})]
 
     def _form_delete_rule(self, provider_id: str, rule_id: str) -> list[Response | Effect]:
@@ -2004,13 +1994,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Re-sync availability for remaining rules
         effects = sync_provider_availability(provider_id)
         # Refresh lead time blocks for remaining rules, or clean up if none left
-        remaining = get_rules_for_provider(provider_id)
-        has_lead_time = False
-        for r in remaining:
-            if r.is_active and r.booking_interval.min_lead_hours > 0:
-                effects.extend(build_lead_time_block_effects(r))
-                has_lead_time = True
-        if not has_lead_time:
+        lead_rules = lead_time_rules(get_rules_for_provider(provider_id))
+        if lead_rules:
+            effects.extend(build_provider_lead_time_effects(provider_id, lead_rules))
+        else:
             # Delete orphaned lead time events for this provider
             effects.extend(delete_provider_lead_time_events(provider_id))
         return [*effects, JSONResponse({"message": "Rule deleted"})]

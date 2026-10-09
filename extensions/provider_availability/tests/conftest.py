@@ -40,6 +40,22 @@ def _admin_page_renders_from_file():
         yield
 
 
+class QS(list):
+    """A list that answers the queryset calls the plugin makes on query results.
+
+    Tests stub ``Model.objects.filter`` with a plain list; code that asks for
+    ``.values_list("id", flat=True)`` needs this instead.
+    """
+
+    def values_list(self, *fields, flat=False):
+        if flat:
+            return [getattr(o, fields[0]) for o in self]
+        return [tuple(getattr(o, f) for f in fields) for o in self]
+
+    def order_by(self, *fields):
+        return self
+
+
 PROVIDER_ID = "provider-uuid-123"
 LOCATION_ID = "location-uuid-456"
 VISIT_TYPE_ID = "visit-type-uuid-789"

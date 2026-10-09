@@ -30,7 +30,7 @@ from provider_availability.engine.csv_import import (
 )
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
-    build_lead_time_block_effects,
+    build_provider_lead_time_effects,
     build_recurring_block_sync_effects,
     sync_provider_availability,
 )
@@ -201,9 +201,7 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         # Sync each touched provider's availability once, then refresh lead-time blocks.
         for pid in providers_touched:
             effects.extend(sync_provider_availability(pid))
-            for r in get_rules_for_provider(pid):
-                if r.is_active and r.booking_interval.min_lead_hours > 0:
-                    effects.extend(build_lead_time_block_effects(r))
+            effects.extend(build_provider_lead_time_effects(pid, get_rules_for_provider(pid)))
 
         log.info(
             "csv commit: %d rules, %d blocks, %d recurring blocks",

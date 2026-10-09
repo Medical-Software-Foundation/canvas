@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, call, patch
 
+from tests.conftest import QS
+
 from provider_availability.engine.lookups import (
     get_active_locations,
     get_active_providers,
@@ -21,7 +23,7 @@ class TestGetActiveStaffIds:
         s2.id = "staff-2"
 
         with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value = [s1, s2]
+            mock_objects.filter.return_value = QS([s1, s2])
 
             result = get_active_staff_ids()
 
@@ -30,7 +32,7 @@ class TestGetActiveStaffIds:
 
     def test_empty(self):
         with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value = []
+            mock_objects.filter.return_value = QS([])
 
             assert get_active_staff_ids() == set()
 

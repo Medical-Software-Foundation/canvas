@@ -40,7 +40,7 @@ def get_active_staff_ids() -> set[str]:
     Availability can be scheduled for any active staff record, so the CSV
     importer keys on the staff UUID rather than NPI (which only providers have).
     """
-    ids = {str(s.id) for s in Staff.objects.filter(active=True)}
+    ids = {str(i) for i in Staff.objects.filter(active=True).values_list("id", flat=True)}
     log.info("get_active_staff_ids: found %d active staff", len(ids))
     return ids
 

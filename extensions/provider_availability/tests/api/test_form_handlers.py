@@ -74,6 +74,7 @@ def _make_form_handler(method: str, path: str, body: dict) -> AvailabilityAPI:
 
 
 class TestDoDispatch:
+    @patch(f"{MODULE}.get_rules_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.save_rule")
     @patch(f"{MODULE}.check_rule_overlap", return_value="")

@@ -35,10 +35,12 @@ def resolve_provider_name(provider_id: str) -> str:
     get_admin_calendar_id / get_admin_calendars to avoid refetching the same
     Staff row per iteration.
     """
-    try:
-        return Staff.objects.get(id=provider_id).full_name or ""
-    except Staff.DoesNotExist:
+    row = Staff.objects.filter(id=provider_id).values_list("first_name", "last_name").first()
+    if not row:
         return ""
+    # Same text as Staff.full_name, without loading the whole staff row.
+    name = f"{row[0]} {row[1]}"
+    return name if name.strip() else ""
 
 
 def get_admin_calendar_id(

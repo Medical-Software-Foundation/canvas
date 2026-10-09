@@ -279,17 +279,17 @@ class TestRefreshLeadTimeBlocks:
         lead_effect = MagicMock()
 
         with patch(f"{CR_MODULE}.get_all_rules", return_value=[rule_with_lead, rule_no_lead, rule_inactive]) as mock_rules, \
-             patch(f"{CR_MODULE}.build_lead_time_block_effects", return_value=[lead_effect]) as mock_build:
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects", return_value=[lead_effect]) as mock_build:
 
             result = _refresh_lead_time_blocks()
 
             assert mock_rules.mock_calls == [call()]
-            assert mock_build.mock_calls == [call(rule_with_lead)]
+            assert mock_build.mock_calls == [call(rule_with_lead.provider_id, [rule_with_lead])]
             assert result == [lead_effect]
 
     def test_no_rules(self):
         with patch(f"{CR_MODULE}.get_all_rules", return_value=[]), \
-             patch(f"{CR_MODULE}.build_lead_time_block_effects") as mock_build:
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects") as mock_build:
 
             result = _refresh_lead_time_blocks()
 
@@ -388,10 +388,10 @@ class TestRefreshHoldBlocks:
         block.hold_type = "same_day"
 
         with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[block]), \
-             patch(f"{CR_MODULE}.build_hold_block_refresh_effects", return_value=[MagicMock()]) as mock_build:
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects", return_value=[MagicMock()]) as mock_build:
             result = _refresh_hold_blocks()
 
-            mock_build.assert_called_once_with(block)
+            mock_build.assert_called_once_with(block.provider_id, [block])
             assert len(result) == 1
 
     def test_skips_inactive_blocks(self):
@@ -400,7 +400,7 @@ class TestRefreshHoldBlocks:
         block.hold_type = "same_day"
 
         with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[block]), \
-             patch(f"{CR_MODULE}.build_hold_block_refresh_effects") as mock_build:
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects") as mock_build:
             result = _refresh_hold_blocks()
 
             mock_build.assert_not_called()
@@ -412,7 +412,7 @@ class TestRefreshHoldBlocks:
         block.hold_type = "none"
 
         with patch(f"{CR_MODULE}.get_all_recurring_blocks", return_value=[block]), \
-             patch(f"{CR_MODULE}.build_hold_block_refresh_effects") as mock_build:
+             patch(f"{CR_MODULE}.build_provider_hold_refresh_effects") as mock_build:
             result = _refresh_hold_blocks()
 
             mock_build.assert_not_called()

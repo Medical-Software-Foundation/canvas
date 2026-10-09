@@ -222,13 +222,13 @@ def test_commit_saves_rule_block_rblock_and_syncs():
         build_block_event_effects=DEFAULT,
         build_recurring_block_sync_effects=DEFAULT,
         sync_provider_availability=DEFAULT,
-        build_lead_time_block_effects=DEFAULT,
+        build_provider_lead_time_effects=DEFAULT,
         get_rules_for_provider=DEFAULT,
     ) as mocks:
         mocks["build_block_event_effects"].return_value = ["blk-eff"]
         mocks["build_recurring_block_sync_effects"].return_value = ["rb-eff"]
         mocks["sync_provider_availability"].return_value = ["sync-eff"]
-        mocks["build_lead_time_block_effects"].return_value = ["lead-eff"]
+        mocks["build_provider_lead_time_effects"].return_value = ["lead-eff"]
         mocks["get_rules_for_provider"].return_value = []
         result = handler.commit_records()
 
@@ -268,13 +268,13 @@ def test_commit_refreshes_lead_time_for_active_rules():
         CSV_MODULE,
         save_rule=DEFAULT,
         sync_provider_availability=DEFAULT,
-        build_lead_time_block_effects=DEFAULT,
+        build_provider_lead_time_effects=DEFAULT,
         get_rules_for_provider=DEFAULT,
     ) as mocks:
         mocks["sync_provider_availability"].return_value = []
-        mocks["build_lead_time_block_effects"].return_value = ["lead-eff"]
+        mocks["build_provider_lead_time_effects"].return_value = ["lead-eff"]
         mocks["get_rules_for_provider"].return_value = [saved_rule]
         result = handler.commit_records()
 
-    mocks["build_lead_time_block_effects"].assert_called_once_with(saved_rule)
+    mocks["build_provider_lead_time_effects"].assert_called_once_with("prov-1", [saved_rule])
     assert "lead-eff" in result

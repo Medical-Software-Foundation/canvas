@@ -291,7 +291,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=["sync-fx"]) as mock_sync, \
-             patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=["lead-fx"]) as mock_lead, \
+             patch(f"{SL_MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"]) as mock_lead, \
              patch(f"{SL_MODULE}.build_delete_block_effects", return_value=["del-block-fx"]) as mock_del_block, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=["block-fx"]) as mock_block_fx, \
              patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"]) as mock_rb_fx:
@@ -301,7 +301,7 @@ class TestOnPluginInstalled:
             assert mock_mark.mock_calls == [call()]
             assert mock_set_ver.mock_calls == [call("1.0")]
             assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1"})]
-            assert mock_lead.mock_calls == [call(mock_rule)]
+            assert mock_lead.mock_calls == [call("p1", [mock_rule])]
             # Block reconciliation deletes the block's own prior events first,
             # then recreates — never a blanket calendar sweep.
             assert mock_del_block.mock_calls == [call("p1", mock_block)]
@@ -382,7 +382,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
              patch(f"{SL_MODULE}.set_synced_version") as mock_set_ver, \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]) as mock_sync, \
-             patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=[]) as mock_lead, \
+             patch(f"{SL_MODULE}.build_provider_lead_time_effects", return_value=[]) as mock_lead, \
              patch(f"{SL_MODULE}.build_delete_block_effects", return_value=[]) as mock_del_block, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=[]) as mock_block_fx, \
              patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=[]) as mock_rb_fx:
@@ -391,7 +391,7 @@ class TestOnPluginInstalled:
 
             mock_set_ver.assert_called_once_with("0.0.2")
             mock_sync.assert_called_once_with("p1", schedulable_ids={"p1"})
-            mock_lead.assert_called_once_with(mock_rule)
+            mock_lead.assert_called_once_with("p1", [mock_rule])
             mock_del_block.assert_called_once_with("p1", mock_block)
             mock_block_fx.assert_called_once_with(mock_block)
             mock_rb_fx.assert_called_once_with(mock_rb)
@@ -437,7 +437,7 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_synced_version", return_value="0.0.1"), \
              patch(f"{SL_MODULE}.set_synced_version"), \
              patch(f"{SL_MODULE}.sync_provider_availability", return_value=[]), \
-             patch(f"{SL_MODULE}.build_lead_time_block_effects", side_effect=Exception("lead error")):
+             patch(f"{SL_MODULE}.build_provider_lead_time_effects", side_effect=Exception("lead error")):
 
             result = handler.compute()
 

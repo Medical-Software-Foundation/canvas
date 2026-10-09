@@ -73,7 +73,12 @@ def get_schedulable_staff() -> list[Staff]:
     check.
     """
     codes = get_schedulable_codes()
-    staff = list(Staff.objects.filter(active=True).prefetch_related("roles"))
+    # Only the fields callers read (key, name, NPI); roles are prefetched for the role check.
+    staff = list(
+        Staff.objects.filter(active=True)
+        .only("id", "first_name", "last_name", "npi_number")
+        .prefetch_related("roles")
+    )
     result = [s for s in staff if is_schedulable_staff(s, codes)]
     if codes is not None and not result:
         log.warning(
@@ -92,7 +97,7 @@ def is_provider_type_fallback_active() -> bool:
     codes = get_schedulable_codes()
     if codes is None:
         return False
-    staff = Staff.objects.filter(active=True).prefetch_related("roles")
+    staff = Staff.objects.filter(active=True).only("id").prefetch_related("roles")
     return not any(is_schedulable_staff(s, codes) for s in staff)
 
 

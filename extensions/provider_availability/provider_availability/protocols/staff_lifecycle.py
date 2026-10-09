@@ -23,7 +23,7 @@ from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_block_effects,
     build_delete_effects,
-    build_lead_time_block_effects,
+    build_provider_lead_time_effects,
     build_recurring_block_sync_effects,
     sync_provider_availability,
 )
@@ -271,13 +271,16 @@ class OnPluginInstalled(BaseProtocol):
                         sync_provider_availability(rule.provider_id, schedulable_ids=schedulable_ids)
                     )
                     provider_ids_synced.add(rule.provider_id)
+                    # Lead time is per provider: build it once from all the provider's rules.
+                    if rule.provider_id in schedulable_ids:
+                        provider_rules = [r for r in rules if r.provider_id == rule.provider_id]
+                        effects.extend(build_provider_lead_time_effects(rule.provider_id, provider_rules))
                 rules_synced += 1
                 if (
                     rule.is_active
                     and rule.booking_interval.min_lead_hours > 0
                     and rule.provider_id in schedulable_ids
                 ):
-                    effects.extend(build_lead_time_block_effects(rule))
                     lead_time_count += 1
             except Exception:
                 log.exception(

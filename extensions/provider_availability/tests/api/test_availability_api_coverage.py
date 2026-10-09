@@ -112,7 +112,7 @@ def _lead_time_rule(rule_id: str = "r-lead") -> ProviderAvailabilityRule:
 
 class TestUpdateRuleGroupBranches:
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_lead_time_block_effects", return_value=["lead-fx"])
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.save_rule")
     @patch(f"{MODULE}.check_rule_overlap", return_value=None)
@@ -159,11 +159,11 @@ class TestUpdateRuleGroupBranches:
         assert len(data["rule"]["date_overrides"]) == 1
         # Lead-time effects were appended ahead of the JSONResponse
         assert "lead-fx" in result
-        assert mock_lead.mock_calls == [call(mock_lead.call_args[0][0])]
+        assert mock_lead.mock_calls == [call(PROVIDER_ID, mock_get_rules.return_value)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
-    @patch(f"{MODULE}.build_lead_time_block_effects")
+    @patch(f"{MODULE}.build_provider_lead_time_effects")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.save_rule")
     @patch(f"{MODULE}.check_rule_overlap", return_value=None)
@@ -202,7 +202,7 @@ class TestUpdateRuleGroupBranches:
 
 class TestDeleteRuleBranches:
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_lead_time_block_effects", return_value=["lead-fx"])
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.delete_rule_by_id")
@@ -219,11 +219,11 @@ class TestDeleteRuleBranches:
         assert data["message"] == "Rule deleted"
         assert "lead-fx" in result
         assert mock_delete.mock_calls == [call(PROVIDER_ID, "r1")]
-        assert mock_lead.mock_calls == [call(mock_lead.call_args[0][0])]
+        assert mock_lead.mock_calls == [call(PROVIDER_ID, mock_get_rules.return_value)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
-    @patch(f"{MODULE}.build_lead_time_block_effects")
+    @patch(f"{MODULE}.build_provider_lead_time_effects")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.delete_rule_by_id")
@@ -257,7 +257,7 @@ class TestOverrideResyncBranches:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"])
     @patch(f"{MODULE}.get_all_recurring_blocks")
-    @patch(f"{MODULE}.build_lead_time_block_effects", return_value=["lead-fx"])
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.save_rule")
@@ -298,7 +298,7 @@ class TestOverrideResyncBranches:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"])
     @patch(f"{MODULE}.get_all_recurring_blocks")
-    @patch(f"{MODULE}.build_lead_time_block_effects", return_value=["lead-fx"])
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.save_rule")
@@ -910,14 +910,16 @@ class TestRecurrenceValidation:
 
 class TestCreateRuleLeadTime:
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_lead_time_block_effects", return_value=["lead-fx"])
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.save_rule")
     @patch(f"{MODULE}.check_rule_overlap", return_value=None)
     @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
+    @patch(f"{MODULE}.get_rules_for_provider")
     def test_active_lead_time_rule_appends_effects(
-        self, mock_resolve, mock_overlap, mock_save, mock_sync, mock_lead, mock_access
+        self, mock_get_rules, mock_resolve, mock_overlap, mock_save, mock_sync, mock_lead, mock_access
     ):
+        mock_get_rules.return_value = [_lead_time_rule()]
         body = {
             "provider_id": PROVIDER_ID,
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -929,7 +931,7 @@ class TestCreateRuleLeadTime:
         data, code = _parse(result[-1])
         assert code == HTTPStatus.CREATED
         assert "lead-fx" in result
-        assert mock_lead.mock_calls == [call(mock_lead.call_args[0][0])]
+        assert mock_lead.mock_calls == [call(PROVIDER_ID, mock_get_rules.return_value)]
 
 
 # ── _form_set_provider_timezone / _form_set_provider_tz_bulk ───────────────
@@ -1098,7 +1100,7 @@ class TestCheckWriteAccessSecret:
 
 class TestFormDeleteRule:
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_lead_time_block_effects", return_value=["lead-fx"])
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.delete_rule_by_id")
@@ -1116,7 +1118,7 @@ class TestFormDeleteRule:
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
-    @patch(f"{MODULE}.build_lead_time_block_effects")
+    @patch(f"{MODULE}.build_provider_lead_time_effects")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.delete_rule_by_id")

@@ -846,6 +846,7 @@ class TestGetProviderRules:
 
 
 class TestCreateOrUpdateRule:
+    @patch(f"{MODULE}.get_rules_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.save_rule")
@@ -923,6 +924,7 @@ class TestCreateOrUpdateRule:
         assert code == HTTPStatus.FORBIDDEN
         assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
 
+    @patch(f"{MODULE}.get_rules_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.save_rule")
