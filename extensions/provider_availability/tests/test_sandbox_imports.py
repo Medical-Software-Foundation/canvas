@@ -78,3 +78,22 @@ def test_the_attribute_scan_can_fail():
     assert (3, "json", "loadz") in reads
     assert (4, "datetime", "datetime") in reads
     assert "loadz" not in ALLOWED_MODULES["json"]
+
+
+@pytest.mark.parametrize("path", SOURCES, ids=lambda p: str(p.relative_to(PACKAGE)))
+def test_no_dataclass_with_postponed_annotations(path):
+    """@dataclass with `from __future__ import annotations` looks its module up in
+    sys.modules, which the sandbox leaves empty, so the module fails to load. This
+    took the admin API down in 0.23.20 on support-team; tests outside the sandbox pass."""
+    src = path.read_text()
+    tree = ast.parse(src)
+    future = any(
+        isinstance(n, ast.ImportFrom) and n.module == "__future__" and any(a.name == "annotations" for a in n.names)
+        for n in tree.body
+    )
+    dataclasses_used = any(
+        isinstance(d, (ast.Name, ast.Attribute)) and getattr(d, "id", getattr(d, "attr", "")) == "dataclass"
+        or isinstance(d, ast.Call) and getattr(d.func, "id", getattr(d.func, "attr", "")) == "dataclass"
+        for n in ast.walk(tree) if isinstance(n, ast.ClassDef) for d in n.decorator_list
+    )
+    assert not (future and dataclasses_used), f"{path.name}: @dataclass in a module with `from __future__ import annotations`"

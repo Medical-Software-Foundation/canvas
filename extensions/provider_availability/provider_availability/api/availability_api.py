@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from http import HTTPStatus
 from typing import Any, Callable
@@ -284,17 +283,29 @@ def _sort_providers_you_first(providers: list[dict], staff_id: str) -> list[dict
     return sorted(providers, key=sort_key)
 
 
-@dataclass
 class _FormRequest:
-    """What a route reads from its request, rebuilt from a form-action post."""
+    """What a route reads from its request, rebuilt from a form-action post.
 
-    headers: Any
-    path_params: dict
-    body: dict
-    query_params: dict = field(default_factory=dict)
+    A plain class: @dataclass fails to load in the sandbox in a module using
+    `from __future__ import annotations`.
+    """
+
+    headers: Any = None
+    path_params: dict = {}
+    query_params: dict = {}
+    body: dict = {}
 
     def json(self) -> dict:
         return self.body
+
+
+def _form_request(headers: Any, path_params: dict, body: dict, query_params: dict) -> _FormRequest:
+    request = _FormRequest()
+    request.headers = headers
+    request.path_params = path_params
+    request.body = body
+    request.query_params = query_params
+    return request
 
 
 def _set_request(handler: Any, request: Any) -> None:
@@ -1954,9 +1965,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             if params is None:
                 continue
             original = self.request
-            _set_request(
-                self, _FormRequest(headers=original.headers, path_params=params, body=body, query_params=query)
-            )
+            _set_request(self, _form_request(original.headers, params, body, query))
             try:
                 return route()
             finally:
