@@ -11,7 +11,7 @@ from canvas_sdk.test_utils.factories import (
     ServiceProviderFactory,
 )
 from canvas_sdk.v1.data import FaxDirection
-from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
+from canvas_sdk.v1.data.note import NoteStateChangeEvent, NoteStates
 
 from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
 from failed_fax_dashboard.services.failures import (
@@ -20,7 +20,7 @@ from failed_fax_dashboard.services.failures import (
     collect_sent,
     cutoff_for,
 )
-from tests.helpers import make_alert, make_bot, make_event, make_staff
+from tests.helpers import make_alert, make_bot, make_event, make_staff, set_note_state
 from canvas_sdk.test_utils.factories import TaskFactory
 
 pytestmark = pytest.mark.django_db
@@ -217,15 +217,31 @@ def test_dismissed_row_is_hidden_until_a_newer_failure() -> None:
 def test_deleted_notes_and_letters_on_deleted_notes_are_not_rows() -> None:
     note_event = make_event("note")
     letter_event = make_event("letter")
-    CurrentNoteStateEvent.objects.create(note=note_event.note, state=NoteStates.DELETED)
-    CurrentNoteStateEvent.objects.create(note=letter_event.letter.note, state=NoteStates.DELETED)
+    set_note_state(note_event.note, NoteStates.LOCKED, minutes_later=1)
+    set_note_state(note_event.note, NoteStates.DELETED, minutes_later=2)
+    set_note_state(letter_event.letter.note, NoteStates.DELETED)
 
     assert rows() == []
 
 
 def test_notes_in_a_live_state_stay_rows() -> None:
     event = make_event("note")
-    CurrentNoteStateEvent.objects.create(note=event.note, state=NoteStates.LOCKED)
+    set_note_state(event.note, NoteStates.LOCKED)
+
+    assert len(rows()) == 1
+
+
+def test_a_note_with_no_state_history_stays_a_row() -> None:
+    event = make_event("note")
+    NoteStateChangeEvent.objects.filter(note=event.note).delete()
+
+    assert len(rows()) == 1
+
+
+def test_a_note_deleted_and_then_restored_stays_a_row() -> None:
+    event = make_event("note")
+    set_note_state(event.note, NoteStates.DELETED, minutes_later=1)
+    set_note_state(event.note, NoteStates.NEW, minutes_later=2)
 
     assert len(rows()) == 1
 
@@ -308,7 +324,8 @@ def test_two_clicks_are_credited_in_click_order() -> None:
     second_click = make_staff("Ben", "Baker")
     start = make_event("note", originator=make_staff().user, age_days=4)
     one = make_event("note", note=start.note, originator=bot.user, age_days=2)
-    two = make_event("note", note=start.note, originator=bot.user, age_days=1)
+    two = make_event("note", note=start.note, originator=bot.user, age_days=2)
+    type(two).objects.filter(pk=two.pk).update(created=one.created + timedelta(minutes=1))
     for person, minutes in ((second_click, 1), (first_click, 2)):
         FaxResend.objects.create(
             note_id=start.note.dbid,
@@ -484,3 +501,77 @@ def test_rows_without_an_alert_have_no_task() -> None:
     assert sent[0].task is None
 
 
+
+
+def test_a_resend_to_a_corrected_number_stays_on_the_original_row_and_clears_it_once_delivered() -> None:
+    bot = make_bot()
+    clicker = make_staff("Marcus", "Bell")
+    first = make_event("note", originator=make_staff().user, age_days=1)
+    resent = make_event("note", note=first.note, originator=bot.user, number="+15555550199")
+    FaxResend.objects.create(
+        note_id=first.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550199",
+        from_fax_number="+15555550100",
+        resent_at=resent.created - timedelta(minutes=1),
+    )
+
+    tested = rows()
+
+    assert len(tested) == 1
+    assert tested[0].e164 == "+15555550100"
+    assert [attempt.event_id for attempt in tested[0].attempts] == [str(first.id), str(resent.id)]
+    assert tested[0].latest.sender.name == "Marcus Bell"
+
+    type(resent).objects.filter(pk=resent.pk).update(delivered_by_fax=True)
+
+    assert rows() == []
+
+
+def test_a_resend_click_with_no_send_yet_shows_the_row_as_waiting() -> None:
+    from datetime import datetime, timezone
+
+    from failed_fax_dashboard.services.failures import PENDING_PROBLEM
+
+    clicker = make_staff("Marcus", "Bell")
+    first = make_event("note", age_days=1)
+    FaxResend.objects.create(
+        note_id=first.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        from_fax_number="+15555550100",
+        resent_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+
+    row = rows()[0]
+
+    assert row.pending is True
+    assert row.problem_text == PENDING_PROBLEM
+
+
+def test_a_click_that_never_led_to_a_send_stops_waiting_after_fifteen_minutes() -> None:
+    clicker = make_staff("Marcus", "Bell")
+    first = make_event("note", age_days=1)
+    FaxResend.objects.create(
+        note_id=first.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        resent_at=first.created + timedelta(minutes=1),
+    )
+
+    assert rows()[0].pending is False
+
+
+def test_a_bot_send_long_after_a_click_is_not_credited_to_the_clicker() -> None:
+    bot = make_bot()
+    clicker = make_staff("Marcus", "Bell")
+    first = make_event("note", originator=make_staff().user, age_days=2)
+    make_event("note", note=first.note, originator=bot.user, age_days=1)
+    FaxResend.objects.create(
+        note_id=first.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        resent_at=first.created + timedelta(minutes=1),
+    )
+
+    assert rows()[0].latest.sender.label == "Sent automatically"

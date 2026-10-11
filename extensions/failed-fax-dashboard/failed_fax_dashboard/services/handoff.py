@@ -10,7 +10,7 @@ whole update with it. So a move only ever sets the new side:
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -60,7 +60,7 @@ def to_team(
         if reopen:
             fields["status"] = TaskStatus.OPEN
         alert.assignee = f"{TEAM_PREFIX}{team.id}"
-        alert.save()
+        alert.save(update_fields=["assignee"])
         return Handoff([UpdateTask(id=alert.task_id, **fields).apply()], alert.task_id)
 
     old_id = str(task.id)
@@ -96,7 +96,8 @@ def to_team(
     earlier = [part for part in (alert.previous_task_ids or "").split(",") if part]
     alert.previous_task_ids = ",".join([*earlier, old_id])
     alert.task_id = new_id
+    alert.task_made_at = datetime.now(timezone.utc)
     alert.assignee = f"{TEAM_PREFIX}{team.id}"
     alert.closed = False
-    alert.save()
+    alert.save(update_fields=["previous_task_ids", "task_id", "task_made_at", "assignee", "closed"])
     return Handoff(effects, new_id)

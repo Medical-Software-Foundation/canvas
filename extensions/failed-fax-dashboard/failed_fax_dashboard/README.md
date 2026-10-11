@@ -19,17 +19,17 @@ The contact card comes from the item when it names one (referrals, imaging order
 
 ## How rows clear
 
-- A sent row clears when a later fax of the same item to the same number is delivered. A resend from the dashboard counts.
+- A sent row clears when a later fax of the same item to the same number is delivered. A resend from the dashboard counts, including one to a corrected number: it stays on the row it was resent from.
 - Any row can be dismissed, after a confirm. Dismissing closes the row's open task with the comment "Dismissed from the Failed Faxes dashboard by {name}." The dismissal records who and when.
 - Several rows can be dismissed at once: tick them (or a section header to tick the whole section) and use Dismiss in the bar above the table, with one confirm for the batch. While rows are ticked, the row ✕ buttons are hidden.
 - After a dismiss, an Undo button shows for 10 seconds.
-- Show dismissed lists rows dismissed in the last 30 days, with who dismissed each and when. Restore (one row, or several ticked at once) brings rows back and reopens the task the dismissal closed, with the comment "Task reopened by {name}." A task that was already closed before the dismissal stays closed, and so does one from a dismissal made before version 0.1.9.
+- Show dismissed lists rows dismissed in the last 30 days, with who dismissed each and when. Restore (one row, or several ticked at once) brings rows back and reopens the task the dismissal closed, with the comment "Task reopened by {name}." A task that was already closed before the dismissal stays closed, and so does one from a dismissal made before version 0.1.9. A row dismissed before its task was made gets its task when restored.
 - A newer failure of a dismissed item and number brings the row back on its own.
 - A received row clears only by dismissal.
 
 ## Automatic tasks
 
-A scheduled job runs every 5 minutes and reads only failures recorded since its previous run (with a 15-minute overlap). For each new failure it makes one task per item and fax number, assigned to the sender and labeled "Failed fax". A later failure moves the same task to that attempt's sender, reopens it, and adds a comment. A later delivered attempt closes it. Failures from before the job first ran get no task.
+A scheduled job runs every 5 minutes and reads only failures recorded since its previous run (with a 15-minute overlap). For each new failure it makes one task per item and fax number, assigned to the sender and labeled "Failed fax". A later failure moves the same task to that attempt's sender, reopens it, and adds a comment. A later delivered attempt closes it. Failures sent before the job first ran get no task. If Canvas hasn't made a task 10 minutes after the job asked for it, the next run asks again, up to 3 times. After that the row shows "No task" and the job logs a warning. A failed fax with no one to assign it (no staff sender and no fallback team, or no received-fax team) also gets a warning in the logs.
 
 - Sent fax with no staff sender (for example one sent by another plugin): the team named in `FAILED_FAX_FALLBACK_TEAM`. Empty: no task.
 - Received fax that only partly arrived: the team named in `RECEIVED_FAX_TASK_TEAM`. Empty: no task.
@@ -54,7 +54,7 @@ The SDK can't remove a person from a task. When a task held by a person moves to
 
 ## Resend (notes only)
 
-Resend opens a short form prefilled with the failed number and, when exactly one contact (instance list or Saved Directory) has that number, the recipient name. The fax is sent as Canvas Bot. The plugin remembers who clicked, so the row and the attempt list name that person as the sender.
+Resend opens a short form prefilled with the failed number and, when exactly one contact (instance list or Saved Directory) has that number, the recipient name. The fax is sent as Canvas Bot. The plugin remembers who clicked, so the row and the attempt list name that person as the sender. A click is credited with the first Canvas Bot fax of that note to that number within 15 minutes. Until that fax appears (up to 15 minutes), the row shows "Resent, waiting for delivery" and Resend is off. Each failed send can be resent once at a time, so two clicks at the same instant send the note only once. The fax number must have 10 digits.
 
 ## Sorting, filtering, sections
 

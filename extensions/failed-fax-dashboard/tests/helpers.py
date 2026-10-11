@@ -14,6 +14,8 @@ from canvas_sdk.test_utils.factories import (
     ReferralActionEventFactory,
 )
 
+from canvas_sdk.v1.data.note import NoteStateChangeEvent
+
 from failed_fax_dashboard.models import FaxAlert
 from failed_fax_dashboard.services.sources import SOURCES_BY_KEY
 from failed_fax_dashboard.services.util import BOT_STAFF_ID, to_e164
@@ -56,6 +58,18 @@ def set_created(event: Any, age_days: float) -> None:
     created = datetime.now(timezone.utc) - timedelta(days=age_days)
     type(event).objects.filter(pk=event.pk).update(created=created)
     event.refresh_from_db()
+
+
+def set_note_state(note: Any, state: str, minutes_later: float = 1) -> Any:
+    """Record a state change on ``note`` ``minutes_later`` from now.
+
+    The note factory records a NEW state at creation, so a later time is what makes
+    this one the note's current state.
+    """
+    event = NoteStateChangeEvent.objects.create(note=note, state=state, note_state_html="")
+    created = datetime.now(timezone.utc) + timedelta(minutes=minutes_later)
+    NoteStateChangeEvent.objects.filter(pk=event.pk).update(created=created)
+    return event
 
 
 def make_staff(first_name: str = "Dana", last_name: str = "Whitfield", **kwargs: Any) -> Any:

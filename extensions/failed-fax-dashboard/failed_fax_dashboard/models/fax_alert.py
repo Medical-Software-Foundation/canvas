@@ -1,7 +1,7 @@
 """Custom data behind the automatic failed-fax tasks."""
 
 from canvas_sdk.v1.data.base import CustomModel
-from django.db.models import BooleanField, DateTimeField, TextField, UniqueConstraint
+from django.db.models import BooleanField, DateTimeField, IntegerField, TextField, UniqueConstraint
 
 
 class FaxAlert(CustomModel):
@@ -23,6 +23,13 @@ class FaxAlert(CustomModel):
     # Comma-separated ids of tasks this one replaced (a hand-off from a person to a team
     # closes the person's task and opens a new one), oldest first.
     previous_task_ids: TextField = TextField(default="")
+    # When the plugin asked Canvas for the current task. A task still missing well after this
+    # was rejected by Canvas, so the scheduled job makes it again. Empty (None) on alerts
+    # saved before the field existed.
+    task_made_at: DateTimeField = DateTimeField(null=True)
+    # How many times the job has asked again for a task Canvas never made. It stops at
+    # TASK_RETRIES_MAX. Empty (None) on alerts saved before the field existed.
+    task_retries: IntegerField = IntegerField(default=0, null=True)
 
     class Meta:
         constraints = [

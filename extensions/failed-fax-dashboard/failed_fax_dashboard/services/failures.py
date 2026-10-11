@@ -23,11 +23,13 @@ from failed_fax_dashboard.services.sources import (
     RECEIVED_TYPE,
     SOURCES,
     SourceSpec,
+    exclude_deleted_notes,
     walk,
 )
 from failed_fax_dashboard.services.tasks import (
     TaskInfo,
     alert_key,
+    TASK_RETRIES_MAX,
     load_alerts,
     load_tasks,
 )
@@ -64,6 +66,10 @@ class SentRow:
     directory: ServiceProvider | SavedContact | None = None
     task: TaskInfo | None = None
     dismissal: FaxDismissal | None = None
+    # Someone clicked Resend and the send hasn't shown up yet.
+    resend_requested: bool = False
+    # Canvas rejected the task every time the job asked, so none is coming.
+    task_given_up: bool = False
 
     @property
     def key(self) -> str:
@@ -77,8 +83,9 @@ class SentRow:
 
     @property
     def pending(self) -> bool:
-        """Whether the latest attempt is still waiting for a result."""
-        return self.latest.outcome == "pending"
+        """Whether a resend is on its way: the latest attempt has no result yet, or a
+        Resend click is still waiting for its send."""
+        return self.latest.outcome == "pending" or self.resend_requested
 
     @property
     def when(self) -> datetime:
@@ -143,6 +150,7 @@ class ReceivedRow:
     task: TaskInfo | None = None
     link_url: str = DATA_INTEGRATION_PATH
     dismissal: FaxDismissal | None = None
+    task_given_up: bool = False
 
     @property
     def key(self) -> str:
@@ -210,13 +218,15 @@ def event_number(event: Any) -> str:
 def failed_events(spec: SourceSpec, cutoff: datetime) -> list[Any]:
     """Faxed events of one item type that were not delivered, with everything the row needs."""
     queryset = (
-        spec.model.objects.filter(
-            event_type=FAXED,
-            delivered_by_fax=False,
-            created__gte=cutoff,
-            **spec.item_filters,
+        exclude_deleted_notes(
+            spec.model.objects.filter(
+                event_type=FAXED,
+                delivered_by_fax=False,
+                created__gte=cutoff,
+                **spec.item_filters,
+            ),
+            spec,
         )
-        .exclude(**spec.item_excludes)
         .select_related("fax", "originator__staff", *spec.select_related)
         .defer(*spec.defer)
         .order_by("created")
@@ -280,20 +290,22 @@ def collect_sent(
 ) -> list[SentRow]:
     """Failed sent faxes: one row per item and number, minus cleared and dismissed ones.
 
-    A row clears when a later attempt to the same number was delivered. With ``show``,
+    A row clears when a later attempt to the same number was delivered. A resend to a
+    corrected number counts as an attempt of the row it was made from. With ``show``,
     the dismissed rows in it are returned too, each carrying its dismissal, so the Show
     dismissed view and the live counts come from one pass.
     """
     dismissed = dismissed_keys(cutoff)
     rows: list[SentRow] = []
     for spec in SOURCES:
-        newest: dict[tuple[int, str], Any] = {}
-        for event in failed_events(spec, cutoff):
-            key = (getattr(event, f"{spec.item_field}_id"), to_e164(event_number(event)))
-            newest[key] = event
-        if not newest:
+        events = list(failed_events(spec, cutoff))
+        if not events:
             continue
-        histories = load_attempts(spec, [key[0] for key in newest])
+        histories = load_attempts(spec, [getattr(event, f"{spec.item_field}_id") for event in events])
+        newest: dict[tuple[int, str], Any] = {}
+        for event in events:
+            number = histories.row_number(str(event.id), to_e164(event_number(event)))
+            newest[(getattr(event, f"{spec.item_field}_id"), number)] = event
         commands = command_ids(spec, list(newest.values()))
         for key, event in newest.items():
             attempts = histories.get(key, [])
@@ -316,6 +328,7 @@ def collect_sent(
                     patient=patient,
                     link_url=item_link(spec, event, patient, walk(event, spec.note_path), commands),
                     dismissal=show.get(row_id) if show is not None else None,
+                    resend_requested=key in histories.waiting,
                 )
             )
     looked_up = [row for row in rows if needs_lookup(row.spec, row.event)]
@@ -363,6 +376,11 @@ def _with_earlier(task: TaskInfo | None, alert: Any) -> TaskInfo | None:
     return replace(task, earlier_ids=tuple(part for part in alert.previous_task_ids.split(",") if part))
 
 
+def _given_up(task: TaskInfo | None, alert: Any) -> bool:
+    """Whether the job stopped asking for this row's task after Canvas rejected every try."""
+    return task is None and alert is not None and (alert.task_retries or 0) >= TASK_RETRIES_MAX
+
+
 def attach_tasks(sent: list[SentRow], received: list[ReceivedRow]) -> None:
     """Give each row the automatic task the scheduled job made for it, if any."""
     alerts = load_alerts([row.item_id for row in sent] + [str(row.fax.id) for row in received])
@@ -370,9 +388,11 @@ def attach_tasks(sent: list[SentRow], received: list[ReceivedRow]) -> None:
     for sent_row in sent:
         alert = alerts.get(alert_key(sent_row.spec.type_key, sent_row.item_id, sent_row.e164))
         sent_row.task = _with_earlier(tasks.get(alert.task_id) if alert is not None else None, alert)
+        sent_row.task_given_up = _given_up(sent_row.task, alert)
     for received_row in received:
         alert = alerts.get(alert_key(RECEIVED_TYPE, str(received_row.fax.id), received_row.e164))
         received_row.task = _with_earlier(tasks.get(alert.task_id) if alert is not None else None, alert)
+        received_row.task_given_up = _given_up(received_row.task, alert)
 
 
 def directory_name(row: SentRow) -> str:

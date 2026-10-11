@@ -180,3 +180,94 @@ def test_show_dismissed_lists_recent_dismissals_with_who_and_when() -> None:
     assert [row["source_id"] for row in normal["rows"]] == [str(live.id)]
     assert "dismissed" not in normal["rows"][0]
     assert normal["view"]["dismissed"] is False
+
+
+ENVIRONMENT = {"CUSTOMER_IDENTIFIER": "acme", "INSTALLATION_TIME_ZONE": "America/New_York"}
+
+
+def test_bulk_dismiss_reads_the_same_number_of_times_however_many_rows() -> None:
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    dana = make_staff()
+
+    def count(rows: int) -> int:
+        events = [make_event("note", number=f"+1555555{index:04d}") for index in range(rows)]
+        with CaptureQueriesContext(connection) as queries:
+            dismiss_rows({"keys": [key(event) for event in events]}, staff_id=dana.id)
+        return len([query for query in queries.captured_queries if query["sql"].startswith("SELECT")])
+
+    assert count(3) == count(9)
+
+
+def test_restoring_a_row_dismissed_before_its_task_was_made_makes_the_task() -> None:
+    from failed_fax_dashboard.models import AlertStart
+
+    dana = make_staff()
+    AlertStart.objects.create(started_at=datetime.now(timezone.utc) - timedelta(days=7))
+    event = make_event("note", originator=dana.user)
+    FaxDismissal.objects.create(
+        source_type="note", source_id=str(event.id), dismissed_by=dana.id, dismissed_at=event.created
+    )
+
+    effects = decoded(restore_rows({"keys": [key(event)]}, staff_id=dana.id, secrets={}, environment=ENVIRONMENT))
+
+    assert [kind for kind, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    assert effects[0][1]["assignee"] == {"id": dana.id}
+    assert FaxAlert.objects.get().task_id == effects[0][1]["id"]
+
+
+def test_restoring_a_received_fax_dismissed_before_its_task_was_made_makes_the_task() -> None:
+    from canvas_sdk.test_utils.factories import TeamFactory
+    from canvas_sdk.v1.data import FaxDirection
+
+    from failed_fax_dashboard.models import AlertStart
+
+    dana = make_staff()
+    team = TeamFactory.create(name="Medical Records")
+    AlertStart.objects.create(started_at=datetime.now(timezone.utc) - timedelta(days=7))
+    fax = FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
+    FaxDismissal.objects.create(
+        source_type="received_fax", source_id=str(fax.id), dismissed_by=dana.id, dismissed_at=fax.created
+    )
+
+    effects = decoded(
+        restore_rows(
+            {"keys": [f"received_fax:{fax.id}"]},
+            staff_id=dana.id,
+            secrets={"RECEIVED_FAX_TASK_TEAM": "Medical Records"},
+            environment=ENVIRONMENT,
+        )
+    )
+
+    assert [kind for kind, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    assert effects[0][1]["team"] == {"id": str(team.id)}
+
+
+def test_dismissing_a_row_whose_task_canvas_never_made_stops_the_retries() -> None:
+    from canvas_sdk.test_utils.factories import TaskFactory as Tasks
+
+    dana = make_staff()
+    event = make_event("note")
+    make_alert(event, "note", Tasks.build())
+
+    assert dismiss_rows({"keys": [key(event)]}, staff_id=dana.id) == []
+    assert FaxAlert.objects.get().closed is True
+
+
+def test_restoring_a_row_whose_task_canvas_never_made_makes_the_task() -> None:
+    from canvas_sdk.test_utils.factories import TaskFactory as Tasks
+
+    from failed_fax_dashboard.models import AlertStart
+
+    dana = make_staff()
+    AlertStart.objects.create(started_at=datetime.now(timezone.utc) - timedelta(days=7))
+    event = make_event("note", originator=dana.user)
+    make_alert(event, "note", Tasks.build())
+    dismiss_rows({"keys": [key(event)]}, staff_id=dana.id)
+
+    effects = decoded(restore_rows({"keys": [key(event)]}, staff_id=dana.id, secrets={}, environment=ENVIRONMENT))
+
+    assert [kind for kind, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    alert = FaxAlert.objects.get()
+    assert (alert.task_id, alert.closed) == (effects[0][1]["id"], False)

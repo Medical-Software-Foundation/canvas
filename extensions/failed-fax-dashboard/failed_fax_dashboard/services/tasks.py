@@ -17,6 +17,8 @@ from failed_fax_dashboard.services.util import (
 )
 
 ID_CHUNK = 400
+# How many times the scheduled job asks again for a task Canvas never made.
+TASK_RETRIES_MAX = 3
 
 ASSIGNEE_STAFF = "staff"
 ASSIGNEE_TEAM = "team"

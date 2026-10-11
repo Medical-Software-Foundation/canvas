@@ -219,11 +219,28 @@ def test_reassign_and_comment_are_authored_by_the_logged_in_staff(call_api: Call
         "POST", "/tasks/comment", staff_id=clicker.id, body={"task_id": str(task.id), "body": "Called them"}
     )
 
-    assert (status, body) == (200, {"ok": True})
+    assert (status, body) == (200, {"ok": True, "task_id": str(task.id)})
     assert [effect.type for effect in effects] == [EffectType.UPDATE_TASK, EffectType.CREATE_TASK_COMMENT]
     assert json.loads(effects[1].payload)["data"]["author_id"] == clicker.id
     assert comment_status == 200
     assert json.loads(comment_effects[0].payload)["data"]["author_id"] == clicker.id
+
+
+def test_reassign_from_a_person_to_a_team_returns_the_new_task_id(call_api: CallApi) -> None:
+    clicker = make_staff("Dana", "Whitfield")
+    holder = make_staff("Thomas", "Pickles")
+    team = TeamFactory.create(name="Front Desk")
+    task = TaskFactory.create(assignee=holder, team=None)
+    make_alert(make_event("note"), "note", task)
+
+    status, body, effects = call_api(
+        "POST", "/tasks/reassign", staff_id=clicker.id, body={"task_id": str(task.id), "assignee": f"team:{team.id}"}
+    )
+
+    created = json.loads(effects[2].payload)["data"]["id"]
+    assert status == 200
+    assert body == {"ok": True, "task_id": created}
+    assert created != str(task.id)
 
 
 def test_reassign_and_comment_errors(call_api: CallApi) -> None:

@@ -171,13 +171,14 @@ def expected_owner(
 ) -> Owner | None:
     """Where the scheduled job will put this row's task on its next run, or None.
 
-    None when the row already has a task, when its failure was recorded before the job's
-    first run (those never get one), or when no one would get the task.
+    None when the row already has a task, when it was sent or received before the job's
+    first run (those never get one, the same rule the job uses), when Canvas rejected
+    every try at its task, or when no one would get the task.
     """
-    if row.task is not None or start is None:
+    if row.task is not None or start is None or row.task_given_up:
         return None
     if isinstance(row, SentRow):
-        if row.event.modified <= start:
+        if row.event.created < start:
             return None
         attempt = next((item for item in row.attempts if item.event_id == str(row.event.id)), row.latest)
         patient_id = str(row.patient.id) if row.patient is not None else None
@@ -187,7 +188,7 @@ def expected_owner(
         if attempt.sender.is_person:
             return (ASSIGNEE_STAFF, attempt.sender.staff_id)
         return (ASSIGNEE_TEAM, str(fallback.id)) if fallback is not None else None
-    if row.fax.modified <= start or received_team is None:
+    if row.fax.created < start or received_team is None:
         return None
     return (ASSIGNEE_TEAM, str(received_team.id))
 

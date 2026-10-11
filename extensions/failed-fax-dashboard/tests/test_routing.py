@@ -29,7 +29,7 @@ def run(secrets: dict[str, str]) -> list[tuple[str, dict[str, Any]]]:
 
 def started() -> None:
     AlertStart.objects.all().delete()
-    AlertStart.objects.create(started_at=NOW - timedelta(hours=1))
+    AlertStart.objects.create(started_at=NOW - timedelta(days=7))
 
 
 def with_role(first: str, last: str, code: str, name: str, abbreviation: str | None = None) -> Any:

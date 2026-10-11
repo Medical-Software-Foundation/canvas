@@ -513,7 +513,7 @@ def test_a_failure_from_before_the_job_started_is_under_the_person_who_sent_it()
     event = make_event("note", originator=me.user, number="+15555550101")
     theirs = make_event("note", originator=other.user, number="+15555550102")
     for old in (event, theirs):
-        type(old).objects.filter(pk=old.pk).update(modified=old.modified - timedelta(hours=3))
+        type(old).objects.filter(pk=old.pk).update(created=old.created - timedelta(hours=3))
     job_started(hours_ago=1)
 
     result = page(staff_id=me.id)
@@ -574,3 +574,31 @@ def test_a_waiting_received_fax_goes_to_the_received_team() -> None:
 
     assert result["counts"] == {"mine": 1, "rest": 0}
     assert result["rows"][0]["task_pending"] is True
+
+
+def test_a_failure_sent_before_the_job_started_never_says_its_task_is_being_made() -> None:
+    me = make_staff("Dana", "Whitfield")
+    event = make_event("note", originator=me.user)
+    # Sent before the start, but its record changed after it (as when the result arrives late).
+    type(event).objects.filter(pk=event.pk).update(created=event.created - timedelta(hours=3))
+    job_started(hours_ago=1)
+
+    row = page(staff_id=me.id)["rows"][0]
+
+    assert (row["task"], row["task_pending"], row["mine"]) == (None, False, True)
+
+
+def test_a_row_whose_task_canvas_rejected_every_time_says_no_task() -> None:
+    from canvas_sdk.test_utils.factories import TaskFactory
+
+    from failed_fax_dashboard.services.tasks import TASK_RETRIES_MAX
+
+    me = make_staff("Dana", "Whitfield")
+    event = make_event("note", originator=me.user)
+    job_started(hours_ago=1)
+    alert = make_alert(event, "note", TaskFactory.build(), task_retries=TASK_RETRIES_MAX)
+
+    row = page(staff_id=me.id)["rows"][0]
+
+    assert alert.task_id
+    assert (row["task"], row["task_pending"]) == (None, False)

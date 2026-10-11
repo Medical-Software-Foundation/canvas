@@ -25,6 +25,19 @@ def test_dashboard_rows_do_not_load_note_bodies_or_letter_text(type_key: str) ->
     assert [column for column in UNUSED if column in loaded] == []
 
 
+@pytest.mark.parametrize("type_key", ["note", "letter"])
+def test_deleted_note_check_does_not_join_the_current_state_view(type_key: str) -> None:
+    # The current_state view is built for every note on the instance before any join,
+    # which took 153 ms on a large instance against 2 ms for a per-note lookup.
+    make_event(type_key)
+
+    with CaptureQueriesContext(connection) as queries:
+        collect_sent(cutoff_for(None))
+
+    loaded = " ".join(query["sql"] for query in queries.captured_queries)
+    assert "current_note_state" not in loaded
+
+
 def test_show_dismissed_builds_the_lists_once() -> None:
     from failed_fax_dashboard.models import FaxDismissal
     from failed_fax_dashboard.services.dashboard import dashboard_page

@@ -16,6 +16,12 @@ def normalize_number(number: str | None) -> str:
     return "".join(ch for ch in (number or "") if ch.isdigit())
 
 
+def is_fax_number(number: str | None) -> bool:
+    """Whether a typed number is a full US fax number: 10 digits, or 11 starting with 1."""
+    digits = normalize_number(number)
+    return len(digits) == 10 or (len(digits) == 11 and digits.startswith("1"))
+
+
 def to_e164(number: str | None) -> str:
     """A fax number in E.164 form. Ten digits are taken as a US number."""
     digits = normalize_number(number)

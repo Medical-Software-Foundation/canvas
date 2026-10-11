@@ -12,7 +12,8 @@ from canvas_sdk.v1.data import (
     NoteActionEvent,
     ReferralActionEvent,
 )
-from canvas_sdk.v1.data.note import NoteStates
+from canvas_sdk.v1.data.note import NoteStateChangeEvent, NoteStates
+from django.db.models import OuterRef, Q, Subquery
 
 RECEIVED_TYPE = "received_fax"
 RECEIVED_LABEL = "Received fax"
@@ -36,9 +37,10 @@ class SourceSpec:
     # Large text columns on the joined rows that nothing here reads: the note's body and
     # a letter's text. Deferred so a page load doesn't pull them for every failed fax.
     defer: tuple[str, ...] = ()
-    # Filters/excludes that drop retracted or deleted items.
+    # Filters that drop retracted or deleted items.
     item_filters: dict[str, Any] = field(default_factory=dict)
-    item_excludes: dict[str, Any] = field(default_factory=dict)
+    # Path from the action event to a note whose deletion drops the row.
+    deleted_note_path: str | None = None
     # Attribute chain to the linkable object for follow-up tasks, with its task type.
     link_path: tuple[str, ...] | None = None
     link_type: AddTask.LinkableObjectType | None = None
@@ -75,7 +77,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         note_path=("note",),
         select_related=("note__patient",),
         defer=_note_body("note"),
-        item_excludes={"note__current_state__state": NoteStates.DELETED},
+        deleted_note_path="note",
         noun="note",
     ),
     SourceSpec(
@@ -143,7 +145,7 @@ SOURCES: tuple[SourceSpec, ...] = (
         note_path=("letter", "note"),
         select_related=("letter__note__patient",),
         defer=("letter__content", *_note_body("letter__note")),
-        item_excludes={"letter__note__current_state__state": NoteStates.DELETED},
+        deleted_note_path="letter__note",
         noun="letter",
     ),
     SourceSpec(
@@ -164,6 +166,25 @@ TYPE_LABELS: dict[str, str] = {
     **{spec.type_key: spec.label for spec in SOURCES},
     RECEIVED_TYPE: RECEIVED_LABEL,
 }
+
+
+def exclude_deleted_notes(queryset: Any, spec: SourceSpec) -> Any:
+    """Drop rows whose note's latest state is deleted.
+
+    Reads each note's newest state event by ``note_id`` (indexed) rather than joining
+    ``current_state``, a view Postgres builds for every note on the instance first.
+    """
+    if spec.deleted_note_path is None:
+        return queryset
+    latest = (
+        NoteStateChangeEvent.objects.filter(note=OuterRef(spec.deleted_note_path))
+        .order_by("-created", "-id")
+        .values("state")[:1]
+    )
+    # A note with no state events keeps its row, as it did through the view's outer join.
+    return queryset.alias(note_state_now=Subquery(latest)).filter(
+        Q(note_state_now__isnull=True) | ~Q(note_state_now=NoteStates.DELETED)
+    )
 
 
 def walk(obj: Any, path: tuple[str, ...] | None) -> Any:

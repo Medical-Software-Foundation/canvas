@@ -376,9 +376,25 @@
         var chosen = picker.value;
         var name = personLabel(chosen);
         picker.disabled = true;
-        request("POST", "/tasks/reassign", { task_id: t.id, assignee: chosen }).then(function () {
+        request("POST", "/tasks/reassign", { task_id: t.id, assignee: chosen }).then(function (res) {
           var kind = chosen.split(":")[0];
           var wasMine = row.mine;
+          if (res.task_id && res.task_id !== t.id) {
+            // A person can't be taken off a task, so the move closed theirs and opened a new one
+            // for the team. File the closed one as an earlier task and act on the new one from now on.
+            var earlier = t.earlier || [];
+            earlier.push({
+              number: earlier.length + 1,
+              id: t.id,
+              assignee_name: t.assignee ? t.assignee.name : "",
+              url: t.url ? t.url.replace("taskStatus=OPEN", "taskStatus=CLOSED") : null,
+              comments: t.comments
+            });
+            t.earlier = earlier;
+            t.id = res.task_id;
+            t.url = null;
+            t.comments = [];
+          }
           t.assignee = { kind: kind, id: chosen.substring(chosen.indexOf(":") + 1), name: name };
           t.comments.push({ author: me.name, mine: true, automatic: false, at: new Date().toISOString(), body: "Reassigned to " + name + " by " + me.name + "." });
           row.mine = isMineTask(t);

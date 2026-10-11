@@ -18,7 +18,7 @@ from canvas_sdk.v1.data import FaxDirection, IntegrationTask
 from failed_fax_dashboard.handlers.fax_alert_cron import FaxAlertCron
 from failed_fax_dashboard.models import AlertStart, FaxAlert, FaxDismissal, FaxResend
 from failed_fax_dashboard.services.alerts import alert_effects
-from tests.helpers import make_bot, make_event, make_staff
+from tests.helpers import make_alert, make_bot, make_event, make_staff
 
 pytestmark = pytest.mark.django_db
 
@@ -34,7 +34,8 @@ def run(secrets: dict[str, str] | None = None, now: datetime | None = None) -> l
     return decode(alert_effects(secrets or {}, ENVIRONMENT, now or NOW))
 
 
-def started(hours_ago: float = 1) -> None:
+def started(hours_ago: float = 24 * 7) -> None:
+    """Record the job's start, by default a week back so the tests' failures come after it."""
     AlertStart.objects.all().delete()
     AlertStart.objects.create(started_at=NOW - timedelta(hours=hours_ago))
 
@@ -552,3 +553,180 @@ def test_a_task_comment_for_a_referral_links_to_the_referral_command() -> None:
         f"/patient/{referral.patient.id}?noteId={referral.note.dbid}"
         f"&commandType=refer&commandId={referral.dbid}&commandUuid={command.id}"
     ) in comment["body"]
+
+
+def test_a_failure_sent_before_the_start_gets_no_task_even_when_its_record_changes_later() -> None:
+    make_event("note", originator=make_staff().user, age_days=10)
+    started()  # a week ago; the event was just modified, but it was sent before the start
+
+    assert run() == []
+    assert FaxAlert.objects.count() == 0
+
+
+def test_a_received_fax_from_before_the_start_gets_no_task_even_when_its_record_changes_later() -> None:
+    TeamFactory.create(name="Medical Records")
+    fax = FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
+    type(fax).objects.filter(pk=fax.pk).update(created=NOW - timedelta(days=10))
+    started()
+
+    assert run({"RECEIVED_FAX_TASK_TEAM": "Medical Records"}) == []
+
+
+def test_a_task_canvas_never_made_is_made_again_once_ten_minutes_pass() -> None:
+    make_event("note", originator=make_staff().user, age_days=1)
+    started()
+    old_id = run()[0][1]["id"]
+
+    assert run(now=NOW + timedelta(minutes=5)) == []
+    effects = run(now=NOW + timedelta(minutes=11))
+
+    assert [kind for kind, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    assert effects[0][1]["id"] != old_id
+    alert = FaxAlert.objects.get()
+    assert (alert.task_id, alert.task_made_at) == (effects[0][1]["id"], NOW + timedelta(minutes=11))
+    assert run(now=NOW + timedelta(minutes=12)) == []
+
+
+def test_a_task_that_canvas_made_is_left_alone() -> None:
+    make_event("note", originator=make_staff().user, age_days=1)
+    started()
+    task_id = run()[0][1]["id"]
+    TaskFactory.create(id=task_id)
+
+    assert run(now=NOW + timedelta(minutes=30)) == []
+
+
+def test_a_received_fax_task_canvas_never_made_is_made_again() -> None:
+    TeamFactory.create(name="Medical Records")
+    FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
+    started()
+    secrets = {"RECEIVED_FAX_TASK_TEAM": "Medical Records"}
+    old_id = run(secrets)[0][1]["id"]
+
+    effects = run(secrets, now=NOW + timedelta(minutes=11))
+
+    assert [kind for kind, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    assert effects[0][1]["id"] != old_id
+    assert [alert.task_id for alert in FaxAlert.objects.all()] == [effects[0][1]["id"]]
+
+
+def corrected_resend(first: Any, delivered: bool | None) -> Any:
+    """A dashboard resend of ``first`` to a corrected number, sent by Canvas Bot."""
+    clicker = make_staff("Marcus", "Bell")
+    resent = make_event("note", note=first.note, originator=make_bot().user, number="+15555550199", delivered=delivered)
+    FaxResend.objects.create(
+        note_id=first.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550199",
+        from_fax_number="+15555550100",
+        resent_at=resent.created - timedelta(minutes=1),
+    )
+    return clicker
+
+
+def test_a_delivered_resend_to_a_corrected_number_closes_the_original_task() -> None:
+    first = make_event("note", originator=make_staff().user, age_days=1)
+    started()
+    task_id = run()[0][1]["id"]
+    corrected_resend(first, delivered=True)
+
+    effects = run()
+
+    assert effects[0] == ("UPDATE_TASK", {"id": task_id, "status": "COMPLETED"})
+    assert FaxAlert.objects.get().closed is True
+
+
+def test_a_failed_resend_to_a_corrected_number_updates_the_original_task() -> None:
+    first = make_event("note", originator=make_staff().user, age_days=1)
+    started()
+    task_id = run()[0][1]["id"]
+    TaskFactory.create(id=task_id)
+    clicker = corrected_resend(first, delivered=False)
+
+    effects = run()
+
+    assert [kind for kind, _ in effects] == ["UPDATE_TASK", "CREATE_TASK_COMMENT"]
+    assert effects[0][1]["id"] == task_id
+    assert effects[0][1]["assignee"] == {"id": clicker.id}
+    assert [alert.fax_number for alert in FaxAlert.objects.all()] == ["+15555550100"]
+
+
+def test_the_job_saves_only_the_fields_it_changed() -> None:
+    from failed_fax_dashboard.services.alerts import HANDLED_FIELDS, save_fields
+
+    event = make_event("note")
+    make_alert(event, "note", TaskFactory.create())
+    stale = FaxAlert.objects.get()
+    # The dashboard hands the task to a team while the job is working on the same alert.
+    FaxAlert.objects.filter(dbid=stale.dbid).update(task_id="new-task", previous_task_ids="old-task")
+    stale.closed = False
+    save_fields(stale, HANDLED_FIELDS)
+
+    saved = FaxAlert.objects.get()
+    assert (saved.task_id, saved.previous_task_ids) == ("new-task", "old-task")
+
+
+def test_the_job_stops_asking_for_a_task_canvas_keeps_rejecting() -> None:
+    from failed_fax_dashboard.services.tasks import TASK_RETRIES_MAX
+
+    make_event("note", originator=make_staff().user, age_days=1)
+    started()
+    run()
+
+    retries = [
+        [kind for kind, _ in run(now=NOW + timedelta(minutes=11 * attempt))]
+        for attempt in range(1, TASK_RETRIES_MAX + 2)
+    ]
+
+    assert retries == [["CREATE_TASK", "CREATE_TASK_COMMENT"]] * TASK_RETRIES_MAX + [[]]
+    assert FaxAlert.objects.get().task_retries == TASK_RETRIES_MAX
+
+
+def test_a_new_failure_asks_for_a_task_again_after_the_job_gave_up() -> None:
+    from failed_fax_dashboard.services.tasks import TASK_RETRIES_MAX
+
+    sender = make_staff()
+    first = make_event("note", originator=sender.user, age_days=1)
+    started()
+    run()
+    FaxAlert.objects.update(task_retries=TASK_RETRIES_MAX)
+    make_event("note", note=first.note, originator=sender.user)
+
+    effects = run(now=NOW + timedelta(minutes=30))
+
+    assert [kind for kind, _ in effects] == ["CREATE_TASK", "CREATE_TASK_COMMENT"]
+    assert FaxAlert.objects.get().task_retries == 0
+
+
+def test_skipped_faxes_are_logged_when_a_team_setting_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    import failed_fax_dashboard.services.alerts as alerts
+
+    warnings: list[str] = []
+    monkeypatch.setattr(alerts.log, "warning", warnings.append)
+    make_event("note", originator=make_bot().user)
+    FaxFactory.create(direction=FaxDirection.INBOUND, success=False)
+    started()
+
+    assert run() == []
+    assert warnings == [
+        "1 failed fax(es) sent automatically got no task: FAILED_FAX_FALLBACK_TEAM is empty or doesn't match one team.",
+        "1 partly received fax(es) got no task: RECEIVED_FAX_TASK_TEAM is empty or doesn't match one team.",
+    ]
+
+
+def test_a_task_made_at_the_same_moment_by_a_restore_wins_and_the_job_drops_its_own() -> None:
+    from failed_fax_dashboard.services.alerts import save_fields
+
+    event = make_event("note")
+    make_alert(event, "note", TaskFactory.create())
+    clash = FaxAlert(
+        source_type="note",
+        item_id=str(event.note.id),
+        fax_number="+15555550100",
+        task_id="another",
+        last_handled_event_id=str(event.id),
+        last_handled_at=event.created,
+    )
+
+    assert save_fields(clash, []) is False
+    assert FaxAlert.objects.count() == 1

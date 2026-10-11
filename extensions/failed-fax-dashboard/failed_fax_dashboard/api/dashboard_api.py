@@ -21,6 +21,7 @@ from failed_fax_dashboard.services.actions import (
     build_reassign,
     build_resend,
     build_resend_takeover,
+    current_task_id,
     dismiss_rows,
     restore_rows,
 )
@@ -157,10 +158,12 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_allowed():
             return self._forbidden()
         try:
-            effects = build_reassign(self._body(), staff_id=self._staff_id())
+            body = self._body()
+            effects = build_reassign(body, staff_id=self._staff_id())
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
-        return [JSONResponse({"ok": True}), *effects]
+        # A move from a person to a team replaces the task, so the page needs the new id.
+        return [JSONResponse({"ok": True, "task_id": current_task_id(str(body.get("task_id")))}), *effects]
 
     @api.post("/tasks/comment")
     def comment(self) -> list[Response | Effect]:
@@ -190,7 +193,12 @@ class FailedFaxDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_allowed():
             return self._forbidden()
         try:
-            effects = restore_rows(self._body(), staff_id=self._staff_id())
+            effects = restore_rows(
+                self._body(),
+                staff_id=self._staff_id(),
+                secrets=dict(self.secrets),
+                environment=dict(self.environment),
+            )
         except ActionError as error:
             return [JSONResponse({"error": error.message}, status_code=error.status)]
         return [JSONResponse({"ok": True}), *effects]

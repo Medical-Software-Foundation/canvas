@@ -4,10 +4,10 @@ from typing import Any
 
 import pytest
 from canvas_generated.messages.effects_pb2 import EffectType
-from canvas_sdk.test_utils.factories import FaxFactory, StaffFactory, TaskFactory, TeamFactory
+from canvas_sdk.test_utils.factories import StaffFactory, TaskFactory, TeamFactory
 from canvas_sdk.v1.data import Task
 
-from failed_fax_dashboard.models import FaxAlert, FaxDismissal, FaxResend
+from failed_fax_dashboard.models import FaxAlert, FaxResend
 from failed_fax_dashboard.services.actions import (
     ActionError,
     build_comment,
@@ -16,7 +16,7 @@ from failed_fax_dashboard.services.actions import (
     build_resend_takeover,
 )
 from failed_fax_dashboard.services.handoff import to_team
-from tests.helpers import make_alert, make_event, make_staff
+from tests.helpers import make_alert, make_bot, make_event, make_staff
 
 pytestmark = pytest.mark.django_db
 
@@ -59,7 +59,9 @@ def test_resend_remembers_who_clicked_and_returns_the_note_fax_effect() -> None:
     ("overrides", "message"),
     [
         ({"recipient_name": "  "}, "Recipient name is required"),
-        ({"recipient_fax_number": "n/a"}, "A valid fax number is required"),
+        ({"recipient_fax_number": "n/a"}, "Enter a 10-digit fax number"),
+        ({"recipient_fax_number": "555-12"}, "Enter a 10-digit fax number"),
+        ({"recipient_fax_number": "2 555 555 0123"}, "Enter a 10-digit fax number"),
         ({"event_id": "nope"}, "Invalid id"),
     ],
 )
@@ -299,3 +301,136 @@ def test_resending_leaves_closed_tasks_and_untasked_rows_alone() -> None:
 
     assert build_resend_takeover(resend_body(untasked), staff_id=clicker.id) == []
     assert build_resend_takeover(resend_body(closed), staff_id=clicker.id) == []
+
+
+def test_a_second_click_moments_after_the_first_is_refused() -> None:
+    first_clicker = make_staff("Marcus", "Bell")
+    second_clicker = make_staff("Priya", "Shah")
+    failed = make_event("note", age_days=1)
+    build_resend(resend_body(failed), staff_id=first_clicker.id)
+
+    with pytest.raises(ActionError) as caught:
+        build_resend(resend_body(failed), staff_id=second_clicker.id)
+
+    assert caught.value.message == "This fax was already sent again"
+    assert FaxResend.objects.count() == 1
+
+
+def test_a_resend_to_a_corrected_number_blocks_another_resend_from_the_row() -> None:
+    clicker = make_staff()
+    failed = make_event("note", age_days=2)
+    build_resend(resend_body(failed, recipient_fax_number="(555) 555-0199"), staff_id=clicker.id)
+    saved = FaxResend.objects.get()
+    assert (saved.fax_number, saved.from_fax_number) == ("+15555550199", "+15555550100")
+    make_event("note", note=failed.note, number="+15555550199", delivered=None)
+
+    with pytest.raises(ActionError):
+        build_resend(resend_body(failed), staff_id=clicker.id)
+
+
+def test_resending_from_a_failed_corrected_number_resend_keeps_the_original_row() -> None:
+    clicker = make_staff("Marcus", "Bell")
+    failed = make_event("note", age_days=2)
+    task = TaskFactory.create(status="OPEN")
+    make_alert(failed, "note", task)
+    resent = make_event("note", note=failed.note, originator=make_bot().user, number="+15555550199", age_days=1)
+    FaxResend.objects.create(
+        note_id=failed.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550199",
+        from_fax_number="+15555550100",
+        resent_at=resent.created - timedelta(minutes=1),
+    )
+
+    build_resend(resend_body(resent), staff_id=clicker.id)
+    takeover = build_resend_takeover(resend_body(resent), staff_id=clicker.id)
+
+    assert FaxResend.objects.order_by("resent_at").last().from_fax_number == "+15555550100"
+    assert data(takeover[0])["id"] == str(task.id)
+
+
+def test_a_resend_that_loses_a_same_instant_race_is_refused() -> None:
+    clicker = make_staff()
+    failed = make_event("note", age_days=1)
+    # Another click took this send's next claim between this one's check and its save.
+    FaxResend.objects.create(
+        note_id=failed.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        resent_at=failed.created + timedelta(minutes=1),
+        claim=f"{failed.id}:1",
+    )
+    FaxResend.objects.create(
+        note_id=failed.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        resent_at=failed.created + timedelta(minutes=2),
+        claim=f"{failed.id}:0",
+    )
+    FaxResend.objects.filter(claim=f"{failed.id}:0").update(claim="other:0")
+
+    with pytest.raises(ActionError) as caught:
+        build_resend(resend_body(failed), staff_id=clicker.id)
+
+    assert caught.value.message == "This fax was already sent again"
+    assert FaxResend.objects.count() == 2
+
+
+def test_a_click_that_never_led_to_a_send_can_be_resent_after_the_wait() -> None:
+    clicker = make_staff()
+    failed = make_event("note", age_days=1)
+    FaxResend.objects.create(
+        note_id=failed.note.dbid,
+        staff_id=clicker.dbid,
+        fax_number="+15555550100",
+        resent_at=failed.created + timedelta(minutes=1),
+        claim=f"{failed.id}:0",
+    )
+
+    build_resend(resend_body(failed), staff_id=clicker.id)
+
+    assert FaxResend.objects.order_by("resent_at").last().claim == f"{failed.id}:1"
+
+
+def test_resending_leaves_a_task_closed_in_canvas_alone() -> None:
+    clicker = make_staff("Dana", "Whitfield")
+    failed = make_event("note")
+    make_alert(failed, "note", TaskFactory.create(status="CLOSED"), assignee="staff:someone")
+
+    assert build_resend_takeover(resend_body(failed), staff_id=clicker.id) == []
+
+
+def test_a_task_canvas_has_not_made_cannot_be_reassigned_or_commented_on() -> None:
+    actor = make_staff()
+    team = TeamFactory.create(name="Front Desk")
+    event = make_event("note")
+    alert = make_alert(event, "note", TaskFactory.build())
+
+    for action, payload in (
+        (build_reassign, {"task_id": alert.task_id, "assignee": f"team:{team.id}"}),
+        (build_reassign, {"task_id": alert.task_id, "assignee": f"staff:{actor.id}"}),
+        (build_comment, {"task_id": alert.task_id, "body": "Called them"}),
+    ):
+        with pytest.raises(ActionError) as caught:
+            action(payload, staff_id=actor.id)
+        assert caught.value.message == "This fax's task hasn't been made yet. Try again in a few minutes."
+    assert FaxAlert.objects.get().assignee == ""
+
+
+def test_an_old_task_id_from_before_a_team_hand_off_acts_on_the_new_task() -> None:
+    # A dashboard opened before the hand-off still holds the closed task's id.
+    clicker = make_staff("Dana", "Whitfield")
+    holder = make_staff("Thomas", "Pickles")
+    team = TeamFactory.create(name="Front Desk")
+    old = alerted_task(assignee=holder, team=None)
+    build_reassign({"task_id": str(old.id), "assignee": f"team:{team.id}"}, staff_id=clicker.id)
+    new_id = FaxAlert.objects.get().task_id
+
+    with pytest.raises(ActionError) as caught:
+        build_comment({"task_id": str(old.id), "body": "Called them"}, staff_id=clicker.id)
+    assert caught.value.message == "This fax's task hasn't been made yet. Try again in a few minutes."
+
+    TaskFactory.create(id=new_id, assignee=None, team=team)
+    effect = build_comment({"task_id": str(old.id), "body": "Called them"}, staff_id=clicker.id)
+
+    assert data(effect)["task"] == {"id": new_id}
