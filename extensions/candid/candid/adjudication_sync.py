@@ -614,29 +614,22 @@ def _post_era_payments(
                     )
 
     # Secondary (ERA index 1) / Tertiary (ERA index 2)
+    new_era_ids = {str(era["era_id"]) for era in new_eras}
+    # A $0 secondary (a denial, its own deductible) sends an ERA but no paid delta
+    secondary_adjudicated = current_amounts["secondary"] > 0 or any(
+        str(era.get("era_id") or "") in new_era_ids for era in all_eras[1:]
+    )
     for coverage_id, paid_field, tier, era_index in (
         (state.secondary_id, "secondary_paid_amount_cents", "secondary", 1),
         (state.tertiary_id, "tertiary_paid_amount_cents", "tertiary", 2),
     ):
         if not coverage_id:
             continue
-        has_delta = _has_delta(current_amounts, state.prev_synced_amounts, tier)
-        # A $0 secondary ERA leaves the paid amount unchanged, so it has no delta
-        new_secondary_era = (
-            tier == "secondary"
-            and era_index < len(all_eras)
-            and all_eras[era_index] in new_eras
-        )
-        if not (has_delta or new_secondary_era):
-            continue
-        txns = (
-            _build_secondary_transactions(
+        txns: list[LineItemTransaction] = []
+        if _has_delta(current_amounts, state.prev_synced_amounts, tier):
+            txns = _build_secondary_transactions(
                 service_lines, state.line_items, state.canvas_claim_id, paid_field
             )
-            if has_delta
-            else []
-        )
-        secondary_adjudicated = len(all_eras) > 1 or current_amounts["secondary"] > 0
         if tier == "secondary" and secondary_adjudicated:
             txns.extend(
                 _secondary_leftover_transactions(state, service_lines, next_responsible)
