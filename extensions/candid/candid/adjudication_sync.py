@@ -620,10 +620,21 @@ def _post_era_payments(
     ):
         if not coverage_id:
             continue
-        if not _has_delta(current_amounts, state.prev_synced_amounts, tier):
+        has_delta = _has_delta(current_amounts, state.prev_synced_amounts, tier)
+        # A $0 secondary ERA leaves the paid amount unchanged, so it has no delta
+        new_secondary_era = (
+            tier == "secondary"
+            and era_index < len(all_eras)
+            and all_eras[era_index] in new_eras
+        )
+        if not (has_delta or new_secondary_era):
             continue
-        txns = _build_secondary_transactions(
-            service_lines, state.line_items, state.canvas_claim_id, paid_field
+        txns = (
+            _build_secondary_transactions(
+                service_lines, state.line_items, state.canvas_claim_id, paid_field
+            )
+            if has_delta
+            else []
         )
         secondary_adjudicated = len(all_eras) > 1 or current_amounts["secondary"] > 0
         if tier == "secondary" and secondary_adjudicated:

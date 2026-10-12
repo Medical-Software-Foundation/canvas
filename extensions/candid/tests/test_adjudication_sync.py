@@ -904,8 +904,9 @@ def _sync_secondary_posting(
     next_responsible: str,
     metadata: dict | None = None,
     eras: list[dict] | None = None,
+    secondary_paid_cents: int = 1500,
 ) -> list:
-    """Sync a claim whose secondary paid $15 on a $20 coinsurance; return its txns."""
+    """Sync a claim whose secondary paid toward a $20 coinsurance; return its txns."""
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1", dbid=101)
     claim = _fake_claim(
         [li],
@@ -921,7 +922,7 @@ def _sync_secondary_posting(
                 primary_paid_amount_cents=7000,
                 allowed_amount_cents=9000,
                 coinsurance_cents=2000,
-                secondary_paid_amount_cents=1500,
+                secondary_paid_amount_cents=secondary_paid_cents,
             )
         ],
         eras=eras or [{"era_id": "era-1"}, {"era_id": "era-2"}],
@@ -950,7 +951,7 @@ def _sync_secondary_posting(
 # The primary was posted on an earlier sync; only the secondary's ERA is new.
 PRIMARY_ALREADY_POSTED = {
     META_SYNCED_ERA_IDS: ["era-1"],
-    "candid_synced_amounts": {"primary": 7000, "secondary": None, "tertiary": None},
+    "candid_synced_amounts": {"primary": 7000, "secondary": 0, "tertiary": 0},
 }
 
 
@@ -975,6 +976,19 @@ def test_secondary_leftover_stays_when_candid_says_nobody_owes() -> None:
     )
 
     assert [t.payment for t in txns] == [Decimal("15.00")]
+
+
+def test_secondary_leftover_moves_when_the_secondary_pays_nothing() -> None:
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="patient",
+        metadata=PRIMARY_ALREADY_POSTED,
+        secondary_paid_cents=0,
+    )
+
+    assert [
+        (t.adjustment, t.adjustment_code, t.transfer_remaining_balance_to) for t in txns
+    ] == [(Decimal("20.00"), TRANSFER_CODE, "patient")]
 
 
 def test_secondary_leftover_counts_pr_moved_in_the_same_sync() -> None:
