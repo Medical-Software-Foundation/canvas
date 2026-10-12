@@ -129,7 +129,7 @@ Each row is validated for format and required fields, then the staff key is chec
 | `CacheRefreshTask` | CronTask | Every 5 minutes: lead-time blocks, Clinic calendars for newly bookable staff, and re-syncing anyone who gained or lost bookability. Once a day: hold-block rolling window and rules starting or ending. Every 6 hours: cache TTL refresh |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
-| `OnPluginInstalled` | Protocol | Creates missing Clinic calendars; on first install, or when the way events are drawn changes (`EVENT_LAYOUT_VERSION`), re-syncs all rules and blocks to Calendar Events. Other releases and redeploys skip the re-sync |
+| `OnPluginInstalled` | Protocol | Runs on first install and on every update. Creates missing Clinic calendars; on first install, or when the way events are drawn changes (`EVENT_LAYOUT_VERSION`), re-syncs all rules and blocks to Calendar Events. Other updates skip the re-sync |
 | `OnAppointmentCreated` | Protocol | Creates buffer events on Administrative calendar |
 | `OnAppointmentRescheduled` | Protocol | Updates buffer events when appointment is rescheduled |
 | `OnAppointmentCanceled` | Protocol | Removes buffer events when appointment is canceled |

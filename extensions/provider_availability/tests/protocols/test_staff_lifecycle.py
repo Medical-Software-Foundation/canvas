@@ -439,3 +439,45 @@ class TestOnPluginInstalled:
 
             # Should not crash — exception caught per-rule
             assert result == []
+
+
+class TestInstallRunsOnUpdates:
+    """Canvas fires PLUGIN_CREATED only on the first upload; updates fire PLUGIN_UPDATED."""
+
+    def test_listens_for_first_upload_and_updates(self):
+        assert OnPluginInstalled.RESPONDS_TO == ["PLUGIN_CREATED", "PLUGIN_UPDATED"]
+
+    def test_update_with_same_layout_only_checks_calendars(self):
+        handler = OnPluginInstalled(MagicMock())
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[MagicMock()]), \
+             patch(f"{SL_MODULE}.missing_clinic_calendar_effects", return_value=["new-cal"]) as mock_cals, \
+             patch(f"{SL_MODULE}.is_first_install", return_value=False), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value="events-1"), \
+             patch(f"{SL_MODULE}.EVENT_LAYOUT_VERSION", 1), \
+             patch(f"{SL_MODULE}.get_all_rules") as mock_rules, \
+             patch(f"{SL_MODULE}.sync_provider_availability") as mock_sync:
+            assert handler.compute() == ["new-cal"]
+        assert len(mock_cals.mock_calls) == 1
+        assert mock_rules.mock_calls == [] and mock_sync.mock_calls == []
+
+    def test_update_with_new_layout_redraws_once_and_records_it(self):
+        handler = OnPluginInstalled(MagicMock())
+        rule = MagicMock(provider_id="p1")
+        rule.is_active = True
+        rule.booking_interval.min_lead_hours = 0
+        staff = MagicMock()
+        staff.id = "p1"
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff]), \
+             patch(f"{SL_MODULE}.missing_clinic_calendar_effects", return_value=[]), \
+             patch(f"{SL_MODULE}.is_first_install", return_value=False), \
+             patch(f"{SL_MODULE}.get_synced_version", return_value="0.23.18"), \
+             patch(f"{SL_MODULE}.EVENT_LAYOUT_VERSION", 2), \
+             patch(f"{SL_MODULE}.get_all_rules", return_value=[rule]), \
+             patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
+             patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
+             patch(f"{SL_MODULE}.sync_provider_availability", return_value=["avail"]) as mock_sync, \
+             patch(f"{SL_MODULE}.build_provider_lead_time_effects", return_value=[]), \
+             patch(f"{SL_MODULE}.set_synced_version") as mock_set:
+            assert "avail" in handler.compute()
+        assert mock_sync.mock_calls == [call("p1", schedulable_ids={"p1"})]
+        assert mock_set.mock_calls == [call("events-2")]

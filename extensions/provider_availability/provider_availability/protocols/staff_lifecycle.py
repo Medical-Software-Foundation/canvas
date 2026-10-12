@@ -116,13 +116,17 @@ class OnStaffDeactivated(BaseProtocol):
 class OnPluginInstalled(BaseProtocol):
     """Create Clinic calendars for all active providers and sync rules on install/update.
 
-    Fires on PLUGIN_CREATED which occurs on both initial install and every
-    redeployment.  Creates Clinic calendars for all active providers (required
-    for the Canvas schedule view to work), then syncs any cached rules to
-    Calendar Events.
+    Canvas fires PLUGIN_CREATED only on a plugin's first upload, and
+    PLUGIN_UPDATED when it is enabled or its code changes, so this listens for
+    both. Every run checks for missing Clinic calendars (required for the
+    Canvas schedule view to work), one query. Redrawing every provider's
+    events runs only on first install or when EVENT_LAYOUT_VERSION changes.
     """
 
-    RESPONDS_TO = EventType.Name(EventType.PLUGIN_CREATED)
+    RESPONDS_TO = [
+        EventType.Name(EventType.PLUGIN_CREATED),
+        EventType.Name(EventType.PLUGIN_UPDATED),
+    ]
 
     def compute(self) -> list[Effect]:
         effects: list[Effect] = []
