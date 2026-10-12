@@ -32,6 +32,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data.calendar import Event as EventModel
+from canvas_sdk.v1.data.note import NoteTypeCategories
 from logger import log
 
 from provider_availability.engine.admin_calendar import (
@@ -104,7 +105,7 @@ def _load_appointment(appointment_id: str) -> Appointment | None:
     """
     appt = (
         Appointment.objects.filter(id=appointment_id, entered_in_error__isnull=True)
-        .select_related("provider", "location", "appointment_rescheduled_from__provider")
+        .select_related("provider", "location", "note_type", "appointment_rescheduled_from__provider")
         .first()
     )
     if appt is None:
@@ -250,6 +251,20 @@ def _delete_buffer_effects(appt: Appointment) -> list[Effect]:
     return [EventEffect(event_id=str(evt.id)).delete() for evt in doomed]
 
 
+def _is_visit(appt: Appointment) -> bool:
+    """Only patient visits get buffers.
+
+    Lunch, meetings and other schedule events are stored as appointments too,
+    usually with no patient, but an "other event" can carry a patient. Canvas
+    only lets other events be deleted (cancelled and entered in error), so
+    padding one would leave its buffers behind when it is deleted.
+    """
+    if appt.patient_id is None:
+        return False
+    note_type = appt.note_type
+    return note_type is None or note_type.category != NoteTypeCategories.SCHEDULE_EVENT
+
+
 def _neighbor_buffer_spans(
     appt: Appointment, provider_id: str, start: datetime, end: datetime
 ) -> list[tuple[datetime, datetime]]:
@@ -270,6 +285,7 @@ def _neighbor_buffer_spans(
         )
         .exclude(id=appt.id)
         .exclude(status=AppointmentProgressStatus.CANCELLED)
+        .exclude(note_type__category=NoteTypeCategories.SCHEDULE_EVENT)
         .select_related("location")
     )
     at_start, at_end = _to_utc(start), _to_utc(end)
@@ -317,9 +333,7 @@ def _create_buffer_effects(appt: Appointment) -> list[Effect]:
     """Draw the pre/post buffer events for this one appointment."""
     if not appt.provider or appt.status == AppointmentProgressStatus.CANCELLED:
         return []
-    if appt.patient_id is None:
-        # Lunch, meetings and other schedule events are stored as appointments
-        # with no patient. They are not visits, so they are never padded.
+    if not _is_visit(appt):
         return []
 
     provider_id = str(appt.provider.id)

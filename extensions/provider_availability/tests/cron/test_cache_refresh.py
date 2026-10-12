@@ -49,7 +49,7 @@ class TestCacheRefreshTaskExecute:
             assert mock_refresh.mock_calls == [call()]
             assert mock_cal.mock_calls == [call([])]
             assert mock_resync.mock_calls == [call()]
-            assert mock_lead.mock_calls == [call()]
+            assert mock_lead.mock_calls == [call(set())]  # the bookable set (empty here)
             # Same day → hold refresh is NOT run
             assert mock_hold.mock_calls == []
             assert result == []
@@ -527,3 +527,27 @@ class TestJobFailuresAreIsolatedAndFindable:
              patch("provider_availability.engine.job_errors.log") as mock_log:
             assert _refresh_lead_time_blocks() == []
         assert mock_log.exception.mock_calls == [call("PA_JOB_FAILED %s %s", "lead_time", "all")]
+
+
+class TestLeadTimeOnlyForBookableProviders:
+    def _rule(self, pid):
+        r = MagicMock(provider_id=pid)
+        r.is_active = True
+        r.booking_interval.min_lead_hours = 4
+        return r
+
+    def test_providers_no_longer_bookable_are_skipped(self):
+        bookable, gone = self._rule("p-in"), self._rule("p-out")
+        with patch(f"{CR_MODULE}.get_all_rules", return_value=[bookable, gone]), \
+             patch(f"{CR_MODULE}.build_provider_lead_time_effects", return_value=["lt"]) as mock_build:
+            assert _refresh_lead_time_blocks({"p-in"}) == ["lt"]
+        assert mock_build.mock_calls == [call("p-in", [bookable])]
+
+    def test_failed_or_empty_lookup_refreshes_everyone(self):
+        a, b = self._rule("p1"), self._rule("p2")
+        lookups: list[set[str] | None] = [None, set()]
+        for ids in lookups:
+            with patch(f"{CR_MODULE}.get_all_rules", return_value=[a, b]), \
+                 patch(f"{CR_MODULE}.build_provider_lead_time_effects", return_value=[]) as mock_build:
+                _refresh_lead_time_blocks(ids)
+            assert [c.args[0] for c in mock_build.mock_calls] == ["p1", "p2"]

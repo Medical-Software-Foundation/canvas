@@ -158,7 +158,7 @@ class TestDeleteBufferEffects:
              patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=[cal]), \
              patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts, \
              patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events:
-            mock_appts.filter.return_value.exclude.return_value.exclude.return_value.select_related.return_value = []
+            mock_appts.filter.return_value.exclude.return_value.exclude.return_value.exclude.return_value.select_related.return_value = []
             base = mock_events.filter.return_value
             base.filter.side_effect = [[pre_evt], [post_evt]]
 
@@ -219,7 +219,7 @@ class TestDeleteKeepsANeighborsBuffer:
              patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts, \
              patch(f"{BUFFER_MODULE}.EventEffect") as mock_effect, \
              patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events:
-            mock_appts.filter.return_value.exclude.return_value.exclude.return_value.select_related.return_value = neighbors
+            mock_appts.filter.return_value.exclude.return_value.exclude.return_value.exclude.return_value.select_related.return_value = neighbors
             mock_events.filter.return_value.filter.side_effect = [events_pre, events_post]
             mock_effect.side_effect = lambda event_id: MagicMock(delete=lambda: f"delete:{event_id}")
             return _delete_buffer_effects(appt)
@@ -745,3 +745,44 @@ class TestBufferMinutesFollowsTheCoveringRule:
 
         with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=rules):
             assert [r.id for r in _covering_rules(appt, "p1")] == ["fri"]
+
+
+class TestOtherEventsNeverGetBuffers:
+    """An "other event" (schedule event) can carry a patient, and Canvas deletes
+    one by marking it cancelled and entered in error, so padding it would leave
+    its buffers behind."""
+
+    def test_other_event_with_a_patient_gets_no_buffers(self):
+        from canvas_sdk.v1.data.note import NoteTypeCategories
+
+        appt = _future_appt()
+        appt.note_type.category = NoteTypeCategories.SCHEDULE_EVENT
+        with patch(f"{BUFFER_MODULE}._buffer_minutes") as mock_minutes:
+            assert _create_buffer_effects(appt) == []
+        assert mock_minutes.mock_calls == []
+
+    def test_visit_without_a_note_type_still_counts(self):
+        from provider_availability.protocols.appointment_buffer import _is_visit
+
+        appt = _future_appt()
+        appt.note_type = None
+        assert _is_visit(appt) is True
+
+    def test_no_patient_is_not_a_visit(self):
+        from provider_availability.protocols.appointment_buffer import _is_visit
+
+        appt = _future_appt()
+        appt.patient_id = None
+        assert _is_visit(appt) is False
+
+    def test_neighbor_lookup_leaves_out_other_events(self):
+        from canvas_sdk.v1.data.note import NoteTypeCategories
+        from provider_availability.protocols.appointment_buffer import _neighbor_buffer_spans
+
+        appt = _future_appt()
+        with patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts:
+            chain = mock_appts.filter.return_value.exclude.return_value.exclude.return_value
+            chain.exclude.return_value.select_related.return_value = []
+            start = appt.start_time
+            _neighbor_buffer_spans(appt, "p1", start, start + timedelta(minutes=30))
+        assert chain.exclude.mock_calls[0] == call(note_type__category=NoteTypeCategories.SCHEDULE_EVENT)

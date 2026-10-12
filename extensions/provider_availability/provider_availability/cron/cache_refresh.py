@@ -75,7 +75,9 @@ class CacheRefreshTask(CronTask):
         effects.extend(_daily_resync())
 
         # Refresh lead-time blocks every cron tick (the lead window slides continuously)
-        effects.extend(_refresh_lead_time_blocks())
+        effects.extend(
+            _refresh_lead_time_blocks({str(s.id) for s in schedulable} if schedulable is not None else None)
+        )
 
         # Refresh hold-type blocks once per day. The hold window advances by whole
         # days, so rebuilding every tick only re-emits identical events (and runs
@@ -129,14 +131,22 @@ def _daily_resync() -> list[Effect]:
     return effects
 
 
-def _refresh_lead_time_blocks() -> list[Effect]:
-    """Refresh lead-time blocks for all rules with min_lead_hours > 0."""
+def _refresh_lead_time_blocks(schedulable_ids: set[str] | None = None) -> list[Effect]:
+    """Refresh lead-time blocks for bookable providers with lead-time rules.
+
+    A provider who is no longer bookable has no availability to protect, so
+    their lead time is not redrawn. ``None`` (the staff lookup failed) or an
+    empty set (roles misconfigured) refreshes everyone, the same way
+    availability sync skips its gate rather than act on a bad lookup.
+    """
     effects: list[Effect] = []
     try:
         # One pass per provider: lead-time events are per provider, so building
         # them rule by rule made each rule delete the others' events every tick.
         by_provider: dict[str, list] = {}
         for rule in lead_time_rules(get_all_rules()):
+            if schedulable_ids and rule.provider_id not in schedulable_ids:
+                continue
             by_provider.setdefault(rule.provider_id, []).append(rule)
         for provider_id, rules in by_provider.items():
             # One provider's failure must not stop everyone else's lead time.
