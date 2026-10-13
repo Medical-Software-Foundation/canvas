@@ -93,8 +93,8 @@ def test_validate_groups_rows_into_one_rule():
     handler = _handler()
     csv = (
         HEADER + "\n"
-        + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
-        + "rule,1234567890,Main Clinic,,monday,13:00,17:00,,,,,,,,,weekly,1,,,\n"
+        + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
+        + "rule,1234567890,Main Clinic,,monday,13:00,17:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     )
     _set_upload(handler, csv)
     with _patch_lookups(), patch(CSV_MODULE + ".check_rule_overlap", return_value=None):
@@ -108,7 +108,7 @@ def test_validate_groups_rows_into_one_rule():
 
 def test_validate_surfaces_structural_error():
     handler = _handler()
-    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,funday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,funday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     _set_upload(handler, csv)
     with _patch_lookups(), patch(CSV_MODULE + ".check_rule_overlap", return_value=None):
         body, _ = _parse(handler.validate_upload()[0])
@@ -119,7 +119,7 @@ def test_validate_surfaces_structural_error():
 
 def test_validate_surfaces_unknown_provider():
     handler = _handler()
-    csv = HEADER + "\n" + "rule,0000000000,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+    csv = HEADER + "\n" + "rule,0000000000,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     _set_upload(handler, csv)
     with _patch_lookups(), patch(CSV_MODULE + ".check_rule_overlap", return_value=None):
         body, _ = _parse(handler.validate_upload()[0])
@@ -129,7 +129,7 @@ def test_validate_surfaces_unknown_provider():
 
 def test_validate_flags_overlap_and_excludes_record():
     handler = _handler()
-    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     _set_upload(handler, csv)
     with _patch_lookups(), patch(
         CSV_MODULE + ".check_rule_overlap", return_value="Overlapping availability on Monday"
@@ -144,7 +144,7 @@ def test_validate_fetches_rules_once_and_passes_them_to_overlap():
     """Overlap check reuses one get_all_rules() read instead of a per-row scan."""
     handler = _handler()
     saved = ProviderAvailabilityRule(id="r-saved", provider_id="1234567890")
-    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+    csv = HEADER + "\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     _set_upload(handler, csv)
     with _patch_lookups(), \
          patch(CSV_MODULE + ".get_all_rules", return_value=[saved]) as mock_all_rules, \
@@ -163,7 +163,7 @@ def test_validate_counts_blocks_and_rblocks():
     csv = (
         HEADER + "\n"
         + "block,1234567890,,,,,,true,2026-07-04,Holiday,,,,,,,,,,\n"
-        + "rblock,1234567890,,,monday,12:00,13:00,,,Lunch,none,,,,,weekly,1,,,\n"
+        + "rblock,1234567890,,,monday,12:00,13:00,,,Lunch,none,,,,,weekly,1,2026-07-01,,\n"
     )
     _set_upload(handler, csv)
     with _patch_lookups(), patch(CSV_MODULE + ".check_rule_overlap", return_value=None):

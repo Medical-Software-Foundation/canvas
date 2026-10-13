@@ -241,3 +241,69 @@ class TestLeadTimeRuleTimezone:
         created = [c.kwargs for c in mock_effect.call_args_list if "starts_at" in c.kwargs]
         # 9:00-15:00 Pacific is 12:00-18:00 Eastern
         assert [(c["starts_at"].astimezone(TZ).hour, c["ends_at"].astimezone(TZ).hour) for c in created] == [(12, 18)]
+
+
+class TestEveryOtherWeekKeepsItsWeeks:
+    """A series is drawn from its start date's weeks, whatever day it is redrawn."""
+
+    def _first(self, today):
+        from provider_availability.engine.event_sync import _first_in_pattern
+
+        schedule = {"friday": [TimeWindow(start=dt.time(9, 0), end=dt.time(10, 0))]}
+        # Started on Friday Oct 2, 2026, every 2 weeks: Oct 2, Oct 16, Oct 30, ...
+        return _first_in_pattern(today, 4, dt.date(2026, 10, 2), 2, schedule)
+
+    def test_redrawn_on_an_on_week(self):
+        assert self._first(dt.date(2026, 10, 12)) == dt.date(2026, 10, 16)
+
+    def test_redrawn_on_an_off_week(self):
+        """Drawn on Mon Oct 5 the next Friday (Oct 9) is an off week, so it starts Oct 16."""
+        assert self._first(dt.date(2026, 10, 5)) == dt.date(2026, 10, 16)
+
+    def test_weekly_series_unchanged(self):
+        from provider_availability.engine.event_sync import _first_in_pattern
+
+        schedule = {"friday": [TimeWindow(start=dt.time(9, 0), end=dt.time(10, 0))]}
+        assert _first_in_pattern(dt.date(2026, 10, 5), 4, dt.date(2026, 10, 2), 1, schedule) == dt.date(2026, 10, 9)
+
+
+class TestSameTimeOneOffBlocks:
+    """One-off block events are found by time, so a same-time block loses its events too."""
+
+    def _block(self, block_id, reason):
+        from provider_availability.engine.models import AdminBlock
+
+        return AdminBlock(id=block_id, provider_id=PROVIDER_ID, reason=reason,
+                          start=datetime(2026, 10, 19, 11, 0), end=datetime(2026, 10, 19, 11, 30))
+
+    @patch(f"{MODULE}.build_block_event_effects", side_effect=lambda b: [f"draw-{b.id}"])
+    @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}.provider_tz", return_value=TZ)
+    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    def test_deleting_one_redraws_the_other(self, mock_ids, mock_tz, mock_cals, mock_draw):
+        from provider_availability.engine.event_sync import build_delete_block_effects
+
+        lunch, meeting = self._block("b1", "Lunch"), self._block("b2", "Meeting")
+        later = self._block("b3", "Later")
+        later.end = datetime(2026, 10, 19, 12, 0)
+        with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, meeting, later]), \
+             patch(f"{MODULE}.EventModel.objects") as mock_events:
+            mock_events.filter.return_value = QS([MagicMock(id="e1"), MagicMock(id="e2")])
+            result = build_delete_block_effects(PROVIDER_ID, lunch)
+
+        assert mock_draw.mock_calls == [call(meeting)]
+        assert result[-1] == "draw-b2"
+
+    @patch(f"{MODULE}.build_block_event_effects")
+    @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}.provider_tz", return_value=TZ)
+    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    def test_bulk_callers_skip_the_redraw(self, mock_ids, mock_tz, mock_cals, mock_draw):
+        from provider_availability.engine.event_sync import build_delete_block_effects
+
+        lunch, meeting = self._block("b1", "Lunch"), self._block("b2", "Meeting")
+        with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, meeting]), \
+             patch(f"{MODULE}.EventModel.objects") as mock_events:
+            mock_events.filter.return_value = QS([MagicMock(id="e1")])
+            build_delete_block_effects(PROVIDER_ID, lunch, keep_others=False)
+        assert mock_draw.mock_calls == []

@@ -197,6 +197,16 @@ def _validate_recurrence_payload(body: dict) -> str | None:
         for w in time_windows:
             if w.get("start", "") >= w.get("end", ""):
                 return f"Start time must be before end time ({w.get('start')} >= {w.get('end')})"
+    # A repeating series is drawn from its start date, so every-2-weeks stays on
+    # the same weeks whenever it is redrawn. Without one it restarted from the
+    # day it was redrawn. An end date stays optional.
+    start = body.get("effective_start")
+    if not start:
+        return "Start date is required"
+    try:
+        date.fromisoformat(str(start))
+    except ValueError:
+        return "Start date must be YYYY-MM-DD"
     return None
 
 
@@ -1214,7 +1224,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             for gb in group_blocks:
                 if gb.id == block.id:
                     continue
-                old_effects = build_delete_block_effects(gb.provider_id, gb)
+                old_effects = build_delete_block_effects(
+                    gb.provider_id, gb, skip_ids={g.id for g in group_blocks}
+                )
                 all_effects.extend(old_effects)
                 gb.start = block.start
                 gb.end = block.end
@@ -1260,7 +1272,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             for gb in group_blocks:
                 if gb.id == block_id:
                     continue
-                event_effects.extend(build_delete_block_effects(gb.provider_id, gb))
+                event_effects.extend(
+                    build_delete_block_effects(gb.provider_id, gb, skip_ids={g.id for g in group_blocks})
+                )
                 delete_block(gb.provider_id, gb.id)
                 deleted_count += 1
 
@@ -1686,7 +1700,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
         effects: list[Effect] = []
         for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(provider_id, blk))
+            effects.extend(build_delete_block_effects(provider_id, blk, keep_others=False))
 
         set_provider_timezone(provider_id, tz_name)
 
@@ -1716,7 +1730,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
         effects: list[Effect] = []
         for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(provider_id, blk))
+            effects.extend(build_delete_block_effects(provider_id, blk, keep_others=False))
 
         clear_provider_timezone(provider_id)
         # Re-sync so the provider's events move to the practice-default timezone.
@@ -1757,7 +1771,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         provider_blocks = [b for b in get_all_blocks() if b.provider_id in provider_ids]
         effects: list[Effect] = []
         for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(blk.provider_id, blk))
+            effects.extend(build_delete_block_effects(blk.provider_id, blk, keep_others=False))
 
         for pid in provider_ids:
             set_provider_timezone(pid, tz_name)

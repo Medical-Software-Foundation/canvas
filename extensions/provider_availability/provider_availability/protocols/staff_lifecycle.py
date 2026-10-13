@@ -232,7 +232,7 @@ class OnPluginInstalled(BaseProtocol):
             try:
                 # build_block_event_effects only creates; delete this block's
                 # own prior events first so a redeploy doesn't duplicate them.
-                effects.extend(build_delete_block_effects(block.provider_id, block))
+                effects.extend(build_delete_block_effects(block.provider_id, block, keep_others=False))
                 effects.extend(build_block_event_effects(block))
                 blocks_synced += 1
             except Exception:

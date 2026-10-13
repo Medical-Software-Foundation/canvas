@@ -47,7 +47,7 @@ def test_all_imports_are_sandbox_allowed(path):
 # which the import scan above cannot see.
 #
 # uuid.uuid5 is missing from the allowlist in this SDK copy, yet the deployed
-# runner allows it: calendars on the support-team instance carry the exact
+# runner allows it: calendars on a Canvas test instance carry the exact
 # uuid5 ids engine/admin_calendar.py computes (checked 2026-10-08).
 _VERIFIED_ON_INSTANCE = {("uuid", "uuid5")}
 
@@ -84,7 +84,7 @@ def test_the_attribute_scan_can_fail():
 def test_no_dataclass_with_postponed_annotations(path):
     """@dataclass with `from __future__ import annotations` looks its module up in
     sys.modules, which the sandbox leaves empty, so the module fails to load. This
-    took the admin API down in 0.23.20 on support-team; tests outside the sandbox pass."""
+    took the admin API down in 0.23.20 on a test instance; tests outside the sandbox pass."""
     src = path.read_text()
     tree = ast.parse(src)
     future = any(

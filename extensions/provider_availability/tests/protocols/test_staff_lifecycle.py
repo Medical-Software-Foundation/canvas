@@ -300,7 +300,7 @@ class TestOnPluginInstalled:
             assert mock_lead.mock_calls == [call("p1", [mock_rule])]
             # Block reconciliation deletes the block's own prior events first,
             # then recreates — never a blanket calendar sweep.
-            assert mock_del_block.mock_calls == [call("p1", mock_block)]
+            assert mock_del_block.mock_calls == [call("p1", mock_block, keep_others=False)]
             assert mock_block_fx.mock_calls == [call(mock_block)]
             assert mock_rb_fx.mock_calls == [call([mock_rb])]
             assert "sync-fx" in result
@@ -388,7 +388,7 @@ class TestOnPluginInstalled:
             mock_set_ver.assert_called_once_with("0.0.2")
             mock_sync.assert_called_once_with("p1", schedulable_ids={"p1"})
             mock_lead.assert_called_once_with("p1", [mock_rule])
-            mock_del_block.assert_called_once_with("p1", mock_block)
+            mock_del_block.assert_called_once_with("p1", mock_block, keep_others=False)
             mock_block_fx.assert_called_once_with(mock_block)
             mock_rb_fx.assert_called_once_with([mock_rb])
 

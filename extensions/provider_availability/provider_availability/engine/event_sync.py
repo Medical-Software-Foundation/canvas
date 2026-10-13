@@ -34,6 +34,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.storage import (
+    get_blocks_for_provider,
     get_event_ids,
     get_recurring_blocks_for_provider,
     get_rules_for_provider,
@@ -65,7 +66,7 @@ DAY_TO_DAYS_OF_WEEK: dict[str, DaysOfWeek] = {
 # the events themselves (titles, times, recurrence, which calendars), then
 # update tests/event_layout_lock.json; tests/test_event_layout.py fails until
 # the lock matches the drawing code.
-EVENT_LAYOUT_VERSION = 1
+EVENT_LAYOUT_VERSION = 2
 
 AVAILABILITY_TITLE = "Available"
 BLOCK_TITLE = "Block"
@@ -292,8 +293,11 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
             if weekday_int is None or dow is None:
                 continue
 
-            # Find first occurrence of this weekday in the range
-            first_date = _next_weekday(range_start, weekday_int)
+            # First occurrence of this weekday in the range that is on the
+            # series' weeks, counted from the start date (every N weeks)
+            first_date = _first_in_pattern(
+                range_start, weekday_int, rule.effective_start, interval, rule.weekly_schedule
+            )
             if first_date > range_end:
                 continue
 
@@ -485,6 +489,25 @@ def _weekday_occurrences(start: date, end: date, weekday_int: int) -> list[date]
     return result
 
 
+def _first_in_pattern(
+    range_start: date, weekday_int: int, effective_start: date | None, interval: int, weekly_schedule: dict
+) -> date:
+    """First date on or after ``range_start`` with this weekday that falls on the series' weeks.
+
+    Every-N-weeks series count their weeks from the start date (see
+    ``date_in_pattern``), not from the day they are drawn, so a redraw on an
+    "off" week keeps the same weeks. Weekly series (N = 1) are unchanged.
+    """
+    first = _next_weekday(range_start, weekday_int)
+    if interval <= 1 or effective_start is None:
+        return first
+    for _ in range(interval):
+        if date_in_pattern(first, effective_start, "weekly", interval, weekly_schedule):
+            return first
+        first += dt.timedelta(days=7)
+    return first
+
+
 def _next_weekday(from_date: date, weekday_int: int) -> date:
     """Find the next occurrence of a weekday (0=Mon, 6=Sun) on or after from_date."""
     days_ahead = weekday_int - from_date.weekday()
@@ -597,12 +620,43 @@ def build_block_event_effects(block: AdminBlock) -> list[Effect]:
     return effects
 
 
-def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None) -> list[Effect]:
+def _redraw_same_time_blocks(provider_id: str, block: AdminBlock, skip_ids: set[str]) -> list[Effect]:
+    """Redraw the provider's other one-off blocks with exactly this block's start and end."""
+    tz = provider_tz(provider_id)
+
+    def span(b: AdminBlock) -> tuple[datetime, datetime]:
+        return (
+            to_utc(b.start if b.start.tzinfo is not None else localize_naive(b.start, tz)),
+            to_utc(b.end if b.end.tzinfo is not None else localize_naive(b.end, tz)),
+        )
+
+    target = span(block)
+    effects: list[Effect] = []
+    for other in get_blocks_for_provider(provider_id):
+        if other.id == block.id or other.id in skip_ids:
+            continue
+        if span(other) == target:
+            effects.extend(build_block_event_effects(other))
+    return effects
+
+
+def build_delete_block_effects(
+    provider_id: str,
+    block: AdminBlock | None = None,
+    keep_others: bool = True,
+    skip_ids: set[str] | None = None,
+) -> list[Effect]:
     """Delete admin block events from the provider's Administrative calendars.
 
     If a specific block is given, first try stored event IDs, then fall back to
     time-range matching (with TZ conversion). Also matches by title (reason).
     Otherwise, delete all block-titled events.
+
+    Events are matched by time, not by block, so the provider's other one-off
+    blocks with the exact same start and end lose theirs too; with
+    ``keep_others`` they are redrawn, except the blocks in ``skip_ids`` (ones
+    the caller is deleting or redrawing itself). Callers that delete and
+    redraw all of a provider's blocks pass ``keep_others=False``.
     """
     effects: list[Effect] = []
 
@@ -644,6 +698,8 @@ def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None
                     starts_at__date=block_start_utc.date(),
                 ).values_list("id", flat=True):
                     effects.append(EventEffect(event_id=str(evt_id)).delete())
+        if keep_others and effects:
+            effects.extend(_redraw_same_time_blocks(provider_id, block, skip_ids or set()))
     else:
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
         if cal_ids:
@@ -1057,7 +1113,9 @@ def _draw_recurring_block_events(block: RecurringBlock) -> list[Effect]:
             if weekday_int is None or dow is None:
                 continue
 
-            first_date = _next_weekday(range_start, weekday_int)
+            first_date = _first_in_pattern(
+                range_start, weekday_int, block.effective_start, interval, block.weekly_schedule
+            )
             if first_date > range_end:
                 continue
 

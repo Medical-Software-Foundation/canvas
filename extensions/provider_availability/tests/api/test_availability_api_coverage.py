@@ -147,6 +147,7 @@ class TestUpdateRuleGroupBranches:
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
         }
         handler = _make_handler(json_body=body)
@@ -185,6 +186,7 @@ class TestUpdateRuleGroupBranches:
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {},
         }
         handler = _make_handler(json_body=body)
@@ -552,6 +554,7 @@ class TestCreateRecurringBlockReplace:
         mock_get_block.return_value = old_block
         body = {
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {"friday": [{"start": "12:00", "end": "13:00"}]},
             "replace_block_id": "b-old",
         }
@@ -754,7 +757,7 @@ class TestClearProviderTz:
         # Only this provider's block, deleted before the clear and rebuilt after it
         assert order.mock_calls == [
             call.get_all_blocks(),
-            call.build_delete_block_effects(PROVIDER_ID, mine),
+            call.build_delete_block_effects(PROVIDER_ID, mine, keep_others=False),
             call.clear_provider_timezone(PROVIDER_ID),
             call.build_block_event_effects(mine),
         ]
@@ -923,6 +926,7 @@ class TestCreateRuleLeadTime:
         mock_get_rules.return_value = [_lead_time_rule()]
         body = {
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
             "is_active": True,
             "booking_interval": {"min_lead_hours": 48},
@@ -1385,3 +1389,24 @@ class TestMalformedDates:
         handler = _make_handler(json_body={"id": "b1", "provider_id": PROVIDER_ID, "start": "tomorrow", "end": "later"})
         data, code = _parse(handler.update_block()[0])
         assert code == HTTPStatus.BAD_REQUEST
+
+
+class TestStartDateRequired:
+    @pytest.mark.parametrize("route", ["create_or_update_rule", "update_rule_group", "create_recurring_block", "update_recurring_block"])
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.get_rule_by_id", new=lambda *a: None)
+    @patch(f"{MODULE}.get_recurring_block_by_id", new=lambda *a: None)
+    def test_missing_start_date_is_rejected(self, mock_access, route):
+        handler = _make_handler(json_body={
+            "id": "x1", "provider_id": PROVIDER_ID,
+            "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
+        })
+        data, code = _parse(getattr(handler, route)()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert data["error"] == "Start date is required"
+
+    def test_bad_start_date_is_rejected(self):
+        from provider_availability.api.availability_api import _validate_recurrence_payload
+
+        assert _validate_recurrence_payload({"effective_start": "10/05/2026"}) == "Start date must be YYYY-MM-DD"
+        assert _validate_recurrence_payload({"effective_start": "2026-10-05"}) is None

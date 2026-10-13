@@ -1589,7 +1589,7 @@ function renderAccordion() {
         } else if (r.effective_start) {
           repeatsHtml = '<span class="date-range">Since ' + fmtDate(r.effective_start) + '</span>';
         } else {
-          repeatsHtml = '<span class="date-range">Always</span>';
+          repeatsHtml = '<span class="date-range" title="Edit to add a start date">No start date</span>';
         }
 
         // Build detail panel content
@@ -1766,7 +1766,7 @@ function renderAccordion() {
         } else if (rb.effective_start) {
           repeatsHtml = '<span class="date-range">Since ' + fmtDate(rb.effective_start) + '</span>';
         } else {
-          repeatsHtml = '<span class="date-range">Always</span>';
+          repeatsHtml = '<span class="date-range" title="Edit to add a start date">No start date</span>';
         }
 
         // Build inline chips: hold + reason
@@ -2566,7 +2566,20 @@ function editBlock(blockJson) {
 
 /* ---------- Save functions ---------- */
 
+// An override typed into the open override box is saved only by its own
+// Save Override button, so Save Rule would otherwise drop it without a word.
+function _hasUnsavedOverride() {
+  var form = document.getElementById('override-form');
+  if (!form || form.style.display === 'none') return false;
+  var dateEl = document.getElementById('override_date');
+  return !!(dateEl && dateEl.value) || form.querySelectorAll('.override-window-row').length > 0;
+}
+
 async function saveRule() {
+  if (_hasUnsavedOverride()) {
+    showMsg('You have an unsaved date override. Click Save Override or Cancel first.', 'error');
+    return;
+  }
   const providerIds = msProvider.getValue();
   if (providerIds.length === 0) { showMsg('Please select at least one provider', 'error'); return; }
 
@@ -2619,6 +2632,7 @@ async function saveRule() {
     });
     effectiveStart = document.getElementById('effective_start').value || null;
     effectiveEnd = document.getElementById('effective_end').value || null;
+    if (!effectiveStart) { showMsg('Start date is required', 'error'); return; }
   }
 
   const editingId = document.getElementById('editing_rule_id').value;
@@ -2753,6 +2767,7 @@ async function saveRecurringBlock() {
   const groupId = document.getElementById('editing_group_id').value;
   const applyToGroup = document.getElementById('apply_to_group').checked && groupId;
   const holdType = 'none';
+  if (!document.getElementById('rb_effective_start').value) { showMsg('Start date is required', 'error'); return; }
 
   const locationIds = msBlockLocation.getValue();
 
@@ -3467,6 +3482,7 @@ async function saveHold() {
   var reason = document.getElementById('hold_reason').value;
   var effectiveStart = document.getElementById('hold_effective_start').value || null;
   var effectiveEnd = document.getElementById('hold_effective_end').value || null;
+  if (!effectiveStart) { showMsg('Start date is required', 'error'); return; }
   var locationIds = msHoldLocation.getValue();
 
   // Gather schedule from hold-day-* inputs

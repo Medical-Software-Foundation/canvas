@@ -835,3 +835,6 @@ body {
 }
 
 /* (animations removed for Canvas design system compliance) */
+
+/* "(optional)" after a field label */
+.label-hint { font-weight: 400; color: var(--text-muted); }

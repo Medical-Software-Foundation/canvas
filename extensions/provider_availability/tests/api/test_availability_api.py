@@ -855,6 +855,7 @@ class TestCreateOrUpdateRule:
     def test_success(self, mock_resolve, mock_overlap, mock_save, mock_sync, mock_access):
         body = {
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {
                 "monday": [{"start": "09:00", "end": "12:00"}],
             },
@@ -900,6 +901,7 @@ class TestCreateOrUpdateRule:
     def test_overlap_returns_error(self, mock_resolve, mock_overlap, mock_access):
         body = {
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {
                 "monday": [{"start": "09:00", "end": "12:00"}],
             },
@@ -936,6 +938,7 @@ class TestCreateOrUpdateRule:
         """The endpoint accepts location_id (string) and converts it to location_ids (list)."""
         body = {
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "location_id": LOCATION_ID,
             "visit_type": VISIT_TYPE_ID,
             "weekly_schedule": {},
@@ -973,6 +976,7 @@ class TestUpdateRuleGroup:
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
         }
         handler = _make_handler(json_body=body)
@@ -1008,6 +1012,7 @@ class TestUpdateRuleGroup:
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {},
         }
         handler = _make_handler(json_body=body)
@@ -1034,6 +1039,7 @@ class TestUpdateRuleGroup:
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "group_id": "g1",
             "apply_to_group": True,
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -1067,6 +1073,7 @@ class TestUpdateRuleGroup:
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "group_id": "g1",
             "apply_to_group": True,
             "weekly_schedule": {},
@@ -1707,6 +1714,7 @@ class TestCreateRecurringBlock:
     def test_success(self, mock_save, mock_effects, mock_access):
         body = {
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {
                 "friday": [{"start": "12:00", "end": "13:00"}],
             },
@@ -1783,6 +1791,7 @@ class TestUpdateRecurringBlock:
         body = {
             "id": "rb1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
         }
         handler = _make_handler(json_body=body)
@@ -1831,6 +1840,7 @@ class TestUpdateRecurringBlock:
         body = {
             "id": "rb1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "group_id": "g1",
             "apply_to_group": True,
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -1865,6 +1875,7 @@ class TestUpdateRecurringBlock:
         body = {
             "id": "rb1",
             "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
             "group_id": "g1",
             "apply_to_group": True,
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -2124,7 +2135,7 @@ class TestSetProviderTimezone:
         # Only this provider's one-off block is rebuilt (re-anchored to the new TZ)
         assert mock_build_block.mock_calls == [call(block_match)]
         # Its prior (old-TZ) events are deleted as part of the re-sync
-        assert call(PROVIDER_ID, block_match) in mock_delete_block.mock_calls
+        assert call(PROVIDER_ID, block_match, keep_others=False) in mock_delete_block.mock_calls
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_provider_id_is_bad_request(self, mock_access):
@@ -2233,8 +2244,8 @@ class TestSetProviderTimezoneBulk:
         assert mock_build_block.mock_calls == [call(block_p1), call(block_p2)]
         # Old-TZ events are deleted (per provider) as part of the re-sync
         assert mock_delete_block.mock_calls == [
-            call(PROVIDER_ID, block_p1),
-            call(PROVIDER_ID_2, block_p2),
+            call(PROVIDER_ID, block_p1, keep_others=False),
+            call(PROVIDER_ID_2, block_p2, keep_others=False),
         ]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
