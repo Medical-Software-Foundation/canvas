@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from canvas_sdk.effects.calendar import CalendarType, EventRecurrence
+from canvas_sdk.effects.calendar import CalendarType, Event as EventEffect, EventRecurrence
 
 from provider_availability.engine.models import (
     AdminBlock,
@@ -36,7 +36,9 @@ from provider_availability.engine.event_sync import (
     build_delete_block_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
+    _build_delete_hold_events,
     _recurring_block_event_scope,
+    dedupe_event_deletes,
     build_lead_time_block_effects,
     build_recurring_block_sync_effects,
     build_sync_effects,
@@ -1275,20 +1277,9 @@ class TestBuildBlockEventEffects:
 
 
 class TestBuildDeleteBlockEffects:
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_used(self, mock_get_ids, sample_block):
-        mock_get_ids.return_value = ["evt-1", "evt-2"]
-
-        result = build_delete_block_effects(PROVIDER_ID, sample_block)
-
-        assert mock_get_ids.mock_calls == [call(sample_block.id)]
-        assert len(result) == 2
-
     @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_time_range_fallback(self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block):
-        mock_get_ids.return_value = []
+    def test_time_range_fallback(self, mock_get_admin_cals, mock_tz, sample_block):
 
         mock_cal = MagicMock()
         mock_cal.id = "admin-cal-1"
@@ -1331,9 +1322,7 @@ class TestBuildDeleteBlockEffects:
 
     @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_no_events_found_returns_empty(self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block):
-        mock_get_ids.return_value = []
+    def test_no_events_found_returns_empty(self, mock_get_admin_cals, mock_tz, sample_block):
         mock_get_admin_cals.return_value = []
 
         result = build_delete_block_effects(PROVIDER_ID, sample_block)
@@ -1350,12 +1339,10 @@ class TestBuildDeleteBlockEffects:
 
     @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_time_range_fallback_multiple_calendars(
-        self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block
+        self, mock_get_admin_cals, mock_tz, sample_block
     ):
-        """When stored IDs are empty, searches across multiple admin calendars."""
-        mock_get_ids.return_value = []
+        """Searches across multiple admin calendars."""
 
         mock_cal1 = MagicMock()
         mock_cal1.id = "admin-cal-1"
@@ -1786,19 +1773,27 @@ class TestBuildDeleteRecurringBlockEffects:
         mock_evt.id = "evt-found-1"
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = [mock_evt]
+            mock_event_objects.filter.side_effect = [[mock_evt], []]
 
             result = build_delete_recurring_block_effects(
                 PROVIDER_ID, sample_recurring_block
             )
 
-        # Should match by block's reason ("Lunch") AND legacy RECURRING_BLOCK_TITLE
-        assert mock_event_objects.filter.call_args == call(
-            calendar__id__in=["admin-cal-1"],
-            title__in=["Lunch", RECURRING_BLOCK_TITLE],
-            is_cancelled=False,
-            recurrence__contains="FREQ=",
-        )
+        # Scoped match on the block's reason ("Lunch"), then an unscoped match
+        # on the legacy RECURRING_BLOCK_TITLE
+        assert mock_event_objects.filter.call_args_list == [
+            call(
+                calendar__id__in=["admin-cal-1"],
+                title="Lunch",
+                is_cancelled=False,
+                recurrence__contains="FREQ=",
+            ),
+            call(
+                calendar__id__in=["admin-cal-1"],
+                title=RECURRING_BLOCK_TITLE,
+                is_cancelled=False,
+            ),
+        ]
         assert len(result) == 1
 
     @patch(f"{MODULE}.get_admin_calendars")
@@ -1874,17 +1869,13 @@ class TestBuildDeleteRecurringBlockEffects:
         )
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = [mock_evt]
+            mock_event_objects.filter.side_effect = [[mock_evt], []]
 
             result = build_delete_recurring_block_effects(PROVIDER_ID, block)
 
-        # "Blocked" != RECURRING_BLOCK_TITLE so both should be in the list
-        assert mock_event_objects.filter.call_args == call(
-            calendar__id__in=["admin-cal-1"],
-            title__in=["Blocked", RECURRING_BLOCK_TITLE],
-            is_cancelled=False,
-            recurrence__contains="FREQ=",
-        )
+        # "Blocked" != RECURRING_BLOCK_TITLE so both are searched
+        titles = [c.kwargs["title"] for c in mock_event_objects.filter.call_args_list]
+        assert titles == ["Blocked", RECURRING_BLOCK_TITLE]
         assert len(result) == 1
 
     @patch(f"{MODULE}.get_admin_calendars")
@@ -1913,19 +1904,17 @@ class TestBuildDeleteRecurringBlockEffects:
         mock_evt2.id = "evt-2"
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = [mock_evt1, mock_evt2]
+            mock_event_objects.filter.side_effect = [[mock_evt1, mock_evt2], []]
 
             result = build_delete_recurring_block_effects(
                 PROVIDER_ID, sample_recurring_block
             )
 
-        # One bulk query spanning both admin calendars
+        # One bulk query per title, each spanning both admin calendars
         assert len(result) == 2
-        assert mock_event_objects.filter.call_count == 1
-        assert mock_event_objects.filter.call_args.kwargs["calendar__id__in"] == [
-            "cal-1",
-            "cal-2",
-        ]
+        assert mock_event_objects.filter.call_count == 2
+        for c in mock_event_objects.filter.call_args_list:
+            assert c.kwargs["calendar__id__in"] == ["cal-1", "cal-2"]
 
 
 # ── build_lead_time_block_effects ─────────────────────────────────────
@@ -3072,7 +3061,7 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         hold_evt = MagicMock()
         hold_evt.id = "hold-1"
         mock_event_model.objects.filter.side_effect = (
-            [[title_evt], [hold_evt]] + [[] for _ in range(10)]
+            [[title_evt], [], [hold_evt]] + [[] for _ in range(10)]
         )
 
         result = build_delete_recurring_block_effects(
@@ -3111,8 +3100,8 @@ class TestRecurringBlockDeleteScope:
             mock_event_objects.filter.return_value = []
             build_delete_recurring_block_effects(PROVIDER_ID, block)
 
-        kwargs = mock_event_objects.filter.call_args.kwargs
-        assert kwargs["title__in"] == ["Blocked", RECURRING_BLOCK_TITLE]
+        kwargs = mock_event_objects.filter.call_args_list[0].kwargs
+        assert kwargs["title"] == "Blocked"
         assert kwargs["recurrence__contains"] == "FREQ="
 
     @patch(f"{MODULE}.get_admin_calendars")
@@ -3138,52 +3127,72 @@ class TestRecurringBlockDeleteScope:
             mock_event_objects.filter.return_value = []
             build_delete_recurring_block_effects(PROVIDER_ID, block)
 
-        # Nov 20-23 widened by a day on each side: midnight Eastern on Nov 19
-        # through midnight Eastern on Nov 25.
-        assert mock_event_objects.filter.call_args == call(
+        # Nov 20-23 is midnight Eastern Nov 20 to midnight Eastern Nov 24,
+        # both 05:00 UTC. Widened by 5 hours earlier (Eastern to UTC, the
+        # farthest zone east) and 5 hours later (Eastern to US/Hawaii, the
+        # farthest west).
+        assert mock_event_objects.filter.call_args_list[0] == call(
             calendar__id__in=["admin-cal-1"],
-            title__in=["PTO", RECURRING_BLOCK_TITLE],
+            title="PTO",
             is_cancelled=False,
             recurrence__contains="FREQ=",
-            starts_at__gte=datetime(2026, 11, 19, 5, 0, tzinfo=UTC),
-            starts_at__lt=datetime(2026, 11, 25, 5, 0, tzinfo=UTC),
+            starts_at__gte=datetime(2026, 11, 20, 0, 0, tzinfo=UTC),
+            starts_at__lt=datetime(2026, 11, 24, 10, 0, tzinfo=UTC),
         )
 
     def test_bounds_cover_events_created_before_a_move_east(self):
-        """Events created at 07:00 Honolulu (UTC-10) on Nov 20-23, then the
-        block's timezone changed to Kiritimati (UTC+14). Unwidened, the upper
-        bound would be Nov 23 10:00 UTC and miss the Nov 23 17:00 UTC event."""
+        """Events created at 20:00 US/Hawaii (UTC-10) on Nov 20-23, then the
+        block's timezone changed to UTC, the widest gap in COMMON_TIMEZONES.
+        Unwidened, the upper bound would be Nov 24 00:00 UTC and miss the
+        Nov 23 event, which starts Nov 24 06:00 UTC."""
         block = RecurringBlock(
             id="rb-nov",
             provider_id=PROVIDER_ID,
             reason="PTO",
             effective_start=date(2026, 11, 20),
             effective_end=date(2026, 11, 23),
-            timezone="Pacific/Kiritimati",
+            timezone="UTC",
         )
 
         scope = _recurring_block_event_scope(block)
 
-        assert scope["starts_at__gte"] <= datetime(2026, 11, 20, 17, 0, tzinfo=UTC)
-        assert datetime(2026, 11, 23, 17, 0, tzinfo=UTC) < scope["starts_at__lt"]
+        assert datetime(2026, 11, 24, 6, 0, tzinfo=UTC) < scope["starts_at__lt"]
 
     def test_bounds_cover_events_created_before_a_move_west(self):
-        """Events created at 07:00 Kiritimati (UTC+14) on Nov 20-23, then the
-        block's timezone changed to Honolulu (UTC-10). Unwidened, the lower
-        bound would be Nov 20 10:00 UTC and miss the Nov 19 17:00 UTC event."""
+        """Events created at 00:00 UTC on Nov 20, then the block's timezone
+        changed to US/Hawaii. Unwidened, the lower bound would be Nov 20 10:00
+        UTC and miss the Nov 20 00:00 UTC event."""
         block = RecurringBlock(
             id="rb-nov",
             provider_id=PROVIDER_ID,
             reason="PTO",
             effective_start=date(2026, 11, 20),
             effective_end=date(2026, 11, 23),
-            timezone="Pacific/Honolulu",
+            timezone="US/Hawaii",
         )
 
         scope = _recurring_block_event_scope(block)
 
-        assert scope["starts_at__gte"] <= datetime(2026, 11, 19, 17, 0, tzinfo=UTC)
-        assert datetime(2026, 11, 22, 17, 0, tzinfo=UTC) < scope["starts_at__lt"]
+        assert scope["starts_at__gte"] <= datetime(2026, 11, 20, 0, 0, tzinfo=UTC)
+
+    def test_back_to_back_block_starting_the_next_morning_is_outside(self):
+        """PTO Nov 1-15 and PTO Nov 16-30, Eastern. The second block's series
+        starts Nov 16 at 09:00 Eastern (14:00 UTC), which must fall outside the
+        first block's upper bound so editing the first doesn't delete it."""
+        block = RecurringBlock(
+            id="rb-a",
+            provider_id=PROVIDER_ID,
+            reason="PTO",
+            effective_start=date(2026, 11, 1),
+            effective_end=date(2026, 11, 15),
+            timezone="America/New_York",
+        )
+
+        scope = _recurring_block_event_scope(block)
+
+        assert scope["starts_at__lt"] <= datetime(2026, 11, 16, 14, 0, tzinfo=UTC)
+        # and the first block's own last occurrence, Nov 15 at 09:00, is inside
+        assert datetime(2026, 11, 15, 14, 0, tzinfo=UTC) < scope["starts_at__lt"]
 
     @patch(f"{MODULE}.provider_tz")
     def test_unbounded_block_does_not_look_up_timezone(self, mock_provider_tz):
@@ -3191,3 +3200,66 @@ class TestRecurringBlockDeleteScope:
 
         assert _recurring_block_event_scope(block) == {"recurrence__contains": "FREQ="}
         mock_provider_tz.assert_not_called()
+
+
+# ── hold block delete scope ───────────────────────────────────────────
+
+
+class TestHoldBlockDeleteScope:
+    """A hold block's delete must not reach other hold blocks' events."""
+
+    def test_matches_its_own_hold_title_within_its_dates(self):
+        block = RecurringBlock(
+            id="hold-a",
+            provider_id=PROVIDER_ID,
+            hold_type="same_day",
+            effective_start=date(2026, 11, 2),
+            effective_end=date(2026, 11, 30),
+            timezone="America/New_York",
+        )
+
+        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_event_objects.filter.return_value = []
+            _build_delete_hold_events(["admin-cal-1"], block)
+
+        own = mock_event_objects.filter.call_args_list[0].kwargs
+        assert own["title"] == "Same Day Hold"
+        assert "starts_at__gte" in own and "starts_at__lt" in own
+        # The rest are legacy-prefix cleanups, none of which match a current title.
+        legacy = [c.kwargs["title__startswith"] for c in mock_event_objects.filter.call_args_list[1:]]
+        assert "Same Day Hold" not in legacy
+        assert "Next Day Hold" not in legacy
+
+    def test_another_hold_blocks_title_is_not_matched(self):
+        """Editing Same Day Hold (Mondays) must not delete Next Day Hold: Surgery."""
+        block = RecurringBlock(id="hold-a", provider_id=PROVIDER_ID, hold_type="same_day")
+
+        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
+            mock_event_objects.filter.return_value = []
+            _build_delete_hold_events(["admin-cal-1"], block)
+
+        titles = [
+            c.kwargs.get("title") or c.kwargs.get("title__startswith")
+            for c in mock_event_objects.filter.call_args_list
+        ]
+        assert not any("Next Day Hold: Surgery".startswith(t) for t in titles)
+
+
+# ── dedupe_event_deletes ──────────────────────────────────────────────
+
+
+class TestDedupeEventDeletes:
+    def test_keeps_the_first_delete_of_each_event_in_order(self):
+        create = EventEffect(
+            calendar_id="cal-1",
+            title="PTO",
+            starts_at=datetime(2026, 11, 2, 14, 0, tzinfo=UTC),
+            ends_at=datetime(2026, 11, 2, 15, 0, tzinfo=UTC),
+        ).create()
+        delete_a = EventEffect(event_id="evt-a").delete()
+        delete_b = EventEffect(event_id="evt-b").delete()
+        delete_a_again = EventEffect(event_id="evt-a").delete()
+
+        result = dedupe_event_deletes([delete_a, delete_b, delete_a_again, create])
+
+        assert result == [delete_a, delete_b, create]

@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+from canvas_sdk.effects import EffectType
+
 from provider_availability.api.availability_api import (
     AvailabilityAPI,
     _check_write_access,
@@ -2259,10 +2261,11 @@ def _run_edit(via: str, body: dict) -> list:
     return handler._form_update_recurring_block(body)
 
 
-# The stored Nov 1-30 block, widened by a day: midnight Eastern on Oct 31
-# (EDT) through midnight Eastern on Dec 2 (EST).
-STORED_NOV_START = datetime(2026, 10, 31, 4, 0, tzinfo=UTC)
-STORED_NOV_END = datetime(2026, 12, 2, 5, 0, tzinfo=UTC)
+# The stored Nov 1-30 block: midnight Eastern on Nov 1 (EDT, 04:00 UTC) widened
+# 4 hours earlier to UTC, through midnight Eastern on Dec 1 (EST, 05:00 UTC)
+# widened 5 hours later to US/Hawaii.
+STORED_NOV_START = datetime(2026, 11, 1, 0, 0, tzinfo=UTC)
+STORED_NOV_END = datetime(2026, 12, 1, 10, 0, tzinfo=UTC)
 
 
 @pytest.mark.parametrize("via", ["json", "form"])
@@ -2296,11 +2299,16 @@ class TestRecurringBlockEditDeletesStoredEvents:
         assert event_filter.mock_calls == [
             call(
                 calendar__id__in=["admin-cal-1"],
-                title__in=["PTO", "Recurring Block"],
+                title="PTO",
                 is_cancelled=False,
                 recurrence__contains="FREQ=",
                 starts_at__gte=STORED_NOV_START,
                 starts_at__lt=STORED_NOV_END,
+            ),
+            call(
+                calendar__id__in=["admin-cal-1"],
+                title="Recurring Block",
+                is_cancelled=False,
             ),
         ]
         assert mock_save.call_args[0][0].effective_start == date(2026, 11, 10)
@@ -2314,8 +2322,9 @@ class TestRecurringBlockEditDeletesStoredEvents:
 
         _run_edit(via, _edit_body(reason="Vacation"))
 
-        assert [c.kwargs["title__in"] for c in event_filter.mock_calls] == [
-            ["PTO", "Recurring Block"],
+        assert [c.kwargs["title"] for c in event_filter.mock_calls] == [
+            "PTO",
+            "Recurring Block",
         ]
         assert mock_save.call_args[0][0].reason == "Vacation"
 
@@ -2333,10 +2342,12 @@ class TestRecurringBlockEditDeletesStoredEvents:
             _edit_body(reason="Vacation", effective_start="2026-11-10", apply_to_group=True),
         )
 
-        # One delete per block, both built from the stored PTO / Nov 1 values.
-        assert len(event_filter.mock_calls) == 2
-        for c in event_filter.mock_calls:
-            assert c.kwargs["title__in"] == ["PTO", "Recurring Block"]
+        # One scoped delete per block, both built from the stored PTO / Nov 1
+        # values, each followed by the legacy-title cleanup.
+        assert [c.kwargs["title"] for c in event_filter.mock_calls] == [
+            "PTO", "Recurring Block", "PTO", "Recurring Block",
+        ]
+        for c in event_filter.mock_calls[::2]:
             assert c.kwargs["starts_at__gte"] == STORED_NOV_START
         # The group member is saved with the edit applied, and the stored
         # object the delete was built from is left as it was.
@@ -2346,3 +2357,50 @@ class TestRecurringBlockEditDeletesStoredEvents:
         assert saved_member.effective_start == date(2026, 11, 10)
         assert stored_member.reason == "PTO"
         assert stored_member.effective_start == date(2026, 11, 1)
+
+    def test_apply_to_group_copies_recurrence_and_time_windows(
+        self, mock_event_model, mock_get_cals, mock_cal_id, mock_overrides,
+        mock_get_previous, mock_group, mock_save, mock_access, via,
+    ):
+        """Weekly to every-other-day must reach the rest of the group too."""
+        self._setup(mock_event_model, mock_get_cals)
+        mock_get_previous.return_value = _stored_pto_block("rb1", PROVIDER_ID)
+        mock_group.return_value = [_stored_pto_block("rb2", PROVIDER_ID_2)]
+
+        _run_edit(
+            via,
+            _edit_body(
+                recurrence_frequency="daily",
+                recurrence_interval=2,
+                time_windows=[{"start": "08:00", "end": "10:00"}],
+                apply_to_group=True,
+            ),
+        )
+
+        saved_member = mock_save.call_args_list[1][0][0]
+        assert saved_member.id == "rb2"
+        assert saved_member.recurrence_frequency == "daily"
+        assert saved_member.recurrence_interval == 2
+        assert saved_member.time_windows == [TimeWindow(dt.time(8, 0), dt.time(10, 0))]
+
+    def test_apply_to_group_emits_one_delete_per_event(
+        self, mock_event_model, mock_get_cals, mock_cal_id, mock_overrides,
+        mock_get_previous, mock_group, mock_save, mock_access, via,
+    ):
+        """Group blocks that share a title and dates match the same events, so
+        each event is deleted once rather than once per block."""
+        event_filter = self._setup(mock_event_model, mock_get_cals)
+        shared = MagicMock()
+        shared.id = "evt-shared"
+        event_filter.return_value = [shared]
+        mock_get_previous.return_value = _stored_pto_block("rb1", PROVIDER_ID)
+        mock_group.return_value = [_stored_pto_block("rb2", PROVIDER_ID_2)]
+
+        result = _run_edit(via, _edit_body(apply_to_group=True))
+
+        deletes = [
+            json.loads(e.payload)["data"]["event_id"]
+            for e in result
+            if getattr(e, "type", None) == EffectType.CALENDAR__EVENT__DELETE
+        ]
+        assert deletes == ["evt-shared"]

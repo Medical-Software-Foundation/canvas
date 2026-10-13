@@ -13,7 +13,6 @@ from provider_availability.engine.models import AdminBlock, ProviderAvailability
 INDEX_KEY = "pa:rules:index"
 BLOCK_INDEX_KEY = "pa:blocks:index"
 RECURRING_BLOCK_INDEX_KEY = "pa:recurring_blocks:index"
-EVENT_IDS_PREFIX = "pa:event_ids:"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
@@ -131,28 +130,6 @@ def _remove_from_index(key: str) -> None:
     if key in index:
         index.remove(key)
         cache.set(INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
-
-
-# ── Event ID mapping (rule → Canvas Event UUIDs) ─────────────────────
-
-
-def save_event_ids(rule_id: str, event_ids: list[str]) -> None:
-    """Save the list of Canvas Event UUIDs created for a rule."""
-    cache = _get_cache()
-    cache.set(f"{EVENT_IDS_PREFIX}{rule_id}", event_ids, timeout_seconds=CACHE_TTL_SECONDS)
-
-
-def get_event_ids(rule_id: str) -> list[str]:
-    """Get stored Canvas Event UUIDs for a rule."""
-    cache = _get_cache()
-    data = cache.get(f"{EVENT_IDS_PREFIX}{rule_id}")
-    return list(data) if data else []
-
-
-def delete_event_ids(rule_id: str) -> None:
-    """Remove stored Canvas Event UUIDs for a rule."""
-    cache = _get_cache()
-    cache.delete(f"{EVENT_IDS_PREFIX}{rule_id}")
 
 
 # ── Admin Block CRUD ───────────────────────────────────────────────────
@@ -427,16 +404,6 @@ def refresh_all_ttls() -> int:
         current_index = _get_index()
         if current_index:
             cache.set(INDEX_KEY, current_index, timeout_seconds=CACHE_TTL_SECONDS)
-
-    # Refresh event_id mappings for all active rules
-    for key in all_keys:
-        parts = key.split(":")
-        if len(parts) == 4:
-            rule_id = parts[3]
-            eid_key = f"{EVENT_IDS_PREFIX}{rule_id}"
-            eid_data = cache.get(eid_key)
-            if eid_data is not None:
-                cache.set(eid_key, eid_data, timeout_seconds=CACHE_TTL_SECONDS)
 
     # Refresh blocks
     block_keys = _get_block_index()

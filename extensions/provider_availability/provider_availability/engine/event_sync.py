@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from datetime import UTC, date, datetime
 
-from canvas_sdk.effects import Effect
+from canvas_sdk.effects import Effect, EffectType
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
 from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.effects.calendar import DaysOfWeek, Event as EventEffect, EventRecurrence
@@ -29,8 +30,8 @@ from provider_availability.engine.models import (
     RecurringBlock,
     date_in_pattern,
 )
-from provider_availability.engine.storage import get_event_ids, get_rules_for_provider
-from provider_availability.engine.tz_utils import localize_naive, provider_tz, to_utc
+from provider_availability.engine.storage import get_rules_for_provider
+from provider_availability.engine.tz_utils import COMMON_TIMEZONES, localize_naive, provider_tz, to_utc
 
 DAY_TO_WEEKDAY: dict[str, int] = {
     "monday": 0,
@@ -65,7 +66,8 @@ DEFAULT_HORIZON_YEARS = 25
 # Rolling window for hold-type admin block generation
 HOLD_BLOCK_WINDOW_DAYS = 30
 HOLD_BLOCK_TITLE = "Hold Block"  # legacy prefix, kept for cleanup queries
-HOLD_TITLE_PREFIXES = ["Hold Block", "Same Day Hold", "Next Day Hold", "Same-Day Hold", "Next-Day Hold"]
+# Older title formats that can't be attributed to a block, cleaned up by prefix
+LEGACY_HOLD_TITLE_PREFIXES = ["Hold Block", "Same-Day Hold", "Next-Day Hold"]
 
 # Only rebuild lead-time blocks when boundaries have drifted beyond this threshold
 LEAD_TIME_DRIFT_THRESHOLD_SECONDS = 300  # 5 minutes
@@ -516,22 +518,14 @@ def build_block_event_effects(block: AdminBlock) -> list[Effect]:
 def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None) -> list[Effect]:
     """Delete admin block events from the provider's Administrative calendars.
 
-    If a specific block is given, first try stored event IDs, then fall back to
-    time-range matching (with TZ conversion). Also matches by title (reason).
+    If a specific block is given, matches by time range (with TZ conversion),
+    then by title (reason) if the time range found nothing.
     Otherwise, delete all block-titled events.
     """
     effects: list[Effect] = []
 
     if block:
-        # Try stored event IDs first
-        stored_ids = get_event_ids(block.id)
-        if stored_ids:
-            for eid in stored_ids:
-                effects.append(EventEffect(event_id=eid).delete())
-            log.info("build_delete_block_effects: block=%s, deleted %d events by stored IDs", block.id, len(effects))
-            return effects
-
-        # Fall back to time-range matching — convert block times to UTC for comparison
+        # Time-range matching — convert block times to UTC for comparison
         tz = provider_tz(provider_id)
         block_start_utc = to_utc(block.start if block.start.tzinfo is not None else localize_naive(block.start, tz))
         block_end_utc = to_utc(block.end if block.end.tzinfo is not None else localize_naive(block.end, tz))
@@ -953,8 +947,7 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
         return effects
 
     tz = ZoneInfo(block.timezone) if block.timezone else provider_tz(block.provider_id)
-    hold_type_label = "Same Day Hold" if block.hold_type == "same_day" else "Next Day Hold"
-    title = hold_type_label + (": " + block.reason if block.reason else "")
+    title = _hold_block_title(block)
 
     # Determine the range
     range_start = block.effective_start if block.effective_start and block.effective_start > today else today
@@ -1039,16 +1032,10 @@ def build_hold_block_refresh_effects(block: RecurringBlock) -> list[Effect]:
     """
     effects: list[Effect] = []
 
-    # Delete existing hold block events (legacy and new title formats)
+    # Delete this block's existing hold events (and legacy-titled ones)
     cal_ids = [c.id for c in get_admin_calendars(block.provider_id)]
     if cal_ids:
-        for prefix in HOLD_TITLE_PREFIXES:
-            for evt in EventModel.objects.filter(
-                calendar__id__in=cal_ids,
-                title__startswith=prefix,
-                is_cancelled=False,
-            ):
-                effects.append(EventEffect(event_id=str(evt.id)).delete())
+        effects.extend(_build_delete_hold_events(cal_ids, block))
 
     # Recreate for current window
     effects.extend(_build_hold_block_events(block))
@@ -1059,39 +1046,37 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
     """Delete recurring block events from the provider's Admin calendars.
 
     If a specific block is given, matches by the block's actual title
-    (reason). Also searches for the legacy RECURRING_BLOCK_TITLE to clean up
-    orphaned events.
+    (reason), scoped to this block's own events. Also searches for the
+    legacy RECURRING_BLOCK_TITLE to clean up orphaned events.
     """
     effects: list[Effect] = []
 
     if block:
-        # Match by the block's actual title AND legacy title
         title = block.reason if block.reason else "Blocked"
-        titles_to_delete = [title]
-        if RECURRING_BLOCK_TITLE != title:
-            titles_to_delete.append(RECURRING_BLOCK_TITLE)
-        # Titles are shared with one-off blocks and with other recurring blocks
-        # that use the same reason, so scope the match to recurring events that
-        # start inside this block's effective range.
-        scope = _recurring_block_event_scope(block)
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
         if cal_ids:
+            # Titles are shared with one-off blocks and with other recurring blocks
+            # that use the same reason, so scope the match to recurring events that
+            # start inside this block's effective range.
             for evt in EventModel.objects.filter(
                 calendar__id__in=cal_ids,
-                title__in=titles_to_delete,
+                title=title,
                 is_cancelled=False,
-                **scope,
+                **_recurring_block_event_scope(block),
             ):
                 effects.append(EventEffect(event_id=str(evt.id)).delete())
+            # Legacy-titled events can't be attributed to a block, so they are
+            # cleaned up whatever their recurrence or dates.
+            if title != RECURRING_BLOCK_TITLE:
+                for evt in EventModel.objects.filter(
+                    calendar__id__in=cal_ids,
+                    title=RECURRING_BLOCK_TITLE,
+                    is_cancelled=False,
+                ):
+                    effects.append(EventEffect(event_id=str(evt.id)).delete())
             # Also clean up hold block events
             if block.hold_type != "none":
-                for prefix in HOLD_TITLE_PREFIXES:
-                    for evt in EventModel.objects.filter(
-                        calendar__id__in=cal_ids,
-                        title__startswith=prefix,
-                        is_cancelled=False,
-                    ):
-                        effects.append(EventEffect(event_id=str(evt.id)).delete())
+                effects.extend(_build_delete_hold_events(cal_ids, block))
     else:
         # No specific block — search by legacy title
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
@@ -1108,23 +1093,111 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
     return effects
 
 
+def _build_delete_hold_events(cal_ids: list, block: RecurringBlock) -> list[Effect]:
+    """Delete a hold block's own events, plus any legacy-titled hold events.
+
+    Current hold events are titled by hold type and reason, so the match is on
+    that exact title within the block's date range. Two hold blocks with
+    different types or reasons no longer delete each other's events.
+    """
+    effects: list[Effect] = []
+    title = _hold_block_title(block)
+    if title:
+        for evt in EventModel.objects.filter(
+            calendar__id__in=cal_ids,
+            title=title,
+            is_cancelled=False,
+            **_block_date_bounds(block),
+        ):
+            effects.append(EventEffect(event_id=str(evt.id)).delete())
+    for prefix in LEGACY_HOLD_TITLE_PREFIXES:
+        for evt in EventModel.objects.filter(
+            calendar__id__in=cal_ids,
+            title__startswith=prefix,
+            is_cancelled=False,
+        ):
+            effects.append(EventEffect(event_id=str(evt.id)).delete())
+    return effects
+
+
+def _hold_block_title(block: RecurringBlock) -> str | None:
+    """The title _build_hold_block_events gives this block's events, or None if it isn't a hold block."""
+    if block.hold_type == "same_day":
+        label = "Same Day Hold"
+    elif block.hold_type == "next_day":
+        label = "Next Day Hold"
+    else:
+        return None
+    return label + (": " + block.reason if block.reason else "")
+
+
 def _recurring_block_event_scope(block: RecurringBlock) -> dict:
     """ORM filter kwargs that limit a title match to this block's own events.
 
     Recurring block events always carry a recurrence rule and one-off block
-    events never do. Events are anchored at or after effective_start and end
-    by effective_end, so a start well outside that range belongs to another
-    block. The bounds are widened by a day on each side so that events
-    created under a different timezone still fall inside them.
+    events never do. An edited single occurrence is stored as a separate
+    non-recurring event whose parent cascades its delete, so it goes with the
+    series.
     """
-    scope: dict = {"recurrence__contains": "FREQ="}
+    return {"recurrence__contains": "FREQ=", **_block_date_bounds(block)}
+
+
+def _block_date_bounds(block: RecurringBlock) -> dict:
+    """ORM filter kwargs bounding starts_at to the block's effective dates.
+
+    A block's events start on or after effective_start and no later than
+    effective_end, so a start outside that range belongs to another block.
+    Existing events were created in whatever timezone was in force at the
+    time, so each bound is widened by the gap between the block's timezone
+    and the farthest COMMON_TIMEZONES zone in that direction. That keeps
+    events created before a timezone change inside, and is hours rather than
+    a day, so a same-reason block starting the day after this one ends stays
+    outside unless its first window starts within that gap of midnight.
+    """
+    bounds: dict = {}
     if not block.effective_start and not block.effective_end:
-        return scope
+        return bounds
     tz = ZoneInfo(block.timezone) if block.timezone else provider_tz(block.provider_id)
     if block.effective_start:
-        day_before = block.effective_start - dt.timedelta(days=1)
-        scope["starts_at__gte"] = to_utc(localize_naive(datetime.combine(day_before, dt.time.min), tz))
+        start = localize_naive(datetime.combine(block.effective_start, dt.time.min), tz)
+        earlier, _ = _tz_change_slack(start)
+        bounds["starts_at__gte"] = to_utc(start) - earlier
     if block.effective_end:
-        two_days_after = block.effective_end + dt.timedelta(days=2)
-        scope["starts_at__lt"] = to_utc(localize_naive(datetime.combine(two_days_after, dt.time.min), tz))
-    return scope
+        day_after = block.effective_end + dt.timedelta(days=1)
+        end = localize_naive(datetime.combine(day_after, dt.time.min), tz)
+        _, later = _tz_change_slack(end)
+        bounds["starts_at__lt"] = to_utc(end) + later
+    return bounds
+
+
+def _tz_change_slack(local: datetime) -> tuple[dt.timedelta, dt.timedelta]:
+    """How much earlier and later in UTC this local time could have landed under another COMMON_TIMEZONES zone.
+
+    An event created under a zone east of `local`'s (a larger UTC offset) sits
+    earlier in UTC, and one created under a zone to the west sits later.
+    Offsets are taken at `local`'s instant, so daylight saving is accounted for.
+    """
+    current = local.utcoffset() or dt.timedelta(0)
+    offsets = [local.astimezone(ZoneInfo(name)).utcoffset() or dt.timedelta(0) for name in COMMON_TIMEZONES]
+    earlier = max(max(offsets) - current, dt.timedelta(0))
+    later = max(current - min(offsets), dt.timedelta(0))
+    return earlier, later
+
+
+def dedupe_event_deletes(effects: list[Effect]) -> list[Effect]:
+    """Drop repeat deletes of the same event, keeping the first and preserving order.
+
+    Overlapping delete scopes (for example several blocks in one group edit)
+    can match the same event. Canvas treats a delete of a missing event as a
+    no-op, but one delete per event keeps the response clean.
+    """
+    seen: set[str] = set()
+    result: list[Effect] = []
+    for effect in effects:
+        if effect.type == EffectType.CALENDAR__EVENT__DELETE:
+            event_id = json.loads(effect.payload)["data"]["event_id"]
+            if event_id in seen:
+                continue
+            seen.add(event_id)
+        result.append(effect)
+    return result

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from http import HTTPStatus
-from unittest.mock import DEFAULT, MagicMock, patch
+from unittest.mock import DEFAULT, MagicMock, call, patch
 
 from provider_availability.api.csv_import_api import CSVImportAPI
 
@@ -204,7 +204,9 @@ def test_commit_saves_rule_block_rblock_and_syncs():
         sync_provider_availability=DEFAULT,
         build_lead_time_block_effects=DEFAULT,
         get_rules_for_provider=DEFAULT,
+        get_recurring_block_by_id=DEFAULT,
     ) as mocks:
+        mocks["get_recurring_block_by_id"].return_value = None
         mocks["build_block_event_effects"].return_value = ["blk-eff"]
         mocks["build_recurring_block_sync_effects"].return_value = ["rb-eff"]
         mocks["sync_provider_availability"].return_value = ["sync-eff"]
@@ -258,3 +260,31 @@ def test_commit_refreshes_lead_time_for_active_rules():
 
     mocks["build_lead_time_block_effects"].assert_called_once_with(saved_rule)
     assert "lead-eff" in result
+
+
+def test_commit_reimport_deletes_the_stored_version_of_a_recurring_block():
+    """A re-import that changes a block's reason or dates has to delete the
+    events as they were stored, so the stored block goes to the sync as previous."""
+    rblock_rec = {
+        "kind": "rblock", "id": "rb-1", "provider_id": "prov-1", "location_ids": [],
+        "weekly_schedule": {"monday": [{"start": "12:00", "end": "13:00"}]},
+        "time_windows": [], "recurrence_frequency": "weekly", "recurrence_interval": 1,
+        "reason": "Vacation", "hold_type": "none", "effective_start": None,
+        "effective_end": None, "is_active": True,
+    }
+    stored = object()
+    handler = _handler(json_body={"records": [rblock_rec]})
+
+    with patch(CSV_MODULE + "._check_write_access", return_value=None), patch.multiple(
+        CSV_MODULE,
+        save_recurring_block=DEFAULT,
+        build_recurring_block_sync_effects=DEFAULT,
+        get_recurring_block_by_id=DEFAULT,
+    ) as mocks:
+        mocks["get_recurring_block_by_id"].return_value = stored
+        mocks["build_recurring_block_sync_effects"].return_value = []
+        handler.commit_records()
+
+    assert mocks["get_recurring_block_by_id"].mock_calls == [call("prov-1", "rb-1")]
+    saved = mocks["save_recurring_block"].call_args[0][0]
+    assert mocks["build_recurring_block_sync_effects"].mock_calls == [call(saved, stored)]

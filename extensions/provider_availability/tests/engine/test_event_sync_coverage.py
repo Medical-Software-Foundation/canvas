@@ -27,7 +27,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.event_sync import (
     AVAILABILITY_TITLE,
-    HOLD_TITLE_PREFIXES,
+    LEGACY_HOLD_TITLE_PREFIXES,
     RECURRING_BLOCK_TITLE,
     _block_outside_override,
     _build_hold_block_events,
@@ -337,12 +337,10 @@ class TestBuildBlockEventEffectsLocations:
 class TestBuildDeleteBlockEffectsTitleFallback:
     @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_title_fallback_when_time_match_empty(
-        self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block
+        self, mock_get_admin_cals, mock_tz, sample_block
     ):
-        """When no stored IDs and time-range match is empty, fall back to title match (lines 540-548)."""
-        mock_get_ids.return_value = []
+        """When the time-range match is empty, fall back to title match (lines 540-548)."""
 
         mock_cal = MagicMock()
         mock_cal.id = "admin-cal-1"
@@ -369,14 +367,12 @@ class TestBuildDeleteBlockEffectsTitleFallback:
 
     @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
     def test_title_fallback_uses_blocked_when_no_reason(
-        self, mock_get_ids, mock_get_admin_cals, mock_tz
+        self, mock_get_admin_cals, mock_tz
     ):
         """Empty-reason block uses 'Blocked' as fallback title (line 527 + 541-548)."""
         from provider_availability.engine.models import AdminBlock
 
-        mock_get_ids.return_value = []
         mock_cal = MagicMock()
         mock_cal.id = "admin-cal-1"
         mock_get_admin_cals.return_value = [mock_cal]
@@ -1095,16 +1091,17 @@ class TestBuildHoldBlockRefreshEffects:
              patch(f"{MODULE}.EventEffect") as mock_event_effect:
             mock_date.today.return_value = date(2026, 3, 2)
             mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
-            # First prefix returns one existing event, remaining prefixes empty
-            side = [[existing_evt]] + [[] for _ in HOLD_TITLE_PREFIXES[1:]]
+            # The block's own hold title returns one existing event, legacy prefixes empty
+            side = [[existing_evt]] + [[] for _ in LEGACY_HOLD_TITLE_PREFIXES]
             mock_event_objects.filter.side_effect = side
             mock_event_effect.return_value.create.return_value = MagicMock()
             mock_event_effect.return_value.delete.return_value = MagicMock()
 
             result = build_hold_block_refresh_effects(block)
 
-        # One prefix query per HOLD_TITLE_PREFIXES entry
-        assert mock_event_objects.filter.call_count == len(HOLD_TITLE_PREFIXES)
+        # One query for the block's own hold title, then one per legacy prefix
+        assert mock_event_objects.filter.call_count == 1 + len(LEGACY_HOLD_TITLE_PREFIXES)
+        assert mock_event_objects.filter.call_args_list[0].kwargs["title"] == "Same Day Hold: Hold"
         # 1 delete (existing) + 1 create (03-03) = 2
         assert len(result) == 2
 
@@ -1136,17 +1133,17 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
         )
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            # First filter = title__in match, then one hold event on first prefix,
-            # empty for remaining prefixes.
-            side = [[title_evt], [hold_evt]] + [[] for _ in HOLD_TITLE_PREFIXES[1:]]
+            # Reason-title match, legacy-title match, the block's own hold title,
+            # then one query per legacy hold prefix.
+            side = [[title_evt], [], [hold_evt]] + [[] for _ in LEGACY_HOLD_TITLE_PREFIXES]
             mock_event_objects.filter.side_effect = side
 
             result = build_delete_recurring_block_effects(PROVIDER_ID, block)
 
-        # title match uses title__in with reason + legacy
-        title_call = mock_event_objects.filter.call_args_list[0]
-        assert title_call.kwargs["title__in"] == ["Hold", RECURRING_BLOCK_TITLE]
+        calls = mock_event_objects.filter.call_args_list
+        assert calls[0].kwargs["title"] == "Hold"
+        assert calls[1].kwargs["title"] == RECURRING_BLOCK_TITLE
+        assert calls[2].kwargs["title"] == "Next Day Hold: Hold"
         # 1 title delete + 1 hold delete = 2
         assert len(result) == 2
-        # 1 title query + N prefix queries
-        assert mock_event_objects.filter.call_count == 1 + len(HOLD_TITLE_PREFIXES)
+        assert mock_event_objects.filter.call_count == 3 + len(LEGACY_HOLD_TITLE_PREFIXES)

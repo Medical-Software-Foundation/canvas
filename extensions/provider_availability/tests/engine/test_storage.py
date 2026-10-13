@@ -17,7 +17,6 @@ from provider_availability.engine.storage import (
     INDEX_KEY,
     BLOCK_INDEX_KEY,
     RECURRING_BLOCK_INDEX_KEY,
-    EVENT_IDS_PREFIX,
     PRACTICE_TZ_KEY,
     INSTALL_SENTINEL_KEY,
     save_rule,
@@ -26,9 +25,6 @@ from provider_availability.engine.storage import (
     get_all_rules,
     delete_rule_by_id,
     delete_rules_for_provider,
-    save_event_ids,
-    get_event_ids,
-    delete_event_ids,
     save_block,
     get_blocks_for_provider,
     get_block_by_id,
@@ -107,25 +103,6 @@ class TestRuleCRUD:
     def test_delete_rules_for_provider_empty(self, patch_cache):
         count = delete_rules_for_provider("nonexistent")
         assert count == 0
-
-
-# ── Event ID mapping ──────────────────────────────────────────────────
-
-
-class TestEventIDs:
-    def test_save_and_get_event_ids(self, patch_cache):
-        save_event_ids("rule-1", ["event-a", "event-b"])
-        result = get_event_ids("rule-1")
-        assert result == ["event-a", "event-b"]
-
-    def test_get_event_ids_empty(self, patch_cache):
-        result = get_event_ids("nonexistent")
-        assert result == []
-
-    def test_delete_event_ids(self, patch_cache):
-        save_event_ids("rule-1", ["event-a"])
-        delete_event_ids("rule-1")
-        assert get_event_ids("rule-1") == []
 
 
 # ── Admin Block CRUD ──────────────────────────────────────────────────
@@ -396,14 +373,6 @@ class TestTTLRefresh:
         assert result == 0
         assert get_provider_timezone("p1") == "US/Pacific"
         assert get_provider_timezone("p2") == "US/Eastern"
-
-    def test_refresh_all_ttls_with_event_ids(self, patch_cache, sample_rule):
-        """Refresh should also refresh event ID mappings for rules."""
-        save_rule(sample_rule)
-        save_event_ids(sample_rule.id, ["evt-1", "evt-2"])
-        result = refresh_all_ttls()
-        assert result == 1
-        assert get_event_ids(sample_rule.id) == ["evt-1", "evt-2"]
 
 
 # ── Provider Timezone ────────────────────────────────────────────────

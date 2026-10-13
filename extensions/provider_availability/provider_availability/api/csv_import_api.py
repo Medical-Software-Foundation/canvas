@@ -46,6 +46,7 @@ from provider_availability.engine.models import (
 )
 from provider_availability.engine.overlap import check_rule_overlap
 from provider_availability.engine.storage import (
+    get_recurring_block_by_id,
     get_rules_for_provider,
     save_block,
     save_recurring_block,
@@ -184,8 +185,11 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
                 created["block"] = created["block"] + 1
             elif kind == "rblock":
                 rblock = RecurringBlock.from_dict(rec)
+                # A re-import of an existing block has to delete the events as they
+                # were stored, before this row changed its reason or dates.
+                previous = get_recurring_block_by_id(rblock.provider_id, rblock.id)
                 save_recurring_block(rblock)
-                effects.extend(build_recurring_block_sync_effects(rblock))
+                effects.extend(build_recurring_block_sync_effects(rblock, previous))
                 created["rblock"] = created["rblock"] + 1
 
         # Sync each touched provider's availability once, then refresh lead-time blocks.

@@ -27,6 +27,7 @@ from provider_availability.engine.event_sync import (
     build_delete_recurring_block_effects,
     build_lead_time_block_effects,
     build_recurring_block_sync_effects,
+    dedupe_event_deletes,
     delete_provider_lead_time_events,
     sync_provider_availability,
 )
@@ -186,6 +187,33 @@ def _validate_recurrence_payload(body: dict) -> str | None:
             if w.get("start", "") >= w.get("end", ""):
                 return f"Start time must be before end time ({w.get('start')} >= {w.get('end')})"
     return None
+
+
+def _apply_recurring_block_to_group(block: RecurringBlock, group_id: str) -> tuple[list[Effect], int]:
+    """Copy an edited recurring block's schedule onto the rest of its group.
+
+    Each group block is copied before its fields are overwritten, and the stored
+    version is passed to the sync as `previous`, so the delete matches the events
+    that actually exist. Returns the sync effects and the number of blocks updated.
+    """
+    effects: list[Effect] = []
+    count = 0
+    for stored_gb in get_recurring_blocks_by_group(group_id):
+        if stored_gb.id == block.id:
+            continue
+        gb = dataclasses.replace(stored_gb)
+        gb.weekly_schedule = block.weekly_schedule
+        gb.reason = block.reason
+        gb.effective_start = block.effective_start
+        gb.effective_end = block.effective_end
+        gb.is_active = block.is_active
+        gb.recurrence_frequency = block.recurrence_frequency
+        gb.recurrence_interval = block.recurrence_interval
+        gb.time_windows = list(block.time_windows)
+        save_recurring_block(gb)
+        effects.extend(build_recurring_block_sync_effects(gb, stored_gb))
+        count += 1
+    return effects, count
 
 
 def _check_write_access(request: object, secrets: dict | None = None) -> list[Response] | None:
@@ -1240,24 +1268,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         all_effects: list[Effect] = list(build_recurring_block_sync_effects(block, previous))
 
         updated_count = 1
-        apply_to_group = body.get("apply_to_group", False)
-        if apply_to_group and block.group_id:
-            group_blocks = get_recurring_blocks_by_group(block.group_id)
-            for stored_gb in group_blocks:
-                if stored_gb.id == block.id:
-                    continue
-                gb = dataclasses.replace(stored_gb)
-                gb.weekly_schedule = block.weekly_schedule
-                gb.reason = block.reason
-                gb.effective_start = block.effective_start
-                gb.effective_end = block.effective_end
-                gb.is_active = block.is_active
-                gb.recurrence_frequency = block.recurrence_frequency
-                gb.recurrence_interval = block.recurrence_interval
-                gb.time_windows = list(block.time_windows)
-                save_recurring_block(gb)
-                all_effects.extend(build_recurring_block_sync_effects(gb, stored_gb))
-                updated_count += 1
+        if body.get("apply_to_group", False) and block.group_id:
+            group_effects, group_count = _apply_recurring_block_to_group(block, block.group_id)
+            all_effects = dedupe_event_deletes([*all_effects, *group_effects])
+            updated_count += group_count
 
         return [
             *all_effects,
@@ -1881,18 +1895,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         all_fx: list[Effect] = list(build_recurring_block_sync_effects(block, previous))
         count = 1
         if body.get("apply_to_group") and block.group_id:
-            for stored_gb in get_recurring_blocks_by_group(block.group_id):
-                if stored_gb.id == block.id:
-                    continue
-                gb = dataclasses.replace(stored_gb)
-                gb.weekly_schedule = block.weekly_schedule
-                gb.reason = block.reason
-                gb.effective_start = block.effective_start
-                gb.effective_end = block.effective_end
-                gb.is_active = block.is_active
-                save_recurring_block(gb)
-                all_fx.extend(build_recurring_block_sync_effects(gb, stored_gb))
-                count += 1
+            group_fx, group_count = _apply_recurring_block_to_group(block, block.group_id)
+            all_fx = dedupe_event_deletes([*all_fx, *group_fx])
+            count += group_count
         return [*all_fx, JSONResponse({"message": f"Updated {count} recurring block(s)"})]
 
     def _form_delete_recurring_block(self, provider_id: str, block_id: str) -> list[Response | Effect]:
