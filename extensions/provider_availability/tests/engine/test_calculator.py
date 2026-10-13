@@ -2,6 +2,7 @@
 
 import datetime as dt
 from datetime import date, datetime, timedelta
+import pytest
 from unittest.mock import MagicMock, call, patch
 
 from provider_availability.engine.models import (
@@ -24,6 +25,14 @@ from provider_availability.engine.calculator import (
 
 
 CALC_MODULE = "provider_availability.engine.calculator"
+
+
+@pytest.fixture(autouse=True)
+def _provider_owns_one_calendar():
+    """The provider's own calendars are looked up first; give it one."""
+    with patch(f"{CALC_MODULE}.Calendar.objects") as mock_cals:
+        mock_cals.filter.return_value.values_list.return_value = ["cal-own"]
+        yield mock_cals
 
 
 def _make_rule(**overrides):

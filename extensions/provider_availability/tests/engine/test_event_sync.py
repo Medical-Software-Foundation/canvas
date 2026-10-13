@@ -426,8 +426,11 @@ class TestBuildDeleteEffects:
 
             result = build_delete_effects(PROVIDER_ID)
 
+            from provider_availability.engine.admin_calendar import own_calendars_q
+
+            # Only this provider's Clinic calendars: its own staff key, or untagged ones with its name
             assert mock_cal_objects.mock_calls == [
-                call.filter(title__startswith="Jane Doe: Clinic"),
+                call.filter(own_calendars_q(PROVIDER_ID, "Jane Doe", "Clinic")),
             ]
             assert result == []
 
@@ -656,6 +659,17 @@ class TestBuildDeleteEffects:
 # ── _get_calendar_id ──────────────────────────────────────────────────
 
 
+def _lookup(mock_cal_objects, by_id=None, titled=()):
+    """Calendar lookups: filter(id=...).first() for the fixed id, filter(title=...) for the name."""
+    def fake_filter(*args, **kwargs):
+        if "title" in kwargs:
+            return list(titled)
+        result = MagicMock()
+        result.first.return_value = by_id
+        return result
+    mock_cal_objects.filter.side_effect = fake_filter
+
+
 class TestGetCalendarId:
     def test_existing_calendar_found(self):
         name_row = ("Jane", "Doe")
@@ -670,18 +684,14 @@ class TestGetCalendarId:
             mock_loc.full_name = "West Office"
             mock_loc_objects.get.return_value = mock_loc
             # anchor-id lookup misses -> falls back to title match
-            mock_cal_objects.filter.return_value.first.return_value = None
-            mock_cal_objects.for_calendar_name.return_value.first.return_value = mock_cal
+            mock_cal.description = PROVIDER_ID  # tagged with this provider's staff key
+            _lookup(mock_cal_objects, titled=[mock_cal])
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, LOCATION_ID)
 
             assert cal_id == "existing-cal-uuid"
             assert effects == []
-            assert mock_cal_objects.for_calendar_name.call_args == call(
-                provider_name="Jane Doe",
-                calendar_type=CalendarType.Clinic,
-                location="West Office",
-            )
+            assert mock_cal_objects.filter.call_args.kwargs == {"title": "Jane Doe: Clinic: West Office"}
 
     def test_existing_calendar_found_by_anchor_id(self):
         """A calendar matching the deterministic anchor id is reused without a title lookup."""
@@ -701,7 +711,7 @@ class TestGetCalendarId:
             assert cal_id == "anchor-cal-uuid"
             assert effects == []
             # title lookup is not consulted when the anchor id matches
-            assert mock_cal_objects.for_calendar_name.call_count == 0
+            assert mock_cal_objects.filter.call_count == 1  # the fixed id only, no name lookup
 
     def test_creates_new_calendar(self):
         name_row = ("Jane", "Doe")
@@ -714,7 +724,6 @@ class TestGetCalendarId:
             mock_loc.full_name = "West Office"
             mock_loc_objects.get.return_value = mock_loc
             mock_cal_objects.filter.return_value.first.return_value = None
-            mock_cal_objects.for_calendar_name.return_value.first.return_value = None
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, LOCATION_ID)
 
@@ -746,18 +755,14 @@ class TestGetCalendarId:
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects:
             mock_staff_objects.filter.return_value.values_list.return_value.first.return_value = name_row
-            mock_cal_objects.filter.return_value.first.return_value = None
-            mock_cal_objects.for_calendar_name.return_value.first.return_value = mock_cal
+            mock_cal.description = PROVIDER_ID  # tagged with this provider's staff key
+            _lookup(mock_cal_objects, titled=[mock_cal])
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, None)
 
             assert cal_id == "existing-cal-uuid"
             assert effects == []
-            assert mock_cal_objects.for_calendar_name.call_args == call(
-                provider_name="Jane Doe",
-                calendar_type=CalendarType.Clinic,
-                location=None,
-            )
+            assert mock_cal_objects.filter.call_args.kwargs == {"title": "Jane Doe: Clinic"}
 
     def test_location_not_found_uses_empty_name(self):
         """When location_id is given but PracticeLocation.DoesNotExist, location_name is empty."""
@@ -772,19 +777,15 @@ class TestGetCalendarId:
              patch(f"{MODULE}.PracticeLocation.objects") as mock_loc_objects:
             mock_staff_objects.filter.return_value.values_list.return_value.first.return_value = name_row
             mock_loc_objects.get.side_effect = PracticeLocation.DoesNotExist
-            mock_cal_objects.filter.return_value.first.return_value = None
-            mock_cal_objects.for_calendar_name.return_value.first.return_value = mock_cal
+            mock_cal.description = PROVIDER_ID  # tagged with this provider's staff key
+            _lookup(mock_cal_objects, titled=[mock_cal])
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, "bad-loc-id")
 
             assert cal_id == "existing-cal-uuid"
             assert effects == []
             # location=None because location_name is empty
-            assert mock_cal_objects.for_calendar_name.call_args == call(
-                provider_name="Jane Doe",
-                calendar_type=CalendarType.Clinic,
-                location=None,
-            )
+            assert mock_cal_objects.filter.call_args.kwargs == {"title": "Jane Doe: Clinic"}
 
     def test_creates_calendar_with_location_id_passed(self):
         """New calendar creation passes location_id to CalendarEffect."""
@@ -799,7 +800,6 @@ class TestGetCalendarId:
             mock_loc.full_name = "West"
             mock_loc_objects.get.return_value = mock_loc
             mock_cal_objects.filter.return_value.first.return_value = None
-            mock_cal_objects.for_calendar_name.return_value.first.return_value = None
             mock_cal_effect.return_value.create.return_value = MagicMock()
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, LOCATION_ID)
@@ -818,7 +818,7 @@ class TestGetCalendarId:
 
     def test_creates_calendar_without_location(self):
         """New calendar creation passes location=None when location_id is None."""
-        name_row = ("", "")  # empty name -> skip for_calendar_name
+        name_row = ("", "")  # empty name -> skip the name lookup
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.deterministic_calendar_id", return_value="new-id"), \
              patch(f"{MODULE}.CalendarEffect") as mock_cal_effect:

@@ -45,6 +45,52 @@ def resolve_provider_name(provider_id: str) -> str:
     return name if name.strip() else ""
 
 
+def name_is_shared(provider_id: str) -> bool:
+    """Whether another staff record has this provider's exact first and last name.
+
+    One person can have several profiles (one per licensing state, say), and
+    calendars are linked to a provider only by name, so for shared names a
+    name-only calendar cannot be told apart and is not reused.
+    """
+    row = Staff.objects.filter(id=provider_id).values_list("first_name", "last_name").first()
+    if not row:
+        return False
+    return bool(Staff.objects.filter(first_name=row[0], last_name=row[1]).exclude(id=provider_id).exists())
+
+
+def find_own_calendar(
+    provider_id: str, provider_name: str, calendar_type: str, location_name: str | None, fixed_id: str
+) -> CalendarModel | None:
+    """The calendar of this type (and location) that belongs to this provider, if any.
+
+    In order: the fixed id the plugin gives calendars it creates; a calendar
+    with the right title tagged with this provider's staff key; and, only when
+    no other staff record shares the name, an untagged calendar with the right
+    title (made before calendars were tagged).
+    """
+    by_id = CalendarModel.objects.filter(id=fixed_id).first()
+    if by_id:
+        return by_id
+    title = f"{provider_name}: {calendar_type}" + (f": {location_name}" if location_name else "")
+    candidates = list(CalendarModel.objects.filter(title=title))
+    mine = next((c for c in candidates if c.description == str(provider_id)), None)
+    if mine or not candidates:
+        return mine
+    if name_is_shared(provider_id):
+        return None
+    return next((c for c in candidates if not c.description), candidates[0])
+
+
+def own_calendars_q(provider_id: str, provider_name: str, calendar_type: str | None = None) -> Q:
+    """Calendars to clear or read for this provider: tagged with its staff key, or
+    untagged with its name. Calendars tagged for another profile with the same
+    name are left out, so one profile never clears another's events.
+    """
+    prefix = f"{provider_name}: {calendar_type}" if calendar_type else f"{provider_name}:"
+    untagged = Q(description="") | Q(description__isnull=True)
+    return Q(title__startswith=prefix) & (Q(description=str(provider_id)) | untagged)
+
+
 def get_admin_calendar_id(
     provider_id: str, location_id: str | None = None, provider_name: str | None = None
 ) -> tuple[str, list[Effect]]:
@@ -72,17 +118,8 @@ def get_admin_calendar_id(
             pass
 
     new_id = deterministic_calendar_id(provider_id, CalendarType.Administrative, location_id)
-    loc_arg = location_name or None
-    # Prefer the deterministic anchor id (so a calendar we already created is
-    # reused without re-emitting a create); fall back to title for legacy
-    # calendars created before deterministic ids existed.
-    existing = (
-        CalendarModel.objects.filter(id=new_id).first()
-        or CalendarModel.objects.for_calendar_name(
-            provider_name=provider_name,
-            calendar_type=CalendarType.Administrative,
-            location=loc_arg,
-        ).first()
+    existing = find_own_calendar(
+        provider_id, provider_name, CalendarType.Administrative, location_name or None, new_id
     )
     if existing:
         return str(existing.id), []
@@ -118,7 +155,7 @@ def get_admin_calendars(
         return []
 
     return list(
-        CalendarModel.objects.filter(title__startswith=provider_name + ": Admin")
+        CalendarModel.objects.filter(own_calendars_q(provider_id, provider_name, CalendarType.Administrative))
     )
 
 

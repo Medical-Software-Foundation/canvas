@@ -21,8 +21,10 @@ from zoneinfo import ZoneInfo
 
 from provider_availability.engine.admin_calendar import (
     deterministic_calendar_id,
+    find_own_calendar,
     get_admin_calendar_id,
     get_admin_calendars,
+    own_calendars_q,
     resolve_provider_name,
 )
 from provider_availability.engine.models import (
@@ -66,7 +68,7 @@ DAY_TO_DAYS_OF_WEEK: dict[str, DaysOfWeek] = {
 # the events themselves (titles, times, recurrence, which calendars), then
 # update tests/event_layout_lock.json; tests/test_event_layout.py fails until
 # the lock matches the drawing code.
-EVENT_LAYOUT_VERSION = 2
+EVENT_LAYOUT_VERSION = 3
 
 AVAILABILITY_TITLE = "Available"
 BLOCK_TITLE = "Block"
@@ -446,9 +448,7 @@ def build_delete_effects(provider_id: str) -> list[Effect]:
 
     cal_ids = [
         c.id
-        for c in CalendarModel.objects.filter(
-            title__startswith=provider_name + ": Clinic"
-        )
+        for c in CalendarModel.objects.filter(own_calendars_q(provider_id, provider_name, CalendarType.Clinic))
     ]
     if not cal_ids:
         return []
@@ -538,17 +538,7 @@ def _get_calendar_id(
 
     new_id = deterministic_calendar_id(provider_id, CalendarType.Clinic, location_id)
     if provider_name:
-        loc_arg = location_name or None
-        # Prefer the deterministic anchor id; fall back to title for legacy
-        # calendars created before deterministic ids existed.
-        existing = (
-            CalendarModel.objects.filter(id=new_id).first()
-            or CalendarModel.objects.for_calendar_name(
-                provider_name=provider_name,
-                calendar_type=CalendarType.Clinic,
-                location=loc_arg,
-            ).first()
-        )
+        existing = find_own_calendar(provider_id, provider_name, CalendarType.Clinic, location_name or None, new_id)
         if existing:
             log.info(
                 "_get_calendar_id: found existing calendar id=%s title=%s",

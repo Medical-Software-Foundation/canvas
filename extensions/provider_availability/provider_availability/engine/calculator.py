@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data import Event
+from canvas_sdk.v1.data.calendar import Calendar
 from django.db.models import Q
 
 from provider_availability.engine.models import (
@@ -23,6 +24,7 @@ from provider_availability.engine.models import (
     ProviderAvailabilityRule,
     date_in_pattern,
 )
+from provider_availability.engine.admin_calendar import own_calendars_q
 from provider_availability.engine.event_sync import AVAILABILITY_TITLE
 from provider_availability.engine.provider_resolver import get_provider_display
 from provider_availability.engine.storage import get_blocks_for_provider, get_recurring_blocks_for_provider
@@ -320,9 +322,13 @@ def _get_schedule_event_blocks(
     # only its first occurrence, so the later ones are expanded here.
     repeating = Q(recurrence__isnull=False) & ~Q(recurrence="")
     still_running = Q(recurrence_ends_at__isnull=True) | Q(recurrence_ends_at__gt=start)
+    # Only this provider's calendars: another profile with the same name has its own.
+    own_ids = list(Calendar.objects.filter(own_calendars_q(provider_id, provider_name)).values_list("id", flat=True))
+    if not own_ids:
+        return []
     events = Event.objects.filter(
         Q(ends_at__gt=start) | (repeating & still_running),
-        calendar__title__startswith=provider_name + ":",
+        calendar__id__in=own_ids,
         starts_at__lt=end,
         is_cancelled=False,
     ).exclude(
