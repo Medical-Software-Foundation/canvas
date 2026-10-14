@@ -146,3 +146,13 @@ def test_insert_into_sig_needs_a_waiting_prescription(db: Any) -> None:
     assert resp.status_code == HTTPStatus.CONFLICT
 
 
+
+
+def test_favorite_refuses_someone_elses_phrase_with_the_same_code(db: Any) -> None:
+    mine = phrase(dbid=1, owner_id=10)
+    theirs = phrase(dbid=2, owner_id=55)
+    db.phrase_model.objects.filter.return_value.select_related.return_value.first.return_value = theirs
+    with patch(f"{MODULE}.usable_phrases", return_value={"fu2w": mine}), patch(f"{MODULE}.PhraseFavorite") as fav:
+        resp = response(make_api(path={"phrase_id": "2"}).toggle_favorite())
+    assert resp.status_code == HTTPStatus.NOT_FOUND
+    fav.objects.create.assert_not_called()

@@ -298,7 +298,8 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
     def toggle_favorite(self) -> list[Response | Effect]:
         me = self._me()
         phrase = self._get_phrase()
-        if me is None or phrase is None or phrase.code not in usable_phrases(me):
+        usable = usable_phrases(me).get(phrase.code) if me is not None and phrase is not None else None
+        if me is None or phrase is None or usable is None or usable.dbid != phrase.dbid:
             return _error("Phrase not found.", HTTPStatus.NOT_FOUND)
         existing = PhraseFavorite.objects.filter(staff_id=me, phrase_id=phrase.dbid)
         if existing.exists():

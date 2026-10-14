@@ -74,9 +74,20 @@
     return out;
   }
   // Fill for display. html=true highlights filled values and what's left to fill in.
+  // Like text.replace(re, fn), but escapes the text between matches, for output that goes into innerHTML.
+  // fn's own output is trusted, so it must escape whatever it adds.
+  function replaceAsHtml(text, re, fn) {
+    var out = "", last = 0, m; re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      out += esc(text.slice(last, m.index)) + fn.apply(null, m.concat([m.index]));
+      last = m.index + m[0].length;
+      if (!m[0].length) { re.lastIndex += 1; }
+    }
+    return out + esc(text.slice(last));
+  }
   function fill(text, ans, html) {
     var i = 0;
-    return text.replace(PLACEHOLDER, function (all, kind, label, options, name, offset) {
+    return (html ? replaceAsHtml.bind(null, text, PLACEHOLDER) : text.replace.bind(text, PLACEHOLDER))(function (all, kind, label, options, name, offset) {
       var wrapVal = function (v) { return html ? '<span class="val">' + esc(v) + "</span>" : v; };
       var wrapGap = function (v) { return html ? '<span class="gap">' + esc(v) + "</span>" : v; };
       if (name != null) {
