@@ -307,3 +307,19 @@ class TestSameTimeOneOffBlocks:
             mock_events.filter.return_value = QS([MagicMock(id="e1")])
             build_delete_block_effects(PROVIDER_ID, lunch, keep_others=False)
         assert mock_draw.mock_calls == []
+
+
+class TestNameSharingCheckedOncePerDraw:
+    @patch(f"{MODULE}.get_admin_calendar_id", return_value=("admin-cal", []))
+    @patch(f"{MODULE}.provider_tz", return_value=TZ)
+    @patch(f"{MODULE}.resolve_provider_name", return_value="Charles Brown")
+    def test_block_on_three_locations_checks_once(self, mock_name, mock_tz, mock_cal):
+        from provider_availability.engine.event_sync import build_block_event_effects
+        from provider_availability.engine.models import AdminBlock
+
+        block = AdminBlock(id="b1", provider_id=PROVIDER_ID, location_ids=["l1", "l2", "l3"],
+                           start=datetime(2026, 10, 19, 11, 0), end=datetime(2026, 10, 19, 11, 30))
+        with patch(f"{MODULE}.name_is_shared", return_value=True) as mock_shared:
+            build_block_event_effects(block)
+        assert mock_shared.mock_calls == [call(PROVIDER_ID)]
+        assert [c.args[3] for c in mock_cal.mock_calls] == [True, True, True]

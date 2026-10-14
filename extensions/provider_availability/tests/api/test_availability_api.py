@@ -13,8 +13,6 @@ import pytest
 from provider_availability.api.availability_api import (
     AvailabilityAPI,
     _check_write_access,
-    _enrich_blocks,
-    _enrich_recurring_blocks,
     _enrich_rules,
 )
 from provider_availability.engine.models import (
@@ -236,52 +234,6 @@ class TestEnrichRules:
         assert result[0]["provider_name"] == ""
         assert result[0]["provider_npi"] == ""
         assert mock_displays.mock_calls == [call(["unknown"])]
-
-
-class TestEnrichBlocks:
-    def test_with_data(self):
-        block = AdminBlock(
-            id="b1",
-            provider_id=PROVIDER_ID,
-            start=datetime(2026, 3, 10, 9, 0),
-            end=datetime(2026, 3, 10, 12, 0),
-        )
-        displays = {PROVIDER_ID: {"name": "Dr. Smith"}}
-        result = _enrich_blocks([block], displays)
-        assert len(result) == 1
-        assert result[0]["provider_name"] == "Dr. Smith"
-        assert result[0]["id"] == "b1"
-
-    def test_empty(self):
-        result = _enrich_blocks([], {})
-        assert result == []
-
-    def test_unknown_provider(self):
-        block = AdminBlock(
-            id="b2",
-            provider_id="unknown",
-            start=datetime(2026, 3, 10, 9, 0),
-            end=datetime(2026, 3, 10, 12, 0),
-        )
-        result = _enrich_blocks([block], {})
-        assert result[0]["provider_name"] == ""
-
-
-class TestEnrichRecurringBlocks:
-    def test_with_data(self):
-        rb = RecurringBlock(
-            id="rb1",
-            provider_id=PROVIDER_ID,
-            weekly_schedule={"monday": [TimeWindow(dt.time(9, 0), dt.time(12, 0))]},
-        )
-        displays = {PROVIDER_ID: {"name": "Dr. Smith"}}
-        result = _enrich_recurring_blocks([rb], displays)
-        assert len(result) == 1
-        assert result[0]["provider_name"] == "Dr. Smith"
-
-    def test_empty(self):
-        result = _enrich_recurring_blocks([], {})
-        assert result == []
 
 
 # ── Dropdown / list endpoints ────────────────────────────────────────────

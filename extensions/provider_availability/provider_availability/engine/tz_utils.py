@@ -41,11 +41,6 @@ def provider_tz(provider_id: str) -> ZoneInfo:
     return practice_tz()
 
 
-def practice_now() -> datetime:
-    """Return the current time in the practice timezone."""
-    return datetime.now(practice_tz())
-
-
 def provider_now(provider_id: str) -> datetime:
     """Return the current time in the provider's timezone."""
     return datetime.now(provider_tz(provider_id))
@@ -77,12 +72,3 @@ def localize_naive(dt_naive: datetime, tz: ZoneInfo | None = None) -> datetime:
     return dt_naive.replace(tzinfo=tz)
 
 
-def to_practice_naive(dt_val: datetime) -> datetime:
-    """Convert any datetime to a naive practice-TZ datetime.
-
-    - If aware: convert to practice TZ, then strip tzinfo.
-    - If naive: return as-is (assumed already in practice TZ).
-    """
-    if dt_val.tzinfo is not None:
-        return dt_val.astimezone(practice_tz()).replace(tzinfo=None)
-    return dt_val

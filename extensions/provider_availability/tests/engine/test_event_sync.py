@@ -29,7 +29,6 @@ from provider_availability.engine.event_sync import (
     RECURRING_BLOCK_TITLE,
     _compute_recurring_segments,
     _next_weekday,
-    _weekday_occurrences,
     _build_hold_block_events,
     _build_rule_events,
     _get_calendar_id,
@@ -87,46 +86,6 @@ class TestNextWeekday:
         # From Sunday (weekday 6), find Saturday (weekday 5) = next Sat
         result = _next_weekday(date(2026, 3, 8), 5)  # 2026-03-08 is Sunday
         assert result == date(2026, 3, 14)
-
-
-# ── _weekday_occurrences ──────────────────────────────────────────────
-
-
-class TestWeekdayOccurrences:
-    def test_full_month_mondays(self):
-        result = _weekday_occurrences(date(2026, 3, 1), date(2026, 3, 31), 0)
-        assert result == [
-            date(2026, 3, 2),
-            date(2026, 3, 9),
-            date(2026, 3, 16),
-            date(2026, 3, 23),
-            date(2026, 3, 30),
-        ]
-
-    def test_no_occurrences(self):
-        # Range too short to contain Friday (weekday 4)
-        # 2026-03-02 is Monday, 2026-03-05 is Thursday
-        result = _weekday_occurrences(date(2026, 3, 2), date(2026, 3, 5), 4)
-        assert result == []
-
-    def test_single_day_match(self):
-        # 2026-03-02 is Monday
-        result = _weekday_occurrences(date(2026, 3, 2), date(2026, 3, 2), 0)
-        assert result == [date(2026, 3, 2)]
-
-    def test_single_day_no_match(self):
-        result = _weekday_occurrences(date(2026, 3, 2), date(2026, 3, 2), 1)
-        assert result == []
-
-    def test_two_week_span(self):
-        # Two Wednesdays in a two-week span starting on a Monday
-        result = _weekday_occurrences(date(2026, 3, 2), date(2026, 3, 15), 2)
-        assert result == [date(2026, 3, 4), date(2026, 3, 11)]
-
-    def test_start_equals_end_on_matching_day(self):
-        # 2026-03-06 is a Friday
-        result = _weekday_occurrences(date(2026, 3, 6), date(2026, 3, 6), 4)
-        assert result == [date(2026, 3, 6)]
 
 
 # ── sync_provider_availability ────────────────────────────────────────
@@ -920,8 +879,8 @@ class TestBuildRuleEvents:
         assert len(result) == 2
         # provider_name resolved once and passed into each per-location call
         assert mock_get_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-1", "Dr X"),
-            call(PROVIDER_ID, "loc-2", "Dr X"),
+            call(PROVIDER_ID, "loc-1", "Dr X", False),
+            call(PROVIDER_ID, "loc-2", "Dr X", False),
         ]
         assert mock_resolve.mock_calls == [call(PROVIDER_ID)]
 
@@ -1281,7 +1240,7 @@ class TestBuildBlockEventEffects:
 
         result = build_block_event_effects(sample_block)
 
-        assert mock_get_admin_cal.mock_calls == [call(sample_block.provider_id, None, "Dr X")]
+        assert mock_get_admin_cal.mock_calls == [call(sample_block.provider_id, None, "Dr X", None)]
         assert len(result) == 1  # 1 event effect (no cal effects)
 
     @patch(f"{MODULE}.provider_tz")

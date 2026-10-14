@@ -327,8 +327,8 @@ class TestBuildBlockEventEffectsLocations:
             assert all(c.kwargs["title"] == "Offsite" for c in mock_event_effect.call_args_list)
 
         assert mock_get_admin_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-A", "Dr X"),
-            call(PROVIDER_ID, "loc-B", "Dr X"),
+            call(PROVIDER_ID, "loc-A", "Dr X", False),
+            call(PROVIDER_ID, "loc-B", "Dr X", False),
         ]
         assert len(result) == 2
 
@@ -630,8 +630,8 @@ class TestBuildRecurringBlockSyncDailyAndLocations:
             assert cal_ids == ["admin-cal-A", "admin-cal-B"]
 
         assert mock_get_admin_cal.mock_calls == [
-            call(PROVIDER_ID, "loc-A", "Dr X"),
-            call(PROVIDER_ID, "loc-B", "Dr X"),
+            call(PROVIDER_ID, "loc-A", "Dr X", False),
+            call(PROVIDER_ID, "loc-B", "Dr X", False),
         ]
         # 1 weekly event per location = 2
         assert len(result) == 2

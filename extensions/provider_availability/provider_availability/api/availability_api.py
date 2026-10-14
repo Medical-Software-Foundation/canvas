@@ -147,28 +147,6 @@ def _enrich_rules(rules: list[ProviderAvailabilityRule]) -> list[dict]:
     return enriched
 
 
-def _enrich_blocks(blocks: list[AdminBlock], displays: dict) -> list[dict]:
-    """Convert blocks to dicts with provider_name."""
-    enriched: list[dict] = []
-    for b in blocks:
-        d = b.to_dict()
-        info = displays.get(b.provider_id, {})
-        d["provider_name"] = info.get("name", "")
-        enriched.append(d)
-    return enriched
-
-
-def _enrich_recurring_blocks(blocks: list[RecurringBlock], displays: dict) -> list[dict]:
-    """Convert recurring blocks to dicts with provider_name."""
-    enriched: list[dict] = []
-    for b in blocks:
-        d = b.to_dict()
-        info = displays.get(b.provider_id, {})
-        d["provider_name"] = info.get("name", "")
-        enriched.append(d)
-    return enriched
-
-
 _VALID_RECURRENCE_FREQUENCIES = ("weekly", "daily")
 
 

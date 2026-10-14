@@ -24,6 +24,7 @@ from provider_availability.engine.admin_calendar import (
     find_own_calendar,
     get_admin_calendar_id,
     get_admin_calendars,
+    name_is_shared,
     own_calendars_q,
     resolve_provider_name,
 )
@@ -229,8 +230,9 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
     event_count = 0
     provider_name = resolve_provider_name(rule.provider_id)  # resolve once, reuse per location
 
+    shared = name_is_shared(rule.provider_id) if len(location_ids) > 1 else None  # once, not per location
     for location_id in location_ids:
-        calendar_id, cal_effects = _get_calendar_id(rule.provider_id, location_id, provider_name)
+        calendar_id, cal_effects = _get_calendar_id(rule.provider_id, location_id, provider_name, shared)
         effects.extend(cal_effects)
 
         if is_daily:
@@ -478,17 +480,6 @@ def build_delete_effects(provider_id: str) -> list[Effect]:
     return effects
 
 
-def _weekday_occurrences(start: date, end: date, weekday_int: int) -> list[date]:
-    """Return all occurrences of a weekday (0=Mon, 6=Sun) between start and end inclusive."""
-    first = _next_weekday(start, weekday_int)
-    result: list[date] = []
-    current = first
-    while current <= end:
-        result.append(current)
-        current += dt.timedelta(days=7)
-    return result
-
-
 def _first_in_pattern(
     range_start: date, weekday_int: int, effective_start: date | None, interval: int, weekly_schedule: dict
 ) -> date:
@@ -517,7 +508,7 @@ def _next_weekday(from_date: date, weekday_int: int) -> date:
 
 
 def _get_calendar_id(
-    provider_id: str, location_id: str | None, provider_name: str | None = None
+    provider_id: str, location_id: str | None, provider_name: str | None = None, shared: bool | None = None
 ) -> tuple[str, list[Effect]]:
     """Get or create a Clinic calendar for a provider+location.
 
@@ -538,7 +529,9 @@ def _get_calendar_id(
 
     new_id = deterministic_calendar_id(provider_id, CalendarType.Clinic, location_id)
     if provider_name:
-        existing = find_own_calendar(provider_id, provider_name, CalendarType.Clinic, location_name or None, new_id)
+        existing = find_own_calendar(
+            provider_id, provider_name, CalendarType.Clinic, location_name or None, new_id, shared
+        )
         if existing:
             log.info(
                 "_get_calendar_id: found existing calendar id=%s title=%s",
@@ -588,8 +581,9 @@ def build_block_event_effects(block: AdminBlock) -> list[Effect]:
         location_ids = [None]  # provider-level (no location)
 
     provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
+    shared = name_is_shared(block.provider_id) if len(location_ids) > 1 else None  # once, not per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name, shared)
         if not calendar_id:
             log.warning("build_block_event_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
@@ -1060,8 +1054,9 @@ def _draw_recurring_block_events(block: RecurringBlock) -> list[Effect]:
 
     event_count = 0
     provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
+    shared = name_is_shared(block.provider_id) if len(location_ids) > 1 else None  # once, not per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name, shared)
         if not calendar_id:
             log.warning("build_recurring_block_sync_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue
@@ -1205,8 +1200,9 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
 
     event_count = 0
     provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
+    shared = name_is_shared(block.provider_id) if len(location_ids) > 1 else None  # once, not per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name)
+        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name, shared)
         if not calendar_id:
             log.warning("_build_hold_block_events: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue

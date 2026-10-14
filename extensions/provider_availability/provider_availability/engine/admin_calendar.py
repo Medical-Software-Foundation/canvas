@@ -59,14 +59,20 @@ def name_is_shared(provider_id: str) -> bool:
 
 
 def find_own_calendar(
-    provider_id: str, provider_name: str, calendar_type: str, location_name: str | None, fixed_id: str
+    provider_id: str,
+    provider_name: str,
+    calendar_type: str,
+    location_name: str | None,
+    fixed_id: str,
+    shared: bool | None = None,
 ) -> CalendarModel | None:
     """The calendar of this type (and location) that belongs to this provider, if any.
 
     In order: the fixed id the plugin gives calendars it creates; a calendar
     with the right title tagged with this provider's staff key; and, only when
     no other staff record shares the name, an untagged calendar with the right
-    title (made before calendars were tagged).
+    title (made before calendars were tagged). Pass ``shared`` (from
+    ``name_is_shared``) when looking up several calendars for one provider.
     """
     by_id = CalendarModel.objects.filter(id=fixed_id).first()
     if by_id:
@@ -76,7 +82,7 @@ def find_own_calendar(
     mine = next((c for c in candidates if c.description == str(provider_id)), None)
     if mine or not candidates:
         return mine
-    if name_is_shared(provider_id):
+    if name_is_shared(provider_id) if shared is None else shared:
         return None
     return next((c for c in candidates if not c.description), candidates[0])
 
@@ -92,7 +98,10 @@ def own_calendars_q(provider_id: str, provider_name: str, calendar_type: str | N
 
 
 def get_admin_calendar_id(
-    provider_id: str, location_id: str | None = None, provider_name: str | None = None
+    provider_id: str,
+    location_id: str | None = None,
+    provider_name: str | None = None,
+    shared: bool | None = None,
 ) -> tuple[str, list[Effect]]:
     """Find or create the provider's Administrative calendar.
 
@@ -119,7 +128,7 @@ def get_admin_calendar_id(
 
     new_id = deterministic_calendar_id(provider_id, CalendarType.Administrative, location_id)
     existing = find_own_calendar(
-        provider_id, provider_name, CalendarType.Administrative, location_name or None, new_id
+        provider_id, provider_name, CalendarType.Administrative, location_name or None, new_id, shared
     )
     if existing:
         return str(existing.id), []

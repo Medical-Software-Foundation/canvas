@@ -111,7 +111,8 @@ Rows are keyed by `staff_key` (the Canvas Staff UUID), not NPI - so availability
 | `min_lead_hours`, `slot_minutes` | rule | Default 24 / 15 |
 | `recurrence_frequency` | rule, rblock | `weekly` (default) or `daily` |
 | `recurrence_interval` | rule, rblock | Integer >= 1 (default 1) |
-| `effective_start`, `effective_end` | rule, rblock | `YYYY-MM-DD`, optional |
+| `effective_start` | rule, rblock | `YYYY-MM-DD`, required |
+| `effective_end` | rule, rblock | `YYYY-MM-DD`, optional |
 | `group_key` | rule, rblock | Optional; forces rows to merge into one record |
 
 ### Validation
@@ -162,6 +163,9 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | PUT | `/rules` | Update an availability rule |
 | DELETE | `/rules/<provider_id>/<rule_id>` | Delete a single rule |
 | DELETE | `/rules/<provider_id>` | Delete all rules for a provider |
+| GET | `/rules/<provider_id>/<rule_id>/overrides` | List a rule's date overrides |
+| POST | `/rules/<provider_id>/<rule_id>/overrides` | Add or replace a date override (rejected if it overlaps another rule that day) |
+| DELETE | `/rules/<provider_id>/<rule_id>/overrides/<date>` | Remove a date override |
 | GET | `/blocks/<provider_id>` | Get one-off blocks for a provider |
 | POST | `/blocks` | Create a one-off block |
 | PUT | `/blocks` | Update a one-off block |
@@ -176,6 +180,14 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | GET | `/provider-timezones/all` | Get all provider timezone overrides |
 | PUT | `/provider-timezone` | Set a provider timezone (re-syncs all their rules, blocks, and recurring blocks) |
 | PUT | `/provider-timezones/bulk` | Set timezones for multiple providers at once |
+| DELETE | `/provider-timezone/<provider_id>` | Clear a provider timezone so the practice default applies |
+| GET | `/roles` | Get the schedulable role codes and the roles to pick from |
+| PUT | `/roles` | Save schedulable role codes (re-syncs availability) |
+| GET | `/my-view` | Get the signed-in user's saved provider filter |
+| PUT | `/my-view` | Save the signed-in user's provider filter |
+| GET | `/expired-summary` | Items that ended over 30 days ago, for providers the viewer can edit |
+| POST | `/expired/remove` | Remove picked expired items from the plugin's lists (calendar history stays) |
+| POST | `/expired/snooze` | Hide picked expired items for 30 days |
 | GET | `/availability-admin` | Serve admin UI HTML with preloaded data |
 | POST | `/form-action` | CSP-compliant form dispatch for admin UI writes |
 | GET | `/admin.css` | Admin UI stylesheet |

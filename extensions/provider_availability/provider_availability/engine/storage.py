@@ -140,12 +140,6 @@ def _remove_from_index(key: str) -> None:
 # ── Event ID mapping (rule → Canvas Event UUIDs) ─────────────────────
 
 
-def save_event_ids(rule_id: str, event_ids: list[str]) -> None:
-    """Save the list of Canvas Event UUIDs created for a rule."""
-    cache = _get_cache()
-    cache.set(f"{EVENT_IDS_PREFIX}{rule_id}", event_ids, timeout_seconds=CACHE_TTL_SECONDS)
-
-
 def get_event_ids(rule_id: str) -> list[str]:
     """Get stored Canvas Event UUIDs for a rule."""
     cache = _get_cache()

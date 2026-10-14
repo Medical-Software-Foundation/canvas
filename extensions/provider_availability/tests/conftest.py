@@ -45,7 +45,8 @@ def _no_stored_recurring_blocks():
     """Recurring-block resyncs redraw the provider's other blocks from storage,
     which needs a running plugin. Default to none stored; tests that care patch it."""
     with patch("provider_availability.engine.event_sync.get_recurring_blocks_for_provider", return_value=[]), \
-         patch("provider_availability.engine.event_sync.get_blocks_for_provider", return_value=[]):
+         patch("provider_availability.engine.event_sync.get_blocks_for_provider", return_value=[]), \
+         patch("provider_availability.engine.event_sync.name_is_shared", return_value=False):
         yield
 
 
