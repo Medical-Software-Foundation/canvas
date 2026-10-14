@@ -28,3 +28,11 @@ omit = ["tests/*"]
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
+filterwarnings = [
+  # The Canvas SDK sets `json_encoders` in its base model config
+  # (canvas_sdk/base.py). Pydantic deprecated it in 2.0 and removes it in 3.0,
+  # so it is the SDK's to fix rather than this plugin's. Pinned to the exact
+  # message, not to DeprecationWarning as a whole, so any new warning still
+  # shows up in the test output.
+  "ignore:`json_encoders` is deprecated:DeprecationWarning",
+]

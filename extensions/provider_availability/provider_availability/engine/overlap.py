@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from provider_availability.engine.models import (
+    DateOverride,
     ProviderAvailabilityRule,
     TimeWindow,
     date_in_pattern,
@@ -93,22 +94,32 @@ def _windows_for_day(rule: ProviderAvailabilityRule, day: date) -> tuple[str, li
 def check_rule_overlap(
     rule: ProviderAvailabilityRule,
     exclude_rule_id: str = "",
+    existing_rules: list[ProviderAvailabilityRule] | None = None,
 ) -> str | None:
     """Check if a rule overlaps with existing rules for the same provider.
 
     Returns a conflict description string if overlap found, else None.
 
+    Pass existing_rules (the provider's saved rules) to skip the per-call cache
+    read — callers validating many rules at once should fetch once and reuse.
+
     Honors recurrence frequency / interval — two rules with non-coinciding
     occurrences (e.g. weekly interval=2 anchored on alternating weeks) are
     not flagged.
     """
-    existing_rules = get_rules_for_provider(rule.provider_id)
+    if existing_rules is None:
+        existing_rules = get_rules_for_provider(rule.provider_id)
 
     for existing in existing_rules:
         if existing.id == exclude_rule_id:
             continue
         if not existing.is_active:
             continue
+
+        # 0. One-day overrides on either rule, against the other rule's hours that day.
+        override_msg = _override_conflict(rule, existing) or _override_conflict(existing, rule)
+        if override_msg:
+            return override_msg
 
         # 1. Check effective date range overlap
         if not _date_ranges_overlap(
@@ -140,4 +151,62 @@ def check_rule_overlap(
                         f"{ew.start.strftime('%H:%M')}-{ew.end.strftime('%H:%M')}"
                     )
 
+    return None
+
+
+def _hours_on(rule: ProviderAvailabilityRule, day: date) -> list[TimeWindow]:
+    """The hours a rule actually keeps on one date: its override for that date, else its schedule."""
+    for o in rule.date_overrides:
+        if o.date == day:
+            return [] if o.is_closed else list(o.time_windows)
+    if rule.effective_start and day < rule.effective_start:
+        return []
+    if rule.effective_end and day > rule.effective_end:
+        return []
+    if not date_in_pattern(
+        day, rule.effective_start, rule.recurrence_frequency,
+        max(1, rule.recurrence_interval), rule.weekly_schedule,
+    ):
+        return []
+    return _windows_for_day(rule, day)[1]
+
+
+def check_override_overlap(
+    rule: ProviderAvailabilityRule,
+    override: DateOverride,
+    existing_rules: list[ProviderAvailabilityRule] | None = None,
+) -> str | None:
+    """Check a date override against the provider's other active rules on that date.
+
+    Rule saves already keep a provider's rules apart; an override could still
+    stretch one rule into another's hours on a single day, where both would
+    claim the same time (and the longer lead time would cover both).
+    """
+    if override.is_closed:
+        return None
+    if existing_rules is None:
+        existing_rules = get_rules_for_provider(rule.provider_id)
+    only_this = ProviderAvailabilityRule(id=rule.id, provider_id=rule.provider_id, date_overrides=[override])
+    for other in existing_rules:
+        if other.id == rule.id or not other.is_active:
+            continue
+        msg = _override_conflict(only_this, other)
+        if msg:
+            return msg
+    return None
+
+
+def _override_conflict(a: ProviderAvailabilityRule, b: ProviderAvailabilityRule) -> str | None:
+    """A date override on rule ``a`` whose hours overlap rule ``b``'s hours that day."""
+    for o in a.date_overrides:
+        if o.is_closed:
+            continue
+        for ow in _hours_on(b, o.date):
+            for nw in o.time_windows:
+                if nw.overlaps(ow):
+                    return (
+                        f"Overlapping availability on {o.date.isoformat()}: "
+                        f"{nw.start.strftime('%H:%M')}-{nw.end.strftime('%H:%M')} "
+                        f"conflicts with {ow.start.strftime('%H:%M')}-{ow.end.strftime('%H:%M')}"
+                    )
     return None

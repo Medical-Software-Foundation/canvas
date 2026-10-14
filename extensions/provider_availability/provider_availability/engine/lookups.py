@@ -9,9 +9,16 @@ from logger import log
 
 
 def get_active_providers() -> list[dict[str, Any]]:
-    """Return all active staff with PROVIDER role, sorted by last name."""
+    """Return active staff in a schedulable role, sorted by last name.
+
+    "Schedulable" is configurable per practice by StaffRole internal code (see
+    ``engine.roles``); until configured, it is every staff member with a
+    Provider role type.
+    """
+    from provider_availability.engine.roles import get_schedulable_staff
+
     results: list[dict[str, Any]] = []
-    for staff in Staff.objects.filter(active=True, roles__role_type="PROVIDER").distinct():
+    for staff in get_schedulable_staff():
         results.append(
             {
                 "id": str(staff.id),
@@ -33,7 +40,7 @@ def get_active_staff_ids() -> set[str]:
     Availability can be scheduled for any active staff record, so the CSV
     importer keys on the staff UUID rather than NPI (which only providers have).
     """
-    ids = {str(s.id) for s in Staff.objects.filter(active=True)}
+    ids = {str(i) for i in Staff.objects.filter(active=True).values_list("id", flat=True)}
     log.info("get_active_staff_ids: found %d active staff", len(ids))
     return ids
 

@@ -16,16 +16,23 @@ from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPI
 from canvas_sdk.handlers.simple_api.api import get, post, put
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.calendar import Event as EventModel
-from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
+from provider_availability.api.availability_api import _reconcile_availability_to_roles
+from provider_availability.engine.roles import (
+    get_available_roles,
+    get_effective_schedulable_roles,
+    is_provider_type_fallback_active,
+    get_schedulable_staff,
+)
 from provider_availability.engine.storage import (
     get_practice_timezone,
+    get_schedulable_roles,
     set_practice_timezone,
+    set_schedulable_roles,
 )
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
 
-SCHEDULABLE_ROLES = {"MD", "DO", "NP", "PA"}
 AVAILABILITY_YEARS = 25
 
 
@@ -52,42 +59,32 @@ class ProvisionAPI(SimpleAPI):
         skipped = 0
         errored = 0
 
-        active_staff = list(Staff.objects.filter(active=True))
-        log.info("provision: checking %d active staff", len(active_staff))
+        active_staff = get_schedulable_staff()
+        log.info("provision: checking %d schedulable staff", len(active_staff))
 
-        schedulable = [
-            s for s in active_staff
-            if s.top_role_abbreviation
-            and s.top_role_abbreviation.upper() in SCHEDULABLE_ROLES
-        ]
-        staff_keys = [str(s.id) for s in schedulable]
+        # Bulk-fetch existing calendars and their active Available events up front,
+        # so the per-staff loop does no DB queries (was 2 queries per staff).
+        staff_keys = [str(s.id) for s in active_staff]
+        now = datetime.now(UTC).replace(tzinfo=None)
+        cal_by_key = {
+            c.description: c
+            for c in CalendarModel.objects.filter(description__in=staff_keys)
+        }
+        keys_with_active_event = set(
+            EventModel.objects.filter(
+                calendar__description__in=staff_keys,
+                title="Available",
+                recurrence_ends_at__gt=now,
+            ).values_list("calendar__description", flat=True)
+        )
 
-        # Bulk-load existing calendars and the calendars that already have an
-        # active Available event, so the per-staff loop issues no DB queries.
-        cals_by_key: dict[str, CalendarModel] = {}
-        active_cal_ids: set[str] = set()
-        if staff_keys:
-            cals_by_key = {
-                c.description: c
-                for c in CalendarModel.objects.filter(description__in=staff_keys)
-            }
-            now = datetime.now(UTC).replace(tzinfo=None)
-            active_cal_ids = {
-                str(cid)
-                for cid in EventModel.objects.filter(
-                    calendar__description__in=staff_keys,
-                    title="Available",
-                    recurrence_ends_at__gt=now,
-                ).values_list("calendar_id", flat=True)
-            }
-
-        for staff in schedulable:
+        for staff in active_staff:
             try:
                 staff_key = str(staff.id)
-                existing_cal = cals_by_key.get(staff_key)
+                existing_cal = cal_by_key.get(staff_key)
 
                 if existing_cal:
-                    if str(existing_cal.id) in active_cal_ids:
+                    if staff_key in keys_with_active_event:
                         skipped += 1
                         continue
                     calendar_id = str(existing_cal.id)
@@ -188,3 +185,52 @@ class ProvisionAPI(SimpleAPI):
         set_practice_timezone(tz_name)
         log.info("provision set_timezone: changed to %s", tz_name)
         return [JSONResponse({"message": f"Timezone set to {tz_name}", "timezone": tz_name})]
+
+    # ── Schedulable roles ─────────────────────────────────────────────
+
+    @get("/roles")
+    def get_roles(self) -> list[Response | Effect]:
+        """Return configured schedulable role codes and the roles available in the instance."""
+        return [
+            JSONResponse({
+                "schedulable_roles": get_effective_schedulable_roles(),
+                "configured": get_schedulable_roles() is not None,
+                "fallback_active": is_provider_type_fallback_active(),
+                "available": get_available_roles(),
+            })
+        ]
+
+    @put("/roles")
+    def set_roles(self) -> list[Response | Effect]:
+        """Replace the set of schedulable role internal codes."""
+        body = self.request.json()
+        codes = body.get("schedulable_roles")
+        if not isinstance(codes, list):
+            return [
+                JSONResponse(
+                    {"error": "schedulable_roles must be a list of role internal codes"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        if not normalized:
+            # Same rule as the Settings tab: an empty set would de-schedule
+            # every provider at once.
+            return [
+                JSONResponse(
+                    {"error": "At least one schedulable role is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        set_schedulable_roles(normalized)
+        log.info("provision set_roles: set %d schedulable roles", len(normalized))
+
+        # Same as the Settings tab: availability follows the new set at once.
+        effects = _reconcile_availability_to_roles()
+        return [
+            *effects,
+            JSONResponse({
+                "message": "Schedulable roles updated",
+                "schedulable_roles": normalized,
+            })
+        ]

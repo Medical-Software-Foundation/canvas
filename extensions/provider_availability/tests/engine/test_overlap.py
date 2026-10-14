@@ -1,7 +1,7 @@
 """Tests for provider_availability.engine.overlap."""
 
 import datetime as dt
-from datetime import date
+from datetime import date, time
 from unittest.mock import MagicMock, call, patch
 
 from provider_availability.engine.models import ProviderAvailabilityRule, TimeWindow
@@ -189,3 +189,54 @@ class TestCheckRuleOverlap:
 
             assert mock_get.mock_calls == [call("p1")]
             assert result is None
+
+
+# ── date overrides against other rules ─────────────────────────────────
+
+
+def _rule(rule_id, start, end, overrides=None):
+    return ProviderAvailabilityRule(
+        id=rule_id, provider_id="p1", is_active=True,
+        weekly_schedule={"monday": [TimeWindow(start=time(start), end=time(end))]},
+        date_overrides=overrides or [],
+    )
+
+
+class TestOverrideOverlap:
+    MONDAY = date(2026, 12, 7)
+
+    def test_override_stretching_into_another_rule_is_rejected(self):
+        from provider_availability.engine.models import DateOverride
+        from provider_availability.engine.overlap import check_override_overlap
+
+        morning, afternoon = _rule("am", 9, 12), _rule("pm", 13, 17)
+        stretch = DateOverride(date=self.MONDAY, time_windows=[TimeWindow(start=time(9), end=time(17))])
+        msg = check_override_overlap(morning, stretch, existing_rules=[morning, afternoon])
+        assert msg and "2026-12-07" in msg and "13:00-17:00" in msg
+
+    def test_override_inside_its_own_hours_is_fine(self):
+        from provider_availability.engine.models import DateOverride
+        from provider_availability.engine.overlap import check_override_overlap
+
+        morning, afternoon = _rule("am", 9, 12), _rule("pm", 13, 17)
+        shorter = DateOverride(date=self.MONDAY, time_windows=[TimeWindow(start=time(9), end=time(11))])
+        assert check_override_overlap(morning, shorter, existing_rules=[morning, afternoon]) is None
+
+    def test_other_rule_closed_that_day_is_fine(self):
+        from provider_availability.engine.models import DateOverride
+        from provider_availability.engine.overlap import check_override_overlap
+
+        closed = DateOverride(date=self.MONDAY, is_closed=True, time_windows=[])
+        morning, afternoon = _rule("am", 9, 12), _rule("pm", 13, 17, overrides=[closed])
+        stretch = DateOverride(date=self.MONDAY, time_windows=[TimeWindow(start=time(9), end=time(17))])
+        assert check_override_overlap(morning, stretch, existing_rules=[morning, afternoon]) is None
+
+    def test_rule_edit_into_another_rules_override_day_is_rejected(self):
+        """The afternoon rule's one-day override reaches 11:00; a new 10-12 morning rule hits it."""
+        from provider_availability.engine.models import DateOverride
+
+        early = DateOverride(date=self.MONDAY, time_windows=[TimeWindow(start=time(11), end=time(17))])
+        afternoon = _rule("pm", 13, 17, overrides=[early])
+        new_morning = _rule("am", 10, 12)
+        msg = check_rule_overlap(new_morning, existing_rules=[afternoon])
+        assert msg and "2026-12-07" in msg
