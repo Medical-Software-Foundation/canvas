@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "mock_candid",
+    "description": "Stands in for Candid Health's API so the candid plugin's claim submission, remittance posting, and patient payment flows can be tested end to end on a test instance, with remittances scripted per claim.",
+    "components": {
+        "handlers": [
+            {
+                "class": "mock_candid.api:MockCandidAPI",
+                "description": "The Candid API endpoints the candid plugin calls: auth token, encounters, patient payments."
+            },
+            {
+                "class": "mock_candid.api:MockCandidControlAPI",
+                "description": "Test-control endpoints: global config, per-claim scenarios, patient payment injection, and state inspection. Requires MOCK_CANDID_API_KEY."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "MOCK_CANDID_API_KEY",
+            "sensitive": true
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

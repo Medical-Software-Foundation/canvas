@@ -221,3 +221,5 @@ cd candid
 uv run pytest tests/ -v
 ```
 
+To test end to end on a test instance without Candid, install the `mock_candid` plugin next to this one and script remittances per claim. See [`mock_candid/README.md`](../mock_candid/README.md).
+
