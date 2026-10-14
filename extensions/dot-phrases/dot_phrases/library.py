@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from canvas_sdk.v1.data import Note, Patient, Staff, Team
+from canvas_sdk.caching.plugins import get_cache
+from canvas_sdk.v1.data import Calendar, Note, Patient, Staff, Team
 from django.db.models import F, Q
 
-from dot_phrases.catalog import RX_FIELDS
 from dot_phrases.models import Phrase, PhraseFavorite, PhraseHidden, PracticeSetting, PracticeValue
 from dot_phrases.text import pronouns
 
@@ -49,7 +50,8 @@ def usable_phrases(owner_dbid: int | None) -> dict[str, Phrase]:
     if owner_dbid is not None:
         query |= Q(scope="personal", owner_id=owner_dbid)
     by_code: dict[str, Phrase] = {}
-    for phrase in Phrase.objects.filter(query, archived=False).select_related("owner"):
+    # Oldest first, so if a code was ever saved twice the same row always wins.
+    for phrase in Phrase.objects.filter(query, archived=False).select_related("owner").order_by("dbid"):
         current = by_code.get(phrase.code)
         if current is None or (phrase.scope == "personal" and current.scope == "practice"):
             by_code[phrase.code] = phrase
@@ -109,12 +111,97 @@ def staff_name(staff: Any) -> str:
     return " ".join(p for p in parts if p).strip()
 
 
-def placeholder_values(patient: Patient | None, note: Note | None, today: date | None = None) -> dict[str, str]:
+def _zone(value: Any) -> ZoneInfo | None:
+    """A time zone from a stored value: a zone object or a name like "America/Chicago"."""
+    name = str(value or "").strip()
+    if not name:
+        return None
+    try:
+        # A stored zone object prints as its name, so both forms go through ZoneInfo.
+        return ZoneInfo(name)
+    except (KeyError, ValueError):
+        # ZoneInfoNotFoundError is a KeyError; a malformed name is a ValueError.
+        return None
+
+
+def _tz_key(staff_dbid: int) -> str:
+    return f"dot-phrases:tz:{staff_dbid}"
+
+
+def remember_timezone(staff_dbid: int | None, name: str | None) -> str | None:
+    """Keep the time zone a staff member's browser reported, so their typed codes use it too.
+
+    Returns the zone name when it's a real time zone, or None. Stored in the plugin cache, which
+    keeps it for up to 14 days; each chart panel open refreshes it.
+    """
+    zone = _zone(name)
+    if zone is None:
+        return None
+    if staff_dbid is not None:
+        get_cache().set(_tz_key(staff_dbid), str(zone))
+    return str(zone)
+
+
+def remembered_timezone(staff_dbid: int | None) -> str | None:
+    """The last time zone a staff member's browser reported, if the cache still has it."""
+    if staff_dbid is None:
+        return None
+    value = get_cache().get(_tz_key(staff_dbid))
+    return str(value) if value else None
+
+
+def calendar_timezone() -> str | None:
+    """The time zone most of the instance's calendars use, checked at most once a day."""
+    cache = get_cache()
+    cached = cache.get("dot-phrases:calendar-tz")
+    if cached is not None:
+        return str(cached) or None
+    counts: dict[str, int] = {}
+    for value in Calendar.objects.values_list("timezone", flat=True)[:5000]:
+        name = str(value or "")
+        if name and name != "UTC":
+            counts[name] = counts.get(name, 0) + 1
+    best = max(counts, key=lambda k: counts[k]) if counts else ""
+    cache.set("dot-phrases:calendar-tz", best, timeout_seconds=86400)
+    return best or None
+
+
+def local_today(
+    patient: Patient | None, note: Note | None, zone_name: str | None = None, owner_dbid: int | None = None
+) -> date:
+    """Today's date where the provider is, for {today} and {age}.
+
+    Canvas gives plugins no practice time zone. In order, this uses: the browser's time zone (for
+    the chart panel), the time zone the command creator's browser last reported, the note
+    provider's and then the patient's saved Canvas time zone, the time zone most calendars use,
+    and only then UTC.
+    """
+    candidates = (
+        lambda: zone_name,
+        lambda: remembered_timezone(owner_dbid),
+        lambda: getattr(getattr(note, "provider", None), "last_known_timezone", None),
+        lambda: getattr(patient, "last_known_timezone", None),
+        calendar_timezone,
+    )
+    for candidate in candidates:
+        zone = _zone(candidate())
+        if zone is not None:
+            return datetime.now(zone).date()
+    return datetime.now(UTC).date()
+
+
+def placeholder_values(
+    patient: Patient | None,
+    note: Note | None,
+    today: date | None = None,
+    zone_name: str | None = None,
+    owner_dbid: int | None = None,
+) -> dict[str, str]:
     """Patient placeholder values for one chart, plus the practice info values.
 
     Anything the chart has no value for is left out, so its placeholder stays as typed.
     """
-    today = today or datetime.now(UTC).date()
+    today = today or local_today(patient, note, zone_name, owner_dbid)
     values: dict[str, str] = dict(practice_values())
     values["today"] = today.strftime("%m/%d/%Y")
     if patient is not None:
@@ -135,7 +222,3 @@ def phrase_fits_rx(phrase: Phrase, field: str) -> bool:
     """Whether a phrase is set up for a prescription field (sig or note_to_pharmacist)."""
     return bool(phrase.rx_sig) if field == "sig" else bool(phrase.rx_note_to_pharmacist)
 
-
-def rx_field_max(field: str) -> int:
-    """The character limit for a prescription field."""
-    return RX_FIELDS[field][1]

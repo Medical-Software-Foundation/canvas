@@ -83,10 +83,10 @@ class TestRules:
         assert rx_problems(210, "x" * 210) == []
         assert rx_problems(210, "x" * 211) == ["over 210 characters"]
 
-    def test_pharmacy_text_is_one_line_of_plain_characters_without_placeholders(self) -> None:
+    def test_pharmacy_text_is_one_line_of_plain_characters(self) -> None:
         assert rx_problems(1000, "Take 1\nwith food") == ["has a line break"]
         assert rx_problems(1000, "Take ½ tablet") == ["has special characters"]
-        assert rx_problems(1000, "Take for {blank days}") == ["has placeholders"]
+        assert rx_problems(1000, "Take for {blank days}") == []
 
     def test_keyboard_symbols_like_at_and_hash_are_allowed(self) -> None:
         assert rx_problems(1000, "Call #2 @ 9am, 50% off & more ~ok") == []
@@ -102,6 +102,6 @@ class TestRules:
         assert rx_message("Sig", 1000, "Take 1 tablet") == ""
 
     def test_editor_message_with_several_problems_says_fix_these(self) -> None:
-        assert rx_message("Sig", 10, "Take {blank days} days") == (
-            "Can't use in the Sig: it's over 10 characters (22) and it has placeholders. Fix these, or uncheck Use in Sig."
+        assert rx_message("Sig", 10, "Take ½ tab\ndaily") == (
+            "Can't use in the Sig: it's over 10 characters (16) and it has a line break. Fix these, or uncheck Use in Sig."
         )

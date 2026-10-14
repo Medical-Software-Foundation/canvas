@@ -93,7 +93,6 @@
       Array.prototype.forEach.call(text, function (ch) { if (!/[ -~]/.test(ch) && bad.indexOf(ch) < 0) { bad.push(ch); } });
       if (bad.length) { parts.push("it has special characters (" + bad.slice(0, 5).join(", ") + (bad.length > 5 ? ", …" : "") + ")"); fixes.push("Replace them"); }
     }
-    PLACEHOLDER.lastIndex = 0; if (PLACEHOLDER.test(text)) { parts.push("it has placeholders"); fixes.push("Remove them"); }
     if (!parts.length) { return ""; }
     var name = label === "Sig" ? label : label.charAt(0).toLowerCase() + label.slice(1);
     return "Can't use in the " + name + ": " + parts.join(" and ") + ". " + (fixes.length === 1 ? fixes[0] : "Fix these") + ", or uncheck Use in " + name + ".";
@@ -106,7 +105,6 @@
     var max = data.rxFields[field].max, p = [];
     if (text.length > max) { p.push("over " + max.toLocaleString() + " characters"); }
     if (/[\r\n]/.test(text)) { p.push("has a line break"); } else if (/[^ -~]/.test(text)) { p.push("has special characters"); }
-    PLACEHOLDER.lastIndex = 0; if (PLACEHOLDER.test(text)) { p.push("has placeholders"); }
     return p;
   }
   function chips(p) {
@@ -136,7 +134,7 @@
     if (window.ResizeObserver) { previewObserver = new ResizeObserver(fit); previewObserver.observe(ta); }
   }
   function render() {
-    $("#axMain").innerHTML = adTab === "phrases" ? phrasesHtml() : adTab === "settings" ? settingsHtml() : importHtml();
+    $("#axMain").innerHTML = adTab === "phrases" ? phrasesHtml() : settingsHtml();
     if (adTab === "phrases") { updDetail(); syncPreview(); }
   }
   function load() {
@@ -241,11 +239,11 @@
       (ro ? "" : '<div class="ax-help">Placeholders go in curly brackets. Use the menus above, or type them.</div>') + "</div>" +
       '<div><div class="ax-lbl">What lands in the note, for a sample patient</div><div class="ax-result" id="axResult"></div><div class="ax-help" id="axAsks"></div></div></div>' +
       '<div class="ax-guide" id="axGuide"' + (guideOpen ? "" : " hidden") + ">" + guideHtml() + "</div>" +
-      '<div class="ax-lbl">Use in</div><div class="ax-seg" id="axUse"><button data-use="any">All commands</button><button data-use="some">Limited commands</button></div><div class="ax-help" id="axAllHint">Every command dot phrases work in. Prescription fields are set separately below.</div>' +
+      '<div class="ax-lbl">Use in</div><div class="ax-seg" id="axUse"><button data-use="all">All commands</button><button data-use="some">Limited commands</button><button data-use="rx">Prescriptions only</button></div><div class="ax-help" id="axAllHint">Every command dot phrases work in. Prescription fields are set separately below.</div><div class="ax-help" id="axRxHint">Only the prescription fields checked below.</div>' +
       '<div class="pk ax-pk" id="axCmds">' + pickerHtml(d.use_in || [], ro) + "</div>" +
       '<div class="ax-warn" id="axLim"></div><div class="ax-lbl">Prescriptions</div><div class="ax-rx">' +
       ["sig", "note_to_pharmacist"].map(function (k) { return '<label class="ax-check"><input type="checkbox" data-rx="' + k + '"' + (d.rx[k] ? " checked" : "") + (ro ? " disabled" : "") + "> Use in the " + (k === "sig" ? "Sig" : "note to pharmacist") + ' <span class="ax-count" id="axC_' + k + '"></span></label>'; }).join("") +
-      '</div><div class="ax-help">Goes to the pharmacy, so it has to be one line of plain text with no placeholders: up to 1,000 characters for the Sig and 210 for the note to pharmacist.</div><div class="ax-err" id="axRx"></div><div class="ax-err" id="axErr"></div>' + foot;
+      '</div><div class="ax-help">Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210.<br>Prescriptions with unfilled placeholders cannot be sent.</div><div class="ax-err" id="axRx"></div><div class="ax-err" id="axErr"></div>' + foot;
   }
   function asksSentence(t) {
     var f = fields(t); if (!f.length) { return "Nothing to ask. It goes in exactly as shown."; }
@@ -264,9 +262,10 @@
     }
     $("#axResult").innerHTML = d.text ? fill(d.text, true) : '<span style="color:#8ea8b5">Start writing on the left.</span>';
     $("#axAsks").textContent = d.text ? asksSentence(d.text) : "";
-    $$("#axUse button").forEach(function (b) { b.classList.toggle("on", (b.getAttribute("data-use") === "any") === (d.use_in === null)); });
-    $("#axCmds").hidden = d.use_in === null;
-    $("#axAllHint").hidden = d.use_in !== null;
+    $$("#axUse button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-use") === d.mode); });
+    $("#axCmds").hidden = d.mode !== "some";
+    $("#axAllHint").hidden = d.mode !== "all";
+    $("#axRxHint").hidden = d.mode !== "rx";
     $$("#axCmds [data-cmdck]").forEach(function (b) { b.checked = !!d.use_in && d.use_in.indexOf(b.getAttribute("data-cmdck")) >= 0; });
     var n = $$("#axCmds .pk-groups input:checked").length; var pn = $("#axCmds .pk-n"); if (pn) { pn.textContent = n ? " · " + n + " picked" : ""; }
     $$("#axCmds [data-grpall]").forEach(function (b) {
@@ -285,11 +284,11 @@
   }
   // Unsaved edits: leaving a phrase with changes asks first, so work isn't lost.
   function isDirty() {
+    var importPending = impStep === 2 || (impStep === 1 && !!(($("#axImport") || {}).value || "").trim());
     if (adTab === "settings") {
       var changed = data.values.some(function (v) { var i = $('[data-fv="' + v.name + '"]'); return i && i.value !== v.value; });
-      return changed || !!(($("#axNewName") || {}).value || "").trim() || !!(($("#axNewVal") || {}).value || "").trim();
+      return changed || importPending || !!(($("#axNewName") || {}).value || "").trim() || !!(($("#axNewVal") || {}).value || "").trim();
     }
-    if (adTab === "import") { return impStep === 2 || (impStep === 1 && !!(($("#axImport") || {}).value || "").trim()); }
     if (!adSel || !adDraft) { return false; }
     var d = adDraft, p = adSel === "new" ? null : adSel;
     if (!p) { return !!(d.code || d.text.trim() || d.use_in !== null || d.rx.sig || d.rx.note_to_pharmacist); }
@@ -306,23 +305,30 @@
     closeFloatBar();
     var bar = document.createElement("div");
     bar.className = "ax-floatbar ax-discard"; bar.setAttribute("role", "alertdialog"); bar.setAttribute("aria-labelledby", "axFbT");
-    bar.innerHTML = '<div><div class="ax-cf-title" id="axFbT">' + (adTab === "import" ? "Discard this import?" : "Discard your changes?") + "</div>" +
-      "<p>" + (adTab === "import" ? "Your list hasn't been imported." : "Your edits haven't been saved.") + "</p></div>" +
+    bar.innerHTML = '<div><div class="ax-cf-title" id="axFbT">' + "Discard your changes?" + "</div>" +
+      "<p>" + "Your edits haven't been saved, and any list you added hasn't been imported." + "</p></div>" +
       '<div class="ax-dacts"><button class="ax-btn" data-fbkeep>Keep editing</button><button class="ax-btn primary" data-fbdiscard>Discard changes</button></div>';
     document.body.appendChild(bar);
     bar.querySelector("[data-fbkeep]").addEventListener("click", closeFloatBar);
     bar.querySelector("[data-fbdiscard]").addEventListener("click", function () {
       closeFloatBar();
-      if (adTab === "import") { impStep = 1; impText = ""; impRows = []; }
+      impStep = 1; impText = ""; impRows = [];
       action();
     });
     bar.querySelector("[data-fbkeep]").focus();
   }
   function closeFloatBar() { var b = $(".ax-floatbar"); if (b) { b.parentNode.removeChild(b); } }
   window.addEventListener("beforeunload", function (e) { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+  // Use in: "all" (every command), "some" (picked commands), or "rx" (prescription fields only).
+  // "rx" saves an empty command list; the prescription boxes say which fields.
+  function setMode(mode) {
+    adDraft.mode = mode;
+    adDraft.use_in = mode === "all" ? null : mode === "rx" ? [] : (adDraft.use_in || []);
+  }
   function select(p) {
     adCaret = null; adSel = p; adConfirm = false; adPending = null;
     adDraft = p === "new" ? { code: "", text: "", use_in: null, rx: {} } : { code: p.code, text: p.text, use_in: p.use_in === null ? null : p.use_in.slice(), rx: { sig: p.rx_sig, note_to_pharmacist: p.rx_note_to_pharmacist } };
+    adDraft.mode = adDraft.use_in === null ? "all" : adDraft.use_in.length ? "some" : (adDraft.rx.sig || adDraft.rx.note_to_pharmacist) ? "rx" : "some";
     render();
   }
   function closeMenus(except) {
@@ -343,13 +349,16 @@
     if (!/^[a-z][a-z0-9]*$/.test(d.code)) { return err("Give it a code that starts with a letter and uses only letters and numbers."); }
     if (!d.text.trim()) { return err("Write the text this phrase puts in the note."); }
     var u = unknownPlaceholders(d.text); if (u.length) { return err(u.join(", ") + " isn't a placeholder. Add it on the Practice settings tab, or fix the spelling."); }
-    if (d.use_in !== null && !d.use_in.length && !d.rx.sig && !d.rx.note_to_pharmacist) { return err("Pick at least one command, or choose All commands."); }
+    if (d.mode === "some" && !(d.use_in || []).length) { return err("Pick at least one command, or choose All commands."); }
+    if (d.mode === "rx" && !d.rx.sig && !d.rx.note_to_pharmacist) { return err("Check Use in the Sig or Use in the note to pharmacist, or choose another Use in option."); }
     if (rxMessages(d).length) { err(""); $("#axRx").scrollIntoView({ block: "nearest" }); return; }
     var body = { code: d.code, text: d.text.trim(), use_in: d.use_in, rx_sig: !!d.rx.sig, rx_note_to_pharmacist: !!d.rx.note_to_pharmacist, scope: "practice" };
+    // One save at a time, so a double click can't create the same phrase twice.
+    var btn = $("[data-save]"); if (btn) { if (btn.disabled) { return; } btn.disabled = true; }
     (p ? api("PATCH", "/phrases/" + p.id, body) : api("POST", "/phrases", body)).then(function (r) {
       toast(p ? "Saved ." + d.code : "Saved ." + d.code + ". Everyone can use it now.");
       d.text = d.text.trim(); adSel = { id: r.phrase.id }; return load();
-    }).catch(function (e) { err(e.message); });
+    }).catch(function (e) { err(e.message); if (btn) { btn.disabled = false; } });
   }
 
   // ---- practice settings ----
@@ -364,11 +373,13 @@
       '<section class="ax-sec"><h3>Practice info</h3><p>Information that\'s the same for every patient, like your after-hours number. Set it once here and every phrase that uses it stays up to date. Use it in a phrase by writing its name in curly brackets.</p>' +
       '<table class="ax-tbl"><thead><tr><th style="width:30%">Name</th><th>Value</th><th style="width:100px">Used in</th><th style="width:140px"></th></tr></thead><tbody>' + rowsHtml +
       '<tr class="add"><td><input class="ax-in" id="axNewName" placeholder="clinic_fax" aria-label="New name"></td><td><input class="ax-in" id="axNewVal" placeholder="(555) 010-3000" aria-label="New value"></td><td colspan="2"><button class="ax-btn" data-fadd>Add</button></td></tr></tbody></table>' +
-      '<div class="ax-help">Names use lowercase letters and underscores, no spaces. Then write <span class="tok">{clinic_fax}</span> in any phrase.</div><div class="ax-err" id="axFillErr"></div></section>';
+      '<div class="ax-help">Names use lowercase letters and underscores, no spaces. Then write <span class="tok">{clinic_fax}</span> in any phrase.</div><div class="ax-err" id="axFillErr"></div></section>' +
+      '<section class="ax-sec ax-sec-import"><h3>Import</h3><p>Add many practice phrases at once, from a pasted list or a CSV file.</p><div id="axImportSec">' + importHtml() + "</div></section>";
   }
 
   // ---- import ----
   var SAMPLE_IMPORT = "ckdplan, Plan, Recheck kidney function in 3 months.\nacpdiscuss, Any, Discussed advance care planning with {first_name}.";
+  function renderImport() { var box = $("#axImportSec"); if (box) { box.innerHTML = importHtml(); } }
   function importHtml() {
     var steps = ["Add your list", "Check it", "Import"].map(function (s, i) { return '<li class="' + (impStep === i + 1 ? "on" : impStep > i + 1 ? "done" : "") + '">' + s + "</li>"; }).join("");
     var body = "";
@@ -444,7 +455,7 @@
       if (guideOpen) { g.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
       return;
     }
-    if (el("#axUse [data-use]")) { adDraft.use_in = el("#axUse [data-use]").getAttribute("data-use") === "any" ? null : (adDraft.use_in || []); updDetail(); return; }
+    if (el("#axUse [data-use]")) { setMode(el("#axUse [data-use]").getAttribute("data-use")); updDetail(); return; }
     if (el("[data-fsave]")) {
       var name = el("[data-fsave]").getAttribute("data-fsave"), input = $('[data-fv="' + name + '"]');
       api("POST", "/admin/values", { name: name, value: input.value }).then(function () { toast("Saved {" + name + "}"); return load(); }).catch(function (er) { $("#axFillErr").textContent = er.message; });
@@ -463,13 +474,13 @@
     }
     if (el("[data-check]")) {
       impText = $("#axImport").value;
-      api("POST", "/admin/import/check", { text: impText }).then(function (r) { impRows = r.rows || []; impStep = 2; render(); }).catch(function (er) { toast(er.message); });
+      api("POST", "/admin/import/check", { text: impText }).then(function (r) { impRows = r.rows || []; impStep = 2; renderImport(); }).catch(function (er) { toast(er.message); });
       return;
     }
-    if (el("[data-back1]")) { impStep = 1; render(); return; }
-    if (el("[data-import]")) { api("POST", "/admin/import", { text: impText }).then(function (r) { impDone = r.imported || 0; impStep = 3; impText = ""; return load(); }).catch(function (er) { toast(er.message); }); return; }
+    if (el("[data-back1]")) { impStep = 1; renderImport(); return; }
+    if (el("[data-import]")) { var ib = el("[data-import]"); if (ib.disabled) { return; } ib.disabled = true; api("POST", "/admin/import", { text: impText }).then(function (r) { impDone = r.imported || 0; impStep = 3; impText = ""; return load(); }).catch(function (er) { ib.disabled = false; toast(er.message); }); return; }
     if (el("[data-seephr]")) { impStep = 1; adTab = "phrases"; adSel = null; selectTab(); return; }
-    if (el("[data-again]")) { impStep = 1; impText = ""; render(); }
+    if (el("[data-again]")) { impStep = 1; impText = ""; renderImport(); }
   });
   $("#axMain").addEventListener("input", function (e) {
     var t = e.target;
@@ -489,10 +500,15 @@
       if (t.checked && i < 0) { set.push(k); } else if (!t.checked && i >= 0) { set.splice(i, 1); }
       adDraft.use_in = set; updDetail(); return;
     }
-    if (t.getAttribute("data-rx")) { adDraft.rx[t.getAttribute("data-rx")] = t.checked; updDetail(); return; }
+    if (t.getAttribute("data-rx")) {
+      adDraft.rx[t.getAttribute("data-rx")] = t.checked;
+      // A new phrase checked for a prescription field starts out as prescriptions only.
+      if (adSel === "new" && t.checked && adDraft.mode === "all") { setMode("rx"); }
+      updDetail(); return;
+    }
     if (t.id === "axFile" && t.files && t.files[0]) {
       var reader = new FileReader();
-      reader.onload = function () { impText = csvToLines(String(reader.result || "")); render(); };
+      reader.onload = function () { impText = csvToLines(String(reader.result || "")); renderImport(); };
       reader.readAsText(t.files[0]);
     }
   });

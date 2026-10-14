@@ -151,7 +151,11 @@ def unknown_placeholders(text: str, practice_names: set[str]) -> list[str]:
 
 
 def rx_problems(field_max: int, text: str) -> list[str]:
-    """Why text can't go in a prescription field: length, line breaks, characters, placeholders."""
+    """Why text can't go in a prescription field: length, line breaks, or special characters.
+
+    Placeholders are allowed: they are filled in before the text is checked again, and anything
+    left to fill in blocks sending until it's done.
+    """
     problems: list[str] = []
     if len(text) > field_max:
         problems.append(f"over {field_max:,} characters")
@@ -159,8 +163,6 @@ def rx_problems(field_max: int, text: str) -> list[str]:
         problems.append("has a line break")
     elif any(not (" " <= char <= "~") for char in text):
         problems.append("has special characters")
-    if has_placeholders(text):
-        problems.append("has placeholders")
     return problems
 
 
@@ -190,9 +192,6 @@ def rx_issue(field_max: int, text: str) -> tuple[str, str]:
         if bad:
             parts.append(f"it has special characters ({', '.join(bad[:5])}{', …' if len(bad) > 5 else ''})")
             kinds.append("Replace them")
-    if has_placeholders(text):
-        parts.append("it has placeholders")
-        kinds.append("Remove them")
     if not parts:
         return "", ""
     return " and ".join(parts), kinds[0] if len(kinds) == 1 else "Fix these"

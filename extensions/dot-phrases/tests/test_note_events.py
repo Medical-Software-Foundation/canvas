@@ -34,6 +34,9 @@ class FakeCache:
     def set(self, key: str, value: Any, timeout_seconds: int | None = None) -> None:
         self.data[key] = value
 
+    def delete(self, key: str) -> None:
+        self.data.pop(key, None)
+
 
 def event(event_type: int, fields: dict[str, Any], target: str = "cmd-1") -> Any:
     return SimpleNamespace(type=event_type, context={"fields": fields}, target=SimpleNamespace(id=target))
@@ -99,6 +102,36 @@ class TestExpandPhrases:
         assert ExpandPhrases(handler_event).compute() == []
 
 
+    def test_retyping_the_same_code_after_it_expanded_expands_again(self, env: Any) -> None:
+        plan = EventType.PLAN_COMMAND__POST_UPDATE
+        assert ExpandPhrases(event(plan, {"narrative": ".fallprec"})).compute()
+        # The edit lands, so the next save has no code in it; then the provider types the code again.
+        assert ExpandPhrases(event(plan, {"narrative": "Discussed fall precautions with Jane."})).compute() == []
+        assert ExpandPhrases(event(plan, {"narrative": ".fallprec"})).compute()
+
+    def test_phrases_that_fit_alone_but_not_together_stay_as_typed(self, env: Any) -> None:
+        long_one = phrase(8, "long", "x" * 300)
+        with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "long": long_one}):
+            effects = ExpandPhrases(event(EventType.ALLERGY_COMMAND__POST_UPDATE, {"narrative": ".long .long"})).compute()
+        assert effects == []
+
+
+    def test_sig_phrase_fills_patient_details_and_leaves_fill_ins(self, env: Any) -> None:
+        taper = phrase(12, "taper", "Take {blank count} tablets for {first_name}", use_in=[], sig=True)
+        with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "taper": taper}):
+            effects = ExpandPhrases(event(EventType.PRESCRIBE_COMMAND__POST_UPDATE, {"sig": ".taper"})).compute()
+        assert payload(effects[0])["sig"] == "Take [count] tablets for Jane"
+        assert env.cache.get(leftovers_key("cmd-1")) == ["[count]"]
+
+    def test_sig_phrase_that_no_longer_fits_once_filled_stays_as_typed(self, env: Any) -> None:
+        accent = phrase(13, "accent", "For {first_name}", use_in=[], sig=True)
+        with (
+            patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "accent": accent}),
+            patch(f"{MODULE}.placeholder_values", return_value={"first_name": "José"}),
+        ):
+            assert ExpandPhrases(event(EventType.PRESCRIBE_COMMAND__POST_UPDATE, {"sig": ".accent"})).compute() == []
+
+
 class TestBlockUnfinished:
     def errors(self, effects: list[Any]) -> list[str]:
         assert len(effects) == 1
@@ -129,6 +162,37 @@ class TestBlockUnfinished:
         env.cache.data[leftovers_key("cmd-1")] = ["[right / left]"]
         text = "Jane reports left knee pain. Stiff in the morning."
         assert BlockUnfinished(event(EventType.HISTORY_OF_PRESENT_ILLNESS_COMMAND__POST_VALIDATION, {"narrative": text})).compute() == []
+
+    def test_too_long_after_filling_says_so(self, env: Any) -> None:
+        near = phrase(9, "near", "x" * 508 + " {first_name}")
+        with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "near": near}), patch(f"{MODULE}.placeholder_values", return_value={"first_name": "Jane"}):
+            result = BlockUnfinished(event(EventType.ALLERGY_COMMAND__POST_VALIDATION, {"narrative": ".near"})).compute()
+        assert ".near is too long for Allergy: 513 characters, and the limit is 512." in payload(result[0])["errors"][0]["message"]
+
+    def test_too_long_together_says_so(self, env: Any) -> None:
+        half = phrase(10, "half", "x" * 300)
+        with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "half": half}):
+            result = BlockUnfinished(event(EventType.ALLERGY_COMMAND__POST_VALIDATION, {"narrative": ".half .half"})).compute()
+        assert "Together, the phrases here are over the 512-character limit for Allergy." in payload(result[0])["errors"][0]["message"]
+
+    def test_sig_phrases_too_long_together_give_a_reason(self, env: Any) -> None:
+        big = phrase(11, "big", "x" * 600, use_in=[], sig=True)
+        with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "big": big}):
+            result = BlockUnfinished(event(EventType.PRESCRIBE_COMMAND__POST_VALIDATION, {"sig": ".big .big"})).compute()
+        message = payload(result[0])["errors"][0]["message"]
+        assert "Together, the phrases in the Sig are over 1,000 characters." in message
+        assert ": ." not in message
+
+    def test_unfilled_fill_ins_in_a_sig_block_review_and_send(self, env: Any) -> None:
+        env.cache.set(leftovers_key("cmd-1"), ["[count]"])
+        result = BlockUnfinished(event(EventType.PRESCRIBE_COMMAND__POST_VALIDATION, {"sig": "Take [count] tablets ***"})).compute()
+        messages = [e["message"] for e in payload(result[0])["errors"]]
+        assert "Sig: Fill in [count]." in messages
+        assert "Sig: Fill in the blank marked ***." in messages
+
+    def test_filled_in_sig_passes(self, env: Any) -> None:
+        env.cache.set(leftovers_key("cmd-1"), ["[count]"])
+        assert BlockUnfinished(event(EventType.PRESCRIBE_COMMAND__POST_VALIDATION, {"sig": "Take 2 tablets daily"})).compute() == []
 
     def test_review_commands_are_not_registered(self) -> None:
         assert EventType.Name(EventType.PLAN_COMMAND__POST_VALIDATION) in BlockUnfinished.RESPONDS_TO

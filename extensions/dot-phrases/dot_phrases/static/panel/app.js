@@ -26,6 +26,10 @@
     clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("on"); t.style.pointerEvents = "none"; }, 5000);
   }
 
+  // The browser's time zone, so {today} and {age} match the clock the provider sees.
+  function browserZone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (err) { return ""; }
+  }
   function api(method, path, body) {
     return fetch(API + path, {
       method: method, credentials: "same-origin",
@@ -124,7 +128,6 @@
       Array.prototype.forEach.call(text, function (ch) { if (!/[ -~]/.test(ch) && bad.indexOf(ch) < 0) { bad.push(ch); } });
       if (bad.length) { parts.push("it has special characters (" + bad.slice(0, 5).join(", ") + (bad.length > 5 ? ", …" : "") + ")"); fixes.push("Replace them"); }
     }
-    PLACEHOLDER.lastIndex = 0; if (PLACEHOLDER.test(text)) { parts.push("it has placeholders"); fixes.push("Remove them"); }
     if (!parts.length) { return ""; }
     var name = label === "Sig" ? label : label.charAt(0).toLowerCase() + label.slice(1);
     return "Can't use in the " + name + ": " + parts.join(" and ") + ". " + (fixes.length === 1 ? fixes[0] : "Fix these") + ", or uncheck Use in " + name + ".";
@@ -133,7 +136,6 @@
     var max = state.rxFields[field].max, p = [];
     if (text.length > max) { p.push("over " + max.toLocaleString() + " characters"); }
     if (/[\r\n]/.test(text)) { p.push("has a line break"); } else if (/[^ -~]/.test(text)) { p.push("has special characters"); }
-    if (hasPlaceholders(text)) { p.push("has placeholders"); }
     return p;
   }
 
@@ -197,7 +199,7 @@
     if (!open) {
       return '<div class="pc ' + edge + '" data-id="' + p.id + '"><div class="pc-main">' + top + '<div class="pc-prev">' + previewHtml(p.text) + "</div>" + chipsHtml(p) + "</div>" + plus + "</div>";
     }
-    var asks = (t === "sig" || t === "note_to_pharmacist") ? [] : fs;
+    var asks = fs;
     var askHtml = asks.map(function (f, i) {
       if (f.kind === "pick") {
         return '<div class="pc-label">' + esc(f.label) + '</div><div class="pc-choices" data-pick="' + i + '">' +
@@ -246,7 +248,7 @@
   function find(id) { return state.phrases.filter(function (p) { return p.id === id; })[0]; }
 
   function load() {
-    return api("GET", "/phrases?note_id=" + encodeURIComponent(NOTE_ID)).then(function (d) {
+    return api("GET", "/phrases?note_id=" + encodeURIComponent(NOTE_ID) + "&tz=" + encodeURIComponent(browserZone())).then(function (d) {
       state.phrases = d.phrases || [];
       state.isAdmin = !!d.is_admin; state.adminTeam = d.admin_team || ""; state.allowCopy = !!d.allow_copy_text; state.rxTargets = d.rx_targets || [];
       state.commands = d.commands || []; state.labels = {};
@@ -265,7 +267,7 @@
 
   function insert(p, to) {
     var ans = openId === p.id ? answers : [];
-    return api("POST", "/notes/" + encodeURIComponent(NOTE_ID) + "/insert", { phrase_id: p.id, target: to, answers: ans }).then(function () {
+    return api("POST", "/notes/" + encodeURIComponent(NOTE_ID) + "/insert", { phrase_id: p.id, target: to, answers: ans, tz: browserZone() }).then(function () {
       toast(state.rxFields[to] ? "Filled the prescription's " + targetLabel(to).toLowerCase() : "Added as a new " + targetLabel(to));
       openId = null; return load();
     }).catch(function (e) { toast(e.message); });
@@ -298,7 +300,7 @@
     if (ins) {
       var ts = targetsFor(p); if (!ts.length) { return; }
       var to = ins.getAttribute("data-to") || ts[0];
-      var needsAsk = to !== "sig" && to !== "note_to_pharmacist" && (p.fill_ins || []).length;
+      var needsAsk = (p.fill_ins || []).length;
       if (openId !== p.id && (needsAsk || ts.length > 1)) { openId = p.id; answers = []; target = ts[0]; renderList(); return; }
       insert(p, to); return;
     }
@@ -508,17 +510,27 @@
       '<label for="fText">Text</label><div class="ax-editor"><textarea class="ax-ta ax-ta-flat" id="fText" rows="4">' + esc(p ? p.text : "") + "</textarea>" + insertBar() + "</div>" +
       '<div class="hint">Placeholders go in curly brackets. Use the menus above, or type them.</div>' +
       '<div class="ax-guide pp-guide" id="fGuide" hidden>' + guideHtml() + "</div>" +
-      '<label>Use in</label><div class="hint" style="margin-top:0">All commands. Only practice phrases can be limited to certain commands.</div><div class="warn" id="fLim"></div>' +
+      '<label>Use in</label><div class="hint" style="margin-top:0" id="fUseAll">All commands. Check a prescription box below to make it prescriptions only.</div>' +
+      '<div class="pp-seg sm" id="fUseSeg" hidden><button type="button" data-use="all">All commands</button><button type="button" data-use="rx">Prescriptions only</button></div>' +
+      '<div class="warn" id="fLim"></div>' +
       "<label>Prescriptions</label>" +
       '<label class="ck"><input type="checkbox" data-rx="sig"' + (p && p.rx_sig ? " checked" : "") + '> Use in Sig <span class="counter" id="fC_sig"></span></label>' +
       '<label class="ck"><input type="checkbox" data-rx="note_to_pharmacist"' + (p && p.rx_note_to_pharmacist ? " checked" : "") + '> Use in note to pharmacist <span class="counter" id="fC_note_to_pharmacist"></span></label>' +
-      '<div class="hint">Goes to the pharmacy: one line of plain text, no placeholders. 1,000 characters for the Sig, 210 for the note to pharmacist. Unchecked, the phrase never expands there.</div>' +
+      '<div class="hint">Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210.<br>Prescriptions with unfilled placeholders cannot be sent.</div>' +
       '<div class="err" id="fRx"></div>' +
       '<div class="note">Personal phrases are only for you.' + (state.isAdmin ? " To share one with everyone, use the Dot Phrases admin app." : " Practice phrases are made by your practice's admins.") + "</div>" +
       '<div class="err" id="fErr"></div>' +
       '<div class="row ed-acts">' + (editing ? '<button class="pp-btn pp-del-out" id="fDelete" title="Delete .' + esc(p.code) + '" aria-label="Delete .' + esc(p.code) + '">' + TRASH_ICON + "</button>" : "") +
       '<span class="grow"></span><button class="pp-btn" id="fCancel">Cancel</button><button class="pp-btn pp-primary" id="fSave">Save</button></div></div>';
     var root = $("#editorSlot .ed");
+    // Prescriptions only: a phrase with a prescription box checked can skip note commands. New phrases
+    // start that way; an existing phrase keeps what it had.
+    var rxOnly = p && p.mine ? !!(p.use_in && p.use_in.length === 0) : true;
+    function showUse() {
+      var anyRx = root.querySelector('[data-rx="sig"]').checked || root.querySelector('[data-rx="note_to_pharmacist"]').checked;
+      $("#fUseAll").hidden = anyRx; $("#fUseSeg").hidden = !anyRx;
+      Array.prototype.forEach.call(root.querySelectorAll("#fUseSeg [data-use]"), function (b) { b.classList.toggle("on", (b.getAttribute("data-use") === "rx") === rxOnly); });
+    }
     function upd() {
       var text = $("#fText").value;
       var len = fill(text, [], false).length;
@@ -533,6 +545,7 @@
         c.classList.toggle("bad", pr.length > 0);
         if (pr.length) { errs.push(rxMessage(k, text, state.rxFields[k].label, state.rxFields[k].max)); }
       });
+      showUse();
       $("#fRx").innerHTML = errs.map(function (m) { return "<div>" + esc(m) + "</div>"; }).join("");
       return { errs: errs };
     }
@@ -563,6 +576,8 @@
         if (hl) { var k = text.indexOf(hl); if (k >= 0) { a = start + k; b = a + hl.length; } }
         ta.focus(); ta.setSelectionRange(a, b); caret = b; upd(); return;
       }
+      var useBtn = e.target.closest("#fUseSeg [data-use]");
+      if (useBtn) { rxOnly = useBtn.getAttribute("data-use") === "rx"; upd(); return; }
       if (e.target.closest("[data-guide]")) {
         closeMenus();
         var g = $("#fGuide"); g.hidden = !g.hidden;
@@ -585,9 +600,11 @@
       var u = unknownPlaceholders(text); if (u.length) { return err("Unknown placeholder: " + u.join(", ") + "."); }
       var rx = { sig: root.querySelector('[data-rx="sig"]').checked, ntp: root.querySelector('[data-rx="note_to_pharmacist"]').checked };
       if (s.errs.length) { err(""); $("#fRx").scrollIntoView({ block: "nearest" }); return; }
-      var body = { code: code, text: text, use_in: null, rx_sig: rx.sig, rx_note_to_pharmacist: rx.ntp, scope: "personal" };
+      var body = { code: code, text: text, use_in: (rx.sig || rx.ntp) && rxOnly ? [] : null, rx_sig: rx.sig, rx_note_to_pharmacist: rx.ntp, scope: "personal" };
+      // One save at a time, so a double click can't create the same phrase twice.
+      var saveBtn = $("#fSave"); if (saveBtn.disabled) { return; } saveBtn.disabled = true;
       var req = p && p.mine ? api("PATCH", "/phrases/" + p.id, body) : api("POST", "/phrases", body);
-      req.then(function () { toast("Saved ." + code); return load().then(leaveEdit); }).catch(function (er) { err(er.message); });
+      req.then(function () { toast("Saved ." + code); return load().then(leaveEdit); }).catch(function (er) { saveBtn.disabled = false; err(er.message); });
     });
     upd(); $("#fCode").focus();
   }

@@ -6,8 +6,8 @@ Providers type a short code, like `.metf500`, in a note's text box. After the co
 
 - **Personal and practice phrases.** Everyone can make personal phrases. Practice phrases are made by members of the Canvas team named in the plugin's `ADMIN_TEAM` setting, and everyone can use them. A personal phrase with the same code as a practice phrase is used instead of it, for that provider.
 - **Placeholders.** Phrases can include patient details (`{first_name}`, `{age}`, `{subject_pronoun}`, and more), practice info set once by admins (`{after_hours_line}`), and fill-ins the provider completes: choices (`{pick side: right | left}`), blanks (`{blank duration}`), and `***`. From the chart panel the provider is asked first. Typed in a note, fill-ins come in as `[brackets]` and the command can't be recorded until each one is filled in.
-- **Use in.** Personal phrases work in all commands. Admins can limit a practice phrase to specific commands, like Perform and Plan for procedure wording. A code typed somewhere it isn't set up for stays as typed, and the command explains why.
-- **Prescriptions.** A phrase expands in a Sig or note to pharmacist only when it's checked for that field. Pharmacy text must be one line of plain characters with no placeholders, up to 1,000 characters for the Sig and 210 for the note to pharmacist. A code left in either field keeps the prescription from being reviewed.
+- **Use in.** Personal phrases work in all commands, or in prescriptions only when a prescription box is checked. Admins can choose all commands, prescriptions only, or limit a practice phrase to specific commands, like Perform and Plan for procedure wording. A code typed somewhere it isn't set up for stays as typed, and the command explains why.
+- **Prescriptions.** A phrase expands in a Sig or note to pharmacist only when it's checked for that field. Placeholders fill in first, and the filled text must still be one line of plain keyboard characters, up to 1,000 characters for the Sig and 210 for the note to pharmacist, or the code stays as typed. A code, [bracket], or `***` left in either field keeps the prescription from being reviewed or sent.
 - **Starred and recently used** phrases sort to the top of the chart panel.
 - **Hiding and deleting.** Anyone can hide practice phrases they don't use from their own chart panel list; typing a hidden phrase's code still works. Providers delete their own phrases, and admins delete practice phrases, after a confirm. Deleting a phrase doesn't change text already in notes.
 
@@ -38,6 +38,8 @@ Known limits:
 - The four review commands can't block recording. A phrase set to all commands still expands there, and any [brackets] or *** left in it can be recorded unfilled, including in a message to the patient. To keep a practice phrase out of review commands, limit it to other commands.
 - Recording is blocked per command. Signing the whole note with an unrecorded command is only blocked when the practice's setting for uncommitted commands is on.
 - Blocking applies to recording and review in the Canvas UI. Commands committed through the SDK aren't blocked.
+- Unfilled [brackets] from a phrase are remembered for up to 14 days, the longest the plugin cache keeps anything. After that, or after a cache reset, they no longer block recording, though they stay visible in the text.
+- Canvas gives plugins no practice time zone, so `{today}` and `{age}` use, in order: the browser's time zone (chart panel), the time zone the command creator's browser last reported when they opened the panel (kept up to 14 days), the provider's and then the patient's saved Canvas time zone, the time zone most of the instance's calendars use, and then UTC.
 - A swap uses the personal phrases of whoever created the command. In a note shared by two providers, the creator's phrases apply.
 - Text copied with the Copy button is plain text, so it isn't checked against a phrase's command limits wherever it's pasted. Admins can turn copying off.
 
@@ -51,6 +53,7 @@ In the admin app, **Practice settings** holds:
 
 - **Allow copying phrase text**: shows the Copy button on each phrase card in the chart panel. On by default.
 - **Practice info**: values like `{after_hours_line}` used as placeholders in any phrase.
+- **Import**: see below.
 
 **Import** takes one phrase per line, `code, use in, text`, or a CSV with those three columns. Use in is `All`, or commands separated by `/` (Plan, HPI, Instruct, Perform, Sig, Note to pharmacist).
 

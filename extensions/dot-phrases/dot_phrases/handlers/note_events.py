@@ -12,10 +12,10 @@ from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Command, Staff
 from logger import log
 
-from dot_phrases.catalog import ALL_COMMANDS, COMMAND_LABELS, FIELD_LIMITS, RX_FIELDS, RX_KEYS, CommandSpec, spec_for_event
-from dot_phrases.expansion import expand_note_field, expand_rx_field
-from dot_phrases.library import placeholder_values, record_use, usable_phrases
-from dot_phrases.text import CODE_PATTERN, codes_in, rx_field_name, rx_issue
+from dot_phrases.catalog import ALL_COMMANDS, COMMAND_LABELS, RX_FIELDS, RX_KEYS, CommandSpec, spec_for_event
+from dot_phrases.expansion import combined_length, combined_rx_length, expand_note_field, expand_rx_field, limit_for
+from dot_phrases.library import phrase_fits_rx, placeholder_values, record_use, usable_phrases
+from dot_phrases.text import CODE_PATTERN, codes_in, fill, rx_field_name, rx_issue
 
 # An edit that doesn't take re-fires POST_UPDATE with the same text. Remember each attempt for 10
 # minutes so it is never retried in a loop.
@@ -59,6 +59,13 @@ class ExpandPhrases(BaseHandler):
         fields = self.event.context.get("fields")
         candidates = _event_text_fields(spec, fields) if isinstance(fields, dict) else []
         if not candidates:
+            # No code left in the command: forget the last attempt, so typing the same code again
+            # later expands instead of looking like an edit that didn't take.
+            if isinstance(fields, dict):
+                cache = get_cache()
+                attempt_key = f"dot-phrases:attempt:{self.event.target.id}"
+                if cache.get(attempt_key) is not None:
+                    cache.delete(attempt_key)
             return []
 
         command = (
@@ -70,18 +77,19 @@ class ExpandPhrases(BaseHandler):
         if command is None or command.state != "staged":
             # Canvas refuses plugin edits once a command is no longer staged.
             return []
-        phrases = usable_phrases(_owner_dbid(command))
+        owner = _owner_dbid(command)
+        phrases = usable_phrases(owner)
         if not phrases:
             return []
 
         is_rx = spec.key in RX_KEYS
-        values = {} if is_rx else placeholder_values(command.patient, command.note)
+        values = placeholder_values(command.patient, command.note, owner_dbid=owner)
         updates: dict[str, str] = {}
         used: list[int] = []
         leftovers: list[str] = []
         for event_field, sdk_field, text in candidates:
             if is_rx:
-                result = expand_rx_field(text, phrases, event_field)
+                result = expand_rx_field(text, phrases, event_field, values)
             else:
                 result = expand_note_field(text, phrases, values, spec.key)
             if result.text != text:
@@ -131,6 +139,7 @@ class BlockUnfinished(BaseHandler):
 
         messages: list[str] = []
         phrases: dict[str, Any] | None = None
+        values: dict[str, str] = {}
         for event_field, _sdk_field in spec.fields:
             text = fields.get(event_field)
             if not isinstance(text, str) or not text:
@@ -138,22 +147,28 @@ class BlockUnfinished(BaseHandler):
             prefix = f"{RX_FIELDS[event_field][0]}: " if is_rx else ""
             codes = codes_in(text)
             if codes and phrases is None:
-                command = Command.objects.filter(id=self.event.target.id).first()
-                phrases = usable_phrases(_owner_dbid(command)) if command else {}
+                command = (
+                    Command.objects.filter(id=self.event.target.id)
+                    .select_related("note__provider", "patient")
+                    .defer("note___body", "note___body_content", "note___body_order", "note__related_data")
+                    .first()
+                )
+                owner = _owner_dbid(command) if command else None
+                phrases = usable_phrases(owner) if command else {}
+                values = {} if command is None else placeholder_values(command.patient, command.note, owner_dbid=owner)
             for code in codes:
-                messages.append(prefix + self._code_message(code, (phrases or {}).get(code), spec, event_field, is_rx))
-            if is_rx:
-                continue
+                messages.append(prefix + self._code_message(code, (phrases or {}).get(code), spec, event_field, is_rx, text, phrases or {}, values))
+            # Unfilled fill-ins block recording, and for a prescription they block review and send.
             still = [left for left in tracked if left in text]
             brackets = sorted({left for left in still if left.startswith("[")}, key=still.index)
             missing = sorted({left for left in still if left.startswith("{")}, key=still.index)
             if brackets:
-                messages.append(f"Fill in {', '.join(brackets)}.")
+                messages.append(prefix + f"Fill in {', '.join(brackets)}.")
             if missing:
-                messages.append(f"The chart has nothing for {', '.join(missing)}. Type it in.")
+                messages.append(prefix + f"The chart has nothing for {', '.join(missing)}. Type it in.")
             stars = text.count("***")
             if stars:
-                messages.append("Fill in the blank marked ***." if stars == 1 else f"Fill in the {stars} blanks marked ***.")
+                messages.append(prefix + ("Fill in the blank marked ***." if stars == 1 else f"Fill in the {stars} blanks marked ***."))
 
         if not messages:
             return []
@@ -163,20 +178,38 @@ class BlockUnfinished(BaseHandler):
         return [effect.apply()]
 
     @staticmethod
-    def _code_message(code: str, phrase: Any, spec: CommandSpec, field: str, is_rx: bool) -> str:
+    def _code_message(
+        code: str,
+        phrase: Any,
+        spec: CommandSpec,
+        field: str,
+        is_rx: bool,
+        text: str,
+        phrases: dict[str, Any],
+        values: dict[str, str],
+    ) -> str:
         if phrase is None:
             return f".{code} is not a saved phrase. Fix or remove it."
         if is_rx:
-            fits = phrase.rx_sig if field == "sig" else phrase.rx_note_to_pharmacist
-            label = RX_FIELDS[field][0]
-            if not fits:
+            label, field_max = RX_FIELDS[field]
+            name = rx_field_name(label)
+            if not phrase_fits_rx(phrase, field):
                 return f".{code} isn't set up for the {label}. Type the text instead."
-            issue = rx_issue(RX_FIELDS[field][1], phrase.text)[0]
-            return f".{code} can't go in the {rx_field_name(label)}: {issue}. Type the text instead."
+            issue = rx_issue(field_max, fill(phrase.text, values).text)[0]
+            if issue:
+                return f".{code} can't go in the {name}: {issue}. Type the text instead."
+            if combined_rx_length(text, phrases, field, values) > field_max:
+                return f"Together, the phrases in the {name} are over {field_max:,} characters. Use fewer, or type the text instead."
+            return f"Filling in .{code}. If it stays, retype it."
+        command_label = COMMAND_LABELS.get(spec.key, spec.label)
         if phrase.use_in is not None and spec.key not in phrase.use_in:
-            return f".{code} isn't set up for {COMMAND_LABELS.get(spec.key, spec.label)}."
-        limit = FIELD_LIMITS.get(spec.key)
-        if limit is not None and len(phrase.text) > limit:
-            return f".{code} is too long for {COMMAND_LABELS.get(spec.key, spec.label)} ({limit:,} characters)."
+            return f".{code} isn't set up for {command_label}."
+        limit = limit_for(spec.key)
+        if limit is not None:
+            filled = len(fill(phrase.text, values).text)
+            if filled > limit:
+                return f".{code} is too long for {command_label}: {filled:,} characters, and the limit is {limit:,}."
+            if combined_length(text, phrases, values, spec.key) > limit:
+                return f"Together, the phrases here are over the {limit:,}-character limit for {command_label}. Use fewer, or shorten one."
         # The swap runs after the command saves, so a code that fits can be seen here for a moment.
         return f"Filling in .{code}. If it stays, retype it."

@@ -33,14 +33,16 @@ from dot_phrases.catalog import (
 from dot_phrases.handlers.note_events import leftovers_key
 from dot_phrases.handlers.panel_button import EDITABLE_NOTE_STATES
 from dot_phrases.library import (
+    admin_team_name,
     favorite_ids,
     get_setting,
-    admin_team_name,
     hidden_ids,
     is_admin,
+    phrase_fits_rx,
     placeholder_values,
     practice_values,
     record_use,
+    remember_timezone,
     set_setting,
     staff_dbid,
     staff_name,
@@ -167,7 +169,9 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
         note_id = self.request.query_params.get("note_id") or ""
         note = Note.objects.filter(id=note_id).select_related("patient", "provider").defer(*NOTE_BLOBS).first() if note_id else None
-        values = placeholder_values(note.patient if note else None, note)
+        # The panel sends the browser's time zone; remember it so this person's typed codes use it too.
+        zone = remember_timezone(me, self.request.query_params.get("tz"))
+        values = placeholder_values(note.patient if note else None, note, zone_name=zone, owner_dbid=me)
         favorites = favorite_ids(me)
         hidden = hidden_ids(me)
         phrases = [_phrase_json(p, me, favorites, values, hidden) for p in usable_phrases(me).values()]
@@ -206,9 +210,12 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         unknown = unknown_placeholders(text, set(practice_values()))
         if unknown:
             return None, f"{', '.join(unknown)} isn't a placeholder. Add it on the Practice settings tab, or fix the spelling."
-        # Only practice phrases can be limited to certain commands; personal phrases work in any
-        # note field.
-        use_in = body.get("use_in") if scope == "practice" else None
+        # Practice phrases can be limited to certain commands. A personal phrase works in every note
+        # command, unless it's set to prescriptions only (an empty list, with a prescription box checked).
+        if scope == "practice":
+            use_in = body.get("use_in")
+        else:
+            use_in = [] if body.get("use_in") == [] else None
         if use_in is not None:
             if not isinstance(use_in, list) or any(k not in COMMAND_LABELS for k in use_in):
                 return None, "Use in has a command this plugin doesn't work in."
@@ -344,7 +351,8 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         """Count a copy as a use, so Recently used reflects it."""
         me = self._me()
         phrase = self._get_phrase()
-        if me is None or phrase is None or usable_phrases(me).get(phrase.code) is None:
+        usable = usable_phrases(me).get(phrase.code) if me is not None and phrase is not None else None
+        if me is None or phrase is None or usable is None or usable.dbid != phrase.dbid:
             return _error("Phrase not found.", HTTPStatus.NOT_FOUND)
         record_use([phrase.dbid])
         return [JSONResponse({"ok": True})]
@@ -381,20 +389,27 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         target = str(body.get("target") or "")
         answers = [str(a) for a in (body.get("answers") or []) if isinstance(a, (str, int, float))]
 
+        zone = remember_timezone(me, str(body.get("tz") or "") or None)
+        values = placeholder_values(note.patient, note, zone_name=zone, owner_dbid=me)
         if target in RX_FIELDS:
-            fits = phrase.rx_sig if target == "sig" else phrase.rx_note_to_pharmacist
-            if not fits:
+            if not phrase_fits_rx(phrase, target):
                 return _error(f".{phrase.code} isn't set up for the {RX_FIELDS[target][0].lower()}.")
-            issue, _ = rx_issue(RX_FIELDS[target][1], phrase.text)
+            rx_filled = fill(phrase.text, values, answers)
+            issue, _ = rx_issue(RX_FIELDS[target][1], rx_filled.text)
             if issue:
                 return _error(f".{phrase.code} can't go in the {rx_field_name(RX_FIELDS[target][0])}: {issue}.")
             rx = self._staged_rx(note.id)
             if rx is None:
                 return _error("There's no prescription waiting in this note.", HTTPStatus.CONFLICT)
+            if rx_filled.leftovers:
+                # Anything left to fill in keeps the prescription from being reviewed or sent.
+                cache = get_cache()
+                existing = cache.get(leftovers_key(str(rx.id))) or []
+                cache.set(leftovers_key(str(rx.id)), list(existing) + list(rx_filled.leftovers))
             record_use([phrase.dbid])
             command_class = RX_SCHEMA_KEYS[rx.schema_key]
             return [
-                command_class(command_uuid=str(rx.id), **{target: phrase.text}).edit(),
+                command_class(command_uuid=str(rx.id), **{target: rx_filled.text}).edit(),
                 JSONResponse({"ok": True, "target": target}),
             ]
 
@@ -402,7 +417,10 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             return _error("Pick where to add it.")
         if phrase.use_in is not None and target not in phrase.use_in:
             return _error(f".{phrase.code} isn't set up for {COMMAND_LABELS[target]}.")
-        filled = fill(phrase.text, placeholder_values(note.patient, note), answers)
+        filled = fill(phrase.text, values, answers)
+        limit = FIELD_LIMITS.get(target)
+        if limit is not None and len(filled.text) > limit:
+            return _error(f".{phrase.code} is too long for {COMMAND_LABELS[target]}: {len(filled.text):,} characters, and the limit is {limit:,}.")
         command_uuid = str(uuid4())
         if filled.leftovers:
             get_cache().set(leftovers_key(command_uuid), list(filled.leftovers))
@@ -515,7 +533,9 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
                 why = f"There's already a practice phrase .{code}, so this line is skipped."
             if not why and code in seen:
                 why = f".{code} is in this list twice, so this line is skipped."
-            seen.add(code)
+            if not why:
+                # Only a line that will import claims its code, so a fixed copy below a broken line still imports.
+                seen.add(code)
             rows.append({"code": code, "use_in": use_in, "text": text, "why": why, **rx})
         return rows
 

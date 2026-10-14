@@ -72,6 +72,14 @@ class TestCreatePhrase:
         response(make_api(body={"code": "fu2w", "text": "x", "use_in": ["plan"]}).create_phrase())
         assert db.phrase_model.objects.create.call_args.kwargs["use_in"] is None
 
+    def test_personal_phrase_can_be_prescriptions_only(self, db: Any) -> None:
+        response(make_api(body={"code": "taper", "text": "Take 1 tablet", "use_in": [], "rx_sig": True}).create_phrase())
+        assert db.phrase_model.objects.create.call_args.kwargs["use_in"] == []
+
+    def test_personal_prescriptions_only_needs_a_prescription_box(self, db: Any) -> None:
+        resp = response(make_api(body={"code": "taper", "text": "Take 1 tablet", "use_in": []}).create_phrase())
+        assert resp.status_code == HTTPStatus.BAD_REQUEST
+
     def test_practice_phrases_can_be_limited_to_certain_commands(self, db: Any) -> None:
         response(make_api(staff_id=ADMIN_ID, body={"code": "kneeinj", "text": "x", "scope": "practice", "use_in": ["perform", "plan"]}).create_phrase())
         assert db.phrase_model.objects.create.call_args.kwargs["use_in"] == ["plan", "perform"]
@@ -101,7 +109,7 @@ class TestCreatePhrase:
             ({"code": "fu2w", "text": "x", "scope": "practice", "use_in": ["bogus"]}, "Use in has a command"),
             ({"code": "fu2w", "text": "x", "scope": "practice", "use_in": []}, "Pick at least one place"),
             ({"code": "gen", "text": "x" * 211, "use_in": [], "rx_note_to_pharmacist": True}, "over 210 characters"),
-            ({"code": "sig", "text": "Take for {blank days}", "use_in": [], "rx_sig": True}, "has placeholders"),
+            ({"code": "sig", "text": "Take 1 tablet\ndaily", "use_in": [], "rx_sig": True}, "has a line break"),
         ],
     )
     def test_rejects_invalid_phrases(self, db: Any, body: dict[str, Any], message: str) -> None:

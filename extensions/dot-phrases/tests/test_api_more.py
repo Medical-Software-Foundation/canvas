@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from http import HTTPStatus
 from types import SimpleNamespace
 from typing import Any
@@ -138,6 +140,7 @@ def test_insert_into_sig_needs_a_waiting_prescription(db: Any) -> None:
         patch(f"{MODULE}.CurrentNoteStateEvent") as state_model,
         patch(f"{MODULE}.usable_phrases", return_value={"metf500": metf}),
         patch(f"{MODULE}.Command") as command_model,
+        patch(f"{MODULE}.placeholder_values", return_value={}),
     ):
         note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = note
         state_model.objects.filter.return_value.values_list.return_value.first.return_value = "NEW"
@@ -156,3 +159,58 @@ def test_favorite_refuses_someone_elses_phrase_with_the_same_code(db: Any) -> No
         resp = response(make_api(path={"phrase_id": "2"}).toggle_favorite())
     assert resp.status_code == HTTPStatus.NOT_FOUND
     fav.objects.create.assert_not_called()
+
+
+def test_copy_of_a_phrase_hidden_behind_a_personal_one_is_not_counted(db: Any) -> None:
+    practice = phrase(dbid=3, scope="practice", owner_id=20)
+    personal = phrase(dbid=1, owner_id=10)
+    db.phrase_model.objects.filter.return_value.select_related.return_value.first.return_value = practice
+    with patch(f"{MODULE}.usable_phrases", return_value={"fu2w": personal}):
+        assert response(make_api(path={"phrase_id": "3"}).phrase_used()).status_code == HTTPStatus.NOT_FOUND
+    db.record_use.assert_not_called()
+
+
+def test_import_keeps_a_fixed_copy_below_a_broken_line(db: Any) -> None:
+    db.phrase_model.objects.filter.return_value.values_list.return_value = []
+    rows = body_of(response(make_api(staff_id=ADMIN_ID, body={"text": "knee, Plan,\nknee, Plan, Knee exam normal."}).import_check()))["rows"]
+    assert rows[0]["why"]
+    assert rows[1]["why"] == ""
+
+
+def test_insert_refuses_text_over_the_field_limit(db: Any) -> None:
+    huge = phrase(dbid=4, code="huge", text="x" * 4001)
+    note = SimpleNamespace(id="note-uuid", dbid=5, patient=None, provider=None)
+    with (
+        patch(f"{MODULE}.Note") as note_model,
+        patch(f"{MODULE}.CurrentNoteStateEvent") as state_model,
+        patch(f"{MODULE}.usable_phrases", return_value={"huge": huge}),
+        patch(f"{MODULE}.placeholder_values", return_value={}),
+    ):
+        note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = note
+        state_model.objects.filter.return_value.values_list.return_value.first.return_value = "NEW"
+        resp = response(make_api(body={"phrase_id": 4, "target": "instruct"}, path={"note_id": "note-uuid"}).insert())
+    assert resp.status_code == HTTPStatus.BAD_REQUEST
+    assert "limit is 4,000" in body_of(resp)["error"]
+
+
+def test_insert_into_sig_fills_placeholders_and_remembers_fill_ins(db: Any) -> None:
+    taper = phrase(dbid=6, code="taper", text="Take {blank count} tablets daily for {first_name}", use_in=[], rx_sig=True)
+    note = SimpleNamespace(id="note-uuid", dbid=5, patient=None, provider=None)
+    rx = SimpleNamespace(id="rx-uuid", schema_key="prescribe")
+    cache: dict[str, Any] = {}
+    fake_cache = SimpleNamespace(get=lambda k, d=None: cache.get(k, d), set=lambda k, v, timeout_seconds=None: cache.__setitem__(k, v))
+    with (
+        patch(f"{MODULE}.Note") as note_model,
+        patch(f"{MODULE}.CurrentNoteStateEvent") as state_model,
+        patch(f"{MODULE}.usable_phrases", return_value={"taper": taper}),
+        patch(f"{MODULE}.Command") as command_model,
+        patch(f"{MODULE}.placeholder_values", return_value={"first_name": "Jane"}),
+        patch(f"{MODULE}.get_cache", return_value=fake_cache),
+    ):
+        note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = note
+        state_model.objects.filter.return_value.values_list.return_value.first.return_value = "NEW"
+        command_model.objects.filter.return_value.order_by.return_value.first.return_value = rx
+        results = make_api(body={"phrase_id": 6, "target": "sig", "answers": []}, path={"note_id": "note-uuid"}).insert()
+    edit = [r for r in results if not hasattr(r, "status_code")][0]
+    assert json.loads(edit.payload)["data"]["sig"] == "Take [count] tablets daily for Jane"
+    assert cache["dot-phrases:leftovers:rx-uuid"] == ["[count]"]

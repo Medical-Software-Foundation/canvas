@@ -123,13 +123,29 @@ INSERTABLE: dict[str, Any] = {
 }
 INSERT_FIELD: dict[str, str] = {"plan": "narrative", "hpi": "narrative", "instruct": "comment", "perform": "notes"}
 
-# Note fields with a character limit tighter than 2,048 (home-app model max_length).
+# Character limits on the text fields phrases expand into. Most come from the SDK command classes
+# (canvas_sdk.commands, Field max_length); the review commands' 2,048 and Instruct's 4,000 come from
+# the Canvas models those commands save to. A command with more than one text field uses the
+# smallest of its limits. Commands not listed have no limit.
 FIELD_LIMITS: dict[str, int] = {
+    "vitals": 150,
+    "immstmt": 255,
     "allergy": 512,
+    "removeallergy": 512,
     "fhx": 512,
-    "stopmed": 1024,
+    "pmh": 1000,
+    "psh": 1000,
     "medstmt": 1000,
+    "stopmed": 1024,
+    "resolve": 1024,
     "imaging": 1024,
+    "assess": 2048,
+    "diagnose": 2048,
+    "labreview": 2048,
+    "imgreview": 2048,
+    "refreview": 2048,
+    "docreview": 2048,
+    "instruct": 4000,
 }
 
 # schema_key values Canvas uses for staged prescription commands in a note.

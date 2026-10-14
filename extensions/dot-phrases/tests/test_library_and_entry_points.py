@@ -34,10 +34,18 @@ class TestAdmins:
 def test_personal_phrase_is_used_instead_of_a_practice_phrase_with_the_same_code() -> None:
     rows = [p("fu2w", "practice", 1), p("fu2w", "personal", 2), p("dmed", "practice", 3)]
     with patch("dot_phrases.library.Phrase") as model:
-        model.objects.filter.return_value.select_related.return_value = rows
+        model.objects.filter.return_value.select_related.return_value.order_by.return_value = rows
         found = usable_phrases(10)
     assert found["fu2w"].dbid == 2
     assert found["dmed"].dbid == 3
+    model.objects.filter.return_value.select_related.return_value.order_by.assert_called_once_with("dbid")
+
+
+def test_a_code_saved_twice_always_uses_the_oldest_row() -> None:
+    rows = [p("fu2w", "practice", 4), p("fu2w", "practice", 9)]
+    with patch("dot_phrases.library.Phrase") as model:
+        model.objects.filter.return_value.select_related.return_value.order_by.return_value = rows
+        assert usable_phrases(10)["fu2w"].dbid == 4
 
 
 def test_placeholder_values_from_the_chart() -> None:
@@ -101,3 +109,55 @@ def test_hidden_ids_are_per_staff_member_and_empty_without_one() -> None:
         model.objects.filter.return_value.values_list.return_value = [5, 8]
         assert hidden_ids(10) == {5, 8}
     model.objects.filter.assert_called_once_with(staff_id=10)
+
+
+def test_today_uses_the_providers_time_zone_then_the_patients() -> None:
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    from dot_phrases.library import local_today
+
+    provider_note = SimpleNamespace(provider=SimpleNamespace(last_known_timezone="Pacific/Kiritimati"))
+    assert local_today(None, provider_note) == datetime.now(ZoneInfo("Pacific/Kiritimati")).date()
+    patient = SimpleNamespace(last_known_timezone="Pacific/Pago_Pago")
+    assert local_today(patient, SimpleNamespace(provider=None)) == datetime.now(ZoneInfo("Pacific/Pago_Pago")).date()
+    assert local_today(SimpleNamespace(last_known_timezone="Not/AZone"), None) == datetime.now(UTC).date()
+
+
+def test_today_accepts_a_stored_zone_object() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from dot_phrases.library import local_today
+
+    note = SimpleNamespace(provider=SimpleNamespace(last_known_timezone=ZoneInfo("Asia/Tokyo")))
+    assert local_today(None, note) == datetime.now(ZoneInfo("Asia/Tokyo")).date()
+
+
+def test_browser_zone_comes_first_then_the_remembered_one(library_cache_and_calendars: Any) -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from dot_phrases.library import local_today, remember_timezone
+
+    provider_note = SimpleNamespace(provider=SimpleNamespace(last_known_timezone="Asia/Tokyo"))
+    assert local_today(None, provider_note, zone_name="Pacific/Kiritimati") == datetime.now(ZoneInfo("Pacific/Kiritimati")).date()
+    assert remember_timezone(10, "Pacific/Pago_Pago") == "Pacific/Pago_Pago"
+    assert local_today(None, provider_note, owner_dbid=10) == datetime.now(ZoneInfo("Pacific/Pago_Pago")).date()
+
+
+def test_a_made_up_browser_zone_is_not_remembered(library_cache_and_calendars: Any) -> None:
+    from dot_phrases.library import remember_timezone, remembered_timezone
+
+    assert remember_timezone(10, "Not/AZone") is None
+    assert remembered_timezone(10) is None
+
+
+def test_calendars_decide_when_nobody_has_a_time_zone(library_cache_and_calendars: Any) -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from dot_phrases.library import local_today
+
+    library_cache_and_calendars.calendar.objects.values_list.return_value = ["Pacific/Kiritimati", "Pacific/Kiritimati", "UTC", "Asia/Tokyo"]
+    assert local_today(None, None) == datetime.now(ZoneInfo("Pacific/Kiritimati")).date()
