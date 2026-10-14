@@ -62,6 +62,8 @@ from dot_phrases.text import (
 
 API_BASE = "/plugin-io/api/dot_phrases"
 # Changes on every plugin load, so browsers fetch fresh scripts and styles after an update.
+# A note's body columns can be large and nothing here reads them.
+NOTE_BLOBS = ("_body", "_body_content", "_body_order", "related_data")
 CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 MAX_VALUE_LENGTH = 500
 MAX_IMPORT_LINES = 2000
@@ -164,7 +166,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         if me is None:
             return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
         note_id = self.request.query_params.get("note_id") or ""
-        note = Note.objects.filter(id=note_id).select_related("patient", "provider").first() if note_id else None
+        note = Note.objects.filter(id=note_id).select_related("patient", "provider").defer(*NOTE_BLOBS).first() if note_id else None
         values = placeholder_values(note.patient if note else None, note)
         favorites = favorite_ids(me)
         hidden = hidden_ids(me)
@@ -362,7 +364,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         me = self._me()
         if me is None:
             return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
-        note = Note.objects.filter(id=self.request.path_params.get("note_id")).select_related("patient", "provider").first()
+        note = Note.objects.filter(id=self.request.path_params.get("note_id")).select_related("patient", "provider").defer(*NOTE_BLOBS).first()
         if note is None:
             return _error("Note not found.", HTTPStatus.NOT_FOUND)
         state = CurrentNoteStateEvent.objects.filter(note__dbid=note.dbid).values_list("state", flat=True).first()

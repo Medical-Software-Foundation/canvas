@@ -67,7 +67,7 @@ class TestPanelButton:
 
     def test_opens_the_chart_panel_for_the_note(self) -> None:
         with patch("dot_phrases.handlers.panel_button.Note") as notes:
-            notes.objects.filter.return_value.first.return_value = SimpleNamespace(id="note-uuid")
+            notes.objects.filter.return_value.values_list.return_value.first.return_value = "note-uuid"
             effects = self.button().handle()
         data = json.loads(effects[0].payload)["data"]
         assert data["url"] == "/plugin-io/api/dot_phrases/panel/?note_id=note-uuid"

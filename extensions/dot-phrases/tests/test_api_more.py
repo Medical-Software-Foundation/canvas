@@ -33,7 +33,7 @@ def test_list_phrases_returns_previews_favorites_and_prescription_targets(db: An
         patch(f"{MODULE}.Command") as command_model,
         patch(f"{MODULE}.hidden_ids", return_value={2}),
     ):
-        note_model.objects.filter.return_value.select_related.return_value.first.return_value = note
+        note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = note
         command_model.objects.filter.return_value.order_by.return_value.first.return_value = SimpleNamespace(id="rx")
         data = body_of(response(make_api(query={"note_id": "note-uuid"}).list_phrases()))
     by_code = {p["code"]: p for p in data["phrases"]}
@@ -139,7 +139,7 @@ def test_insert_into_sig_needs_a_waiting_prescription(db: Any) -> None:
         patch(f"{MODULE}.usable_phrases", return_value={"metf500": metf}),
         patch(f"{MODULE}.Command") as command_model,
     ):
-        note_model.objects.filter.return_value.select_related.return_value.first.return_value = note
+        note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = note
         state_model.objects.filter.return_value.values_list.return_value.first.return_value = "NEW"
         command_model.objects.filter.return_value.order_by.return_value.first.return_value = None
         resp = response(make_api(body={"phrase_id": 1, "target": "sig"}, path={"note_id": "note-uuid"}).insert())

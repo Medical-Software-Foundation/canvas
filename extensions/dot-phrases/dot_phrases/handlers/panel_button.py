@@ -26,10 +26,10 @@ class DotPhrasesButton(ActionButton):
         return state in EDITABLE_NOTE_STATES
 
     def handle(self) -> list[Effect]:
-        note = Note.objects.filter(dbid=self.context.get("note_id")).first()
-        if note is None:
+        note_uuid = Note.objects.filter(dbid=self.context.get("note_id")).values_list("id", flat=True).first()
+        if note_uuid is None:
             return []
-        query = urlencode({"note_id": str(note.id)})
+        query = urlencode({"note_id": str(note_uuid)})
         return [
             LaunchModalEffect(
                 url=f"/plugin-io/api/dot_phrases/panel/?{query}",

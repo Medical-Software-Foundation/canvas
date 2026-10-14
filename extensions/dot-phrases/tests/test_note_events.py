@@ -51,7 +51,7 @@ def env() -> Any:
         patch(f"{MODULE}.placeholder_values", return_value={"first_name": "Jane"}),
         patch(f"{MODULE}.record_use") as record_use,
     ):
-        command_model.objects.filter.return_value.select_related.return_value.first.return_value = command
+        command_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = command
         command_model.objects.filter.return_value.first.return_value = command
         staff_model.objects.filter.return_value.values_list.return_value.first.return_value = 42
         yield SimpleNamespace(cache=cache, command=command, usable=usable, record_use=record_use)

@@ -61,7 +61,12 @@ class ExpandPhrases(BaseHandler):
         if not candidates:
             return []
 
-        command = Command.objects.filter(id=self.event.target.id).select_related("note", "patient").first()
+        command = (
+            Command.objects.filter(id=self.event.target.id)
+            .select_related("note__provider", "patient")
+            .defer("note___body", "note___body_content", "note___body_order", "note__related_data")
+            .first()
+        )
         if command is None or command.state != "staged":
             # Canvas refuses plugin edits once a command is no longer staged.
             return []
