@@ -1,0 +1,47 @@
+{
+    "sdk_version": "0.226.1",
+    "plugin_version": "0.5.0",
+    "name": "questionnaire_followup",
+    "description": "Present the paired long-form questionnaire in the patient portal when a patient screens positive on a short one, with admin-configurable pairings, thresholds, and re-ask windows.",
+    "components": {
+        "handlers": [
+            {
+                "class": "questionnaire_followup.handlers.event_handlers:PortalFollowUpForms",
+                "description": "Decides which follow-up questionnaires a patient is shown in the portal"
+            },
+            {
+                "class": "questionnaire_followup.api.routes:FollowUpAdminAPI",
+                "description": "Serves the pairing editor and reads/writes the pairing rules"
+            }
+        ],
+        "applications": [
+            {
+                "class": "questionnaire_followup.applications.admin_app:FollowUpAdminApplication",
+                "name": "Questionnaire Follow-Up",
+                "description": "Configure which short questionnaire leads to which long one",
+                "scope": "global",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "canvas_medical__questionnaire_followup",
+        "access": "read_write"
+    },
+    "variables": [
+        {
+            "name": "ADMIN_STAFF_KEYS",
+            "sensitive": false,
+            "default": ""
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
