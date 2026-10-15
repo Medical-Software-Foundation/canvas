@@ -81,6 +81,7 @@ A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candi
   - `"none"` / `"primary"` → no transfer
 - **ERA-to-payer mapping:** ERAs are ordered by payer tier (index 0 = primary, 1 = secondary, 2 = tertiary). Each posting uses the correct ERA's check number, check date, and era_id for its description
 - After payments post, the claim is moved to **PatientBalance** (if only patient balance remains) or **AdjudicatedOpenBalance** based on the encounter's per-service-line `insurance_balance_cents` and `patient_balance_cents` totals
+- **Split claims:** split 1 alone sets the claim's Candid status, queue and `candid_synced_amounts`. Splits 2+ (the 99499 placeholder) are checked for patient payments, and their ERA IDs are recorded without posting anything
 - Each sync attempt appends an entry to the claim's `candid_sync_history` metadata (a capped, newest-first JSON list) so the timeline UI can show sync history
 
 **Patient payment sync (Candid -> Canvas):**

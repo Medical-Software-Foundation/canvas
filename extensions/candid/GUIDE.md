@@ -38,7 +38,7 @@ CMS-1500 forms limit claims to 12 diagnosis codes per encounter. When a claim ha
 - The `candid_encounters` metadata stores all splits: `[{split: 1, candid_encounter_id: "...", external_id: "canvas:claim-id-1"}, {split: 2, ...}]`
 - The `external_id` for each split uses a `-1`, `-2` suffix (e.g. `canvas:abc123-1`, `canvas:abc123-2`)
 
-**During adjudication sync**, the plugin fetches ERA data for ALL encounters in the split — each is checked independently for new ERAs and patient payments.
+**During adjudication sync**, the plugin checks every encounter in the split for patient payments. Insurance payments, the Candid status banner, and the claim's queue come from the primary encounter, because it carries the real service lines. Remittances for a supplemental encounter are recorded but post nothing, since its only line is the $0.01 placeholder, which isn't on the Canvas claim.
 
 ### When adjudication data arrives from Candid
 

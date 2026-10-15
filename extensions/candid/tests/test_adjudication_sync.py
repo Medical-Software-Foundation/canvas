@@ -19,6 +19,7 @@ from candid.adjudication_sync import (
 from canvas_sdk.v1.data.claim import ClaimQueues
 from candid.effect_helpers import (
     ERA_DESC_PREFIX,
+    META_SYNCED_AMOUNTS,
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
     PATIENT_PAYMENT_DESC_PREFIX,
@@ -1125,6 +1126,103 @@ def test_sync_dedupes_patient_payment_across_encounters() -> None:
             if c.kwargs["claim_coverage_id"] == "patient"
         ]
         assert len(patient_payment_calls) == 1
+
+
+SPLIT_ENCOUNTERS = [
+    {"split": 1, "candid_encounter_id": "enc-1"},
+    {"split": 2, "candid_encounter_id": "enc-2"},
+]
+
+
+def _overflow_encounter(status: str, eras: list[dict] | None = None) -> dict:
+    """Split 2 of a claim with over 12 diagnoses: only the $0.01 99499 placeholder."""
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                procedure_code="99499",
+                charge_amount_cents=1,
+                insurance_balance_cents=1,
+            )
+        ],
+        eras=eras,
+        status=status,
+    )
+    encounter["claims"][0]["claim_id"] = "candid-claim-2"
+    return encounter
+
+
+def test_split_claim_queue_and_status_follow_split_1() -> None:
+    """The overflow split is synced last, but split 1 decides the queue and banner."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim([li], metadata={"candid_encounters": SPLIT_ENCOUNTERS})
+    split_1 = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=6000,
+                allowed_amount_cents=8000,
+                deductible_cents=2000,
+                insurance_balance_cents=0,
+                patient_balance_cents=2000,
+            )
+        ],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner") as mock_banner,
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = [
+            split_1,
+            _overflow_encounter(status="coded"),
+        ]
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        ce.move_to_queue.assert_called_once_with(ClaimQueues.PATIENT_BALANCE.label)
+        assert mock_banner.call_args.kwargs["claim_status"] == "era_received"
+
+
+def test_overflow_split_era_keeps_split_1_synced_amounts() -> None:
+    """A denial ERA for the overflow split posts nothing and doesn't zero the synced
+    amounts, which would make split 1's next ERA re-post its primary payment."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim([li], metadata={"candid_encounters": SPLIT_ENCOUNTERS})
+    split_1 = _encounter_response(
+        service_lines=[_candid_service_line(primary_paid_amount_cents=7000)],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = [
+            split_1,
+            _overflow_encounter(status="finalized_denied", eras=[{"era_id": "era-x"}]),
+        ]
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        assert [
+            c.kwargs["claim_description"] for c in ce.post_payment.call_args_list
+        ] == [f"{ERA_DESC_PREFIX}era-1"]
+        upserts = {
+            c.kwargs["key"]: c.kwargs["value"]
+            for c in ce.upsert_metadata.call_args_list
+        }
+        assert json.loads(upserts[META_SYNCED_AMOUNTS]) == {
+            "primary": 7000,
+            "secondary": 0,
+            "tertiary": 0,
+        }
+        assert json.loads(upserts[META_SYNCED_ERA_IDS]) == ["era-1", "era-x"]
 
 
 # ---------------------------------------------------------------------------

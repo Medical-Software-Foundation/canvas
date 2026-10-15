@@ -513,7 +513,7 @@ class _SyncState:
     era_totals: dict[str, int] = field(default_factory=dict)
     payment_effect_count: int = 0
     claim_status: str = DEFAULT_CLAIM_STATUS
-    last_encounter_data: dict | None = None
+    primary_encounter_data: dict | None = None
     secondary_coverage: Any | None = None
     moved_to_secondary: dict[str, Decimal] = field(default_factory=dict)
 
@@ -697,16 +697,18 @@ def _post_patient_payments_for_candid_claim(
 
 
 def _process_encounter(
-    state: _SyncState, encounter_data: dict, client: CandidClient
+    state: _SyncState, encounter_data: dict, client: CandidClient, overflow: bool
 ) -> None:
     """Process all Candid claims inside one Candid encounter response."""
-    state.last_encounter_data = encounter_data
+    # Split 1 holds the claim's real lines, so only it sets status and queue
+    if not overflow:
+        state.primary_encounter_data = encounter_data
     next_responsible = (encounter_data.get("next_responsible_party") or "").lower()
     transfer_to = _resolve_transfer_target(state, next_responsible)
 
     for candid_claim in encounter_data.get("claims", []):
         candid_claim_id = candid_claim.get("claim_id", "")
-        if candid_claim_status := candid_claim.get("status"):
+        if not overflow and (candid_claim_status := candid_claim.get("status")):
             state.claim_status = candid_claim_status
 
         service_lines = candid_claim.get("service_lines", [])
@@ -717,7 +719,10 @@ def _process_encounter(
             if (era_id := str(era.get("era_id") or ""))
             and era_id not in state.synced_era_ids
         ]
-        if new_eras:
+        if new_eras and overflow:
+            # Its only line is the $0.01 placeholder, which isn't on the Canvas claim
+            state.attempted_era_ids.extend(str(era["era_id"]) for era in new_eras)
+        elif new_eras:
             _post_era_payments(
                 state,
                 candid_claim,
@@ -752,8 +757,8 @@ def _finalize_effects(state: _SyncState, claim: Claim) -> None:
         )
     )
 
-    if state.payment_effect_count > 0 and state.last_encounter_data:
-        target_queue = _determine_target_queue(state.last_encounter_data)
+    if state.payment_effect_count > 0 and state.primary_encounter_data:
+        target_queue = _determine_target_queue(state.primary_encounter_data)
         state.effects.append(state.claim_effect.move_to_queue(target_queue))
         log.info(f"Candid sync: moving claim {state.canvas_claim_id} to {target_queue}")
 
@@ -842,7 +847,12 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
                 f"for claim {state.canvas_claim_id}: {e}"
             )
             continue
-        _process_encounter(state, encounter_data, client)
+        _process_encounter(
+            state,
+            encounter_data,
+            client,
+            overflow=(encounter_record.get("split") or 1) > 1,
+        )
 
     _finalize_effects(state, claim)
 
