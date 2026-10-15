@@ -358,17 +358,22 @@ def _secondary_leftover_transactions(
 
     balances = _coverage_balance_by_line(state.secondary_coverage)
     dbid_by_line_id = {str(li.id): li.dbid for li in state.line_items}
-    txns: list[LineItemTransaction] = []
+    # Several Candid lines can match one Canvas line; its leftover moves once
+    paid_by_line: dict[str, Decimal] = {}
     for idx, sl in enumerate(service_lines):
         line_item_id = _match_line_item(
             sl, state.line_items, state.canvas_claim_id, index=idx
         )
         if not line_item_id:
             continue
+        paid = _cents_to_dollars(sl.get("secondary_paid_amount_cents")) or Decimal("0")
+        paid_by_line[line_item_id] = paid_by_line.get(line_item_id, Decimal("0")) + paid
+
+    txns: list[LineItemTransaction] = []
+    for line_item_id, paid in paid_by_line.items():
         on_secondary = balances.get(
             dbid_by_line_id[line_item_id], Decimal("0")
         ) + state.moved_to_secondary.get(line_item_id, Decimal("0"))
-        paid = _cents_to_dollars(sl.get("secondary_paid_amount_cents")) or Decimal("0")
         leftover = on_secondary - paid
         if leftover > 0:
             txns.append(

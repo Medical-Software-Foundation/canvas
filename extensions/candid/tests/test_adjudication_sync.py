@@ -905,6 +905,7 @@ def _sync_secondary_posting(
     metadata: dict | None = None,
     eras: list[dict] | None = None,
     secondary_paid_cents: int = 1500,
+    service_lines: list[dict] | None = None,
 ) -> list:
     """Sync a claim with a $20 coinsurance and the secondary's ERA; return its txns."""
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1", dbid=101)
@@ -917,7 +918,8 @@ def _sync_secondary_posting(
         },
     )
     encounter = _encounter_response(
-        service_lines=[
+        service_lines=service_lines
+        or [
             _candid_service_line(
                 primary_paid_amount_cents=7000,
                 allowed_amount_cents=9000,
@@ -1001,6 +1003,35 @@ def test_secondary_leftover_counts_pr_moved_in_the_same_sync() -> None:
     leftover = [t for t in txns if t.adjustment_code == TRANSFER_CODE]
     assert [(t.adjustment, t.transfer_remaining_balance_to) for t in leftover] == [
         (Decimal("5.00"), "patient")
+    ]
+
+
+def test_secondary_leftover_moves_once_when_candid_lines_share_a_canvas_line() -> None:
+    """Two Candid lines match the one Canvas line; its $20 balance moves on once."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="patient",
+        metadata=PRIMARY_ALREADY_POSTED,
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=3500,
+                coinsurance_cents=1000,
+                secondary_paid_amount_cents=1500,
+            ),
+            _candid_service_line(
+                primary_paid_amount_cents=3500,
+                coinsurance_cents=1000,
+                secondary_paid_amount_cents=0,
+            ),
+        ],
+    )
+
+    assert [
+        (t.payment, t.adjustment, t.adjustment_code, t.transfer_remaining_balance_to)
+        for t in txns
+    ] == [
+        (Decimal("15.00"), None, None, None),
+        (None, Decimal("5.00"), TRANSFER_CODE, "patient"),
     ]
 
 
