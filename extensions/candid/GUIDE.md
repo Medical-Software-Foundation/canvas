@@ -38,15 +38,16 @@ CMS-1500 forms limit claims to 12 diagnosis codes per encounter. When a claim ha
 - The `candid_encounters` metadata stores all splits: `[{split: 1, candid_encounter_id: "...", external_id: "canvas:claim-id-1"}, {split: 2, ...}]`
 - The `external_id` for each split uses a `-1`, `-2` suffix (e.g. `canvas:abc123-1`, `canvas:abc123-2`)
 
-**During adjudication sync**, the plugin fetches ERA data for ALL encounters in the split — each is checked independently for new ERAs and patient payments.
+**During adjudication sync**, the plugin checks every encounter in the split for patient payments. Insurance payments, the Candid status banner, and the claim's queue come from the primary encounter, because it carries the real service lines. Remittances for a supplemental encounter are recorded but post nothing, since its only line is the $0.01 placeholder, which isn't on the Canvas claim.
 
 ### When adjudication data arrives from Candid
 
-A nightly sync runs at **2:00 AM** to check all claims in Filed Awaiting Response, Adjudicated Open Balance, and Patient Balance queues. When new ERA (Electronic Remittance Advice) data is found:
+A nightly sync starts at **2:00 AM** to check all claims in Filed Awaiting Response, Adjudicated Open Balance, Patient Balance, and Rejected Needs Review queues, working through them in hourly batches until every claim has been checked. When new ERA (Electronic Remittance Advice) data is found:
 
 - Insurance payments are posted to the claim (charged, allowed, paid amounts per service line)
 - Payer adjustments are posted with their CARC codes (e.g. CO-45, PR-1)
-- If the remaining balance is the patient's responsibility, the balance transfers to the patient
+- The deductible, coinsurance, and copay from the primary move to the secondary insurance when the claim has one, and to the patient when it doesn't
+- When the secondary's remittance arrives, any payment is posted to the secondary, and whatever it didn't pay (all of it, if it paid nothing) moves to the patient when Candid says the patient owes it. If Candid says nothing more is owed, the rest stays on the secondary for you to write off
 - The claim moves to **Patient Balance** or **Adjudicated Open Balance** depending on the remaining balances
 - The status banner updates (e.g. "Candid: Era Received | Last synced 2026-05-01")
 

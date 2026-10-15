@@ -3714,7 +3714,11 @@ if (!customElements.get('canvas-tab-panel')) {
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
-      this.shadowRoot.innerHTML = '<style>:host{display:block}:host([hidden]){display:none}.panel-inner{overflow:auto;max-width:100%}</style><div class="panel-inner"><slot></slot></div>';
+      // overflow must stay visible: an auto/hidden panel clips anything a child
+      // positions outside its box, which silently cut off the provider filter's
+      // dropdown whenever the panel was shorter than the open menu. Content that
+      // needs its own scrolling carries it on the content element instead.
+      this.shadowRoot.innerHTML = '<style>:host{display:block}:host([hidden]){display:none}.panel-inner{overflow:visible;max-width:100%}</style><div class="panel-inner"><slot></slot></div>';
     }
     connectedCallback() {
       this.setAttribute('role', 'tabpanel');

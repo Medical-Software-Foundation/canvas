@@ -26,7 +26,6 @@ from provider_availability.engine.storage import (
     get_all_rules,
     delete_rule_by_id,
     delete_rules_for_provider,
-    save_event_ids,
     get_event_ids,
     delete_event_ids,
     save_block,
@@ -113,19 +112,10 @@ class TestRuleCRUD:
 
 
 class TestEventIDs:
-    def test_save_and_get_event_ids(self, patch_cache):
-        save_event_ids("rule-1", ["event-a", "event-b"])
-        result = get_event_ids("rule-1")
-        assert result == ["event-a", "event-b"]
 
     def test_get_event_ids_empty(self, patch_cache):
         result = get_event_ids("nonexistent")
         assert result == []
-
-    def test_delete_event_ids(self, patch_cache):
-        save_event_ids("rule-1", ["event-a"])
-        delete_event_ids("rule-1")
-        assert get_event_ids("rule-1") == []
 
 
 # ── Admin Block CRUD ──────────────────────────────────────────────────
@@ -325,6 +315,29 @@ class TestTTLRefresh:
         result = refresh_all_ttls()
         assert result == 1
 
+    def test_refresh_renews_the_seen_bookable_set(self, patch_cache):
+        """If this record lapsed, the next bookability change would be recorded
+        but never applied, so it is renewed with the other saved settings."""
+        from provider_availability.engine.storage import SCHEDULABLE_SEEN_KEY, set_seen_schedulable_ids
+
+        set_seen_schedulable_ids(["b", "a"])
+        patch_cache.set.reset_mock()
+
+        refresh_all_ttls()
+
+        assert call(SCHEDULABLE_SEEN_KEY, ["a", "b"], timeout_seconds=CACHE_TTL_SECONDS) in patch_cache.set.mock_calls
+
+    def test_refresh_renews_the_synced_version(self, patch_cache):
+        """If this lapsed, the next same-version redeploy would rebuild every event."""
+        from provider_availability.engine.storage import SYNCED_VERSION_KEY, set_synced_version
+
+        set_synced_version("0.23.20")
+        patch_cache.set.reset_mock()
+
+        refresh_all_ttls()
+
+        assert call(SYNCED_VERSION_KEY, "0.23.20", timeout_seconds=CACHE_TTL_SECONDS) in patch_cache.set.mock_calls
+
     def test_refresh_cleans_stale_keys(self, patch_cache):
         """If a cached rule has expired (returns None), it should be removed from the index."""
         # Manually set up a stale index entry
@@ -396,14 +409,6 @@ class TestTTLRefresh:
         assert result == 0
         assert get_provider_timezone("p1") == "US/Pacific"
         assert get_provider_timezone("p2") == "US/Eastern"
-
-    def test_refresh_all_ttls_with_event_ids(self, patch_cache, sample_rule):
-        """Refresh should also refresh event ID mappings for rules."""
-        save_rule(sample_rule)
-        save_event_ids(sample_rule.id, ["evt-1", "evt-2"])
-        result = refresh_all_ttls()
-        assert result == 1
-        assert get_event_ids(sample_rule.id) == ["evt-1", "evt-2"]
 
 
 # ── Provider Timezone ────────────────────────────────────────────────
