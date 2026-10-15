@@ -17,12 +17,6 @@ def _role(internal_code="", public_abbreviation="", name=""):
     return role
 
 
-def _staff_with_roles(*roles):
-    staff = MagicMock()
-    staff.roles.all.return_value = list(roles)
-    return staff
-
-
 def test_unconfigured_allows_everyone():
     assert staff_can_access_dashboard("staff-1", {}) is True
     assert staff_can_access_dashboard(None, {}) is True
@@ -45,49 +39,50 @@ def test_missing_staff_key_denied_when_restricted():
 
 def test_role_allowlist_matches_internal_code():
     secrets = {ALLOWED_ROLES_SECRET: "BILL"}
-    with patch("candid.access.Staff") as MockStaff:
-        MockStaff.objects.filter.return_value.first.return_value = _staff_with_roles(
+    with patch("candid.access.StaffRole") as MockStaffRole:
+        MockStaffRole.objects.filter.return_value = [
             _role(internal_code="BILL", name="Biller")
-        )
+        ]
         assert staff_can_access_dashboard("staff-1", secrets) is True
+        MockStaffRole.objects.filter.assert_called_once_with(staff__id="staff-1")
 
 
 def test_role_allowlist_matches_name_case_insensitively():
     secrets = {ALLOWED_ROLES_SECRET: "biller"}
-    with patch("candid.access.Staff") as MockStaff:
-        MockStaff.objects.filter.return_value.first.return_value = _staff_with_roles(
+    with patch("candid.access.StaffRole") as MockStaffRole:
+        MockStaffRole.objects.filter.return_value = [
             _role(internal_code="BILL", name="Biller")
-        )
+        ]
         assert staff_can_access_dashboard("staff-1", secrets) is True
 
 
 def test_role_allowlist_matches_public_abbreviation():
     secrets = {ALLOWED_ROLES_SECRET: "MD"}
-    with patch("candid.access.Staff") as MockStaff:
-        MockStaff.objects.filter.return_value.first.return_value = _staff_with_roles(
+    with patch("candid.access.StaffRole") as MockStaffRole:
+        MockStaffRole.objects.filter.return_value = [
             _role(internal_code="PHYS", public_abbreviation="MD", name="Physician")
-        )
+        ]
         assert staff_can_access_dashboard("staff-1", secrets) is True
 
 
 def test_role_allowlist_denies_non_matching_role():
     secrets = {ALLOWED_ROLES_SECRET: "BILL"}
-    with patch("candid.access.Staff") as MockStaff:
-        MockStaff.objects.filter.return_value.first.return_value = _staff_with_roles(
+    with patch("candid.access.StaffRole") as MockStaffRole:
+        MockStaffRole.objects.filter.return_value = [
             _role(internal_code="MA", name="Medical Assistant")
-        )
+        ]
         assert staff_can_access_dashboard("staff-1", secrets) is False
 
 
 def test_role_allowlist_denies_unknown_staff():
     secrets = {ALLOWED_ROLES_SECRET: "BILL"}
-    with patch("candid.access.Staff") as MockStaff:
-        MockStaff.objects.filter.return_value.first.return_value = None
+    with patch("candid.access.StaffRole") as MockStaffRole:
+        MockStaffRole.objects.filter.return_value = []
         assert staff_can_access_dashboard("staff-x", secrets) is False
 
 
 def test_staff_key_match_short_circuits_role_lookup():
     secrets = {ALLOWED_STAFF_KEYS_SECRET: "staff-1", ALLOWED_ROLES_SECRET: "BILL"}
-    with patch("candid.access.Staff") as MockStaff:
+    with patch("candid.access.StaffRole") as MockStaffRole:
         assert staff_can_access_dashboard("staff-1", secrets) is True
-        MockStaff.objects.filter.assert_not_called()
+        MockStaffRole.objects.filter.assert_not_called()
