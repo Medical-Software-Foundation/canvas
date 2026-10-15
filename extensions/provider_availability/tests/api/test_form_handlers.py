@@ -290,6 +290,20 @@ class TestStaticAssets:
         assert result[0].status_code == HTTPStatus.OK
         mock_render.assert_called_once_with("static/css/admin.css")
 
+    @patch(f"{MODULE}.render_to_string", return_value="body { color: red; }")
+    def test_get_theme_css(self, mock_render):
+        result = _make_handler().get_theme_css()
+        assert result[0].status_code == HTTPStatus.OK
+        assert result[0].headers["Content-Type"].startswith("text/css")
+        assert mock_render.mock_calls == [call("static/css/theme.css")]
+
+    @patch(f"{MODULE}.render_to_string", return_value="console.log('hi');")
+    def test_get_settings_js(self, mock_render):
+        result = _make_handler().get_settings_js()
+        assert result[0].status_code == HTTPStatus.OK
+        assert result[0].headers["Content-Type"].startswith("application/javascript")
+        assert mock_render.mock_calls == [call("static/js/settings.js")]
+
     @patch(f"{MODULE}.render_to_string", return_value="console.log('hi');")
     def test_get_admin_js(self, mock_render):
         handler = _make_handler()

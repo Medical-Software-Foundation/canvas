@@ -2113,6 +2113,30 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         ]
 
+    @api.get("/theme.css")
+    def get_theme_css(self) -> list[Response | Effect]:
+        """Serve the theme layered over admin.css (the Dot Phrases admin look)."""
+        return [
+            Response(
+                render_to_string("static/css/theme.css").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/css",
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/settings.js")
+    def get_settings_js(self) -> list[Response | Effect]:
+        """Serve the Settings tab script."""
+        return [
+            Response(
+                render_to_string("static/js/settings.js").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="application/javascript",
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
     @api.get("/tokens.css")
     def get_tokens_css(self) -> list[Response | Effect]:
         """Serve the Canvas design system tokens."""

@@ -1,6 +1,7 @@
 const API_BASE = '/plugin-io/api/provider_availability/api';
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const DAY_ABBR = {monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun'};
+const DAY_FULL = {monday:'Monday',tuesday:'Tuesday',wednesday:'Wednesday',thursday:'Thursday',friday:'Friday',saturday:'Saturday',sunday:'Sunday'};
 const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const AVATAR_CLASSES = ['avatar-a','avatar-b','avatar-c'];
 
@@ -211,7 +212,7 @@ function _updateScheduleEditorLabel() {
   var asterisk = ' <span style="color:var(--block);font-size:13px;margin-left:2px;">*</span>';
   var fq = document.getElementById('recurrence_frequency');
   var freq = fq ? fq.value : 'weekly';
-  lbl.innerHTML = (freq === 'daily' ? 'Time Windows' : 'Weekly Schedule') + asterisk;
+  lbl.innerHTML = (freq === 'daily' ? 'Time windows' : 'Weekly schedule') + asterisk;
 }
 
 function setBlockMode(mode) {
@@ -265,7 +266,7 @@ function _updateBlockScheduleEditorLabel() {
   var asterisk = ' <span style="color:var(--block);font-size:13px;margin-left:2px;">*</span>';
   var fq = document.getElementById('rb_recurrence_frequency');
   var freq = fq ? fq.value : 'weekly';
-  lbl.innerHTML = (freq === 'daily' ? 'Block Time Windows' : 'Weekly Block Schedule') + asterisk;
+  lbl.innerHTML = (freq === 'daily' ? 'Block time windows' : 'Weekly block schedule') + asterisk;
 }
 
 function _readRecurrenceFields(intervalId, frequencyId) {
@@ -595,7 +596,7 @@ function addDailyTimeWindow(containerId, startVal, endVal) {
   row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
   row.innerHTML =
     timeFieldHtml(startVal) +
-    '<span class="time-sep">→</span>' +
+    '<span class="time-sep">\u2013</span>' +
     timeFieldHtml(endVal);
   var rmv = document.createElement('button');
   rmv.type = 'button';
@@ -997,6 +998,7 @@ document.addEventListener('change', function(e) {
 var _LAST_TAB_KEY = 'provider_availability:last-tab';
 function _rememberTab(name) {
   _activeTab = name;
+  syncHeaderTabs(name);
   try { history.replaceState(null, '', '#' + name); } catch (e) {}
   try { sessionStorage.setItem(_LAST_TAB_KEY, name); } catch (e) {}
 }
@@ -1039,6 +1041,7 @@ function showTab(name) {
     } else if (name === 'settings') {
       renderSettingsPanel();
       bulkReset();
+      if (window.paSettings) window.paSettings.open();
     } else {
       if (!_skipDirtyCheck) loadOverview();
     }
@@ -1363,9 +1366,10 @@ function saveCurrentForm() {
 async function loadProviders() {
   try { const data = await apiCall('/providers/list'); _providers = data.providers || []; } catch (e) { _providers = []; }
   const items = _providers.map(p => ({ id: p.id, name: p.name, npi: p.npi_number || '' }));
-  if (msProvider) msProvider.setItems(items);
-  if (msBlockProvider) msBlockProvider.setItems(items);
-  if (msHoldProvider) msHoldProvider.setItems(items);
+  var editable = editableProviderItems(_providers, items);
+  if (msProvider) msProvider.setItems(editable);
+  if (msBlockProvider) msBlockProvider.setItems(editable);
+  if (msHoldProvider) msHoldProvider.setItems(editable);
   if (msFilterProvider) msFilterProvider.setItems(filterItems(_providers, items));
 }
 
@@ -1451,24 +1455,28 @@ function renderAccordion() {
   var savedScroll = window.scrollY;
   // Build TZ hint HTML for embedding in the legend bar
   // Update legend bar in filter bar
-  var legendContainer = document.getElementById('legend-bar-container');
-  if (legendContainer) {
+  // "View times in" sits in the toolbar; the legend sits on the first section heading.
+  var tzWrap = document.getElementById('view-tz-wrap');
+  if (tzWrap) {
     var tzList = COMMON_TZS.slice();
     if (tzList.indexOf(_practiceTz) === -1) tzList.unshift(_practiceTz);
     var activeTz = _viewTz || 'provider';
-    var legendHtml = '<span class="tz-hint-bar" style="margin-bottom:0;">' +
-      '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
-      'View times in: <select id="view-tz-select" onchange="changeViewTz(this.value)">' +
-      '<option value="provider"' + (activeTz === 'provider' ? ' selected' : '') + '>Provider\'s Timezone</option>' +
+    tzWrap.innerHTML = 'View times in <select class="input" id="view-tz-select" onchange="changeViewTz(this.value)">' +
+      '<option value="provider"' + (activeTz === 'provider' ? ' selected' : '') + '>Provider\'s timezone</option>' +
       tzList.map(function(tz) { return '<option value="' + tz + '"' + (tz === activeTz ? ' selected' : '') + '>' + tz + '</option>'; }).join('') +
-      '</select></span>';
-    legendHtml += '<span style="display:flex;gap:12px;align-items:center;">';
-    legendHtml += '<span class="legend-item"><span class="type-chip chip-avail">' + SVG_CHECK + '</span> Available</span>';
-    legendHtml += '<span class="legend-item"><span class="type-chip chip-block">' + SVG_X + '</span> Blocked</span>';
-    legendHtml += '<span class="legend-item"><span class="type-chip chip-hold">' + SVG_PAUSE + '</span> Hold</span>';
-    legendHtml += '<span class="legend-item"><span class="type-chip chip-override">' + SVG_OVERRIDE + '</span> Override</span>';
-    legendHtml += '</span>';
-    legendContainer.innerHTML = legendHtml;
+      '</select>';
+  }
+  var legendHtml = '<span class="av-legend">' +
+    '<span class="legend-item"><span class="type-chip chip-avail">' + SVG_CHECK + '</span> Available</span>' +
+    '<span class="legend-item"><span class="type-chip chip-block">' + SVG_X + '</span> Blocked</span>' +
+    '<span class="legend-item"><span class="type-chip chip-hold">' + SVG_PAUSE + '</span> Hold</span>' +
+    '<span class="legend-item"><span class="type-chip chip-override">' + SVG_OVERRIDE + '</span> Override</span>' +
+    '</span>';
+  var legendShown = false;
+  function sectionHeading(title) {
+    var row = '<div class="av-sec-row"><h3 class="overview-section-title">' + title + '</h3>' + (legendShown ? '' : legendHtml) + '</div>';
+    legendShown = true;
+    return row;
   }
 
   const selectedIds = msFilterProvider ? msFilterProvider.getValue() : [];
@@ -1500,10 +1508,10 @@ function renderAccordion() {
   const providers = yours.concat(others);
 
   let html = '';
-  if (yours.length) html += '<h3 class="overview-section-title">Your availability</h3>';
+  if (yours.length) html += sectionHeading('Your availability');
   providers.forEach((p, idx) => {
     if (idx === yours.length) {
-      html += '<h3 class="overview-section-title">' + (yours.length ? 'Other providers' : 'Providers') + '</h3>';
+      html += sectionHeading(yours.length ? 'Other providers' : 'Providers');
     }
     const pid = p.provider_id;
     const name = p.provider_name || pid.slice(0, 8) + '...';
@@ -1531,7 +1539,8 @@ function renderAccordion() {
     const pureBlockCount = visibleBlocks.length + visibleRecurring.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
     const hasData = availableCount > 0 || pureBlockCount > 0 || holdCount > 0;
 
-    html += '<div class="provider-card">';
+    var readOnly = p.can_edit === false;
+    html += '<div class="provider-card' + (readOnly ? ' read-only' : '') + '">';
 
     // Header
     html += '<div class="provider-card-header" onclick="toggleCard(this)">';
@@ -1552,6 +1561,7 @@ function renderAccordion() {
     if (overrideCount > 0) html += '<span class="meta-pip pip-override">' + overrideCount + ' override</span>';
     html += '</div>';
     html += '<div class="provider-header-right">';
+    if (readOnly) html += '<span class="read-only-note">View only</span>';
     html += '<button class="btn btn-avail" onclick="event.stopPropagation();addForProvider(\'' + pid + '\',\'available\')">+ Available</button>';
     html += '<button class="btn btn-block-add" onclick="event.stopPropagation();addForProvider(\'' + pid + '\',\'blocked\')">+ Blocked</button>';
     html += '<svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
@@ -1851,7 +1861,7 @@ function renderAccordion() {
     html += '</div>';
   });
   if (others.length === 0) {
-    if (yours.length) html += '<h3 class="overview-section-title">Other providers</h3>';
+    if (yours.length) html += sectionHeading('Other providers');
     html += othersEmpty;
   }
   container.innerHTML = html;
@@ -1869,7 +1879,7 @@ function renderAccordion() {
   var ecBtn = document.querySelector('.btn-expand-collapse');
   if (ecBtn) {
     var anyCollapsed = container.querySelector('.provider-card.collapsed');
-    ecBtn.textContent = anyCollapsed ? 'Expand All' : 'Collapse All';
+    ecBtn.textContent = anyCollapsed ? 'Expand all' : 'Collapse all';
   }
   window.scrollTo(0, savedScroll);
 }
@@ -1887,7 +1897,7 @@ function toggleAllCards() {
     if (allExpanded) c.classList.add('collapsed');
     else c.classList.remove('collapsed');
   });
-  if (btn) btn.textContent = allExpanded ? 'Expand All' : 'Collapse All';
+  if (btn) btn.textContent = allExpanded ? 'Expand all' : 'Collapse all';
 }
 
 function onFilterProviderChange() { renderAccordion(); }
@@ -1911,7 +1921,7 @@ function initScheduleEditor() {
   DAYS.forEach(day => {
     html += '<div id="day-wrap-' + day + '">';
     html += '<div class="day-header collapsed" onclick="toggleDayCollapse(this)">';
-    html += '<span class="day-label">' + DAY_ABBR[day] + '</span>';
+    html += '<span class="day-label">' + DAY_FULL[day] + '</span>';
     html += '<span class="day-summary" id="day-summary-' + day + '">No hours</span>';
     html += '<svg class="day-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
     html += '</div>';
@@ -1960,7 +1970,7 @@ function addWindow(day, startVal, endVal) {
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
   wrap.innerHTML = timeFieldHtml(startVal) +
-    '<span class="time-sep">\u2192</span>' +
+    '<span class="time-sep">\u2013</span>' +
     timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
@@ -1993,7 +2003,7 @@ function initRecurringBlockScheduleEditor() {
   DAYS.forEach(day => {
     html += '<div id="rb-day-wrap-' + day + '">';
     html += '<div class="day-header collapsed" onclick="toggleDayCollapse(this)">';
-    html += '<span class="day-label">' + DAY_ABBR[day] + '</span>';
+    html += '<span class="day-label">' + DAY_FULL[day] + '</span>';
     html += '<span class="day-summary" id="rb-day-summary-' + day + '">No hours</span>';
     html += '<svg class="day-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
     html += '</div>';
@@ -2017,7 +2027,7 @@ function addRecurringBlockWindow(day, startVal, endVal) {
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
   wrap.innerHTML = timeFieldHtml(startVal) +
-    '<span class="time-sep">\u2192</span>' +
+    '<span class="time-sep">\u2013</span>' +
     timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
@@ -2120,7 +2130,7 @@ function addOverrideWindow(startVal, endVal) {
   const wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
   wrap.innerHTML = timeFieldHtml(startVal) +
-    '<span class="time-sep">\u2192</span>' +
+    '<span class="time-sep">\u2013</span>' +
     timeFieldHtml(endVal);
   const rmv = document.createElement('button');
   rmv.type = 'button';
@@ -2247,7 +2257,7 @@ async function refreshOverviewAndOverrides(providerId, ruleId) {
 
 function resetForm() {
   const today = new Date().toISOString().slice(0, 10);
-  document.getElementById('editor-title').textContent = 'Add New Rule';
+  document.getElementById('editor-title').textContent = 'Add new rule';
   document.getElementById('editing_rule_id').value = '';
   document.getElementById('editing_block_id').value = '';
   document.getElementById('editing_recurring_block_id').value = '';
@@ -2268,9 +2278,12 @@ function resetForm() {
   msBlockProvider.clear();
   msBlockLocation.setValue(_locations.map(l => String(l.id)));
 
-  document.getElementById('buffer_pre').value = '0';
-  document.getElementById('buffer_post').value = '0';
-  document.getElementById('min_lead_hours').value = '0';
+  // New rules start from the defaults saved in Settings (settings.js keeps these current).
+  var _defaults = (window.__PRELOADED__ && window.__PRELOADED__.rule_defaults) || {};
+  document.getElementById('buffer_pre').value = String(_defaults.buffer_pre || 0);
+  document.getElementById('buffer_post').value = String(_defaults.buffer_post || 0);
+  document.getElementById('min_lead_hours').value = String(_defaults.min_lead_hours || 0);
+  applyFeatureVisibility();
   document.getElementById('effective_start').value = today;
   document.getElementById('effective_end').value = '';
   document.getElementById('no_end_date').checked = true;
@@ -2362,7 +2375,7 @@ function editRule(ruleJson) {
   document.getElementById('type-selector-section').style.display = 'none';
   _skipDirtyCheck = true;
   showTab('editor');
-  document.getElementById('editor-title').textContent = 'Edit Availability';
+  document.getElementById('editor-title').textContent = 'Edit availability';
   document.getElementById('editing_rule_id').value = r.id || '';
   document.getElementById('editing_group_id').value = r.group_id || '';
   msProvider.setValue([r.provider_id]);
@@ -2443,7 +2456,7 @@ function editRecurringBlock(blockJson) {
   document.getElementById('type-selector-section').style.display = 'none';
   _skipDirtyCheck = true;
   showTab('editor');
-  document.getElementById('editor-title').textContent = 'Edit Block';
+  document.getElementById('editor-title').textContent = 'Edit block';
   document.getElementById('editing_recurring_block_id').value = b.id || '';
   document.getElementById('editing_group_id').value = b.group_id || '';
   msBlockProvider.setValue([b.provider_id]);
@@ -2496,7 +2509,7 @@ function editBlock(blockJson) {
   document.getElementById('type-selector-section').style.display = 'none';
   _skipDirtyCheck = true;
   showTab('editor');
-  document.getElementById('editor-title').textContent = 'Edit Block';
+  document.getElementById('editor-title').textContent = 'Edit block';
   document.getElementById('editing_block_id').value = b.id || '';
   document.getElementById('editing_group_id').value = b.group_id || '';
   msBlockProvider.setValue([b.provider_id]);
@@ -3454,7 +3467,7 @@ function editHold(holdJson) {
   document.getElementById('type-selector-section').style.display = 'none';
   _skipDirtyCheck = true;
   showTab('editor');
-  document.getElementById('editor-title').textContent = 'Edit Hold';
+  document.getElementById('editor-title').textContent = 'Edit hold';
   document.getElementById('editing_hold_id').value = h.id || '';
   document.getElementById('editing_hold_group_id').value = h.group_id || '';
   document.getElementById('hold_reason').value = h.reason || '';
@@ -3580,7 +3593,7 @@ function initHoldScheduleEditor() {
   DAYS.forEach(function(day) {
     html += '<div id="hold-day-wrap-' + day + '">';
     html += '<div class="day-header collapsed" onclick="toggleDayCollapse(this)">';
-    html += '<span class="day-label">' + DAY_ABBR[day] + '</span>';
+    html += '<span class="day-label">' + DAY_FULL[day] + '</span>';
     html += '<span class="day-summary" id="hold-day-summary-' + day + '">No hours</span>';
     html += '<svg class="day-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
     html += '</div>';
@@ -3604,7 +3617,7 @@ function addHoldWindow(day, startVal, endVal) {
   var wrap = document.createElement('div');
   wrap.className = 'day-time-inputs';
   wrap.innerHTML = timeFieldHtml(startVal) +
-    '<span class="time-sep">\u2192</span>' +
+    '<span class="time-sep">\u2013</span>' +
     timeFieldHtml(endVal);
   var rmv = document.createElement('button');
   rmv.type = 'button';
@@ -3693,9 +3706,10 @@ try {
 
     _providers = (P.providers && P.providers.providers) || [];
     var provItems = _providers.map(function(p) { return { id: p.id, name: p.name, npi: p.npi_number || '' }; });
-    if (msProvider) msProvider.setItems(provItems);
-    if (msBlockProvider) msBlockProvider.setItems(provItems);
-    if (msHoldProvider) msHoldProvider.setItems(provItems);
+    var editableItems = editableProviderItems(_providers, provItems);
+    if (msProvider) msProvider.setItems(editableItems);
+    if (msBlockProvider) msBlockProvider.setItems(editableItems);
+    if (msHoldProvider) msHoldProvider.setItems(editableItems);
     if (msFilterProvider) msFilterProvider.setItems(filterItems(_providers, provItems));
 
     _locations = (P.locations && P.locations.locations) || [];
@@ -3784,6 +3798,7 @@ if (_mainTabsEl) {
     } else if (name === 'settings') {
       renderSettingsPanel();
       bulkReset();
+      if (window.paSettings) window.paSettings.open();
     } else {
       if (!_skipDirtyCheck) loadOverview();
     }
@@ -3800,7 +3815,13 @@ var _initHash = location.hash.replace('#', '');
 if (!_initHash) {
   try { _initHash = sessionStorage.getItem(_LAST_TAB_KEY) || ''; } catch (e) {}
 }
+if (_initHash === 'settings' && !paAccess().is_admin) _initHash = 'availability';
 if (_initHash === 'settings' || _initHash === 'editor') {
+  // The tab component picks its starting tab after this script runs, from the
+  // tab marked active, so mark the restored one or it lands on Availability.
+  document.querySelectorAll('#main-tabs > canvas-tab').forEach(function(t) {
+    if (t.getAttribute('for') === 'panel-' + _initHash) t.setAttribute('active', ''); else t.removeAttribute('active');
+  });
   showTab(_initHash);
 } else if (_initHash === 'bulk-import') {
   // Bulk import used to be its own tab; an old link lands on its Settings section.
@@ -3822,3 +3843,70 @@ window.addEventListener('popstate', function() {
   _settingsDirty = false;
   showTab('availability');
 });
+
+
+/* ---------- Theme: header tabs, access and feature switches ---------- */
+
+// The viewer's access, sent with the page (engine.access.Access.summary).
+function paAccess() {
+  return (window.__PRELOADED__ && window.__PRELOADED__.access) || { is_admin: true };
+}
+
+// The Scheduling switches, sent with the page and kept current by settings.js.
+function paFeatureOn(name) {
+  var f = (window.__PRELOADED__ && window.__PRELOADED__.features) || {};
+  return f[name] !== false;
+}
+
+// Provider picker items limited to providers the viewer can edit.
+function editableProviderItems(providers, items) {
+  var editable = {};
+  (providers || []).forEach(function(p) { if (p.can_edit !== false) editable[String(p.id)] = true; });
+  return (items || []).filter(function(it) { return editable[String(it.id)]; });
+}
+
+// Hide parts of the editor for features switched off in Settings.
+// A page-level class per switched-off feature; theme.css hides what goes with it,
+// so code that shows those sections later can't bring them back.
+function applyFeatureVisibility() {
+  ['buffers', 'lead_time', 'holds', 'overrides', 'provider_timezones'].forEach(function(name) {
+    document.body.classList.toggle('feature-off-' + name, !paFeatureOn(name));
+  });
+  ['buffer_pre', 'buffer_post', 'min_lead_hours'].forEach(function(id) {
+    var input = document.getElementById(id);
+    var item = input && input.closest('.setting-item');
+    if (item) item.setAttribute('data-field', id);
+  });
+}
+
+function syncHeaderTabs(name) {
+  document.querySelectorAll('#ax-tabs button').forEach(function(b) { b.classList.toggle('on', b.dataset.t === name); });
+  hideInnerTabStrip();
+}
+
+// The tab component draws its own strip; the header tabs replace it.
+function hideInnerTabStrip() {
+  var root = _mainTabsEl && _mainTabsEl.shadowRoot;
+  if (!root || !root.querySelector('.tab-wrapper')) { setTimeout(hideInnerTabStrip, 30); return; }
+  if (!root.getElementById('pa-hide-strip')) {
+    var st = document.createElement('style');
+    st.id = 'pa-hide-strip';
+    st.textContent = '.tab-wrapper { display: none !important; }';
+    root.appendChild(st);
+  }
+}
+
+(function initHeaderTabs() {
+  var nav = document.getElementById('ax-tabs');
+  if (!nav) return;
+  if (!paAccess().is_admin) {
+    var settingsBtn = document.getElementById('ax-tab-settings');
+    if (settingsBtn) settingsBtn.style.display = 'none';
+    if (_activeTab === 'settings') { _skipDirtyCheck = true; showTab('availability'); }
+  }
+  nav.querySelectorAll('button').forEach(function(b) {
+    b.addEventListener('click', function() { if (b.dataset.t !== _activeTab) showTab(b.dataset.t); });
+  });
+  syncHeaderTabs(_activeTab);
+  applyFeatureVisibility();
+})();
