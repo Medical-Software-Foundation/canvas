@@ -474,8 +474,9 @@
     var menu = function (key, label, head, items) { return '<div class="ax-menu"><button type="button" class="ax-tbtn" data-menu="' + key + '" aria-expanded="false" aria-haspopup="true">' + ICONS[key] + label + '</button><div class="ax-pop" role="menu" hidden><div class="ax-pop-head">' + head + "</div>" + items + "</div></div>"; };
     var chart = Object.keys(CHART_LABEL).map(function (k) { return item("{" + k + "}", CHART_LABEL[k], state.values[k] ? "This patient: " + state.values[k] : "Empty for this patient"); }).join("");
     var practice = state.practiceNames.map(function (n) { return item("{" + n + "}", prettyName(n), state.values[n] || "No value yet"); }).join("") || '<div class="ax-pop-foot">Your practice has no practice info yet.</div>';
-    var ask = item("{pick label: option | option}", "Choice", "Buttons to tap in the chart panel", "label: option | option") +
-      item("{blank label}", "Blank", "A box to type in", "label") + item("***", "Quick blank", "A blank with no heading", "");
+    var ask = item("{blank instructions}", "Blank with instructions", "Tells the provider what goes here. Example: [duration]", "instructions") +
+      item("***", "Plain blank", "Marks a spot to fill in, without instructions: ***", "") +
+      item("{pick label: option | option}", "Choice", "The provider picks one option. Example: [right / left]", "label: option | option");
     return '<div class="ax-tools" role="toolbar" aria-label="Insert a placeholder">' + menu("chart", "Patient", "From the patient's chart", chart) +
       menu("practice", "Practice", "Practice info, same for every patient", practice) + menu("ask", "Fill-ins", "The provider fills these in when they use the phrase", ask) +
       '<div class="ax-info"><button type="button" class="ax-ibtn" data-guide aria-expanded="false" aria-controls="fGuide" aria-label="How placeholders work" title="How placeholders work"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.1"/></svg></button></div></div>';
@@ -493,10 +494,10 @@
       '<table class="gd-tbl"><thead><tr><th>You type</th><th>It becomes</th></tr></thead><tbody>' + (pracRows || '<tr><td colspan="2" class="gd-empty">None yet</td></tr>') + "</tbody></table></section>" +
       '<section class="gd-sec"><h4>' + ICONS.ask + "Fill-ins</h4><p>Filled in when the phrase is used. Written right in the phrase.</p>" +
       '<table class="gd-tbl gd-fill"><thead><tr><th>You type</th><th>In the chart panel</th><th>Typed in a note</th></tr></thead><tbody>' +
-      "<tr><td>" + ins("{pick side: right | left | both}") + '</td><td>Buttons: Right, Left, Both</td><td><code class="gd-out">[right / left / both]</code></td></tr>' +
       "<tr><td>" + ins("{blank duration}") + '</td><td>A box labeled "duration"</td><td><code class="gd-out">[duration]</code></td></tr>' +
-      "<tr><td>" + ins("***") + '</td><td>A box with no label</td><td><code class="gd-out">***</code></td></tr></tbody></table>' +
-      '<p class="gd-note">For a choice, the word before the colon is the heading and options are split by |. Typed in a note, the command can\'t be recorded until every [bracket] and *** is filled in.</p></section></div>' +
+      "<tr><td>" + ins("***") + '</td><td>A box with no label</td><td><code class="gd-out">***</code></td></tr>' +
+      "<tr><td>" + ins("{pick side: right | left}") + '</td><td>Buttons: Right, Left</td><td><code class="gd-out">[right / left]</code></td></tr></tbody></table>' +
+      '<p class="gd-note">Add instructions when the sentence doesn\'t make clear what goes in the blank. Every blank must be filled in before the command can be recorded. For a choice, the word before the colon is the heading, and options are separated by |.</p></section></div>' +
       '<section class="gd-ex"><h4>Example</h4>' +
       '<div class="gd-ex-row"><div class="gd-ex-k">You write</div><div><span class="gd-src">{first_name} is a {age}-year-old seen today for {pick side: right | left | both} knee pain for {blank duration}.</span></div></div>' +
       '<div class="gd-ex-row"><div class="gd-ex-k">You pick</div><div>Left, and type 2 weeks</div></div>' +
