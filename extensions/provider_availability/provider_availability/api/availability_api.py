@@ -39,10 +39,12 @@ from provider_availability.engine.lookups import (
     get_teams,
 )
 from provider_availability.engine.access import admin_ids, effective_default_access
+from provider_availability.engine.features import CHOICES, affected_items, apply_feature_change
 from provider_availability.engine.settings import (
     delete_group,
     get_access_config,
     get_features,
+    is_feature_on,
     get_rule_defaults,
     save_group,
     set_admin_team,
@@ -327,7 +329,7 @@ def _build_overview(
     displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
     loc_map = {loc["id"]: loc["name"] for loc in locations}
     vt_map = {vt["id"]: vt["name"] for vt in visit_types}
-    provider_tzs = get_all_provider_timezones()
+    provider_tzs = get_all_provider_timezones() if is_feature_on("provider_timezones") else {}
 
     overview: dict[str, dict] = {}
     for pid in provider_ids:
@@ -701,6 +703,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         body["provider_id"] = provider_id
         body.pop("provider_npi", None)
         body["updated_at"] = datetime.now(UTC).isoformat()
+        if not is_feature_on("overrides"):
+            # Overrides are off: a save can't add or change them, only keep what was there.
+            prior = get_rule_by_id(provider_id, str(body.get("id", ""))) if body.get("id") else None
+            body["date_overrides"] = [o.to_dict() for o in prior.date_overrides] if prior else []
 
         # Accept both old single-value and new list formats
         if "location_ids" not in body and "location_id" in body:
@@ -778,7 +784,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Preserve date_overrides and timezone from existing rule when not in payload
         existing = get_rule_by_id(provider_id, rule_id)
         if existing:
-            if "date_overrides" not in body:
+            if "date_overrides" not in body or not is_feature_on("overrides"):
                 body["date_overrides"] = [o.to_dict() for o in existing.date_overrides]
             if "timezone" not in body or body["timezone"] is None:
                 body["timezone"] = existing.timezone
@@ -915,6 +921,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
+        if not is_feature_on("overrides"):
+            return [JSONResponse({"error": "Date overrides are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
         rule_id = self.request.path_params["rule_id"]
         rule = get_rule_by_id(provider_id, rule_id)
         if not rule:
@@ -1340,6 +1348,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
+        if body.get("hold_type", "none") not in ("none", "", None) and not is_feature_on("holds"):
+            return [JSONResponse({"error": "Holds are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
 
         if not is_daily and not weekly_schedule:
             return [
@@ -1399,6 +1409,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
         if denied:
             return denied
+        if body.get("hold_type", "none") not in ("none", "", None) and not is_feature_on("holds"):
+            return [JSONResponse({"error": "Holds are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
 
         if not block_id or not provider_id:
             return [
@@ -1694,6 +1706,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         tz_name = body.get("timezone", "")
         if not provider_id:
             return [JSONResponse({"error": "provider_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        if not is_feature_on("provider_timezones"):
+            return [JSONResponse({"error": "Provider timezones are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
         if not tz_name or tz_name not in COMMON_TIMEZONES:
             return [JSONResponse(
                 {"error": f"Invalid timezone. Choose from: {', '.join(COMMON_TIMEZONES)}"},
@@ -1822,6 +1836,35 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "staff": staff,
             "locations": get_active_locations(),
         })]
+
+    @api.put("/settings/features")
+    def put_feature(self) -> list[Response | Effect]:
+        """Turn a Scheduling feature on or off. Turning one off needs a choice (engine.features.CHOICES)."""
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        body = self.request.json()
+        feature = str(body.get("feature", ""))
+        on = body.get("on")
+        if not isinstance(on, bool):
+            return self._bad_request("on must be true or false")
+        try:
+            effects = apply_feature_change(feature, on, str(body.get("choice", "") or ""))
+        except ValueError as exc:
+            return self._bad_request(str(exc))
+        log.info("settings: %s turned %s by %s", feature, "on" if on else "off", _signed_in_staff_id(self.request))
+        return [*effects, JSONResponse({"features": get_features(), "changed": len(effects)})]
+
+    @api.get("/settings/affected/<feature>")
+    def get_affected(self) -> list[Response | Effect]:
+        """What turning a feature off would affect, for the "View affected items" table."""
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        feature = self.request.path_params["feature"]
+        if feature not in CHOICES:
+            return self._bad_request(f"Unknown feature: {feature}")
+        return [JSONResponse(affected_items(feature))]
 
     @api.put("/settings/rule-defaults")
     def put_rule_defaults(self) -> list[Response | Effect]:

@@ -47,6 +47,7 @@ from provider_availability.engine.models import (
     TimeWindow,
     date_in_pattern,
 )
+from provider_availability.engine.settings import applied_overrides, is_feature_on
 from provider_availability.engine.storage import get_rules_for_provider
 from provider_availability.engine.tz_utils import to_provider_naive
 
@@ -163,7 +164,7 @@ def _covering_rules(
         # A date override replaces the day's pattern and windows, exactly as it
         # does in slot calculation, so hours that exist only because of an
         # override still get their padding.
-        override = next((o for o in rule.date_overrides if o.date == local_date), None)
+        override = next((o for o in applied_overrides(rule) if o.date == local_date), None)
         if override is not None:
             if override.is_closed:
                 continue
@@ -331,6 +332,10 @@ def _unclaimed(
 
 def _create_buffer_effects(appt: Appointment) -> list[Effect]:
     """Draw the pre/post buffer events for this one appointment."""
+    if not is_feature_on("buffers"):
+        # Switched off in Settings: new appointments get no buffers. Existing
+        # buffers are still cleared by cancel and reschedule.
+        return []
     if not appt.provider or appt.status == AppointmentProgressStatus.CANCELLED:
         return []
     if not _is_visit(appt):

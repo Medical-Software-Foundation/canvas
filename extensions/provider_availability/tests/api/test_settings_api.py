@@ -194,3 +194,59 @@ class TestOverviewFollowsAccess:
         settings.set_default_access("none")
         data, _ = _parse(_handler(staff_id=SCHED).get_overview()[0])
         assert [p["provider_id"] for p in data["providers"]] == [PROV1]
+
+
+class TestFeatureEndpoints:
+    @patch(f"{MODULE}.apply_feature_change", return_value=["effect"])
+    def test_turn_off_with_a_choice(self, mock_apply):
+        result = _handler(json_body={"feature": "buffers", "on": False, "choice": "remove"}).put_feature()
+        assert result[0] == "effect"
+        data, code = _parse(result[1])
+        assert code == HTTPStatus.OK
+        assert data["changed"] == 1
+        assert mock_apply.mock_calls == [call("buffers", False, "remove")]
+
+    def test_on_must_be_a_boolean(self):
+        data, code = _parse(_handler(json_body={"feature": "buffers", "on": "no"}).put_feature()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+
+    def test_missing_choice_is_a_400(self):
+        data, code = _parse(_handler(json_body={"feature": "buffers", "on": False}).put_feature()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Choose one of" in data["error"]
+
+    def test_non_admin_cannot(self):
+        _, code = _parse(_handler(staff_id=SCHED, json_body={"feature": "buffers", "on": False, "choice": "keep"}).put_feature()[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert settings.is_feature_on("buffers") is True
+
+    @patch(f"{MODULE}.affected_items", return_value={"total": 0, "providers": []})
+    def test_affected(self, mock_items):
+        data, code = _parse(_handler(path_params={"feature": "holds"}).get_affected()[0])
+        assert code == HTTPStatus.OK
+        assert mock_items.mock_calls == [call("holds")]
+
+    def test_affected_unknown_feature(self):
+        _, code = _parse(_handler(path_params={"feature": "rounding"}).get_affected()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+
+
+class TestSwitchedOffFeaturesRefuseNewData:
+    def test_no_new_holds(self):
+        settings.set_feature("holds", False)
+        body = {"provider_id": PROV1, "hold_type": "same_day", "weekly_schedule": {}}
+        data, code = _parse(_handler(json_body=body).create_recurring_block()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Holds are turned off" in data["error"]
+
+    def test_no_new_overrides(self):
+        settings.set_feature("overrides", False)
+        data, code = _parse(_handler(path_params={"provider_id": PROV1, "rule_id": "r1"}).add_override()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Date overrides are turned off" in data["error"]
+
+    def test_no_provider_timezones(self):
+        settings.set_feature("provider_timezones", False)
+        data, code = _parse(_handler(json_body={"provider_id": PROV1, "timezone": "US/Pacific"}).set_provider_tz()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Provider timezones are turned off" in data["error"]

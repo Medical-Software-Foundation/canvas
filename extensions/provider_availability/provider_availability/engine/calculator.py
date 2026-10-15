@@ -27,6 +27,7 @@ from provider_availability.engine.models import (
 from provider_availability.engine.admin_calendar import own_calendars_q
 from provider_availability.engine.event_sync import AVAILABILITY_TITLE
 from provider_availability.engine.provider_resolver import get_provider_display
+from provider_availability.engine.settings import applied_overrides
 from provider_availability.engine.storage import get_blocks_for_provider, get_recurring_blocks_for_provider
 from provider_availability.engine.tz_utils import provider_now, to_provider_naive
 
@@ -161,7 +162,7 @@ def calculate_available_slots(
             current_date += timedelta(days=1)
 
     # Build date override lookup
-    override_lookup = {o.date: o for o in rule.date_overrides}
+    override_lookup = {o.date: o for o in applied_overrides(rule)}
 
     # Generate slots day by day
     granularity = timedelta(minutes=rule.booking_interval.slot_granularity_minutes)

@@ -36,6 +36,7 @@ from provider_availability.engine.models import (
     date_in_pattern,
 )
 from provider_availability.engine.roles import get_schedulable_provider_ids
+from provider_availability.engine.settings import applied_overrides, is_feature_on
 from provider_availability.engine.storage import (
     get_blocks_for_provider,
     get_event_ids,
@@ -267,7 +268,7 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
                 event_count += 1
 
             # Daily mode: still honor explicit date_overrides by emitting one-off events.
-            for ovr in rule.date_overrides:
+            for ovr in applied_overrides(rule):
                 if ovr.is_closed or not ovr.time_windows:
                     continue
                 for ovr_window in ovr.time_windows:
@@ -287,9 +288,8 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
         # Weekly path
         # Collect override dates by weekday for splitting recurring events
         overrides_by_weekday: dict[int, list[DateOverride]] = {}
-        if rule.date_overrides:
-            for ovr in rule.date_overrides:
-                overrides_by_weekday.setdefault(ovr.date.weekday(), []).append(ovr)
+        for ovr in applied_overrides(rule):
+            overrides_by_weekday.setdefault(ovr.date.weekday(), []).append(ovr)
 
         for day, windows in rule.weekly_schedule.items():
             weekday_int = DAY_TO_WEEKDAY.get(day)
@@ -763,7 +763,7 @@ def _lead_intervals_for_rule(
     end_date = lead_end_local.date()
 
     # Check date overrides — use override windows instead of weekly schedule
-    override_lookup = {o.date: o for o in rule.date_overrides}
+    override_lookup = {o.date: o for o in applied_overrides(rule)}
 
     rule_is_daily = rule.recurrence_frequency == "daily"
     rule_interval = max(1, rule.recurrence_interval)
@@ -826,6 +826,10 @@ def build_provider_lead_time_effects(
     Called every cron tick. Skips the rebuild if existing lead-time events
     are within LEAD_TIME_DRIFT_THRESHOLD_SECONDS of the expected window.
     """
+    if not is_feature_on("lead_time"):
+        # Switched off in Settings: draw nothing. Blocks already drawn run out on
+        # their own unless the admin chose to remove them (engine.features).
+        return []
     rules = lead_time_rules(rules)
     if not rules:
         # Lead time turned off or no rules left: clear any Lead Time events still blocking.
@@ -911,7 +915,7 @@ def _get_provider_override_map(provider_id: str) -> dict[date, list]:
     """
     override_map: dict[date, list] = {}
     for rule in get_rules_for_provider(provider_id):
-        for ovr in rule.date_overrides:
+        for ovr in applied_overrides(rule):
             if ovr.is_closed:
                 override_map[ovr.date] = []  # empty = fully closed
             else:
@@ -1171,6 +1175,9 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
     - next_day: blocks dates > today + 1 (today and tomorrow available)
     """
     effects: list[Effect] = []
+    if not is_feature_on("holds"):
+        # Switched off in Settings: no new hold events.
+        return effects
     today = date.today()
 
     # Determine the first date that should be blocked
@@ -1295,6 +1302,10 @@ def build_provider_hold_refresh_effects(
     events are found by title per provider, so the delete runs once per
     provider, not once per hold block.
     """
+    if not is_feature_on("holds"):
+        # Switched off in Settings: holds stop refreshing, so those already on
+        # calendars stay until their dates pass (or the admin removes them).
+        return []
     holds = [b for b in blocks if b.is_active and b.hold_type != "none"]
     if not holds:
         return []

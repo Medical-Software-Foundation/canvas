@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from provider_availability.engine.settings import is_feature_on
 from provider_availability.engine.storage import get_practice_timezone, get_provider_timezone
 
 
@@ -33,9 +34,10 @@ def provider_tz(provider_id: str) -> ZoneInfo:
     """Return the timezone for the given provider.
 
     Checks for a per-provider timezone first, then falls back to the
-    practice-level timezone.
+    practice-level timezone. With provider timezones switched off in Settings,
+    every provider uses the practice timezone.
     """
-    tz_name = get_provider_timezone(provider_id)
+    tz_name = get_provider_timezone(provider_id) if is_feature_on("provider_timezones") else None
     if tz_name:
         return ZoneInfo(tz_name)
     return practice_tz()

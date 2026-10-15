@@ -42,14 +42,39 @@ def is_feature_on(name: str) -> bool:
     return get_features().get(name, True)
 
 
-def set_feature(name: str, on: bool) -> dict[str, bool]:
+# Stored next to the switches: whether date overrides saved before the switch
+# was turned off keep applying. Only read while overrides are off.
+_KEEP_OVERRIDES = "overrides_keep_existing"
+
+
+def set_feature(name: str, on: bool, keep_existing_overrides: bool = True) -> dict[str, bool]:
     """Turn one feature on or off. Raises ValueError for an unknown feature."""
     if name not in FEATURES:
         raise ValueError(f"Unknown feature: {name}")
-    features = get_features()
-    features[name] = bool(on)
-    _get_cache().set(FEATURES_KEY, features, timeout_seconds=CACHE_TTL_SECONDS)
-    return features
+    stored = dict(_get_cache().get(FEATURES_KEY) or {})
+    stored.update(get_features())
+    stored[name] = bool(on)
+    if name == "overrides":
+        stored[_KEEP_OVERRIDES] = bool(on) or bool(keep_existing_overrides)
+    _get_cache().set(FEATURES_KEY, stored, timeout_seconds=CACHE_TTL_SECONDS)
+    return get_features()
+
+
+def overrides_applied() -> bool:
+    """Whether saved date overrides change providers' hours.
+
+    True while the feature is on. With it off, true only if the admin chose to
+    keep applying the overrides that already existed.
+    """
+    stored = _get_cache().get(FEATURES_KEY) or {}
+    if stored.get("overrides", True):
+        return True
+    return bool(stored.get(_KEEP_OVERRIDES, True))
+
+
+def applied_overrides(rule: Any) -> list:
+    """The rule's date overrides that should change its hours right now."""
+    return list(rule.date_overrides) if overrides_applied() else []
 
 
 # ── New rule defaults ──────────────────────────────────────────────────
