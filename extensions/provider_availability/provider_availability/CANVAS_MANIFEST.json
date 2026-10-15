@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.23.28",
+    "plugin_version": "0.24.0",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {
@@ -10,7 +10,7 @@
                 "description": "REST API for querying availability and managing rules",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole"],
+                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole", "Team"],
                     "write": ["Calendar", "Event"]
                 }
             },
@@ -28,7 +28,7 @@
                 "description": "Staff-session API for bulk availability import from a CSV file",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole"],
+                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole", "Team"],
                     "write": ["Calendar", "Event"]
                 }
             },

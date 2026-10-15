@@ -33,7 +33,32 @@ After install, open **Provider Availability** from the provider menu to manage s
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff key UUIDs allowed to edit rules in the admin UI (and to commit a bulk import). Empty = allow all staff (bootstrap). |
+| `allowed-staff-keys` | Comma-separated staff key UUIDs who are admins when no admin team is picked in Settings. Empty, with no team picked, = every staff member is an admin (bootstrap). |
+
+### Access control
+
+Set in **Settings → Access control**. Any signed-in staff member can open the app; what they can see and change follows these rules, checked on every write:
+
+1. **Admins** edit every provider and change Settings. Admins are the members of the Canvas team picked as the admin team. With no team picked (or a team with no members), the `allowed-staff-keys` secret lists them. With neither, everyone is an admin.
+2. **Every provider** can always edit their own availability.
+3. **Editing groups** are made in the app: a group's schedulers can edit only that group's providers (they can still view others unless default access is No access). The group form can add everyone at a primary practice location at once.
+4. **Everyone else** gets the **default access** level: Full access (view and edit every provider, the starting value), View access, or No access (only their own).
+
+A practice that restricted the plugin with the `allowed-staff-keys` secret starts at **No access** until someone saves a default access level, so staff the secret left out do not gain access when this version installs. Practice timezone, schedulable roles, bulk timezones and bulk import are admin only.
+
+### Scheduling features
+
+**Settings → Scheduling** has a switch for each of appointment buffers, lead time, same-day and next-day holds, date overrides, and provider timezones. All start on. Turning one off stops new events at once and asks what to do with the ones already on calendars, with a "View affected items" list by provider:
+
+| Feature | Choices when turned off |
+|---------|-------------------------|
+| Appointment buffers | Keep each buffer until its appointment ends, or remove them now |
+| Lead time | Keep blocks until they expire (within a day), or remove them now |
+| Holds | Keep holds until they end, or remove them now. The Hold rule type is hidden |
+| Date overrides | Keep applying existing overrides (no new ones), or stop applying them (those dates go back to regular hours) |
+| Provider timezones | Every provider moves to the practice timezone and their events are redrawn |
+
+While a feature is off the API refuses new holds, new overrides and new provider timezones. **New rule defaults** (pre- and post-appointment buffer, minimum lead time) pre-fill the Add form; they start at 0.
 
 ### Practice and provider timezones
 
@@ -43,7 +68,7 @@ Set a practice-level default timezone in the admin UI **Settings** tab, with opt
 
 Which staff can be scheduled is configurable per practice from the **Settings** tab under **Schedulable Roles**. Staff in a checked role get a Clinic calendar (on activation, plugin install, provisioning, and the daily cron) and appear in the provider pickers. Roles are matched by StaffRole **internal code** — always present, unlike the public abbreviation, so non-clinical roles (Care Coordinator, Office Manager, etc.) can be scheduled too. The checklist lists each role as `Name (CODE) — N staff` for every role active staff currently hold.
 
-Until you save a list, every staff member with a Provider role type is schedulable, the same as before roles were configurable. The Settings tab shows those roles' codes as the current selection. A saved list that matches no active staff falls back to the Provider role type rather than making nobody bookable. The set can also be read/written via the API: `GET`/`PUT /api/roles` (staff session, write-gated by `allowed-staff-keys`) and `GET`/`PUT /provision/roles` (API key).
+Until you save a list, every staff member with a Provider role type is schedulable, the same as before roles were configurable. The Settings tab shows those roles' codes as the current selection. A saved list that matches no active staff falls back to the Provider role type rather than making nobody bookable. The set can also be read/written via the API: `GET`/`PUT /api/roles` (staff session, admins only) and `GET`/`PUT /provision/roles` (API key).
 
 ## Screenshots
 
@@ -188,10 +213,18 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | GET | `/expired-summary` | Items that ended over 30 days ago, for providers the viewer can edit |
 | POST | `/expired/remove` | Remove picked expired items from the plugin's lists (calendar history stays) |
 | POST | `/expired/snooze` | Hide picked expired items for 30 days |
+| GET | `/settings` | Everything the Settings tab shows (admins only) |
+| PUT | `/settings/features` | Turn a Scheduling feature on or off, with the keep/remove choice (admins only) |
+| GET | `/settings/affected/<feature>` | What turning a feature off would affect, by provider (admins only) |
+| PUT | `/settings/rule-defaults` | Save new rule defaults (admins only) |
+| PUT | `/settings/access` | Set the admin team and/or default access (admins only) |
+| POST | `/settings/groups` | Create an editing group (admins only) |
+| PUT | `/settings/groups/<group_id>` | Replace an editing group (admins only) |
+| DELETE | `/settings/groups/<group_id>` | Delete an editing group (admins only) |
 | GET | `/availability-admin` | Serve admin UI HTML with preloaded data |
 | POST | `/form-action` | CSP-compliant form dispatch for admin UI writes |
-| GET | `/admin.css` | Admin UI stylesheet |
-| GET | `/admin.js` | Admin UI JavaScript |
+| GET | `/admin.css`, `/theme.css` | Admin UI stylesheets (theme.css is the Dot Phrases admin look, layered on admin.css) |
+| GET | `/admin.js`, `/settings.js` | Admin UI JavaScript (settings.js runs the Settings tab) |
 | GET | `/tokens.css`, `/typography.css`, `/canvas-components.js` | Canvas design-system static assets |
 
 ### CSVImportAPI (session-authenticated)
@@ -200,7 +233,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 |--------|------|-------------|
 | GET | `/csv/template` | Download the CSV template |
 | POST | `/csv/validate` | Upload a CSV (multipart `file`), returns per-row errors and previewed records |
-| POST | `/csv/commit` | Persist previewed records and sync calendar events (gated by `allowed-staff-keys`) |
+| POST | `/csv/commit` | Persist previewed records and sync calendar events (admins only) |
 
 ### ProvisionAPI (API key-authenticated)
 
@@ -217,7 +250,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff UUIDs allowed to open the admin UI and edit rules. Dashed or undashed UUIDs both work. Leave empty/unset to allow any logged-in Canvas staff member (bootstrap). |
+| `allowed-staff-keys` | Comma-separated staff UUIDs who are admins when no admin team is picked. Dashed or undashed UUIDs both work. Empty, with no team picked, makes every staff member an admin (bootstrap). See Access control. |
 
 ### Data Model
 
