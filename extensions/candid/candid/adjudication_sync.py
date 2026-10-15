@@ -48,6 +48,8 @@ from candid.effect_helpers import (
 PR_DEDUCTIBLE = "PR-1"
 PR_COINSURANCE = "PR-2"
 PR_COPAY = "PR-3"
+# Canvas's "Transfer" adjustment group, the code billers use for manual balance moves
+TRANSFER_CODE = "TR-0"
 
 
 def _cents_to_dollars(cents: int | None) -> Decimal | None:
@@ -209,12 +211,15 @@ def _build_insurance_transactions(
     line_items: list,
     canvas_claim_id: str,
     transfer_to: str | None = None,
+    pr_transfer_to: str = PATIENT_COVERAGE_ID,
 ) -> list[LineItemTransaction]:
     """Build insurance payment + adjustment transactions from encounter service lines.
 
     When ``transfer_to`` is set (e.g. ``"patient"`` or a coverage UUID),
     adjustment transactions include ``transfer_remaining_balance_to`` so the
     remaining balance moves to the appropriate payer after insurance pays.
+    Patient responsibility (deductible, coinsurance, copay) moves to
+    ``pr_transfer_to``.
     """
     txns: list[LineItemTransaction] = []
     line_items_by_id = {str(li.id): li for li in line_items}
@@ -281,9 +286,6 @@ def _build_insurance_transactions(
                     )
                 )
 
-        # Patient responsibility (deductible, coinsurance, copay) always
-        # transfers to the patient — these are the patient's share regardless
-        # of what next_responsible_party says about the remaining balance.
         for cents_field, pr_code in (
             ("deductible_cents", PR_DEDUCTIBLE),
             ("coinsurance_cents", PR_COINSURANCE),
@@ -296,7 +298,7 @@ def _build_insurance_transactions(
                         claim_line_item_id=line_item_id,
                         adjustment=amount,
                         adjustment_code=pr_code,
-                        transfer_remaining_balance_to="patient",
+                        transfer_remaining_balance_to=pr_transfer_to,
                     )
                 )
 
@@ -316,6 +318,71 @@ def _build_secondary_transactions(
         if payment:
             txns.append(
                 LineItemTransaction(claim_line_item_id=line_item_id, payment=payment)
+            )
+    return txns
+
+
+def _coverage_balance_by_line(coverage: Any) -> dict[int, Decimal]:
+    """Canvas's balance on ``coverage`` per claim line item, keyed by line dbid."""
+    balances: dict[int, Decimal] = {}
+
+    def add(line_dbid: int, amount: Decimal) -> None:
+        balances[line_dbid] = balances.get(line_dbid, Decimal("0")) + amount
+
+    # billing_line_item_id holds the ClaimLineItem dbid on every SDK version
+    for transfer in coverage.transfers.active().filter(
+        posting__entered_in_error__isnull=True
+    ):
+        add(transfer.billing_line_item_id, transfer.amount)
+    for posting in coverage.postings.active():
+        for payment in posting.newlineitempayments.active():
+            add(payment.billing_line_item_id, -payment.amount)
+        for adjustment in posting.newlineitemadjustments.active():
+            if adjustment.write_off:
+                add(adjustment.billing_line_item_id, -adjustment.amount)
+        for transfer in posting.lineitemtransfers.active():
+            add(transfer.billing_line_item_id, -transfer.amount)
+    return balances
+
+
+def _secondary_leftover_transactions(
+    state: "_SyncState", service_lines: list[dict], next_responsible: str
+) -> list[LineItemTransaction]:
+    """Move what the secondary left unpaid to whoever Candid says owes the rest."""
+    if next_responsible == "patient":
+        target = PATIENT_COVERAGE_ID
+    elif next_responsible == "tertiary" and state.tertiary_id:
+        target = state.tertiary_id
+    else:
+        return []
+
+    balances = _coverage_balance_by_line(state.secondary_coverage)
+    dbid_by_line_id = {str(li.id): li.dbid for li in state.line_items}
+    # Several Candid lines can match one Canvas line; its leftover moves once
+    paid_by_line: dict[str, Decimal] = {}
+    for idx, sl in enumerate(service_lines):
+        line_item_id = _match_line_item(
+            sl, state.line_items, state.canvas_claim_id, index=idx
+        )
+        if not line_item_id:
+            continue
+        paid = _cents_to_dollars(sl.get("secondary_paid_amount_cents")) or Decimal("0")
+        paid_by_line[line_item_id] = paid_by_line.get(line_item_id, Decimal("0")) + paid
+
+    txns: list[LineItemTransaction] = []
+    for line_item_id, paid in paid_by_line.items():
+        on_secondary = balances.get(
+            dbid_by_line_id[line_item_id], Decimal("0")
+        ) + state.moved_to_secondary.get(line_item_id, Decimal("0"))
+        leftover = on_secondary - paid
+        if leftover > 0:
+            txns.append(
+                LineItemTransaction(
+                    claim_line_item_id=line_item_id,
+                    adjustment=leftover,
+                    adjustment_code=TRANSFER_CODE,
+                    transfer_remaining_balance_to=target,
+                )
             )
     return txns
 
@@ -446,7 +513,9 @@ class _SyncState:
     era_totals: dict[str, int] = field(default_factory=dict)
     payment_effect_count: int = 0
     claim_status: str = DEFAULT_CLAIM_STATUS
-    last_encounter_data: dict | None = None
+    primary_encounter_data: dict | None = None
+    secondary_coverage: Any | None = None
+    moved_to_secondary: dict[str, Decimal] = field(default_factory=dict)
 
 
 def _init_sync_state(claim: Claim) -> _SyncState:
@@ -474,6 +543,7 @@ def _init_sync_state(claim: Claim) -> _SyncState:
             "secondary": None,
             "tertiary": None,
         },
+        secondary_coverage=coverages_ordered[1] if len(coverages_ordered) > 1 else None,
     )
 
 
@@ -481,9 +551,8 @@ def _resolve_transfer_target(state: _SyncState, next_responsible: str) -> str | 
     """Determine where the remaining balance transfers after this insurance posting.
 
     For adjustments (CO-45 etc.) the transfer goes to whoever is next
-    responsible. For patient responsibility amounts (deductible, coinsurance,
-    copay) the transfer always goes to patient — see
-    ``_build_insurance_transactions`` which handles PR codes separately.
+    responsible. Patient responsibility amounts (deductible, coinsurance,
+    copay) are routed separately — see ``_post_era_payments``.
     """
     if next_responsible == "patient":
         return "patient"
@@ -502,6 +571,7 @@ def _post_era_payments(
     service_lines: list[dict],
     new_eras: list[dict],
     transfer_to: str | None,
+    next_responsible: str,
 ) -> None:
     """Post primary/secondary/tertiary insurance payments for the new ERAs on a Candid claim."""
     # ERAs are ordered: index 0 = primary, 1 = secondary, 2 = tertiary.
@@ -527,27 +597,48 @@ def _post_era_payments(
         and state.primary_id
     ):
         primary_era = _era_at(all_eras, 0)
+        # Like Canvas's ERA posting: PR goes to the next coverage, else the patient.
         insurance_txns = _build_insurance_transactions(
             service_lines,
             state.line_items,
             state.canvas_claim_id,
             transfer_to=transfer_to,
+            pr_transfer_to=state.secondary_id or PATIENT_COVERAGE_ID,
         )
         if insurance_txns:
             _append_payment_effect(state, state.primary_id, insurance_txns, primary_era)
+            for txn in insurance_txns:
+                if (
+                    state.secondary_id
+                    and txn.transfer_remaining_balance_to == state.secondary_id
+                ):
+                    line_id = str(txn.claim_line_item_id)
+                    state.moved_to_secondary[line_id] = (
+                        state.moved_to_secondary.get(line_id, Decimal("0"))
+                        + txn.adjustment
+                    )
 
     # Secondary (ERA index 1) / Tertiary (ERA index 2)
+    new_era_ids = {str(era["era_id"]) for era in new_eras}
+    # A $0 secondary (a denial, its own deductible) sends an ERA but no paid delta
+    secondary_adjudicated = current_amounts["secondary"] > 0 or any(
+        str(era.get("era_id") or "") in new_era_ids for era in all_eras[1:]
+    )
     for coverage_id, paid_field, tier, era_index in (
         (state.secondary_id, "secondary_paid_amount_cents", "secondary", 1),
         (state.tertiary_id, "tertiary_paid_amount_cents", "tertiary", 2),
     ):
         if not coverage_id:
             continue
-        if not _has_delta(current_amounts, state.prev_synced_amounts, tier):
-            continue
-        txns = _build_secondary_transactions(
-            service_lines, state.line_items, state.canvas_claim_id, paid_field
-        )
+        txns: list[LineItemTransaction] = []
+        if _has_delta(current_amounts, state.prev_synced_amounts, tier):
+            txns = _build_secondary_transactions(
+                service_lines, state.line_items, state.canvas_claim_id, paid_field
+            )
+        if tier == "secondary" and secondary_adjudicated:
+            txns.extend(
+                _secondary_leftover_transactions(state, service_lines, next_responsible)
+            )
         if not txns:
             continue
         _append_payment_effect(state, coverage_id, txns, _era_at(all_eras, era_index))
@@ -606,16 +697,18 @@ def _post_patient_payments_for_candid_claim(
 
 
 def _process_encounter(
-    state: _SyncState, encounter_data: dict, client: CandidClient
+    state: _SyncState, encounter_data: dict, client: CandidClient, overflow: bool
 ) -> None:
     """Process all Candid claims inside one Candid encounter response."""
-    state.last_encounter_data = encounter_data
+    # Split 1 holds the claim's real lines, so only it sets status and queue
+    if not overflow:
+        state.primary_encounter_data = encounter_data
     next_responsible = (encounter_data.get("next_responsible_party") or "").lower()
     transfer_to = _resolve_transfer_target(state, next_responsible)
 
     for candid_claim in encounter_data.get("claims", []):
         candid_claim_id = candid_claim.get("claim_id", "")
-        if candid_claim_status := candid_claim.get("status"):
+        if not overflow and (candid_claim_status := candid_claim.get("status")):
             state.claim_status = candid_claim_status
 
         service_lines = candid_claim.get("service_lines", [])
@@ -626,9 +719,17 @@ def _process_encounter(
             if (era_id := str(era.get("era_id") or ""))
             and era_id not in state.synced_era_ids
         ]
-        if new_eras:
+        if new_eras and overflow:
+            # Its only line is the $0.01 placeholder, which isn't on the Canvas claim
+            state.attempted_era_ids.extend(str(era["era_id"]) for era in new_eras)
+        elif new_eras:
             _post_era_payments(
-                state, candid_claim, service_lines, new_eras, transfer_to
+                state,
+                candid_claim,
+                service_lines,
+                new_eras,
+                transfer_to,
+                next_responsible,
             )
 
         _post_patient_payments_for_candid_claim(state, client, candid_claim_id)
@@ -656,8 +757,8 @@ def _finalize_effects(state: _SyncState, claim: Claim) -> None:
         )
     )
 
-    if state.payment_effect_count > 0 and state.last_encounter_data:
-        target_queue = _determine_target_queue(state.last_encounter_data)
+    if state.payment_effect_count > 0 and state.primary_encounter_data:
+        target_queue = _determine_target_queue(state.primary_encounter_data)
         state.effects.append(state.claim_effect.move_to_queue(target_queue))
         log.info(f"Candid sync: moving claim {state.canvas_claim_id} to {target_queue}")
 
@@ -746,7 +847,12 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
                 f"for claim {state.canvas_claim_id}: {e}"
             )
             continue
-        _process_encounter(state, encounter_data, client)
+        _process_encounter(
+            state,
+            encounter_data,
+            client,
+            overflow=(encounter_record.get("split") or 1) > 1,
+        )
 
     _finalize_effects(state, claim)
 

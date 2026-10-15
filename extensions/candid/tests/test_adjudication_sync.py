@@ -8,8 +8,10 @@ from candid.adjudication_sync import (
     PR_COINSURANCE,
     PR_COPAY,
     PR_DEDUCTIBLE,
+    TRANSFER_CODE,
     _build_insurance_transactions,
     _cents_to_dollars,
+    _coverage_balance_by_line,
     _determine_target_queue,
     _match_line_item,
     sync_claim_adjudications,
@@ -17,6 +19,7 @@ from candid.adjudication_sync import (
 from canvas_sdk.v1.data.claim import ClaimQueues
 from candid.effect_helpers import (
     ERA_DESC_PREFIX,
+    META_SYNCED_AMOUNTS,
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
     PATIENT_PAYMENT_DESC_PREFIX,
@@ -30,12 +33,14 @@ def _fake_line_item(
     charge: Decimal,
     from_date: str = "2026-01-15",
     li_id: str = "li-1",
+    dbid: int = 101,
 ) -> MagicMock:
     li = MagicMock()
     li.proc_code = proc_code
     li.charge = charge
     li.from_date = from_date
     li.id = li_id
+    li.dbid = dbid
     return li
 
 
@@ -755,6 +760,330 @@ def test_sync_does_not_create_separate_patient_posting_for_pr() -> None:
         assert len(insurance_calls) == 1
 
 
+def test_insurance_pr_transfers_to_given_target() -> None:
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    service_lines = [
+        _candid_service_line(
+            primary_paid_amount_cents=7000,
+            deductible_cents=1500,
+            coinsurance_cents=500,
+            copay_cents=2000,
+        )
+    ]
+
+    default_txns = _build_insurance_transactions(service_lines, [li], CANVAS_CLAIM_ID)
+    secondary_txns = _build_insurance_transactions(
+        service_lines, [li], CANVAS_CLAIM_ID, pr_transfer_to="cov-secondary"
+    )
+
+    def pr_targets(txns: list) -> dict[str, str]:
+        return {
+            t.adjustment_code: t.transfer_remaining_balance_to
+            for t in txns
+            if t.adjustment_code in (PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY)
+        }
+
+    assert pr_targets(default_txns) == dict.fromkeys(
+        (PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY), "patient"
+    )
+    assert pr_targets(secondary_txns) == dict.fromkeys(
+        (PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY), "cov-secondary"
+    )
+
+
+def _sync_pr_transfer_targets(coverages: list, eras: list[dict]) -> list:
+    """Run a sync for a claim with PR amounts; return each PR txn's transfer target."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim(
+        [li],
+        coverages=coverages,
+        metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
+    )
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9500,
+                coinsurance_cents=2000,
+                copay_cents=500,
+            )
+        ],
+        eras=eras,
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        primary_call = next(
+            c
+            for c in ce.post_payment.call_args_list
+            if c.kwargs["claim_coverage_id"] == "cov-primary"
+        )
+        return [
+            t.transfer_remaining_balance_to
+            for t in primary_call.kwargs["line_item_transactions"]
+            if t.adjustment_code in (PR_COINSURANCE, PR_COPAY)
+        ]
+
+
+def test_sync_moves_pr_to_secondary_when_claim_has_secondary() -> None:
+    targets = _sync_pr_transfer_targets(
+        coverages=[
+            _fake_coverage("cov-primary", "Primary"),
+            _fake_coverage("cov-secondary", "Secondary"),
+        ],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    assert targets == ["cov-secondary", "cov-secondary"]
+
+
+def test_sync_moves_pr_to_patient_without_secondary() -> None:
+    targets = _sync_pr_transfer_targets(
+        coverages=[_fake_coverage("cov-primary", "Primary")],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    assert targets == ["patient", "patient"]
+
+
+# ---------------------------------------------------------------------------
+# Secondary leftover (what the secondary didn't pay)
+# ---------------------------------------------------------------------------
+
+
+def _txn(line_dbid: int, amount: str, write_off: bool = False) -> MagicMock:
+    txn = MagicMock()
+    txn.billing_line_item_id = line_dbid
+    txn.amount = Decimal(amount)
+    txn.write_off = write_off
+    return txn
+
+
+def _fake_secondary(
+    transferred_in: list | None = None,
+    payments: list | None = None,
+    adjustments: list | None = None,
+    transfers_out: list | None = None,
+) -> MagicMock:
+    """A secondary coverage whose Canvas balance comes from these transactions."""
+    cov = _fake_coverage("cov-secondary", "Secondary")
+    cov.transfers.active.return_value.filter.return_value = transferred_in or []
+    posting = MagicMock()
+    posting.newlineitempayments.active.return_value = payments or []
+    posting.newlineitemadjustments.active.return_value = adjustments or []
+    posting.lineitemtransfers.active.return_value = transfers_out or []
+    cov.postings.active.return_value = [posting]
+    return cov
+
+
+def test_coverage_balance_by_line() -> None:
+    cov = _fake_secondary(
+        transferred_in=[_txn(101, "20.00"), _txn(102, "10.00")],
+        payments=[_txn(101, "15.00")],
+        adjustments=[_txn(101, "2.00", write_off=True), _txn(101, "3.00")],
+        transfers_out=[_txn(101, "1.00")],
+    )
+
+    # A non-write-off adjustment doesn't change what the coverage owes.
+    assert _coverage_balance_by_line(cov) == {
+        101: Decimal("2.00"),
+        102: Decimal("10.00"),
+    }
+
+
+def _sync_secondary_posting(
+    secondary: MagicMock,
+    next_responsible: str,
+    metadata: dict | None = None,
+    eras: list[dict] | None = None,
+    secondary_paid_cents: int = 1500,
+    service_lines: list[dict] | None = None,
+) -> list:
+    """Sync a claim with a $20 coinsurance and the secondary's ERA; return its txns."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1", dbid=101)
+    claim = _fake_claim(
+        [li],
+        coverages=[_fake_coverage("cov-primary", "Primary"), secondary],
+        metadata={
+            "candid_encounters": [{"candid_encounter_id": "enc-abc"}],
+            **(metadata or {}),
+        },
+    )
+    encounter = _encounter_response(
+        service_lines=service_lines
+        or [
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9000,
+                coinsurance_cents=2000,
+                secondary_paid_amount_cents=secondary_paid_cents,
+            )
+        ],
+        eras=eras or [{"era_id": "era-1"}, {"era_id": "era-2"}],
+    )
+    encounter["next_responsible_party"] = next_responsible
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        secondary_call = next(
+            c
+            for c in ce.post_payment.call_args_list
+            if c.kwargs["claim_coverage_id"] == "cov-secondary"
+        )
+        return secondary_call.kwargs["line_item_transactions"]
+
+
+# The primary was posted on an earlier sync; only the secondary's ERA is new.
+PRIMARY_ALREADY_POSTED = {
+    META_SYNCED_ERA_IDS: ["era-1"],
+    "candid_synced_amounts": {"primary": 7000, "secondary": 0, "tertiary": 0},
+}
+
+
+def test_secondary_leftover_moves_to_patient_when_candid_says_patient() -> None:
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="patient",
+        metadata=PRIMARY_ALREADY_POSTED,
+    )
+
+    assert txns[0].payment == Decimal("15.00")
+    assert txns[1].adjustment == Decimal("5.00")
+    assert txns[1].adjustment_code == TRANSFER_CODE
+    assert txns[1].transfer_remaining_balance_to == "patient"
+
+
+def test_secondary_leftover_stays_when_candid_says_nobody_owes() -> None:
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="none",
+        metadata=PRIMARY_ALREADY_POSTED,
+    )
+
+    assert [t.payment for t in txns] == [Decimal("15.00")]
+
+
+def test_secondary_leftover_moves_when_the_secondary_pays_nothing() -> None:
+    """A secondary denial pays $0, so its ERA is the only sign it adjudicated."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="patient",
+        metadata=PRIMARY_ALREADY_POSTED,
+        secondary_paid_cents=0,
+    )
+
+    assert [
+        (t.payment, t.adjustment, t.adjustment_code, t.transfer_remaining_balance_to)
+        for t in txns
+    ] == [(None, Decimal("20.00"), TRANSFER_CODE, "patient")]
+
+
+def test_secondary_leftover_counts_pr_moved_in_the_same_sync() -> None:
+    """Primary and secondary ERAs arrive together: PR moves to the secondary, then
+    the secondary's leftover moves on to the patient."""
+    txns = _sync_secondary_posting(_fake_secondary(), next_responsible="patient")
+
+    leftover = [t for t in txns if t.adjustment_code == TRANSFER_CODE]
+    assert [(t.adjustment, t.transfer_remaining_balance_to) for t in leftover] == [
+        (Decimal("5.00"), "patient")
+    ]
+
+
+def test_secondary_leftover_moves_once_when_candid_lines_share_a_canvas_line() -> None:
+    """Two Candid lines match the one Canvas line; its $20 balance moves on once."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="patient",
+        metadata=PRIMARY_ALREADY_POSTED,
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=3500,
+                coinsurance_cents=1000,
+                secondary_paid_amount_cents=1500,
+            ),
+            _candid_service_line(
+                primary_paid_amount_cents=3500,
+                coinsurance_cents=1000,
+                secondary_paid_amount_cents=0,
+            ),
+        ],
+    )
+
+    assert [
+        (t.payment, t.adjustment, t.adjustment_code, t.transfer_remaining_balance_to)
+        for t in txns
+    ] == [
+        (Decimal("15.00"), None, None, None),
+        (None, Decimal("5.00"), TRANSFER_CODE, "patient"),
+    ]
+
+
+def test_secondary_leftover_skips_when_balance_was_never_on_the_secondary() -> None:
+    """Claims posted before this fix left PR on the patient; don't move it twice."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(),
+        next_responsible="patient",
+        metadata=PRIMARY_ALREADY_POSTED,
+    )
+
+    assert [t.payment for t in txns] == [Decimal("15.00")]
+
+
+def test_pr_stays_on_secondary_until_the_secondary_adjudicates() -> None:
+    """Primary-only ERA: PR waits on the secondary even when Candid says patient."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1", dbid=101)
+    claim = _fake_claim(
+        [li],
+        coverages=[_fake_coverage("cov-primary", "Primary"), _fake_secondary()],
+        metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
+    )
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9000,
+                coinsurance_cents=2000,
+            )
+        ],
+        eras=[{"era_id": "era-1"}],
+    )
+    encounter["next_responsible_party"] = "patient"
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        coverage_ids = [
+            c.kwargs["claim_coverage_id"] for c in ce.post_payment.call_args_list
+        ]
+        assert coverage_ids == ["cov-primary"]
+
+
 # ---------------------------------------------------------------------------
 # Multi-encounter / cross-encounter dedup
 # ---------------------------------------------------------------------------
@@ -797,6 +1126,103 @@ def test_sync_dedupes_patient_payment_across_encounters() -> None:
             if c.kwargs["claim_coverage_id"] == "patient"
         ]
         assert len(patient_payment_calls) == 1
+
+
+SPLIT_ENCOUNTERS = [
+    {"split": 1, "candid_encounter_id": "enc-1"},
+    {"split": 2, "candid_encounter_id": "enc-2"},
+]
+
+
+def _overflow_encounter(status: str, eras: list[dict] | None = None) -> dict:
+    """Split 2 of a claim with over 12 diagnoses: only the $0.01 99499 placeholder."""
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                procedure_code="99499",
+                charge_amount_cents=1,
+                insurance_balance_cents=1,
+            )
+        ],
+        eras=eras,
+        status=status,
+    )
+    encounter["claims"][0]["claim_id"] = "candid-claim-2"
+    return encounter
+
+
+def test_split_claim_queue_and_status_follow_split_1() -> None:
+    """The overflow split is synced last, but split 1 decides the queue and banner."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim([li], metadata={"candid_encounters": SPLIT_ENCOUNTERS})
+    split_1 = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=6000,
+                allowed_amount_cents=8000,
+                deductible_cents=2000,
+                insurance_balance_cents=0,
+                patient_balance_cents=2000,
+            )
+        ],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner") as mock_banner,
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = [
+            split_1,
+            _overflow_encounter(status="coded"),
+        ]
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        ce.move_to_queue.assert_called_once_with(ClaimQueues.PATIENT_BALANCE.label)
+        assert mock_banner.call_args.kwargs["claim_status"] == "era_received"
+
+
+def test_overflow_split_era_keeps_split_1_synced_amounts() -> None:
+    """A denial ERA for the overflow split posts nothing and doesn't zero the synced
+    amounts, which would make split 1's next ERA re-post its primary payment."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim([li], metadata={"candid_encounters": SPLIT_ENCOUNTERS})
+    split_1 = _encounter_response(
+        service_lines=[_candid_service_line(primary_paid_amount_cents=7000)],
+        eras=[{"era_id": "era-1"}],
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = [
+            split_1,
+            _overflow_encounter(status="finalized_denied", eras=[{"era_id": "era-x"}]),
+        ]
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        ce = MCE.return_value
+
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+        assert [
+            c.kwargs["claim_description"] for c in ce.post_payment.call_args_list
+        ] == [f"{ERA_DESC_PREFIX}era-1"]
+        upserts = {
+            c.kwargs["key"]: c.kwargs["value"]
+            for c in ce.upsert_metadata.call_args_list
+        }
+        assert json.loads(upserts[META_SYNCED_AMOUNTS]) == {
+            "primary": 7000,
+            "secondary": 0,
+            "tertiary": 0,
+        }
+        assert json.loads(upserts[META_SYNCED_ERA_IDS]) == ["era-1", "era-x"]
 
 
 # ---------------------------------------------------------------------------
