@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from canvas_sdk.v1.data import NoteType, PracticeLocation, Staff
+from canvas_sdk.v1.data.team import Team
 from logger import log
 
 
@@ -83,4 +84,35 @@ def get_scheduleable_visit_types() -> list[dict[str, Any]]:
 
     results.sort(key=lambda vt: vt["name"].lower())
     log.info("get_scheduleable_visit_types: found %d types", len(results))
+    return results
+
+
+def get_staff_directory() -> list[dict[str, Any]]:
+    """Active staff for the editing-group pickers, with each person's primary location.
+
+    ``location_id`` drives the group form's "Add everyone at" quick add. Sorted
+    by last name, like the provider lists.
+    """
+    rows = (
+        Staff.objects.filter(active=True)
+        .values_list("id", "first_name", "last_name", "primary_practice_location__id")
+    )
+    people: list[tuple[tuple[str, str], dict[str, Any]]] = []
+    for sid, first, last, loc_id in rows:
+        sort_key = ((last or "").strip().lower(), (first or "").strip().lower())
+        people.append((sort_key, {
+            "id": str(sid),
+            "name": f"{first or ''} {last or ''}".strip(),
+            "location_id": str(loc_id) if loc_id else "",
+        }))
+    people.sort(key=lambda pair: pair[0])
+    results = [person for _, person in people]
+    log.info("get_staff_directory: found %d active staff", len(results))
+    return results
+
+
+def get_teams() -> list[dict[str, Any]]:
+    """Canvas teams, for picking the admin team. Sorted by name."""
+    results = [{"id": str(tid), "name": name or ""} for tid, name in Team.objects.values_list("id", "name")]
+    results.sort(key=lambda t: t["name"].lower())
     return results

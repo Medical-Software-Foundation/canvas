@@ -152,3 +152,24 @@ def mock_event():
     event = MagicMock()
     event.target.id = "target-uuid-123"
     return event
+
+
+class FakeCache:
+    """In-memory stand-in for the plugin cache, for code that reads settings."""
+
+    def __init__(self):
+        self.data = {}
+
+    def get(self, key, default=None):
+        return self.data.get(key, default)
+
+    def set(self, key, value, timeout_seconds=None):
+        self.data[key] = value
+
+
+@pytest.fixture(autouse=True)
+def settings_cache():
+    """Practice settings start unsaved: every feature on, defaults at 0, no access config."""
+    cache = FakeCache()
+    with patch("provider_availability.engine.settings._get_cache", return_value=cache):
+        yield cache

@@ -829,7 +829,7 @@ class TestCreateOrUpdateRule:
         body, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "provider_id or provider_npi is required" in body["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == []
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
@@ -876,7 +876,7 @@ class TestCreateOrUpdateRule:
         result = handler.create_or_update_rule()
         data, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
     @patch(f"{MODULE}.get_rules_for_provider", new=lambda _pid: [])
     @patch(f"{MODULE}._check_write_access", return_value=None)
@@ -948,7 +948,7 @@ class TestUpdateRuleGroup:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "id and provider_id are required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == []
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_id_only(self, mock_access):
@@ -1050,7 +1050,7 @@ class TestUpdateRuleGroup:
         result = handler.update_rule_group()
         data, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, {PROVIDER_ID})]
 
 
 class TestDeleteRule:
@@ -1084,7 +1084,7 @@ class TestDeleteRule:
         result = handler.delete_rule()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
 
 class TestDeleteProviderRules:
@@ -1112,7 +1112,7 @@ class TestDeleteProviderRules:
         result = handler.delete_provider_rules()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
 
 # ── Date Override Endpoints ──────────────────────────────────────────────
@@ -1336,7 +1336,7 @@ class TestCreateBlock:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "start, and end are required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_provider_id(self, mock_access):
@@ -1345,7 +1345,7 @@ class TestCreateBlock:
         result = handler.create_block()
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == []
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_invalid_time_range(self, mock_access):
@@ -1377,7 +1377,7 @@ class TestCreateBlock:
         result = handler.create_block()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_block_event_effects", return_value=[])
@@ -1502,7 +1502,7 @@ class TestUpdateBlock:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "id, provider_id, start, and end are required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, {""})]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_invalid_time_range(self, mock_access):
@@ -1689,7 +1689,7 @@ class TestCreateRecurringBlock:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "provider_id is required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == []
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_weekly_schedule(self, mock_access):
@@ -1699,7 +1699,7 @@ class TestCreateRecurringBlock:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "weekly_schedule is required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_invalid_time_window(self, mock_access):
@@ -1731,7 +1731,7 @@ class TestCreateRecurringBlock:
         result = handler.create_recurring_block()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
 
 class TestUpdateRecurringBlock:
@@ -1763,7 +1763,7 @@ class TestUpdateRecurringBlock:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "id and provider_id are required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, {""})]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_weekly_schedule(self, mock_access):
@@ -1773,7 +1773,7 @@ class TestUpdateRecurringBlock:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "weekly_schedule is required" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, {PROVIDER_ID})]
 
     @patch(f"{MODULE}.get_recurring_block_by_id", new=lambda *_: None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
@@ -1853,7 +1853,7 @@ class TestUpdateRecurringBlock:
         result = handler.update_recurring_block()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, {PROVIDER_ID})]
 
 
 class TestDeleteRecurringBlockEndpoint:
@@ -1906,7 +1906,7 @@ class TestDeleteRecurringBlockEndpoint:
         result = handler.delete_recurring_block_endpoint()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
 
 # ── Timezone endpoints ───────────────────────────────────────────────────
@@ -1946,7 +1946,7 @@ class TestSetTimezone:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "Invalid timezone" in data["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, admin_only=True)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
@@ -1955,7 +1955,7 @@ class TestSetTimezone:
         result = handler.set_timezone()
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, admin_only=True)]
 
     @patch(f"{MODULE}._check_write_access")
     def test_write_access_denied(self, mock_access):
@@ -1968,7 +1968,7 @@ class TestSetTimezone:
         result = handler.set_timezone()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, admin_only=True)]
 
 
 # ── Provider-timezone endpoints ──────────────────────────────────────────
@@ -2096,7 +2096,7 @@ class TestSetProviderTimezone:
         body, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "provider_id is required" in body["error"]
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [""])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
@@ -2118,7 +2118,7 @@ class TestSetProviderTimezone:
         result = handler.set_provider_tz()
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets, [PROVIDER_ID])]
 
 
 class TestSetProviderTimezoneBulk:

@@ -158,3 +158,40 @@ class TestGetScheduleableVisitTypes:
             result = get_scheduleable_visit_types()
 
             assert result == []
+
+
+class TestStaffDirectory:
+    def test_sorted_by_last_name_with_locations_and_same_names_allowed(self):
+        from unittest.mock import patch as _patch
+
+        from provider_availability.engine.lookups import get_staff_directory
+
+        class _Rows(list):
+            def values_list(self, *fields, flat=False):
+                return self
+
+        rows = _Rows([
+            ("s2", "Zoe", "Adams", "loc1"),
+            ("s1", "Ann", "Brown", None),
+            ("s3", "Zoe", "Adams", "loc2"),
+        ])
+        with _patch("provider_availability.engine.lookups.Staff") as staff:
+            staff.objects.filter.return_value = rows
+            result = get_staff_directory()
+        assert result == [
+            {"id": "s2", "name": "Zoe Adams", "location_id": "loc1"},
+            {"id": "s3", "name": "Zoe Adams", "location_id": "loc2"},
+            {"id": "s1", "name": "Ann Brown", "location_id": ""},
+        ]
+        assert staff.objects.filter.mock_calls[0] == __import__("unittest.mock").mock.call(active=True)
+
+
+class TestTeams:
+    def test_sorted_by_name(self):
+        from unittest.mock import patch as _patch
+
+        from provider_availability.engine.lookups import get_teams
+
+        with _patch("provider_availability.engine.lookups.Team") as team:
+            team.objects.values_list.return_value = [("t2", "zeta"), ("t1", "Alpha")]
+            assert get_teams() == [{"id": "t1", "name": "Alpha"}, {"id": "t2", "name": "zeta"}]

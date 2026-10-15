@@ -23,6 +23,10 @@ MY_VIEW_INDEX_KEY = "pa:my_view:index"
 INSTALL_SENTINEL_KEY = "pa:installed"
 SYNCED_VERSION_KEY = "pa:synced_version"
 LAST_TTL_REFRESH_KEY = "pa:last_ttl_refresh"
+# Practice settings (engine/settings.py): feature switches, new rule defaults, access control
+FEATURES_KEY = "pa:features"
+RULE_DEFAULTS_KEY = "pa:rule_defaults"
+ACCESS_KEY = "pa:access"
 CACHE_TTL_SECONDS = 14 * 24 * 60 * 60 - 3600  # 14 days minus 1 hour buffer
 TTL_REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours between full TTL refreshes
 
@@ -495,7 +499,10 @@ def refresh_all_ttls() -> int:
     # reconciled against (if it lapsed, the next change would go unapplied), and
     # the version install last synced (if it lapsed, a same-version redeploy
     # would rebuild every event)
-    for key in (SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY, EXPIRED_SNOOZE_KEY, SYNCED_VERSION_KEY):
+    for key in (
+        SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY, EXPIRED_SNOOZE_KEY, SYNCED_VERSION_KEY,
+        FEATURES_KEY, RULE_DEFAULTS_KEY, ACCESS_KEY,
+    ):
         val = cache.get(key)
         if val is not None:
             cache.set(key, val, timeout_seconds=CACHE_TTL_SECONDS)

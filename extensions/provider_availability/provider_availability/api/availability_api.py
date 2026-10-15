@@ -35,6 +35,19 @@ from provider_availability.engine.lookups import (
     get_active_locations,
     get_active_providers,
     get_scheduleable_visit_types,
+    get_staff_directory,
+    get_teams,
+)
+from provider_availability.engine.access import admin_ids, effective_default_access
+from provider_availability.engine.settings import (
+    delete_group,
+    get_access_config,
+    get_features,
+    get_rule_defaults,
+    save_group,
+    set_admin_team,
+    set_default_access,
+    set_rule_defaults,
 )
 from provider_availability.api._auth import current_staff_id as _signed_in_staff_id
 from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
@@ -83,7 +96,7 @@ from provider_availability.engine.storage import (
     set_schedulable_roles,
     set_seen_schedulable_ids,
 )
-from provider_availability.api._auth import is_authorized
+from provider_availability.engine.access import Access
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
 from provider_availability.engine.provider_resolver import (
     get_provider_displays,
@@ -188,21 +201,34 @@ def _validate_recurrence_payload(body: dict) -> str | None:
     return None
 
 
-def _check_write_access(request: object, secrets: dict | None = None) -> list[Response] | None:
-    """Return an error response list if the user is not authorized for writes, else None.
+def _access(request: object, secrets: dict | None) -> Access:
+    return Access.for_staff(_signed_in_staff_id(request), secrets)
 
-    Gates on the ``allowed-staff-keys`` plugin secret. Empty / unset secret =
-    any logged-in Canvas staff member is allowed (``StaffSessionAuthMixin``
-    enforces the logged-in baseline).
+
+def _check_write_access(
+    request: object,
+    secrets: dict | None = None,
+    provider_ids: Any = None,
+    admin_only: bool = False,
+) -> list[Response] | None:
+    """Return an error response list if the caller may not make this change, else None.
+
+    ``provider_ids`` are the providers the change touches; the caller must be
+    able to edit every one of them (see engine.access). ``admin_only`` changes,
+    and any call that names no provider, need an admin.
     """
-    if is_authorized(secrets, request):
+    access = _access(request, secrets)
+    ids = {str(p) for p in (provider_ids or []) if p}
+    if admin_only or not ids:
+        allowed = access.is_admin
+        message = "Access denied. Only Provider Availability admins can change this."
+    else:
+        allowed = access.can_edit_all(ids)
+        message = "Access denied. You don't have access to edit availability for this provider."
+    if allowed:
         return None
-    return [
-        JSONResponse(
-            {"error": "Access denied. You are not authorized to modify availability rules."},
-            status_code=HTTPStatus.FORBIDDEN,
-        )
-    ]
+    log.info("access denied: staff=%s admin_only=%s providers=%s", access.staff_id, admin_only, sorted(ids))
+    return [JSONResponse({"error": message}, status_code=HTTPStatus.FORBIDDEN)]
 
 
 def _reconcile_availability_to_roles(only: set[str] | None = None) -> list[Effect]:
@@ -269,6 +295,66 @@ def _sort_providers_you_first(providers: list[dict], staff_id: str) -> list[dict
         return (0 if p["is_you"] else 1, name)
 
     return sorted(providers, key=sort_key)
+
+
+def _build_overview(
+    access: Access,
+    schedulable_ids: set[str],
+    locations: list[dict],
+    visit_types: list[dict],
+    practice_tz: str,
+) -> list[dict]:
+    """Rules, blocks and recurring blocks grouped by provider, for the Availability tab.
+
+    Only currently-schedulable providers the caller can view are included; a
+    de-scheduled provider's saved rules are kept but not shown. Each provider
+    carries ``can_edit`` so the page shows edit controls only where they work.
+    The viewer's own row comes first.
+    """
+    rules = get_all_rules()
+    blocks = get_all_blocks()
+    recurring_blocks = get_all_recurring_blocks()
+    viewer = access.staff_id
+
+    provider_ids = (
+        {r.provider_id for r in rules}
+        | {b.provider_id for b in blocks}
+        | {rb.provider_id for rb in recurring_blocks}
+    ) & schedulable_ids
+    _include_viewer(provider_ids, schedulable_ids, viewer)
+    provider_ids = {pid for pid in provider_ids if access.can_view(pid)}
+
+    displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
+    loc_map = {loc["id"]: loc["name"] for loc in locations}
+    vt_map = {vt["id"]: vt["name"] for vt in visit_types}
+    provider_tzs = get_all_provider_timezones()
+
+    overview: dict[str, dict] = {}
+    for pid in provider_ids:
+        info = displays.get(pid, {})
+        overview[pid] = {
+            "provider_id": pid,
+            "provider_name": info.get("name", ""),
+            "provider_timezone": provider_tzs.get(pid) or practice_tz,
+            "provider_timezone_explicit": pid in provider_tzs,
+            "can_edit": access.can_edit(pid),
+            "rules": [],
+            "blocks": [],
+            "recurring_blocks": [],
+        }
+    for r in rules:
+        if r.provider_id in overview:
+            d = r.to_dict()
+            d["location_names"] = [loc_map.get(lid, lid) for lid in r.location_ids]
+            d["visit_type_names"] = [vt_map.get(vt, vt) for vt in r.visit_types]
+            overview[r.provider_id]["rules"].append(d)
+    for b in blocks:
+        if b.provider_id in overview:
+            overview[b.provider_id]["blocks"].append(b.to_dict())
+    for rb in recurring_blocks:
+        if rb.provider_id in overview:
+            overview[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
+    return _sort_providers_you_first(list(overview.values()), viewer)
 
 
 class _FormRequest:
@@ -384,81 +470,18 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/overview")
     def get_overview(self) -> list[Response | Effect]:
         """Return all rules + blocks + recurring blocks grouped by provider."""
-        rules = get_all_rules()
-        blocks = get_all_blocks()
-        recurring_blocks = get_all_recurring_blocks()
-
-        # Only show providers who are currently in a schedulable role. A provider
-        # who was de-scheduled (their role removed) drops off this screen, but
-        # their saved rules/blocks are kept (non-destructive) — re-adding the
-        # role brings them back with their configuration intact.
-        schedulable_ids = {str(s.id) for s in get_schedulable_staff()}
-
-        # Collect all provider IDs (restricted to currently-schedulable staff)
-        provider_ids = set()
-        for r in rules:
-            if r.provider_id in schedulable_ids:
-                provider_ids.add(r.provider_id)
-        for b in blocks:
-            if b.provider_id in schedulable_ids:
-                provider_ids.add(b.provider_id)
-        for rb in recurring_blocks:
-            if rb.provider_id in schedulable_ids:
-                provider_ids.add(rb.provider_id)
-        _include_viewer(provider_ids, schedulable_ids, _signed_in_staff_id(self.request))
-
-        displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
-
-        # Build location/visit-type name lookups for rules
+        schedulable_ids = {str(st.id) for st in get_schedulable_staff()}
         try:
-            locations = {loc["id"]: loc["name"] for loc in get_active_locations()}
+            locations = get_active_locations()
         except Exception:
-            locations = {}
+            locations = []
         try:
-            visit_types = {vt["id"]: vt["name"] for vt in get_scheduleable_visit_types()}
+            visit_types = get_scheduleable_visit_types()
         except Exception:
-            visit_types = {}
-
-        # Group by provider
-        provider_tzs = get_all_provider_timezones()
-        practice_tz_name = get_practice_timezone()
-        providers: dict[str, dict] = {}
-        for pid in provider_ids:
-            info = displays.get(pid, {})
-            providers[pid] = {
-                "provider_id": pid,
-                "provider_name": info.get("name", ""),
-                "provider_timezone": provider_tzs.get(pid) or practice_tz_name,
-                "provider_timezone_explicit": pid in provider_tzs,
-                "rules": [],
-                "blocks": [],
-                "recurring_blocks": [],
-            }
-
-        for r in rules:
-            if r.provider_id not in providers:
-                continue
-            d = r.to_dict()
-            d["location_names"] = [locations.get(lid, lid) for lid in r.location_ids]
-            d["visit_type_names"] = [visit_types.get(vt, vt) for vt in r.visit_types]
-            providers[r.provider_id]["rules"].append(d)
-
-        for b in blocks:
-            if b.provider_id not in providers:
-                continue
-            providers[b.provider_id]["blocks"].append(b.to_dict())
-
-        for rb in recurring_blocks:
-            if rb.provider_id not in providers:
-                continue
-            providers[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
-
-        # Alphabetical, with the viewer's own row first (the page shows it in
-        # its own section).
-        sorted_providers = _sort_providers_you_first(
-            list(providers.values()), _signed_in_staff_id(self.request)
+            visit_types = []
+        sorted_providers = _build_overview(
+            _access(self.request, self.secrets), schedulable_ids, locations, visit_types, get_practice_timezone()
         )
-
         return [JSONResponse({"providers": sorted_providers})]
 
     # ── Availability queries ───────────────────────────────────────────
@@ -648,9 +671,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/rules")
     def create_or_update_rule(self) -> list[Response | Effect]:
         """Create or update a rule for a provider."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
 
         raw_provider_id = body.get("provider_id", "")
@@ -673,6 +693,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
+        if denied:
+            return denied
 
         body["provider_id"] = provider_id
         body.pop("provider_npi", None)
@@ -730,9 +754,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/rules")
     def update_rule_group(self) -> list[Response | Effect]:
         """Update a rule, optionally applying to all group members."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
         apply_to_group = body.pop("apply_to_group", False)
         rule_id = body.get("id", "")
@@ -745,6 +766,12 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+
+        # Read the batch once: the access check needs every provider in it, and the update below reuses it.
+        batch_rules = get_rules_by_group(body["group_id"]) if apply_to_group and body.get("group_id") else []
+        denied = _check_write_access(self.request, self.secrets, {provider_id} | {gr.provider_id for gr in batch_rules})
+        if denied:
+            return denied
 
         body["updated_at"] = datetime.now(UTC).isoformat()
 
@@ -779,7 +806,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         providers_to_sync = {rule.provider_id}
 
         if apply_to_group and rule.group_id:
-            group_rules = get_rules_by_group(rule.group_id)
+            group_rules = batch_rules if rule.group_id == body.get("group_id") else get_rules_by_group(rule.group_id)
             for gr in group_rules:
                 if gr.id == rule.id:
                     continue
@@ -820,10 +847,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.delete("/rules/<provider_id>/<rule_id>")
     def delete_rule(self) -> list[Response | Effect]:
         """Delete a specific rule by provider ID and rule UUID."""
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
         rule_id = self.request.path_params["rule_id"]
 
         delete_rule_by_id(provider_id, rule_id)
@@ -850,10 +877,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.delete("/rules/<provider_id>")
     def delete_provider_rules(self) -> list[Response | Effect]:
         """Delete all rules for a provider."""
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
 
         event_effects = build_delete_effects(provider_id)
 
@@ -884,10 +911,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/rules/<provider_id>/<rule_id>/overrides")
     def add_override(self) -> list[Response | Effect]:
         """Add or replace a date override on a rule."""
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
         rule_id = self.request.path_params["rule_id"]
         rule = get_rule_by_id(provider_id, rule_id)
         if not rule:
@@ -934,10 +961,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.delete("/rules/<provider_id>/<rule_id>/overrides/<override_date>")
     def remove_override(self) -> list[Response | Effect]:
         """Remove a date override from a rule."""
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
         rule_id = self.request.path_params["rule_id"]
         rule = get_rule_by_id(provider_id, rule_id)
         if not rule:
@@ -984,9 +1011,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         - Multi-date all-day batch: { provider_id, dates: [...], all_day: true, ... }
           → creates one AdminBlock per date, sharing a fresh group_id.
         """
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
 
         provider_id = body.get("provider_id", "")
@@ -997,6 +1021,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
+        if denied:
+            return denied
 
         all_day = bool(body.get("all_day", False))
         dates_payload = body.get("dates") or []
@@ -1142,12 +1169,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/blocks")
     def update_block(self) -> list[Response | Effect]:
         """Update an existing admin block."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
         block_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
+        batch_blocks = get_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
+        denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
+        if denied:
+            return denied
         start_str = body.get("start", "")
         end_str = body.get("end", "")
 
@@ -1198,7 +1226,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         updated_count = 1
         apply_to_group = body.get("apply_to_group", False)
         if apply_to_group and block.group_id:
-            group_blocks = get_blocks_by_group(block.group_id)
+            group_blocks = batch_blocks if block.group_id == body.get("group_id") else get_blocks_by_group(block.group_id)
             for gb in group_blocks:
                 if gb.id == block.id:
                     continue
@@ -1227,10 +1255,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         Pass ?apply_to_group=true to also delete every other AdminBlock that
         shares the same group_id (multi-date holiday batches).
         """
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
         block_id = self.request.path_params["block_id"]
 
         query = getattr(self.request, "query_params", {}) or {}
@@ -1240,13 +1268,20 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Look up the block before deleting so we can target the right calendar event
         blocks = get_blocks_for_provider(provider_id)
         target_block = next((b for b in blocks if b.id == block_id), None)
+        group_blocks = (
+            get_blocks_by_group(target_block.group_id)
+            if apply_to_group and target_block and target_block.group_id else []
+        )
+        if group_blocks:
+            denied = _check_write_access(self.request, self.secrets, {provider_id} | {gb.provider_id for gb in group_blocks})
+            if denied:
+                return denied
 
         event_effects = build_delete_block_effects(provider_id, target_block)
         delete_block(provider_id, block_id)
         deleted_count = 1
 
-        if apply_to_group and target_block and target_block.group_id:
-            group_blocks = get_blocks_by_group(target_block.group_id)
+        if group_blocks:
             for gb in group_blocks:
                 if gb.id == block_id:
                     continue
@@ -1289,9 +1324,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/recurring-blocks")
     def create_recurring_block(self) -> list[Response | Effect]:
         """Create a new recurring weekly block."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
 
         provider_id = body.get("provider_id", "")
@@ -1305,6 +1337,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
+        if denied:
+            return denied
 
         if not is_daily and not weekly_schedule:
             return [
@@ -1357,12 +1392,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/recurring-blocks")
     def update_recurring_block(self) -> list[Response | Effect]:
         """Update an existing recurring block."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
         block_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
+        batch_blocks = get_recurring_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
+        denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
+        if denied:
+            return denied
 
         if not block_id or not provider_id:
             return [
@@ -1395,7 +1431,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         updated_count = 1
         apply_to_group = body.get("apply_to_group", False)
         if apply_to_group and block.group_id:
-            group_blocks = get_recurring_blocks_by_group(block.group_id)
+            group_blocks = batch_blocks if block.group_id == body.get("group_id") else get_recurring_blocks_by_group(block.group_id)
             for gb in group_blocks:
                 if gb.id == block.id:
                     continue
@@ -1424,10 +1460,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.delete("/recurring-blocks/<provider_id>/<block_id>")
     def delete_recurring_block_endpoint(self) -> list[Response | Effect]:
         """Delete a specific recurring block."""
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
         block_id = self.request.path_params["block_id"]
 
         # Try to look up the block for stored event ID deletion
@@ -1457,7 +1493,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/timezone")
     def set_timezone(self) -> list[Response | Effect]:
         """Set the practice timezone and re-sync all rules and recurring blocks."""
-        denied = _check_write_access(self.request, self.secrets)
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
         body = self.request.json()
@@ -1501,7 +1537,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
     def _save_roles(self, body: dict) -> list[Response | Effect]:
         """Shared by the API route and the form fallback."""
-        denied = _check_write_access(self.request, self.secrets)
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
         codes = body.get("schedulable_roles")
@@ -1589,10 +1625,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     # ── Expired items ─────────────────────────────────────────────────
 
     def _expired_scope(self) -> list[str]:
-        """Providers whose expired items this viewer may clear: every bookable provider today."""
-        if not is_authorized(self.secrets, self.request):
-            return []
-        return [str(p["id"]) for p in get_active_providers()]
+        """Providers whose expired items this viewer may clear: the bookable providers they can edit."""
+        access = _access(self.request, self.secrets)
+        return [str(p["id"]) for p in get_active_providers() if access.can_edit(str(p["id"]))]
 
     def _expired_body_keys(self) -> list[str] | None:
         """The item keys in the request body. None if malformed."""
@@ -1609,9 +1644,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/expired/remove")
     def remove_expired_items(self) -> list[Response | Effect]:
         """Drop the picked items from the plugin's lists. Their past calendar events stay in Canvas."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         keys = self._expired_body_keys()
         if keys is None:
             return [JSONResponse({"error": "keys must be a list of item keys"}, status_code=HTTPStatus.BAD_REQUEST)]
@@ -1622,9 +1654,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/expired/snooze")
     def snooze_expired_items(self) -> list[Response | Effect]:
         """Hide the picked items for 30 days."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         keys = self._expired_body_keys()
         if keys is None:
             return [JSONResponse({"error": "keys must be a list of item keys"}, status_code=HTTPStatus.BAD_REQUEST)]
@@ -1657,11 +1686,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/provider-timezone")
     def set_provider_tz(self) -> list[Response | Effect]:
         """Set a provider's timezone."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
-            return denied
         body = self.request.json()
         provider_id = body.get("provider_id", "")
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
+        if denied:
+            return denied
         tz_name = body.get("timezone", "")
         if not provider_id:
             return [JSONResponse({"error": "provider_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
@@ -1699,10 +1728,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.delete("/provider-timezone/<provider_id>")
     def clear_provider_tz(self) -> list[Response | Effect]:
         """Clear a provider's explicit timezone, reverting to the practice default."""
-        denied = _check_write_access(self.request, self.secrets)
+        provider_id = self.request.path_params["provider_id"]
+        denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
-        provider_id = self.request.path_params["provider_id"]
         # Same as set_provider_tz: one-off blocks are naive wall-clock times, so delete
         # their events while the old TZ is still in effect, then rebuild after the clear.
         provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
@@ -1730,7 +1759,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/provider-timezones/bulk")
     def set_provider_tz_bulk(self) -> list[Response | Effect]:
         """Set the same timezone for multiple providers at once."""
-        denied = _check_write_access(self.request, self.secrets)
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
         body = self.request.json()
@@ -1768,11 +1797,109 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
     # ── Admin UI serving ──────────────────────────────────────────────
 
+    # ── Settings: new rule defaults and access control ────────────────
+
+    def _bad_request(self, message: str) -> list[Response | Effect]:
+        return [JSONResponse({"error": message}, status_code=HTTPStatus.BAD_REQUEST)]
+
+    @api.get("/settings")
+    def get_settings(self) -> list[Response | Effect]:
+        """Everything the Settings tab shows. Admins only, since it lists staff and teams."""
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        config = get_access_config()
+        admins = admin_ids(self.secrets, config)
+        staff = get_staff_directory()
+        names = {s["id"]: s["name"] for s in staff}
+        return [JSONResponse({
+            "features": get_features(),
+            "rule_defaults": get_rule_defaults(),
+            "access": {**config, "default_access": effective_default_access(self.secrets, config)},
+            "admins": [{"id": a, "name": names.get(a, "")} for a in sorted(admins)],
+            "admins_from": "team" if config["admin_team_id"] and admins else ("secret" if admins else "everyone"),
+            "teams": get_teams(),
+            "staff": staff,
+            "locations": get_active_locations(),
+        })]
+
+    @api.put("/settings/rule-defaults")
+    def put_rule_defaults(self) -> list[Response | Effect]:
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        try:
+            saved = set_rule_defaults(self.request.json())
+        except ValueError as exc:
+            return self._bad_request(str(exc))
+        return [JSONResponse({"rule_defaults": saved})]
+
+    @api.put("/settings/access")
+    def put_access(self) -> list[Response | Effect]:
+        """Change the admin team and/or default access. Either key may be left out."""
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        body = self.request.json()
+        try:
+            if "admin_team_id" in body:
+                team_id = str(body.get("admin_team_id") or "")
+                if team_id and team_id not in {t["id"] for t in get_teams()}:
+                    return self._bad_request("That team doesn't exist")
+                set_admin_team(team_id)
+            if "default_access" in body:
+                set_default_access(str(body.get("default_access")))
+        except ValueError as exc:
+            return self._bad_request(str(exc))
+        log.info("settings: access changed by %s: %s", _signed_in_staff_id(self.request), sorted(body.keys()))
+        return [JSONResponse({"access": get_access_config()})]
+
+    @api.post("/settings/groups")
+    def post_group(self) -> list[Response | Effect]:
+        return self._save_group("")
+
+    @api.put("/settings/groups/<group_id>")
+    def put_group(self) -> list[Response | Effect]:
+        return self._save_group(self.request.path_params["group_id"])
+
+    def _save_group(self, group_id: str) -> list[Response | Effect]:
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        body = self.request.json()
+        active = {s["id"] for s in get_staff_directory()}
+        schedulers = body.get("schedulers", [])
+        providers = body.get("providers", [])
+        if not isinstance(schedulers, list) or not isinstance(providers, list):
+            return self._bad_request("schedulers and providers must be lists of staff ids")
+        unknown = [str(x) for x in [*schedulers, *providers] if str(x) not in active]
+        if unknown:
+            return self._bad_request(f"{len(unknown)} selected staff are not active Canvas staff")
+        try:
+            group = save_group(str(body.get("name", "")), schedulers, providers, group_id)
+        except ValueError as exc:
+            return self._bad_request(str(exc))
+        log.info("settings: group %s saved by %s", group["id"], _signed_in_staff_id(self.request))
+        return [JSONResponse({"group": group, "access": get_access_config()})]
+
+    @api.delete("/settings/groups/<group_id>")
+    def remove_group(self) -> list[Response | Effect]:
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        if not delete_group(self.request.path_params["group_id"]):
+            return [JSONResponse({"error": "Group not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        log.info("settings: group %s deleted by %s", self.request.path_params["group_id"], _signed_in_staff_id(self.request))
+        return [JSONResponse({"access": get_access_config()})]
+
     @api.get("/availability-admin")
     def get_admin_ui(self) -> list[Response | Effect]:
-        """Serve the main admin UI page with pre-rendered data."""
-        denied = _check_write_access(self.request, self.secrets)
-        if denied:
+        """Serve the main admin UI page with pre-rendered data.
+
+        Any signed-in staff member can open it; what they see and can change
+        follows engine.access.
+        """
+        if not _signed_in_staff_id(self.request):
             return [HTMLResponse(ACCESS_DENIED_HTML, status_code=HTTPStatus.FORBIDDEN)]
 
         # Pre-render all initial data so the page doesn't need fetch()
@@ -1797,68 +1924,15 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         tz = get_practice_timezone()
 
-        # Build overview (same logic as get_overview endpoint)
-        rules = get_all_rules()
-        blocks = get_all_blocks()
-        recurring_blocks = get_all_recurring_blocks()
-
         # Restrict the overview to currently-schedulable providers (the
         # `providers` list above is already the schedulable set). De-scheduled
         # providers drop off the screen; their saved rules are kept.
-        schedulable_ids = {str(p["id"]) for p in providers}
-
-        provider_ids = set()
-        for r in rules:
-            if r.provider_id in schedulable_ids:
-                provider_ids.add(r.provider_id)
-        for b in blocks:
-            if b.provider_id in schedulable_ids:
-                provider_ids.add(b.provider_id)
-        for rb in recurring_blocks:
-            if rb.provider_id in schedulable_ids:
-                provider_ids.add(rb.provider_id)
-        _include_viewer(provider_ids, schedulable_ids, _signed_in_staff_id(self.request))
-
-        displays = get_provider_displays(list(provider_ids)) if provider_ids else {}
-
-        loc_map = {loc["id"]: loc["name"] for loc in locations}
-        vt_map = {vt["id"]: vt["name"] for vt in visit_types}
-
-        provider_tzs = get_all_provider_timezones()
-        overview: dict[str, dict] = {}
-        for pid in provider_ids:
-            info = displays.get(pid, {})
-            overview[pid] = {
-                "provider_id": pid,
-                "provider_name": info.get("name", ""),
-                "provider_timezone": provider_tzs.get(pid) or tz,
-                "provider_timezone_explicit": pid in provider_tzs,
-                "rules": [],
-                "blocks": [],
-                "recurring_blocks": [],
-            }
-
-        for r in rules:
-            if r.provider_id not in overview:
-                continue
-            d = r.to_dict()
-            d["location_names"] = [loc_map.get(lid, lid) for lid in r.location_ids]
-            d["visit_type_names"] = [vt_map.get(vt, vt) for vt in r.visit_types]
-            overview[r.provider_id]["rules"].append(d)
-
-        for b in blocks:
-            if b.provider_id not in overview:
-                continue
-            overview[b.provider_id]["blocks"].append(b.to_dict())
-
-        for rb in recurring_blocks:
-            if rb.provider_id not in overview:
-                continue
-            overview[rb.provider_id]["recurring_blocks"].append(rb.to_dict())
-
-        sorted_overview = _sort_providers_you_first(
-            list(overview.values()), _signed_in_staff_id(self.request)
+        access = _access(self.request, self.secrets)
+        sorted_overview = _build_overview(
+            access, {str(p["id"]) for p in providers}, locations, visit_types, tz
         )
+        for p in providers:
+            p["can_edit"] = access.can_edit(str(p["id"]))
 
         return {
             "providers": {"providers": providers, "count": len(providers)},
@@ -1868,6 +1942,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "overview": {"providers": sorted_overview},
             "my_view": {"provider_ids": get_my_view(_signed_in_staff_id(self.request))},
             "csv_template": generate_template_csv(),
+            "access": access.summary(),
+            "features": get_features(),
+            "rule_defaults": get_rule_defaults(),
         }
 
     @api.post("/form-action")
@@ -1877,8 +1954,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         Accepts form fields: _method, _path, _body (JSON string).
         Dispatches to write handler, then returns admin page with fresh data.
         """
-        # Same gate as the admin page: the response is the full page with every provider's schedule.
-        if not is_authorized(self.secrets, self.request):
+        # Each write handler checks access itself; the page sent back is filtered to what the caller can view.
+        if not _signed_in_staff_id(self.request):
             return [HTMLResponse(ACCESS_DENIED_HTML, status_code=HTTPStatus.FORBIDDEN)]
         form = self.request.form_data()
         method = form.get("_method").value.upper() if form.get("_method") else "POST"

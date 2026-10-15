@@ -254,13 +254,13 @@ class TestAdminUI:
         mock_render.assert_called_once()
 
     @patch(f"{MODULE}._check_write_access")
-    def test_get_admin_ui_access_denied(self, mock_access):
-        from canvas_sdk.effects.simple_api import JSONResponse
-
-        mock_access.return_value = [JSONResponse({"error": "Denied"}, status_code=HTTPStatus.FORBIDDEN)]
+    def test_get_admin_ui_needs_a_signed_in_staff_member(self, mock_access):
+        """Any signed-in staff member can open the page; without a staff id it is refused."""
         handler = _make_handler()
-        result = handler.get_admin_ui()
+        with patch(f"{MODULE}._signed_in_staff_id", return_value=""):
+            result = handler.get_admin_ui()
         assert result[0].status_code == HTTPStatus.FORBIDDEN
+        assert mock_access.mock_calls == []
 
     @patch(f"{MODULE}.get_active_providers", side_effect=Exception("db error"))
     @patch(f"{MODULE}.get_active_locations", side_effect=Exception("db error"))
