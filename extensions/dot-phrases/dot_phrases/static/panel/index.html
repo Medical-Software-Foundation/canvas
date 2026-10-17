@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dot Phrases</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{{ api_base }}/panel/app.css?v={{ cache_bust }}">
+</head>
+<body data-api-base="{{ api_base }}" data-note-id="{{ note_id }}">
+  <div id="ppList">
+    <div class="pp-band">
+      <div class="pp-head"><h2>Dot Phrases</h2>
+        <button class="pp-icon" id="gear" title="Manage my phrases" aria-label="Manage my phrases"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2" fill="#fff"/><circle cx="15" cy="17" r="2.2" fill="#fff"/></svg></button>
+      </div>
+      <div class="pp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="Search codes and text" autocomplete="off" aria-label="Search codes and text"></div>
+      <div class="pp-seg" id="chips"><button class="on" data-f="all">All</button><button data-f="mine">Mine</button><button data-f="practice">Practice</button></div>
+    </div>
+    <div id="plist"><p class="empty">Loading phrases…</p></div>
+  </div>
+  <div id="ppManage" hidden>
+    <div class="pp-band">
+      <div class="pp-head"><button class="pp-back" id="back" aria-label="Back to Dot Phrases"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button><h2>Manage phrases</h2>
+        <button class="pp-btn pp-primary pp-sm" id="newBtn">+ New</button></div>
+      <div class="pp-seg sm" id="mArchSeg"><button class="on" data-a="active">Active</button><button data-a="hidden">Hidden</button></div>
+    </div>
+    <div class="pp-content"><div id="mlist"></div></div>
+  </div>
+  <div id="ppEdit" hidden>
+    <div class="pp-band">
+      <div class="pp-head"><button class="pp-back" id="edBack" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button><h2 id="edTitle">Edit phrase</h2></div>
+    </div>
+    <div class="pp-content"><div id="editorSlot"></div></div>
+  </div>
+  <div class="off-chart" id="offChart" hidden role="status"><div><b>Dot Phrases works on the Chart tab</b><p>Go back to the Chart to insert phrases. Anything you started is still here.</p></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="{{ api_base }}/panel/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>
