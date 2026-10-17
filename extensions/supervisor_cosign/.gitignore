@@ -1,0 +1,8 @@
+.claude
+.venv
+.mypy_cache
+.pytest_cache
+.coverage
+__pycache__
+*.pyc
+.cpa-workflow-artifacts
