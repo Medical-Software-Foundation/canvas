@@ -1,0 +1,20 @@
+[project]
+authors = [
+  {email = "amanda.peterson@canvasmedical.com", name = "Amanda Peterson"}
+]
+description = "In-UI report and dashboard builder for non-technical users, backed by Canvas SDK Data Models."
+license = "MIT"
+name = "reporting"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["reporting"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
