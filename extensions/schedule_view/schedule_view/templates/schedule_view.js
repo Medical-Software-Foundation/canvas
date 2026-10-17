@@ -1904,25 +1904,41 @@
         actionsRow.appendChild(rescheduleBtn);
       }
 
-      // No Show
-      var noshowBtn = document.createElement("button");
-      noshowBtn.className = "modal-action-btn action-warning";
-      noshowBtn.textContent = "No Show";
-      noshowBtn.addEventListener("click", function () {
-        showConfirmation(card, "Mark as No Show",
-          "Please confirm that " + (appt.patient_name || "this patient") + " did not show up for the appointment.",
-          "confirm-warning", function () { markNoShow(appt); });
-      });
-      actionsRow.appendChild(noshowBtn);
+      // Schedule events (room reservations, generic admin events) have no
+      // clinical note behind them, and both cancel_appointment and
+      // noshow_appointment reject exactly that case with a 400
+      // ("Appointment has no associated note..."). Offering the buttons on
+      // those rows can only ever produce that error, so point at the route
+      // that works: cancelling the visit that owns a room releases the room
+      // via the scheduling_with_rooms APPOINTMENT_CANCELED cascade.
+      if (appt.note_id) {
+        // No Show
+        var noshowBtn = document.createElement("button");
+        noshowBtn.className = "modal-action-btn action-warning";
+        noshowBtn.textContent = "No Show";
+        noshowBtn.addEventListener("click", function () {
+          showConfirmation(card, "Mark as No Show",
+            "Please confirm that " + (appt.patient_name || "this patient") + " did not show up for the appointment.",
+            "confirm-warning", function () { markNoShow(appt); });
+        });
+        actionsRow.appendChild(noshowBtn);
 
-      // Cancel
-      var cancelBtn = document.createElement("button");
-      cancelBtn.className = "modal-action-btn action-danger";
-      cancelBtn.textContent = "Cancel";
-      cancelBtn.addEventListener("click", function () {
-        showCancelConfirmation(card, appt);
-      });
-      actionsRow.appendChild(cancelBtn);
+        // Cancel
+        var cancelBtn = document.createElement("button");
+        cancelBtn.className = "modal-action-btn action-danger";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", function () {
+          showCancelConfirmation(card, appt);
+        });
+        actionsRow.appendChild(cancelBtn);
+      } else {
+        var noActionNote = document.createElement("div");
+        noActionNote.className = "modal-schedule-event-notice";
+        noActionNote.textContent = appt.is_schedule_event
+          ? "Cancel the linked provider appointment to release this room."
+          : "This entry has no chart note, so it cannot be cancelled or marked as a no-show here.";
+        actionsRow.appendChild(noActionNote);
+      }
 
       actionsSection.appendChild(actionsRow);
       body.appendChild(actionsSection);
