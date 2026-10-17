@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --background: 40 33% 98%;
+    --foreground: 200 25% 15%;
+    --card: 0 0% 100%;
+    --primary: 174 62% 26%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 174 35% 94%;
+    --muted: 40 20% 95%;
+    --muted-foreground: 200 10% 42%;
+    --accent-text: 22 62% 38%;
+    --border: 200 15% 88%;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1000px; height: 700px;
+    background: hsl(var(--background));
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Inter, sans-serif;
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; gap: 52px;
+    padding: 0 48px;
+  }
+
+  /* ---------- left column ---------- */
+  .left { width: 468px; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: hsl(var(--primary));
+    background: hsl(var(--secondary));
+    padding: 6px 12px; border-radius: 999px; margin-bottom: 18px;
+  }
+  h1 {
+    font-size: 33px; line-height: 1.16; font-weight: 800;
+    letter-spacing: -.022em; margin-bottom: 14px;
+  }
+  .sub {
+    font-size: 15.5px; line-height: 1.5; color: hsl(var(--muted-foreground));
+    margin-bottom: 26px;
+  }
+  .sub b { color: hsl(var(--foreground)); font-weight: 650; }
+  .step { display: flex; gap: 13px; margin-bottom: 15px; align-items: flex-start; }
+  .check {
+    flex: 0 0 22px; width: 22px; height: 22px; border-radius: 999px;
+    background: hsl(var(--primary) / .12); color: hsl(var(--primary));
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+  .check svg { width: 13px; height: 13px; }
+  .step p { font-size: 14.5px; line-height: 1.5; color: hsl(var(--muted-foreground)); }
+  .step b { color: hsl(var(--foreground)); font-weight: 650; }
+
+  /* ---------- phone ---------- */
+  .right { width: 340px; }
+  .phone {
+    position: relative; background: #1a1a1a; border-radius: 3rem;
+    padding: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,.28);
+  }
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 30px; background: #1a1a1a;
+    border-bottom-left-radius: 1.2rem; border-bottom-right-radius: 1.2rem;
+    z-index: 10; display: flex; align-items: center; justify-content: center;
+  }
+  .notch span { width: 58px; height: 20px; background: #000; border-radius: 999px; }
+  .screen { background: hsl(var(--card)); border-radius: 2.4rem; overflow: hidden; }
+  .statusbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 4px;
+  }
+  .statusbar .time { font-size: 12px; font-weight: 650; }
+  .statusbar .icons { display: flex; align-items: center; gap: 5px; }
+  .statusbar svg { display: block; }
+  .contact {
+    padding: 10px 16px 12px; border-bottom: 1px solid hsl(var(--border) / .45);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: hsl(var(--primary) / .15); color: hsl(var(--primary));
+    font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .contact .name { font-size: 13.5px; font-weight: 650; }
+  .contact .sub { font-size: 10px; color: hsl(var(--muted-foreground)); }
+  .thread { padding: 14px; display: flex; flex-direction: column; gap: 11px; }
+  .row { display: flex; flex-direction: column; }
+  .row.them { align-items: flex-start; }
+  .row.me { align-items: flex-end; }
+  .bubble {
+    max-width: 88%; padding: 9px 13px; font-size: 12.5px; line-height: 1.5;
+    border-radius: 16px;
+  }
+  .them .bubble {
+    background: hsl(var(--muted)); color: hsl(var(--foreground));
+    border-bottom-left-radius: 5px;
+  }
+  .me .bubble {
+    background: hsl(var(--primary)); color: hsl(var(--primary-foreground));
+    border-bottom-right-radius: 5px;
+  }
+  .ts { font-size: 9.5px; color: hsl(var(--muted-foreground)); margin: 4px 3px 0; }
+  .composer {
+    padding: 10px 12px; border-top: 1px solid hsl(var(--border) / .45);
+  }
+  .composer div {
+    background: hsl(var(--muted) / .7); border-radius: 999px; padding: 7px 15px;
+    font-size: 11.5px; color: hsl(var(--muted-foreground));
+  }
+  .whitelabel {
+    margin-top: 16px; text-align: center;
+    font-size: 11.5px; line-height: 1.5; color: hsl(var(--muted-foreground));
+  }
+  .whitelabel b { color: hsl(var(--accent-text)); font-weight: 650; }
+</style>
+</head>
+<body>
+
+  <div class="left">
+    <div class="eyebrow">Canvas SDK plugin</div>
+    <h1>Your front desk stops<br>chasing confirmations</h1>
+    <p class="sub">One-way reminders get ignored. VisitConfirmed <b>asks each
+       patient to confirm</b>, and answers their questions when they write
+       back.</p>
+
+    <div class="step">
+      <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></div>
+      <p>Outreach starts the moment an appointment is booked in Canvas.
+         <b>No lists to upload, no batch to run.</b></p>
+    </div>
+
+    <div class="step">
+      <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></div>
+      <p>A patient who ignores the text <b>gets a phone call</b>.</p>
+    </div>
+
+    <div class="step">
+      <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></div>
+      <p><b>Only the exceptions reach your staff</b>: someone who needs a new
+         time, or a question the agent cannot answer.</p>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="screen">
+
+        <div class="statusbar">
+          <span class="time">9:41</span>
+          <div class="icons">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 20h2V8H2v12zm4 0h2V4H6v16zm4 0h2v-8h-2v8zm4 0h2V8h-2v12zm4 0h2V2h-2v18z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+            <svg width="15" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="18" height="12" rx="2" ry="2"/><line x1="23" y1="13" x2="23" y2="11" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+
+        <div class="contact">
+          <div class="avatar">NF</div>
+          <div>
+            <p class="name">Northside Family Health</p>
+            <p class="sub">Text message</p>
+          </div>
+        </div>
+
+        <div class="thread">
+          <div class="row them">
+            <div class="bubble">Hi Maria, it's Northside Family Health. You have a visit with Dr. Lee on Tue at 2:00 PM. Reply YES to confirm.</div>
+            <span class="ts">9:41 AM</span>
+          </div>
+          <div class="row me">
+            <div class="bubble">Do I need to fast beforehand?</div>
+            <span class="ts">9:41 AM</span>
+          </div>
+          <div class="row them">
+            <div class="bubble">No fasting needed for this visit. Reply YES to confirm or RESCHEDULE for a new time.</div>
+            <span class="ts">9:42 AM</span>
+          </div>
+          <div class="row me">
+            <div class="bubble">Yes</div>
+            <span class="ts">9:42 AM</span>
+          </div>
+          <div class="row them">
+            <div class="bubble">You're confirmed for Tue at 2:00 PM. See you then!</div>
+            <span class="ts">9:42 AM</span>
+          </div>
+        </div>
+
+        <div class="composer"><div>Text Message</div></div>
+      </div>
+    </div>
+
+    <p class="whitelabel">Sent from your own number.<br><b>Patients see your practice, never VisitConfirmed.</b></p>
+  </div>
+
+</body>
+</html>
