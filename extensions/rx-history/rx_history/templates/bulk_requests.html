@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+<link rel="stylesheet" href="/plugin-io/api/rx_history/static/canvas-plugin-ui.css?v={{ cache_bust }}">
+<script src="/plugin-io/api/rx_history/static/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+<style>
+html, body { height: 100%; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-family);
+  font-size: 1rem;
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.4285em;
+}
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-huge) var(--space-huge);
+}
+.page-title {
+  font-size: 1.28571429rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin-bottom: var(--space-large);
+}
+.page-title span {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  font-size: .92857143em;
+  margin-left: var(--space-tiny);
+}
+.empty-state {
+  padding: var(--space-huge) var(--space-large);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+#feedbackBanner {
+  display: none;
+  margin-bottom: var(--space-medium);
+}
+#feedbackBanner.visible {
+  display: block;
+}
+canvas-table-row[data-skipped="no_care_event"] .skip-badge {
+  display: inline-block;
+  margin-left: var(--space-tiny);
+}
+canvas-table-row .skip-badge {
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<canvas-tooltip></canvas-tooltip>
+
+<span id="providers-data" hidden>{{ providers_json }}</span>
+
+<div class="page">
+  <div class="page-title">Surescripts Requests <span>Bulk eligibility and medication history</span></div>
+
+  <canvas-banner id="feedbackBanner"></canvas-banner>
+
+  <canvas-card>
+    <canvas-card-body>
+      <canvas-inline-row>
+        <canvas-input label="From" type="date" id="dateFrom"></canvas-input>
+        <canvas-input label="To" type="date" id="dateTo"></canvas-input>
+        <canvas-dropdown id="providerFilter" label="Provider">
+          <canvas-option value="" selected>All Providers</canvas-option>
+        </canvas-dropdown>
+        <canvas-button id="loadBtn">Load Appointments</canvas-button>
+      </canvas-inline-row>
+    </canvas-card-body>
+    <canvas-card-body no-padding>
+      <canvas-table selectable striped aria-label="Upcoming appointments">
+        <canvas-table-head>
+          <canvas-table-row>
+            <canvas-table-cell width="44px"><canvas-checkbox id="selectAll"></canvas-checkbox></canvas-table-cell>
+            <canvas-table-cell>Patient</canvas-table-cell>
+            <canvas-table-cell>Provider</canvas-table-cell>
+            <canvas-table-cell>Date</canvas-table-cell>
+            <canvas-table-cell>Time</canvas-table-cell>
+          </canvas-table-row>
+        </canvas-table-head>
+        <canvas-table-body id="tableBody">
+          <canvas-table-row>
+            <canvas-table-cell colspan><div class="empty-state">Set a date range and click Load Appointments.</div></canvas-table-cell>
+          </canvas-table-row>
+        </canvas-table-body>
+      </canvas-table>
+    </canvas-card-body>
+    <canvas-card-footer>
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+        <div id="selectionInfo">0 selected</div>
+        <div style="display: flex; gap: 8px">
+          <canvas-button id="eligBtn" disabled>Request Eligibility (0)</canvas-button>
+          <canvas-button id="histBtn" disabled>Request Med History (0)</canvas-button>
+        </div>
+      </div>
+    </canvas-card-footer>
+  </canvas-card>
+</div>
+
+<script>
+(function() {
+  var BASE = "/plugin-io/api/rx_history/bulk";
+  var appointments = [];
+  var selected = new Set();
+
+  // Init dates: today to +7 days
+  var today = new Date();
+  var nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  document.getElementById("dateFrom").value = formatDate(today);
+  document.getElementById("dateTo").value = formatDate(nextWeek);
+
+  function formatDate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var dd = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + dd;
+  }
+
+  // Populate provider dropdown
+  try {
+    var providers = JSON.parse(document.getElementById("providers-data").textContent || "[]");
+    var sel = document.getElementById("providerFilter");
+    for (var i = 0; i < providers.length; i++) {
+      var opt = document.createElement("canvas-option");
+      opt.setAttribute("value", providers[i].id);
+      opt.textContent = providers[i].name;
+      sel.appendChild(opt);
+    }
+  } catch(e) {}
+
+  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  function updateSelection() {
+    var count = selected.size;
+    document.getElementById("selectionInfo").textContent = count + " selected";
+
+    var eligBtn = document.getElementById("eligBtn");
+    eligBtn.textContent = "Request Eligibility (" + count + ")";
+    eligBtn.toggleAttribute("disabled", count === 0);
+
+    var histBtn = document.getElementById("histBtn");
+    histBtn.textContent = "Request Med History (" + count + ")";
+    histBtn.toggleAttribute("disabled", count === 0);
+
+    document.getElementById("selectAll").checked = count > 0 && count === appointments.length;
+  }
+
+  function renderTable() {
+    var tbody = document.getElementById("tableBody");
+    if (!appointments.length) {
+      tbody.innerHTML = '<canvas-table-row>'
+        + '<canvas-table-cell colspan><div class="empty-state">No appointments found for this date range.</div></canvas-table-cell>'
+        + '</canvas-table-row>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < appointments.length; i++) {
+      var a = appointments[i];
+      var checked = selected.has(a.patient_id) ? " checked" : "";
+      html += '<canvas-table-row data-patient-id="' + esc(a.patient_id) + '">'
+        + '<canvas-table-cell width="44px"><canvas-checkbox data-pid="' + esc(a.patient_id) + '"' + checked + '></canvas-checkbox></canvas-table-cell>'
+        + '<canvas-table-cell>' + esc(a.patient_name) + '<canvas-badge class="skip-badge" size="mini" basic circular data-canvas-tooltip="No appointment in the next 7 days.">!</canvas-badge></canvas-table-cell>'
+        + '<canvas-table-cell>' + esc(a.provider_name) + '</canvas-table-cell>'
+        + '<canvas-table-cell>' + esc(a.appointment_date) + '</canvas-table-cell>'
+        + '<canvas-table-cell>' + esc(a.appointment_time) + '</canvas-table-cell>'
+        + '</canvas-table-row>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  function showBanner(variant, msg) {
+    var el = document.getElementById("feedbackBanner");
+    el.setAttribute("variant", variant);
+    el.textContent = msg;
+    el.classList.add("visible");
+  }
+
+  function hideBanner() {
+    var el = document.getElementById("feedbackBanner");
+    el.classList.remove("visible");
+  }
+
+  // Load
+  document.getElementById("loadBtn").addEventListener("click", function() {
+    var df = document.getElementById("dateFrom").value;
+    var dt = document.getElementById("dateTo").value;
+    var prov = document.getElementById("providerFilter").value;
+    if (!df || !dt) { showBanner("error", "Please select a date range."); return; }
+
+    hideBanner();
+    var tbody = document.getElementById("tableBody");
+    tbody.innerHTML = '<canvas-table-row>'
+      + '<canvas-table-cell colspan><div class="empty-state">Loading appointments...</div></canvas-table-cell>'
+      + '</canvas-table-row>';
+    selected.clear();
+    updateSelection();
+
+    var url = BASE + "/appointments?date_from=" + df + "&date_to=" + dt;
+    if (prov) url += "&provider_id=" + prov;
+
+    fetch(url, { credentials: "same-origin" })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        appointments = data.appointments || [];
+        renderTable();
+      })
+      .catch(function() {
+        tbody.innerHTML = '<canvas-table-row>'
+          + '<canvas-table-cell colspan><div class="empty-state">Error loading appointments.</div></canvas-table-cell>'
+          + '</canvas-table-row>';
+        showBanner("error", "Failed to load appointments.");
+      });
+  });
+
+  // Checkbox delegation
+  document.getElementById("tableBody").addEventListener("change", function(e) {
+    if (e.target.tagName === "CANVAS-CHECKBOX") {
+      var pid = e.target.dataset.pid;
+      if (pid) {
+        if (e.target.checked) { selected.add(pid); } else { selected.delete(pid); }
+        updateSelection();
+      }
+    }
+  });
+
+  // Select all
+  document.getElementById("selectAll").addEventListener("change", function() {
+    var checked = this.checked;
+    selected.clear();
+    if (checked) {
+      for (var i = 0; i < appointments.length; i++) {
+        selected.add(appointments[i].patient_id);
+      }
+    }
+    renderTable();
+    updateSelection();
+  });
+
+  // Bulk actions
+  function sendBulk(endpoint, btnId, label) {
+    var btn = document.getElementById(btnId);
+    var ids = Array.from(selected);
+    if (!ids.length) return;
+
+    btn.toggleAttribute("disabled", true);
+    btn.textContent = "Sending...";
+
+    fetch(BASE + "/" + endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        patient_ids: ids,
+        date_from: document.getElementById("dateFrom").value,
+        date_to: document.getElementById("dateTo").value,
+        provider_id: document.getElementById("providerFilter").value,
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === "ok") {
+        var sent = typeof data.sent === "number" ? data.sent : 0;
+        var skipped = Array.isArray(data.skipped) ? data.skipped : [];
+        var msg = label + " sent for " + sent + " patient" + (sent !== 1 ? "s" : "") + ".";
+        var variant = "success";
+        if (skipped.length) {
+          var noCare = 0;
+          for (var i = 0; i < skipped.length; i++) {
+            if (skipped[i].reason === "no_care_event") { noCare = noCare + 1; }
+          }
+          msg += " Skipped " + skipped.length + " patient" + (skipped.length !== 1 ? "s" : "") + ".";
+          if (noCare) { msg += " " + noCare + " had no upcoming appointment."; }
+          variant = sent ? "warning" : "warning";
+          annotateSkippedRows(skipped);
+        }
+        showBanner(variant, msg);
+      } else {
+        showBanner("error", data.error || "Request failed.");
+      }
+      updateSelection();
+    })
+    .catch(function() {
+      showBanner("error", "Request failed. Please try again.");
+      updateSelection();
+    });
+  }
+
+  function annotateSkippedRows(skipped) {
+    for (var i = 0; i < skipped.length; i++) {
+      var item = skipped[i];
+      var row = document.querySelector(
+        'canvas-table-row[data-patient-id="' + CSS.escape(item.patient_id) + '"]'
+      );
+      if (row) {
+        row.setAttribute("data-skipped", item.reason);
+      }
+    }
+  }
+
+  document.getElementById("eligBtn").addEventListener("click", function() {
+    sendBulk("eligibility", "eligBtn", "Eligibility requests");
+  });
+  document.getElementById("histBtn").addEventListener("click", function() {
+    sendBulk("med-history", "histBtn", "Med history requests");
+  });
+})();
+</script>
+
+</body>
+</html>
