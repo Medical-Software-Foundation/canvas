@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "questionnaire_webhook",
+    "description": "Extracts specific answers from committed questionnaires and POSTs them to external endpoints. Ships with two example branches: CCM-eligible encounter flagging and prior-authorization medication fields.",
+    "components": {
+        "protocols": [
+            {
+                "class": "questionnaire_webhook.protocols.questionnaire_webhook:QuestionnaireWebhookProtocol",
+                "description": "On questionnaire commit, sends matched questionnaire answers to a webhook",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["CCM_WEBHOOK_URL", "PA_WEBHOOK_URL", "AUTH_TOKEN"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
