@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+  <link rel="stylesheet" href="{{ base }}/canvas-plugin-ui.css?v={{ cache_bust }}">
+  <script src="{{ base }}/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+  <script src="{{ base }}/chart-note-scroll.js?v={{ cache_bust }}"></script>
+  <style>
+    /* --- The base font, which the design system does not set
+       canvas-plugin-ui.css puts the font family on h1 to h5 and on p, and on every
+       component through its own shadow root. It never sets one on body, so a div, a span
+       or a label falls back to the browser default, which is a serif. */
+    html, body {
+      margin: 0;
+      font-family: var(--font-family);
+      font-size: 14px;
+      color: var(--color-text, rgba(0, 0, 0, 0.87));
+      background: var(--palette-white, #fff);
+    }
+
+    /* --- The extra room underneath, which is not a style choice
+       The home app floats its chat widget over the bottom right of every right chart pane,
+       fixed, on top of whatever this page renders. The clearance is measured against the
+       widget's expanded size rather than its collapsed one, because a clearance measured
+       against the collapsed widget stops working the moment a provider opens it. */
+    .pane { padding: 1.5rem; padding-bottom: 120px; }
+
+    .muted { color: var(--color-text-muted, #767676); font-size: .92857143em; }
+
+    /* --- One note, its heading, its line, and its cards
+       The group is the unit of this pane. The chart wide pane stacks several of these and
+       the note scoped pane shows exactly one, which is the whole difference between the two
+       and the reason they are one page rather than two. */
+    .note-group { margin-bottom: var(--space-huge, 2rem); }
+    /* The note type carries the weight the home app gives it at the top of a note, so the
+       two lines together read as that note rather than as a caption about it. */
+    .note-type { font-weight: 700; margin: 0; font-size: 1.07142857rem; }
+    /* The link takes the design system's link colour and keeps its underline on at rest,
+       rather than only on hover, so it reads as clickable before anybody touches it. The
+       icon at the end takes the same colour by inheriting it, since it draws with stroke
+       currentColor. */
+    .note-type a {
+      color: var(--color-secondary, #2185D0);
+      text-decoration: underline;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-mini, .25rem);
+    }
+    .note-type-link-icon { width: 14px; height: 14px; flex-shrink: 0; }
+    .note-line { margin-top: var(--space-mini, .25rem); }
+
+    /* One card per program, stacked with even spacing. Consecutive margins collapse to one
+       gap between cards rather than doubling it. */
+    .program-card { margin-top: var(--space-medium); margin-bottom: var(--space-medium); }
+    .card-head { display: flex; align-items: center; gap: var(--space-small); flex-wrap: wrap; }
+    /* --- Why the drug is a heading rather than bold text
+       It gives the card a semantic heading a screen reader can announce, and it separates
+       the medication from the program name under it by size as well as by space. */
+    .card-title {
+      margin: 0;
+      font-size: 1.07142857rem;
+      font-weight: 700;
+      line-height: 1.28571429em;
+    }
+    .card-program { margin-top: var(--space-tiny); }
+    .card-note { margin-top: var(--space-tiny); }
+    /* A section inside the one card body, divided from the section above it the way the
+       design system asks, since a card holds exactly one canvas-card-body and the internal
+       structure is built from divs inside it rather than from a second body. */
+    .card-section {
+      border-top: 1px solid rgba(34, 36, 38, 0.15);
+      margin-top: 1em;
+      padding-top: 1em;
+    }
+    .card-warning { margin-top: var(--space-small); }
+
+    /* --- The timer row
+       Sits above the groups, quiet enough to ignore. It is a status line about our own
+       mechanism rather than anything clinical, so it never takes weight or colour. */
+    .tick-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-small);
+      margin-bottom: var(--space-large);
+    }
+
+    /* --- The catch up checklist, and why it is not a stack of plain checkboxes
+       canvas-checkbox takes a label as a single string attribute, so a step whose message
+       body runs to three sentences became one unbroken line of text beside a box, which
+       is what a practitioner has to read carefully before ticking. The component stays
+       exactly as the design system fixes it and the reading is built beside it instead,
+       the day and what kind of step it is on the first line, the wording underneath. The
+       box aligns to the top of that block rather than to its middle, since a two line and
+       a five line row would otherwise put their boxes at different heights. */
+    .catch-up { display: flex; flex-direction: column; }
+    .catch-up-row {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-small);
+      padding: var(--space-small) 0;
+      border-top: 1px solid rgba(34, 36, 38, 0.15);
+    }
+    .catch-up-row:first-child { border-top: 0; padding-top: 0; }
+    /* The nudge that puts the box on the same optical line as the first line of text.
+       The component centres its own box inside its line box, and the heading beside it
+       is one step larger, so without this the box sits low by about two pixels. */
+    .catch-up-row canvas-checkbox { margin-top: 1px; flex-shrink: 0; }
+    /* The text is the click target as well as the box, because a row of this height with
+       only a 16 pixel box to hit is a target a person misses. min-width zero is what lets
+       a long word wrap inside a flex child rather than widening the whole dialog. */
+    .catch-up-text { flex: 1; min-width: 0; cursor: pointer; }
+    .catch-up-day { font-weight: 700; }
+    .catch-up-body { margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <!-- The chain icon that ends a note link, held here as a template rather than as a route
+       or a copied asset file, since it is one icon read straight off link.svg in the design
+       system. noteLinkIcon clones it in after the link text. -->
+  <template id="note-type-link-icon">
+    <svg class="note-type-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+    </svg>
+  </template>
+
+  <div class="pane">
+    <!-- The update timer, on screen from the moment the pane opens and never not counting.
+         A program's steps fire from a daily walk on the server, so a pane left open goes
+         stale silently, and a line that says when it will refresh is what stops a provider
+         reading a status that stopped being true an hour ago. -->
+    <div class="tick-row">
+      <span class="muted" id="tick"></span>
+      <canvas-button variant="ghost" size="xs" id="update-now">Update now</canvas-button>
+    </div>
+    <div id="content"><canvas-loader></canvas-loader></div>
+  </div>
+
+  <!-- --- Why the already due steps are asked about here rather than inside the card
+       The question only ever arrives at the moment somebody presses Start, it has to be
+       answered before anything is written, and answering it wrongly sends real messages to
+       a real patient about a dose they took weeks ago. That is a confirmation, and the
+       design system's answer to a confirmation is a modal rather than a checklist sitting
+       permanently open on a card nobody has pressed yet. -->
+  <canvas-modal id="catch-up" size="small">
+    <canvas-modal-header dismissable>Steps already due</canvas-modal-header>
+    <canvas-modal-content>
+      <p class="muted" style="margin:0 0 var(--space-small)" id="catch-up-lead"></p>
+      <div class="catch-up" id="catch-up-list"></div>
+      <p class="muted" style="margin:var(--space-small) 0 0">
+        Anything left unticked is recorded as skipped, with the reason that it fell due
+        before the program started.
+      </p>
+    </canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="catch-up-no">Cancel</canvas-button>
+      <canvas-button variant="primary" id="catch-up-yes">Start the program</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <!-- The reason a program was stopped is typed here rather than into window.prompt. A
+       browser dialog is not part of the design system, it cannot be styled, it reads as the
+       browser interrupting rather than as the product asking, and it is the one control on
+       a page that no screenshot of that page can show. -->
+  <canvas-modal id="stop" size="small">
+    <canvas-modal-header dismissable>Stop this program</canvas-modal-header>
+    <canvas-modal-content>
+      <p class="muted" style="margin:0 0 var(--space-small)">
+        Every step still to run is halted. The reason is kept against the program so anybody
+        reading the chart later can see why it ended.
+      </p>
+      <canvas-textarea label="Why are you stopping it" id="stop-reason" rows="3"
+        placeholder="e.g. The patient asked us to stop."></canvas-textarea>
+    </canvas-modal-content>
+    <canvas-modal-footer>
+      <canvas-button variant="ghost" id="stop-no">Cancel</canvas-button>
+      <canvas-button variant="danger" id="stop-yes">Stop the program</canvas-button>
+    </canvas-modal-footer>
+  </canvas-modal>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var BASE = "{{ base }}";
+      var PATIENT_ID = "{{ patient_id }}";
+      var NOTE_ID = "{{ note_id }}";
+
+      var content = document.getElementById("content");
+      var tickLabel = document.getElementById("tick");
+
+      // Every note group and its cards, exactly as GET /followups handed them over. Held so
+      // a click can find the card it belongs to without any of its values making a round
+      // trip through an HTML attribute, which is what keeps a provider name carrying a
+      // quote, or a medication label carrying an ampersand, intact.
+      var state = { notes: [], cards: {} };
+
+      // --- The program's own status, in one map
+      //
+      // The word and the colour for a running program's status. A step's own status word
+      // is decided server side in program_pane.py instead, so this page and the enrolment
+      // write can never print two different words for the same step.
+      var PROGRAM_STATUS = {
+        active: { color: "green", label: "Running" },
+        stopped: { color: "red", label: "Stopped" },
+        completed: { color: "grey", label: "Finished" }
+      };
+
+      // The badge on a card that carries no enrolment yet. Startable is deliberately quiet
+      // rather than green, since green on this pane means a program that is actually going.
+      var CARD_STATE = {
+        startable: { color: "blue", label: "Not started" },
+        blocked: { color: "red", label: "Cannot start" },
+        uncovered: { color: "grey", label: "No program" }
+      };
+
+      function esc(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
+
+      // A date arrives as an ISO date. Shown in the month name form the design system asks
+      // for rather than as the raw string, and worked out from the text alone so no timezone
+      // conversion can shift it onto a different day.
+      var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      function niceDate(iso) {
+        var parts = String(iso || "").split("-");
+        if (parts.length !== 3) { return iso || ""; }
+        var month = MONTHS[parseInt(parts[1], 10) - 1];
+        if (!month) { return iso; }
+        return month + " " + parseInt(parts[2], 10) + ", " + parts[0];
+      }
+
+      /* The chain icon after the link text, cloned from the template above rather than
+         rebuilt from a string every time, so the markup that draws it exists in exactly one
+         place on this page. */
+      function noteLinkIcon() {
+        var template = document.getElementById("note-type-link-icon");
+        return template.content.firstElementChild.cloneNode(true);
+      }
+
+      function chartNoteUrl(note) {
+        return "/patient/" + encodeURIComponent(note.patient_key) +
+          "#noteId=" + encodeURIComponent(note.dbid);
+      }
+
+      // --- Which note this is, in the note's own words
+      //
+      // This line exists to be recognised rather than read, so it is the same sentence the
+      // home app draws at the top of the note, in the same order and the same shape.
+      // Anything that merely paraphrases it makes a reader compare two lines instead of
+      // recognising one. The time is formatted here rather than on the server because the
+      // home app formats it here too, in whichever timezone the person reading it is
+      // sitting in. Formatting it server side put this line two hours off the note beside it.
+      function noteLineText(note) {
+        var at = note.at ? new Date(note.at) : null;
+        var when = "";
+        if (at && !isNaN(at.getTime())) {
+          when = "On " + window.mfpChartNote.noteMoment(at);
+        }
+        var tail = [
+          note.provider_name ? "with " + note.provider_name : "",
+          note.location_name ? "at " + note.location_name : ""
+        ].filter(Boolean).join(" ");
+        return [when, tail].filter(Boolean).join(" ");
+      }
+
+      /* --- The note name carries the reader back to the note
+         The pane sits beside the chart, and a provider who has scrolled away has no way back
+         to the note a program came from. In a chart of many notes, finding the right one
+         again is the whole problem, so the name is a link.
+
+         Both halves of the address are needed and they are different kinds of identifier.
+         The chart route takes the patient public key and the permalink takes the note
+         database id, so swapping them produces a chart that loads and scrolls nowhere. */
+      function noteHeading(note, index) {
+        var heading = document.createElement("h3");
+        heading.className = "note-type";
+        var name = note.note_type_name || "This note";
+        if (!note.dbid || !note.patient_key) {
+          heading.textContent = name;
+          return heading;
+        }
+        var link = document.createElement("a");
+        link.appendChild(document.createTextNode(name));
+        link.appendChild(noteLinkIcon());
+        link.setAttribute("href", chartNoteUrl(note));
+        /* The fallback when the script below cannot reach the chart, which navigates the
+           whole window rather than this pane. Without it the pane would load a chart inside
+           itself, which is worse than not moving at all. */
+        link.setAttribute("target", "_top");
+        link.setAttribute("title", "Show this note in the chart");
+        link.addEventListener("click", function (event) {
+          window.mfpChartNote.scrollTo(state.notes[index], event);
+        });
+        heading.appendChild(link);
+        return heading;
+      }
+
+      // --- One step of a running program, one row
+      //
+      // The word and the colour come off the row itself, decided once server side, rather
+      // than from a second map kept here. That is what stops this pane and any other view
+      // of the same enrolment drifting onto two different words for one status.
+      // The badge above already says where the step got to, so this line never repeats
+      // that word. It carries the reason a step did not land when there is one, and
+      // otherwise the day the step was timed for, which is the fact the badge does not
+      // carry and the one a reader is actually looking for beside it.
+      function stepDueLabel(step) {
+        if (step.failure_reason) { return esc(step.failure_reason); }
+        return "Due " + esc(niceDate(step.due_date));
+      }
+
+      function stepRow(step) {
+        return "<canvas-table-row>" +
+          "<canvas-table-cell bold>Day " + esc(step.day_offset) + "</canvas-table-cell>" +
+          "<canvas-table-cell>" + esc(step.summary || step.kind) +
+            (step.condition ? "<div class='muted'>Only if the recheck is not booked</div>" : "") +
+          "</canvas-table-cell>" +
+          "<canvas-table-cell><canvas-badge color='" + esc(step.status_color) + "' size='mini'>" +
+            esc(step.status_label) + "</canvas-badge>" +
+            "<div class='muted'>" + stepDueLabel(step) + "</div>" +
+          "</canvas-table-cell>" +
+        "</canvas-table-row>";
+      }
+
+      function stepsTable(enrolment) {
+        // A class nobody has configured a step on produces an enrolment with no steps, and
+        // a table of headers over nothing reads as a rendering failure rather than as the
+        // truth. Say the truth instead, and name the one thing that would change it.
+        if (!enrolment.steps.length) {
+          return "<p class='muted' style='margin:0'>This program has no steps configured " +
+            "yet, so nothing is scheduled. Adding steps to " + esc(enrolment.medication_class) +
+            " on the configuration page is what gives it something to do.</p>";
+        }
+        return "<canvas-table compact aria-label='Steps of " +
+            esc(enrolment.medication_class) + "'>" +
+          "<canvas-table-head><canvas-table-row>" +
+            "<canvas-table-cell>Day</canvas-table-cell>" +
+            "<canvas-table-cell>What happens</canvas-table-cell>" +
+            "<canvas-table-cell>Where it got to</canvas-table-cell>" +
+          "</canvas-table-row></canvas-table-head>" +
+          "<canvas-table-body>" + enrolment.steps.map(stepRow).join("") + "</canvas-table-body>" +
+        "</canvas-table>";
+      }
+
+      // --- The badge a card carries
+      //
+      // A running card takes the enrolment's own status. Everything else takes the card
+      // state the server decided, so this page never works out for itself whether a
+      // prescription can be started.
+      // The enrolment's own status wins whenever there is one, running or not, because a
+      // card that has been stopped is offering a fresh start and still has to say what
+      // happened last time. Not started is only for a pair that has never been enrolled.
+      function cardBadge(card) {
+        var state = card.enrollment
+          ? (PROGRAM_STATUS[card.enrollment.status] || PROGRAM_STATUS.active)
+          : (CARD_STATE[card.state] || CARD_STATE.startable);
+        return "<canvas-badge color='" + state.color + "' size='mini'>" +
+          state.label + "</canvas-badge>";
+      }
+
+      // --- What sits under the title, per state
+      //
+      // The program name always, since the card is a prescription paired with one program
+      // and the whole point of dropping the chooser was that the card says which. Then the
+      // one sentence that state needs, and nothing else.
+      function cardDetail(card) {
+        if (card.state === "uncovered") {
+          return "<div class='muted card-program'>" +
+            (card.therapeutic_group
+              ? "This falls under " + esc(card.therapeutic_group) + ", and no program is " +
+                "configured for it."
+              : "No configured program covers this medication.") +
+            "</div>";
+        }
+        var lines = ["<div class='card-program'><strong>" + esc(card.class_name) + "</strong></div>"];
+        if (card.state === "startable" && card.enrollment) {
+          // Stopped or finished, and offered again. The sentence leads with what happened
+          // rather than with the offer, since a reader has to know this is a second run
+          // before the step count below means anything.
+          lines.push("<div class='muted card-note'>" +
+            (card.enrollment.status === "completed"
+              ? "This program ran from " + esc(niceDate(card.enrollment.start_date)) +
+                " and finished."
+              : "This program was started on " + esc(niceDate(card.enrollment.start_date)) +
+                " and stopped." +
+                (card.enrollment.stopped_reason
+                  ? " " + esc(card.enrollment.stopped_reason) : "")) +
+            " Starting it again schedules all " + esc(card.step_count) +
+            " step" + (card.step_count === 1 ? "" : "s") + " afresh from " +
+            esc(niceDate(card.start_date)) + "." +
+            (card.due_steps.length
+              ? " " + card.due_steps.length + " of them " +
+                (card.due_steps.length === 1 ? "is" : "are") + " already due."
+              : "") +
+            "</div>");
+          return lines.join("");
+        }
+        if (card.state === "running") {
+          lines.push("<div class='muted card-note'>Started " +
+            esc(niceDate(card.enrollment ? card.enrollment.start_date : card.start_date)) +
+            "</div>");
+          if (card.enrollment && card.enrollment.stopped_reason) {
+            lines.push("<div class='muted card-note'>" +
+              esc(card.enrollment.stopped_reason) + "</div>");
+          }
+        } else if (card.state === "blocked") {
+          lines.push("<div class='muted card-note'>" + esc(card.blocked_reason) + "</div>");
+        } else if (!card.step_count) {
+          // Startable and empty. Offering it silently would create a program that never
+          // does anything, and the card that says so is the only place a practitioner
+          // would find that out before starting it.
+          lines.push("<div class='muted card-note'>No steps are configured on " +
+            esc(card.class_name) + " yet, so starting it schedules nothing until some " +
+            "are added on the configuration page.</div>");
+        } else {
+          lines.push("<div class='muted card-note'>" + esc(card.step_count) +
+            " step" + (card.step_count === 1 ? "" : "s") + ", starting " +
+            esc(niceDate(card.start_date)) + ", the day this was prescribed." +
+            (card.due_steps.length
+              ? " " + card.due_steps.length + " of them " +
+                (card.due_steps.length === 1 ? "is" : "are") + " already due."
+              : "") +
+            "</div>");
+        }
+        return lines.join("");
+      }
+
+      // Behaviour step 17's own warning rather than hiding rule. A second program on the
+      // same medication is allowed, so the card says what starting it would mean rather
+      // than removing the option.
+      function alreadyRunningBanner(card) {
+        if (!card.already_running || card.state !== "startable") { return ""; }
+        return "<canvas-banner variant='warning' class='card-warning'>" +
+          "<p>" + esc(card.already_running) + " is already running on this medication. " +
+            "Starting " + esc(card.class_name) + " adds a second program, and the patient " +
+            "will get messages from both.</p>" +
+        "</canvas-banner>";
+      }
+
+      function cardFooter(card) {
+        if (card.state === "running") {
+          if (!card.enrollment || card.enrollment.status !== "active") { return ""; }
+          return "<canvas-card-footer>" +
+            "<canvas-button variant='ghost' size='sm' data-stop='" +
+              esc(card.enrollment.id) + "'>Stop this program</canvas-button>" +
+          "</canvas-card-footer>";
+        }
+        if (card.state !== "startable") { return ""; }
+        // Start alone rather than Start plus the program name. The card names the
+        // program two lines above the button, in bold, so repeating it in the label made
+        // the longest thing on the card a restatement of something already read. The
+        // program still reaches a screen reader, through aria-label, because a reader
+        // moving button to button gets none of the card's own context.
+        return "<canvas-card-footer>" +
+          "<canvas-button variant='primary' size='sm' data-start='" + esc(card.key) +
+            "' aria-label='Start " + esc(card.class_name) + "'>Start</canvas-button>" +
+        "</canvas-card-footer>";
+      }
+
+      // One card, one prescription paired with one program. A card holds exactly one
+      // canvas-card-body, so the steps table sits in a divided section inside that body
+      // rather than in a second body of its own.
+      function programCard(card) {
+        // The steps table rides with the enrolment rather than with the running state, so
+        // a stopped card still shows what did and did not happen before it was ended.
+        var steps = card.enrollment
+          ? "<div class='card-section'>" + stepsTable(card.enrollment) + "</div>"
+          : "";
+        return "<canvas-card class='program-card' id='card-" + esc(card.key) + "'>" +
+          "<canvas-card-body>" +
+            "<div class='card-head'>" +
+              "<h4 class='card-title'>" + esc(card.medication_label || "This prescription") + "</h4>" +
+              cardBadge(card) +
+            "</div>" +
+            cardDetail(card) +
+            alreadyRunningBanner(card) +
+            steps +
+          "</canvas-card-body>" +
+          cardFooter(card) +
+        "</canvas-card>";
+      }
+
+      // --- Nothing to show
+      //
+      // The design system's typed empty state rather than a banner, because the container is
+      // genuinely empty rather than carrying something with a problem. The copy names all
+      // three things a prescription needs, because saying only to prescribe on the note sent
+      // somebody who did exactly that back to a pane that still refused them.
+      function emptyState() {
+        return "<div style='padding: var(--space-huge); text-align: center'>" +
+          "<h3 style='margin:0 0 var(--space-small); font-weight:700'>No follow up program</h3>" +
+          "<p style='margin:0' class='muted'>" +
+            (NOTE_ID
+              ? "Nothing on this note can start a program yet. A prescription has to be " +
+                "committed, name its medication and name its prescriber, and a medication " +
+                "class has to cover it."
+              : "This patient has no program running and no prescription a configured class " +
+                "covers.") +
+          "</p>" +
+        "</div>";
+      }
+
+      function render() {
+        // --- Never rebuild the page under somebody who is answering a question on it
+        //
+        // This pane rebuilds its whole content on every load rather than patching the
+        // cards whose facts moved, which is cheap and honest at rest and wrong in the
+        // middle of a decision. At ten seconds a tick lands while a dialog is open often
+        // enough to matter, and the catch up dialog is the one place on this page where a
+        // rebuild would throw away ticks a practitioner had already made. The state is
+        // kept and the redraw is dropped, and the next tick picks it up, so the countdown
+        // never pauses and the rhythm never breaks.
+        // Guarded rather than read straight, because both are declared further down
+        // this same scope and hoisting leaves them undefined until it runs.
+        if ((catchUpModal && catchUpModal.isOpen) || (stopModal && stopModal.isOpen)) {
+          return;
+        }
+        content.textContent = "";
+        if (!state.notes.length) {
+          content.innerHTML = emptyState();
+          return;
+        }
+        state.cards = {};
+        state.notes.forEach(function (note, index) {
+          var group = document.createElement("section");
+          group.className = "note-group";
+          group.appendChild(noteHeading(note, index));
+
+          var line = document.createElement("div");
+          line.className = "muted note-line";
+          line.textContent = noteLineText(note);
+          group.appendChild(line);
+
+          var cards = document.createElement("div");
+          cards.innerHTML = note.programs.map(function (card) {
+            state.cards[card.key] = { card: card, note: note };
+            return programCard(card);
+          }).join("");
+          group.appendChild(cards);
+
+          content.appendChild(group);
+        });
+        wire();
+      }
+
+      function wire() {
+        Array.prototype.forEach.call(content.querySelectorAll("[data-stop]"), function (button) {
+          button.addEventListener("click", function () {
+            openStopModal(button.getAttribute("data-stop"));
+          });
+        });
+        Array.prototype.forEach.call(content.querySelectorAll("[data-start]"), function (button) {
+          button.addEventListener("click", function () {
+            requestStart(button.getAttribute("data-start"));
+          });
+        });
+      }
+
+      // --- Where a refusal goes
+      //
+      // Inside the card whose button caused it, because with several cards on screen a
+      // banner at the foot of the pane does not say which one failed. Falls back to the foot
+      // of the pane when the refusal belongs to no single card, or when that card is no
+      // longer there after a reload.
+      function banner(message, runningId, cardKey) {
+        var existing = content.querySelector(".refusal");
+        if (existing) { existing.remove(); }
+        var host = cardKey ? document.getElementById("card-" + cardKey) : null;
+        (host || content).insertAdjacentHTML("beforeend",
+          "<canvas-banner class='refusal' variant='warning' header='Could not start the program'>" +
+          "<p>" + esc(message) + "</p>" +
+          (runningId
+            ? "<canvas-button size='sm' id='resolve-running'>Stop the running program</canvas-button>"
+            : "") +
+          "</canvas-banner>");
+        if (runningId) {
+          document.getElementById("resolve-running").addEventListener("click", function () {
+            resolveRunning(runningId);
+          });
+        }
+      }
+
+      function failed(message) {
+        content.innerHTML = "<canvas-banner variant='error' header='Could not load the programs'>" +
+          "<p>" + esc(message) + "</p></canvas-banner>";
+      }
+
+      function readJson(url) {
+        return fetch(url, { credentials: "same-origin" }).then(function (response) {
+          if (!response.ok) { throw new Error("The server answered " + response.status); }
+          return response.json();
+        });
+      }
+
+      function load() {
+        var query = NOTE_ID
+          ? "note_id=" + encodeURIComponent(NOTE_ID)
+          : "patient_id=" + encodeURIComponent(PATIENT_ID);
+        return readJson(BASE + "/followups?" + query)
+          .then(function (payload) {
+            state.notes = payload.notes || [];
+            render();
+          })
+          .catch(function (error) { failed(error.message); });
+      }
+
+      // --- The catch up question, asked once, at the moment it matters
+      //
+      // Behaviour steps 22 and 23. Every already due step is listed unticked, so nothing
+      // about it is sent unless the practitioner chooses it here, before the enrolment is
+      // written. A card with nothing already due never opens this at all and starts
+      // straight away, which is the ordinary case.
+      var catchUpModal = document.getElementById("catch-up");
+      var pendingStartKey = null;
+
+      function requestStart(cardKey) {
+        var entry = state.cards[cardKey];
+        if (!entry) { return; }
+        pendingStartKey = cardKey;
+        if (!entry.card.due_steps.length) {
+          start(cardKey, []);
+          return;
+        }
+        document.getElementById("catch-up-lead").textContent =
+          entry.card.class_name + " starts on " + niceDate(entry.card.start_date) +
+          ", the day this was prescribed, so " + entry.card.due_steps.length +
+          (entry.card.due_steps.length === 1 ? " step is" : " steps are") +
+          " already due. Tick the ones to send now.";
+        var list = document.getElementById("catch-up-list");
+        list.innerHTML = entry.card.due_steps.map(catchUpRow).join("");
+        // The label the component would have drawn goes to the screen reader instead, since
+        // the visible reading is now two elements beside the box rather than its own label.
+        Array.prototype.forEach.call(list.querySelectorAll(".catch-up-row"), function (row) {
+          var box = row.querySelector("canvas-checkbox");
+          row.querySelector(".catch-up-text").addEventListener("click", function () {
+            box.checked = !box.checked;
+          });
+        });
+        catchUpModal.open();
+      }
+
+      // What kind of step this is, in the words a practitioner uses rather than the value
+      // the model stores. It goes on the heading line beside the day, so the row says what
+      // will happen before anybody reads the wording underneath it.
+      var STEP_KIND = {
+        message: "message to the patient",
+        task: "task for the team",
+        questionnaire: "questionnaire to the patient"
+      };
+
+      function catchUpRow(step) {
+        var kind = STEP_KIND[step.kind] || step.kind;
+        var body = step.summary || "";
+        // A questionnaire step the practice wrote no covering note for falls back server
+        // side to the words Questionnaire to the patient, which is exactly what the kind
+        // on the line above already says. Printing it twice reads as a rendering fault
+        // rather than as an absence, so the second line is dropped instead.
+        if (body.toLowerCase() === kind.toLowerCase()) { body = ""; }
+        return "<div class='catch-up-row'>" +
+          "<canvas-checkbox data-catch-up-step='" + esc(step.id) + "' aria-label='" +
+            esc("Day " + step.day_offset + ", " + kind + ". " + body) + "'></canvas-checkbox>" +
+          "<div class='catch-up-text'>" +
+            "<div class='catch-up-day'>Day " + esc(step.day_offset) + ", " + esc(kind) + "</div>" +
+            (body ? "<div class='muted catch-up-body'>" + esc(body) + "</div>" : "") +
+          "</div>" +
+        "</div>";
+      }
+
+      function tickedCatchUpIds() {
+        var ids = [];
+        Array.prototype.forEach.call(
+          document.getElementById("catch-up-list").querySelectorAll("[data-catch-up-step]"),
+          function (box) {
+            if (box.checked) { ids.push(Number(box.getAttribute("data-catch-up-step"))); }
+          }
+        );
+        return ids;
+      }
+
+      document.getElementById("catch-up-no").addEventListener("click", function () {
+        pendingStartKey = null;
+        catchUpModal.dismiss();
+      });
+
+      document.getElementById("catch-up-yes").addEventListener("click", function () {
+        var key = pendingStartKey;
+        var ids = tickedCatchUpIds();
+        catchUpModal.dismiss();
+        if (key) { start(key, ids); }
+      });
+
+      function start(cardKey, catchUpStepIds) {
+        var entry = state.cards[cardKey];
+        if (!entry) { return; }
+        var card = entry.card;
+        fetch(BASE + "/enrollments", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patient_id: card.patient_id,
+            prescription_id: card.prescription_id,
+            prescriber_staff_id: card.prescriber_id,
+            medication_class_id: card.class_id,
+            medication_label: card.medication_label,
+            note_id: String(entry.note.dbid || ""),
+            catch_up_step_ids: catchUpStepIds
+          })
+        })
+          .then(function (response) {
+            return response.json().then(function (body) {
+              if (!response.ok) {
+                // Reload first, so every card on screen agrees with the refusal that is
+                // about to be printed beside one of them.
+                var reason = body.error || "The server answered " + response.status;
+                var runningId = body.running_enrollment_id || null;
+                return load().then(function () { banner(reason, runningId, cardKey); });
+              }
+              return load();
+            });
+          })
+          .catch(function (error) { banner(error.message, null, cardKey); });
+      }
+
+      function resolveRunning(enrolmentId) {
+        var key = pendingStartKey;
+        fetch(BASE + "/enrollments/" + encodeURIComponent(enrolmentId) + "/stop", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Replaced by a new program started from the note." })
+        })
+          .then(function (response) {
+            if (!response.ok) { throw new Error("The server answered " + response.status); }
+            // Straight back into the same submission, because stopping the old one was only
+            // ever a step towards starting this one on the same card.
+            if (key) { requestStart(key); } else { load(); }
+          })
+          .catch(function (error) { banner(error.message); });
+      }
+
+      var stopModal = document.getElementById("stop");
+      var pendingStop = null;
+
+      function openStopModal(id) {
+        pendingStop = id;
+        document.getElementById("stop-reason").value = "";
+        stopModal.open();
+      }
+
+      document.getElementById("stop-no").addEventListener("click", function () {
+        pendingStop = null;
+        stopModal.dismiss();
+      });
+
+      document.getElementById("stop-yes").addEventListener("click", function () {
+        var id = pendingStop;
+        var reason = document.getElementById("stop-reason").value;
+        pendingStop = null;
+        stopModal.dismiss();
+        if (!id) { return; }
+        fetch(BASE + "/enrollments/" + encodeURIComponent(id) + "/stop", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reason })
+        })
+          .then(function (response) {
+            if (!response.ok) { throw new Error("The server answered " + response.status); }
+            load();
+          })
+          .catch(function (error) { failed(error.message); });
+      });
+
+      // --- The refresh timer
+      //
+      // A program's steps fire from a daily walk on the server, and an enrolment can be
+      // started from another session, so a pane left open goes stale with nothing on screen
+      // saying so. The countdown is shown rather than hidden because a pane that silently
+      // reloads under a provider reading it is worse than one that says when it will.
+      // Ten seconds, which is what this pane has always run at. It was briefly sixty,
+      // which was not a decision, only a constant written fresh when the pane was rebuilt
+      // instead of carried over from the page it replaced.
+      var PERIOD = 10;
+      var remaining = PERIOD;
+      var timer = null;
+
+      function drawTick() {
+        tickLabel.textContent = "Updates in " + remaining + "s";
+      }
+
+      function tick() {
+        remaining -= 1;
+        if (remaining <= 0) { update(); return; }
+        drawTick();
+      }
+
+      function update() {
+        remaining = PERIOD;
+        tickLabel.textContent = "Updating";
+        load().then(function () { drawTick(); });
+      }
+
+      function startTicking() {
+        if (timer === null) { timer = setInterval(tick, 1000); }
+      }
+
+      function stopTicking() {
+        if (timer !== null) { clearInterval(timer); timer = null; }
+      }
+
+      document.getElementById("update-now").addEventListener("click", update);
+
+      // A hidden pane counting down and refetching is spending a provider's instance on
+      // nothing, so the timer stops with the tab and restarts with it.
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) { stopTicking(); } else { update(); startTicking(); }
+      });
+
+      drawTick();
+      startTicking();
+      load();
+    })();
+  </script>
+</body>
+</html>
