@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Theme Kit Demo</title>
+
+    {% comment %} LAYER 1 — inline critical CSS.
+       Rendered server-side from the shared custom-data namespace, so the very
+       first paint already has the published token values with no network
+       request. This is what removes the flash of unstyled content. It must come
+       BEFORE the stylesheet link so the linked rules can still override it. {% endcomment %}
+    <style>{{ ctk_tokens_css|safe }}</style>
+
+    {% comment %} The page's own rules, written against the tokens above. Inlined here only
+       because this is a one-page demo; a real consumer would keep them in its
+       own stylesheet. Every var() carries a fallback so the page survives a
+       theme that omits a token. {% endcomment %}
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: var(--ctk-space-8, 2rem);
+        font-family: var(--ctk-font-family, system-ui, sans-serif);
+        font-size: var(--ctk-font-size-base, 1rem);
+        line-height: var(--ctk-line-height-base, 1.5);
+        color: var(--ctk-color-fg, #16191d);
+        background: var(--ctk-color-bg, #ffffff);
+      }
+      .shell { max-width: 720px; margin: 0 auto; }
+      h1 {
+        font-size: var(--ctk-font-size-xl, 1.5rem);
+        line-height: var(--ctk-line-height-tight, 1.2);
+        margin: 0 0 var(--ctk-space-2, .5rem);
+      }
+      .lede { color: var(--ctk-color-fg-muted, #5b6472); margin: 0 0 var(--ctk-space-6, 1.5rem); }
+      .card {
+        background: var(--ctk-color-surface, #f6f8fa);
+        border: 1px solid var(--ctk-color-border, #d7dce3);
+        border-radius: var(--ctk-radius-md, 8px);
+        padding: var(--ctk-space-6, 1.5rem);
+        margin-bottom: var(--ctk-space-4, 1rem);
+      }
+      .btn {
+        display: inline-block;
+        font: inherit;
+        font-weight: var(--ctk-font-weight-bold, 700);
+        border: 0;
+        cursor: pointer;
+        background: var(--ctk-color-accent, #0b5fff);
+        color: var(--ctk-color-accent-contrast, #ffffff);
+        border-radius: var(--ctk-radius-md, 8px);
+        padding: var(--ctk-space-2, .5rem) var(--ctk-space-4, 1rem);
+      }
+      a { color: var(--ctk-color-accent, #0b5fff); }
+      .swatches { display: flex; gap: var(--ctk-space-2, .5rem); margin-top: var(--ctk-space-4, 1rem); }
+      .swatch {
+        width: 56px; height: 56px;
+        border-radius: var(--ctk-radius-sm, 4px);
+        border: 1px solid var(--ctk-color-border, #d7dce3);
+      }
+      .meta {
+        font-size: var(--ctk-font-size-sm, .875rem);
+        color: var(--ctk-color-fg-muted, #5b6472);
+        border-top: 1px solid var(--ctk-color-border, #d7dce3);
+        margin-top: var(--ctk-space-8, 2rem);
+        padding-top: var(--ctk-space-4, 1rem);
+      }
+      code { font-family: var(--ctk-font-family-mono, ui-monospace, monospace); }
+    </style>
+
+    {% comment %} LAYER 2 — the full published stylesheet, same-origin so no
+       url_permissions entry is needed. Served with
+       `max-age=300, stale-while-revalidate=86400`, so the browser paints from
+       cache and revalidates in the background; it never blocks a paint. {% endcomment %}
+    <link rel="stylesheet" href="/plugin-io/api/canvas_theme_kit/assets/default/core.css" />
+  </head>
+
+  <body>
+    <div class="shell">
+      <h1>Theme Kit Demo</h1>
+      <p class="lede">
+        A separate plugin, styled entirely by tokens published from
+        <code>canvas_theme_kit</code> — read at render time through the shared
+        custom-data namespace.
+      </p>
+
+      <div class="card">
+        <p>This card's surface, border and radius all come from published tokens.</p>
+        <button class="btn">Accent button</button>
+        <div class="swatches">
+          <div class="swatch" style="background: var(--ctk-color-accent, #0b5fff)" title="color-accent"></div>
+          <div class="swatch" style="background: var(--ctk-color-success, #1c7c48)" title="color-success"></div>
+          <div class="swatch" style="background: var(--ctk-color-warning, #8a6100)" title="color-warning"></div>
+          <div class="swatch" style="background: var(--ctk-color-danger, #b3261e)" title="color-danger"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <strong>Tokens inlined into this page's &lt;head&gt;:</strong>
+        <span id="token-count">{{ ctk_token_count }}</span>
+        <p style="margin-bottom:0">
+          View source and look at the first <code>&lt;style&gt;</code> block — those
+          values were rendered server-side, before any request for a stylesheet.
+          That is why this page never flashes unstyled.
+        </p>
+      </div>
+
+      <p class="meta">
+        Theme <code>{{ ctk_slug }}</code> ·
+        {% if ctk_has_theme %}reading live tokens from the shared namespace{% else %}no published theme found — every value above is a CSS fallback{% endif %}
+      </p>
+    </div>
+
+    <script src="/plugin-io/api/canvas_theme_kit/assets/core.js"></script>
+  </body>
+</html>

@@ -1,0 +1,70 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.14",
+    "name": "canvas_theme_kit",
+    "description": "Admin-editable CSS and design tokens for Canvas plugins. Serves versioned, themeable stylesheets over SimpleAPI with a staff-gated editor, tuned so pages never flash unstyled.",
+    "url_permissions": [],
+    "custom_data": {
+        "namespace": "canvas_theme_kit__themes",
+        "access": "read_write"
+    },
+    "components": {
+        "applications": [
+            {
+                "class": "canvas_theme_kit.applications.admin_app:ThemeEditorApp",
+                "name": "Theme Kit",
+                "description": "Edit and publish the shared stylesheet and design tokens.",
+                "scope": "global",
+                "icon": "assets/theme-kit-icon.png"
+            },
+            {
+                "class": "canvas_theme_kit.applications.admin_app:ThemeEditorMenuItem",
+                "name": "Theme Kit",
+                "description": "Edit and publish the shared stylesheet and design tokens.",
+                "scope": "provider_menu_item",
+                "icon": "assets/theme-kit-icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "canvas_theme_kit.handlers.assets:ThemeAssets",
+                "description": "Serves published stylesheets, token blocks and the shared script to any logged-in session."
+            },
+            {
+                "class": "canvas_theme_kit.handlers.assets:ThemePreview",
+                "description": "Serves the unpublished draft to authorized editors only, uncached."
+            },
+            {
+                "class": "canvas_theme_kit.handlers.admin_api:ThemeAdminAPI",
+                "description": "Staff-gated API for reading themes, saving drafts, publishing and rolling back."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "namespace_read_access_key",
+            "sensitive": false
+        },
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": false
+        },
+        {
+            "name": "DS_EDITOR_ROLES",
+            "sensitive": false
+        },
+        {
+            "name": "DS_PUBLISHER_ROLES",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "Apache-2.0",
+    "diagram": false,
+    "readme": "./README.md"
+}
