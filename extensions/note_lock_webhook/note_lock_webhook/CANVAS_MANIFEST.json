@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "note_lock_webhook",
+    "description": "Watches note state changes and POSTs the note id and patient id to an external endpoint when a note is signed.",
+    "components": {
+        "protocols": [
+            {
+                "class": "note_lock_webhook.protocols.note_lock_webhook:NoteLockWebhookProtocol",
+                "description": "Sends the note id and patient id to a webhook when a note is signed (state == SGN)",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["WEBHOOK_URL", "AUTH_TOKEN"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
