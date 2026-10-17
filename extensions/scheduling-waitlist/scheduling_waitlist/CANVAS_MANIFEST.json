@@ -1,0 +1,119 @@
+{
+    "sdk_version": "0.147.0",
+    "plugin_version": "0.1.0",
+    "name": "scheduling_waitlist",
+    "description": "Shared, priority-ordered waitlist of patients waiting to be scheduled, with a task raised to the scheduling team whenever a booked slot frees up",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "scheduling_waitlist.applications.waitlist_app:WaitlistApp",
+                "name": "Scheduling Waitlist",
+                "description": "Shared roster of patients waiting to be scheduled",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "scheduling_waitlist.routes.app_routes:WaitlistAppAPI",
+                "description": "Serves the waitlist roster page and its static assets",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "scheduling_waitlist.routes.waitlist_api:WaitlistAPI",
+                "description": "Staff-authenticated REST endpoints for waitlist entries, patient search, and dropdown options",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff", "NoteType", "PracticeLocation", "Appointment"],
+                    "write": ["BannerAlert", "ActionButton"]
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.chart_button:AddToWaitlistButton",
+                "description": "Chart header button that adds the patient in front of you to the waitlist for any appointment type, provider and location in one click, then opens that entry's form on a second click so the broad entry can be narrowed",
+                "data_access": {
+                    "event": "SHOW_CHART_PATIENT_HEADER_BUTTON,ACTION_BUTTON_CLICKED",
+                    "read": ["Patient", "Staff", "NoteType", "PracticeLocation"],
+                    "write": ["BannerAlert", "ActionButton"]
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.appointment_button:AddToWaitlistAppointmentButton",
+                "description": "Adds a 'Waitlist' button to a cancelled or no-showed appointment's note, opening the form pre-filled from the freed slot, or that patient's existing entry for the same service when they are already waiting",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Note", "Patient", "NoteType", "PracticeLocation", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.slot_freed:SlotFreedHandler",
+                "description": "When a booked slot frees up, raises one task to the scheduling team naming the matching waitlisted patients",
+                "data_access": {
+                    "event": "APPOINTMENT_CANCELED,APPOINTMENT_NO_SHOWED,APPOINTMENT_RESCHEDULED,PATIENT_PORTAL__APPOINTMENT_CANCELED,PATIENT_PORTAL__APPOINTMENT_RESCHEDULED",
+                    "read": ["Appointment", "Patient", "Staff", "NoteType", "PracticeLocation", "Team"],
+                    "write": ["Task", "BannerAlert"]
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.appointment_booked:AppointmentBookedHandler",
+                "description": "Marks a waitlist entry scheduled when the patient books a matching appointment",
+                "data_access": {
+                    "event": "APPOINTMENT_CREATED",
+                    "read": ["Appointment", "Patient", "NoteType", "PracticeLocation", "Staff"],
+                    "write": ["BannerAlert"]
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.note_buttons:NoteButtonsRefreshHandler",
+                "description": "Redraws a note's action buttons when its state changes, so the 'Waitlist' button appears on a no-show without a page reload",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": ["Note", "NoteStateChangeEvent", "Appointment"],
+                    "write": []
+                }
+            },
+            {
+                "class": "scheduling_waitlist.handlers.waitlist_cron:WaitlistMaintenanceCron",
+                "description": "Nightly job that ages out stale entries and logs wait-time and fill metrics",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Patient", "NoteType"],
+                    "write": ["BannerAlert"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "WAITLIST_SCHEDULING_TEAM", "sensitive": false},
+        {"name": "WAITLIST_APPOINTMENT_TYPES", "sensitive": false},
+        {"name": "WAITLIST_PRIORITY_LABELS", "sensitive": false},
+        {"name": "WAITLIST_TTL_DAYS", "sensitive": false},
+        {"name": "WAITLIST_MANAGER_ROLE_CODES", "sensitive": false},
+        {"name": "WAITLIST_ENFORCE_TIME_WINDOWS", "sensitive": false},
+        {"name": "WAITLIST_MAX_MATCHES_PER_TASK", "sensitive": false},
+        {"name": "WAITLIST_MIN_LEAD_TIME_HOURS", "sensitive": false},
+        {"name": "WAITLIST_URGENT_LEAD_HOURS", "sensitive": false},
+        {"name": "WAITLIST_DISPLAY_TIMEZONE", "sensitive": false},
+        {"name": "namespace_read_write_access_key", "sensitive": false}
+    ],
+    "custom_data": {
+        "namespace": "custom_data__scheduling_waitlist",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
