@@ -166,7 +166,7 @@ test-utils = [
 
 [[package]]
 name = "canvas-event-webhooks"
-version = "0.5.0"
+version = "0.5.2"
 source = { virtual = "." }
 dependencies = [
     { name = "canvas", extra = ["test-utils"] },

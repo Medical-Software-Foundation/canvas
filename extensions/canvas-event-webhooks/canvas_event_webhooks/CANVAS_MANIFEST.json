@@ -157,6 +157,10 @@
         {
             "name": "include-context",
             "sensitive": false
+        },
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": true
         }
     ],
     "custom_data": {

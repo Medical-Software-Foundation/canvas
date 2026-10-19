@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -434,3 +435,12 @@ def test_default_envelope_keys_are_locked():
     assert set(patient_body["target"]) == {"id", "type"}
     assert patient_body["context"] == safe_context
     assert staff_body["context"] == safe_context
+
+
+def test_manifest_declares_namespace_access_key():
+    """The namespace outlives an uninstall, so a reinstall needs its access key declared."""
+    manifest_path = Path(__file__).parents[1] / "canvas_event_webhooks" / "CANVAS_MANIFEST.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    assert manifest["custom_data"] == {"namespace": "canvas__event_webhooks", "access": "read_write"}
+    assert {"name": "namespace_read_write_access_key", "sensitive": True} in manifest["variables"]

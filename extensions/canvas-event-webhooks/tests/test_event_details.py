@@ -874,18 +874,47 @@ def test_unreadable_related_patient_is_omitted():
 # Failure handling
 # ---------------------------------------------------------------------------
 
-class RelatedObjectDoesNotExist(Exception):
-    """Named like Django's error, which the plugin sandbox cannot import."""
+def _related_object_does_not_exist():
+    """The error Django raises when a forward FK row is missing, taken from a real SDK model."""
+    from canvas_sdk.v1.data.appointment import Appointment
+
+    return Appointment.patient.RelatedObjectDoesNotExist
 
 
-def test_missing_related_record_degrades_to_label_description():
+def test_related_object_does_not_exist_is_an_attribute_error():
+    # The plugin relies on this to handle missing related rows without importing Django.
+    assert issubclass(_related_object_does_not_exist(), AttributeError)
+
+
+def test_missing_related_patient_is_omitted_and_other_details_kept():
+    related_object_does_not_exist = _related_object_does_not_exist()
+
     class Appointment:
+        status = "booked"
+
         @property
         def patient(self):
-            raise RelatedObjectDoesNotExist("patient row deleted")
+            raise related_object_does_not_exist("patient row deleted")
 
     with patch("canvas_event_webhooks.event_details.log") as mock_log:
         extra = enrich_event(_details_event(Appointment()), "APPOINTMENT_UPDATED", None)
+
+    assert mock_log.mock_calls == []
+    assert "patient" not in extra
+    assert extra["data"] == {"record_type": "appointment", "status": "booked"}
+
+
+def test_missing_related_record_degrades_to_label_description():
+    related_object_does_not_exist = _related_object_does_not_exist()
+
+    with (
+        patch("canvas_event_webhooks.event_details.log") as mock_log,
+        patch(
+            "canvas_event_webhooks.event_details._load_actor",
+            side_effect=related_object_does_not_exist("actor row deleted"),
+        ),
+    ):
+        extra = enrich_event(_details_event(_task()), "APPOINTMENT_UPDATED", None)
 
     assert mock_log.mock_calls == [
         call.warning(
@@ -921,6 +950,46 @@ def test_unexpected_error_during_enrichment_is_not_swallowed():
             enrich_event(_details_event(Appointment()), "APPOINTMENT_UPDATED", None)
 
     assert mock_log.mock_calls == []
+
+
+def test_field_does_not_exist_during_enrichment_is_not_swallowed():
+    # A wrong field name is a query bug; it must not be mistaken for a missing related row.
+    from django.core.exceptions import FieldDoesNotExist
+
+    class Appointment:
+        @property
+        def patient(self):
+            raise FieldDoesNotExist("Appointment has no field named 'patinet'")
+
+    with patch("canvas_event_webhooks.event_details.log") as mock_log:
+        with pytest.raises(FieldDoesNotExist, match="patinet"):
+            enrich_event(_details_event(Appointment()), "APPOINTMENT_UPDATED", None)
+
+    assert mock_log.mock_calls == []
+
+
+def test_query_bug_during_enrichment_propagates_out_of_the_handler():
+    # Propagating out of compute() is what lets the plugin runner report the error to Sentry.
+    from django.core.exceptions import FieldDoesNotExist
+
+    class BrokenAppointment(Appointment):
+        @property
+        def patient(self):
+            raise FieldDoesNotExist("bad field")
+
+        @patient.setter
+        def patient(self, value):
+            pass
+
+    handler = AppointmentWebhookHandler(
+        event=_event(
+            EventType.APPOINTMENT_CREATED, instance=BrokenAppointment(), actor=CanvasUser()
+        ),
+        secrets={},
+    )
+
+    with pytest.raises(FieldDoesNotExist, match="bad field"):
+        handler._dispatch(webhooks=[_wh(include_details=True)])
 
 
 def test_plain_falls_back_when_isoformat_or_str_fail():

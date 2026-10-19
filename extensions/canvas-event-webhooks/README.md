@@ -70,6 +70,7 @@ After the first UI save, those CLI secrets are ignored for delivery.
 | Include names and details | Per-webhook toggle, default off | Adds description, actor, patient name/MRN, and major record fields |
 | `webhook-url` / `webhook-secret` | Plugin secrets (legacy CLI) | Used only until the first UI save |
 | `include-context` | Plugin secret, default off | If `true`, puts the unfiltered Canvas context in `context` (may include PHI). Instance-wide, not per webhook |
+| `namespace_read_write_access_key` | Plugin secret, auto-generated | Access key for the `canvas__event_webhooks` custom-data namespace. Canvas generates it on first install. The namespace survives uninstall, so keep this key to reuse it after a reinstall |
 
 Need a fourth destination? That is a plugin code change, not a UI setting.
 

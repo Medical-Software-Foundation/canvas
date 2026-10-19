@@ -24,15 +24,11 @@ from canvas_event_webhooks.events_catalog import event_label
 
 # Best-effort lookups must not block webhook delivery. Catch only expected
 # attribute/type failures from optional Canvas models — never bare Exception.
+# A missing related row raises Django's RelatedObjectDoesNotExist, which subclasses
+# AttributeError. Other DoesNotExist-style errors (e.g. FieldDoesNotExist) are bugs
+# and must propagate.
 _SAFE_ERRORS = (AttributeError, TypeError, ValueError)
 
-
-def _is_safe_lookup_error(exc: BaseException) -> bool:
-    if isinstance(exc, _SAFE_ERRORS):
-        return True
-    # Django RelatedObjectDoesNotExist / Model.DoesNotExist — do not import django
-    # (blocked in the Canvas sandbox).
-    return getattr(exc.__class__, "__name__", "").endswith("DoesNotExist")
 
 _MOCK_TYPES = frozenset(
     {"Mock", "MagicMock", "NonCallableMock", "NonCallableMagicMock", "AsyncMock"}
@@ -58,9 +54,7 @@ def enrich_event(event, event_name: str, patient_id: str | None) -> dict:
         if data:
             extra["data"] = data
         return extra
-    except Exception as exc:
-        if not _is_safe_lookup_error(exc):
-            raise
+    except _SAFE_ERRORS as exc:
         log.warning(
             "[Webhooks] Failed to attach event details (%s).",
             exc.__class__.__name__,
