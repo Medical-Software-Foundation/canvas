@@ -266,7 +266,7 @@ def _include_viewer(provider_ids: set[str], schedulable_ids: set[str], staff_id:
     """Add the viewer to the overview when they are a schedulable provider.
 
     The overview otherwise lists only providers with saved rules or blocks, so a
-    provider who has set nothing up yet would have no "Your availability" row to
+    provider who has set nothing up yet would have no "My availability" row to
     start from. Non-schedulable viewers (an admin, say) get no row at all.
     """
     if staff_id and staff_id in schedulable_ids:

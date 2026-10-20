@@ -44,7 +44,7 @@
   <!-- Availability Panel -->
   <canvas-tab-panel id="panel-availability">
     <div class="filter-bar">
-      <div id="ms-filter-provider" class="multi-select" style="flex:1;max-width:400px;"></div>
+      <div id="ms-filter-provider" class="multi-select"></div>
       <button class="btn" onclick="saveMyView()" title="Remember this selection as the providers you see by default">Save as my view</button>
       <button class="btn" id="toggle-expired" onclick="toggleExpired()" title="Expired rules, blocks, holds and overrides are hidden by default">Show expired</button>
       <span class="grow"></span>
@@ -166,7 +166,7 @@
             <div class="section-label">Schedule</div>
             <div class="schedule-mode-toggle">
               <button type="button" class="mode-btn active" id="mode-single" onclick="setScheduleMode('single')">Single event</button>
-              <button type="button" class="mode-btn" id="mode-recurring" onclick="setScheduleMode('recurring')">Recurring</button>
+              <button type="button" class="mode-btn" id="mode-recurring" onclick="setScheduleMode('recurring')">Recurring event</button>
             </div>
           </div>
 
@@ -193,40 +193,36 @@
 
           <!-- Recurring schedule fields (hidden in single mode) -->
           <div id="weekly-schedule-fields" style="display:none;">
-            <div id="repeats-section">
-              <div class="section-label">Repeats</div>
-              <div class="form-row" style="grid-template-columns:120px 200px;align-items:end;">
-                <div class="field">
-                  <label>Every</label>
-                  <input class="input" type="number" id="recurrence_interval" min="1" value="1" placeholder="1">
-                </div>
-                <div class="field">
-                  <label>Frequency</label>
-                  <select id="recurrence_frequency" class="input" onchange="onRecurrenceFrequencyChange()">
-                    <option value="weekly" selected>Week(s)</option>
-                    <option value="daily">Day(s)</option>
+            <div class="schedule-row">
+              <div id="repeats-section" class="field">
+                <label>Repeats</label>
+                <div class="repeat-row">
+                  <span class="repeat-word">Every</span>
+                  <input class="input repeat-num" type="number" id="recurrence_interval" min="1" value="1" placeholder="1" aria-label="Repeat every">
+                  <select id="recurrence_frequency" class="input repeat-unit" aria-label="Repeat unit" onchange="onRecurrenceFrequencyChange()">
+                    <option value="weekly" selected>weeks</option>
+                    <option value="daily">days</option>
                   </select>
                 </div>
+                <p class="field-hint" style="margin:0;">
+                  e.g. <em>2 weeks</em> = bi-weekly &middot; <em>17 days</em> = every 17 days
+                </p>
+                <p id="daily-mode-hint" style="display:none;"></p>
               </div>
-              <p style="font-size:12.5px;color:var(--text-muted);margin:6px 0 0;">
-                e.g. <em>2 weeks</em> = bi-weekly &middot; <em>17 days</em> = every 17 days
-              </p>
-              <p id="daily-mode-hint" style="display:none;"></p>
-            </div>
-            <div>
-              <div class="section-label">Effective date range</div>
-              <div class="form-row">
-                <div class="field" style="position:relative;">
-                  <label>Start date <span class="req">*</span></label>
-                  <input class="input date-facade" type="text" id="effective_start_display" readonly placeholder="Select date..." onclick="document.getElementById('effective_start').showPicker()">
-                  <input type="date" id="effective_start" class="date-hidden" onchange="syncDateFacade('effective_start')" tabindex="-1">
-                </div>
-                <div class="field" style="position:relative;">
-                  <label>End date <span class="label-hint">(optional)</span></label>
-                  <input class="input date-facade" type="text" id="effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('effective_end').showPicker()">
-                  <input type="date" id="effective_end" class="date-hidden" onchange="syncDateFacade('effective_end')" tabindex="-1">
-                  <div class="no-end-row">
-                    <canvas-checkbox id="no_end_date" label="No end date" checked onchange="toggleNoEndDate('effective_end', this.checked)"></canvas-checkbox>
+              <div class="date-range">
+                <div class="form-row date-range-row">
+                  <div class="field" style="position:relative;">
+                    <label>Start date <span class="req">*</span></label>
+                    <input class="input date-facade" type="text" id="effective_start_display" readonly placeholder="Select date..." onclick="document.getElementById('effective_start').showPicker()">
+                    <input type="date" id="effective_start" class="date-hidden" onchange="syncDateFacade('effective_start')" tabindex="-1">
+                  </div>
+                  <div class="field" style="position:relative;">
+                    <label>End date <span class="label-hint">(optional)</span></label>
+                    <input class="input date-facade" type="text" id="effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('effective_end').showPicker()">
+                    <input type="date" id="effective_end" class="date-hidden" onchange="syncDateFacade('effective_end')" tabindex="-1">
+                    <div class="no-end-row">
+                      <canvas-checkbox id="no_end_date" label="No end date" checked onchange="toggleNoEndDate('effective_end', this.checked)"></canvas-checkbox>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -345,7 +341,7 @@
             <div class="section-label">Block type</div>
             <div class="schedule-mode-toggle">
               <button type="button" class="mode-btn active" id="block-mode-single" onclick="setBlockMode('single')">Single event</button>
-              <button type="button" class="mode-btn" id="block-mode-recurring" onclick="setBlockMode('recurring')">Recurring</button>
+              <button type="button" class="mode-btn" id="block-mode-recurring" onclick="setBlockMode('recurring')">Recurring event</button>
             </div>
           </div>
 
@@ -379,40 +375,36 @@
           </div>
 
           <div id="block-weekly-fields" style="display:none;">
-          <div id="rb-repeats-section">
-            <div class="section-label">Repeats</div>
-            <div class="form-row" style="grid-template-columns:120px 200px;align-items:end;">
-              <div class="field">
-                <label>Every</label>
-                <input class="input" type="number" id="rb_recurrence_interval" min="1" value="1" placeholder="1">
-              </div>
-              <div class="field">
-                <label>Frequency</label>
-                <select id="rb_recurrence_frequency" class="input" onchange="onRecurringBlockFrequencyChange()">
-                  <option value="weekly" selected>Week(s)</option>
-                  <option value="daily">Day(s)</option>
+          <div class="schedule-row">
+            <div id="rb-repeats-section" class="field">
+              <label>Repeats</label>
+              <div class="repeat-row">
+                <span class="repeat-word">Every</span>
+                <input class="input repeat-num" type="number" id="rb_recurrence_interval" min="1" value="1" placeholder="1" aria-label="Repeat every">
+                <select id="rb_recurrence_frequency" class="input repeat-unit" aria-label="Repeat unit" onchange="onRecurringBlockFrequencyChange()">
+                  <option value="weekly" selected>weeks</option>
+                  <option value="daily">days</option>
                 </select>
               </div>
+              <p class="field-hint" style="margin:0;">
+                e.g. <em>2 weeks</em> = bi-weekly &middot; <em>17 days</em> = every 17 days
+              </p>
+              <p id="rb-daily-mode-hint" style="display:none;"></p>
             </div>
-            <p style="font-size:12.5px;color:var(--text-muted);margin:6px 0 0;">
-              e.g. <em>2 weeks</em> = bi-weekly &middot; <em>17 days</em> = every 17 days
-            </p>
-            <p id="rb-daily-mode-hint" style="display:none;"></p>
-          </div>
-          <div id="blocked-effective-dates">
-            <div class="section-label">Effective date range</div>
-            <div class="form-row">
-              <div class="field" style="position:relative;">
-                <label>Start date <span class="req">*</span></label>
-                <input class="input date-facade" type="text" id="rb_effective_start_display" readonly placeholder="Select date..." onclick="document.getElementById('rb_effective_start').showPicker()">
-                <input type="date" id="rb_effective_start" class="date-hidden" onchange="syncDateFacade('rb_effective_start')" tabindex="-1">
-              </div>
-              <div class="field" style="position:relative;">
-                <label>End date <span class="label-hint">(optional)</span></label>
-                <input class="input date-facade" type="text" id="rb_effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('rb_effective_end').showPicker()">
-                <input type="date" id="rb_effective_end" class="date-hidden" onchange="syncDateFacade('rb_effective_end')" tabindex="-1">
-                <div class="no-end-row">
-                  <canvas-checkbox id="rb_no_end_date" label="No end date" checked onchange="toggleNoEndDate('rb_effective_end', this.checked)"></canvas-checkbox>
+            <div id="blocked-effective-dates" class="date-range">
+              <div class="form-row date-range-row">
+                <div class="field" style="position:relative;">
+                  <label>Start date <span class="req">*</span></label>
+                  <input class="input date-facade" type="text" id="rb_effective_start_display" readonly placeholder="Select date..." onclick="document.getElementById('rb_effective_start').showPicker()">
+                  <input type="date" id="rb_effective_start" class="date-hidden" onchange="syncDateFacade('rb_effective_start')" tabindex="-1">
+                </div>
+                <div class="field" style="position:relative;">
+                  <label>End date <span class="label-hint">(optional)</span></label>
+                  <input class="input date-facade" type="text" id="rb_effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('rb_effective_end').showPicker()">
+                  <input type="date" id="rb_effective_end" class="date-hidden" onchange="syncDateFacade('rb_effective_end')" tabindex="-1">
+                  <div class="no-end-row">
+                    <canvas-checkbox id="rb_no_end_date" label="No end date" checked onchange="toggleNoEndDate('rb_effective_end', this.checked)"></canvas-checkbox>
+                  </div>
                 </div>
               </div>
             </div>
@@ -473,7 +465,7 @@
           </div>
           <div>
             <div class="section-label">Effective date range</div>
-            <div class="form-row">
+            <div class="form-row date-range-row">
               <div class="field" style="position:relative;">
                 <label>Start date <span class="req">*</span></label>
                 <input class="input date-facade" type="text" id="hold_effective_start_display" readonly placeholder="Select date..." onclick="document.getElementById('hold_effective_start').showPicker()">

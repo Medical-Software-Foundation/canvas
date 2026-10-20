@@ -446,7 +446,8 @@ function renderExpiredBanner() {
   var n = _expiredSummary.count || 0;
   if (!n) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.innerHTML = '<span class="expired-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>' +
-    '<span class="expired-text"><b>' + n + (n === 1 ? ' item' : ' items') + ' ended more than 30 days ago.</b> Their past calendar entries stay in Canvas either way.</span>' +
+    '<span class="expired-text"><b>' + n + (n === 1 ? ' event' : ' events') + ' expired more than 30 days ago.</b> Remove ' + (n === 1 ? 'it' : 'them') + ' from the availability list?' +
+    '<span class="expired-note">This only removes ' + (n === 1 ? 'it' : 'them') + ' from this dashboard and does not change anything else in Canvas.</span></span>' +
     '<span class="expired-actions"><button class="btn" onclick="snoozeExpired()">Ask again in 30 days</button>' +
     '<button class="btn btn-primary" onclick="openExpiredPanel()">Review</button></span>';
   el.style.display = '';
@@ -578,7 +579,7 @@ async function saveMyView() {
   _savedView = ids.map(String);
   renderAccordion();
   if (ids.length) {
-    showMsg('Saved ' + ids.length + ' provider' + (ids.length === 1 ? '' : 's') + ' as your default view', 'success');
+    showMsg('Saved ' + ids.length + ' provider' + (ids.length === 1 ? '' : 's') + ' as my default view', 'success');
   } else {
     showMsg('Default view cleared. You will see every provider.', 'success');
   }
@@ -804,6 +805,7 @@ class MultiSelect {
     this.control.addEventListener('click', () => this.input.focus());
 
     this.chipsArea = document.createElement('span');
+    this.chipsArea.className = 'ms-chips';
     this.control.appendChild(this.chipsArea);
 
     this.input = document.createElement('input');
@@ -1508,7 +1510,7 @@ function renderAccordion() {
   const providers = yours.concat(others);
 
   let html = '';
-  if (yours.length) html += sectionHeading('Your availability');
+  if (yours.length) html += sectionHeading('My availability');
   providers.forEach((p, idx) => {
     if (idx === yours.length) {
       html += sectionHeading(yours.length ? 'Other providers' : 'Providers');
@@ -2360,11 +2362,12 @@ function resetForm() {
 function toggleNoEndDate(inputId, checked) {
   const el = document.getElementById(inputId);
   const facade = document.getElementById(inputId + '_display');
-  if (checked) {
-    el.value = '';
-    if (facade) { facade.style.display = 'none'; facade.value = ''; }
-  } else {
-    if (facade) facade.style.display = '';
+  if (checked) el.value = '';
+  // The end date box stays in place so the two date columns line up; it is grayed out while "No end date" is ticked.
+  if (facade) {
+    if (checked) facade.value = '';
+    facade.disabled = checked;
+    facade.placeholder = checked ? 'No end date' : 'Select date...';
   }
 }
 

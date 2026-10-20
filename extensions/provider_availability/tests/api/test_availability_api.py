@@ -2263,7 +2263,7 @@ class TestServeStaticAssets:
 
 
 class TestViewerSection:
-    """The viewer's own row backs the "Your availability" section, so it has to
+    """The viewer's own row backs the "My availability" section, so it has to
     exist even before they have saved anything, and only when they can be booked."""
 
     @patch(f"{MODULE}.get_scheduleable_visit_types", return_value=[])
