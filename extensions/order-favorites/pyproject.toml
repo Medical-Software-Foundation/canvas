@@ -21,3 +21,8 @@ dev = [
 
 [tool.coverage.run]
 omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+DJANGO_SETTINGS_MODULE = "canvas_sdk.tests.settings"

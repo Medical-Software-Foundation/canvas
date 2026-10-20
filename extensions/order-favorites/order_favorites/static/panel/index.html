@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Order Favorites</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="{{ api_base }}/panel/app.css?v={{ cache_bust }}">
+</head>
+<body data-api-base="{{ api_base }}" data-note-id="{{ note_id }}">
+  <div class="view" id="vUse"><p class="loading">Loading favorites…</p></div>
+  <div class="view" id="vManage" hidden></div>
+  <div class="view" id="vEdit" hidden>
+    <div class="pp-band"><div class="pp-head"><button class="pp-back" id="edBack" title="Back" aria-label="Back"></button><h2 id="edTitle"></h2></div></div>
+    <div class="pp-content"><div id="guardSlot" hidden></div><div class="ed"><div id="edFor"></div><div id="edForm"></div></div></div>
+    <div class="pp-foot ed-foot">
+      <div class="hint" id="edHint"></div>
+      <div class="ax-err" id="edErr" role="alert"></div>
+      <div class="row"><button class="pp-btn" id="edCancel">Cancel</button><button class="pp-btn pp-primary" id="edSave" style="flex:1">Save</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="{{ api_base }}/shared/editor.js?v={{ cache_bust }}"></script>
+  <script src="{{ api_base }}/panel/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>
