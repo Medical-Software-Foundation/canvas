@@ -18,6 +18,8 @@
   var imp = { text: "", rows: null, error: "", done: "" };
   var staffQ = "", staffResults = [], removeAsk = null, staffTimer = null;
   var guard = null;
+  // "+ New" in an order set opens a favorite form in the detail pane (sub), then returns to the set (back).
+  var sub = null, back = null;
 
   var EYE_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF = I.hide;
@@ -28,7 +30,8 @@
   function listTabs() { return mine.kinds.concat(mine.sets_enabled ? ["set"] : []); }
   function isAdmin() { return !!mine.is_admin; }
   function byId(id) { for (var i = 0; i < mine.favorites.length; i++) { if (mine.favorites[i].id === id) { return mine.favorites[i]; } } return null; }
-  function dirty() { return !!(edit && edit.editor && edit.editor.dirty()); }
+  // While a favorite form is open from a set, the set's own unsaved changes count too.
+  function dirty() { return !!(edit && edit.editor && edit.editor.dirty()) || !!(sub && sub.setDirty); }
   function guarded(go) { if (guard && dirty()) { guard.run(go); } else { go(); } }
   function noun() { return tab === "rx" ? "prescriptions" : tab === "lab" ? "labs" : "order sets"; }
   function kindWord() { return tab === "rx" ? "prescription" : tab === "lab" ? "lab" : "order set"; }
@@ -51,7 +54,7 @@
     }).catch(function (e) { app.innerHTML = '<p class="ax-list-empty">' + esc(e.message) + "</p>"; });
   }
 
-  function select(id) { sel = id; confirmDel = false; edit = null; copyOf = null; }
+  function select(id) { sel = id; confirmDel = false; edit = null; copyOf = null; sub = null; back = null; }
 
   // ---------- frame ----------
   function render() {
@@ -111,6 +114,7 @@
 
   // ---------- detail ----------
   function renderDetail() {
+    if (sub) { renderSub(); return; }
     var box = $("#detail");
     var f = sel ? byId(sel) : null;
     var editingNew = edit && !edit.id;
@@ -136,14 +140,50 @@
       : "";
     box.innerHTML = '<div class="ax-dhead"><div><div class="ax-dcode">' + title + '</div><div class="ax-dmeta">' + meta + "</div></div></div>" +
       '<div id="guardSlot" hidden></div>' + forSeg + '<div class="ed" style="margin-top:16px" id="form"></div><div class="ax-err" id="err" role="alert"></div><div id="foot"></div>';
-    var value = f || edit.value;
-    edit = { id: f ? f.id : null, kind: tab, value: value, practice: practice, editor: null };
+    var value = back ? back.value : f || edit.value;
+    var baseline = back ? back.baseline : edit && edit.baseline || null;
+    edit = { id: f ? f.id : null, kind: tab, value: value, practice: practice, editor: null, baseline: baseline };
     var copyNote = !f && copyOf ? 'A personal copy of the practice ' + (isSet ? "order set" : "favorite") + ' "' + copyOf + '". Changes to the practice one won\'t reach your copy.' : "";
     edit.editor = isSet
-      ? OF.SetEditor($("#form"), value, { favorites: mine.favorites, practice: practice, kinds: kinds(), note: copyNote })
+      ? OF.SetEditor($("#form"), value, { favorites: mine.favorites, practice: practice, kinds: kinds(), note: copyNote, onNew: openSub, baseline: baseline, justAdded: back ? back.justAdded : null })
       : OF.Editor($("#form"), value, { note: copyNote });
+    back = null;
     guard = OF.Guard($("#guardSlot"), dirty, function () { return edit ? edit.editor.name() : ""; });
     renderFoot();
+  }
+  // A favorite made from a set is personal or practice to match the set, and lands in it checked.
+  function openSub(kind) {
+    sub = { kind: kind, practice: edit.practice, draft: edit.editor.payload(), baseline: edit.baseline || edit.value, setDirty: edit.editor.dirty() };
+    renderSub();
+  }
+  function renderSub() {
+    var word = sub.kind === "rx" ? "prescription" : "lab";
+    $("#detail").innerHTML = '<div class="ax-dhead"><div><div class="ax-dcode">New ' + word + ' favorite</div><div class="ax-dmeta">For the order set <b>' + esc(sub.draft.name || "Untitled") + "</b> · " +
+      (sub.practice ? "saved as a practice favorite, since this is a practice order set, and added to the set." : "saved as your personal favorite and added to the set.") + "</div></div></div>" +
+      '<div id="guardSlot" hidden></div><div class="ed" style="margin-top:16px" id="form"></div><div class="ax-err" id="err" role="alert"></div>' +
+      '<div class="ax-foot"><div class="ax-dacts"><button class="ax-btn" data-subback="1">Back to set</button><button class="ax-btn primary" id="subsave">Save and add to set</button></div></div>';
+    edit = { id: null, kind: sub.kind, value: OF.blank(sub.kind), practice: sub.practice, editor: null };
+    edit.editor = OF.Editor($("#form"), edit.value, {});
+    // Leaving the pane warns if the form or the set behind it has unsaved changes.
+    guard = OF.Guard($("#guardSlot"), dirty, function () { return edit && edit.editor.name() || sub.draft.name; });
+  }
+  function closeSub(added) {
+    var draft = sub.draft;
+    if (added) { draft.items.push(added.id); }
+    back = { value: draft, baseline: sub.baseline, justAdded: added ? added.id : null };
+    sub = null;
+    renderDetail();
+  }
+  function saveSub() {
+    var body = edit.editor.payload();
+    $("#subsave").disabled = true;
+    OF.api("POST", sub.practice ? "/admin/favorites" : "/favorites", body).then(function (d) {
+      mine.favorites.push(d.favorite);
+      OF.useFavorites(mine.favorites);
+      toast('Saved "' + d.favorite.name + '" and added it to the set');
+      edit.editor.saved();
+      closeSub(d.favorite);
+    }).catch(function (e) { $("#err").textContent = e.message; var b = $("#subsave"); if (b) { b.disabled = false; } });
   }
   function renderFoot() {
     var f = edit && edit.id ? byId(edit.id) : null;
@@ -281,6 +321,8 @@
       edit = { id: null, kind: src.kind, value: copy }; renderRows(); renderDetail();
       return;
     }
+    // Back to the set only needs a warning when the form itself has changes; the set is kept either way.
+    if (d.subback) { if (edit.editor.dirty()) { guard.run(function () { closeSub(null); }); } else { closeSub(null); } return; }
     if (d.cancel) { guarded(function () { select(null); renderRows(); renderDetail(); }); return; }
     if (d.del) { confirmDel = true; renderFoot(); return; }
     if (d.confirm) {
@@ -307,6 +349,7 @@
     }
     switch (t.id) {
       case "save": save(); break;
+      case "subsave": saveSub(); break;
       case "check": checkRows(); break;
       case "doImport": doImport(); break;
       case "tpl": {

@@ -315,10 +315,13 @@
 
   // ---------- the order set editor ----------
   // favorites: everything the person can see. practice: a practice set, which may only hold practice favorites.
+  // onNew(kind): show "+ New" on each group to create a favorite from here. baseline: the set as it was before a
+  // trip to that form, so unsaved changes are still caught. justAdded: the favorite just created, marked "new".
   function SetEditor(container, value, opts) {
     opts = opts || {};
     var f = { kind: "set", name: value.name || "", items: (value.items || []).slice() };
-    var start = JSON.stringify(f);
+    var base = opts.baseline || value;
+    var start = JSON.stringify({ kind: "set", name: base.name || "", items: (base.items || []).slice() });
     var pool = (opts.favorites || []).filter(function (x) { return (x.kind === "rx" || x.kind === "lab") && (!opts.practice || x.shared) && (!x.hidden || f.items.indexOf(x.id) >= 0); });
     if (opts.practice) { f.items = f.items.filter(function (id) { return pool.some(function (x) { return x.id === id; }); }); }
     var groups = [["rx", "Prescriptions"], ["lab", "Labs"]].filter(function (g) { return !opts.kinds || opts.kinds.indexOf(g[0]) >= 0; });
@@ -327,8 +330,10 @@
     h += '<label for="fName">Name</label><input id="fName" maxlength="120" placeholder="e.g. Diabetes visit">';
     h += '<label>Favorites in this set</label><div class="picklist">' + groups.map(function (g) {
       var list = pool.filter(function (x) { return x.kind === g[0]; });
-      return '<div class="pkh">' + g[1] + "</div>" + (list.map(function (x) {
-        return '<label class="pk"><input type="checkbox" data-pk="' + x.id + '"' + (f.items.indexOf(x.id) >= 0 ? " checked" : "") + "><span>" + esc(x.name) + "<small>" + (x.shared ? "Practice" : "Mine") + "</small></span></label>";
+      var addNew = opts.onNew ? '<button type="button" class="linkbtn pk-new" data-pknew="' + g[0] + '">+ New</button>' : "";
+      return '<div class="pkh"><span>' + g[1] + "</span>" + addNew + "</div>" + (list.map(function (x) {
+        var just = x.id === opts.justAdded;
+        return '<label class="pk' + (just ? " just" : "") + '"><input type="checkbox" data-pk="' + x.id + '"' + (f.items.indexOf(x.id) >= 0 ? " checked" : "") + "><span>" + esc(x.name) + "<small>" + (x.shared ? "Practice" : "Mine") + (just ? " · <b>new</b>" : "") + "</small></span></label>";
       }).join("") || '<div class="pk-empty">None yet.</div>');
     }).join("") + '</div><div class="hint" id="pkCount"></div>';
     container.innerHTML = h;
@@ -336,6 +341,11 @@
     var changed = function () { $("#pkCount").textContent = plural(f.items.length, "favorite", "favorites") + " picked. Editing a favorite later changes it in every set that uses it."; if (opts.onChange) { opts.onChange(); } };
     $("#fName").value = f.name;
     $("#fName").addEventListener("input", function () { f.name = this.value; changed(); });
+    container.querySelector(".picklist").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-pknew]"); if (b && opts.onNew) { opts.onNew(b.getAttribute("data-pknew")); }
+    });
+    var justRow = container.querySelector(".pk.just");
+    if (justRow) { justRow.scrollIntoView({ block: "nearest" }); setTimeout(function () { justRow.classList.remove("just"); }, 1600); }
     container.querySelector(".picklist").addEventListener("change", function (e) {
       var id = +e.target.getAttribute("data-pk"); if (!id) { return; }
       var i = f.items.indexOf(id);

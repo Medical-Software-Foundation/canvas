@@ -284,3 +284,13 @@ body{display:flex;flex-direction:column;min-height:0;font-family:"DM Sans",-appl
 .pc-side .pc-kind{white-space:nowrap;margin-top:auto}
 .ml-row .pc-side{align-self:stretch}
 .pc-side .pc-exp{align-self:flex-end}
+/* Order set editor: "+ New" on each group header and the favorite just made there (mockups/order-favorites-set-shortcut.html).
+   Not sourced from home-app: built from the panel palette above. */
+.picklist .pkh{display:flex;align-items:center;justify-content:space-between}
+.picklist .pkh .pk-new{text-transform:none;letter-spacing:0;font-size:12px;padding:0}
+.picklist label.pk.just{background:#f2fafb;transition:background 1.2s}
+.picklist label.pk.just small b{color:#2c7f8c;font-weight:600}
+/* "For the order set <name>" under the title of a favorite made from a set. Built from the panel palette. */
+.backto{font-size:12.5px;color:#5e7a8a;margin:-6px 0 0 32px}
+.backto b{color:#0d203c;font-weight:600}
+.backto[hidden]{display:none}

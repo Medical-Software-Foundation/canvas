@@ -214,23 +214,64 @@
     drawEditor();
     view = "edit"; result = ""; render();
   }
+  // "+ New" in the order set editor: make a favorite there, then come back to the set with it checked.
+  // The set's unsaved name and checks are kept, and it still counts as unsaved against how it started.
+  function openSubEditor(kind) {
+    var parent = edit;
+    parent.baseline = parent.baseline || parent.value;
+    parent.value = parent.editor.payload();
+    parent.justAdded = null;
+    edit = { id: null, kind: kind, practice: parent.practice, value: OF.blank(kind), forSet: parent };
+    $("#edTitle").textContent = "New " + (kind === "rx" ? "prescription" : "lab") + " favorite";
+    $("#edErr").textContent = "";
+    guard.clear();
+    drawEditor();
+    $("#vEdit .pp-content").scrollTop = 0;
+  }
+  function backToSet(added) {
+    var parent = edit.forSet;
+    if (added) { parent.value.items.push(added.id); parent.justAdded = added.id; }
+    edit = parent;
+    $("#edTitle").textContent = (edit.id ? "Edit " : "New ") + "order set";
+    $("#edErr").textContent = "";
+    guard.clear();
+    drawEditor();
+  }
   function drawEditor() {
     var isSet = edit.kind === "set";
+    var forSet = edit.forSet;
     var forSeg = isSet && !edit.id && data.is_admin
       ? '<div class="save-for"><label>Save for</label><div class="pp-seg">' + [["mine", "Personal"], ["practice", "Practice"]].map(function (v) { return '<button class="' + (newFor === v[0] ? "on" : "") + '" data-for="' + v[0] + '">' + v[1] + "</button>"; }).join("") + '</div><div class="hint">' + (newFor === "practice" ? "Everyone in the practice will see this. It can only include practice favorites." : "Only you will see this in your favorites panel.") + "</div></div>"
       : "";
     $("#edFor").innerHTML = forSeg;
+    $("#edSub").hidden = !forSet;
+    $("#edSub").innerHTML = forSet ? "For the order set <b>" + esc(forSet.value.name || "Untitled") + "</b>" : "";
     $("#vEdit").classList.toggle("is-set", isSet);
-    edit.practice = isSet && newFor === "practice";
+    // A favorite made from a set is personal or practice to match the set.
+    if (!forSet) { edit.practice = isSet && newFor === "practice"; }
     edit.editor = isSet
-      ? OF.SetEditor($("#edForm"), edit.value, { favorites: data.favorites, practice: edit.practice, kinds: data.kinds, note: edit.note })
+      ? OF.SetEditor($("#edForm"), edit.value, { favorites: data.favorites, practice: edit.practice, kinds: data.kinds, note: edit.note, onNew: openSubEditor, baseline: edit.baseline, justAdded: edit.justAdded })
       : OF.Editor($("#edForm"), edit.value, { note: edit.note });
-    $("#edHint").textContent = edit.practice ? "Saved as a practice order set." : "Saved as your personal " + (isSet ? "order set." : "favorite.") + (data.is_admin && !isSet ? " Practice favorites are added in the Order Favorites app." : "");
-    $("#edSave").textContent = edit.practice ? "Save practice order set" : "Save";
+    $("#edHint").textContent = forSet
+      ? (edit.practice ? "Saved as a practice favorite, since this is a practice order set, and added to the set." : "Saved as your personal favorite and added to the set.")
+      : edit.practice ? "Saved as a practice order set." : "Saved as your personal " + (isSet ? "order set." : "favorite.") + (data.is_admin && !isSet ? " Practice favorites are added in the Order Favorites app." : "");
+    $("#edSave").textContent = forSet ? "Save and add to set" : edit.practice ? "Save practice order set" : "Save";
+    $("#edCancel").textContent = forSet ? "Back to set" : "Cancel";
   }
-  function leaveEditor() { guard.run(function () { edit = null; view = "manage"; render(); }); }
+  function leaveEditor() { guard.run(function () { if (edit.forSet) { backToSet(null); } else { edit = null; view = "manage"; render(); } }); }
   function save() {
     var body = edit.editor.payload();
+    if (edit.forSet) {
+      $("#edSave").disabled = true;
+      OF.api("POST", edit.practice ? "/admin/favorites" : "/favorites", body).then(function (d) {
+        data.favorites.push(d.favorite);
+        OF.useFavorites(data.favorites);
+        toast('Saved "' + d.favorite.name + '" and added it to the set');
+        edit.editor.saved();
+        backToSet(d.favorite);
+      }).catch(function (e) { $("#edErr").textContent = e.message; }).then(function () { $("#edSave").disabled = false; });
+      return;
+    }
     var path = edit.practice ? "/admin/favorites" : "/favorites";
     var req = edit.id ? OF.api("PATCH", path + "/" + edit.id, body) : OF.api("POST", path, body);
     $("#edSave").disabled = true;

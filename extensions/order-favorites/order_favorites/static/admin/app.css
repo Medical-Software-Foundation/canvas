@@ -299,3 +299,10 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .picklist .pkh:first-child{border-top:0}
 .pk-empty{font-size:12.5px;font-style:italic;color:#8ea8b5;padding:8px 10px;border-top:1px solid #eef4f6}
 .ax-detail .ed .note{font-size:12.5px;color:#5e7a8a;background:#F4F8FA;border-radius:9px;padding:8px 10px;margin-bottom:14px}
+/* Order set editor: "+ New" on each group header and the favorite just made there (mockups/order-favorites-set-shortcut.html).
+   Not sourced from home-app: built from the panel palette above. */
+.picklist .pkh{display:flex;align-items:center;justify-content:space-between}
+.picklist .pkh .pk-new{border:0;background:none;font:inherit;font-size:12px;font-weight:600;color:#2c7f8c;cursor:pointer;text-transform:none;letter-spacing:0;padding:0} /* the panel's .linkbtn (panel/app.css:230) */
+.picklist .pkh .pk-new:hover{text-decoration:underline}
+.picklist label.pk.just{background:#f2fafb;transition:background 1.2s}
+.picklist label.pk.just small b{color:#2c7f8c;font-weight:600}
