@@ -294,3 +294,12 @@ body{display:flex;flex-direction:column;min-height:0;font-family:"DM Sans",-appl
 .backto{font-size:12.5px;color:#5e7a8a;margin:-6px 0 0 32px}
 .backto b{color:#0d203c;font-weight:600}
 .backto[hidden]{display:none}
+/* Short screens and iPads (mockups/order-favorites-small-screens.html, option E): the footer under the favorites
+   is never taller than half the panel. Its selected list or note list scrolls inside it, and Adding to, the count,
+   and Add stay put. Not sourced from home-app. */
+#vUse .pp-foot{max-height:50vh;display:flex;flex-direction:column}
+#vUse .pp-foot > *{flex-shrink:0}
+#vUse .pp-foot .selbox,#vUse .pp-foot .notepick{flex:0 1 auto;min-height:64px;overflow:auto}
+/* Backstop when even the shrunk lists don't fit: the footer scrolls and Add stays pinned at its bottom. */
+#vUse .pp-foot{overflow-y:auto}
+#vUse .pp-foot #add{position:sticky;bottom:0;box-shadow:0 0 0 6px #fff}

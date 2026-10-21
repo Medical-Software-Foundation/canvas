@@ -148,7 +148,8 @@
     return h;
   }
   function openPicker() {
-    picking = true; render();
+    // The note list and the selected list don't both fit in the footer on a short screen.
+    picking = true; showSel = false; render();
     if (others) { return; }
     OF.api("GET", "/notes/" + encodeURIComponent(NOTE_ID) + "/others").then(function (d) { others = d.notes; othersTotal = d.total || d.notes.length; render(); })
       .catch(function (e) { picking = false; result = '<div class="rs bad">' + esc(e.message) + "</div>"; render(); });
