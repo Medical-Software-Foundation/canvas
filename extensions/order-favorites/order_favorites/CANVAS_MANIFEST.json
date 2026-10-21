@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.245.0",
-    "plugin_version": "0.5.0",
+    "plugin_version": "0.5.1",
     "name": "order_favorites",
     "description": "Saved prescriptions and lab orders that staff add to a note in one action. A button in each open visit or chart review note opens a panel of practice and personal favorites; an app in the app drawer lets everyone manage their own favorites, and lets favorites admins manage practice favorites, import, and settings.",
     "components": {

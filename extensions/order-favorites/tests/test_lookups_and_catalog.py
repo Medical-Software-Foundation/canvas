@@ -34,10 +34,10 @@ def test_partner_tests_match_every_word_in_name_code_or_keywords_and_stop_at_the
 
 def test_resolve_tests_refuses_a_name_two_tests_share_and_ignores_blanks(make_partner: Any) -> None:
     partner = make_partner(tests=[("001", "Panel"), ("002", "Panel"), ("003", "TSH")])
-    found, missing = catalog.resolve_tests(str(partner.id), ["panel", " ", "tsh"])
+    found, missing, shared = catalog.resolve_tests(str(partner.id), ["panel", " ", "tsh", "nope"])
     assert found == [{"code": "003", "name": "TSH"}]
-    assert missing == ["panel"]
-    assert catalog.resolve_tests(str(partner.id), []) == ([], [])
+    assert (missing, shared) == (["nope"], ["panel"])
+    assert catalog.resolve_tests(str(partner.id), []) == ([], [], [])
 
 
 def test_resolve_partner_by_name_or_id_and_never_guesses(make_partner: Any) -> None:
@@ -55,7 +55,7 @@ def test_resolve_partner_by_name_or_id_and_never_guesses(make_partner: Any) -> N
 
 def test_resolve_tests_by_code_or_exact_name(make_partner: Any) -> None:
     partner = make_partner(tests=[("001", "CMP"), ("002", "TSH")])
-    found, missing = catalog.resolve_tests(str(partner.id), ["cmp", "002", "001", "Free T4"])
+    found, missing, _shared = catalog.resolve_tests(str(partner.id), ["cmp", "002", "001", "Free T4"])
     assert found == [{"code": "001", "name": "CMP"}, {"code": "002", "name": "TSH"}]
     assert missing == ["Free T4"]
 

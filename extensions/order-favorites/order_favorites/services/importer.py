@@ -108,9 +108,14 @@ def _lab_body(details: str, cache: dict[str, Any]) -> dict[str, Any]:
     partner, reason = resolve_partner(partner_value)
     if partner is None:
         raise Invalid(reason[0].upper() + reason[1:] + ".")
-    tests, missing = resolve_tests(str(partner.id), _multi(tests_value))
+    tests, missing, shared = resolve_tests(str(partner.id), _multi(tests_value))
+    problems = []
+    if shared:
+        problems.append(f"{partner.name} has more than one test named {', '.join(shared)}. Use its order code instead.")
     if missing:
-        raise Invalid(f"{partner.name} doesn't offer the test code {', '.join(missing)}")
+        problems.append(f"{partner.name} has no test with the code or name {', '.join(missing)}.")
+    if problems:
+        raise Invalid(" ".join(problems))
     diagnoses = []
     for code in _multi(dx_value):
         if code not in cache:

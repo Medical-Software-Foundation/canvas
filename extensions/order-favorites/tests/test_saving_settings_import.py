@@ -161,6 +161,17 @@ def test_split_line_handles_quotes_and_commas() -> None:
     assert split_line('lab,"Say ""hi""",x') == ["lab", 'Say "hi"', "x"]
 
 
+def test_check_csv_says_which_test_names_are_shared_and_which_match_nothing(make_partner: Any) -> None:
+    make_partner(tests=[("L1", "Lipid panel (refl)"), ("L2", "Lipid panel (refl)"), ("A1C", "Hemoglobin A1c")])
+    text = "type,name,details\nlab,Two problems,Generic Lab|lipid panel (refl);hemoglobn a1c||no|\n"
+    [row] = check_csv(text)["rows"]
+    assert not row["ok"]
+    assert row["reason"] == (
+        "Generic Lab has more than one test named lipid panel (refl). Use its order code instead. "
+        "Generic Lab has no test with the code or name hemoglobn a1c."
+    )
+
+
 def test_check_csv_reports_each_row(make_partner: Any) -> None:
     make_partner(tests=[("VITD", "Vitamin D 25-OH")])
     text = (
@@ -179,7 +190,7 @@ def test_check_csv_reports_each_row(make_partner: Any) -> None:
     rows = {r["row"]: r for r in result["rows"]}
     assert rows[2]["ok"] and rows[2]["favorite"]["details"]["representative_ndc"] == "1"
     assert rows[3]["ok"] and rows[3]["summary"] == "Generic Lab · 1 test · E55.9"
-    assert rows[4]["reason"] == "Generic Lab doesn't offer the test code NOT-A-TEST"
+    assert rows[4]["reason"] == "Generic Lab has no test with the code or name NOT-A-TEST."
     assert rows[5]["reason"] == "The medication is missing."
     assert rows[6]["reason"] == "Type must be rx or lab."
 

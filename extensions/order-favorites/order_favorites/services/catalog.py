@@ -82,8 +82,11 @@ def check_tests(partner_id: str, codes: list[str]) -> dict[str, Any]:
     }
 
 
-def resolve_tests(partner_id: str, values: list[str]) -> tuple[list[dict[str, str]], list[str]]:
-    """Match test order codes or exact test names to the partner's catalog. Returns (tests, not_found).
+def resolve_tests(partner_id: str, values: list[str]) -> tuple[list[dict[str, str]], list[str], list[str]]:
+    """Match test order codes or exact test names to the partner's catalog.
+
+    Returns (tests, not_found, shared): shared are names more than one test has, which are refused rather
+    than guessed.
 
     Only the tests named in values are read, not the whole catalog.
     """
@@ -98,16 +101,17 @@ def resolve_tests(partner_id: str, values: list[str]) -> tuple[list[dict[str, st
         by_name.setdefault((test.order_name or "").lower(), []).append(test)
     found: list[dict[str, str]] = []
     missing: list[str] = []
+    shared: list[str] = []
     for value in wanted:
         key = value.lower()
         test = by_code.get(key)
         if test is None and len(by_name.get(key, [])) == 1:
             test = by_name[key][0]
         if test is None:
-            missing.append(value)
+            (shared if len(by_name.get(key, [])) > 1 else missing).append(value)
         elif test.order_code not in {t["code"] for t in found}:
             found.append({"code": test.order_code, "name": test.order_name or ""})
-    return found, missing
+    return found, missing, shared
 
 
 def _usable_npi(staff: Staff) -> bool:
