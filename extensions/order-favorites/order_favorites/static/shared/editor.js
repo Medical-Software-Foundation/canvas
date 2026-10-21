@@ -111,7 +111,7 @@
   }
 
   // ---------- search picker ----------
-  // A text box with a pop-up list. multi: tick several, the list stays open; single: pick one, it closes.
+  // A text box with a pop-up list. multi: check several, the list stays open; single: pick one, it closes.
   function Picker(root, opts) {
     var self = this, timer = null, seq = 0;
     self.root = root; self.opts = opts;
@@ -265,7 +265,7 @@
         $("#staleWarn").textContent = left.length ? left.map(function (t) { return t.name || t.code; }).join(", ") + (left.length === 1 ? " is" : " are") + " no longer offered by " + (f.lab_partner_name || "this lab") + ". Remove it and add its replacement." : "";
       };
       var tests = new Picker($("#pTests"), {
-        multi: true, placeholder: "Search tests to add", foot: "Tick as many as you need",
+        multi: true, placeholder: "Search tests to add", foot: "Check as many as you need",
         find: function (q) { return f.lab_partner_id ? api("GET", "/lookup/lab-tests?partner_id=" + encodeURIComponent(f.lab_partner_id) + "&q=" + encodeURIComponent(q)).then(function (d) { return d.results; }) : Promise.reject(new Error("Pick a lab partner first")); },
         key: function (t) { return t.code; }, row: function (t) { return esc(t.name || t.code) + (t.name ? ' <span class="muted">' + esc(t.code) + "</span>" : ""); },
         selected: function () { return f.tests; },
@@ -275,7 +275,7 @@
       });
       drawStale();
       new Picker($("#pDx"), {
-        multi: true, min: 2, placeholder: "Search ICD-10 code or name", foot: "Tick as many as you need",
+        multi: true, min: 2, placeholder: "Search ICD-10 code or name", foot: "Check as many as you need",
         find: function (q) { return q.length < 2 ? [] : api("GET", "/lookup/diagnoses?q=" + encodeURIComponent(q)).then(function (d) { return d.results; }); },
         key: function (d) { return d.code; }, row: function (d) { return '<span class="code">' + esc(icd(d.code)) + "</span>" + esc(d.text); },
         selected: function () { return f.diagnoses; },

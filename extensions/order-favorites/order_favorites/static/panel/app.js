@@ -106,7 +106,7 @@
 
   // ---------- footer: the target note and what's selected ----------
   // Opens the note in the chart. target="_top" moves the whole Canvas page, which closes this panel.
-  // Left off the note the panel was opened from: it is already on screen, and reloading would clear what is ticked.
+  // Left off the note the panel was opened from: it is already on screen, and reloading would clear what is checked.
   function noteLink(note, icon, cls) {
     if (!note.url) { return ""; }
     return '<a class="' + cls + '" target="_top" href="' + esc(note.url) + '" title="Open this note in the chart" aria-label="Open this note in the chart">' + icon + "</a>";
