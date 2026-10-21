@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from django.db.models import Q
+
 from canvas_sdk.v1.data import LabPartner, LabPartnerTest, Staff
 
 # Canvas gives this placeholder NPI to staff who have no real one; it never identifies a provider.
@@ -28,19 +30,18 @@ def active_partners() -> list[dict[str, str]]:
 
 
 def partner_tests(partner_id: str, search: str = "", limit: int = 50) -> list[dict[str, str]]:
-    """Tests a partner offers, as [{code, name}]. Tests with no order code can't be ordered and are left out."""
+    """Tests a partner offers, as [{code, name}]. Tests with no order code can't be ordered and are left out.
+
+    Each search word must appear in the test's name, code, or keywords. The filtering runs in the
+    database, since a lab's catalog can hold thousands of tests.
+    """
     if parse_uuid(partner_id) is None:
         return []
-    needle = search.strip().lower()
-    results: list[dict[str, str]] = []
-    tests = LabPartnerTest.objects.filter(lab_partner__id=partner_id).exclude(order_code="").order_by("order_name")
-    for test in tests:
-        if needle and needle not in f"{test.order_name or ''} {test.order_code or ''} {test.keywords or ''}".lower():
-            continue
-        results.append({"code": test.order_code or "", "name": test.order_name or ""})
-        if len(results) >= limit:
-            break
-    return results
+    tests = LabPartnerTest.objects.filter(lab_partner__id=partner_id).exclude(order_code="")
+    for word in search.split():
+        tests = tests.filter(Q(order_name__icontains=word) | Q(order_code__icontains=word) | Q(keywords__icontains=word))
+    rows = tests.order_by("order_name").values_list("order_code", "order_name")[:limit]
+    return [{"code": code or "", "name": name or ""} for code, name in rows]
 
 
 def resolve_partner(value: str) -> tuple[LabPartner | None, str]:
@@ -82,21 +83,28 @@ def check_tests(partner_id: str, codes: list[str]) -> dict[str, Any]:
 
 
 def resolve_tests(partner_id: str, values: list[str]) -> tuple[list[dict[str, str]], list[str]]:
-    """Match test order codes or exact test names to the partner's catalog. Returns (tests, not_found)."""
-    catalog = list(LabPartnerTest.objects.filter(lab_partner__id=partner_id).exclude(order_code=""))
+    """Match test order codes or exact test names to the partner's catalog. Returns (tests, not_found).
+
+    Only the tests named in values are read, not the whole catalog.
+    """
+    wanted = [v.strip() for v in values if v.strip()]
+    named = Q()
+    for value in wanted:
+        named |= Q(order_code__iexact=value) | Q(order_name__iexact=value)
+    catalog = list(LabPartnerTest.objects.filter(named, lab_partner__id=partner_id).exclude(order_code="")) if wanted else []
     by_code = {t.order_code.lower(): t for t in catalog if t.order_code}
     by_name: dict[str, list[LabPartnerTest]] = {}
     for test in catalog:
         by_name.setdefault((test.order_name or "").lower(), []).append(test)
     found: list[dict[str, str]] = []
     missing: list[str] = []
-    for value in values:
-        key = value.strip().lower()
+    for value in wanted:
+        key = value.lower()
         test = by_code.get(key)
         if test is None and len(by_name.get(key, [])) == 1:
             test = by_name[key][0]
         if test is None:
-            missing.append(value.strip())
+            missing.append(value)
         elif test.order_code not in {t["code"] for t in found}:
             found.append({"code": test.order_code, "name": test.order_name or ""})
     return found, missing
@@ -119,7 +127,8 @@ def ordering_providers(search: str = "", limit: int = 50) -> list[dict[str, str]
     """Active staff with a usable NPI, as [{id, name, npi}]."""
     needle = search.strip().lower()
     staff = (
-        Staff.objects.filter(active=True)
+        Staff.objects.only("id", "first_name", "last_name", "npi_number")
+        .filter(active=True)
         .exclude(npi_number="")
         .exclude(npi_number__isnull=True)
         .exclude(npi_number__in=PLACEHOLDER_NPIS)

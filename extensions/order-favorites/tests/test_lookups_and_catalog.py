@@ -21,6 +21,25 @@ def test_partner_tests_search_by_name_or_code_and_skip_blank_codes(make_partner:
     assert catalog.partner_tests("not-a-uuid") == []
 
 
+def test_partner_tests_match_every_word_in_name_code_or_keywords_and_stop_at_the_limit(make_partner: Any) -> None:
+    from canvas_sdk.v1.data import LabPartnerTest
+
+    partner = make_partner(tests=[("001", "Comprehensive panel"), ("002", "Lipid panel"), ("003", "TSH")])
+    LabPartnerTest.objects.filter(order_code="003").update(keywords="thyroid screen")
+    assert [t["code"] for t in catalog.partner_tests(str(partner.id), "panel 002")] == ["002"]
+    assert [t["code"] for t in catalog.partner_tests(str(partner.id), "thyroid")] == ["003"]
+    assert catalog.partner_tests(str(partner.id), "panel tsh") == []
+    assert len(catalog.partner_tests(str(partner.id), "panel", limit=1)) == 1
+
+
+def test_resolve_tests_refuses_a_name_two_tests_share_and_ignores_blanks(make_partner: Any) -> None:
+    partner = make_partner(tests=[("001", "Panel"), ("002", "Panel"), ("003", "TSH")])
+    found, missing = catalog.resolve_tests(str(partner.id), ["panel", " ", "tsh"])
+    assert found == [{"code": "003", "name": "TSH"}]
+    assert missing == ["panel"]
+    assert catalog.resolve_tests(str(partner.id), []) == ([], [])
+
+
 def test_resolve_partner_by_name_or_id_and_never_guesses(make_partner: Any) -> None:
     one = make_partner(name="Labcorp")
     make_partner(name="Twin")
@@ -77,8 +96,10 @@ def test_pharmacy_search_shapes_the_address() -> None:
 def test_find_medication_needs_an_exact_single_match() -> None:
     meds = [{"fdb_code": "1", "name": "drug 10 mg tablet", "units": []}, {"fdb_code": "2", "name": "drug 20 mg tablet", "units": []}]
     with patch.object(lookups, "search_medications", return_value=meds):
-        assert lookups.find_medication("Drug 10 mg tablet")[0]["fdb_code"] == "1"
-        assert lookups.find_medication("2")[0]["fdb_code"] == "2"
+        by_name, _ = lookups.find_medication("Drug 10 mg tablet")
+        by_code, _ = lookups.find_medication("2")
+        assert by_name is not None and by_name["fdb_code"] == "1"
+        assert by_code is not None and by_code["fdb_code"] == "2"
         assert lookups.find_medication("drug")[0] is None
     assert lookups.find_medication("") == (None, "the medication is missing")
 

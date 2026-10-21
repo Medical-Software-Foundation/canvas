@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import PanelApplication
 
 from order_favorites.services.access import staff_dbid
+
+# Changes on every install, so Canvas never shows a drawer page cached from an older version.
+_CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 
 
 class OrderFavoritesApp(PanelApplication):
@@ -30,7 +35,7 @@ class OrderFavoritesApp(PanelApplication):
 
     def on_open(self) -> Effect | list[Effect]:
         return LaunchModalEffect(
-            url="/plugin-io/api/order_favorites/admin/",
+            url=f"/plugin-io/api/order_favorites/admin/?v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.PAGE,
             title="Order Favorites",
         ).apply()

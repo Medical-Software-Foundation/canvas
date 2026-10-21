@@ -53,6 +53,7 @@ def test_button_opens_the_panel_for_the_clicked_note(make_note: Any) -> None:
     effects = button(note.dbid).handle()
     assert len(effects) == 1
     assert f"note_id={note.id}" in effects[0].payload
+    assert "&v=" in effects[0].payload
 
 
 def test_letters_and_messages_never_receive_orders(make_staff: Any, make_note: Any) -> None:

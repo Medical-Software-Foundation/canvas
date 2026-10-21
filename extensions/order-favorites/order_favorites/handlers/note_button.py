@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 from canvas_sdk.effects import Effect
@@ -9,6 +10,8 @@ from canvas_sdk.handlers.action_button import ActionButton
 from order_favorites.services.notes import eligible_note_by_dbid
 
 API_BASE = "/plugin-io/api/order_favorites"
+# Changes on every install, so Canvas never shows a panel page cached from an older version.
+_CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 
 
 class OrderFavoritesButton(ActionButton):
@@ -31,7 +34,7 @@ class OrderFavoritesButton(ActionButton):
             return []
         return [
             LaunchModalEffect(
-                url=f"{API_BASE}/panel/?{urlencode({'note_id': str(note.id)})}",
+                url=f"{API_BASE}/panel/?{urlencode({'note_id': str(note.id), 'v': _CACHE_BUST})}",
                 target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,
                 title="Order Favorites",
             ).apply()

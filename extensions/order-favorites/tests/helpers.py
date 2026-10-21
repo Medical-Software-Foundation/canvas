@@ -41,7 +41,8 @@ def lab_details(partner: Any, codes: list[str], **kw: Any) -> dict[str, Any]:
 
 
 def favorite(owner: Any, kind: str = "rx", shared: bool = False, name: str = "Fav", details: dict[str, Any] | None = None) -> Favorite:
-    return Favorite.objects.create(kind=kind, name=name, shared=shared, owner_id=owner.dbid, details=details if details is not None else dict(RX_DETAILS))
+    created: Favorite = Favorite.objects.create(kind=kind, name=name, shared=shared, owner_id=owner.dbid, details=details if details is not None else dict(RX_DETAILS))
+    return created
 
 
 def effects_of(results: list[Any], name: str) -> list[dict[str, Any]]:

@@ -14,7 +14,7 @@ from canvas_sdk.v1.data.lab import LabPartner, LabPartnerTest
 from order_favorites.handlers.api import OrderFavoritesAPI
 from order_favorites.models import CustomStaff, Favorite, FavoritesAdmin, HiddenFavorite, PracticeSetting
 
-PLUGIN_MODELS = [Favorite, HiddenFavorite, FavoritesAdmin, PracticeSetting]
+PLUGIN_MODELS: list[Any] = [Favorite, HiddenFavorite, FavoritesAdmin, PracticeSetting]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -46,7 +46,8 @@ def make_staff() -> Callable[..., CustomStaff]:
         language = language_model.objects.create(code="en", description="English")
         user = CanvasUser.objects.create(email=email) if email else None
         extra = {"id": key} if key else {}
-        return CustomStaff.objects.create(first_name=first, last_name=last, npi_number=npi, active=active, language=language, user=user, **extra)
+        staff: CustomStaff = CustomStaff.objects.create(first_name=first, last_name=last, npi_number=npi, active=active, language=language, user=user, **extra)
+        return staff
 
     return _make
 

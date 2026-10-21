@@ -14,7 +14,8 @@ from tests.helpers import effects_of, favorite, lab_details
 
 
 def a_set(owner: Any, items: list[int], shared: bool = False, name: str = "Set") -> Favorite:
-    return Favorite.objects.create(kind="set", name=name, shared=shared, owner_id=owner.dbid, details={"items": items})
+    created: Favorite = Favorite.objects.create(kind="set", name=name, shared=shared, owner_id=owner.dbid, details={"items": items})
+    return created
 
 
 def add(staff: Any, note: Any, ids: list[int]) -> tuple[int, dict[str, Any], list[Any]]:
