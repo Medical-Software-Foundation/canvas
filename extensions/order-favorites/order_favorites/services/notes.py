@@ -4,11 +4,16 @@ Favorites go into open visit (encounter) and chart review notes only. Letters an
 lock, so a state check alone would let orders land where nobody sees them in the chart; they are
 left out by category. The same check runs when the note-header button is drawn and again when
 orders are added, since the note can be locked or deleted while the panel is open.
+
+Booked appointment notes count as open so staff can pre-chart before check-in, as Canvas allows. Until
+check-in they use Canvas's "appointment" note category; check-in turns them into a visit note.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+from django.db.models import Q
 
 from canvas_sdk.v1.data import Note
 from canvas_sdk.v1.data.note import NoteStates, NoteTypeCategories
@@ -26,14 +31,17 @@ OPEN_STATES = [
     NoteStates.UNDELETED,
 ]
 TARGET_CATEGORIES = [NoteTypeCategories.ENCOUNTER, NoteTypeCategories.REVIEW]
+# Appointment notes before check-in, for pre-charting. Reverted is a check-in that was undone.
+PRECHART_STATES = [NoteStates.BOOKED, NoteStates.REVERTED]
+PRECHART_CATEGORIES = [NoteTypeCategories.APPOINTMENT, NoteTypeCategories.ENCOUNTER, NoteTypeCategories.REVIEW]
 # A note's body columns can be large and nothing here reads them.
 NOTE_BLOBS = ("_body", "_body_content", "_body_order", "related_data")
 
 
 def _eligible() -> Any:
     return Note.objects.defer(*NOTE_BLOBS).filter(
-        current_state__state__in=OPEN_STATES,
-        note_type_version__category__in=TARGET_CATEGORIES,
+        Q(current_state__state__in=OPEN_STATES, note_type_version__category__in=TARGET_CATEGORIES)
+        | Q(current_state__state__in=PRECHART_STATES, note_type_version__category__in=PRECHART_CATEGORIES)
     )
 
 

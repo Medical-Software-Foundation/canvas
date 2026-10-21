@@ -33,8 +33,17 @@ def add(staff: Any, note: Any, ids: list[int]) -> tuple[int, dict[str, Any], lis
     [
         ("encounter", "NEW", True),
         ("review", "ULK", True),
+        ("encounter", "BKD", True),
+        ("appointment", "BKD", True),
+        ("appointment", "RVT", True),
+        ("appointment", "LKD", False),
+        ("appointment", "CLD", False),
+        ("encounter", "CVD", True),
         ("encounter", "LKD", False),
         ("review", "DLT", False),
+        ("encounter", "CLD", False),
+        ("encounter", "NSW", False),
+        ("encounter", "SCH", False),
         ("letter", "NEW", False),
         ("message", "NEW", False),
     ],
@@ -54,6 +63,16 @@ def test_button_opens_the_panel_for_the_clicked_note(make_note: Any) -> None:
     assert len(effects) == 1
     assert f"note_id={note.id}" in effects[0].payload
     assert "&v=" in effects[0].payload
+
+
+def test_booked_appointment_note_receives_orders_for_precharting(make_staff: Any, make_note: Any, make_partner: Any) -> None:
+    me = make_staff(npi=NPI)
+    partner = make_partner(tests=[("001", "Comprehensive panel")])
+    note = make_note(category="appointment", state="BKD")
+    status, _body, results = add(me, note, [favorite(me).dbid, favorite(me, kind="lab", details=lab_details(partner, ["001"])).dbid])
+    assert status == 200
+    assert effects_of(results, "ORIGINATE_PRESCRIBE_COMMAND")[0]["note_uuid"] == str(note.id)
+    assert effects_of(results, "ORIGINATE_LAB_ORDER_COMMAND")[0]["note_uuid"] == str(note.id)
 
 
 def test_letters_and_messages_never_receive_orders(make_staff: Any, make_note: Any) -> None:
