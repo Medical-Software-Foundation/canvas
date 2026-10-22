@@ -5,6 +5,7 @@ fail closed, and editing must stay separable from publishing — an editor who c
 publish by accident defeats the reason the two permissions were split.
 """
 
+import json
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -15,6 +16,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from canvas_theme_kit.handlers.admin_api import ThemeAdminAPI
+from canvas_theme_kit.store import PublishConflict
 from canvas_theme_kit.theming import ValidationError
 
 AUTH = "canvas_theme_kit.handlers.admin_api"
@@ -37,6 +39,7 @@ def patch_store() -> Iterator[SimpleNamespace]:
         patch(f"{AUTH}.store_reset_draft") as reset_draft,
         patch(f"{AUTH}.store_load_into_draft") as load_into_draft,
         patch(f"{AUTH}.ThemeRevision") as revision_model,
+        patch(f"{AUTH}.Staff") as staff_model,
     ):
         # Queried through the manager rather than `theme.revisions`: the reverse
         # accessor on a CustomModel returns None inside Canvas's sandbox.
@@ -53,7 +56,9 @@ def patch_store() -> Iterator[SimpleNamespace]:
             revision=1, content_hash="h" * 32, published_by="staff-1", note=""
         )
         rollback.return_value = MagicMock(revision=2, content_hash="h" * 32)
+        staff_model.objects.filter.return_value.values_list.return_value = []
         yield SimpleNamespace(
+            staff_model=staff_model,
             revision_model=revision_model,
             revision_chain=chain,
             get_theme=get_theme,
@@ -80,7 +85,6 @@ def make_theme(slug: str = "default") -> MagicMock:
     theme = MagicMock(
         slug=slug,
         title="Default",
-        is_default=True,
         updated_at=datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc),
         updated_by="staff-1",
         draft_css=".a{}",
@@ -230,6 +234,41 @@ class TestReadRoutes:
         assert "draft_css" in body
         assert "revisions" in body
 
+    def test_history_names_the_publisher(self, handler: ThemeAdminAPI) -> None:
+        # The audit trail is read by people; a raw staff key tells them nothing.
+        # A key with no staff record (deleted staff) gets no name, and the UI
+        # falls back to showing the key.
+        def row(revision: int, by: str) -> dict[str, Any]:
+            return {
+                "revision": revision,
+                "content_hash": "h" * 32,
+                "is_active": revision == 2,
+                "published_at": None,
+                "published_by": by,
+                "note": "",
+            }
+
+        a, b, c = allow()
+        with a, b, c, patch_store() as mock_store:
+            mock_store.get_theme.return_value = make_theme()
+            mock_store.revision_chain.__iter__.return_value = iter(
+                [row(2, "staff-1"), row(1, "gone")]
+            )
+            staff_rows = mock_store.staff_model.objects.filter.return_value.values_list
+            staff_rows.return_value = [("staff-1", "Ada", "Lovelace")]
+            payload = json.loads(only(handler.get_theme()).content)
+
+        assert [r["published_by_name"] for r in payload["revisions"]] == [
+            "Ada Lovelace",
+            None,
+        ]
+        assert [r["published_by"] for r in payload["revisions"]] == ["staff-1", "gone"]
+        # One lookup for the whole history, projected to the name columns.
+        mock_store.staff_model.objects.filter.assert_called_once_with(
+            id__in=["gone", "staff-1"]
+        )
+        staff_rows.assert_called_once_with("id", "first_name", "last_name")
+
     def test_get_theme_404s_when_missing(self, handler: ThemeAdminAPI) -> None:
         a, b, c = allow()
         with a, b, c, patch_store() as mock_store:
@@ -290,22 +329,10 @@ class TestCreateTheme:
         kwargs = mock_theme.objects.create.call_args.kwargs
         assert kwargs["slug"] == "clinic-b"
         assert kwargs["draft_tokens"] == {"color-accent": "#0b5fff"}
-        # First theme on a fresh install becomes the default; this is not one.
-        assert kwargs["is_default"] is False
-
-    def test_first_theme_becomes_default(self, handler: ThemeAdminAPI) -> None:
-        handler.request.json.return_value = {"slug": "first"}
-        a, b, c = allow()
-        with a, b, c, patch_store() as mock_store, \
-             patch(f"{AUTH}.Theme") as mock_theme:
-            mock_store.get_theme.return_value = None
-            mock_store.default_tokens.return_value = {}
-            mock_theme.objects.filter.return_value.exists.return_value = False
-            mock_theme.objects.create.return_value = make_theme("first")
-
-            handler.create_theme()
-
-        assert mock_theme.objects.create.call_args.kwargs["is_default"] is True
+        # is_default is not set: nothing reads it. Consumers name a slug, so
+        # flagging some other theme as "default" only misleads. The column
+        # stays because custom columns cannot be dropped.
+        assert "is_default" not in kwargs
 
 
 class TestSaveDraft:
@@ -366,6 +393,18 @@ class TestPublish:
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert "bad css" in response.content.decode()
 
+    def test_reports_a_concurrent_publish_as_a_conflict(
+        self, handler: ThemeAdminAPI
+    ) -> None:
+        a, b, c = allow()
+        with a, b, c, patch_store() as mock_store:
+            mock_store.get_theme.return_value = make_theme()
+            mock_store.publish.side_effect = PublishConflict("someone else won")
+            response = only(handler.publish())
+
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "someone else won" in response.content.decode()
+
     def test_404s_for_unknown_theme(self, handler: ThemeAdminAPI) -> None:
         a, b, c = allow()
         with a, b, c, patch_store() as mock_store:
@@ -411,6 +450,18 @@ class TestRollback:
             response = only(handler.rollback())
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_reports_a_concurrent_publish_as_a_conflict(
+        self, handler: ThemeAdminAPI
+    ) -> None:
+        handler.request.json.return_value = {"revision": 1}
+        a, b, c = allow()
+        with a, b, c, patch_store() as mock_store:
+            mock_store.get_theme.return_value = make_theme()
+            mock_store.rollback.side_effect = PublishConflict("someone else won")
+            response = only(handler.rollback())
+
+        assert response.status_code == HTTPStatus.CONFLICT
 
     def test_404s_for_unknown_theme(self, handler: ThemeAdminAPI) -> None:
         a, b, c = allow()

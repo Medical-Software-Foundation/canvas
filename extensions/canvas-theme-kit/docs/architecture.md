@@ -66,9 +66,11 @@ history is append-only, so "who published what, when" survives every operation.
 `is_active` marks the revision currently served. Exactly one per theme should
 carry it, enforced in `_append_revision()` rather than by a database constraint,
 because the SDK's supported constraint set has no conditional unique index. The
-deactivate happens *before* the insert deliberately: a crash between the two
-leaves zero active revisions (the asset route 404s, which is visible) rather than
-two (a coin flip over which stylesheet the organization gets).
+deactivate and the insert run in one transaction, so a crash or a concurrent
+publish rolls both back instead of leaving the theme with no active revision.
+See [decisions.md](decisions.md).
+
+`is_default` is unused; see [decisions.md](decisions.md).
 
 ### Constraints that shape this schema
 

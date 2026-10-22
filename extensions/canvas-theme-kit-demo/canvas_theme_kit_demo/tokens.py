@@ -21,9 +21,11 @@ Two sandbox constraints shape the code below, both learned the hard way:
   inside the sandbox.
 """
 
+import re
 from json import dumps, loads
 
 from canvas_sdk.caching.plugins import get_cache
+from logger import log
 
 from canvas_theme_kit_demo.models import Theme, ThemeRevision
 
@@ -47,18 +49,36 @@ _CACHE_KEY = "ctk-demo:v2:tokens"
 # custom-property block rather than a broken `<style>` element.
 EMPTY_BLOCK = ":root{}"
 
+# The same name rule and the structural subset of the value rule the publisher
+# enforces. Checked again here because the block is inlined with |safe: `<`
+# could close the <style> element and `{` `}` `;` could close the rule.
+_TOKEN_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_UNSAFE_VALUE_CHARS = set("<>{};")
+
 
 def render_tokens_css(tokens: dict[str, str]) -> str:
     """Render tokens as a `:root` block.
 
     Deliberately identical to `canvas_theme_kit.theming.render_tokens_css`,
-    including the sort. Plugins cannot import across the boundary, so this is a
-    mirror; if the two ever disagree the inline block and the linked stylesheet
-    would declare different values for the same token.
+    including the sort, for every token the publisher accepts. Plugins cannot
+    import across the boundary, so this is a mirror; if the two ever disagree
+    the inline block and the linked stylesheet would declare different values
+    for the same token.
+
+    A token the publisher would have refused is dropped and logged rather than
+    inlined. This page is the pattern other consumers copy, so it does not
+    rely on the publisher's validation alone.
     """
-    if not tokens:
+    safe = {}
+    for name in sorted(tokens):
+        value = str(tokens[name])
+        if _TOKEN_NAME_RE.match(name) and not _UNSAFE_VALUE_CHARS & set(value):
+            safe[name] = value
+        else:
+            log.warning(f"canvas_theme_kit_demo: dropped unsafe token {name!r}")
+    if not safe:
         return EMPTY_BLOCK
-    body = "".join(f"--{TOKEN_PREFIX}-{name}:{tokens[name]};" for name in sorted(tokens))
+    body = "".join(f"--{TOKEN_PREFIX}-{name}:{value};" for name, value in safe.items())
     return f":root{{{body}}}"
 
 
@@ -100,19 +120,21 @@ def cached_tokens(slug: str = DEFAULT_SLUG) -> dict[str, str]:
     cache = get_cache()
     key = f"{_CACHE_KEY}:{slug}"
 
+    # Broad on purpose: the SDK does not document what its cache backend
+    # raises. Logged, because a dead cache shows up only as slower pages.
     try:
         cached = cache.get(key)
         if cached is not None:
             return dict(loads(cached))
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f"canvas_theme_kit_demo: cache read failed for {key}: {exc!r}")
 
     tokens = active_tokens(slug)
 
     try:
         cache.set(key, dumps(tokens), timeout_seconds=CACHE_TTL_SECONDS)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f"canvas_theme_kit_demo: cache write failed for {key}: {exc!r}")
     return tokens
 
 

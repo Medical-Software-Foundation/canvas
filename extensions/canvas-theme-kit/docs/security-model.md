@@ -108,16 +108,33 @@ to every consuming page at once. Specifically:
   read to the end is rejected.
 - `image-set()` is rejected. It takes a bare string as an image URL, so it can
   fetch without any `url()`.
-- Backslash escapes are rejected. They can spell a scheme (`8ttps:`) or the
-  function name (`=rl(`) in a form no lexical check recognizes.
+- Backslash escapes are rejected. They can spell a scheme (`\68ttps:`) or the
+  function name (`\75rl(`) in a form no lexical check recognizes.
 
 Rollback re-validates for the same reason publish does: the validator may have
 tightened since the content was saved, and replayed content is the oldest there
 is. Without the check, rollback would be the way around it.
 
+- Each `url()` target is normalized the way the URL parser does it before its
+  scheme is checked: tab, CR and LF are removed, and leading and trailing
+  control characters and spaces are trimmed. Chrome reads `h<TAB>ttps://…` as
+  `https://…` and makes the request.
+- `</` is rejected anywhere, including comments and strings. Served as
+  `text/css` it is inert, but a consumer that inlines `core.css` into a
+  `<style>` element would have the element closed early. `<` alone is allowed
+  because media-query range syntax (`(width < 600px)`) needs it.
+
 CSS comments are stripped before the rules run, so a stylesheet whose comment
 explains that it avoids `@import` is not rejected for saying so. Comment bytes
 still count toward the size limit, since they are stored and served.
+
+The strip is a scanner that follows the CSS tokenizer, not a regex. `/*` opens
+a comment only outside a string and outside an unquoted `url()`. A regex strip
+let `content:"/*"` … `content:"*/"` hide a live off-origin `url()` between them
+from every check; a reviewer published that on a sandbox and watched the demo
+page request the outside host. Any rule where the scanner strips more than the
+browser would reopens that hole, so the scanner is pinned by tests in
+`tests/test_theming.py`.
 
 ### Tokens are constrained, not escaped
 
@@ -130,6 +147,16 @@ escaping.
 Token values also go through the same fetch checks as the stylesheet. A token
 reaches the page through `var()`, so a check that covered only the stylesheet
 would let `url(https://…)` move into a token.
+
+Values that leave a string or comment open (`"oops`, `a /* b`) or span lines
+are rejected too. Every token renders into one `:root{}` block, so one open
+string swallows every token after it and the authored CSS behind them.
+
+Consumers check again. The demo inlines the token block with `|safe`, so its
+renderer drops and logs any token whose name breaks the name rule or
+whose value contains `<`, `>`, `{`, `}` or `;`. The publisher already refuses
+these; the second check exists because the demo is the pattern other consumers
+copy, and it costs nothing.
 
 ### No admin-editable JavaScript
 
@@ -197,7 +224,10 @@ without an authenticated session to the instance.
 
 ## Audit trail
 
-Every published revision records `published_by` and `published_at`. Rollback
+Every published revision records `published_by` (the staff key) and
+`published_at`. The editor's history shows the staff member's name, resolved
+in one query per page load; a key whose staff record is gone still shows as the
+raw key, so deleting an account does not erase it from the trail. Rollback
 republishes rather than rewrites, so the history of who published what survives
 every operation. There is no code path that mutates or deletes a published
 revision.

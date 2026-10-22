@@ -20,6 +20,7 @@ from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.staff import Staff
 
 from canvas_theme_kit.authorization import can_edit, can_publish, current_staff
+from canvas_theme_kit.store import PublishConflict
 from canvas_theme_kit.store import default_tokens as store_default_tokens
 from canvas_theme_kit.store import get_theme as store_get_theme
 from canvas_theme_kit.store import load_revision_into_draft as store_load_into_draft
@@ -145,6 +146,26 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
     def _invalid(self, message: str) -> list[Response | Effect]:
         return [JSONResponse({"error": message}, status_code=HTTPStatus.BAD_REQUEST)]
 
+    def _conflict(self, message: str) -> list[Response | Effect]:
+        return [JSONResponse({"error": message}, status_code=HTTPStatus.CONFLICT)]
+
+    @staticmethod
+    def _staff_names(staff_ids: set[str]) -> dict[str, str]:
+        """Display names for the given staff keys, in one query.
+
+        Projected to the two name columns: the history table only needs a
+        label, and a staff row is wide.
+        """
+        if not staff_ids:
+            return {}
+        rows = Staff.objects.filter(id__in=sorted(staff_ids)).values_list(
+            "id", "first_name", "last_name"
+        )
+        return {
+            str(key): " ".join(part for part in (first, last) if part)
+            for key, first, last in rows
+        }
+
     def _missing(self, slug: str) -> list[Response | Effect]:
         return [
             JSONResponse(
@@ -160,7 +181,6 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
         {
             "slug",
             "title",
-            "is_default",
             "updated_at",
             "updated_by",
             "active_revision",
@@ -200,7 +220,6 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
         payload: dict[str, Any] = {
             "slug": theme.slug,
             "title": theme.title,
-            "is_default": theme.is_default,
             "updated_at": theme.updated_at.isoformat() if theme.updated_at else None,
             "updated_by": theme.updated_by,
             "active_revision": active["revision"] if active else None,
@@ -343,6 +362,9 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
                 "note",
             )
         ]
+        names = self._staff_names({r["published_by"] for r in history if r["published_by"]})
+        for r in history:
+            r["published_by_name"] = names.get(r["published_by"])
         payload = self._theme_json(theme, include_draft=True)
         payload["revisions"] = history
         return [JSONResponse(payload)]
@@ -376,10 +398,11 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
         # Seed the draft with the neutral starter tokens so a new theme opens as
         # something an admin can edit rather than a blank page. Nothing is
         # published until they explicitly publish.
+        # is_default is left at its column default. Nothing reads it: consumers
+        # name a slug in the asset URL. See docs/decisions.md.
         theme = Theme.objects.create(
             slug=slug,
             title=title,
-            is_default=not Theme.objects.filter(is_default=True).exists(),
             draft_tokens=store_default_tokens(),
             updated_by=staff.id if staff else "",
         )
@@ -497,6 +520,8 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         except ValidationError as exc:
             return self._invalid(str(exc))
+        except PublishConflict as exc:
+            return self._conflict(str(exc))
 
         return [
             JSONResponse(
@@ -540,6 +565,8 @@ class ThemeAdminAPI(StaffSessionAuthMixin, SimpleAPI):
             revision = store_rollback(theme, target, staff.id if staff else "")
         except ValidationError as exc:
             return self._invalid(str(exc))
+        except PublishConflict as exc:
+            return self._conflict(str(exc))
 
         return [
             JSONResponse(

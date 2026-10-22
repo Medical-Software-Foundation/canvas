@@ -119,14 +119,26 @@ bumping anything.
 
 ---
 
-### Deactivate before insert when publishing
-
-A crash between the two writes leaves zero active revisions — the asset route
-404s, which is visible and debuggable — rather than two, which is a coin flip
-over which stylesheet the organization gets.
+### Deactivate and insert in one transaction when publishing
 
 "Exactly one active revision" is enforced in code rather than by a constraint
 because the SDK's supported constraint set has no conditional unique index.
+
+The deactivate and the insert share one `atomic()` block. Without it, two
+publishes at the same moment both read the same latest revision number; the
+second insert fails on `uq_ctk_theme_revision`, but its deactivation has already
+committed and switched off the first publisher's new revision. The theme is left
+with no active revision until someone publishes again. Inside a transaction the
+loser rolls back whole and gets a 409 telling them to reload.
+
+The unique constraint on `(theme, revision)` is what makes this work: it turns a
+silent double insert into an error that rolls the transaction back. A row lock
+(`select_for_update`) would serialize the two instead, but it has not been
+confirmed to pass the sandbox, and the constraint already gives the right
+outcome.
+
+The cache is invalidated after commit, not inside the block. A page render
+between the two would re-cache the old content for another full TTL.
 
 ---
 
@@ -148,6 +160,14 @@ because the file's opening comment *explained* that it avoids `@import`.
 CSS comments are inert, so they are stripped before the rule checks. Their bytes
 still count toward the size limit, since they are stored and served. A real
 `@import` after a comment is still rejected.
+
+The strip was first a regex, `/\*.*?\*/`. Code review showed it could be used
+to hide rules: to a browser, `/*` inside a quoted string is text, so a `url()`
+between `content:"/*"` and `content:"*/"` is live CSS, but the regex removed it
+before any check ran. It is now a scanner that skips strings (which end at their
+closing quote or a newline) and unquoted `url()` tokens, and only treats `/*`
+outside both as a comment. It must never strip more than the browser does;
+stripping less only makes the validator stricter.
 
 ---
 
@@ -205,6 +225,18 @@ Multiple named themes exist and are independently versioned. Choosing between
 them per patient or per location at render time needs a rule engine and nothing
 requires it yet. Routes are already slug-scoped, so adding it later does not
 break the URL shape.
+
+### `Theme.is_default` is unused
+
+The column exists, but nothing sets or reads it. It was once set on the first
+theme created, while every consumer and asset route used the literal slug
+`default`. An install whose first theme was `clinic-b` had that theme marked
+default while the documented consumer link returned 404. Consumers name a slug;
+there is no slugless route to resolve a default for.
+
+The column stays because custom-data columns cannot be dropped, and removing it
+from one plugin's model would break the verbatim mirror the consumers require. If
+slugless resolution is ever added, it is the place to record the choice.
 
 ---
 

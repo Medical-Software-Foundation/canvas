@@ -5,7 +5,7 @@ exactly one revision is active at a time, and that a cache failure can never
 take down a page render or a publish.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -21,6 +21,19 @@ def cache() -> Iterator[MagicMock]:
         client.get.return_value = None
         get_cache.return_value = client
         yield client
+
+
+@pytest.fixture(autouse=True)
+def atomic() -> Iterator[MagicMock]:
+    # The ORM is mocked, so there is no connection for a real transaction.
+    with patch("canvas_theme_kit.store.atomic") as mock_atomic:
+        yield mock_atomic
+
+
+@pytest.fixture
+def log() -> Iterator[MagicMock]:
+    with patch("canvas_theme_kit.store.log") as mock_log:
+        yield mock_log
 
 
 def make_theme(slug: str = "default", **kwargs: object) -> MagicMock:
@@ -224,6 +237,55 @@ class TestPublish:
 
             mock_rev.objects.create.assert_not_called()
 
+    def test_writes_inside_one_transaction(
+        self, cache: MagicMock, atomic: MagicMock
+    ) -> None:
+        # Two publishes at the same moment both deactivate, then both insert
+        # the same revision number. Without a transaction the loser's
+        # deactivation sticks after its insert fails on uq_ctk_theme_revision,
+        # leaving the theme with no active revision. Inside one, it rolls back.
+        theme = self._theme()
+        order: list[str] = []
+
+        def record(step: str, result: object = None) -> Callable[..., object]:
+            def effect(*args: object, **kwargs: object) -> object:
+                order.append(step)
+                return result
+
+            return effect
+
+        # __exit__ returning None (falsy) lets exceptions propagate, as a real
+        # transaction does.
+        atomic.return_value.__enter__.side_effect = record("begin")
+        atomic.return_value.__exit__.side_effect = record("commit")
+
+        with patch("canvas_theme_kit.store.ThemeRevision") as mock_rev:
+            self._latest(mock_rev, 2)
+            mock_rev.objects.filter.return_value.update.side_effect = record("deactivate")
+            mock_rev.objects.create.side_effect = record("create", MagicMock())
+            cache.delete.side_effect = record("invalidate")
+            store.publish(theme, "staff-1")
+
+        # Invalidated only after commit, so a render between the two cannot
+        # re-cache the old content for another TTL.
+        assert order[:4] == ["begin", "deactivate", "create", "commit"]
+        assert set(order[4:]) == {"invalidate"}
+
+    def test_a_concurrent_publish_is_reported_as_a_conflict(
+        self, cache: MagicMock
+    ) -> None:
+        from django.db import IntegrityError
+
+        theme = self._theme()
+
+        with patch("canvas_theme_kit.store.ThemeRevision") as mock_rev:
+            self._latest(mock_rev, 2)
+            mock_rev.objects.create.side_effect = IntegrityError("uq_ctk_theme_revision")
+            with pytest.raises(store.PublishConflict):
+                store.publish(theme, "staff-1")
+
+        cache.delete.assert_not_called()
+
 
 class TestRollback:
     def test_republishes_old_content_as_a_new_revision(self, cache: MagicMock) -> None:
@@ -284,26 +346,47 @@ class TestDefaultTokens:
             assert store.default_tokens() == {"color-accent": "#0b5fff"}
             assert mock_render.mock_calls == [call("static/default_tokens.json")]
 
-    def test_returns_empty_when_unreadable(self) -> None:
-        # A missing starter set should leave an admin with an empty theme to
-        # fill in, not a plugin that cannot create themes.
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            {"side_effect": FileNotFoundError("Template static/default_tokens.json not found.")},
+            {"return_value": "{not json"},
+            {"return_value": '{"Bad Name": "#fff"}'},
+        ],
+    )
+    def test_returns_empty_and_logs_when_the_starter_set_is_broken(
+        self, log: MagicMock, failure: dict[str, object]
+    ) -> None:
+        # A broken starter set leaves an admin with an empty theme rather than
+        # a plugin that cannot create themes. It must be logged: the only other
+        # symptom is that every new theme renders unstyled.
         with patch("canvas_theme_kit.store.render_to_string") as mock_render:
-            mock_render.side_effect = RuntimeError("no such template")
-
+            mock_render.configure_mock(**failure)
             assert store.default_tokens() == {}
 
-    def test_returns_empty_when_invalid(self) -> None:
-        with patch("canvas_theme_kit.store.render_to_string") as mock_render:
-            mock_render.return_value = '{"Bad Name": "#fff"}'
+        log.error.assert_called_once()
+        assert "default_tokens.json" in log.error.call_args.args[0]
 
-            assert store.default_tokens() == {}
+    def test_does_not_swallow_unexpected_errors(self) -> None:
+        with patch("canvas_theme_kit.store.render_to_string") as mock_render:
+            mock_render.side_effect = RuntimeError("sandbox refused")
+
+            with pytest.raises(RuntimeError):
+                store.default_tokens()
 
 
 class TestInvalidate:
-    def test_survives_a_cache_failure(self, cache: MagicMock) -> None:
-        # A publish must not fail because the cache is unavailable.
+    def test_survives_and_logs_a_cache_failure(
+        self, cache: MagicMock, log: MagicMock
+    ) -> None:
+        # A publish must not fail because the cache is unavailable, but a
+        # failed delete means pages serve the old theme for up to the TTL, so
+        # it has to show up in the log.
         cache.delete.side_effect = RuntimeError("cache down")
         store.invalidate("default")
+
+        assert log.warning.call_count == 3
+        assert "ctk:v1:css:default" in log.warning.call_args_list[0].args[0]
 
 
 class TestResetDraft:

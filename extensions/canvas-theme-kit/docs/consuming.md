@@ -105,6 +105,13 @@ return [
 **Order matters.** The inline block must come before the link, so the linked
 stylesheet can override tokens rather than the reverse.
 
+**Use the same slug in both.** The linked stylesheet starts with its own `:root`
+block and loads second, so it wins. If you inline `clinic-b` tokens but link the
+`default` stylesheet, the page paints as `clinic-b` and then switches to
+`default`. When the slug varies, pass it to the template and build the link
+from it, as the demo does:
+`href="/plugin-io/api/canvas_theme_kit/assets/{{ ctk_slug|urlencode:'' }}/core.css"`.
+
 **Always pass a fallback** — `var(--ctk-color-accent, #0b5fff)` — so your page
 still renders sensibly against a theme that omits a token, or before one is
 published.

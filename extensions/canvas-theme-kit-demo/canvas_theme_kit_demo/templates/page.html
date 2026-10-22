@@ -72,8 +72,11 @@
     {% comment %} LAYER 2 — the full published stylesheet, same-origin so no
        url_permissions entry is needed. Served with
        `max-age=300, stale-while-revalidate=86400`, so the browser paints from
-       cache and revalidates in the background; it never blocks a paint. {% endcomment %}
-    <link rel="stylesheet" href="/plugin-io/api/canvas_theme_kit/assets/default/core.css" />
+       cache and revalidates in the background; it never blocks a paint.
+       Built from the same slug as the inline block: core.css loads second and
+       its :root block wins, so a mismatched link swaps themes after first
+       paint. {% endcomment %}
+    <link rel="stylesheet" href="/plugin-io/api/canvas_theme_kit/assets/{{ ctk_slug|urlencode:'' }}/core.css" />
   </head>
 
   <body>

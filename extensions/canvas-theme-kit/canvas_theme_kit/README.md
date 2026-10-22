@@ -169,12 +169,16 @@ patient data. That is a deployment decision, not a default.
 
 - **CSS is not inert.** Published CSS is validated on save, publish and
   rollback: `@import`, `image-set()` and backslash escapes are rejected, and
-  `url()` is restricted to same-origin paths and `data:` URIs. Otherwise a
-  stylesheet could beacon to a third party from every patient-facing page it
-  renders on.
+  `url()` is restricted to same-origin paths and `data:` URIs, checked after
+  the same normalization the browser's URL parser applies. Comments are read
+  the way the browser reads them, so a `/*` inside a string cannot hide a rule.
+  `</` is rejected so the stylesheet can be inlined into a `<style>` element.
+  Otherwise a stylesheet could beacon to a third party from every
+  patient-facing page it renders on.
 - **Token values are constrained, not escaped.** They are interpolated into a
-  `:root` block, so `{`, `}`, `;`, `<` and `>` are rejected outright. They pass
-  the same `url()` checks as the stylesheet, since `var()` carries them into it.
+  `:root` block, so `{`, `}`, `;`, `<` and `>` are rejected outright, as are
+  values that leave a quote or comment open. They pass the same `url()` checks
+  as the stylesheet, since `var()` carries them into it.
 - **Publishing is audited.** Every revision records who published it and when.
   Rollback republishes rather than rewrites, so the history stays complete.
 - **Published content is size-capped** at 256 KB of CSS and 500 tokens. It is

@@ -38,14 +38,95 @@ _URL_OPEN_RE = re.compile(r"url\(", re.IGNORECASE)
 # parsed: a design system has no need for it that url() does not cover.
 _IMAGE_SET_RE = re.compile(r"image-set\(", re.IGNORECASE)
 _SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
-# CSS comments are inert, so a stylesheet that mentions @import while
-# explaining that it avoids one must not be rejected for saying so. Stripping
-# them first opens no hole: `@im/**/port` is not valid CSS either way.
-_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+# The URL parser deletes these anywhere in a URL before reading it, so
+# `h<TAB>ttps:` is `https:` to the browser.
+_URL_IGNORED = "\t\n\r"
+# ...and trims these from both ends ("C0 control or space").
+_URL_TRIMMED = "".join(chr(c) for c in range(0x21))
+
+# A newline ends a CSS string, which is what lets the scanner below agree with
+# the browser about where a string stops.
+_CSS_NEWLINES = "\n\r\f"
+
+
+def _is_name_char(ch: str) -> bool:
+    """Whether `ch` can continue a CSS identifier (CSS Syntax 3, 4.2)."""
+    return ch.isascii() and (ch.isalnum() or ch in "-_") or not ch.isascii()
 
 
 class ValidationError(Exception):
     """Raised when submitted CSS or tokens would be unsafe to publish."""
+
+
+def _strip_comments(css: str) -> str:
+    """`css` with each comment replaced by a space, as a browser tokenizes it.
+
+    CSS comments are inert, so a stylesheet that mentions @import while
+    explaining that it avoids one must not be rejected for saying so. But `/*`
+    only opens a comment *outside* a string and outside an unquoted url(). A
+    regex strip that did not know that let `content:"/*"` … `content:"*/"`
+    hide a live url() between them from every check. Each branch below mirrors
+    one rule of the CSS Syntax tokenizer; getting any of them wrong in the
+    direction of stripping too much reopens that hole.
+
+    Backslash escapes are walked over so they cannot desync the scanner, and
+    are then refused outright by `_reject_fetches`.
+    """
+    out: list[str] = []
+    i, n = 0, len(css)
+    while i < n:
+        ch = css[i]
+        if ch == "/" and css.startswith("*", i + 1):
+            # An unclosed comment runs to the end of the sheet, as it does in
+            # the browser.
+            end = css.find("*/", i + 2)
+            i = n if end == -1 else end + 2
+            out.append(" ")
+            continue
+        if ch in "'\"":
+            # A string ends at its closing quote or, unclosed, at a newline.
+            j = i + 1
+            while j < n and css[j] != ch and css[j] not in _CSS_NEWLINES:
+                j += 2 if css[j] == "\\" else 1
+            if j < n and css[j] == ch:
+                j += 1
+            out.append(css[i:j])
+            i = j
+            continue
+        if ch == "\\":
+            out.append(css[i : i + 2])
+            i += 2
+            continue
+        if css[i : i + 4].lower() == "url(" and not (i and _is_name_char(css[i - 1])):
+            # `url(` followed by a quote is a function taking a string, which
+            # the branches above handle. Anything else is one url token that
+            # runs to `)`, and `/*` inside it is just part of the address.
+            j = i + 4
+            while j < n and css[j] in " \t" + _CSS_NEWLINES:
+                j += 1
+            if j >= n or css[j] not in "'\"":
+                while j < n and css[j] != ")":
+                    j += 2 if css[j] == "\\" else 1
+                j = min(j + 1, n)
+            out.append(css[i:j])
+            i = j
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _has_open_string(value: str) -> bool:
+    """Whether `value` ends inside a quoted string."""
+    quote = ""
+    for ch in value:
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+    return bool(quote)
 
 
 def validate_css(css: str) -> None:
@@ -71,8 +152,18 @@ def validate_css(css: str) -> None:
             "of every consuming plugin."
         )
 
+    # Checked on the raw source: inside a <style> element even a comment or a
+    # string closes the element. Served as text/css this is inert, but a
+    # consumer that inlines core.css would be handed markup. `<` alone stays
+    # legal because media-query range syntax (`(width < 600px)`) needs it.
+    if "</" in css:
+        raise ValidationError(
+            "'</' is not allowed: it would close the <style> element on any page "
+            "that inlines this stylesheet."
+        )
+
     # Checked against comment-stripped source so prose cannot trip the rules.
-    code = _COMMENT_RE.sub(" ", css)
+    code = _strip_comments(css)
 
     if _IMPORT_RE.search(code):
         raise ValidationError(
@@ -87,6 +178,10 @@ def validate_css(css: str) -> None:
 
 def _url_targets(code: str) -> list[str]:
     """Every url() target in `code`, read the way a browser reads it.
+
+    Each target is normalized the way the URL parser does it before the
+    caller checks its scheme: a target that only looks same-origin once you
+    ignore a tab is not same-origin.
 
     A regex over `url(...)` fails to *match* a quoted target that contains `)`
     or the other quote character, and a failed match meant nothing was checked
@@ -116,7 +211,8 @@ def _url_targets(code: str) -> list[str]:
             if end == -1:
                 raise ValidationError("Unterminated url().")
             target = code[i:end]
-        targets.append(target.strip())
+        target = "".join(c for c in target if c not in _URL_IGNORED)
+        targets.append(target.strip(_URL_TRIMMED))
     return targets
 
 
@@ -190,6 +286,18 @@ def validate_tokens(tokens: Any) -> dict[str, str]:
             raise ValidationError(
                 f"Token {name!r} value contains a forbidden character "
                 f"(one of {''.join(sorted(TOKEN_VALUE_FORBIDDEN))})."
+            )
+        # Every token renders into one `:root{}` block, so a value that leaves
+        # a string or comment open swallows every token after it, and the
+        # authored CSS too. A newline would end a string mid-value.
+        if (
+            "/*" in value
+            or _has_open_string(value)
+            or any(c in _CSS_NEWLINES for c in value)
+        ):
+            raise ValidationError(
+                f"Token {name!r} value leaves a quote or comment open, or spans "
+                "lines. It would break every token after it."
             )
         try:
             _reject_fetches(value)

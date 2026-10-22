@@ -38,6 +38,30 @@ class TestRenderTokensCss:
     def test_sorts_by_name(self) -> None:
         assert render_tokens_css({"b": "2", "a": "1"}) == ":root{--ctk-a:1;--ctk-b:2;}"
 
+    @pytest.mark.parametrize(
+        "name, value",
+        [
+            ("color-accent", "red}</style><script>alert(1)</script>"),
+            ("color-accent", "red;color:blue"),
+            ("color-accent", "a{b"),
+            ("color-accent", "1 > 0"),
+            ("Bad}Name", "red"),
+        ],
+    )
+    def test_drops_a_token_that_could_escape_the_block(
+        self, name: str, value: str
+    ) -> None:
+        # The block is inlined with |safe, and this page is the pattern other
+        # consumers copy. The publisher already refuses these, so this only
+        # matters if that validation ever regresses or the table is written by
+        # something else; the cost of checking again is nothing.
+        with patch(f"{TOKENS}.log") as log:
+            css = render_tokens_css({name: value, "space-4": "1rem"})
+
+        assert css == ":root{--ctk-space-4:1rem;}"
+        log.warning.assert_called_once()
+        assert repr(name) in log.warning.call_args.args[0]
+
     def test_empty_tokens_still_render_a_valid_block(self) -> None:
         # An empty string here would produce an empty <style> element; a valid
         # empty rule keeps the page's own fallbacks working.
@@ -165,8 +189,12 @@ class TestCachedTokens:
         cache.get.side_effect = RuntimeError("cache down")
         cache.set.side_effect = RuntimeError("cache down")
 
-        with patch(f"{TOKENS}.active_tokens", return_value={"color-accent": "#f00"}):
+        with patch(f"{TOKENS}.active_tokens", return_value={"color-accent": "#f00"}), \
+             patch(f"{TOKENS}.log") as log:
             assert cached_tokens("default") == {"color-accent": "#f00"}
+
+        # Logged, not silent: a dead cache shows up only as slower pages.
+        assert log.warning.call_count == 2
 
     def test_keys_the_cache_per_theme(self, cache: MagicMock) -> None:
         with patch(f"{TOKENS}.active_tokens", return_value={}):

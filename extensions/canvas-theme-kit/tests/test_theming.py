@@ -314,3 +314,115 @@ class TestUrlScannerEdges:
         # What cannot be read cannot be checked, so it is not allowed.
         with pytest.raises(ValidationError, match="url"):
             validate_css(css)
+
+
+class TestCommentsInsideStrings:
+    """A `/*` inside a string or an unquoted url() is text to the browser, not a
+    comment opener. A regex strip that did not know that let a reviewer hide a
+    live off-origin url() between two `content:` strings; it saved, published,
+    and the demo page requested the outside host on a sandbox."""
+
+    @pytest.mark.parametrize(
+        "css",
+        [
+            # The reviewer's payload, verbatim.
+            'a::before{content:"/*"} body{background-image:url(https://example.com/leak.png)}'
+            ' b::after{content:"*/"}',
+            "a::before{content:'/*'} @import 'https://example.com/x.css'; b::after{content:'*/'}",
+            'a::before{content:"/*"} b{background:url(\\68ttps://example.com/x)} c{content:"*/"}',
+            # An unquoted url() is one token: `/*` inside it opens nothing, so
+            # the browser reads the second url() as live CSS.
+            "a{background:url(/*)} b{background:url(https://example.com/x)} c{d:e} /*/)",
+        ],
+    )
+    def test_rejects_rules_hidden_by_a_fake_comment(self, css: str) -> None:
+        with pytest.raises(ValidationError):
+            validate_css(css)
+
+    def test_a_string_ends_at_a_newline(self) -> None:
+        # An unescaped newline closes a CSS string, so the `/*` on the next
+        # line is a real comment and the browser never sees the url() in it.
+        validate_css('a{content:"open\nb{}/* url(https://example.com/x) */')  # must not raise
+
+    def test_a_function_named_like_url_does_not_hide_a_comment(self) -> None:
+        # `xurl(` is an ordinary function, so `/*` inside it opens a real
+        # comment. Treating it as url() would desync the scanner.
+        validate_css("a{b:xurl(/* url(https://example.com/x) */)}")  # must not raise
+
+    def test_still_allows_a_comment_mentioning_import(self) -> None:
+        validate_css('a::before{content:"/"} /* no @import */ b{c:d}')  # must not raise
+
+    def test_an_unterminated_comment_runs_to_the_end(self) -> None:
+        # Browsers treat everything after an unclosed `/*` as comment.
+        validate_css("a{b:c} /* url(https://example.com/x)")  # must not raise
+
+
+class TestUrlTargetsAreNormalized:
+    """The URL parser drops tab, CR and LF anywhere in a URL and trims leading
+    and trailing C0 controls and spaces before it reads the scheme. Chrome
+    resolves `h<TAB>ttps://…` to `https://…` and makes the request, so the
+    check has to see what the browser sees."""
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            '"h\tttps://example.com/x"',
+            '"/\t/example.com/x"',
+            '"ht\ntp://example.com/x"',
+            '"\x01https://example.com/x"',
+            '" //example.com/x"',
+            '"https\r://example.com/x"',
+        ],
+    )
+    def test_rejects_off_origin_targets_split_by_ignored_characters(
+        self, target: str
+    ) -> None:
+        with pytest.raises(ValidationError):
+            validate_css(f"a{{background:url({target})}}")
+
+    def test_rejects_the_same_in_a_token(self) -> None:
+        with pytest.raises(ValidationError):
+            validate_tokens({"brand-image": 'url("h\tttps://example.com/x")'})
+
+    def test_still_allows_a_same_origin_path(self) -> None:
+        validate_css('a{background:url("\t/assets/logo.png ")}')  # must not raise
+
+
+class TestStyleElementBreakout:
+    """Authored CSS is served as text/css, where `</style>` is inert. A consumer
+    that inlines core.css into a `<style>` element would have the element closed
+    early, so the sequence is refused at publish time. `<` alone stays legal:
+    media-query range syntax (`(width < 600px)`) uses it."""
+
+    @pytest.mark.parametrize(
+        "css",
+        [
+            "a{b:c}</style><script>alert(1)</script>",
+            "/* </STYLE> */ a{b:c}",
+            'a::before{content:"</style>"}',
+        ],
+    )
+    def test_rejects_a_closing_tag(self, css: str) -> None:
+        with pytest.raises(ValidationError, match="</"):
+            validate_css(css)
+
+    def test_allows_media_range_syntax(self) -> None:
+        validate_css("@media (400px < width < 800px) { a { b: c; } }")  # must not raise
+
+
+class TestTokenValuesCannotSwallowTheBlock:
+    """Tokens render into one `:root{}` block, so an open string or comment in
+    one value swallows every token after it and the authored CSS too."""
+
+    @pytest.mark.parametrize(
+        "value",
+        ['"oops', "'oops", "a /* b", "'Segoe UI\", Arial", "a\nb"],
+    )
+    def test_rejects_values_that_leave_something_open(self, value: str) -> None:
+        with pytest.raises(ValidationError, match="Token 'a'"):
+            validate_tokens({"a": value})
+
+    def test_allows_a_quote_of_the_other_kind_inside_a_string(self) -> None:
+        assert validate_tokens({"a": "\"O'Brien Sans\", serif"}) == {
+            "a": "\"O'Brien Sans\", serif"
+        }

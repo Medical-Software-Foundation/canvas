@@ -35,3 +35,24 @@ def test_no_comment_text_renders(path: Path) -> None:
     assert "{#" not in rendered and "#}" not in rendered, (
         f"{path.name} renders comment text; use {{% comment %}} for multi-line comments"
     )
+
+
+def test_stylesheet_link_follows_the_requested_theme() -> None:
+    # The inline block comes from ?theme=. A link fixed to `default` loads
+    # second and its :root block overrides the inlined tokens, so any other
+    # theme switched to `default` after first paint.
+    page = TEMPLATE_ROOT / "page.html"
+    rendered = Engine().from_string(page.read_text(encoding="utf-8")).render(
+        Context({"ctk_slug": "clinic-b", "ctk_tokens_css": ":root{}"})
+    )
+    assert "/assets/clinic-b/core.css" in rendered
+    assert "/assets/default/core.css" not in rendered
+
+
+def test_stylesheet_link_encodes_the_slug() -> None:
+    # The slug arrives in a query parameter and lands in a URL path.
+    page = TEMPLATE_ROOT / "page.html"
+    rendered = Engine().from_string(page.read_text(encoding="utf-8")).render(
+        Context({"ctk_slug": "../admin?x=1", "ctk_tokens_css": ":root{}"})
+    )
+    assert "/assets/..%2Fadmin%3Fx%3D1/core.css" in rendered

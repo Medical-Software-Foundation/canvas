@@ -211,7 +211,10 @@
       tr.appendChild(when);
 
       var who = document.createElement("td");
-      who.textContent = r.published_by || "";
+      // Name when the staff record still exists; the raw key otherwise, so a
+      // deleted account still leaves a trace in the audit trail.
+      who.textContent = r.published_by_name || r.published_by || "";
+      if (r.published_by_name) who.title = r.published_by;
       tr.appendChild(who);
 
       var act = document.createElement("td");
@@ -294,10 +297,17 @@
     el("preview").srcdoc = doc;
   }
 
+  // Rejects after showing its own error. publish() chains on it, and a save
+  // that resolved on failure let publish ship the previously stored draft
+  // under a "Published" banner. `shown` stops the error being shown twice.
   function save() {
     var tokens;
     try { tokens = parseTokens(); }
-    catch (e) { show("err", "Tokens are not valid JSON: " + e.message); return Promise.resolve(); }
+    catch (e) {
+      show("err", "Tokens are not valid JSON: " + e.message);
+      e.shown = true;
+      return Promise.reject(e);
+    }
 
     return api("/themes/" + encodeURIComponent(state.slug) + "/draft", {
       method: "POST",
@@ -305,7 +315,11 @@
     }).then(function () {
       show("ok", "Draft saved. Preview updated; published pages are unchanged.");
       refreshPreview();
-    }).catch(function (e) { show("err", e.message); });
+    }).catch(function (e) {
+      show("err", e.message);
+      e.shown = true;
+      throw e;
+    });
   }
 
   function publish() {
@@ -319,7 +333,7 @@
       if (!r) return;
       show("ok", "Published revision " + r.revision + ". Pages pick it up within about five minutes.");
       return loadTheme(state.slug);
-    }).catch(function (e) { show("err", e.message); });
+    }).catch(function (e) { if (!e.shown) show("err", e.message); });
   }
 
   function rollback(revision) {
@@ -370,7 +384,8 @@
 
   el("reset-draft").onclick = resetDraft;
   el("new-theme").onclick = createTheme;
-  el("save").onclick = save;
+  // save() rejects on failure for publish()'s sake; the error is already shown.
+  el("save").onclick = function () { save().catch(function () {}); };
   el("publish").onclick = publish;
   el("preview-btn").onclick = refreshPreview;
   el("theme-picker").onchange = function (e) { loadTheme(e.target.value); };
