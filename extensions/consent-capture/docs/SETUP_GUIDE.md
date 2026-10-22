@@ -197,9 +197,11 @@ Work down the editor. Each part is described below.
 
 - **At capture** — the details staff confirm when recording:
   - **Methods offered** — any of **Verbal**, **Electronic**, **Written**, **Other**.
-    > 💡 **Written is special.** For a Written consent the plugin does *not* generate a PDF.
-    > Instead, staff upload or photograph the signed paper document, and that becomes the
-    > record.
+    > 💡 **Written is special.** Written consents attach the signed form. Staff photograph or
+    > upload the signed paper document, or, with **Allow signing on this device** on, the
+    > signer signs on the staff device and the plugin generates the PDF with the signature.
+  - **Allow signing on this device** — adds **Sign on this device** to **Written** consents.
+    Off by default.
   - **Who is giving consent** — patient or representative.
   - **Capacity statement** — uses `[Patient name]` and `[Name]` placeholders, which fill in
     automatically at capture.
@@ -215,6 +217,20 @@ Click **Save changes**. Repeat Step 5 for every consent you want staff to use.
 > already on a patient's chart still appears under **On File** in the picker even if this
 > toggle is off. The plugin never creates or edits codings, and expiration always lives on
 > the coding in Canvas admin.
+
+### Practice settings
+
+The **Practice settings** tab applies to every consent signed on the device:
+
+- **Signing several consents** — **Sign each consent** (default) or **Allow reusing a
+  signature**, which offers the signer's first signature on the rest of the consents in the
+  same session.
+- **Accepted signatures** — **Finger or stylus** and **Mouse or trackpad** (on by default),
+  and **Typed** (off by default). At least one stays selected.
+- **Ask for a printed name** — off by default. When off, the name from **Who is giving
+  consent?** prints under the signature.
+
+Click **Save changes** on that tab.
 
 ---
 
@@ -247,13 +263,11 @@ a new consent required):
 
 Once you're set up, here's the day-to-day experience for clinical and front-desk staff.
 
-**Three ways a consent shows up in the chart:**
+**Two ways a consent shows up in the chart:**
 1. A **Consents** button in the chart header — **always shown**. It turns **red** when the
    patient still owes a **required** consent, and is a neutral **gray** button once everything
    required is on file.
-2. A **Consents** launcher in the chart's **app drawer** — always available, so staff can
-   review what's on file or record an optional consent any time.
-3. A red **banner** reading **"Required consent not on file."** on the chart and profile —
+2. A red **banner** reading **"Required consent not on file."** on the chart and profile —
    clears automatically once every required consent is on file.
 
 **Recording a consent (4 steps):**

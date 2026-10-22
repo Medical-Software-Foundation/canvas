@@ -55,6 +55,10 @@ class TestNeedsAny:
     def test_false_when_empty(self):
         assert needs_any([]) is False
 
+    def test_declined_required_consent_is_not_due(self):
+        declined = dict(_item("a", False), status="declined")
+        assert needs_any([declined]) is False
+
 
 class TestPatientId:
     def test_returns_target_id(self):

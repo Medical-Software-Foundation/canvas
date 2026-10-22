@@ -2,12 +2,13 @@
 
 Two SimpleAPI handlers:
 
-- ``ConsentApi`` (``/consent``) — the capture endpoint the picker's "Accept"
-  button calls. It resolves the selected ``ConsentDefinition`` by code
+- ``ConsentApi`` (``/consent``) — the capture endpoint the picker's record
+  buttons call. It resolves the selected ``ConsentDefinition`` by code
   (authoritative — the browser never supplies the verbiage), builds a
-  documentation PDF, and creates a FHIR Consent.
-- ``ConsentAdminApi`` (``/admin``) — CRUD over ``ConsentDefinition`` for the
-  Consent Settings admin UI.
+  documentation PDF (with the signature when it was signed on the device), and
+  creates a FHIR Consent. ``/consent/decline`` records a declined consent.
+- ``ConsentAdminApi`` (``/admin``) — CRUD over ``ConsentDefinition`` and the
+  practice settings for the Consent Settings admin UI.
 """
 
 import base64
@@ -39,8 +40,8 @@ from logger import log
 
 from consent_capture.banner import add_banner_effect, remove_banner_effect
 from consent_capture.constants import (
-    ACCEPTED_STATES,
     BANNER_KEY,
+    RECORDED_STATES,
     banners_enabled,
     DEFAULT_CAPACITY_PATIENT,
     DEFAULT_CAPACITY_REPRESENTATIVE,
@@ -58,9 +59,20 @@ from consent_capture.models import ConsentCaptureDetail, ConsentDefinition
 from consent_capture.pdf import generate_consent_pdf_base64, pdf_page_count
 from consent_capture.questions import evaluate_answers, normalize_questions
 from consent_capture.service import (
+    clean_practice_settings,
     definition_by_code,
     is_consent_admin,
     patients_missing_required,
+    practice_settings,
+    save_practice_settings,
+    signature_label,
+)
+from consent_capture.signing import (
+    SIGNED_WITH,
+    accepted_signed_with,
+    clean_signature_jpeg,
+    same_name,
+    statement_fingerprint,
 )
 
 
@@ -148,13 +160,15 @@ def _resolve_patient(patient_id):
     """Return (full_name, date_of_birth_iso) or None if the patient isn't found."""
     row = (
         Patient.objects.filter(id=patient_id)
-        .values_list("first_name", "last_name", "birth_date")
+        .values_list("first_name", "last_name", "suffix", "birth_date")
         .first()
     )
     if not row:
         return None
-    name = _full_name(row[0], row[1], "(name unavailable)")
-    dob = row[2].isoformat() if row[2] else ""
+    # The suffix (Jr, Sr, III) is part of who the patient is: the name check
+    # compares suffixes, so leaving it off would flag a correctly printed name.
+    name = " ".join(n for n in (row[0], row[1], row[2]) if n) or "(name unavailable)"
+    dob = row[3].isoformat() if row[3] else ""
     return name, dob
 
 
@@ -186,9 +200,11 @@ def _store_capture_detail(
     consented_by,
     capacity_statement,
     pages=0,
+    extra=None,
 ):
     """Upsert the capture detail for a just-recorded consent, keyed by the natural key
-    ``(patient_id, system, code, effective_date)``.
+    ``(patient_id, system, code, effective_date)``. ``extra`` carries the newer
+    fields (status, the device-signature detail, the consent text and its hash).
 
     Never raises: the consent is already recorded via FHIR by the time this runs, so a
     storage failure is logged and swallowed rather than failing the capture. Uses the
@@ -208,6 +224,7 @@ def _store_capture_detail(
         "capacity_statement": capacity_statement or "",
         "pages": int(pages or 0),
     }
+    values.update(extra or {})
     try:
         updated = ConsentCaptureDetail.objects.filter(**key).update(**values)
         if not updated:
@@ -272,9 +289,12 @@ def _fhir_access_token(fumage_url, client_id, client_secret):
 class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
     PREFIX = "/consent"
 
-    @api.post("/collect")
-    def collect(self) -> list[Response | Effect]:
-        body = self.request.json() or {}
+    def _capture_context(self, body):
+        """Validate what a recording needs, shared by ``collect`` and ``decline``.
+
+        Returns ``(context, error_response)``: a dict with the resolved definition,
+        patient, staff, who consented, method, capacity statement and local date and
+        time, or ``None`` and a ready-to-return error response."""
         patient_id = body.get("patient_id")
 
         # Authoritative identity of the collector: the logged-in staff session.
@@ -286,13 +306,13 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         client_secret = self.secrets.get("CANVAS_FHIR_CLIENT_SECRET", "")
 
         if not patient_id:
-            return [_error("No patient was identified for this consent.")]
+            return None, [_error("No patient was identified for this consent.")]
         if not code:
-            return [_error("No consent was selected.")]
+            return None, [_error("No consent was selected.")]
 
         definition = definition_by_code(code, system_hint)
         if definition is None:
-            return [
+            return None, [
                 _error(
                     "That consent isn't configured. Please refresh, or ask your "
                     "administrator to set it up in Consent Settings."
@@ -300,7 +320,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             ]
 
         if not client_id or not client_secret:
-            return [
+            return None, [
                 _error(
                     "This plugin isn't fully configured yet — the Canvas FHIR "
                     "credentials are missing. Please contact your administrator."
@@ -309,7 +329,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
 
         patient = _resolve_patient(patient_id)
         if patient is None:
-            return [_error("We couldn't find this patient's record.")]
+            return None, [_error("We couldn't find this patient's record.")]
         patient_name, patient_dob = patient
 
         staff_name = _resolve_staff(staff_id)
@@ -317,7 +337,8 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         # Who is giving consent: the patient or an authorized representative.
         consented_by, who_error = _consented_by(body)
         if who_error:
-            return [_error(who_error)]
+            return None, [_error(who_error)]
+        is_representative = (body.get("consent_by") or "patient").strip().lower() == "representative"
 
         # Method — required when the consent uses it. Validated against the
         # consent's own configured options (falling back to the default set).
@@ -326,13 +347,12 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             allowed = normalize_method_options(definition.method_options) or list(METHOD_OPTIONS)
             method = _clean_method(body.get("method"), allowed)
             if not method:
-                return [_error("Please select how the consent was obtained.")]
+                return None, [_error("Please select how the consent was obtained.")]
 
         # Capacity statement, filled from the definition's templates.
         capacity_statement = ""
         if definition.capacity_enabled:
-            who = (body.get("consent_by") or "patient").strip().lower()
-            if who == "representative":
+            if is_representative:
                 capacity_statement = render_capacity(
                     definition.capacity_representative_template,
                     representative_name=_representative_name(body),
@@ -348,7 +368,217 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         # attestation whenever capacity is enabled — so recording is blocked unless it is
         # confirmed, regardless of the recorded statement's wording.
         if definition.capacity_enabled and not body.get("capacity_confirmed"):
-            return [_error("Consent cannot be recorded unless capacity is confirmed.")]
+            return None, [_error("Consent cannot be recorded unless capacity is confirmed.")]
+
+        # Use the end user's LOCAL calendar date (sent by the browser) so the
+        # consent date reflects the user's day, not UTC. Fall back to server UTC.
+        local_date = (body.get("local_date") or "").strip()
+        if _DATE_RE.match(local_date):
+            today = local_date
+        else:
+            today = datetime.now(timezone.utc).date().isoformat()
+
+        # Local wall-clock time plus the browser's timezone label (e.g. "PDT"),
+        # so the footer timestamp is unambiguous.
+        local_time = _clean_time(body.get("local_time"))
+        local_tz = _clean_tz(body.get("local_tz"))
+        time_display = ("%s %s" % (local_time, local_tz)).strip() if local_time else ""
+
+        return {
+            "patient_id": patient_id,
+            "staff_id": staff_id,
+            "staff_name": staff_name,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "definition": definition,
+            "patient_name": patient_name,
+            "patient_dob": patient_dob,
+            "consented_by": consented_by,
+            "is_representative": is_representative,
+            "signer_name": _representative_name(body) if is_representative else patient_name,
+            "representative_relationship": _clean_text(
+                body.get("representative_relationship"), limit=60
+            ),
+            "method": method,
+            "capacity_statement": capacity_statement,
+            "today": today,
+            "time_display": time_display,
+        }, None
+
+    def _create_fhir_consent(self, ctx, payload):
+        """Create the FHIR Consent. Returns an error response list, or ``None`` on
+        success."""
+        try:
+            client = CanvasFhir(ctx["client_id"], ctx["client_secret"])
+            client.create("Consent", payload)
+        except Exception as exc:
+            response = getattr(exc, "response", None)
+            status = getattr(response, "status_code", None)
+            patient_id = ctx["patient_id"]
+            # Canvas returns 201 with an empty body on a successful Consent
+            # create, which makes the client's JSON parse raise a ValueError even
+            # though the write succeeded. Treat 2xx (or an empty-body parse error
+            # with no HTTP response) as success.
+            if status is not None and status < 400:
+                log.info(
+                    "ConsentApi: consent created (HTTP %s, empty body) for "
+                    "patient %s" % (status, patient_id)
+                )
+            elif status is None and isinstance(exc, ValueError):
+                log.info(
+                    "ConsentApi: consent created (empty response body) for "
+                    "patient %s" % patient_id
+                )
+            else:
+                # Status, error type and body length only: an error body can echo
+                # request content, which would put patient details in the log.
+                body = getattr(response, "text", "") or ""
+                log.error(
+                    "ConsentApi: FHIR Consent create failed (HTTP %s, %s, %d-character "
+                    "response) for patient %s" % (status, type(exc).__name__, len(body), patient_id)
+                )
+                return [
+                    _error(
+                        "We couldn't save the consent. If this keeps happening, "
+                        "please contact your administrator."
+                    )
+                ]
+        return None
+
+    @staticmethod
+    def _reload_effects(patient_id):
+        """Recolor the chart-header "Consents" button live: recording this consent may
+        clear the patient's last required consent, so the red button should turn
+        neutral gray without a page reload. Best-effort — the consent is already
+        recorded, so a reload failure must not fail the capture."""
+        effects: list[Effect] = []
+        try:
+            effects.append(ReloadPatientActionButtonsEffect(id=str(patient_id)).apply())
+        except Exception as exc:  # noqa: BLE001 - never fail an already-recorded consent
+            log.warning(
+                "ConsentApi: button reload skipped for patient %s: %s" % (patient_id, exc)
+            )
+        return effects
+
+    def _device_signature(self, raw, ctx):
+        """Validate a "Sign on this device" signature against the consent and the
+        practice settings. Returns ``(signature, error)``: the cleaned signature dict
+        (image, how it was signed, names and flags) or ``None`` and a message.
+
+        Enforced here, not only in the browser: the consent must allow it, the method
+        must be Written, the kind of signature must be accepted, a printed or typed
+        name is required when the settings ask for it, and a name that doesn't match
+        the person giving consent can't be recorded until staff choose what to do."""
+        definition = ctx["definition"]
+        if not isinstance(raw, dict):
+            return None, "The signature couldn't be read. Please sign again."
+        if not getattr(definition, "allow_device_signature", False):
+            return None, "Signing on this device is turned off for this consent."
+        if ctx["method"] != "Written":
+            return None, "Signing on this device is available for Written consents."
+
+        settings = practice_settings()
+        signed_with = _clean_text(raw.get("signed_with"), limit=10)
+        if signed_with not in SIGNED_WITH:
+            return None, "The signature couldn't be read. Please sign again."
+        if signed_with not in accepted_signed_with(settings):
+            return None, "This kind of signature isn't accepted. Please sign again."
+
+        jpeg, width, height, components, image_error = clean_signature_jpeg(raw.get("image"))
+        if image_error:
+            return None, image_error
+
+        typed = signed_with == "typed"
+        entered = _clean_text(raw.get("entered_name"))
+        if typed and not entered:
+            return None, "Type the signer's full name before recording."
+        if not typed and settings["ask_printed_name"] and not entered:
+            return None, "Enter the printed name before recording."
+        if not typed and not settings["ask_printed_name"]:
+            entered = ""  # not asked: the name from "Who is giving consent?" prints
+
+        name_kept = bool(raw.get("name_kept"))
+        if entered and not same_name(entered, ctx["signer_name"]) and not name_kept:
+            return None, "Choose an option for the name that doesn't match before recording."
+
+        reused = bool(raw.get("reused"))
+        if reused and not settings["reuse_signature"]:
+            return None, "Reusing a signature is turned off. Please sign again."
+
+        # When the signer selected Accept and Sign (sent by the browser), not when
+        # staff recorded it; the effective date may differ, so the date is sent too.
+        signed_date = (raw.get("signed_date") or "").strip()
+        if not _DATE_RE.match(signed_date):
+            signed_date = ctx["today"]
+        signed_time = _clean_time(raw.get("signed_time"))
+        signed_tz = _clean_tz(raw.get("signed_tz"))
+        signed_at = " ".join(x for x in (signed_date, signed_time, signed_tz) if x)
+
+        return {
+            "jpeg": jpeg,
+            "width": width,
+            "height": height,
+            "components": components,
+            "signed_with": signed_with,
+            "entered": entered,
+            "typed": typed,
+            "name_kept": name_kept,
+            "reused": reused,
+            "reconfirmed": bool(raw.get("reconfirmed")),
+            "signed_at": signed_at,
+        }, None
+
+    @staticmethod
+    def _pdf_signature(sig, ctx):
+        """The Signature section for the PDF (see ``pdf._build_pages``)."""
+        if ctx["is_representative"]:
+            relationship = ctx["representative_relationship"] or "Representative"
+            role = "%s of %s" % (relationship, ctx["patient_name"])
+            heading = "Signature of representative"
+        else:
+            role = "Patient"
+            heading = "Signature of patient"
+        signer = ctx["signer_name"]
+        entered = sig["entered"]
+        show_entered = bool(entered) and (
+            sig["name_kept"] or " ".join(entered.lower().split()) != " ".join(signer.lower().split())
+        )
+        notes = ["Signed in person on staff device."]
+        if sig["reconfirmed"]:
+            notes.append("Confirmed under the corrected name.")
+        if sig["name_kept"]:
+            notes.append('Printed name "%s" kept as is by staff.' % entered)
+        return {
+            "jpeg": sig["jpeg"],
+            "width": sig["width"],
+            "height": sig["height"],
+            "components": sig["components"],
+            "heading": heading,
+            "signer": "%s (%s)" % (signer, role),
+            "entered_label": "Typed as" if sig["typed"] else "Printed name",
+            "entered": entered if show_entered else "",
+            "signed_at": sig["signed_at"],
+            "notes": notes,
+        }
+
+    @api.post("/collect")
+    def collect(self) -> list[Response | Effect]:
+        body = self.request.json() or {}
+        ctx, error_response = self._capture_context(body)
+        if error_response:
+            return error_response
+        definition = ctx["definition"]
+        patient_id = ctx["patient_id"]
+        method = ctx["method"]
+        today = ctx["today"]
+
+        # "Sign on this device": a Written consent signed in the picker. The method
+        # stays Written; the plugin generates the PDF with the signature on it.
+        device = None
+        if body.get("signature"):
+            device, sig_error = self._device_signature(body.get("signature"), ctx)
+            if sig_error:
+                return [_error(sig_error)]
 
         # Evaluate the consent's questions — but only for methods that generate a PDF.
         # "Written" consents don't surface the questions in the modal (the signed
@@ -368,40 +598,28 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                 )
                 return [_error(answers_error)]
 
-        # Use the end user's LOCAL calendar date (sent by the browser) so the
-        # consent date reflects the user's day, not UTC. Fall back to server UTC.
-        local_date = (body.get("local_date") or "").strip()
-        if _DATE_RE.match(local_date):
-            today = local_date
-        else:
-            today = datetime.now(timezone.utc).date().isoformat()
-
-        # Local wall-clock time plus the browser's timezone label (e.g. "PDT"),
-        # so the footer timestamp is unambiguous.
-        local_time = _clean_time(body.get("local_time"))
-        local_tz = _clean_tz(body.get("local_tz"))
-        time_display = ("%s %s" % (local_time, local_tz)).strip() if local_time else ""
-
         title = definition.display or definition.code
+        paragraphs = parse_statement(definition.verbiage)
 
         # "Written" consents are signed on paper / an external document: the provider
         # uploads or camera-captures it in the picker, which assembles the pages into a
         # single PDF. We attach that document instead of generating one. Every other
-        # method (and no method) gets an auto-generated PDF.
-        make_pdf = method_generates_pdf(method)
-        if make_pdf:
+        # method (and no method), and a Written consent signed on the device, gets an
+        # auto-generated PDF.
+        if method_generates_pdf(method) or device:
             pdf_b64 = generate_consent_pdf_base64(
                 title=title,
-                patient_name=patient_name,
-                patient_dob=patient_dob,
-                staff_name=staff_name,
+                patient_name=ctx["patient_name"],
+                patient_dob=ctx["patient_dob"],
+                staff_name=ctx["staff_name"],
                 date=today,
-                statement_paragraphs=parse_statement(definition.verbiage),
-                time=time_display,
-                consented_by=consented_by,
-                method=method,
-                capacity_statement=capacity_statement,
+                statement_paragraphs=paragraphs,
+                time=ctx["time_display"],
+                consented_by=ctx["consented_by"],
+                method="Written, signed on this device" if device else method,
+                capacity_statement=ctx["capacity_statement"],
                 responses=responses,
+                signature=self._pdf_signature(device, ctx) if device else None,
             )
         else:
             pdf_b64, doc_error = _clean_document_pdf(body.get("document_pdf"))
@@ -423,73 +641,44 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             pdf_base64=pdf_b64,
             today=today,
         )
-
-        try:
-            client = CanvasFhir(client_id, client_secret)
-            client.create("Consent", payload)
-        except Exception as exc:
-            response = getattr(exc, "response", None)
-            status = getattr(response, "status_code", None)
-            # Canvas returns 201 with an empty body on a successful Consent
-            # create, which makes the client's JSON parse raise a ValueError even
-            # though the write succeeded. Treat 2xx (or an empty-body parse error
-            # with no HTTP response) as success.
-            if status is not None and status < 400:
-                log.info(
-                    "ConsentApi: consent created (HTTP %s, empty body) for "
-                    "patient %s" % (status, patient_id)
-                )
-            elif status is None and isinstance(exc, ValueError):
-                log.info(
-                    "ConsentApi: consent created (empty response body) for "
-                    "patient %s" % patient_id
-                )
-            else:
-                detail = getattr(response, "text", str(exc))
-                log.error(
-                    "ConsentApi: FHIR Consent create failed (HTTP %s) for "
-                    "patient %s: %s" % (status, patient_id, detail)
-                )
-                return [
-                    _error(
-                        "We couldn't save the consent. If this keeps happening, "
-                        "please contact your administrator."
-                    )
-                ]
+        fhir_error = self._create_fhir_consent(ctx, payload)
+        if fhir_error:
+            return fhir_error
 
         log.info(
             "ConsentApi: recorded consent %s for patient %s, collected by %s"
-            % (definition.code, patient_id, staff_name)
+            % (definition.code, patient_id, ctx["staff_name"])
         )
 
         # Persist the capture detail (who obtained it, method, who consented,
         # capacity) so it can be shown under "On File" — Canvas has no settable
         # obtainer field on a FHIR Consent. Must not fail the capture: the consent
         # is already recorded.
+        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
+        extra = {
+            "status": "accepted",
+            "statement_text": statement_text,
+            "statement_sha256": statement_sha256,
+            "signed_on_device": bool(device),
+            "signed_with": device["signed_with"] if device else "",
+            "reused_signature": bool(device and device["reused"]),
+            "printed_name": device["entered"] if device else "",
+            "name_kept": bool(device and device["name_kept"]),
+            "reconfirmed": bool(device and device["reconfirmed"]),
+        }
         _store_capture_detail(
             patient_id=patient_id,
             system=definition.system,
             code=definition.code,
             effective_date=today,
-            obtained_by_id=str(staff_id or ""),
-            obtained_by_name=staff_name,
+            obtained_by_id=str(ctx["staff_id"] or ""),
+            obtained_by_name=ctx["staff_name"],
             method=method,
-            consented_by=consented_by,
-            capacity_statement=capacity_statement,
+            consented_by=ctx["consented_by"],
+            capacity_statement=ctx["capacity_statement"],
             pages=doc_pages,
+            extra=extra,
         )
-
-        # Recolor the chart-header "Consents" button live: recording this consent may
-        # clear the patient's last required consent, so the red button should turn
-        # neutral gray without a page reload. Best-effort — the consent is already
-        # recorded, so a reload failure must not fail the capture.
-        effects: list[Effect] = []
-        try:
-            effects.append(ReloadPatientActionButtonsEffect(id=str(patient_id)).apply())
-        except Exception as exc:  # noqa: BLE001 - never fail an already-recorded consent
-            log.warning(
-                "ConsentApi: button reload skipped for patient %s: %s" % (patient_id, exc)
-            )
 
         return [
             JSONResponse(
@@ -498,21 +687,113 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                     "preview": {
                         "code": definition.code,
                         "title": title,
-                        "patient_name": patient_name,
-                        "patient_dob": patient_dob,
-                        "consented_by": consented_by,
+                        "patient_name": ctx["patient_name"],
+                        "patient_dob": ctx["patient_dob"],
+                        "consented_by": ctx["consented_by"],
                         "method": method,
-                        "collected_by": staff_name,
-                        "capacity_statement": capacity_statement,
+                        "collected_by": ctx["staff_name"],
+                        "capacity_statement": ctx["capacity_statement"],
                         "date": today,
-                        "time": time_display,
+                        "time": ctx["time_display"],
                         "pdf": bool(pdf_b64),
                         "pages": doc_pages,
+                        "signature": signature_label(
+                            bool(device), device["signed_with"] if device else ""
+                        ),
                     },
                 },
                 status_code=HTTPStatus.OK,
             )
-        ] + effects
+        ] + self._reload_effects(patient_id)
+
+    @api.post("/decline")
+    def decline(self) -> list[Response | Effect]:
+        """Record that the patient declined a consent: a FHIR Consent with status
+        "rejected" and a generated PDF stating the outcome. Canvas treats it as
+        asked and answered, so it clears the red button and the chart banner."""
+        body = self.request.json() or {}
+        ctx, error_response = self._capture_context(body)
+        if error_response:
+            return error_response
+        definition = ctx["definition"]
+        patient_id = ctx["patient_id"]
+        today = ctx["today"]
+        title = definition.display or definition.code
+        paragraphs = parse_statement(definition.verbiage)
+
+        pdf_b64 = generate_consent_pdf_base64(
+            title=title,
+            patient_name=ctx["patient_name"],
+            patient_dob=ctx["patient_dob"],
+            staff_name=ctx["staff_name"],
+            date=today,
+            statement_paragraphs=paragraphs,
+            time=ctx["time_display"],
+            consented_by=ctx["consented_by"],
+            method=ctx["method"],
+            capacity_statement=ctx["capacity_statement"],
+            outcome="Declined",
+        )
+        payload = build_consent_payload(
+            system=definition.system,
+            code=definition.code,
+            display=definition.display,
+            patient_id=patient_id,
+            pdf_base64=pdf_b64,
+            today=today,
+            status="rejected",
+        )
+        fhir_error = self._create_fhir_consent(ctx, payload)
+        if fhir_error:
+            return fhir_error
+
+        log.info(
+            "ConsentApi: recorded declined consent %s for patient %s, collected by %s"
+            % (definition.code, patient_id, ctx["staff_name"])
+        )
+        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
+        _store_capture_detail(
+            patient_id=patient_id,
+            system=definition.system,
+            code=definition.code,
+            effective_date=today,
+            obtained_by_id=str(ctx["staff_id"] or ""),
+            obtained_by_name=ctx["staff_name"],
+            method=ctx["method"],
+            consented_by=ctx["consented_by"],
+            capacity_statement=ctx["capacity_statement"],
+            pages=pdf_page_count(base64.b64decode(pdf_b64)),
+            # A decline replaces any same-day recording of this consent, so it
+            # clears the signature detail rather than leaving it on a declined row.
+            extra={
+                "status": "declined",
+                "statement_text": statement_text,
+                "statement_sha256": statement_sha256,
+                "signed_on_device": False,
+                "signed_with": "",
+                "reused_signature": False,
+                "printed_name": "",
+                "name_kept": False,
+                "reconfirmed": False,
+            },
+        )
+        return [
+            JSONResponse(
+                {
+                    "ok": True,
+                    "preview": {
+                        "code": definition.code,
+                        "title": title,
+                        "consented_by": ctx["consented_by"],
+                        "method": ctx["method"],
+                        "collected_by": ctx["staff_name"],
+                        "date": today,
+                        "declined": True,
+                    },
+                },
+                status_code=HTTPStatus.OK,
+            )
+        ] + self._reload_effects(patient_id)
 
     @api.get("/document")
     def document(self) -> list[Response | Effect]:
@@ -534,7 +815,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             # another patient's consent by id).
             consent_id = (
                 PatientConsent.objects.filter(
-                    id=record_id, patient__id=patient_id, state__in=ACCEPTED_STATES
+                    id=record_id, patient__id=patient_id, state__in=RECORDED_STATES
                 )
                 .values_list("id", flat=True)
                 .first()
@@ -542,12 +823,12 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         else:
             # No specific record: fall back to the most recent for this coding.
             query = PatientConsent.objects.filter(
-                patient__id=patient_id, category__code=code, state__in=ACCEPTED_STATES
+                patient__id=patient_id, category__code=code, state__in=RECORDED_STATES
             )
             if system:
                 query = query.filter(category__system=system)
             consent_id = (
-                query.order_by("-effective_date").values_list("id", flat=True).first()
+                query.order_by("-effective_date", "-created").values_list("id", flat=True).first()
             )
         if not consent_id:
             return [_error("No recorded consent was found for this patient.")]
@@ -624,7 +905,14 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
 # --------------------------------------------------------------------------- #
 
 # Boolean workflow flags an admin may toggle through the API.
-_BOOL_FIELDS = ("method_enabled", "obtained_by_enabled", "capacity_enabled", "required", "active")
+_BOOL_FIELDS = (
+    "method_enabled",
+    "obtained_by_enabled",
+    "capacity_enabled",
+    "required",
+    "active",
+    "allow_device_signature",
+)
 
 
 # Human labels for the coding's expiration rule enum (shown read-only).
@@ -677,6 +965,7 @@ def serialize_definition(defn):
         "questions": defn.questions or [],
         "satisfied_by": defn.satisfied_by or [],
         "required": bool(defn.required),
+        "allow_device_signature": bool(getattr(defn, "allow_device_signature", False)),
         "active": bool(defn.active),
         "sort_order": defn.sort_order,
     }
@@ -717,6 +1006,7 @@ def render_admin_page(_default_system=""):
             "method_options_json": json.dumps(list(METHOD_OPTIONS)),
             "default_capacity_patient": DEFAULT_CAPACITY_PATIENT,
             "default_capacity_representative": DEFAULT_CAPACITY_REPRESENTATIVE,
+            "practice_json": json.dumps(practice_settings()),
         },
     )
 
@@ -776,6 +1066,18 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
             return [HTMLResponse(_NOT_AUTHORIZED_HTML, status_code=HTTPStatus.FORBIDDEN)]
         html = render_admin_page(self.secrets.get("CONSENT_SYSTEM", ""))
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
+
+    @api.get("/icon.svg")
+    def settings_icon(self) -> list[Response | Effect]:
+        """The Consent Settings app drawer icon."""
+        return [
+            Response(
+                render_to_string("assets/settings-icon.svg").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="image/svg+xml",
+                headers={"Cache-Control": "max-age=86400"},
+            )
+        ]
 
     @api.get("/banners")
     def banners_page(self) -> list[Response | Effect]:
@@ -947,6 +1249,28 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
                 status_code=HTTPStatus.OK,
             )
         ]
+
+    @api.get("/practice-settings")
+    def get_practice_settings(self) -> list[Response | Effect]:
+        """The practice's "Sign on this device" settings (Practice settings tab)."""
+        if not self._is_admin():
+            return [_error("You don't have access to Consent Settings.")]
+        return [
+            JSONResponse({"ok": True, "settings": practice_settings()}, status_code=HTTPStatus.OK)
+        ]
+
+    @api.post("/practice-settings")
+    def update_practice_settings(self) -> list[Response | Effect]:
+        """Save the Practice settings tab. At least one accepted signature stays on."""
+        if not self._is_admin():
+            return [_error("You don't have access to Consent Settings.")]
+        values, error = clean_practice_settings(self.request.json() or {})
+        if error:
+            return [_error(error)]
+        saved = save_practice_settings(values)
+        staff_id = self.request.headers.get("canvas-logged-in-user-id", "")
+        log.info("ConsentAdminApi: practice settings saved by staff %s: %s" % (staff_id or "unknown", saved))
+        return [JSONResponse({"ok": True, "settings": saved}, status_code=HTTPStatus.OK)]
 
     @api.post("/consents/delete")
     def delete_consent(self) -> list[Response | Effect]:
