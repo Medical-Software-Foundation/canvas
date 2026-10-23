@@ -105,6 +105,20 @@ def test_list_event_deltas_follows_pagination(fake_http):
     assert "pageToken=p2" in fake_http.requests[1][1]
 
 
+def test_list_event_deltas_carries_the_calendar_time_zone_onto_each_event(fake_http):
+    # Google names the calendar's zone once per response; all-day events carry none of their own.
+    fake_http.responses = [
+        FakeResponse(200, {"timeZone": "America/Chicago", "items": [{"id": "a"}], "nextPageToken": "p2"}),
+        FakeResponse(200, {"items": [{"id": "b"}], "nextSyncToken": "sync-xyz"}),
+    ]
+    client = GoogleCalendarClient("tok")
+    events, _token = client.list_event_deltas("dr@example.com", sync_token="prev")
+
+    assert events[0][client_module.CALENDAR_TIME_ZONE_KEY] == "America/Chicago"
+    # A page without a zone leaves the event untouched rather than stamping a blank.
+    assert client_module.CALENDAR_TIME_ZONE_KEY not in events[1]
+
+
 def test_list_event_deltas_raises_410_for_invalid_token(fake_http):
     fake_http.responses = [FakeResponse(410, text="sync token invalid")]
     client = GoogleCalendarClient("tok")

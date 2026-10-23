@@ -30,6 +30,7 @@ from gcal_sync.models import (
     PendingHoldCreate,
     ProviderSyncLock,
     ReimportQueue,
+    RemovedDayHold,
     StaffCalendarMapping,
 )
 from gcal_sync.sync_service import SyncService
@@ -386,6 +387,11 @@ def reset_inbound_for_provider(mapping: StaffCalendarMapping) -> list[Effect]:
     PendingHoldCreate.objects.filter(
         google_calendar_id=mapping.google_calendar_id
     ).delete()
+    # Every hold is being cancelled on purpose, so no day keeps a "removed by the sync" pass to be
+    # held again by a delta; only the rebuild that follows recreates them.
+    RemovedDayHold.objects.filter(
+        google_calendar_id=mapping.google_calendar_id
+    ).delete()
     return effects
 
 
@@ -418,6 +424,11 @@ def purge_holds_chunk(
             google_calendar_id=mapping.google_calendar_id
         ).delete()
         PendingHoldCreate.objects.filter(
+            google_calendar_id=mapping.google_calendar_id
+        ).delete()
+        # A purged provider's days must stay cancelled until a deliberate re-import, so drop the
+        # records that would let a delta hold a sync-removed day again.
+        RemovedDayHold.objects.filter(
             google_calendar_id=mapping.google_calendar_id
         ).delete()
     last_id = str(ids[-1]) if ids else after_id

@@ -19,6 +19,8 @@ def _inbound(mocker):
     inbound = InboundSync(SECRETS, client_factory=lambda cal: object())
     mocker.patch.object(inbound._sync, "push")
     mocker.patch.object(inbound._sync, "remove")
+    # Removed-day records for per-day holds; no DB in these tests.
+    mocker.patch("gcal_sync.inbound.RemovedDayHold")
     return inbound
 
 
@@ -203,7 +205,9 @@ def test_unmarked_cancelled_known_event_removes_hold(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_hold_delete_effect", return_value="DELETE_EFFECT")
+    mocker.patch.object(
+        inbound, "_hold_delete_effects", return_value=["DELETE_EFFECT"]
+    )
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "cancelled"}, stats)
     assert effects == ["DELETE_EFFECT"]

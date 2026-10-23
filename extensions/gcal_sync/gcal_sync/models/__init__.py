@@ -136,6 +136,11 @@ class PendingHoldCreate(CustomModel):
 
     ``created_at`` is set explicitly (not ``auto_now_add``) so a past-grace re-create refreshes the
     window rather than being pinned to the first attempt.
+
+    A multi-day event's holds are marked per day, with ``google_event_id`` set to the per-day value
+    ``{event_id}:{YYYY-MM-DD}``, so only a day whose own create is still applying is held back and
+    days added by a later edit are created straight away. The bare event id marks the single-hold
+    path's create.
     """
 
     google_calendar_id = TextField()
@@ -147,6 +152,32 @@ class PendingHoldCreate(CustomModel):
             UniqueConstraint(
                 fields=["google_event_id", "google_calendar_id"],
                 name="uq_pending_hold_cal_event",
+            ),
+        ]
+
+
+class RemovedDayHold(CustomModel):
+    """A per-day hold the sync cancelled itself because its Google event stopped covering that day.
+
+    Each covered day gets at most one hold for its whole life, so a hold cancelled out-of-band (a
+    purge, or staff cancelling it in Canvas) is never re-created by a delta. That rule also caught
+    the sync's own removals: PTO shortened and later extended back over the same days left those
+    days bookable. A row here marks the day's cancelled hold as the sync's own doing, so the day may
+    be held again if the event covers it again; the row is deleted when that happens.
+
+    ``google_event_id`` holds the per-day value ``{event_id}:{YYYY-MM-DD}``, the same value stamped on
+    the hold, and rows are per calendar like ``PendingHoldCreate``.
+    """
+
+    google_calendar_id = TextField()
+    google_event_id = TextField()
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["google_event_id", "google_calendar_id"],
+                name="uq_removed_day_cal_event",
             ),
         ]
 
