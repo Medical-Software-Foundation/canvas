@@ -1,7 +1,7 @@
 """Nightly cron job to sync adjudication data from Candid for pending claims.
 
 Queries Canvas for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance,
-and PatientBalance queues that have Candid encounter metadata, then runs
+PatientBalance and RejectedNeedsReview queues that have Candid encounter metadata, then runs
 ``sync_claim_adjudications`` on each to pull ERA data, patient payments, and
 post them back to Canvas.
 
@@ -10,7 +10,9 @@ The cron fires every hour. A sync cycle starts at the hour set in
 time zone (``INSTALLATION_TIME_ZONE``) and works through the claims one batch
 per hour, so no single run returns more effects than the plugin runner can send
 back (its responses are capped at 64 MB). A cycle already under way keeps going
-until it finishes, whatever the hour.
+until it finishes, whatever the hour, and at most one cycle starts per local
+day (so the fall-back hour, or an hour changed after today's cycle, never starts
+a second full sync the same day).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -44,6 +46,9 @@ CURSOR_CACHE_KEY = "candid_nightly_sync_cursor"
 CURSOR_TTL_SECONDS = 20 * 60 * 60
 LOCK_CACHE_KEY = "candid_nightly_sync_lock"
 LOCK_TTL_SECONDS = 90 * 60
+# The local date the last cycle started on, so one day never starts two cycles.
+LAST_START_CACHE_KEY = "candid_nightly_sync_last_start_date"
+LAST_START_TTL_SECONDS = 26 * 60 * 60
 
 
 def start_hour(secrets: dict) -> int:
@@ -57,7 +62,8 @@ def start_hour(secrets: dict) -> int:
     if raw is None or str(raw).strip() == "":
         return DEFAULT_START_HOUR
     text = str(raw).strip()
-    if text.isdigit() and 0 <= int(text) <= 23:
+    # ASCII digits only: str.isdigit() also accepts characters like "²" that int() rejects.
+    if 1 <= len(text) <= 2 and all("0" <= ch <= "9" for ch in text) and int(text) <= 23:
         return int(text)
     log.warning(
         f"Candid nightly sync: {START_HOUR_VARIABLE}={text!r} is not an hour from 0 to 23; "
@@ -78,8 +84,14 @@ class NightlyCandidSync(CronTask):
         cache = get_cache()
 
         cursor = cache.get(CURSOR_CACHE_KEY)
-        if not cursor and started.astimezone(tz).hour != start_hour(self.secrets):
-            return []
+        if not cursor:
+            local = started.astimezone(tz)
+            if local.hour != start_hour(self.secrets):
+                return []
+            today = local.date().isoformat()
+            if cache.get(LAST_START_CACHE_KEY) == today:
+                return []
+            cache.set(LAST_START_CACHE_KEY, today, timeout_seconds=LAST_START_TTL_SECONDS)
 
         if cache.get(LOCK_CACHE_KEY):
             log.info("Candid nightly sync: previous batch still running, skipping")
