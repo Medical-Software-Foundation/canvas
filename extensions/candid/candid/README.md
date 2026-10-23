@@ -60,7 +60,7 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Triggers:**
 - **Event-driven:** When a claim enters the **Patient Balance** queue, the plugin asynchronously POSTs to its own `/sync-patient-payments` SimpleAPI route to pull just the patient payments for that claim (full ERA/adjudication sync is left to the nightly cron)
 - **Manual:** The "Sync Now" button on the claim timeline application POSTs to `/claim-detail`, which runs a full adjudication sync inline
-- **Nightly cron (starts 2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position is kept in the plugin cache (`candid_nightly_sync_cursor`), and a cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
+- **Nightly cron (starts 2 AM by default; set `CANDID_SYNC_START_HOUR` to change it):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position is kept in the plugin cache (`candid_nightly_sync_cursor`), and a cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
 
 A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candid_sync_history` metadata — see [Sync history backfill](#sync-history-backfill).
 
@@ -158,7 +158,7 @@ candid/
     dashboard.html / .css / .js        # full-page Candid claims dashboard
     claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
-    nightly_sync.py           # starts 2 AM daily: syncs pending claims in hourly batches
+    nightly_sync.py           # starts daily at CANDID_SYNC_START_HOUR (default 2 AM): syncs pending claims in hourly batches
   adjudication_sync.py        # Core sync logic: pull ERA + patient payments, post to Canvas
   effect_helpers.py           # Shared: banners, metadata keys, success/failure handlers
 ```
@@ -172,6 +172,7 @@ Declared in `CANVAS_MANIFEST.json` under `"variables"`. Sensitive values are enc
 | `CANDID_CLIENT_ID` | Yes | Candid OAuth2 client ID |
 | `CANDID_CLIENT_SECRET` | Yes | Candid OAuth2 client secret — also used as the shared API key on the plugin's own `/submit`, `/sync`, `/sync-patient-payments`, and `/report-payment` SimpleAPI routes |
 | `CANDID_BASE_URL` | No | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
+| `CANDID_SYNC_START_HOUR` | No | The hour the nightly sync starts, as a whole number from `0` to `23`, in the instance's time zone (`INSTALLATION_TIME_ZONE`), not the user's. Blank means `2` (2 AM). A value that isn't a whole number from 0 to 23 also uses `2` and logs a warning. A cycle runs one batch per hour (each batch stops at 45 minutes or 4,000 claims, whichever comes first) until every pending claim is synced, so a cycle takes as many hours as it needs batches: on an instance with about 4,100 pending claims it took three batches, finishing about 2.5 hours after the start. Check how many batches your instance's cycle needs in its logs ("continuing next hour" / "cycle complete"), and pick an hour that leaves that much room before anything time-sensitive on the instance, such as scheduled patient texts. A cycle already running finishes even if the hour is changed, and at most one cycle starts per day. In a time zone with daylight saving time, an hour that doesn't exist on the spring-forward day (e.g. 2 AM in US time zones) starts no cycle that day. |
 
 The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal machine-to-machine routes (`/submit`, `/sync`, `/sync-patient-payments`, `/report-payment`) use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`). The user-facing routes — `/claim-detail`, `/dashboard`, and the `/app/*` asset routes — require a logged-in **staff** session (`StaffSessionAuthMixin`), as does the `CandidTimelineWebSocket`.
 
