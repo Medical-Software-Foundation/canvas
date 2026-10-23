@@ -5,10 +5,12 @@ and PatientBalance queues that have Candid encounter metadata, then runs
 ``sync_claim_adjudications`` on each to pull ERA data, patient payments, and
 post them back to Canvas.
 
-The cron fires every hour. A sync cycle starts at 2 AM in the instance's
-configured time zone (``INSTALLATION_TIME_ZONE``) and works through the claims
-one batch per hour, so no single run returns more effects than the plugin
-runner can send back (its responses are capped at 64 MB).
+The cron fires every hour. A sync cycle starts at the hour set in
+``CANDID_SYNC_START_HOUR`` (0-23, default 2 AM) in the instance's configured
+time zone (``INSTALLATION_TIME_ZONE``) and works through the claims one batch
+per hour, so no single run returns more effects than the plugin runner can send
+back (its responses are capped at 64 MB). A cycle already under way keeps going
+until it finishes, whatever the hour.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -30,7 +32,8 @@ SYNC_QUEUES = (
     ClaimQueues.REJECTED_NEEDS_REVIEW,
 )
 
-TARGET_HOUR = 2  # 2 AM local time
+DEFAULT_START_HOUR = 2  # 2 AM local time
+START_HOUR_VARIABLE = "CANDID_SYNC_START_HOUR"
 
 # A batch must end before the next hourly tick, and its effects must stay far
 # below the 64 MB cap (one unbatched run over ~24k claims was ~78 MB).
@@ -43,8 +46,28 @@ LOCK_CACHE_KEY = "candid_nightly_sync_lock"
 LOCK_TTL_SECONDS = 90 * 60
 
 
+def start_hour(secrets: dict) -> int:
+    """The local hour a sync cycle starts: ``CANDID_SYNC_START_HOUR``, else 2.
+
+    A blank value means the default. Anything that isn't a whole number from 0
+    to 23 also falls back to the default, with a warning, so a typo never stops
+    the nightly sync.
+    """
+    raw = (secrets or {}).get(START_HOUR_VARIABLE)
+    if raw is None or str(raw).strip() == "":
+        return DEFAULT_START_HOUR
+    text = str(raw).strip()
+    if text.isdigit() and 0 <= int(text) <= 23:
+        return int(text)
+    log.warning(
+        f"Candid nightly sync: {START_HOUR_VARIABLE}={text!r} is not an hour from 0 to 23; "
+        f"starting at {DEFAULT_START_HOUR}"
+    )
+    return DEFAULT_START_HOUR
+
+
 class NightlyCandidSync(CronTask):
-    """Sync adjudication data starting at 2 AM local time, one batch per hour."""
+    """Sync adjudication data from the configured start hour, one batch per hour."""
 
     SCHEDULE = "0 * * * *"
 
@@ -55,7 +78,7 @@ class NightlyCandidSync(CronTask):
         cache = get_cache()
 
         cursor = cache.get(CURSOR_CACHE_KEY)
-        if not cursor and started.astimezone(tz).hour != TARGET_HOUR:
+        if not cursor and started.astimezone(tz).hour != start_hour(self.secrets):
             return []
 
         if cache.get(LOCK_CACHE_KEY):
