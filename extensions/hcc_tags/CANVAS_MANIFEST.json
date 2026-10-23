@@ -1,0 +1,47 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "hcc_tags",
+    "description": "Tags HCC diagnoses in condition search results, the patient summary conditions list, and claims",
+    "components": {
+        "protocols": [
+            {
+                "class": "hcc_tags.protocols.condition_annotations:PatientChartConditionAnnotation",
+                "description": "Adds an HCC tag to diagnoses in the patient summary conditions list",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "hcc_tags.protocols.condition_annotations:ClaimConditionAnnotation",
+                "description": "Adds an HCC tag to diagnoses on claims",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "hcc_tags.protocols.condition_search:AnnotateSearchResults",
+                "description": "Adds an HCC tag to condition search results in the Diagnose, Past Medical History, Add Condition, and Assess commands",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
