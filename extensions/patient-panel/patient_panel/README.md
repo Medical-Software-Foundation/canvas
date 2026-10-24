@@ -111,9 +111,6 @@ Available built-in column keys: `patient`, `care_team`, `last_visit`, `next_visi
 | `HIGHLIGHT_THRESHOLD_DAYS_YELLOW` | No | Days threshold for yellow highlight |
 | `HIGHLIGHT_THRESHOLD_DAYS_RED` | No | Days threshold for red highlight |
 | `INSURANCES` | No | Insurance logo mappings |
-| `FHIR_CLIENT_ID` | No | FHIR client ID for patient photos |
-| `FHIR_CLIENT_SECRET` | No | FHIR client secret for patient photos |
-| `CANVAS_INSTANCE_URL` | No | Canvas instance URL for FHIR API |
 | `INSTANCE_TIMEZONE` | No | IANA TZ name (e.g. `America/New_York`) used when the logged-in staff has no `last_known_timezone`. Defaults to `UTC`. |
 | `FLAG_COLOR_LABELS` | No | JSON dict overriding the dropdown labels for the three flag colors, e.g. `{"red": "Urgent", "yellow": "Follow-up", "green": "On track"}`. Missing keys fall back to capitalized color names. |
 | `METADATA_FIELDS` | No | JSON list of extra patient-profile fields driven by the `PatientMetadataFields` handler. Each entry is `{"key", "label", "type": "TEXT" \| "SELECT" \| "DATE", "required", "editable", "options"?}`. Same `key` values are referenced by `type: "metadata"` columns in `PANEL_CONFIG` and gate the inline `POST /<patient_id>/metadata/<key>` edit endpoint (only `editable: true` keys can be written). |
