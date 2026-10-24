@@ -1,0 +1,308 @@
+/* Order Favorites admin app. Copied from the approved mockup,
+   whose admin layout came from the Dot Phrases admin mockups (Recent Patients palette, DM Sans). Comments mark sources. */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:#EFF5F7}
+/* Shared form and picker pieces from the panel section of the mockup */
+.pp-search{position:relative;margin-top:10px}
+.pp-search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#8ea8b5}
+.pp-search input{width:100%;padding:9px 14px 9px 34px;font-family:inherit;font-size:14px;color:#2c4155;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;outline:none}
+.pp-search input::placeholder{color:#8ea8b5}
+.pp-search input:focus{background:#fff;border-color:#5ab5c4;box-shadow:0 0 0 3px rgba(150,211,221,.2)}
+.pp-seg{display:flex;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:3px;margin-top:10px}
+.pp-seg button{flex:auto;white-space:nowrap;border:0;background:none;padding:5px 6px;font-family:inherit;font-size:13px;color:#5e7a8a;border-radius:7px;cursor:pointer}
+/* Selected segment: light teal, the option chosen for Dot Phrases */
+.pp-seg button.on{background:rgba(150,211,221,.28);color:#2c7f8c;font-weight:700;box-shadow:none}
+.pp-seg.sm{margin-top:8px;display:inline-flex}
+.pp-seg.sm button{flex:none;padding:3px 10px;font-size:12px}
+/* Not sourced: count bubble on a tab, built from the .tag shape below. */
+.pp-seg .cnt{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;border-radius:999px;background:#2c7f8c;color:#fff;font-size:11px;font-weight:600;line-height:18px}
+.pc{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1.5px solid #dce8ec;border-radius:12px;padding:11px 12px 11px 12px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(13,32,60,.07);transition:border-color 150ms ease,box-shadow 150ms ease}
+.pc:hover{border-color:#96D3DD;box-shadow:0 4px 16px rgba(13,32,60,.10)}
+.pc.sel{border-color:#5ab5c4;box-shadow:0 0 0 3px rgba(150,211,221,.25),0 4px 16px rgba(13,32,60,.10);background:linear-gradient(#f2fafb,#fff 64px)}
+.tag{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.tag.practice{background:#F4F8FA;color:#5e7a8a;font-weight:500;border:1px solid #dce8ec}
+.tag.mine{background:#e0f3f6;color:#2c7f8c}
+.tag.hid{background:#fdf0dc;color:#b26a00}
+.pp-sec{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:6px 0 8px 4px}
+.pp-sec ~ .pp-sec{margin-top:20px}
+.empty{padding:36px 16px;text-align:center;font-style:italic;color:#8ea8b5}
+
+/* Buttons */
+.pp-btn{border:1.5px solid #dce8ec;background:#fff;color:#0d203c;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.pp-btn:hover{border-color:#96D3DD}
+.pp-primary{background:#0d203c;border-color:#0d203c;color:#fff}
+.pp-primary:hover{background:#1b3354;border-color:#1b3354}
+.pp-btn[disabled]{opacity:.45;cursor:default}
+.pp-sm{padding:4px 10px;font-size:12px;border-radius:7px}
+.fd{display:grid;grid-template-columns:72px minmax(0,1fr);gap:3px 10px;margin:6px 0 0;font-size:13px;line-height:1.45}
+.fd dt{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#2c7f8c;padding-top:2px}
+.fd dd{margin:0;color:#2c4155;overflow-wrap:anywhere}
+.fd-list{list-style:none;margin:0;padding:0}
+.fd-list li{position:relative;padding-left:12px}
+.fd-list li::before{content:"";position:absolute;left:1px;top:.62em;width:5px;height:5px;border-radius:50%;background:#96D3DD}
+.fd-list li + li{margin-top:2px}
+.fd-list .code{font-weight:600;color:#0d203c;margin-right:2px}
+/* Search pickers (not sourced: built from the Dot Phrases .pp-search field and .ax-pop menu) */
+.cb{position:relative}
+.cb-sel{border:1.5px solid #dce8ec;border-radius:9px;background:#fff;margin-bottom:8px;overflow:hidden}
+.cb-sel:empty{display:none}
+.cb-row{display:flex;align-items:flex-start;gap:8px;padding:7px 8px 7px 12px;border-top:1px solid #eef4f6;font-size:13px;color:#2c4155}
+.cb-row:first-child{border-top:0}
+.cb-row .t{flex:1;min-width:0;line-height:1.4}
+.cb-row .code{font-weight:600;color:#0d203c;margin-right:4px}
+.cb-row .rm{border:0;background:none;color:#8ea8b5;cursor:pointer;padding:0 4px;font-size:14px;line-height:1.4}
+.cb-row .rm:hover{color:#c62828}
+.cb-row.bad{background:#fdf6e9}
+.cb-row.bad .t{color:#9a5b00}
+.cb-box{position:relative}
+.cb-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#8ea8b5;pointer-events:none}
+.ed .cb-box input{padding-left:34px}
+.cb-pop{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:30;max-height:240px;overflow:auto;background:#fff;border:1.5px solid #dce8ec;border-radius:12px;box-shadow:0 10px 28px rgba(13,32,60,.14);padding:5px}
+.cb-opt{display:flex;align-items:flex-start;gap:8px;width:100%;border:0;background:none;text-align:left;border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;color:#2c4155;cursor:pointer}
+.cb-opt:hover{background:#F4F8FA}
+.cb-opt .cb-ck{flex-shrink:0;width:16px;height:16px;border:1.5px solid #c3d3da;border-radius:4px;display:grid;place-items:center;margin-top:2px;font-size:11px;line-height:1;color:#fff}
+.cb-opt.on .cb-ck{background:#2c7f8c;border-color:#2c7f8c}
+.cb-opt .code{font-weight:600;color:#0d203c;margin-right:4px}
+.cb-empty{font-size:12.5px;color:#8ea8b5;padding:8px 10px}
+.cb-foot{font-size:11.5px;color:#8ea8b5;padding:6px 10px 3px;border-top:1px solid #eef4f6;margin-top:3px}
+.ml-note{display:flex;gap:6px;align-items:flex-start;font-size:12px;color:#5e7a8a;background:#fff;border:1.5px dashed #dce8ec;border-radius:9px;padding:7px 10px;margin:0 0 8px}
+.ml-note svg{width:13px;height:13px;flex-shrink:0;margin-top:2px;color:#8ea8b5}
+
+/* Editor (Dot Phrases .ed) */
+.ed{border:1.5px solid #dce8ec;border-radius:12px;padding:18px 16px 16px;margin-bottom:12px;background:#fff;box-shadow:0 1px 4px rgba(13,32,60,.07)}
+/* Spacing: 18px between fields, 6px from a label to its field (not sourced; tuned for the narrow panel) */
+.ed label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:18px 0 6px;line-height:1.3}
+.ed label:first-child{margin-top:0}
+.ed input,.ed textarea,.ed select{width:100%;padding:9px 12px;font-family:inherit;font-size:13px;line-height:1.4;color:#2c4155;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px}
+.ed input:focus,.ed textarea:focus,.ed select:focus{outline:none;background:#fff;border-color:#5ab5c4;box-shadow:0 0 0 3px rgba(150,211,221,.2)}
+/* Dropdowns: own caret, inset 12px from the right edge */
+.ed select,.pp-foot select{appearance:none;-webkit-appearance:none;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235e7a8a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:14px 14px}
+.ed textarea{resize:vertical;max-width:100%;min-height:64px;line-height:1.5}
+.ed .hint{font-size:12px;color:#8ea8b5;margin-top:6px;line-height:1.45}
+.ed .warn{font-size:12px;color:#b26a00;margin-top:8px}
+.ed .row{display:flex;gap:8px;align-items:center;margin-top:20px}
+.ed .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;margin-top:18px}
+.ed .grid label{margin-top:0}
+.ed .toks{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ed .toks .tok{margin:0}
+.ed .note{font-size:12.5px;color:#5e7a8a;background:#F4F8FA;border-radius:9px;padding:8px 10px;margin-bottom:14px}
+.ed .ck{display:flex!important;align-items:center;gap:8px;margin:16px 0 0!important;font-size:13px!important;font-weight:400!important;text-transform:none!important;letter-spacing:0!important;color:#2c4155!important}
+.ed .ck input{width:16px!important;height:16px;margin:0;padding:0;accent-color:#2c7f8c}
+.tok{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#0d203c;background:#F4F8FA;border:1px solid #dce8ec;border-radius:999px;padding:0 4px 0 8px;line-height:22px;margin:0 4px 4px 0}
+.tok button{border:0;background:none;color:#8ea8b5;cursor:pointer;padding:0 2px;font-size:13px}
+.seg-wrap .pp-seg{margin-top:0}
+.seg-wrap .pp-seg button[disabled]{color:#c3d3da;cursor:not-allowed}
+
+.linkish{color:#2c7f8c;font-weight:600;cursor:pointer;font-size:12px}
+/* Result notices inside the panel. Not sourced: colors reuse the .tag and .ed .warn palette. */
+.rs{border-radius:9px;padding:9px 11px;font-size:13px;margin-bottom:10px;border:1.5px solid #dce8ec;background:#fff}
+.rs.ok{border-color:#bfe3c9;background:#f1faf4;color:#2e7d4f}
+.rs.warn{border-color:#f1d9ad;background:#fdf6e9;color:#9a5b00}
+.rs.bad{border-color:#f3c7c7;background:#fdf1f1;color:#c62828}
+.rs a{color:#2c7f8c;font-weight:600;cursor:pointer}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,12px);background:#0d203c;color:#fff;border-radius:9px;padding:9px 16px;font-size:13px;opacity:0;transition:all .2s;pointer-events:none;z-index:99;font-family:"DM Sans",-apple-system,BlinkMacSystemFont,sans-serif}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+/* Admin app */
+.admin-app{flex:1;overflow:auto;background:#EFF5F7;font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;color:#2c4155}
+.admin-app[hidden],.chart[hidden]{display:none}
+/* ---------- v12: admin app redesign (Recent Patients palette, DM Sans only) ---------- */
+.admin-app{--ink:#0d203c;--body:#2c4155;--muted:#5e7a8a;--line:#dce8ec;--rule:#eef4f6;--wash:#EFF5F7;--field:#F4F8FA;--accent:#2c7f8c;--accent2:#5ab5c4;--soft:rgba(150,211,221,.28);--bad:#c62828;--ok:#2e7d4f;color:var(--body)}
+.admin-app :focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.ax-head{background:#fff;border-bottom:1.5px solid var(--line);padding:22px 32px 0}
+.ax-title{font-size:22px;font-weight:600;color:var(--ink);line-height:1.2}
+.ax-sub{font-size:13px;color:var(--muted);margin:4px 0 0;max-width:72ch;line-height:1.5}
+.ax-tabs{display:flex;gap:24px;margin-top:18px}
+.ax-tabs button{border:0;background:none;padding:8px 0 11px;font:inherit;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.ax-tabs button.on{color:var(--ink);font-weight:600;border-bottom-color:var(--accent2)}
+.ax-main{padding:24px 32px 48px;max-width:1180px}
+.ax-btn{border:1.5px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:7px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.ax-btn:hover{border-color:#96D3DD}
+.ax-btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+.ax-btn.primary:hover{background:#1b3354}
+.ax-btn.quiet{border-color:transparent;background:none;color:var(--accent);padding:7px 8px}
+.ax-btn[disabled]{opacity:.45;cursor:default}
+.ax-in,.ax-ta{width:100%;font:inherit;font-size:14px;color:var(--body);background:var(--field);border:1.5px solid var(--line);border-radius:9px;padding:8px 11px;outline:none}
+.ax-in:focus,.ax-ta:focus{background:#fff;border-color:var(--accent2);box-shadow:0 0 0 3px rgba(150,211,221,.2)}
+.ax-ta{resize:vertical;line-height:1.55}
+.ax-lbl{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:18px 0 6px}
+.ax-help{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+.ax-err{font-size:13px;color:var(--bad);margin-top:10px;min-height:1px}
+.ax-warn{font-size:12.5px;color:#9a5b00;margin-top:6px}
+.tok{display:inline-block;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:999px;padding:0 8px;line-height:20px;white-space:nowrap}
+button.tok{cursor:pointer;font-family:inherit}
+button.tok:hover{border-color:var(--accent2);background:#fff}
+.ax-seg{display:inline-flex;background:var(--field);border:1.5px solid var(--line);border-radius:9px;padding:3px}
+.ax-seg button{border:0;background:none;padding:5px 12px;font:inherit;font-size:13px;color:var(--muted);border-radius:7px;cursor:pointer}
+.ax-seg button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 4px rgba(13,32,60,.07)}
+
+/* Practice phrases: library list + phrase detail on one surface */
+.ax-split{display:grid;grid-template-columns:380px minmax(0,1fr);background:#fff;border:1.5px solid var(--line);border-radius:14px;box-shadow:0 1px 4px rgba(13,32,60,.07);min-height:560px}
+.ax-list{border-right:1.5px solid var(--line);display:flex;flex-direction:column;min-width:0;border-radius:14px 0 0 14px;overflow:hidden}
+.ax-list-top{padding:14px;display:flex;flex-direction:column;gap:10px;border-bottom:1.5px solid var(--rule)}
+.ax-list-top .row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.ax-rows{overflow-y:auto;overflow-x:hidden;flex:1}
+.ax-row{display:block;width:100%;text-align:left;border:0;border-left:3px solid transparent;border-bottom:1px solid var(--rule);background:#fff;padding:10px 14px 10px 11px;font:inherit;cursor:pointer}
+.ax-row:hover{background:var(--field)}
+.ax-row.on{background:#f0f8fa;border-left-color:var(--accent2)}
+.ax-row .c{display:flex;align-items:baseline;gap:8px}
+.ax-row .code{font-weight:600;color:var(--ink);font-size:14px}
+.ax-row .n{margin-left:auto;font-size:12px;color:var(--muted)}
+.ax-row .t{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.ax-row .pc-uses{margin-top:5px}
+.ax-row{min-width:0;overflow:hidden}
+.ax-list-empty{padding:28px 16px;color:var(--muted);font-size:13px;text-align:center}
+.ax-detail{padding:22px 26px 26px;min-width:0}
+.ax-blank{height:100%;display:grid;place-items:center;text-align:center;color:var(--muted);font-size:14px}
+.ax-blank b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+.ax-dhead{display:flex;align-items:flex-start;gap:12px;padding-bottom:14px;border-bottom:1.5px solid var(--rule)}
+.ax-dcode{font-size:22px;font-weight:600;color:var(--ink);line-height:1.2;word-break:break-all}
+.ax-dmeta{font-size:13px;color:var(--muted);margin-top:3px}
+.ax-dacts{margin-left:auto;display:flex;gap:8px;flex-shrink:0}
+.ax-codein{display:flex;align-items:center;max-width:280px}
+.ax-codein span{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px 0 2px}
+.ax-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.ax-result{min-height:150px;background:#fbfdfd;border:1.5px dashed var(--line);border-radius:9px;padding:9px 12px;font-size:14px;line-height:1.55;color:var(--body);white-space:pre-line;overflow-wrap:break-word}
+.ax-result .val{background:rgba(150,211,221,.35);color:var(--ink);font-weight:600;border-radius:3px;padding:0 2px}
+.ax-result .gap{color:#9a5b00;background:#fdf3e1;border-radius:3px;padding:0 2px}
+.ax-ins{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px}
+.ax-ins .lead{font-size:12.5px;color:var(--muted);margin-right:2px}
+.ax-cmds{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ax-cmds[hidden]{display:none}
+.ax-chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:3px 11px;font:inherit;font-size:12.5px;color:var(--body);cursor:pointer}
+.ax-chip.on{background:var(--soft);border-color:var(--accent2);color:var(--ink);font-weight:600}
+.ax-rx{display:flex;flex-direction:column;gap:6px}
+.ax-check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--body);cursor:pointer}
+.ax-check input{width:16px;height:16px;accent-color:var(--accent)}
+.ax-count{font-size:12.5px;color:var(--muted)}
+.ax-count.bad{color:var(--bad);font-weight:600}
+
+/* Import: a real three-step sequence */
+.ax-imp{background:#fff;border:1.5px solid var(--line);border-radius:14px;box-shadow:0 1px 4px rgba(13,32,60,.07);padding:22px 26px;max-width:860px}
+.ax-steps{display:flex;gap:0;list-style:none;margin:0 0 20px;padding:0;counter-reset:st}
+.ax-steps li{counter-increment:st;flex:1;display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);padding-bottom:12px;border-bottom:2px solid var(--rule)}
+.ax-steps li::before{content:counter(st);width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:600;background:#fff}
+.ax-steps li.on{color:var(--ink);font-weight:600;border-bottom-color:var(--accent2)}
+.ax-steps li.on::before{background:var(--ink);border-color:var(--ink);color:#fff}
+.ax-steps li.done::before{background:var(--soft);border-color:var(--accent2);color:var(--accent)}
+.ax-imp-row{display:flex;gap:8px;align-items:center;margin-top:12px}
+.ax-imp-row .grow{flex:1}
+.ax-sum{font-size:14px;color:var(--ink);margin:0 0 12px}
+.ax-sum .bad{color:var(--bad)}
+.ax-check-tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.ax-check-tbl td{padding:9px 10px 9px 0;border-top:1px solid var(--rule);vertical-align:top}
+.ax-check-tbl .st{width:22px;font-weight:700}
+.ax-check-tbl .st.ok{color:var(--ok)}
+.ax-check-tbl .st.bad{color:var(--bad)}
+.ax-check-tbl .code{font-weight:600;color:var(--ink);white-space:nowrap}
+.ax-check-tbl .why{display:block;color:var(--bad);font-size:12.5px;margin-top:2px}
+.ax-done{text-align:center;padding:30px 10px}
+.ax-done b{display:block;font-size:18px;color:var(--ink);margin-bottom:6px}
+.not-admin{max-width:520px;margin:60px auto;text-align:center}
+
+/* Settings sections and switch, from the Dot Phrases mockup (v12) */
+.ax-switchrow{display:flex;align-items:flex-start;gap:16px;justify-content:space-between;padding:10px 0 2px;border-top:1px solid #eef4f6;cursor:pointer}
+.ax-sw-text b{font-size:14px;color:#0d203c;font-weight:600}
+.ax-sw-text .ax-help{max-width:62ch}
+.ax-sw{position:relative;flex-shrink:0;width:40px;height:24px;margin-top:2px}
+.ax-sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.ax-sw-track{position:absolute;inset:0;border-radius:999px;background:#c9d8de;transition:background .15s}
+.ax-sw-track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(13,32,60,.2);transition:transform .15s}
+.ax-sw input:checked + .ax-sw-track{background:#2c7f8c}
+.ax-sw input:checked + .ax-sw-track::after{transform:translateX(16px)}
+.ax-sw input:focus-visible + .ax-sw-track{outline:2px solid #5ab5c4;outline-offset:2px}
+.ax-sec{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:20px}
+.ax-sec h3,.ax-aside h3{font-size:16px;font-weight:600;color:var(--ink);margin:0}
+.ax-sec > p,.ax-aside > p{font-size:13px;color:var(--muted);margin:4px 0 14px;max-width:70ch;line-height:1.5}
+.ax-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.ax-tbl th{text-align:left;font-size:12.5px;font-weight:600;color:var(--muted);padding:0 10px 8px 0}
+.ax-tbl td{padding:8px 10px 8px 0;border-top:1px solid var(--rule);vertical-align:middle}
+.ax-tbl td.used{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.ax-tbl tr.add td{border-top:1.5px solid var(--line);padding-top:12px}
+/* Mockup chrome, not part of the app */
+.mock-hidden{max-width:520px;margin:60px auto;padding:14px 16px;background:#f3f4f5;border:1px dashed rgba(34,36,38,.25);border-radius:6px;color:#767676;font:13px/1.5 -apple-system,Helvetica,Arial,sans-serif;text-align:center}
+/* Not sourced: unsaved-changes banner, amber from the Dot Phrases .tag.Procedure palette */
+.ax-unsaved{background:#fdf6e9;border:1.5px solid #f1d9ad;border-radius:9px;padding:10px 12px;margin-top:16px;display:flex;align-items:center;gap:8px;font-size:13px;color:#9a5b00}
+.ax-unsaved .grow{flex:1}
+/* Copied from the Dot Phrases admin layout mockup */
+/* Fill the window on every tab (Dot Phrases admin layout app.css) */
+.ax-main{max-width:none}
+.ax-imp{max-width:none}
+.ax-list-top{flex-direction:row;align-items:center;gap:8px}
+.ax-new{flex-shrink:0;padding:8px 12px}
+.ax-btn.danger{display:inline-flex;align-items:center;gap:6px;color:#c62828}
+.ax-btn.danger svg{width:15px;height:15px}
+.ax-btn.danger:hover{border-color:#e9a7a7;background:#fdecec}
+.ax-btn.danger-solid{background:#c62828;border-color:#c62828;color:#fff}
+.ax-btn.danger-solid:hover{background:#a51f1f;border-color:#a51f1f}
+.ax-confirm{display:flex;align-items:center;gap:16px;background:#fdf1f1;border:1.5px solid #f1c9c9;border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.ax-confirm > div:first-child{flex:1}
+.ax-cf-title{font-size:15px;font-weight:600;color:#0d203c}
+.ax-confirm p{margin:2px 0 0;font-size:13px;color:#2c4155}
+.ax-foot{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;gap:12px;background:#fff;border-top:1.5px solid var(--rule);margin:22px -26px -26px;padding:14px 26px;border-radius:0 0 14px 0}
+.ax-foot.ax-confirm{background:#fdf1f1;border:0;border-top:1.5px solid #f1c9c9;margin-bottom:-26px}
+.ax-info{display:flex;align-items:center;gap:5px;margin-top:12px}
+.ax-info svg{width:14px;height:14px;flex-shrink:0}
+.ax-detail .ed{border:0;box-shadow:none;padding:0;margin:0}
+.ax-flag{font-size:11px;font-weight:600;color:#b26a00;background:#fdf0dc;border-radius:999px;padding:0 7px;margin-left:6px}
+.ax-del{background:#fdf1f1;border:1.5px solid #f3c7c7;border-radius:9px;padding:10px 12px;margin-top:16px;display:flex;align-items:center;gap:8px;font-size:13px;color:#c62828}
+.ax-del .grow{flex:1}
+/* Not sourced: shared editor bits (unsaved-changes banner buttons, muted text), from .pp-btn and .pp-danger above */
+.btn{border:1.5px solid #dce8ec;background:#fff;color:#0d203c;border-radius:7px;padding:4px 10px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.btn.danger{background:#c62828;border-color:#c62828;color:#fff}
+.muted{color:#8ea8b5;font-size:12px;margin-left:4px}
+.unsaved{background:#fdf6e9;border:1.5px solid #f1d9ad;border-radius:9px;padding:10px 12px;margin-top:16px;display:flex;align-items:center;gap:8px;font-size:13px;color:#9a5b00}
+.unsaved .grow{flex:1}
+[hidden]{display:none!important}
+.admin-app{min-height:100%}
+.ax-err:empty{display:none}
+/* Not sourced: the Mine / Practice / Hidden row under the My favorites search; the toggle itself is the panel's .pp-seg */
+.my-segs{padding:0 14px 12px;border-bottom:1.5px solid var(--rule)}
+.my-segs .pp-seg{margin-top:0}
+.ax-list-top.my-top{border-bottom:0}
+.ax-detail .fd{grid-template-columns:96px minmax(0,1fr)}
+/* Option E from mockups/order-favorites-tab-options.html. Not sourced from home-app: built from the panel's
+   .ml-icon eye button, the Manage view's .pp-sec section labels, and the palette above. */
+.erow{display:flex;align-items:center;border-bottom:1px solid var(--rule)}
+.erow .ax-row{flex:1;min-width:0;border-bottom:0}
+.erow.hid .code,.erow.hid .t{opacity:.55}
+.eye{flex-shrink:0;width:32px;height:32px;margin-right:10px;border:0;border-radius:8px;background:none;color:#8ea8b5;display:grid;place-items:center;cursor:pointer}
+.eye:hover{background:#F4F8FA;color:#0d203c}
+.eye svg{width:17px;height:17px}
+.eye-space{width:42px;flex-shrink:0}
+.grp{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;padding:12px 14px 6px;background:#fbfdfd;border-bottom:1px solid var(--rule)}
+.grp span{font-weight:500;color:#8ea8b5;margin-left:4px}
+.grp-empty{font-size:12.5px;font-style:italic;color:#8ea8b5;padding:10px 14px;border-bottom:1px solid var(--rule)}
+.hid-opt label{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;color:#5e7a8a;cursor:pointer}
+.hid-opt input{accent-color:#2c7f8c;width:15px;height:15px;margin:0}
+.save-for{margin-top:16px}
+.save-for label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:0 0 6px}
+.save-for .pp-seg{margin-top:0}
+
+/* Order sets: picklist and member list, same as the panel (mockups/order-favorites-panel-additions.html) */
+.kb.set{background:#e9f5ee;color:#2e7d4f}
+.pc-kind{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#5e7a8a}
+.pc-kind svg{width:13px;height:13px}
+.pc-kind.rx{color:#6b3fb5}.pc-kind.lab{color:#1565c0}.pc-kind.set{color:#2e7d4f}
+.set-list{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;color:#2c4155}
+.set-list li{display:flex;align-items:center;gap:6px;padding:2px 0}
+.set-list li svg{width:13px;height:13px;flex-shrink:0}
+.set-list li.rx svg{color:#6b3fb5}.set-list li.lab svg{color:#1565c0}
+.set-list li.gone{color:#9a5b00}
+.picklist{border:1.5px solid #dce8ec;border-radius:9px;background:#fff;max-height:260px;overflow:auto}
+.picklist label.pk{display:flex!important;align-items:flex-start;gap:8px;margin:0!important;padding:8px 10px;border-top:1px solid #eef4f6;font-size:13px!important;font-weight:400!important;text-transform:none!important;letter-spacing:0!important;color:#2c4155!important;cursor:pointer}
+.picklist label.pk:first-child{border-top:0}
+.picklist label.pk input{width:15px!important;height:15px;margin:2px 0 0;accent-color:#2c7f8c;padding:0}
+.picklist .pk small{display:block;font-size:11.5px;color:#8ea8b5}
+.picklist .pkh{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#5e7a8a;background:#fbfdfd;padding:6px 10px;border-top:1px solid #eef4f6}
+.picklist .pkh:first-child{border-top:0}
+.pk-empty{font-size:12.5px;font-style:italic;color:#8ea8b5;padding:8px 10px;border-top:1px solid #eef4f6}
+.ax-detail .ed .note{font-size:12.5px;color:#5e7a8a;background:#F4F8FA;border-radius:9px;padding:8px 10px;margin-bottom:14px}
+/* Order set editor: "+ New" on each group header and the favorite just made there (mockups/order-favorites-set-shortcut.html).
+   Not sourced from home-app: built from the panel palette above. */
+.picklist .pkh{display:flex;align-items:center;justify-content:space-between}
+.picklist .pkh .pk-new{border:0;background:none;font:inherit;font-size:12px;font-weight:600;color:#2c7f8c;cursor:pointer;text-transform:none;letter-spacing:0;padding:0} /* the panel's .linkbtn (panel/app.css:230) */
+.picklist .pkh .pk-new:hover{text-decoration:underline}
+.picklist label.pk.just{background:#f2fafb;transition:background 1.2s}
+.picklist label.pk.just small b{color:#2c7f8c;font-weight:600}
