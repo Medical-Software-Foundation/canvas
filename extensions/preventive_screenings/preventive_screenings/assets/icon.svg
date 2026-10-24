@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Preventive screenings">
+  <!-- Clipboard body: the practice's screening list -->
+  <rect x="17" y="17" width="66" height="74" rx="11" fill="#2185D0"/>
+  <!-- Clip at the top -->
+  <rect x="36" y="7" width="28" height="17" rx="6" fill="#174E7A"/>
+  <!-- Checkmark: the screening is done -->
+  <path d="M33 54 L45 66 L69 40"
+        fill="none" stroke="#FFFFFF" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
