@@ -1,0 +1,75 @@
+{
+    "sdk_version": "0.199.0",
+    "plugin_version": "0.2.0",
+    "name": "patient_numbering",
+    "description": "Gives every patient a unique sequential Patient ID (1, 2, 3...) in addition to the MRN, shown on the patient profile and searchable from the patient search bar. For front desk and practice staff who need simple patient numbers.",
+    "components": {
+        "applications": [
+            {
+                "class": "patient_numbering.applications.numbering_admin:PatientNumberingAdmin",
+                "name": "Patient Numbering",
+                "description": "Number existing patients and check progress",
+                "scope": "global",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "patient_numbering.handlers.patient_created:NumberNewPatient",
+                "description": "Assigns the next Patient ID when a patient is created",
+                "data_access": {
+                    "event": "PATIENT_CREATED",
+                    "read": [
+                        "Patient"
+                    ],
+                    "write": [
+                        "PatientExternalIdentifier",
+                        "PatientMetadata"
+                    ]
+                }
+            },
+            {
+                "class": "patient_numbering.handlers.profile_field:PatientNumberProfileField",
+                "description": "Read-only Patient ID field in the profile demographics",
+                "data_access": {
+                    "event": "PATIENT_METADATA__GET_ADDITIONAL_FIELDS",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_numbering.handlers.admin_api:PatientNumberingAdminAPI",
+                "description": "Admin page, status, and backfill of existing patients in creation order",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Patient"
+                    ],
+                    "write": [
+                        "PatientExternalIdentifier",
+                        "PatientMetadata"
+                    ]
+                }
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "ADMIN_STAFF_IDS",
+            "sensitive": false
+        },
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": true
+        }
+    ],
+    "custom_data": {
+        "namespace": "canvas__patient_numbering",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
