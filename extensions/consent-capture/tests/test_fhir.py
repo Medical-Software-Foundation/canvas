@@ -128,3 +128,15 @@ class TestBuildConsentPayload:
         # Called positionally without a PDF -> no attachment.
         payload = build_consent_payload("s", "c", "d", "p", "2026-07-07")
         assert "sourceAttachment" not in payload
+
+
+class TestConsentStatus:
+    def test_active_by_default(self):
+        assert build_consent_payload("s", "c", "", "p1", "2026-10-22")["status"] == "active"
+
+    def test_rejected_for_a_declined_consent(self):
+        payload = build_consent_payload("s", "c", "", "p1", "2026-10-22", status="rejected")
+        assert payload["status"] == "rejected"
+
+    def test_unknown_status_falls_back_to_active(self):
+        assert build_consent_payload("s", "c", "", "p1", "2026-10-22", status="x")["status"] == "active"

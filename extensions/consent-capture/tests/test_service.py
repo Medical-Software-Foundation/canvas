@@ -55,6 +55,13 @@ def _stub_consent_rows(mock_pc, rows):
     ) = rows
 
 
+RECORDED = (
+    "accepted",
+    "accepted_via_patient_portal",
+    "rejected",
+    "rejected_via_patient_portal",
+)
+
 EFF = datetime(2026, 1, 2, tzinfo=timezone.utc)
 EFF_OLD = datetime(2020, 1, 1, tzinfo=timezone.utc)
 FUTURE = datetime(2999, 1, 1, tzinfo=timezone.utc)
@@ -138,10 +145,11 @@ class TestAcceptedCodes:
 
 
 def _stub_pair_rows(mock_pc, rows):
-    # rows are (system, code, effective_date, expired_date), newest-first.
+    # rows are (system, code, effective_date, expired_date[, state]), newest-first.
+    # A row without a state is an accepted consent.
     (
         mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value
-    ) = rows
+    ) = [r if len(r) == 5 else tuple(r) + ("accepted",) for r in rows]
 
 
 class TestAcceptedStatusPairs:
@@ -165,10 +173,10 @@ class TestAcceptedStatusPairs:
                 ("INTERNAL", "verbal"): {
                     "status": "expired", "effective_date": "2026-01-02", "expired_date": "2000-01-01"},
             }
-            # Queries all of the patient's accepted consents (pairs filtered in Python).
+            # Queries all of the patient's recorded consents (pairs filtered in Python).
             assert mock_pc.objects.filter.mock_calls[0] == call(
                 patient__id="p1",
-                state__in=("accepted", "accepted_via_patient_portal"),
+                state__in=RECORDED,
             )
 
     def test_most_recent_row_wins_per_pair(self):
@@ -409,15 +417,18 @@ class TestConsentRecords:
         assert consent_records("") == []
 
     def _stub_rows(self, mock_pc, rows):
-        # rows are (id, code, system, display, effective_date, expired_date), newest-first.
+        # rows are (id, code, system, display, effective_date, expired_date[, state]),
+        # newest-first. A row without a state is an accepted consent.
         (
             mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value
-        ) = rows
+        ) = [r if len(r) == 7 else tuple(r) + ("accepted",) for r in rows]
 
     def _stub_details(self, mock_ccd, rows):
         # rows are (system, code, effective_date, obtained_by_name, method,
-        # consented_by, capacity_statement, pages).
-        mock_ccd.objects.filter.return_value.values_list.return_value = rows
+        # consented_by, capacity_statement, pages[, signed_on_device, signed_with]).
+        mock_ccd.objects.filter.return_value.values_list.return_value = [
+            r if len(r) == 10 else tuple(r) + (False, "") for r in rows
+        ]
 
     def test_returns_one_entry_per_record_not_deduped(self):
         with patch(f"{MODULE}.PatientConsent") as mock_pc, patch(
@@ -437,11 +448,11 @@ class TestConsentRecords:
                 "status": "active", "on_file": True,
                 "effective_date": "2026-01-02", "expiration_date": "",
                 "obtained_by": "", "method": "", "consented_by": "", "capacity_statement": "",
-                "pages": 0,
+                "pages": 0, "signature": "",
             }
             assert mock_pc.objects.filter.mock_calls[0] == call(
                 patient__id="p1",
-                state__in=("accepted", "accepted_via_patient_portal"),
+                state__in=RECORDED,
             )
 
     def test_empty_code_record_kept_when_system_present(self):
@@ -563,3 +574,209 @@ class TestIsConsentAdmin:
         with patch(f"{MODULE}.Staff") as mock_staff:
             self._stub_staff(mock_staff, "Jane", "Doe")
             assert is_consent_admin("root", "someone-else") is True
+
+
+# --------------------------------------------------------------------------- #
+# Declined consents count as asked and answered
+# --------------------------------------------------------------------------- #
+class TestDeclinedConsents:
+    def test_declined_pair_reads_declined(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            _stub_pair_rows(mock_pc, [
+                ("s", "c", EFF, None, "rejected"),
+                ("s", "p", EFF, None, "rejected_via_patient_portal"),
+            ])
+            result = accepted_status_pairs("p1", [("s", "c"), ("s", "p")])
+            assert result[("s", "c")]["status"] == "declined"
+            assert result[("s", "p")]["status"] == "declined"
+
+    def test_lapsed_decline_is_expired(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            _stub_pair_rows(mock_pc, [("s", "c", EFF, PAST, "rejected")])
+            assert accepted_status_pairs("p1", [("s", "c")])[("s", "c")]["status"] == "expired"
+
+    def test_newest_record_wins_decline_over_older_accept(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            _stub_pair_rows(mock_pc, [
+                ("s", "c", EFF, None, "rejected"),
+                ("s", "c", EFF_OLD, None, "accepted"),
+            ])
+            assert accepted_status_pairs("p1", [("s", "c")])[("s", "c")]["status"] == "declined"
+
+    def test_combined_status_prefers_active_then_declined_then_expired(self):
+        fresh = {
+            ("s", "a"): {"status": "expired"},
+            ("s", "b"): {"status": "declined"},
+            ("s", "c"): {"status": "active"},
+        }
+        assert service._combined_status(fresh, [("s", "a"), ("s", "b")])["status"] == "declined"
+        assert service._combined_status(fresh, [("s", "a"), ("s", "b"), ("s", "c")])["status"] == "active"
+        assert service._combined_status(fresh, [("s", "a")])["status"] == "expired"
+        assert service._combined_status(fresh, [("s", "z")]) == {}
+
+    def test_picker_item_status_declined(self):
+        d = MagicMock(code="c", system="s", display="C", verbiage="", method_enabled=True,
+                      obtained_by_enabled=True, capacity_enabled=False, method_options=[],
+                      questions=[], required=True, allow_device_signature=True)
+        item = service._picker_item(d, {"status": "declined", "effective_date": "2026-01-02"}, True)
+        assert item["status"] == "declined"
+        assert item["on_file"] is False
+        assert item["allow_device_signature"] is True
+
+    def test_picker_item_allow_device_signature_unset_is_off(self):
+        d = MagicMock(code="c", system="s", display="C", verbiage="", method_enabled=True,
+                      obtained_by_enabled=True, capacity_enabled=False, method_options=[],
+                      questions=[], required=False, allow_device_signature=None)
+        assert service._picker_item(d, {}, True)["allow_device_signature"] is False
+
+    def test_declined_required_is_not_incomplete(self):
+        items = [{"required": True, "on_file": False, "status": "declined"}]
+        with patch(f"{MODULE}.picker_items", return_value=items):
+            assert has_incomplete_required("p1") is False
+
+    def test_consent_records_lists_declined(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc, patch(
+            f"{MODULE}.ConsentCaptureDetail"
+        ) as mock_ccd:
+            mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value = [
+                (7, "c", "s", "C", EFF, None, "rejected"),
+            ]
+            mock_ccd.objects.filter.return_value.values_list.return_value = []
+            out = consent_records("p1")
+            assert out[0]["status"] == "declined"
+            assert out[0]["on_file"] is False
+
+    def test_patients_with_active_pair_counts_declines(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            qs = mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value
+            qs.iterator.return_value = [("p1", EFF, None)]
+            now = datetime.now(timezone.utc)
+            assert service._patients_with_active_consent_pair("s", "c", now) == {"p1"}
+            assert mock_pc.objects.filter.mock_calls[0] == call(
+                category__system="s", category__code="c", state__in=RECORDED
+            )
+
+
+class TestSignatureDetail:
+    def test_label_for_each_kind(self):
+        assert service.signature_label(True, "finger") == "Signed on this device (finger or stylus)"
+        assert service.signature_label(True, "mouse") == "Signed on this device (mouse or trackpad)"
+        assert service.signature_label(True, "typed") == "Signed on this device (typed)"
+        assert service.signature_label(True, "") == "Signed on this device"
+
+    def test_blank_when_not_signed_on_device(self):
+        assert service.signature_label(False, "finger") == ""
+        assert service.signature_label(None, "") == ""
+
+    def test_consent_records_carries_signed_with(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc, patch(
+            f"{MODULE}.ConsentCaptureDetail"
+        ) as mock_ccd:
+            mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value = [
+                (1, "c", "s", "C", EFF, None, "accepted"),
+            ]
+            mock_ccd.objects.filter.return_value.values_list.return_value = [
+                ("s", "c", "2026-01-02", "Sam", "Written", "Patient", "", 1, True, "mouse"),
+            ]
+            out = consent_records("p1")
+            assert out[0]["signature"] == "Signed on this device (mouse or trackpad)"
+            assert out[0]["method"] == "Written"
+
+
+# --------------------------------------------------------------------------- #
+# Practice settings
+# --------------------------------------------------------------------------- #
+class TestPracticeSettings:
+    def test_defaults_when_never_saved(self, _no_saved_practice_settings):
+        assert service.practice_settings() == {
+            "reuse_signature": False,
+            "accept_finger": True,
+            "accept_mouse": True,
+            "accept_typed": False,
+            "ask_printed_name": False,
+        }
+        assert _no_saved_practice_settings.filter.mock_calls[0] == call(key="practice")
+
+    def test_saved_row_overrides_and_none_keeps_default(self, _no_saved_practice_settings):
+        _no_saved_practice_settings.filter.return_value.values.return_value.first.return_value = {
+            "reuse_signature": True,
+            "accept_finger": False,
+            "accept_mouse": None,   # column added later, unset on this row
+            "accept_typed": True,
+            "ask_printed_name": True,
+        }
+        assert service.practice_settings() == {
+            "reuse_signature": True,
+            "accept_finger": False,
+            "accept_mouse": True,
+            "accept_typed": True,
+            "ask_printed_name": True,
+        }
+
+    def test_clean_requires_one_accepted_signature(self):
+        values, error = service.clean_practice_settings(
+            {"accept_finger": False, "accept_mouse": False, "accept_typed": False}
+        )
+        assert values is None
+        assert error == "Select at least one accepted signature."
+
+    def test_clean_fills_missing_with_defaults(self):
+        values, error = service.clean_practice_settings({"accept_typed": True})
+        assert error is None
+        assert values == {
+            "reuse_signature": False,
+            "accept_finger": True,
+            "accept_mouse": True,
+            "accept_typed": True,
+            "ask_printed_name": False,
+        }
+
+    def test_clean_non_dict(self):
+        values, error = service.clean_practice_settings("nope")
+        assert error is None and values["accept_finger"] is True
+
+    def test_save_updates_existing_row(self, _no_saved_practice_settings):
+        _no_saved_practice_settings.filter.return_value.update.return_value = 1
+        values = dict(service.PRACTICE_DEFAULTS, reuse_signature=True)
+        service.save_practice_settings(values)
+        assert call(key="practice") in _no_saved_practice_settings.filter.mock_calls
+        assert _no_saved_practice_settings.filter.return_value.update.mock_calls == [call(**values)]
+        assert _no_saved_practice_settings.create.mock_calls == []
+
+    def test_save_creates_row_first_time(self, _no_saved_practice_settings):
+        _no_saved_practice_settings.filter.return_value.update.return_value = 0
+        values = dict(service.PRACTICE_DEFAULTS)
+        service.save_practice_settings(values)
+        assert _no_saved_practice_settings.create.mock_calls == [call(key="practice", **values)]
+
+
+
+class TestReviewFixesService:
+    def test_same_day_records_ordered_by_created(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            _stub_pair_rows(mock_pc, [("s", "c", EFF, None, "accepted")])
+            accepted_status_pairs("p1", [("s", "c")])
+            mock_pc.objects.filter.return_value.values_list.return_value.order_by.assert_called_once_with(
+                "-effective_date", "-created"
+            )
+
+    def test_newer_same_day_accept_wins_over_decline(self):
+        # Rows arrive in -effective_date, -created order: the later accept is first.
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            _stub_pair_rows(mock_pc, [("s", "c", EFF, None, "accepted"), ("s", "c", EFF, None, "rejected")])
+            assert accepted_status_pairs("p1", [("s", "c")])[("s", "c")]["status"] == "active"
+
+    def test_is_required_and_due(self):
+        assert service.is_required_and_due({"required": True, "on_file": False, "status": "needed"}) is True
+        assert service.is_required_and_due({"required": True, "on_file": False, "status": "expired"}) is True
+        assert service.is_required_and_due({"required": True, "on_file": True, "status": "on_file"}) is False
+        assert service.is_required_and_due({"required": True, "on_file": False, "status": "declined"}) is False
+        assert service.is_required_and_due({"required": False, "on_file": False, "status": "needed"}) is False
+
+    def test_practice_settings_only_true_turns_on(self):
+        values, error = service.clean_practice_settings({"accept_typed": "false", "reuse_signature": 1, "ask_printed_name": True})
+        assert error is None
+        assert values["accept_typed"] is False
+        assert values["reuse_signature"] is False
+        assert values["ask_printed_name"] is True
+        assert values["accept_finger"] is True   # missing -> default

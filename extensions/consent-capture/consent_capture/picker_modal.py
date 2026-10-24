@@ -1,9 +1,7 @@
 """Build the patient-facing consent picker modal.
 
-Shared by both entry points so they open an identical modal:
-- ``ConsentButton`` — the red chart-header action button (shown only when a consent
-  is still needed).
-- ``ConsentApp`` — the always-present patient-chart app-drawer launcher.
+Opened by ``ConsentButton``, the "Consents" chart-header button that is always
+shown for a patient (red when a required consent is due, gray otherwise).
 
 Kept out of ``service.py`` (which stays data-only) because this layer renders a
 template and builds an Effect.
@@ -18,7 +16,12 @@ from canvas_sdk.v1.data import Patient
 from logger import log
 
 from consent_capture.constants import METHOD_OPTIONS, NO_STATEMENT_NOTE
-from consent_capture.service import consent_records, is_consent_admin, picker_items
+from consent_capture.service import (
+    consent_records,
+    is_consent_admin,
+    picker_items,
+    practice_settings,
+)
 
 # The Consent Settings page URL (served by ConsentAdminApi); opened from the wrench.
 SETTINGS_URL = "/plugin-io/api/consent_capture/admin/settings"
@@ -30,13 +33,14 @@ def _patient_name_dob(patient_id):
         return "", ""
     row = (
         Patient.objects.filter(id=patient_id)
-        .values_list("first_name", "last_name", "birth_date")
+        .values_list("first_name", "last_name", "suffix", "birth_date")
         .first()
     )
     if not row:
         return "", ""
-    name = ("%s %s" % (row[0] or "", row[1] or "")).strip()
-    dob = row[2].isoformat() if row[2] else ""
+    # Includes the suffix: the signing screen's name check compares it.
+    name = " ".join(n for n in (row[0], row[1], row[2]) if n)
+    dob = row[3].isoformat() if row[3] else ""
     return name, dob
 
 
@@ -67,6 +71,7 @@ def build_picker_modal(patient_id, staff_id, secrets):
             "consents_json": json.dumps(items),
             "records_json": json.dumps(records),
             "method_options_json": json.dumps(list(METHOD_OPTIONS)),
+            "practice_json": json.dumps(practice_settings()),
             "no_statement_note": NO_STATEMENT_NOTE,
             "is_admin": is_admin,
             "settings_url": SETTINGS_URL,

@@ -381,3 +381,116 @@ class TestGeneratePdf:
     def test_module_exposes_page_geometry(self):
         assert pdf.PAGE_WIDTH == 612
         assert pdf.PAGE_HEIGHT == 792
+
+
+# --------------------------------------------------------------------------- #
+# Signature section and Outcome row
+# --------------------------------------------------------------------------- #
+import os as _os
+
+from consent_capture.signing import jpeg_info as _jpeg_info
+
+_ASSETS = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets")
+
+
+def _sig(**over):
+    with open(_os.path.join(_ASSETS, over.pop("asset", "signature.jpg")), "rb") as fh:
+        jpeg = fh.read()
+    width, height, components = _jpeg_info(jpeg)
+    sig = {
+        "jpeg": jpeg, "width": width, "height": height, "components": components,
+        "heading": "Signature of patient", "signer": "Maria Lopez (Patient)",
+        "entered_label": "Printed name", "entered": "", "signed_at": "2026-10-22 10:42 AM PDT",
+        "notes": ["Signed in person on staff device."],
+    }
+    sig.update(over)
+    return sig
+
+
+def _texts(ops):
+    return [op[6] for op in ops if op[0] == "text"]
+
+
+class TestSignatureSection:
+    def test_section_draws_heading_image_line_and_columns(self):
+        ops = _build_ops("T", "Maria Lopez", "1951-06-14", "Sam", "2026-10-22", ["Body."],
+                         signature=_sig())
+        texts = _texts(ops)
+        assert "SIGNATURE" in texts
+        assert "SIGNATURE OF PATIENT" in texts
+        assert "SIGNER" in texts and "Maria Lopez (Patient)" in texts
+        assert "SIGNED" in texts and "2026-10-22 10:42 AM PDT" in texts
+        assert "PRINTED NAME" not in texts            # nothing entered
+        assert "Signed in person on staff device." in texts
+        images = [op for op in ops if op[0] == "image"]
+        assert len(images) == 1
+        _, name, _x, _y, w, h = images[0]
+        assert name == "Sig"
+        # 60 x 20 scaled to fit 240 x 54 keeps the 3:1 aspect ratio.
+        assert round(w / h, 2) == 3.0 and h <= pdf.SIG_MAX_H and w <= pdf.SIG_MAX_W
+
+    def test_entered_name_column_when_present(self):
+        texts = _texts(_build_ops("T", "P", "", "S", "2026-10-22", [],
+                                  signature=_sig(entered="julie", entered_label="Typed as")))
+        assert "TYPED AS" in texts and "julie" in texts
+
+    def test_no_section_without_signature(self):
+        ops = _build_ops("T", "P", "", "S", "2026-10-22", [])
+        assert "SIGNATURE" not in _texts(ops)
+        assert not [op for op in ops if op[0] == "image"]
+
+    def test_image_op_in_content_stream(self):
+        stream = _content_stream([("image", "Sig", 64, 100, 162, 54)])
+        assert stream == "q 162 0 0 54 64 100 cm /Sig Do Q"
+
+    def test_pdf_embeds_jpeg_without_compression(self):
+        sig = _sig()
+        data = generate_consent_pdf("T", "P", "", "S", "2026-10-22", ["Body."], signature=sig)
+        assert b"/XObject << /Sig " in data
+        assert b"/Subtype /Image /Width 60 /Height 20 /ColorSpace /DeviceRGB" in data
+        assert b"/Filter /DCTDecode /Length %d" % len(sig["jpeg"]) in data
+        assert sig["jpeg"] in data
+        assert b"/FlateDecode" not in data
+        assert pdf_page_count(data) == 1
+
+    def test_grayscale_jpeg_uses_devicegray(self):
+        data = generate_consent_pdf("T", "P", "", "S", "2026-10-22", [],
+                                    signature=_sig(asset="signature-gray.jpg"))
+        assert b"/ColorSpace /DeviceGray" in data
+
+    def test_xref_offsets_point_at_objects_with_image(self):
+        data = generate_consent_pdf("T", "P", "", "S", "2026-10-22", ["Body."], signature=_sig())
+        xref_at = int(data.rsplit(b"startxref\n", 1)[1].split(b"\n")[0])
+        rows = data[xref_at:].split(b"\n")[3:]
+        for number, row in enumerate(rows, start=1):
+            if not row.endswith(b" n "):
+                break
+            offset = int(row[:10])
+            assert data[offset:].startswith(b"%d 0 obj" % number)
+
+    def test_signature_section_is_never_split_across_pages(self):
+        # Statements of growing length push the section down; at every length its
+        # heading, image and signer land on the same page.
+        for paragraphs in range(1, 16):
+            pages = _build_pages("T", "P", "", "S", "2026-10-22", ["word " * 60] * paragraphs,
+                                 signature=_sig())
+            holding = [p for p in pages if "SIGNATURE OF PATIENT" in _texts(p)]
+            assert len(holding) == 1
+            page = holding[0]
+            assert "Maria Lopez (Patient)" in _texts(page)
+            assert [op for op in page if op[0] == "image"]
+            assert all(op[2] >= 40 for op in page if op[0] == "text")  # above the footer
+
+    def test_base64_wrapper_passes_signature(self):
+        b64 = generate_consent_pdf_base64("T", "P", "", "S", "2026-10-22", [], signature=_sig())
+        assert b"/DCTDecode" in base64.b64decode(b64)
+
+
+class TestOutcomeRow:
+    def test_outcome_row_follows_consenting_party(self):
+        texts = _texts(_build_ops("T", "P", "", "S", "2026-10-22", [], outcome="Declined"))
+        assert "OUTCOME" in texts and "Declined" in texts
+        assert texts.index("OUTCOME") == texts.index("CONSENTING PARTY") + 2
+
+    def test_no_outcome_row_by_default(self):
+        assert "OUTCOME" not in _texts(_build_ops("T", "P", "", "S", "2026-10-22", []))

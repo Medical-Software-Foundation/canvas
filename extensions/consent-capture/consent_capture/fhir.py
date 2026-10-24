@@ -29,6 +29,7 @@ def build_consent_payload(
     patient_id,
     today,
     pdf_base64="",
+    status="active",
 ):
     """Build the FHIR Consent create payload.
 
@@ -39,6 +40,9 @@ def build_consent_payload(
     ``pdf_base64`` is the generated documentation PDF. When it is empty (e.g. a
     "Written" consent, where the provider uploads the signed document themselves)
     the ``sourceAttachment`` is omitted and the Consent is recorded without one.
+
+    ``status`` is "active" for a consent given, or "rejected" when the patient
+    declined (Canvas stores it as a rejected consent).
     """
     coding = {"system": system, "code": code}
     if display:
@@ -46,7 +50,7 @@ def build_consent_payload(
 
     payload = {
         "resourceType": "Consent",
-        "status": "active",
+        "status": "rejected" if status == "rejected" else "active",
         "scope": {},
         "category": [{"coding": [coding]}],
         "patient": {

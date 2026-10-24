@@ -4,22 +4,21 @@ A Canvas plugin that lets clinical and front-desk staff **record a patient's
 consent right from the chart** — for *any number* of consent types — and files a
 documented FHIR `Consent` for each: who collected it, when, from whom, by what
 method, plus a generated PDF (or, for written consents, the signed document
-itself).
+itself). Patients and representatives can also sign written consents on the
+staff device, one consent or several at a time.
 
-The plugin surfaces consents three ways in the chart:
+The plugin surfaces consents two ways in the chart:
 
 1. A **Consents** button in the chart header — **always present** for a patient.
    It is **red** when the patient still has a **required** consent that isn't on
    file, and a neutral **gray** button once all required consents are on file.
    Inactive/deceased patients always see the gray button and never the red one.
    (The label is always "Consents".)
-2. A **Consents** launcher in the chart **app drawer** — always available, so staff
-   can review what's on file or record an optional consent any time.
-3. A **warning banner** on the chart and profile — shown while a required consent
+2. A **warning banner** on the chart and profile — shown while a required consent
    is outstanding, cleared once it's on file. Can be turned off entirely with the
    `CONSENT_BANNERS_ENABLED` plugin variable.
 
-All three open (or reflect) the same **picker**, which lists every configured
+Both open (or reflect) the same **picker**, which lists every configured
 consent grouped into **Required**, **Optional**, and **On File**, and captures the
 selected one via the Canvas FHIR API.
 
@@ -30,8 +29,8 @@ each coding: the verbiage to read, the questions to ask, method/who/capacity, an
 whether it shows in the consent modal.
 
 Consent Settings is its own page at
-**`/plugin-io/api/consent_capture/admin/settings`** (open it while signed in to Canvas;
-also reachable from the gear icon in the consent picker).
+**`/plugin-io/api/consent_capture/admin/settings`**. Consent admins also open it from the
+**Consent Settings** icon in the app drawer, or from the gear icon in the consent picker.
 
 > **User & admin guides** live in **[`docs/`](../docs/)** (Markdown + printable PDFs):
 > [Setup & Configuration](../docs/SETUP_GUIDE.md) for admins, and the
@@ -76,7 +75,7 @@ Consent Capture turns that into a guided flow that:
 1. Open a patient chart. The **Consents** button in the chart header is always
    present; it turns **red** (with the warning banner) when an **active,
    non-deceased** patient has a required consent not on file, and is a neutral gray
-   otherwise. The **Consents** app-drawer entry is always present.
+   otherwise.
 2. Opening it shows the **picker**, grouped:
    - **Required** — required consents that are needed, or expired and due for
      **Renew**.
@@ -109,6 +108,63 @@ Consent Capture turns that into a guided flow that:
       `sourceAttachment`, **no** `period.end` — expiration is governed by the coding
       in Canvas admin).
    3. Reflects it under **On File** immediately.
+
+### Sign on this device
+
+For a **Written** consent with **Allow signing on this device** turned on, the
+Document step adds a third tab next to **Camera** and **Upload**: **Sign on this
+device**. It opens on that tab when it's available.
+
+1. Staff select **Continue**, and a hand-off screen asks them to give the device to
+   the signer.
+2. The signer reads the consent and signs in the box (finger, stylus, mouse or
+   trackpad, or a typed signature, as the practice allows), then selects
+   **Accept and Sign**. The line under the box reads "Signing as [name][,
+   relationship of patient]. By signing, I agree to the consent above."
+3. A "Thank you" screen asks the signer to hand the device back.
+4. Staff check the signature on **Review consent** and select **Record Consent**.
+
+The consent is saved as **Written**. The plugin generates the PDF with a Signature
+section: the signature image, the signer and their role, a printed or typed name
+when it differs, the date and time signed, "Signed in person on staff device", and
+a note when the signer confirmed under a corrected name. On File and the done screen show
+how it was signed ("Signed on this device (finger or stylus)", "(mouse or trackpad)"
+or "(typed)").
+
+**Name check.** When the signer enters a printed name or types their signature, the
+plugin compares it with the person giving consent: first name, last name and suffix
+(Jr, Sr, II, III, IV, V), ignoring middle names, initials, capitalization, periods
+and extra spaces. A mismatch can't be recorded until staff choose **Same person,
+keep as is** (both names print on the PDF) or **Use "[name]" as representative**
+(updates **Who is giving consent?** and the signer re-confirms their own signature
+under the corrected name). The server repeats the check.
+
+**Stroke types.** Each stroke is checked by the pointer that drew it: touch and pen
+count as finger or stylus, mouse as mouse or trackpad (browsers report a trackpad as
+a mouse). A stroke of a type the practice doesn't accept draws nothing. Computers
+open the box on **Type** when typed signatures are accepted; touch screens open on
+**Draw**.
+
+### Several consents at once
+
+The Consents list has a checkbox on every Required and Optional consent, a **Select
+all** at the top and in each section, and **Start (N)**. Staff choose each consent's
+method (only the methods it offers; Written only when it can be signed on the
+device), answer **Who is giving consent?**, capacity and the effective date once,
+and hand the device over. The signer goes through "Consent 1 of N" with **Next** or
+**Skip**, and **Review consents** shows each one's status with **Sign now** and
+**Decline** for anything unfinished. **Record Consents (N)** records only the
+finished ones, each with its own signature, PDF and FHIR `Consent`; the rest stay
+Needed. With **Allow reusing a signature** on, later consents offer the signer's
+first signature for them to accept, and the record notes "reused signature".
+
+### Declined consents
+
+**Decline** on **Review consents** records a FHIR `Consent` with `status =
+rejected` and a PDF whose Outcome reads "Declined". A declined consent counts as
+asked and answered: it clears the red button and the banner and shows as
+**Declined** under On File. Declines recorded in the patient portal count the same
+way.
 
 > Canvas keeps **one consent per coding** and overwrites it on re-consent, so a
 > coding shows a single current record; the On File section still lists distinct
@@ -159,9 +215,18 @@ never invents one — and configure its workflow:
 | **Position in the modal** | Order in the picker (editable, lower first). |
 | **Content (verbiage)** | The consent language the provider reads. Blank lines start new paragraphs. |
 | **Questions** | Asked and recorded in order (Yes/No, Acknowledge, Text; each required and optionally "must be Yes to record"). |
-| **At capture** | Which methods are offered, whether to ask who is giving consent, and a capacity statement (templates use `[Patient name]` / `[Name]`). |
+| **At capture** | Which methods are offered, **Allow signing on this device** for Written consents (off by default), whether to ask who is giving consent, and a capacity statement (templates use `[Patient name]` / `[Name]`). |
 
 A live document preview shows how the PDF will read as you edit.
+
+The **Practice settings** tab holds the "Signing on this device" settings that apply
+to every consent:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| **Signing several consents** | Sign each consent | Or **Allow reusing a signature** across the consents in one session. |
+| **Accepted signatures** | Finger or stylus, Mouse or trackpad | Add **Typed**, or clear one. At least one stays on. |
+| **Ask for a printed name** | Off | The signer enters their name under a drawn signature. When off, the name from **Who is giving consent?** prints. |
 
 > **"Show in the consent modal" gates *recording*, not display.** A consent that's
 > already on file still appears under **On File** even if the modal toggle is off.
@@ -208,22 +273,24 @@ Declared in `CANVAS_MANIFEST.json`:
   `ReloadPatientActionButtonsEffect` so its color updates live (requires the manifest's
   pinned SDK `0.179.0`).
 - **`consent_api:ConsentApi`** — staff-authenticated capture + document endpoints:
-  `POST /consent/collect` (generates/attaches the document, creates the FHIR
-  `Consent`) and `GET /consent/document` (serves a recorded consent's PDF).
+  `POST /consent/collect` (generates/attaches the document, with the signature when
+  it was signed on the device, and creates the FHIR `Consent`), `POST
+  /consent/decline` (records a declined consent) and `GET /consent/document`
+  (serves a recorded consent's PDF).
 - **`consent_api:ConsentAdminApi`** — staff + admin endpoints behind Consent
   Settings: `GET /admin/settings`, `GET /admin/codings`, `/admin/consents` (list /
-  upsert / delete), and the banner backfill (`GET /admin/banners`, `POST
+  upsert / delete), `/admin/practice-settings` (get / save), and the banner backfill (`GET /admin/banners`, `POST
   /admin/banners/preview`, `POST /admin/banners/refresh`).
 - **`consent_banner:ConsentBanner`** — event handler that adds/removes the
   chart+profile "Required consent not on file." banner.
 
-**Applications**
+**App drawer**
 
-- **`consent_app:ConsentApp`** — the always-available **Consents** app-drawer
-  launcher (`patient_specific`); opens the picker for the charted patient.
-
-**Consent Settings** is not a menu application — it is a standalone page served by
-`consent_api:ConsentAdminApi` at `/admin/settings` (open by URL or the picker's gear icon).
+- **`consent_settings_app:ConsentSettingsApp`** — a **Consent Settings** icon in the
+  app drawer, shown only to consent admins (`CONSENT_ADMIN_USERS` and the instance root
+  user). It opens the Consent Settings page served by `consent_api:ConsentAdminApi` at
+  `/admin/settings`, which also stays reachable by URL and from the picker's gear icon.
+  Per-user app drawer entries need SDK 0.243.0 (Canvas release 1.364.0 or later).
 
 The Written-consent capture flow loads client libraries from `cdn.jsdelivr.net`
 (declared in `url_permissions`): **pdf-lib** (assemble pages into a PDF),
@@ -237,7 +304,12 @@ The Written-consent capture flow loads client libraries from `cdn.jsdelivr.net`
 - The collecting staff member's identity is read from the authenticated session,
   never from the browser.
 - The capture endpoint re-loads the selected consent's verbiage/templates from the
-  server by code — the browser never supplies recorded text.
+  server by code — the browser never supplies recorded text. The exact text and a
+  SHA-256 of it are stored with each recording.
+- A device signature is checked on the server too: the consent must allow it, the
+  method must be Written, the kind of signature must be accepted, a required printed
+  or typed name must be present, and a name that doesn't match the person giving
+  consent is refused unless staff chose to keep it.
 - The document endpoint is **patient-scoped**: a specific record id is verified to
   belong to the requested patient before it's served.
 - Fetching a consent's `sourceAttachment.url` (and minting a token for it) is
@@ -253,7 +325,9 @@ The Written-consent capture flow loads client libraries from `cdn.jsdelivr.net`
 The plugin reads `Patient` (name, DOB, active/deceased), `PatientConsent` (on-file
 status and history), `Staff` (the collector's name), `PatientConsentCoding` (to list
 the instance's consents), and `BannerAlert` (to reconcile banners). It stores
-workflow overlays in its own `ConsentDefinition` custom-data table, writes the
+workflow overlays in its own `ConsentDefinition` custom-data table, the capture
+detail (including how a device signature was made and the consent text shown) in
+`ConsentCaptureDetail`, and the practice settings in `ConsentPracticeSettings`. It writes the
 `Consent` resource through the Canvas FHIR API, and emits `AddBannerAlert` /
 `RemoveBannerAlert` effects. It does not read or write anything else.
 
@@ -270,17 +344,18 @@ consent-capture/                 # container (this repo)
 └── consent_capture/             # the plugin
     ├── CANVAS_MANIFEST.json
     ├── constants.py             # config parsing, methods, capacity + banner constants
-    ├── models/                  # ConsentDefinition custom-data model
+    ├── models/                  # ConsentDefinition, ConsentCaptureDetail, ConsentPracticeSettings
     ├── service.py               # definitions, picker/on-file status, eligibility, backfill query
     ├── picker_modal.py          # builds the shared picker LaunchModalEffect
     ├── banner.py                # shared AddBannerAlert / RemoveBannerAlert builders
     ├── fhir.py                  # FHIR Consent payload builder
     ├── pdf.py                   # dependency-free PDF generation
     ├── questions.py             # question normalization + answer evaluation
-    ├── assets/consent.png       # app icon
+    ├── signing.py               # name check, accepted signatures, signature JPEG checks
+    ├── assets/settings-icon.svg # Consent Settings app drawer icon
     ├── handlers/
     │   ├── consent_button.py    # the Consents chart-header button
-    │   ├── consent_app.py       # the Consents app-drawer launcher
+    │   ├── consent_settings_app.py # the Consent Settings app drawer entry
     │   ├── consent_banner.py    # the chart/profile banner handler
     │   └── consent_api.py       # /consent/* + /admin/* endpoints (incl. the Settings page)
     └── templates/
@@ -298,7 +373,9 @@ uv run pytest                          # full suite
 uv run pytest --cov=consent_capture    # with coverage
 ```
 
-The suite runs at **~98% coverage** and exercises capacity rendering, seeding, the
+The suite runs at **~99% coverage** and exercises the name check, accepted
+signature types, signature reuse and re-confirmation, the PDF Signature section and
+JPEG embedding, declined consents, the practice settings, and capacity rendering, seeding, the
 PDF builder, the FHIR payload, question evaluation, definition/picker-status/
 eligibility helpers, the backfill query, the always-shown chart button's
 status colors (red when a required consent is due, neutral gray otherwise, never

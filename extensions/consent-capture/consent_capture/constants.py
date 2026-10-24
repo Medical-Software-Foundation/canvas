@@ -54,6 +54,14 @@ def banners_enabled(raw):
 # accepted" (so the consent is treated as on file).
 ACCEPTED_STATES = ("accepted", "accepted_via_patient_portal")
 
+# Consent states that mean the patient declined. A declined consent has been asked
+# and answered, so it counts as done for the red button and the chart banner (it is
+# listed as "Declined" under On File, never as permission).
+DECLINED_STATES = ("rejected", "rejected_via_patient_portal")
+
+# Every state that settles a consent: accepted or declined.
+RECORDED_STATES = ACCEPTED_STATES + DECLINED_STATES
+
 # How a consent may be obtained. Hard-coded, fixed set of three. Each consent is
 # configured (in Consent Settings) with which of these it supports; the provider
 # picks one at capture. "Written" is special — see ``method_generates_pdf``.
