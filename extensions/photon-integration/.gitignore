@@ -1,0 +1,9 @@
+.claude
+.pytest_cache
+__pycache__
+.coverage
+.venv
+*.pyc
+.mypy_cache
+introspect_photon.py
+probe_medications.py

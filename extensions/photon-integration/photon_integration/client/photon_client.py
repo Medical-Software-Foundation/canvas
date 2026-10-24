@@ -1,0 +1,172 @@
+"""Thin client for the Photon Health Clinical (GraphQL) API.
+
+Wraps OAuth client-credentials auth and the GraphQL mutations/queries the
+integration needs. All HTTP goes through the Canvas SDK ``Http`` client (30s
+timeout, URL validation, metrics) — never raw requests/httpx.
+
+Environment selection (``sandbox`` vs ``production``) drives both the OAuth and
+API hosts:
+
+* sandbox (Neutron): https://auth.neutron.health , https://api.neutron.health
+* production (Photon): https://auth.photon.health , https://api.photon.health
+"""
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+from canvas_sdk.caching.plugins import get_cache
+from canvas_sdk.utils.http import Http
+
+# OAuth tokens are valid for 24h; refresh a little early.
+_TOKEN_TTL_SECONDS = 23 * 60 * 60
+
+_ENVIRONMENTS = {
+    "sandbox": {
+        "auth_url": "https://auth.neutron.health/oauth/token",
+        "audience": "https://api.neutron.health",
+        "graphql_url": "https://api.neutron.health/graphql",
+    },
+    "production": {
+        "auth_url": "https://auth.photon.health/oauth/token",
+        "audience": "https://api.photon.health",
+        "graphql_url": "https://api.photon.health/graphql",
+    },
+}
+
+
+class PhotonError(Exception):
+    """Raised for any expected Photon API failure (auth, GraphQL, lookup)."""
+
+
+class PhotonClient:
+    """Minimal Photon GraphQL client scoped to the prescription flow."""
+
+    def __init__(self, client_id: str, client_secret: str, env: str = "sandbox") -> None:
+        if not client_id or not client_secret:
+            raise PhotonError("Photon credentials are not configured")
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.env = env if env in _ENVIRONMENTS else "sandbox"
+        config = _ENVIRONMENTS[self.env]
+        self.auth_url = config["auth_url"]
+        self.audience = config["audience"]
+        self.graphql_url = config["graphql_url"]
+        self._http = Http()
+
+    # -- auth --------------------------------------------------------------
+
+    def _fetch_token(self) -> str:
+        """Request a fresh M2M access token from Photon's OAuth endpoint."""
+        response = self._http.post(
+            self.auth_url,
+            json={
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "audience": self.audience,
+                "grant_type": "client_credentials",
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        if response.status_code != 200:
+            raise PhotonError(
+                f"Photon auth failed ({response.status_code}): {response.text[:200]}"
+            )
+        token = response.json().get("access_token")
+        if not token:
+            raise PhotonError("Photon auth response did not include an access_token")
+        return str(token)
+
+    def _get_token(self) -> str:
+        """Return a cached token, fetching (and caching) one when absent."""
+        cache_key = f"photon_token_{self.env}"
+        # get_or_set only invokes the default (and thus the HTTP request) on a
+        # cache miss; a failed fetch raises and nothing is cached.
+        return str(get_cache().get_or_set(cache_key, self._fetch_token, _TOKEN_TTL_SECONDS))
+
+    # -- graphql -----------------------------------------------------------
+
+    def _graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        response = self._http.post(
+            self.graphql_url,
+            json={"query": query, "variables": variables},
+            headers={
+                "Authorization": f"Bearer {self._get_token()}",
+                "Content-Type": "application/json",
+            },
+        )
+        if response.status_code != 200:
+            raise PhotonError(
+                f"Photon GraphQL HTTP {response.status_code}: {response.text[:200]}"
+            )
+        body = response.json()
+        if body.get("errors"):
+            raise PhotonError(f"Photon GraphQL error: {body['errors']}")
+        data = body.get("data")
+        if data is None:
+            raise PhotonError("Photon GraphQL response contained no data")
+        return cast("dict[str, Any]", data)
+
+    # -- patients ----------------------------------------------------------
+
+    def create_patient(self, patient_input: dict[str, Any]) -> str:
+        """Create a Photon patient and return its id.
+
+        ``patient_input`` keys map to the createPatient arguments: externalId,
+        name (NameInput), dateOfBirth (AWSDate), sex (SexType), gender, email,
+        phone (AWSPhone), address (AddressInput).
+        """
+        mutation = """
+            mutation createPatient(
+              $externalId: ID
+              $name: NameInput!
+              $dateOfBirth: AWSDate!
+              $sex: SexType!
+              $gender: String
+              $email: AWSEmail
+              $phone: AWSPhone!
+              $address: AddressInput
+            ) {
+              createPatient(
+                externalId: $externalId
+                name: $name
+                dateOfBirth: $dateOfBirth
+                sex: $sex
+                gender: $gender
+                email: $email
+                phone: $phone
+                address: $address
+              ) { id }
+            }
+        """
+        created = self._graphql(mutation, patient_input).get("createPatient")
+        if not created or not created.get("id"):
+            raise PhotonError("Photon createPatient did not return an id")
+        return str(created["id"])
+
+    # -- treatments (medication catalog) -----------------------------------
+
+    def find_treatment_by_code(self, code: str | None) -> dict[str, Any] | None:
+        """Resolve a Photon treatment by code (RxNorm rxcui).
+
+        Returns the matched medication ({id, name, brandName, genericName}) so the
+        caller can show the provider exactly what Photon resolved (catching a
+        brand->generic or wrong-device substitution) before sending. Photon stores
+        RxNorm but generally not NDC, and ``drug.code`` matches any code id.
+        """
+        if not code:
+            return None
+        query = """
+            query medications($filter: MedicationFilter, $first: Int) {
+              medications(filter: $filter, first: $first) {
+                id name brandName genericName
+              }
+            }
+        """
+        medications = (
+            self._graphql(query, {"filter": {"drug": {"code": code}}, "first": 1}).get(
+                "medications"
+            )
+            or []
+        )
+        return medications[0] if medications else None
