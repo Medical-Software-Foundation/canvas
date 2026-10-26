@@ -124,19 +124,24 @@ def source_numbers(fmt: NumberFormat) -> dict[int, tuple[int, str]]:
     return found
 
 
-def adoptable_patients(fmt: NumberFormat) -> list[tuple[PatientProxy, int, str]]:
-    """Unnumbered patients whose source number is still free, oldest first.
+def adoptable_patients(
+    fmt: NumberFormat, limit: int | None = None
+) -> tuple[list[tuple[PatientProxy, int, str]], int]:
+    """Unnumbered patients whose source number is still free, oldest first, plus how many there are.
 
-    A patient whose source number is already taken is left out here and numbered sequentially
-    afterwards (see conflicting_patients), so a duplicate source ID can't stall the backfill.
+    Only `limit` patients are loaded; the count covers all of them, so the caller can tell whether
+    more remain without a second pass. A patient whose source number is already taken is left out
+    here and numbered sequentially afterwards, so a duplicate source ID can't stall the backfill.
     """
     by_patient = source_numbers(fmt)
     if not by_patient:
-        return []
+        return [], 0
     taken = set(PatientNumber.objects.values_list("number", flat=True))
     free = {dbid: found for dbid, found in by_patient.items() if found[0] not in taken}
     patients = PatientProxy.objects.filter(dbid__in=free.keys()).order_by("created", "dbid")
-    return [(patient, *free[patient.dbid]) for patient in patients]
+    if limit is not None:
+        patients = patients[:limit]
+    return [(patient, *free[patient.dbid]) for patient in patients], len(free)
 
 
 def number_effects(

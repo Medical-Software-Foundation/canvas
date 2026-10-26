@@ -88,14 +88,17 @@ class PatientNumberingAdminAPI(StaffSessionAuthMixin, SimpleAPI):
         adopted: list[int] = []
         assigned: list[int] = []
 
-        for patient, number, source_value in adoptable_patients(fmt)[:BATCH_SIZE]:
+        candidates, adoptable_total = adoptable_patients(fmt, limit=BATCH_SIZE)
+        for patient, number, source_value in candidates:
             if adopt_number(patient, number):
                 effects.extend(number_effects(patient.id, number, fmt, searchable_as=source_value))
                 adopted.append(number)
 
         conflicts = 0
         room = BATCH_SIZE - len(adopted)
-        if room > 0 and not adoptable_patients(fmt):
+        # Every adoptable patient fit in this batch, so nothing is left to adopt. (One that lost a
+        # race for its number now has a taken source number and is numbered below.)
+        if room > 0 and adoptable_total <= BATCH_SIZE:
             # Anyone still holding a source ID here has one whose number is already taken.
             unadopted = source_numbers(fmt)
             for patient in unnumbered_patients()[:room]:

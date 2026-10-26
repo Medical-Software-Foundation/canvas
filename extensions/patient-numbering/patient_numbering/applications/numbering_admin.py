@@ -13,9 +13,9 @@ class PatientNumberingAdmin(Application):
     """Admin app to number existing patients and check progress."""
 
     def on_open(self) -> Effect:
-        """Open the admin page in a modal."""
+        """Open the admin page as a full Canvas page."""
         return LaunchModalEffect(
             url=f"/plugin-io/api/patient_numbering/admin?v={_CACHE_BUST}",
-            target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
+            target=LaunchModalEffect.TargetType.PAGE,
             title="Patient Numbering",
         ).apply()

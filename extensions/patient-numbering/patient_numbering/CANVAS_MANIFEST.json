@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.199.0",
-    "plugin_version": "0.3.1",
+    "plugin_version": "0.3.2",
     "name": "patient_numbering",
     "description": "Gives every patient a unique Patient ID in addition to the MRN, shown on the patient profile and searchable from the patient search bar. Existing patients can keep the number in an ID carried over from a previous system (for example a Charm ID), and new patients continue the sequence. For front desk and practice staff who need simple patient numbers.",
     "components": {

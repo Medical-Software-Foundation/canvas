@@ -119,12 +119,26 @@ class TestAdoptableQuery:
         _source_id(a, "ABC0010")
         _source_id(b, "ABC0011", system="Other")
         _source_id(c, "not-an-id")
-        assert adoptable_patients(CHARM) == [(a, 10, "ABC0010")]
-        assert d not in [p for p, _, _ in adoptable_patients(CHARM)]
+        assert adoptable_patients(CHARM) == ([(a, 10, "ABC0010")], 1)
+        assert d not in [p for p, _, _ in adoptable_patients(CHARM)[0]]
 
     def test_nothing_adoptable_without_source_system(self) -> None:
         _source_id(make_patient(), "ABC0010")
-        assert adoptable_patients(NumberFormat(prefix="ABC", width=4)) == []
+        assert adoptable_patients(NumberFormat(prefix="ABC", width=4)) == ([], 0)
+
+    def test_limit_loads_only_the_batch_but_counts_all(self) -> None:
+        patients = [make_patient() for _ in range(3)]
+        for index, patient in enumerate(patients, start=1):
+            _source_id(patient, CHARM.format(index))
+        batch, total = adoptable_patients(CHARM, limit=2)
+        assert [p for p, _, _ in batch] == patients[:2]
+        assert total == 3
+
+    def test_taken_source_number_is_not_adoptable(self) -> None:
+        holder, imported = make_patient(), make_patient()
+        PatientNumber.objects.create(patient=holder, number=7)
+        _source_id(imported, "ABC0007")
+        assert adoptable_patients(CHARM) == ([], 0)
 
 
 @pytest.mark.django_db
