@@ -1,8 +1,8 @@
 {
     "sdk_version": "0.199.0",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.3.1",
     "name": "patient_numbering",
-    "description": "Gives every patient a unique sequential Patient ID (1, 2, 3...) in addition to the MRN, shown on the patient profile and searchable from the patient search bar. For front desk and practice staff who need simple patient numbers.",
+    "description": "Gives every patient a unique Patient ID in addition to the MRN, shown on the patient profile and searchable from the patient search bar. Existing patients can keep the number in an ID carried over from a previous system (for example a Charm ID), and new patients continue the sequence. For front desk and practice staff who need simple patient numbers.",
     "components": {
         "applications": [
             {
@@ -39,11 +39,12 @@
             },
             {
                 "class": "patient_numbering.handlers.admin_api:PatientNumberingAdminAPI",
-                "description": "Admin page, status, and backfill of existing patients in creation order",
+                "description": "Admin page, status, and backfill of existing patients: keeps source IDs, then numbers the rest in creation order",
                 "data_access": {
                     "event": "",
                     "read": [
-                        "Patient"
+                        "Patient",
+                        "PatientExternalIdentifier"
                     ],
                     "write": [
                         "PatientExternalIdentifier",
@@ -56,6 +57,18 @@
     "variables": [
         {
             "name": "ADMIN_STAFF_IDS",
+            "sensitive": false
+        },
+        {
+            "name": "SOURCE_IDENTIFIER_SYSTEM",
+            "sensitive": false
+        },
+        {
+            "name": "NUMBER_PREFIX",
+            "sensitive": false
+        },
+        {
+            "name": "NUMBER_WIDTH",
             "sensitive": false
         },
         {

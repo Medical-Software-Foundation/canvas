@@ -69,6 +69,9 @@ class TestAdminRoutes:
             "numbered": 0,
             "remaining": 1,
             "backfill_complete": False,
+            "source_system": "",
+            "adopted": 0,
+            "next_patient_id": "1",
         }
 
     def test_status_reports_counts(self) -> None:
@@ -79,18 +82,23 @@ class TestAdminRoutes:
             "numbered": 0,
             "remaining": 2,
             "backfill_complete": False,
+            "source_system": "",
+            "adopted": 0,
+            "next_patient_id": "1",
         }
 
     def test_backfill_numbers_in_creation_order_and_completes(self) -> None:
         patients = [make_patient() for _ in range(3)]
         with patch("patient_numbering.handlers.admin_api.number_effects") as effects:
-            effects.side_effect = lambda key, number: [f"effect-{number}"]
+            effects.side_effect = lambda key, number, fmt: [f"effect-{number}"]
             response, *returned = _admin().backfill()
 
         assert _json(response) == {
             "assigned": 3,
-            "first": 1,
-            "last": 3,
+            "adopted": 0,
+            "conflicts": 0,
+            "first": "1",
+            "last": "3",
             "remaining": 0,
             "backfill_complete": True,
         }
@@ -115,6 +123,8 @@ class TestAdminRoutes:
         body = _json(_admin().backfill()[0])
         assert body == {
             "assigned": 0,
+            "adopted": 0,
+            "conflicts": 0,
             "first": None,
             "last": None,
             "remaining": 0,

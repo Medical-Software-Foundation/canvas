@@ -3,7 +3,12 @@ from canvas_sdk.events import EventType
 from canvas_sdk.handlers.base import BaseHandler
 from logger import log
 from patient_numbering.models import PatientProxy
-from patient_numbering.numbering import assign_number, backfill_complete, number_effects
+from patient_numbering.numbering import (
+    NumberFormat,
+    assign_number,
+    backfill_complete,
+    number_effects,
+)
 
 
 class NumberNewPatient(BaseHandler):
@@ -28,4 +33,4 @@ class NumberNewPatient(BaseHandler):
             return []
 
         log.info(f"patient_numbering: assigned {number} to patient {self.event.target.id}")
-        return number_effects(self.event.target.id, number)
+        return number_effects(self.event.target.id, number, NumberFormat.from_secrets(self.secrets))

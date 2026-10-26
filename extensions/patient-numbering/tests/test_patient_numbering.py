@@ -10,6 +10,7 @@ from patient_numbering.handlers.patient_created import NumberNewPatient
 from patient_numbering.handlers.profile_field import PatientNumberProfileField
 from patient_numbering.models import PatientNumber
 from patient_numbering.numbering import (
+    NumberFormat,
     IDENTIFIER_SYSTEM,
     METADATA_KEY,
     assign_number,
@@ -141,4 +142,4 @@ class TestNewPatientHandler:
         with patch("patient_numbering.handlers.patient_created.number_effects") as effects:
             effects.return_value = ["effects"]
             assert handler.compute() == ["effects"]
-        effects.assert_called_once_with(new.id, 2)
+        effects.assert_called_once_with(new.id, 2, NumberFormat())
