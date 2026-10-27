@@ -50,6 +50,14 @@ class TestOccursOn:
         assert not occurs_on(ev, date(2026, 11, 2), NY)
         assert occurs_on(ev, date(2026, 11, 9), NY)
 
+    def test_weekly_interval_counts_calendar_weeks(self) -> None:
+        # Every other week on Mon and Wed, first occurrence on a Wednesday.
+        wed = datetime(2026, 10, 28, 9, tzinfo=NY)
+        ev = _event(wed, wed + timedelta(hours=8), "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE")
+        assert not occurs_on(ev, date(2026, 11, 2), NY)  # Monday of the skipped week
+        assert occurs_on(ev, date(2026, 11, 9), NY)  # Monday of the next on-week
+        assert occurs_on(ev, date(2026, 11, 11), NY)
+
     def test_daily_interval_and_until(self) -> None:
         ev = _event(MON_9, MON_17, "FREQ=DAILY;INTERVAL=2;UNTIL=20261030T000000Z")
         assert occurs_on(ev, date(2026, 10, 28), NY)
@@ -80,12 +88,13 @@ class TestWindowOn:
         assert s == datetime(2026, 10, 28, 9, 0, tzinfo=NY)
         assert e == datetime(2026, 10, 28, 17, 0, tzinfo=NY)
 
-    def test_overnight_is_clipped_to_midnight(self) -> None:
+    def test_overnight_keeps_its_full_length(self) -> None:
         ev = _event(
-            datetime(2026, 10, 26, 20, tzinfo=NY), datetime(2026, 10, 27, 2, tzinfo=NY)
+            datetime(2026, 10, 26, 22, tzinfo=NY), datetime(2026, 10, 27, 2, tzinfo=NY)
         )
-        _s, e = window_on(ev, date(2026, 10, 26), NY)
-        assert e == datetime(2026, 10, 27, 0, 0, tzinfo=NY)
+        start, end = window_on(ev, date(2026, 10, 28), NY)
+        assert start == datetime(2026, 10, 28, 22, 0, tzinfo=NY)
+        assert end == datetime(2026, 10, 29, 2, 0, tzinfo=NY)
 
     def test_all_day(self) -> None:
         s, e = window_on(_event(MON_9, MON_17, is_all_day=True), date(2026, 10, 26), NY)

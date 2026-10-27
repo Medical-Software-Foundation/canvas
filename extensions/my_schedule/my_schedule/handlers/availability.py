@@ -59,24 +59,27 @@ def occurs_on(event: Event, day: date, tz: ZoneInfo) -> bool:
         days = {_DAY_MAP[d] for d in rule.get("BYDAY", "").split(",") if d in _DAY_MAP}
         if day.weekday() not in (days or {first.weekday()}):
             return False
-        return ((day - first).days // 7) % interval == 0
+        # RRULE weeks start on Monday; count whole weeks between the two Mondays.
+        weeks = (
+            (day - timedelta(days=day.weekday()))
+            - (first - timedelta(days=first.weekday()))
+        ).days // 7
+        return weeks % interval == 0
     return False
 
 
 def window_on(
     event: Event, day: date, tz: ZoneInfo
 ) -> tuple[datetime, datetime] | None:
-    """The event's start and end on `day`, in the calendar's time zone (clipped to that day)."""
-    start_local = event.starts_at.astimezone(tz)
-    end_local = event.ends_at.astimezone(tz)
-    start = datetime.combine(day, start_local.time(), tzinfo=tz)
+    """The occurrence that starts on `day` (calendar-local), keeping its full length.
+
+    An overnight block runs into the next day; the page clips each day's column itself.
+    """
     if event.is_all_day:
         start = datetime.combine(day, time.min, tzinfo=tz)
-        end = start + timedelta(days=1)
-    elif end_local.date() > start_local.date():
-        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=tz)
-    else:
-        end = datetime.combine(day, end_local.time(), tzinfo=tz)
+        return start, start + timedelta(days=1)
+    start = datetime.combine(day, event.starts_at.astimezone(tz).time(), tzinfo=tz)
+    end = start + (event.ends_at - event.starts_at)
     return (start, end) if end > start else None
 
 
