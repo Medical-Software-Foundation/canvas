@@ -54,3 +54,23 @@ def library_cache_and_calendars() -> Iterator[Any]:
     with patch("dot_phrases.library.get_cache", return_value=cache), patch("dot_phrases.library.Calendar") as calendar:
         calendar.objects.values_list.return_value = []
         yield SimpleNamespace(cache=cache, calendar=calendar)
+
+
+@pytest.fixture(autouse=True)
+def practice_settings() -> Iterator[dict[str, Any]]:
+    """Practice settings in memory, so placeholder settings never reach the database."""
+    store: dict[str, Any] = {}
+
+    def fake_get(key: str) -> Any:
+        from dot_phrases.library import SETTING_DEFAULTS
+
+        return store.get(key, SETTING_DEFAULTS.get(key))
+
+    def fake_known() -> set[str]:
+        # Uses the API module's practice_values, which tests often patch.
+        from dot_phrases.handlers import api
+
+        return set(api.practice_values()) | set(store.get("custom_placeholders") or {})
+
+    with patch("dot_phrases.library.get_setting", side_effect=fake_get), patch("dot_phrases.handlers.api.known_names", side_effect=fake_known):
+        yield store

@@ -4,14 +4,13 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import PanelApplication
 
-from dot_phrases.library import is_admin
-
 
 class DotPhrasesAdminApp(PanelApplication):
-    """App drawer icon for practice phrases, practice settings, and import.
+    """App drawer icon for the Dot Phrases app.
 
-    Only members of the team named in the ADMIN_TEAM setting see it. When the setting is empty, nobody
-    does. Needs Canvas 1.364 or later, which added per-user app drawer icons.
+    Every staff member sees it: My phrases and a read-only Practice phrases tab for everyone, and
+    editable practice phrases and Practice settings for members of the ADMIN_TEAM team. Needs
+    Canvas 1.364 or later, which added per-user app drawer icons.
     """
 
     NAME = "Dot Phrases"
@@ -27,11 +26,11 @@ class DotPhrasesAdminApp(PanelApplication):
         # practice phrase from there with the panel's open-in-admin icon.
         if self.event.context.get("patient"):
             return False
-        return is_admin(self._staff_id(), self.secrets)
+        return bool(self._staff_id())
 
     def on_open(self) -> Effect | list[Effect]:
-        # The admin page checks the signed-in staff member again, so a stale menu entry can't
-        # open it for someone removed from the setting.
+        # The page and its API check who is signed in on every request, so only admins can change
+        # practice phrases or settings, whatever the page shows.
         return LaunchModalEffect(
             url="/plugin-io/api/dot_phrases/admin/",
             target=LaunchModalEffect.TargetType.PAGE,

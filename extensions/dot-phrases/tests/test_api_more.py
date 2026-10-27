@@ -34,6 +34,7 @@ def test_list_phrases_returns_previews_favorites_and_prescription_targets(db: An
         patch(f"{MODULE}.placeholder_values", return_value={"after_hours_line": "(555) 010-2000"}),
         patch(f"{MODULE}.Command") as command_model,
         patch(f"{MODULE}.hidden_ids", return_value={2}),
+        patch(f"{MODULE}.note_label", return_value={"title": "RFV 1", "when": "", "provider": ""}) as label,
     ):
         note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = note
         command_model.objects.filter.return_value.order_by.return_value.first.return_value = SimpleNamespace(id="rx")
@@ -48,6 +49,10 @@ def test_list_phrases_returns_previews_favorites_and_prescription_targets(db: An
     assert data["allow_copy_text"] is True
     assert data["is_admin"] is False
     assert data["admin_team"] == "Dot Phrase Admins"
+    assert data["note"] == {"title": "RFV 1", "when": "", "provider": ""}
+    assert [m["name"] for m in data["menu_placeholders"]][:3] == ["first_name", "preferred_name", "last_name"]
+    assert "mrn" not in [m["name"] for m in data["menu_placeholders"]]
+    label.assert_called_once_with(note)
 
 
 def test_list_phrases_needs_a_signed_in_staff_member(db: Any) -> None:
@@ -60,7 +65,7 @@ def test_update_saves_the_changes(db: Any) -> None:
     db.phrase_model.objects.filter.return_value.filter.return_value.exclude.return_value.first.return_value = None
     resp = response(make_api(body={"code": "fu3w", "text": "Follow up in 3 weeks.", "use_in": ["plan"]}, path={"phrase_id": "1"}).update_phrase())
     assert resp.status_code == HTTPStatus.OK
-    assert (mine.code, mine.text, mine.use_in) == ("fu3w", "Follow up in 3 weeks.", None)
+    assert (mine.code, mine.text, mine.use_in) == ("fu3w", "Follow up in 3 weeks.", ["plan"])
     mine.save.assert_called_once()
 
 
@@ -102,12 +107,62 @@ def test_pages_and_assets_render(db: Any) -> None:
 
 def test_admin_data_and_settings(db: Any) -> None:
     db.phrase_model.objects.filter.return_value.select_related.return_value.order_by.return_value = [phrase(scope="practice", text="Call {after_hours_line}.")]
-    data = body_of(response(make_api(staff_id=ADMIN_ID).admin_data()))
+    with patch(f"{MODULE}.hidden_ids", return_value=set()), patch(f"{MODULE}.PatientMetadata") as metadata:
+        metadata.objects.order_by.return_value.values_list.return_value.distinct.return_value = ["program_name"]
+        data = body_of(response(make_api(staff_id=ADMIN_ID).admin_data()))
     assert data["values"] == [{"name": "after_hours_line", "value": "(555) 010-2000", "used_in": 1}]
-    assert response(make_api().admin_data()).status_code == HTTPStatus.FORBIDDEN
+    assert data["is_admin"] is True
+    assert data["metadata_keys"] == ["program_name"]
+    assert [g["name"] for g in data["chart_groups"]] == ["Patient", "Visit", "Coverage"]
+    assert "mrn" not in data["chart_enabled"]
     with patch(f"{MODULE}.set_setting") as set_setting:
         response(make_api(staff_id=ADMIN_ID, body={"allow_copy_text": False}).save_settings())
     set_setting.assert_called_once_with("allow_copy_text", False)
+
+
+def test_app_data_splits_my_phrases_from_practice_phrases_for_any_staff_member(db: Any) -> None:
+    rows = [
+        phrase(dbid=1, code="fu2w", scope="personal", owner_id=10),
+        phrase(dbid=2, code="kneehpi", scope="practice", owner_id=20),
+        phrase(dbid=3, code="metf500", scope="practice", owner_id=20),
+    ]
+    db.phrase_model.objects.filter.return_value.select_related.return_value.order_by.return_value = rows
+    with patch(f"{MODULE}.hidden_ids", return_value={3}):
+        data = body_of(response(make_api().admin_data()))
+    assert data["is_admin"] is False
+    assert data["admin_team"] == "Dot Phrase Admins"
+    assert [(p["code"], p["mine"]) for p in data["mine"]] == [("fu2w", True)]
+    assert [(p["code"], p["hidden"]) for p in data["phrases"]] == [("kneehpi", False), ("metf500", True)]
+
+
+def test_app_data_needs_a_signed_in_staff_member(db: Any) -> None:
+    assert response(make_api(staff_id=None).admin_data()).status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_chart_placeholder_choices_are_saved_in_list_order(db: Any) -> None:
+    with patch(f"{MODULE}.set_setting") as set_setting:
+        ok = response(make_api(staff_id=ADMIN_ID, body={"chart_placeholders": ["mrn", "first_name"]}).save_settings())
+        bad = response(make_api(staff_id=ADMIN_ID, body={"chart_placeholders": ["shoe_size"]}).save_settings())
+    assert ok.status_code == HTTPStatus.OK
+    set_setting.assert_called_once_with("chart_placeholders", ["first_name", "mrn"])
+    assert bad.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_custom_placeholders_are_admin_only_and_checked(db: Any, practice_settings: Any) -> None:
+    def fake_set(key: str, value: Any) -> None:
+        practice_settings[key] = value
+
+    with patch(f"{MODULE}.set_setting", side_effect=fake_set):
+        assert response(make_api(body={"name": "program", "key": "program_name"}).save_custom_placeholder()).status_code == HTTPStatus.FORBIDDEN
+        bad_name = response(make_api(staff_id=ADMIN_ID, body={"name": "Program!", "key": "program_name"}).save_custom_placeholder())
+        chart = response(make_api(staff_id=ADMIN_ID, body={"name": "first_name", "key": "x"}).save_custom_placeholder())
+        practice = response(make_api(staff_id=ADMIN_ID, body={"name": "after_hours_line", "key": "x"}).save_custom_placeholder())
+        no_key = response(make_api(staff_id=ADMIN_ID, body={"name": "program", "key": ""}).save_custom_placeholder())
+        ok = response(make_api(staff_id=ADMIN_ID, body={"name": "program", "key": "program_name"}).save_custom_placeholder())
+        assert practice_settings["custom_placeholders"] == {"program": "program_name"}
+        response(make_api(staff_id=ADMIN_ID, path={"name": "program"}).delete_custom_placeholder())
+    assert [r.status_code for r in (bad_name, chart, practice, no_key, ok)] == [400, 400, 400, 400, 200]
+    assert practice_settings["custom_placeholders"] == {}
 
 
 def test_delete_value_needs_an_admin(db: Any) -> None:

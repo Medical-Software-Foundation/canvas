@@ -270,4 +270,39 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .off-chart > div{background:#fff;border:1.5px solid #dce8ec;border-radius:12px;padding:18px 16px;box-shadow:0 4px 16px rgba(13,32,60,.10);max-width:280px}
 .off-chart b{display:block;font-size:15px;color:#0d203c}
 .off-chart p{margin:6px 0 0;font-size:13px;color:#5e7a8a;line-height:1.5}
+/* Use in checklist: a summary line with Change, and the checklist under it. Not sourced: the summary
+   reuses the editor's field colors; links and checkboxes use the picker's teal (#2c7f8c) */
+.wi{display:flex;align-items:center;gap:12px;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:9px 12px;font-size:14px}
+.wi-t{flex:1;color:#2c4155}
+.wi-t b{color:#0d203c;font-weight:600}
+.wi-link{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:#2c7f8c;cursor:pointer}
+.use-list{margin-top:10px}
+.use-list[hidden],.use-rem[hidden]{display:none}
+.use-rem{font-size:12.5px;color:#9a5b00;margin-top:6px}
+.use-rxhint{font-size:12px;color:#8ea8b5;margin:2px 0 6px;line-height:1.45}
+.use-cnt{font-size:12px;color:#8ea8b5;margin-left:4px}
+.use-cnt.bad{color:#c62828}
+.panel-pk .wi{font-size:13px;padding:8px 10px}
+.panel-pk .pk-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
+.panel-pk .pk-ck{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;color:#2c4155;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;margin:0}
+.panel-pk .pk-ck input{width:15px;height:15px;margin:0;padding:0;accent-color:#2c7f8c;flex-shrink:0}
+.panel-pk .pk-gh{display:flex;align-items:baseline;gap:10px;font-size:12px;font-weight:600;color:#5e7a8a;margin:8px 0 2px}
+.panel-pk .pk-all{margin-left:auto;border:0;background:none;padding:0;font:inherit;font-size:12px;font-weight:600;color:#2c7f8c;cursor:pointer}
+/* "Adding to" line pinned to the bottom of the chart panel, from the Order Favorites panel
+   (order_favorites/static/panel/app.css .pp-foot, .target) */
+.pp-foot{position:sticky;bottom:0;z-index:5;background:#fff;border-top:1.5px solid #dce8ec;padding:12px 16px}
+.pp-foot .lbl{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:0 0 4px}
+.pp-foot .target{font-size:13px;color:#0d203c;font-weight:600;line-height:1.4}
+.pp-foot .target span{display:block;font-size:12px;font-weight:500;color:#5e7a8a}
+/* Hidden view when nothing is hidden: a card like the Manage list's (.ml-group), with the hide icon */
+.hd-empty{background:#fff;border:1.5px solid #dce8ec;border-radius:12px;box-shadow:0 1px 4px rgba(13,32,60,.07);padding:16px;display:flex;gap:12px;align-items:flex-start}
+.hd-empty svg{width:20px;height:20px;color:#2c7f8c;flex-shrink:0;margin-top:1px}
+.hd-empty b{display:block;font-size:14px;color:#0d203c;font-weight:600}
+.hd-empty p{margin:2px 0 0;font-size:12.5px;color:#5e7a8a;line-height:1.45}
+.ml-foot.hd-note{font-size:12.5px;color:#5e7a8a;line-height:1.45}
+/* Select all note commands / Clear all, above the Use in groups */
+.use-bulk{display:flex;align-items:baseline;gap:16px;padding:10px 0 8px;margin:8px 0 0;border-top:1px solid #eef4f6;border-bottom:1px solid #eef4f6}
+.use-bulk .pk-all{margin-left:0}
+.use-bulk .pk-all[data-useall]{margin-left:auto}
+.use-rem b{font-weight:700}
 {% endverbatim %}

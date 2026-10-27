@@ -26,18 +26,62 @@ PLACEHOLDER = re.compile(
 )
 PRACTICE_NAME_RULE = re.compile(r"[a-z][a-z_]{0,63}")
 
-PATIENT_PLACEHOLDERS: dict[str, str] = {
-    "first_name": "Patient's first name",
-    "preferred_name": "Preferred name, if the chart has one",
-    "last_name": "Last name",
-    "age": "Age in years",
-    "dob": "Date of birth",
-    "subject_pronoun": "she / he / they, from the chart's preferred pronouns",
-    "object_pronoun": "her / him / them",
-    "possessive_pronoun": "her / his / their",
-    "today": "Today's date",
-    "provider": "The note's provider",
-}
+# Chart placeholders, filled from the patient's chart and the note. Admins choose which ones show in
+# the editor's menus (Practice settings); every one still fills in when typed.
+CHART_GROUPS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
+    (
+        "Patient",
+        (
+            ("first_name", "First name"),
+            ("preferred_name", "Preferred name, if the chart has one"),
+            ("last_name", "Last name"),
+            ("age", "Age in years"),
+            ("dob", "Date of birth"),
+            ("mrn", "Medical record number"),
+            ("subject_pronoun", "Pronoun: she / he / they"),
+            ("object_pronoun", "Pronoun: her / him / them"),
+            ("possessive_pronoun", "Pronoun: her / his / their"),
+            ("business_line", "Business line the patient belongs to"),
+            ("facility", "Facility the patient lives in"),
+            ("room_number", "Room at that facility"),
+        ),
+    ),
+    (
+        "Visit",
+        (
+            ("today", "Today's date"),
+            ("provider", "The note's provider"),
+            ("practice_location", "The note's practice location"),
+            ("last_visit", "Last visit before this note"),
+            ("next_visit", "Next scheduled visit"),
+        ),
+    ),
+    (
+        "Coverage",
+        (
+            ("insurance", "Primary insurance (payer)"),
+            ("plan", "Primary plan"),
+            ("member_id", "Member ID"),
+            ("group_number", "Group number"),
+        ),
+    ),
+)
+PATIENT_PLACEHOLDERS: dict[str, str] = {name: label for _, items in CHART_GROUPS for name, label in items}
+# Shown in the menus on a new install unless an admin turns them on.
+CHART_OFF_BY_DEFAULT = frozenset(
+    {
+        "mrn",
+        "business_line",
+        "facility",
+        "room_number",
+        "last_visit",
+        "next_visit",
+        "insurance",
+        "plan",
+        "member_id",
+        "group_number",
+    }
+)
 
 # Pronouns come only from the chart's preferred-pronouns field, never from sex at birth. A value
 # outside these three stays as typed so the provider fills it in.
@@ -140,6 +184,11 @@ def has_placeholders(text: str) -> bool:
     return PLACEHOLDER.search(text) is not None
 
 
+def placeholder_names(texts: list[str]) -> set[str]:
+    """The {name} placeholders used in some phrase texts, lowercased."""
+    return {m.group(4).lower() for t in texts for m in PLACEHOLDER.finditer(t or "") if m.group(4)}
+
+
 def unknown_placeholders(text: str, practice_names: set[str]) -> list[str]:
     """Placeholders that are neither patient placeholders nor practice values."""
     unknown: list[str] = []
@@ -203,7 +252,7 @@ def rx_message(label: str, field_max: int, text: str) -> str:
     if not issue:
         return ""
     name = rx_field_name(label)
-    return f"Can't use in the {name}: {issue}. {fix}, or uncheck Use in {name}."
+    return f"Can't use in the {name}: {issue}. {fix}, or uncheck {label} under Use in."
 
 
 def codes_in(text: str) -> list[str]:

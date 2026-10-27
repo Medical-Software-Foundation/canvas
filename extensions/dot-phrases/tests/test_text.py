@@ -92,16 +92,16 @@ class TestRules:
         assert rx_problems(1000, "Call #2 @ 9am, 50% off & more ~ok") == []
 
     def test_editor_message_names_the_field_the_problem_and_the_fix(self) -> None:
-        assert rx_message("Sig", 1000, "Take 1\nwith food") == "Can't use in the Sig: it has a line break. Remove it, or uncheck Use in Sig."
+        assert rx_message("Sig", 1000, "Take 1\nwith food") == "Can't use in the Sig: it has a line break. Remove it, or uncheck Sig under Use in."
         assert rx_message("Note to pharmacist", 210, "x" * 243) == (
-            "Can't use in the note to pharmacist: it's over 210 characters (243). Shorten it, or uncheck Use in note to pharmacist."
+            "Can't use in the note to pharmacist: it's over 210 characters (243). Shorten it, or uncheck Note to pharmacist under Use in."
         )
         assert rx_message("Sig", 1000, "Take ½ tab at 98.6°, take ½ again") == (
-            "Can't use in the Sig: it has special characters (½, °). Replace them, or uncheck Use in Sig."
+            "Can't use in the Sig: it has special characters (½, °). Replace them, or uncheck Sig under Use in."
         )
         assert rx_message("Sig", 1000, "Take 1 tablet") == ""
 
     def test_editor_message_with_several_problems_says_fix_these(self) -> None:
         assert rx_message("Sig", 10, "Take ½ tab\ndaily") == (
-            "Can't use in the Sig: it's over 10 characters (16) and it has a line break. Fix these, or uncheck Use in Sig."
+            "Can't use in the Sig: it's over 10 characters (16) and it has a line break. Fix these, or uncheck Sig under Use in."
         )

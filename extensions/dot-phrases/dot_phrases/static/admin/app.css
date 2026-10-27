@@ -283,4 +283,71 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 /* Import sits inside the Practice settings page, so its card loses its own frame */
 .ax-sec-import .ax-imp{border:0;box-shadow:none;padding:0;max-width:none}
 #axRxHint[hidden],#axAllHint[hidden]{display:none}
+/* Use in checklist: a summary line with Change, and the checklist under it. Not sourced: the summary
+   reuses the editor's field colors; links and checkboxes use the picker's teal (#2c7f8c) */
+.wi{display:flex;align-items:center;gap:12px;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:9px 12px;font-size:14px}
+.wi-t{flex:1;color:#2c4155}
+.wi-t b{color:#0d203c;font-weight:600}
+.wi-link{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:#2c7f8c;cursor:pointer}
+.use-list{margin-top:10px}
+.use-list[hidden],.use-rem[hidden]{display:none}
+.use-rem{font-size:12.5px;color:#9a5b00;margin-top:6px}
+.use-rxhint{font-size:12px;color:#8ea8b5;margin:2px 0 6px;line-height:1.45}
+.use-cnt{font-size:12px;color:#8ea8b5;margin-left:4px}
+.use-cnt.bad{color:#c62828}
+/* Chart placeholders in Practice settings. Rows reuse the table styles (.ax-tbl); group headings are a tinted
+   band with a count and an outlined Select all / Clear all button. Not sourced: band reuses the field colors
+   (#F4F8FA, #dce8ec), button the light teal border (#96D3DD) */
+.ph-grp{margin-top:26px}
+.ax-sec > p + .ph-grp{margin-top:16px}
+.ph-grp .pk-gh{display:flex;align-items:center;gap:10px;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:8px 12px;margin:0 0 4px}
+.ph-grp .pk-gh > span:first-child{font-size:14px;font-weight:700;color:#0b5966}
+.ph-grp .pk-gh .cnt{font-size:12.5px;font-weight:500;color:#5e7a8a}
+.ph-grp .pk-all{margin-left:auto;border:1.5px solid #96D3DD;background:#fff;color:#2c7f8c;border-radius:999px;padding:3px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.ph-grp .pk-all:hover{background:rgba(150,211,221,.28);color:#0d203c;text-decoration:none}
+.ph-tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.ph-tbl td{padding:7px 10px 7px 0;border-top:1px solid #eef4f6;vertical-align:middle}
+.ph-tbl tr:first-child td{border-top:0}
+.ph-tbl td.ck{width:26px}
+.ph-tbl td.ck input{width:16px;height:16px;accent-color:#2c7f8c;margin:0;cursor:pointer}
+.ph-tbl td.tk{width:210px}
+.ph-tbl td.lb{color:#2c4155}
+.ph-tbl td.ex{color:#5e7a8a;text-align:right;white-space:nowrap}
+.ph-tbl tr.off td.lb,.ph-tbl tr.off td.ex{color:#8ea8b5}
+.ph-tbl tr.off .tok{opacity:.55}
+.ph-rule{font-size:12px;color:#8ea8b5;display:block;margin-top:1px}
+/* The dropdown arrow sits 14px in from the edge, like the text inset. Arrow color is the muted text (#5e7a8a) */
+.ax-sel{width:100%;font:inherit;font-size:14px;color:#2c4155;border:1.5px solid #dce8ec;border-radius:9px;padding:8px 38px 8px 11px;cursor:pointer;-webkit-appearance:none;appearance:none;background:#F4F8FA url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235e7a8a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center/14px 14px}
+.ax-sel:focus{background-color:#fff;border-color:#5ab5c4;outline:none;box-shadow:0 0 0 3px rgba(150,211,221,.2)}
+/* Practice settings: the column is capped at 1,000px and centered, and each placeholder group is its own
+   bordered card with column headers, balanced columns, and a faint tint on every other row.
+   Not sourced: card and header colors reuse the section and field colors above */
+#axMain.ax-settings{max-width:1000px;margin:0 auto}
+.ph-note{font-size:12.5px;color:#5e7a8a;margin:-6px 0 0}
+.ph-grp{margin-top:18px;border:1.5px solid #dce8ec;border-radius:12px;overflow:hidden}
+.ax-sec > .ph-note + .ph-grp{margin-top:16px}
+.ph-grp .pk-gh{border:0;border-bottom:1.5px solid #dce8ec;border-radius:0;margin:0}
+.ph-tbl{table-layout:fixed}
+.ph-tbl th{text-align:left;font-size:12px;font-weight:600;color:#5e7a8a;padding:8px 12px 6px;background:#fff;border-bottom:1px solid #eef4f6}
+.ph-tbl td{padding:7px 12px}
+.ph-tbl td.ck,.ph-tbl th.ck{width:44px;padding-left:14px;padding-right:0}
+.ph-tbl td.tk,.ph-tbl th.tk{width:30%}
+.ph-tbl td.lb,.ph-tbl th.lb{width:40%}
+.ph-tbl td.ex,.ph-tbl th.ex{width:auto;text-align:left;padding-right:16px;white-space:normal;overflow-wrap:anywhere}
+.ph-tbl tbody tr:nth-child(even) td{background:#fbfdfd}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Select all note commands / Clear all, above the Use in groups */
+.use-bulk{display:flex;align-items:baseline;gap:16px;padding:10px 0 8px;margin:8px 0 0;border-top:1px solid #eef4f6;border-bottom:1px solid #eef4f6}
+.use-bulk .pk-all{margin-left:0}
+.use-bulk .pk-all[data-useall]{margin-left:auto}
+.use-rem b{font-weight:700}
 {% endverbatim %}
+/* Wider phrase list, so longer previews fit */
+.ax-split{grid-template-columns:360px minmax(0,1fr)}
+.ax-row .tag{margin-left:6px}
+/* A practice phrase for someone who isn't an admin: read-only text and a note on how to change it.
+   Not sourced: reuses the editor field colors (#F4F8FA, #dce8ec) and muted text (#5e7a8a, #8ea8b5) above */
+.ax-ro{background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:9px 12px;font-size:14px;line-height:1.55;color:#2c4155;min-height:96px;white-space:pre-line;overflow-wrap:break-word}
+.ax-pair .ax-result.ax-result-ro{min-height:96px}
+.ax-note-ro{display:flex;gap:6px;align-items:flex-start;font-size:13px;color:#5e7a8a;background:#fff;border:1.5px dashed #dce8ec;border-radius:9px;padding:8px 12px;margin:14px 0 4px}
+.ax-note-ro svg{width:14px;height:14px;flex-shrink:0;margin-top:2px;color:#8ea8b5}

@@ -68,8 +68,12 @@ class TestCreatePhrase:
         assert kwargs["owner_id"] == 10
         assert kwargs["scope"] == "personal"
 
-    def test_personal_phrases_always_work_in_any_note_field(self, db: Any) -> None:
+    def test_personal_phrases_can_be_limited_to_certain_commands(self, db: Any) -> None:
         response(make_api(body={"code": "fu2w", "text": "x", "use_in": ["plan"]}).create_phrase())
+        assert db.phrase_model.objects.create.call_args.kwargs["use_in"] == ["plan"]
+
+    def test_no_use_in_means_every_note_command(self, db: Any) -> None:
+        response(make_api(body={"code": "fu2w", "text": "x"}).create_phrase())
         assert db.phrase_model.objects.create.call_args.kwargs["use_in"] is None
 
     def test_personal_phrase_can_be_prescriptions_only(self, db: Any) -> None:
@@ -211,9 +215,16 @@ class TestInsert:
 
 
 class TestAdmin:
-    def test_admin_page_is_forbidden_for_everyone_else(self, db: Any) -> None:
-        with patch(f"{MODULE}.render_to_string", return_value="<p>no</p>"):
-            assert response(make_api().admin_page()).status_code == HTTPStatus.FORBIDDEN
+    def test_app_page_opens_for_staff_who_arent_admins(self, db: Any) -> None:
+        with patch(f"{MODULE}.render_to_string", return_value="<p>app</p>"):
+            assert response(make_api().admin_page()).status_code == HTTPStatus.OK
+
+    def test_unknown_placeholder_message_fits_who_is_saving(self, db: Any) -> None:
+        body = {"code": "fu2w", "text": "Hi {clinic_fax}"}
+        staff = body_of(response(make_api(body=body).create_phrase()))["error"]
+        admin = body_of(response(make_api(staff_id=ADMIN_ID, body=body).create_phrase()))["error"]
+        assert staff == "{clinic_fax} isn't a placeholder. Fix the spelling, or ask your Dot Phrases admins to add it as practice info."
+        assert admin == "{clinic_fax} isn't a placeholder. Add it on the Practice settings tab, or fix the spelling."
 
     def test_practice_value_names_are_checked(self, db: Any) -> None:
         with patch(f"{MODULE}.PracticeValue") as value_model:
@@ -248,7 +259,9 @@ class TestHidePhrases:
             patch(f"{MODULE}.hidden_ids", return_value=set()) as hidden_ids,
             patch(f"{MODULE}.PhraseHidden") as hidden_model,
         ):
-            yield SimpleNamespace(hidden_model=hidden_model, hidden_ids=hidden_ids)
+            # Only phrase 5 is a practice phrase.
+            db.phrase_model.objects.filter.return_value.values_list.return_value = [5]
+            yield SimpleNamespace(hidden_model=hidden_model, hidden_ids=hidden_ids, phrase_model=db.phrase_model)
 
     def test_hides_a_practice_phrase_for_the_signed_in_staff_member_only(self, hide_db: Any) -> None:
         resp = response(make_api(body={"phrase_ids": [5], "hidden": True}).hide_phrases())
@@ -261,6 +274,13 @@ class TestHidePhrases:
         resp = response(make_api(body={"phrase_ids": [6], "hidden": True}).hide_phrases())
         assert resp.status_code == HTTPStatus.BAD_REQUEST
         hide_db.hidden_model.objects.bulk_create.assert_not_called()
+
+    def test_practice_phrase_with_a_personal_copy_can_still_be_hidden(self, hide_db: Any) -> None:
+        # The staff member's own .insulin replaces the practice one in their usable phrases.
+        with patch(f"{MODULE}.usable_phrases", return_value={"insulin": phrase(dbid=6, code="insulin", scope="personal", owner_id=10)}):
+            resp = response(make_api(body={"phrase_ids": [5], "hidden": True}).hide_phrases())
+        assert body_of(resp)["phrase_ids"] == [5]
+        assert hide_db.phrase_model.objects.filter.call_args.kwargs == {"scope": "practice", "archived": False, "dbid__in": [5]}
 
     def test_mixed_ids_hide_only_the_practice_ones(self, hide_db: Any) -> None:
         resp = response(make_api(body={"phrase_ids": [5, 6, 777], "hidden": True}).hide_phrases())

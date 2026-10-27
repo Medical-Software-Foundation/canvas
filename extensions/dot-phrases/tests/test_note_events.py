@@ -169,6 +169,12 @@ class TestBlockUnfinished:
             result = BlockUnfinished(event(EventType.ALLERGY_COMMAND__POST_VALIDATION, {"narrative": ".near"})).compute()
         assert ".near is too long for Allergy: 513 characters, and the limit is 512." in payload(result[0])["errors"][0]["message"]
 
+    def test_lab_order_comment_holds_128_characters(self, env: Any) -> None:
+        long = phrase(9, "labnote", "x" * 129)
+        with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "labnote": long}):
+            result = BlockUnfinished(event(EventType.LAB_ORDER_COMMAND__POST_VALIDATION, {"comment": ".labnote"})).compute()
+        assert ".labnote is too long for Lab order: 129 characters, and the limit is 128." in payload(result[0])["errors"][0]["message"]
+
     def test_too_long_together_says_so(self, env: Any) -> None:
         half = phrase(10, "half", "x" * 300)
         with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "half": half}):
@@ -200,5 +206,8 @@ class TestBlockUnfinished:
 
 
 def test_expand_listens_to_every_supported_command() -> None:
-    assert len(ExpandPhrases.RESPONDS_TO) == 32
+    assert len(ExpandPhrases.RESPONDS_TO) == 35
+    for name in ("LAB_ORDER", "POC_LAB_TEST", "REMOVE_PAST_MEDICAL_HISTORY"):
+        assert f"{name}_COMMAND__POST_UPDATE" in ExpandPhrases.RESPONDS_TO
+        assert f"{name}_COMMAND__POST_VALIDATION" in BlockUnfinished.RESPONDS_TO
     assert EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_UPDATE) in ExpandPhrases.RESPONDS_TO

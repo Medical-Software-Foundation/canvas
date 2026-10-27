@@ -15,7 +15,7 @@ from logger import log
 from dot_phrases.catalog import ALL_COMMANDS, COMMAND_LABELS, RX_FIELDS, RX_KEYS, CommandSpec, spec_for_event
 from dot_phrases.expansion import combined_length, combined_rx_length, expand_note_field, expand_rx_field, limit_for
 from dot_phrases.library import phrase_fits_rx, placeholder_values, record_use, usable_phrases
-from dot_phrases.text import CODE_PATTERN, codes_in, fill, rx_field_name, rx_issue
+from dot_phrases.text import CODE_PATTERN, codes_in, fill, placeholder_names, rx_field_name, rx_issue
 
 # An edit that doesn't take re-fires POST_UPDATE with the same text. Remember each attempt for 10
 # minutes so it is never retried in a loop.
@@ -70,7 +70,7 @@ class ExpandPhrases(BaseHandler):
 
         command = (
             Command.objects.filter(id=self.event.target.id)
-            .select_related("note__provider", "patient")
+            .select_related("note__provider", "note__location", "patient")
             .defer("note___body", "note___body_content", "note___body_order", "note__related_data")
             .first()
         )
@@ -83,7 +83,9 @@ class ExpandPhrases(BaseHandler):
             return []
 
         is_rx = spec.key in RX_KEYS
-        values = placeholder_values(command.patient, command.note, owner_dbid=owner)
+        typed = [code for _, _, text in candidates for code in codes_in(text)]
+        needed = placeholder_names([phrases[c].text for c in typed if c in phrases])
+        values = placeholder_values(command.patient, command.note, owner_dbid=owner, needed=needed)
         updates: dict[str, str] = {}
         used: list[int] = []
         leftovers: list[str] = []
@@ -149,13 +151,15 @@ class BlockUnfinished(BaseHandler):
             if codes and phrases is None:
                 command = (
                     Command.objects.filter(id=self.event.target.id)
-                    .select_related("note__provider", "patient")
+                    .select_related("note__provider", "note__location", "patient")
                     .defer("note___body", "note___body_content", "note___body_order", "note__related_data")
                     .first()
                 )
                 owner = _owner_dbid(command) if command else None
                 phrases = usable_phrases(owner) if command else {}
-                values = {} if command is None else placeholder_values(command.patient, command.note, owner_dbid=owner)
+                typed = [c for f, _ in spec.fields if isinstance(fields.get(f), str) for c in codes_in(fields[f])]
+                needed = placeholder_names([phrases[c].text for c in typed if c in phrases])
+                values = {} if command is None else placeholder_values(command.patient, command.note, owner_dbid=owner, needed=needed)
             for code in codes:
                 messages.append(prefix + self._code_message(code, (phrases or {}).get(code), spec, event_field, is_rx, text, phrases or {}, values))
             # Unfilled fill-ins block recording, and for a prescription they block review and send.

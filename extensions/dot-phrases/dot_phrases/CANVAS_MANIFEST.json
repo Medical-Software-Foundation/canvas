@@ -2,7 +2,7 @@
   "sdk_version": "0.245.0",
   "plugin_version": "0.1.0",
   "name": "dot_phrases",
-  "description": "Providers type a short code like .metf500 in a note's text box and it is replaced with saved text after the command saves. A chart panel lists, inserts, and manages phrases, and an admin app manages practice phrases, practice info, and import.",
+  "description": "Providers type a short code like .metf500 in a note's text box and it is replaced with saved text after the command saves. A chart panel lists, inserts, and manages phrases, and an app lets everyone manage their own phrases and lets admins manage practice phrases, practice info, and import.",
   "custom_data": {
     "namespace": "canvas_medical__dot_phrases",
     "access": "read_write"
@@ -44,7 +44,7 @@
       },
       {
         "class": "dot_phrases.handlers.api:DotPhrasesAPI",
-        "description": "Serves the chart panel and admin app, and the phrase API behind them.",
+        "description": "Serves the chart panel and the app, and the phrase API behind them.",
         "data_access": {
           "event": "",
           "read": [],
@@ -55,7 +55,7 @@
     "handlers": [
       {
         "class": "dot_phrases.handlers.admin_app:DotPhrasesAdminApp",
-        "description": "App drawer icon for practice phrases, practice settings, and import, shown only to members of the ADMIN_TEAM team."
+        "description": "App drawer icon for My phrases and Practice phrases, shown to all staff. Members of the ADMIN_TEAM team also edit practice phrases and get Practice settings and import."
       }
     ]
   },

@@ -2,18 +2,39 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from canvas_sdk.caching.plugins import get_cache
-from canvas_sdk.v1.data import Calendar, Note, Patient, Staff, Team
+from canvas_sdk.v1.data import (
+    Appointment,
+    BusinessLine,
+    Calendar,
+    Coverage,
+    Note,
+    Patient,
+    PatientFacilityAddress,
+    PatientMetadata,
+    Staff,
+    Team,
+)
+from canvas_sdk.v1.data.reason_for_visit import ReasonForVisit
 from django.db.models import F, Q
 
 from dot_phrases.models import Phrase, PhraseFavorite, PhraseHidden, PracticeSetting, PracticeValue
-from dot_phrases.text import pronouns
+from dot_phrases.text import CHART_OFF_BY_DEFAULT, PATIENT_PLACEHOLDERS, pronouns
 
 SETTING_DEFAULTS: dict[str, Any] = {"allow_copy_text": True}
+
+# Placeholders that each need their own lookup, so they are only looked up when a phrase uses them.
+_LOOKUPS: dict[str, frozenset[str]] = {
+    "business_line": frozenset({"business_line"}),
+    "facility": frozenset({"facility", "room_number"}),
+    "location": frozenset({"practice_location"}),
+    "visits": frozenset({"last_visit", "next_visit"}),
+    "coverage": frozenset({"insurance", "plan", "member_id", "group_number"}),
+}
 
 
 def admin_team_name(secrets: dict[str, Any] | None) -> str:
@@ -75,6 +96,26 @@ def hidden_ids(owner_dbid: int | None) -> set[int]:
 def practice_values() -> dict[str, str]:
     """Practice info placeholders and their values."""
     return {row.name: row.value for row in PracticeValue.objects.all()}
+
+
+def custom_placeholders() -> dict[str, str]:
+    """Admin-made patient placeholders: placeholder name to the patient metadata key it reads."""
+    value = get_setting("custom_placeholders")
+    if not isinstance(value, dict):
+        return {}
+    return {str(k): str(v) for k, v in value.items()}
+
+
+def known_names() -> set[str]:
+    """Placeholder names that aren't chart placeholders: practice info and custom patient ones."""
+    return set(practice_values()) | set(custom_placeholders())
+
+
+def enabled_chart_placeholders() -> list[str]:
+    """Chart placeholders the practice shows in the editor's menus, in list order."""
+    value = get_setting("chart_placeholders")
+    chosen = set(value) if isinstance(value, list) else set(PATIENT_PLACEHOLDERS) - CHART_OFF_BY_DEFAULT
+    return [name for name in PATIENT_PLACEHOLDERS if name in chosen]
 
 
 def get_setting(key: str) -> Any:
@@ -166,10 +207,10 @@ def calendar_timezone() -> str | None:
     return best or None
 
 
-def local_today(
+def local_zone(
     patient: Patient | None, note: Note | None, zone_name: str | None = None, owner_dbid: int | None = None
-) -> date:
-    """Today's date where the provider is, for {today} and {age}.
+) -> timezone | ZoneInfo:
+    """The time zone the provider is in, for {today}, {age}, and visit times.
 
     Canvas gives plugins no practice time zone. In order, this uses: the browser's time zone (for
     the chart panel), the time zone the command creator's browser last reported, the note
@@ -186,8 +227,111 @@ def local_today(
     for candidate in candidates:
         zone = _zone(candidate())
         if zone is not None:
-            return datetime.now(zone).date()
-    return datetime.now(UTC).date()
+            return zone
+    return UTC
+
+
+def local_today(
+    patient: Patient | None, note: Note | None, zone_name: str | None = None, owner_dbid: int | None = None
+) -> date:
+    """Today's date where the provider is (see local_zone)."""
+    return datetime.now(local_zone(patient, note, zone_name, owner_dbid)).date()
+
+
+def _reason_for_visit_title(note: Note) -> str:
+    """The text of the note's first recorded reason for visit, which Canvas uses as the note's heading.
+
+    For a coded reason Canvas uses the code's name, and only falls back to the comment when there's
+    no code. A practice setting can make Canvas use the last reason instead, and plugins can't read
+    it, so a note with two reasons can differ.
+    """
+    for rfv in ReasonForVisit.objects.committed().filter(note_id=note.dbid).prefetch_related("codings").order_by("dbid"):
+        codings = list(rfv.codings.all())
+        text = str(codings[-1].display or "").strip() if codings else ""
+        if not text:
+            text = str(ReasonForVisit.string_from_narrative_json(rfv.narrative_json) or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def note_label(note: Note) -> dict[str, Any]:
+    """Title, visit time, and provider of a note, as the chart panel's "Adding to" line shows it.
+
+    The title follows the note heading: the reason for visit, then the note's title, then its type.
+    """
+    version = getattr(note, "note_type_version", None)
+    title = _reason_for_visit_title(note) or getattr(note, "title", "") or (getattr(version, "name", "") if version else "") or "Note"
+    when = getattr(note, "datetime_of_service", None)
+    return {
+        "title": title,
+        # A timestamp, so the browser shows the date in the user's time zone, as the note header does.
+        "when": when.isoformat() if when else "",
+        "provider": staff_name(getattr(note, "provider", None)),
+    }
+
+
+def _joined(items: list[str]) -> str:
+    """ "A", "A and B", or "A, B, and C"."""
+    items = [i for i in items if i]
+    if len(items) < 3:
+        return " and ".join(items)
+    return ", ".join(items[:-1]) + ", and " + items[-1]
+
+
+def _visit_time(when: datetime, zone: timezone | ZoneInfo) -> str:
+    local = when.astimezone(zone)
+    hour = local.hour % 12 or 12
+    return f"{local:%m/%d/%Y} at {hour}:{local:%M} {'AM' if local.hour < 12 else 'PM'}"
+
+
+def _facility_values(patient: Patient) -> dict[str, str]:
+    # Canvas has no current facility: it shows every active facility address, so all are listed.
+    rows = PatientFacilityAddress.objects.filter(patient=patient, state="active").select_related("facility").order_by("dbid")
+    names = [str(getattr(r.facility, "name", "") or "") for r in rows if r.facility is not None]
+    rooms = [str(r.room_number or "") for r in rows if r.facility is not None]
+    return {"facility": _joined(names), "room_number": _joined(rooms)}
+
+
+def _visit_values(patient: Patient, note: Note | None, zone: timezone | ZoneInfo) -> dict[str, str]:
+    """The last visit before this note and the next one scheduled, skipping cancelled and no-shows."""
+    now = datetime.now(UTC)
+    reference = getattr(note, "datetime_of_service", None) or now
+    moved = Appointment.objects.filter(patient=patient, appointment_rescheduled_from__isnull=False).values_list(
+        "appointment_rescheduled_from_id", flat=True
+    )
+    visits = (
+        Appointment.objects.filter(patient=patient, entered_in_error__isnull=True)
+        .exclude(status__in=["cancelled", "noshowed"])
+        .exclude(dbid__in=list(moved))
+    )
+    if note is not None:
+        visits = visits.exclude(note_id=note.dbid)
+    last = visits.filter(start_time__lt=reference).order_by("-start_time").values_list("start_time", flat=True).first()
+    upcoming = visits.filter(start_time__gt=max(reference, now)).order_by("start_time").values_list("start_time", flat=True).first()
+    return {
+        "last_visit": _visit_time(last, zone) if last else "",
+        "next_visit": _visit_time(upcoming, zone) if upcoming else "",
+    }
+
+
+def _coverage_values(patient: Patient, on: date) -> dict[str, str]:
+    # The same coverage Canvas shows as a note's primary: rank 1, in use, and in date on the visit day.
+    coverage = (
+        Coverage.objects.filter(patient=patient, coverage_rank=1, stack="IN_USE", coverage_start_date__lte=on)
+        .filter(Q(coverage_end_date__isnull=True) | Q(coverage_end_date__gte=on))
+        .select_related("issuer")
+        .order_by("dbid")
+        .first()
+    )
+    if coverage is None:
+        return {}
+    return {
+        "insurance": str(getattr(coverage.issuer, "name", "") or ""),
+        "plan": str(coverage.plan or ""),
+        "member_id": str(coverage.id_number or ""),
+        "group_number": str(coverage.group or ""),
+    }
 
 
 def placeholder_values(
@@ -196,12 +340,19 @@ def placeholder_values(
     today: date | None = None,
     zone_name: str | None = None,
     owner_dbid: int | None = None,
+    needed: set[str] | None = None,
 ) -> dict[str, str]:
-    """Patient placeholder values for one chart, plus the practice info values.
+    """Chart placeholder values for one chart, plus practice info and custom patient placeholders.
 
-    Anything the chart has no value for is left out, so its placeholder stays as typed.
+    Anything the chart has no value for is left out, so its placeholder stays as typed. Pass the
+    placeholder names a phrase uses as `needed` to skip lookups nothing will use; None looks up all.
     """
-    today = today or local_today(patient, note, zone_name, owner_dbid)
+    zone = local_zone(patient, note, zone_name, owner_dbid)
+    today = today or datetime.now(zone).date()
+
+    def wanted(group: str) -> bool:
+        return needed is None or bool(needed & _LOOKUPS[group])
+
     values: dict[str, str] = dict(practice_values())
     values["today"] = today.strftime("%m/%d/%Y")
     if patient is not None:
@@ -210,11 +361,30 @@ def placeholder_values(
         values["last_name"] = patient.last_name or ""
         values["age"] = _age(patient.birth_date, today)
         values["dob"] = patient.birth_date.strftime("%m/%d/%Y") if patient.birth_date else ""
+        values["mrn"] = str(getattr(patient, "mrn", "") or "")
         found = pronouns(getattr(patient, "preferred_pronouns", None))
         if found:
             values["subject_pronoun"], values["object_pronoun"], values["possessive_pronoun"] = found
+        if wanted("business_line") and getattr(patient, "business_line_id", None):
+            values["business_line"] = str(BusinessLine.objects.filter(dbid=patient.business_line_id).values_list("name", flat=True).first() or "")
+        if wanted("facility"):
+            values.update(_facility_values(patient))
+        if wanted("visits"):
+            values.update(_visit_values(patient, note, zone))
+        if wanted("coverage"):
+            visit_day = note.datetime_of_service.astimezone(zone).date() if note is not None and note.datetime_of_service else today
+            values.update(_coverage_values(patient, visit_day))
+        custom = custom_placeholders()
+        if needed is not None:
+            custom = {name: key for name, key in custom.items() if name in needed}
+        if custom:
+            stored = dict(PatientMetadata.objects.filter(patient=patient, key__in=set(custom.values())).values_list("key", "value"))
+            for name, key in custom.items():
+                values[name] = str(stored.get(key) or "")
     if note is not None:
         values["provider"] = staff_name(getattr(note, "provider", None))
+        if wanted("location") and getattr(note, "location_id", None):
+            values["practice_location"] = str(getattr(note.location, "full_name", "") or "")
     return {key: value for key, value in values.items() if value}
 
 

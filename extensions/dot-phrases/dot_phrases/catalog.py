@@ -1,7 +1,8 @@
 """The commands and text fields dot phrases work in.
 
 Each entry was confirmed on a test instance: a plugin edit to the field shows on screen without a
-reload. Questionnaire-style commands (Questionnaire, ROS, Physical Exam, Structured Assessment)
+reload. Lab order, Point-of-care lab test, and Remove past medical history were added later from
+the SDK command classes and Canvas's own field limits. Questionnaire-style commands (Questionnaire, ROS, Physical Exam, Structured Assessment)
 are left out because a plugin edit to their text answers is accepted but never saved.
 ChangeMedicationCommand is not an allowed plugin import, and Clipboard, Private Note, Visual Exam
 Finding, and Snooze Protocol have no SDK edit.
@@ -25,18 +26,21 @@ from canvas_sdk.commands import (
     ImagingReviewCommand,
     ImmunizationStatementCommand,
     InstructCommand,
+    LabOrderCommand,
     LabReviewCommand,
     MedicalHistoryCommand,
     MedicationStatementCommand,
     PastSurgicalHistoryCommand,
     PerformCommand,
     PlanCommand,
+    POCLabTestCommand,
     PrescribeCommand,
     ReasonForVisitCommand,
     ReferCommand,
     ReferralReviewCommand,
     RefillCommand,
     RemoveAllergyCommand,
+    RemovePastMedicalHistoryCommand,
     ResolveConditionCommand,
     StopMedicationCommand,
     TaskCommand,
@@ -75,6 +79,7 @@ NOTE_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("removeallergy", "Remove allergy", "REMOVE_ALLERGY", RemoveAllergyCommand, (("narrative", "narrative"),)),
     CommandSpec("resolve", "Resolve condition", "RESOLVE_CONDITION", ResolveConditionCommand, (("rationale", "rationale"),)),
     CommandSpec("stopmed", "Stop medication", "STOP_MEDICATION", StopMedicationCommand, (("rationale", "rationale"),)),
+    CommandSpec("removepmh", "Remove past medical history", "REMOVE_PAST_MEDICAL_HISTORY", RemovePastMedicalHistoryCommand, (("rationale", "rationale"),)),
     CommandSpec("pmh", "Past medical history", "MEDICAL_HISTORY", MedicalHistoryCommand, (("comments", "comments"),)),
     CommandSpec("psh", "Surgical history", "SURGICAL_HISTORY", PastSurgicalHistoryCommand, (("comment", "comment"),)),
     CommandSpec("fhx", "Family history", "FAMILY_HISTORY", FamilyHistoryCommand, (("note", "note"),)),
@@ -90,6 +95,9 @@ NOTE_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("refer", "Refer", "REFER", ReferCommand, (("notes_to_specialist", "notes_to_specialist"), ("internal_comment", "comment"))),
     CommandSpec("imaging", "Imaging order", "IMAGING_ORDER", ImagingOrderCommand, (("additional_details", "additional_details"), ("comment", "comment"))),
     CommandSpec("vitals", "Vitals", "VITALS", VitalsCommand, (("note", "note"),)),
+    # The lab order comment is sent to the lab with the order.
+    CommandSpec("laborder", "Lab order", "LAB_ORDER", LabOrderCommand, (("comment", "comment"),)),
+    CommandSpec("poclab", "Point-of-care lab test", "POC_LAB_TEST", POCLabTestCommand, (("remarks", "remarks"),)),
     CommandSpec("labreview", "Lab review", "LAB_REVIEW", LabReviewCommand, _REVIEW, validates=False),
     CommandSpec("imgreview", "Imaging review", "IMAGING_REVIEW", ImagingReviewCommand, _REVIEW, validates=False),
     CommandSpec("refreview", "Referral review", "REFERRAL_REVIEW", ReferralReviewCommand, _REVIEW, validates=False),
@@ -126,13 +134,17 @@ INSERT_FIELD: dict[str, str] = {"plan": "narrative", "hpi": "narrative", "instru
 # Character limits on the text fields phrases expand into. Most come from the SDK command classes
 # (canvas_sdk.commands, Field max_length); the review commands' 2,048 and Instruct's 4,000 come from
 # the Canvas models those commands save to. A command with more than one text field uses the
-# smallest of its limits. Commands not listed have no limit.
+# smallest of its limits. Lab order's 128 comes from the Canvas model too. Commands not listed
+# have no limit.
 FIELD_LIMITS: dict[str, int] = {
+    "laborder": 128,
     "vitals": 150,
     "immstmt": 255,
     "allergy": 512,
     "removeallergy": 512,
     "fhx": 512,
+    "removepmh": 512,
+    "poclab": 512,
     "pmh": 1000,
     "psh": 1000,
     "medstmt": 1000,

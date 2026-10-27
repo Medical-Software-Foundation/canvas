@@ -9,7 +9,7 @@
 
   var state = {
     phrases: [], isAdmin: false, allowCopy: true, rxTargets: [],
-    commands: [], labels: {}, limits: {}, rxFields: {}, practiceNames: [], patientNames: {}, values: {}
+    commands: [], labels: {}, limits: {}, rxFields: {}, practiceNames: [], patientNames: {}, menu: [], values: {}
   };
   var filter = "all", openId = null, answers = [], target = null, mArch = "active", selecting = false, selected = {};
 
@@ -18,6 +18,8 @@
   var PLACEHOLDER = /\{(pick|blank)\s+([a-z_ ]*?)\s*(?::\s*([^}]*))?\}|\{([a-z_]+)\}|\*\*\*/gi;
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  // Bold the checkbox names in a prescription warning, already escaped: "uncheck <b>Sig</b> under <b>Use in</b>".
+  function boldUi(html) { return html.replace(/uncheck (Sig|Note to pharmacist) under Use in/g, "uncheck <b>$1</b> under <b>Use in</b>"); }
   function toast(m) { var t = $("#toast"); t.textContent = m; t.style.pointerEvents = "none"; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("on"); }, 2200); }
   // A toast with an Undo button, for hiding.
   function toastUndo(m, undo) {
@@ -130,7 +132,7 @@
     }
     if (!parts.length) { return ""; }
     var name = label === "Sig" ? label : label.charAt(0).toLowerCase() + label.slice(1);
-    return "Can't use in the " + name + ": " + parts.join(" and ") + ". " + (fixes.length === 1 ? fixes[0] : "Fix these") + ", or uncheck Use in " + name + ".";
+    return "Can't use in the " + name + ": " + parts.join(" and ") + ". " + (fixes.length === 1 ? fixes[0] : "Fix these") + ", or uncheck " + label + " under Use in.";
   }
   function rxProblems(field, text) {
     var max = state.rxFields[field].max, p = [];
@@ -247,14 +249,28 @@
 
   function find(id) { return state.phrases.filter(function (p) { return p.id === id; })[0]; }
 
+  // Where Insert goes: the note the panel was opened from.
+  function renderAddingTo(note) {
+    var box = $("#addingTo");
+    if (!note) { box.hidden = true; return; }
+    // "Oct 15, 2026 at 12:23 PM EDT with Canvas Support", in the browser's time zone.
+    var when = note.when ? new Date(note.when) : null, at = "";
+    if (when && !isNaN(when)) {
+      at = when.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " at " +
+        when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+    }
+    var line = at && note.provider ? at + " with " + note.provider : at || (note.provider ? "With " + note.provider : "");
+    box.innerHTML = '<span class="lbl">Adding to</span><div class="target">' + esc(note.title) + "<span>" + esc(line) + "</span></div>";
+    box.hidden = false;
+  }
   function load() {
     return api("GET", "/phrases?note_id=" + encodeURIComponent(NOTE_ID) + "&tz=" + encodeURIComponent(browserZone())).then(function (d) {
-      state.phrases = d.phrases || [];
+      state.phrases = d.phrases || []; renderAddingTo(d.note);
       state.isAdmin = !!d.is_admin; state.adminTeam = d.admin_team || ""; state.allowCopy = !!d.allow_copy_text; state.rxTargets = d.rx_targets || [];
       state.commands = d.commands || []; state.labels = {};
       state.commands.forEach(function (c) { state.labels[c.key] = c.label; });
       state.limits = d.field_limits || {}; state.rxFields = d.rx_fields || {};
-      state.practiceNames = d.practice_names || []; state.patientNames = d.patient_placeholders || {}; state.values = d.values || {};
+      state.practiceNames = d.practice_names || []; state.patientNames = d.patient_placeholders || {}; state.menu = d.menu_placeholders || []; state.values = d.values || {};
       renderList();
       if (!$("#ppManage").hidden) { renderManage(); }
     }).catch(function (e) { $("#plist").innerHTML = '<p class="empty">' + esc(e.message) + "</p>"; });
@@ -369,7 +385,7 @@
     var pick = pickable ? '<input type="checkbox" class="ml-pick" data-pickid="' + p.id + '"' + (on ? " checked" : "") + ' aria-label="Select' + c + '" tabindex="-1">' : "";
     var tail = kind === "mine" ? icon("data-medit", p.id, "Edit" + c, EDIT_ICON) + icon("data-mdel", p.id, "Delete" + c, TRASH_ICON) :
       kind === "hidden" ? (selecting ? "" : '<button class="ml-restore" data-mshow="' + p.id + '">Show again</button>') :
-      (selecting ? "" : (state.isAdmin ? icon("data-madmin", p.id, "Edit" + c + " in the admin app", OPEN_ICON) : "") + icon("data-mcopy", p.id, "Make my own copy of" + c, DUP_ICON) + icon("data-mhide", p.id, "Hide" + c + " from my list", HIDE_ICON));
+      (selecting ? "" : (state.isAdmin ? icon("data-madmin", p.id, "Edit" + c + " in the Dot Phrases app", OPEN_ICON) : "") + icon("data-mcopy", p.id, "Make my own copy of" + c, DUP_ICON) + icon("data-mhide", p.id, "Hide" + c + " from my list", HIDE_ICON));
     var verb = pickable ? "Select" : kind === "mine" ? "Edit" : "View";
     var click = attr ? ' role="button" tabindex="0" aria-label="' + verb + c + '"' : "";
     return '<div class="ml-row' + (attr ? " ml-click" : "") + (on ? " ml-on" : "") + '" ' + attr + click + ">" + pick + '<div class="ml-main"><div class="ml-top"><span class="ml-code">.' + esc(p.code) + "</span></div>" +
@@ -393,13 +409,14 @@
   function renderManage() {
     if (mArch === "hidden") {
       var hid = state.phrases.filter(function (p) { return p.hidden; }).sort(byCode);
-      $("#mlist").innerHTML = group("Hidden practice phrases", hid, "hidden", "Nothing hidden. Hide a practice phrase you never use and it shows up here.", selectBar(hid, "show")) +
-        '<p class="ml-foot">Hidden phrases are off your list only. Typing the code still works.</p>';
+      $("#mlist").innerHTML = hid.length ? group("Hidden practice phrases", hid, "hidden", "", selectBar(hid, "show")) +
+        '<p class="ml-foot hd-note">Typing a hidden phrase in a command still works.</p>' :
+        '<div class="hd-empty">' + HIDE_ICON + "<div><b>No hidden phrases</b><p>Hide practice phrases you don't need, so your list shows only the ones you use. Typing a hidden phrase in a command still works.</p></div></div>";
       return;
     }
     var own = state.phrases.filter(function (p) { return p.mine; }).sort(byCode);
     var practice = state.phrases.filter(function (p) { return p.scope === "practice" && !p.hidden; }).sort(byCode);
-    var lock = practice.length ? '<div class="ml-note">' + LOCK_ICON + "<span>" + (state.isAdmin ? "Change these in the Dot Phrases admin app." : "Only " + esc(admins()) + " can change these.") + " Copy one to make your own version.</span></div>" : "";
+    var lock = practice.length ? '<div class="ml-note">' + LOCK_ICON + "<span>" + (state.isAdmin ? "Edit these on the <b>Practice phrases</b> tab of the Dot Phrases app." : "Only " + esc(admins()) + " can change these.") + " Copy one to make your own version.</span></div>" : "";
     $("#mlist").innerHTML = (selecting ? "" : group("My phrases", own, "mine", "No personal phrases yet. Use New to make one.")) +
       group("Practice phrases", practice, "practice", "No practice phrases yet.", selectBar(practice, "hide"), lock);
   }
@@ -460,9 +477,7 @@
   $("#newBtn").addEventListener("click", function () { openEditor(null, "manage"); });
 
   // ---- editor ----
-  // ---- insert toolbar and guide (same as the admin app, fitted to the panel) ----
-  var CHART_LABEL = { first_name: "First name", preferred_name: "Preferred name", last_name: "Last name", age: "Age", dob: "Date of birth",
-    subject_pronoun: "Pronoun: she / he / they", object_pronoun: "Pronoun: her / him / them", possessive_pronoun: "Pronoun: her / his / their", today: "Today's date", provider: "Note's provider" };
+  // ---- insert toolbar and guide (same as the Dot Phrases app, fitted to the panel) ----
   var ICONS = {
     chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.6 4-5.2 7-5.2s5.8 1.6 7 5.2"/></svg>',
     practice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>',
@@ -472,7 +487,7 @@
   function insertBar() {
     var item = function (ins, name, note, hl) { return '<button type="button" class="ax-pi" data-ins="' + esc(ins) + '"' + (hl ? ' data-hl="' + esc(hl) + '"' : "") + '><span class="n">' + esc(name) + '</span><span class="e">' + esc(note) + "</span></button>"; };
     var menu = function (key, label, head, items) { return '<div class="ax-menu"><button type="button" class="ax-tbtn" data-menu="' + key + '" aria-expanded="false" aria-haspopup="true">' + ICONS[key] + label + '</button><div class="ax-pop" role="menu" hidden><div class="ax-pop-head">' + head + "</div>" + items + "</div></div>"; };
-    var chart = Object.keys(CHART_LABEL).map(function (k) { return item("{" + k + "}", CHART_LABEL[k], state.values[k] ? "This patient: " + state.values[k] : "Empty for this patient"); }).join("");
+    var chart = state.menu.map(function (p) { return item("{" + p.name + "}", p.label, state.values[p.name] ? "This patient: " + state.values[p.name] : "Empty for this patient"); }).join("");
     var practice = state.practiceNames.map(function (n) { return item("{" + n + "}", prettyName(n), state.values[n] || "No value yet"); }).join("") || '<div class="ax-pop-foot">Your practice has no practice info yet.</div>';
     var ask = item("{blank instructions}", "Blank with instructions", "Tells the provider what goes here. Example: [duration]", "instructions") +
       item("***", "Plain blank", "Marks a spot to fill in, without instructions: ***", "") +
@@ -483,7 +498,7 @@
   }
   function guideHtml() {
     var ins = function (k) { return '<button class="tok" data-ins="' + esc(k) + '" title="Add to the phrase">' + esc(k) + "</button>"; };
-    var chartRows = Object.keys(CHART_LABEL).map(function (k) { return "<tr><td>" + ins("{" + k + "}") + "</td><td>" + (state.values[k] ? "<b>" + esc(state.values[k]) + "</b>" : '<span class="gd-empty">Nothing in this chart, so it stays as typed</span>') + "</td></tr>"; }).join("");
+    var chartRows = state.menu.map(function (p) { return "<tr><td>" + ins("{" + p.name + "}") + "</td><td>" + (state.values[p.name] ? "<b>" + esc(state.values[p.name]) + "</b>" : '<span class="gd-empty">Nothing in this chart, so it stays as typed</span>') + "</td></tr>"; }).join("");
     var pracRows = state.practiceNames.map(function (n) { return "<tr><td>" + ins("{" + n + "}") + "</td><td>" + (state.values[n] ? "<b>" + esc(state.values[n]) + "</b>" : '<span class="gd-empty">No value yet</span>') + "</td></tr>"; }).join("");
     return '<div class="gd-head"><div><div class="gd-title">How placeholders work</div><p>Placeholders go in curly brackets and get swapped for real information when the phrase is used. Click one below to add it where your cursor is.</p></div>' +
       '<button type="button" class="gd-close" data-guide aria-label="Close the guide" title="Close">✕</button></div><div class="gd-cols">' +
@@ -501,37 +516,120 @@
       '<section class="gd-ex"><h4>Example</h4>' +
       '<div class="gd-ex-row"><div class="gd-ex-k">You write</div><div><span class="gd-src">{first_name} is a {age}-year-old seen today for {pick side: right | left | both} knee pain for {blank duration}.</span></div></div>' +
       '<div class="gd-ex-row"><div class="gd-ex-k">You pick</div><div>Left, and type 2 weeks</div></div>' +
-      '<div class="gd-ex-row"><div class="gd-ex-k">Note gets</div><div><b>Jane is a 67-year-old seen today for left knee pain for 2 weeks.</b></div></div></section>';
+      '<div class="gd-ex-row"><div class="gd-ex-k">Note gets</div><div><b>Connie is a 67-year-old seen today for left knee pain for 2 weeks.</b></div></div></section>';
   }
+  // ---- Use in: one checklist. Every note command starts checked; the Sig and note to pharmacist ----
+  // ---- start unchecked, so text only reaches a pharmacy when someone picks it. ----
+  var USE_COMMON = ["plan", "hpi", "instruct", "perform", "assess", "diagnose"];
+  var USE_GROUPS = [
+    ["Common commands", USE_COMMON],
+    ["Visit, orders, and tasks", ["rfv", "followup", "task", "refer", "imaging", "laborder", "poclab", "vitals"]],
+    ["History", ["pmh", "removepmh", "psh", "fhx", "allergy", "removeallergy", "immstmt", "medstmt"]],
+    ["Conditions and medications", ["updatedx", "resolve", "stopmed"]],
+    ["Goals", ["goal", "updategoal", "closegoal"]],
+    ["Reviews", ["labreview", "imgreview", "refreview", "docreview"]]
+  ];
+  var USE_ALL = USE_GROUPS.reduce(function (a, g) { return a.concat(g[1]); }, []);
+  var USE_REVIEWS = USE_GROUPS[USE_GROUPS.length - 1][1];
+  function useLabel(k) { return k === "hpi" ? "HPI" : (state.labels[k] || k); }
+  function useChecked(d) { return d.use_in === null ? USE_ALL.slice() : d.use_in.slice(); }
+  // Every note command checked is saved as "all note commands", so commands added later are included.
+  function useSet(d, list) {
+    var keep = USE_ALL.filter(function (k) { return list.indexOf(k) >= 0; });
+    d.use_in = keep.length === USE_ALL.length ? null : keep;
+  }
+  function useSummary(d) {
+    var rx = [];
+    if (d.rx.sig) { rx.push("Sig"); }
+    if (d.rx.note_to_pharmacist) { rx.push("note to pharmacist"); }
+    var notes = d.use_in === null ? "all note commands" : d.use_in.length > 3 ? d.use_in.length + " note commands" : d.use_in.map(useLabel).join(", ");
+    if (notes) { return [notes].concat(rx).join(", "); }
+    if (rx.length === 2) { return "Sig and note to pharmacist"; }
+    return rx.length ? rx[0] + " only" : "nothing yet";
+  }
+  function useNeedsReminder(d, text) {
+    // Any placeholder can be left incomplete: chart values the chart doesn't have, blanks, and choices.
+    if (!/\{\s*[a-z]|\*\*\*/i.test(text || "")) { return false; }
+    return d.use_in === null || USE_REVIEWS.some(function (k) { return d.use_in.indexOf(k) >= 0; });
+  }
+  function useListHtml(d) {
+    var on = useChecked(d);
+    var box = function (k) { return '<label class="pk-ck"><input type="checkbox" data-cmdck="' + k + '"' + (on.indexOf(k) >= 0 ? " checked" : "") + "> " + esc(useLabel(k)) + "</label>"; };
+    var rxBox = function (k, label) { return '<label class="pk-ck"><input type="checkbox" data-rx="' + k + '"' + (d.rx[k] ? " checked" : "") + "> " + label + ' <span class="use-cnt" id="useC_' + k + '"></span></label>'; };
+    return '<div class="pk-gh"><span>Prescriptions</span><button type="button" class="pk-all" data-rxall>Select all</button></div>' +
+      '<div class="pk-cols use-rx">' + rxBox("sig", "Sig") + rxBox("note_to_pharmacist", "Note to pharmacist") + "</div>" +
+      '<div class="use-rxhint">Used in Prescribe, Refill, and Adjust prescription. Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210. Prescriptions with unfilled placeholders cannot be sent.</div>' +
+      '<div class="pk-gh use-bulk"><span>Note commands</span><button type="button" class="pk-all" data-useall>Select all</button><button type="button" class="pk-all" data-useclear>Clear all</button></div>' +
+      USE_GROUPS.map(function (g, i) {
+        return '<div class="pk-grp"><div class="pk-gh"><span>' + esc(g[0]) + '</span><button type="button" class="pk-all" data-grpall="' + i + '">Select all</button></div><div class="pk-cols">' + g[1].map(box).join("") + "</div></div>";
+      }).join("");
+  }
+  function useBlockHtml(d) {
+    return '<div class="wi"><span class="wi-t">Works in: <b class="use-sum"></b></span><button type="button" class="wi-link" data-usetoggle aria-expanded="false">Change</button></div>' +
+      '<div class="use-rem" hidden>Review commands cannot flag incomplete placeholders.</div>' +
+      '<div class="pk use-list" hidden>' + useListHtml(d) + "</div>";
+  }
+  // Bring the checklist, summary, and reminder in line with the draft.
+  function useSync(scope, d, text) {
+    var on = useChecked(d);
+    Array.prototype.forEach.call(scope.querySelectorAll("[data-cmdck]"), function (b) { b.checked = on.indexOf(b.getAttribute("data-cmdck")) >= 0; });
+    Array.prototype.forEach.call(scope.querySelectorAll("[data-rx]"), function (b) { b.checked = !!d.rx[b.getAttribute("data-rx")]; });
+    Array.prototype.forEach.call(scope.querySelectorAll("[data-grpall]"), function (b) {
+      var keys = USE_GROUPS[Number(b.getAttribute("data-grpall"))][1];
+      b.textContent = keys.every(function (k) { return on.indexOf(k) >= 0; }) ? "Clear all" : "Select all";
+    });
+    var rxAll = scope.querySelector("[data-rxall]"); if (rxAll) { rxAll.textContent = d.rx.sig && d.rx.note_to_pharmacist ? "Clear all" : "Select all"; }
+    var sum = scope.querySelector(".use-sum"); if (sum) { sum.textContent = useSummary(d); }
+    var rem = scope.querySelector(".use-rem"); if (rem) { rem.hidden = !useNeedsReminder(d, text); }
+  }
+  // Clicks and changes inside the Use in block. Returns true when it handled the event.
+  function useHandle(e, scope, d) {
+    var t = e.target;
+    var tog = t.closest && t.closest("[data-usetoggle]");
+    if (tog && e.type === "click") {
+      var list = scope.querySelector(".use-list"), open = list.hidden;
+      list.hidden = !open; tog.textContent = open ? "Done" : "Change"; tog.setAttribute("aria-expanded", String(open)); return true;
+    }
+    var grp = t.closest && t.closest("[data-grpall]");
+    if (grp && e.type === "click") {
+      var keys = USE_GROUPS[Number(grp.getAttribute("data-grpall"))][1], cur = useChecked(d);
+      var full = keys.every(function (k) { return cur.indexOf(k) >= 0; });
+      useSet(d, full ? cur.filter(function (k) { return keys.indexOf(k) < 0; }) : cur.concat(keys)); return true;
+    }
+    // Every note command at once. Sig and Note to pharmacist have their own row, since those reach a pharmacy.
+    if (t.closest && t.closest("[data-useall]") && e.type === "click") { useSet(d, USE_ALL); return true; }
+    if (t.closest && t.closest("[data-useclear]") && e.type === "click") { d.use_in = []; return true; }
+    if (t.closest && t.closest("[data-rxall]") && e.type === "click") {
+      var both = d.rx.sig && d.rx.note_to_pharmacist; d.rx.sig = !both; d.rx.note_to_pharmacist = !both; return true;
+    }
+    var changed = e.type === "change" || e.type === "input";
+    if (changed && t.getAttribute && t.getAttribute("data-cmdck")) {
+      var k = t.getAttribute("data-cmdck"), set = useChecked(d), i = set.indexOf(k);
+      if (t.checked && i < 0) { set.push(k); } else if (!t.checked && i >= 0) { set.splice(i, 1); }
+      useSet(d, set); return true;
+    }
+    if (changed && t.getAttribute && t.getAttribute("data-rx")) { d.rx[t.getAttribute("data-rx")] = t.checked; return true; }
+    return false;
+  }
+  function useIsEmpty(d) { return d.use_in !== null && !d.use_in.length && !d.rx.sig && !d.rx.note_to_pharmacist; }
   function openEditor(p, from) {
     var editing = !!(p && p.mine);
     if (from) { openEditScreen(editing ? "Edit phrase" : "New phrase", from); } else { $("#edTitle").textContent = editing ? "Edit phrase" : "New phrase"; }
+    // The draft behind the Use in checklist. A new phrase works in every note command and no prescription field.
+    var draft = { use_in: p && p.use_in ? p.use_in.slice() : null, rx: { sig: !!(p && p.rx_sig), note_to_pharmacist: !!(p && p.rx_note_to_pharmacist) } };
     $("#editorSlot").innerHTML = '<div class="ed">' +
       '<label for="fCode">Code</label><input id="fCode" value="' + esc(p ? p.code : "") + '" maxlength="64" placeholder="e.g. kneehpi"><div class="hint">Starts with a letter. Letters and numbers only.</div>' +
       '<label for="fText">Text</label><div class="ax-editor"><textarea class="ax-ta ax-ta-flat" id="fText" rows="4">' + esc(p ? p.text : "") + "</textarea>" + insertBar() + "</div>" +
       '<div class="hint">Placeholders go in curly brackets. Use the menus above, or type them.</div>' +
       '<div class="ax-guide pp-guide" id="fGuide" hidden>' + guideHtml() + "</div>" +
-      '<label>Use in</label><div class="hint" style="margin-top:0" id="fUseAll">All commands. Check a prescription box below to make it prescriptions only.</div>' +
-      '<div class="pp-seg sm" id="fUseSeg" hidden><button type="button" data-use="all">All commands</button><button type="button" data-use="rx">Prescriptions only</button></div>' +
+      '<label>Use in</label><div id="fUseBlock" class="panel-pk">' + useBlockHtml(draft) + "</div>" +
       '<div class="warn" id="fLim"></div>' +
-      "<label>Prescriptions</label>" +
-      '<label class="ck"><input type="checkbox" data-rx="sig"' + (p && p.rx_sig ? " checked" : "") + '> Use in Sig <span class="counter" id="fC_sig"></span></label>' +
-      '<label class="ck"><input type="checkbox" data-rx="note_to_pharmacist"' + (p && p.rx_note_to_pharmacist ? " checked" : "") + '> Use in note to pharmacist <span class="counter" id="fC_note_to_pharmacist"></span></label>' +
-      '<div class="hint">Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210.<br>Prescriptions with unfilled placeholders cannot be sent.</div>' +
       '<div class="err" id="fRx"></div>' +
-      '<div class="note">Personal phrases are only for you.' + (state.isAdmin ? " To share one with everyone, use the Dot Phrases admin app." : " Practice phrases are made by your practice's admins.") + "</div>" +
+      '<div class="note">Personal phrases are only for you.' + (state.isAdmin ? " To share one with everyone, add it on the <b>Practice phrases</b> tab of the Dot Phrases app." : " Practice phrases are made by your practice's admins.") + "</div>" +
       '<div class="err" id="fErr"></div>' +
       '<div class="row ed-acts">' + (editing ? '<button class="pp-btn pp-del-out" id="fDelete" title="Delete .' + esc(p.code) + '" aria-label="Delete .' + esc(p.code) + '">' + TRASH_ICON + "</button>" : "") +
       '<span class="grow"></span><button class="pp-btn" id="fCancel">Cancel</button><button class="pp-btn pp-primary" id="fSave">Save</button></div></div>';
     var root = $("#editorSlot .ed");
-    // Prescriptions only: a phrase with a prescription box checked can skip note commands. New phrases
-    // start that way; an existing phrase keeps what it had.
-    var rxOnly = p && p.mine ? !!(p.use_in && p.use_in.length === 0) : true;
-    function showUse() {
-      var anyRx = root.querySelector('[data-rx="sig"]').checked || root.querySelector('[data-rx="note_to_pharmacist"]').checked;
-      $("#fUseAll").hidden = anyRx; $("#fUseSeg").hidden = !anyRx;
-      Array.prototype.forEach.call(root.querySelectorAll("#fUseSeg [data-use]"), function (b) { b.classList.toggle("on", (b.getAttribute("data-use") === "rx") === rxOnly); });
-    }
     function upd() {
       var text = $("#fText").value;
       var len = fill(text, [], false).length;
@@ -540,17 +638,25 @@
       $("#fLim").textContent = over.length ? "Too long for " + over.map(function (k) { return state.labels[k] + " (" + state.limits[k] + ")"; }).join(", ") + ". It won't expand there." : "";
       var errs = [];
       ["sig", "note_to_pharmacist"].forEach(function (k) {
-        var on = root.querySelector('[data-rx="' + k + '"]').checked, c = $("#fC_" + k);
+        var on = !!draft.rx[k], c = $("#useC_" + k);
         var pr = on ? rxProblems(k, text) : [];
         c.textContent = on ? text.length + " / " + state.rxFields[k].max.toLocaleString() : "";
         c.classList.toggle("bad", pr.length > 0);
         if (pr.length) { errs.push(rxMessage(k, text, state.rxFields[k].label, state.rxFields[k].max)); }
       });
-      showUse();
-      $("#fRx").innerHTML = errs.map(function (m) { return "<div>" + esc(m) + "</div>"; }).join("");
+      useSync($("#fUseBlock"), draft, text);
+      $("#fRx").innerHTML = errs.map(function (m) { return "<div>" + boldUi(esc(m)) + "</div>"; }).join("");
       return { errs: errs };
     }
-    root.addEventListener("input", upd); root.addEventListener("change", upd);
+    // A checkbox fires "input" before "change"; record it first so the redraw doesn't undo it.
+    root.addEventListener("input", function (e) {
+      if (e.target.closest && e.target.closest("#fUseBlock")) { useHandle(e, $("#fUseBlock"), draft); }
+      upd();
+    });
+    root.addEventListener("change", function (e) {
+      if (e.target.closest && e.target.closest("#fUseBlock")) { useHandle(e, $("#fUseBlock"), draft); }
+      upd();
+    });
     var ta = $("#fText"), caret = null;
     ["click", "keyup", "select", "input"].forEach(function (ev) { ta.addEventListener(ev, function () { caret = ta.selectionEnd; }); });
     function closeMenus(except) {
@@ -577,8 +683,7 @@
         if (hl) { var k = text.indexOf(hl); if (k >= 0) { a = start + k; b = a + hl.length; } }
         ta.focus(); ta.setSelectionRange(a, b); caret = b; upd(); return;
       }
-      var useBtn = e.target.closest("#fUseSeg [data-use]");
-      if (useBtn) { rxOnly = useBtn.getAttribute("data-use") === "rx"; upd(); return; }
+      if (e.target.closest("#fUseBlock") && useHandle(e, $("#fUseBlock"), draft)) { upd(); return; }
       if (e.target.closest("[data-guide]")) {
         closeMenus();
         var g = $("#fGuide"); g.hidden = !g.hidden;
@@ -588,7 +693,7 @@
     });
     $("#fCode").addEventListener("input", function (e) { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""); });
     $("#fCancel").addEventListener("click", leaveEdit);
-    var snap = function () { return [$("#fCode").value, $("#fText").value, root.querySelector('[data-rx="sig"]').checked, root.querySelector('[data-rx="note_to_pharmacist"]').checked].join("\u0000"); };
+    var snap = function () { return [$("#fCode").value, $("#fText").value, JSON.stringify(draft.use_in), draft.rx.sig, draft.rx.note_to_pharmacist].join("\u0000"); };
     var start = snap();
     editDirty = function () {
       if (!$("#fCode") || snap() === start) { return ""; }
@@ -599,9 +704,10 @@
       var s = upd(), code = $("#fCode").value, text = $("#fText").value.trim(), err = function (m) { $("#fErr").textContent = m; };
       if (!/^[a-z][a-z0-9]*$/.test(code) || !text) { return err("Enter a code that starts with a letter, and the text it inserts."); }
       var u = unknownPlaceholders(text); if (u.length) { return err("Unknown placeholder: " + u.join(", ") + "."); }
-      var rx = { sig: root.querySelector('[data-rx="sig"]').checked, ntp: root.querySelector('[data-rx="note_to_pharmacist"]').checked };
+      var rx = { sig: draft.rx.sig, ntp: draft.rx.note_to_pharmacist };
+      if (useIsEmpty(draft)) { return err("Pick at least one place to use this phrase."); }
       if (s.errs.length) { err(""); $("#fRx").scrollIntoView({ block: "nearest" }); return; }
-      var body = { code: code, text: text, use_in: (rx.sig || rx.ntp) && rxOnly ? [] : null, rx_sig: rx.sig, rx_note_to_pharmacist: rx.ntp, scope: "personal" };
+      var body = { code: code, text: text, use_in: draft.use_in, rx_sig: rx.sig, rx_note_to_pharmacist: rx.ntp, scope: "personal" };
       // One save at a time, so a double click can't create the same phrase twice.
       var saveBtn = $("#fSave"); if (saveBtn.disabled) { return; } saveBtn.disabled = true;
       var req = p && p.mine ? api("PATCH", "/phrases/" + p.id, body) : api("POST", "/phrases", body);
@@ -629,7 +735,7 @@
   function copyAsMine(p) {
     openEditor({ code: p.code, text: p.text, use_in: p.use_in, rx_sig: p.rx_sig, rx_note_to_pharmacist: p.rx_note_to_pharmacist, mine: false }, "manage");
   }
-  // Practice phrases are read-only here; admins change them in the admin app.
+  // Practice phrases are read-only here; admins edit them in the Dot Phrases app.
   function openViewer(p) {
     var where = [p.use_in === null ? "All commands" : p.use_in.map(function (k) { return state.labels[k] || k; }).join(", ")];
     if (p.rx_sig) { where.push("Sig"); }
@@ -638,7 +744,7 @@
     $("#editorSlot").innerHTML = '<div class="ed"><label>Code</label><div class="ro">.' + esc(p.code) + "</div>" +
       '<label>Text</label><div class="ro">' + esc(p.text) + "</div>" +
       '<label>Use in</label><div class="ro">' + esc(where.join(", ")) + "</div>" +
-      '<div class="note">' + (state.isAdmin ? "Change it in the Dot Phrases admin app." : "Only " + esc(admins()) + " can change it.") +
+      '<div class="note">' + (state.isAdmin ? "Edit it on the <b>Practice phrases</b> tab of the Dot Phrases app." : "Only " + esc(admins()) + " can change it.") +
       " To use your own wording, make a personal copy: yours is used instead, for you only.</div>" +
       '<div class="row"><button class="pp-btn" id="vClose">Close</button><button class="pp-btn pp-primary" id="vCopy" style="flex:1">Make my own copy</button></div></div>';
     $("#vClose").addEventListener("click", leaveEdit);

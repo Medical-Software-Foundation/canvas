@@ -1,8 +1,9 @@
 """The chart panel, the admin app, and the JSON API behind them.
 
-Every request runs as the signed-in staff member (StaffSessionAuthMixin). Personal phrases can
-only be changed by their owner. Practice phrases, practice info, settings, and import need the
-staff member to be on the ADMIN_TEAM team; when that setting is empty, nobody can change them.
+Every request runs as the signed-in staff member (StaffSessionAuthMixin). Every staff member can
+open the app. Personal phrases can only be changed by their owner. Practice phrases, practice info,
+settings, and import need the staff member to be on the ADMIN_TEAM team; when that setting is
+empty, nobody can change them.
 GET /phrases also serves other tools that want the signed-in staff member's phrases.
 """
 
@@ -18,8 +19,9 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
-from canvas_sdk.v1.data import Command, Note
+from canvas_sdk.v1.data import Command, Note, PatientMetadata
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent
+from django.db.models import Q
 
 from dot_phrases.catalog import (
     COMMAND_LABELS,
@@ -34,10 +36,14 @@ from dot_phrases.handlers.note_events import leftovers_key
 from dot_phrases.handlers.panel_button import EDITABLE_NOTE_STATES
 from dot_phrases.library import (
     admin_team_name,
+    custom_placeholders,
+    enabled_chart_placeholders,
     favorite_ids,
     get_setting,
     hidden_ids,
+    note_label,
     is_admin,
+    known_names,
     phrase_fits_rx,
     placeholder_values,
     practice_values,
@@ -50,12 +56,14 @@ from dot_phrases.library import (
 )
 from dot_phrases.models import Phrase, PhraseFavorite, PhraseHidden, PracticeValue
 from dot_phrases.text import (
+    CHART_GROUPS,
     MAX_TEXT_LENGTH,
     PATIENT_PLACEHOLDERS,
     PRACTICE_NAME_RULE,
     fill,
     fill_ins,
     is_valid_code,
+    placeholder_names,
     rx_field_name,
     rx_issue,
     rx_message,
@@ -69,6 +77,7 @@ NOTE_BLOBS = ("_body", "_body_content", "_body_order", "related_data")
 CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 MAX_VALUE_LENGTH = 500
 MAX_IMPORT_LINES = 2000
+MAX_METADATA_KEYS = 200
 IMPORT_USE_IN = {"plan": "plan", "hpi": "hpi", "instruct": "instruct", "perform": "perform"}
 
 
@@ -145,9 +154,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/admin/")
     def admin_page(self) -> list[Response | Effect]:
-        if not self._admin():
-            html = render_to_string("static/admin/not_admin.html") or ""
-            return [HTMLResponse(html, status_code=HTTPStatus.FORBIDDEN)]
+        # Everyone gets the page. What they can change is checked by each write endpoint.
         html = render_to_string("static/admin/index.html", {"api_base": API_BASE, "cache_bust": CACHE_BUST}) or ""
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
 
@@ -168,7 +175,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         if me is None:
             return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
         note_id = self.request.query_params.get("note_id") or ""
-        note = Note.objects.filter(id=note_id).select_related("patient", "provider").defer(*NOTE_BLOBS).first() if note_id else None
+        note = Note.objects.filter(id=note_id).select_related("patient", "provider", "note_type_version", "location").defer(*NOTE_BLOBS).first() if note_id else None
         # The panel sends the browser's time zone; remember it so this person's typed codes use it too.
         zone = remember_timezone(me, self.request.query_params.get("tz"))
         values = placeholder_values(note.patient if note else None, note, zone_name=zone, owner_dbid=me)
@@ -184,17 +191,29 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
                     "phrases": phrases,
                     "is_admin": self._admin(),
                     "admin_team": admin_team_name(self.secrets),
+                    "note": note_label(note) if note else None,
                     "allow_copy_text": bool(get_setting("allow_copy_text")),
                     "rx_targets": rx_targets,
                     "commands": [{"key": k, "label": COMMAND_LABELS[k]} for k in NOTE_COMMAND_KEYS],
                     "field_limits": FIELD_LIMITS,
                     "rx_fields": {k: {"label": v[0], "max": v[1]} for k, v in RX_FIELDS.items()},
                     "practice_names": sorted(practice_values()),
-                    "patient_placeholders": PATIENT_PLACEHOLDERS,
+                    "patient_placeholders": self._patient_placeholders(),
+                    "menu_placeholders": self._menu_placeholders(),
                     "values": values,
                 }
             )
         ]
+
+    def _patient_placeholders(self) -> dict[str, str]:
+        """Every chart and custom patient placeholder, with its label."""
+        return {**PATIENT_PLACEHOLDERS, **{name: name.replace("_", " ").capitalize() for name in custom_placeholders()}}
+
+    def _menu_placeholders(self) -> list[dict[str, str]]:
+        """The patient placeholders the editor's Patient menu shows: the chart ones the practice chose, then custom ones."""
+        labels = self._patient_placeholders()
+        names = enabled_chart_placeholders() + sorted(custom_placeholders())
+        return [{"name": name, "label": labels[name]} for name in names]
 
     # ---------- phrase writes ----------
 
@@ -207,15 +226,13 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             return None, "Write the text this phrase puts in the note."
         if len(text) > MAX_TEXT_LENGTH:
             return None, f"Phrase text is limited to {MAX_TEXT_LENGTH:,} characters."
-        unknown = unknown_placeholders(text, set(practice_values()))
+        unknown = unknown_placeholders(text, known_names())
         if unknown:
-            return None, f"{', '.join(unknown)} isn't a placeholder. Add it on the Practice settings tab, or fix the spelling."
-        # Practice phrases can be limited to certain commands. A personal phrase works in every note
-        # command, unless it's set to prescriptions only (an empty list, with a prescription box checked).
-        if scope == "practice":
-            use_in = body.get("use_in")
-        else:
-            use_in = [] if body.get("use_in") == [] else None
+            fix = "Add it on the Practice settings tab, or fix the spelling." if self._admin() else "Fix the spelling, or ask your Dot Phrases admins to add it as practice info."
+            return None, f"{', '.join(unknown)} isn't a placeholder. {fix}"
+        # None means every note command; a list names the commands. An empty list with a prescription
+        # box checked means prescriptions only. Personal and practice phrases work the same way.
+        use_in = body.get("use_in")
         if use_in is not None:
             if not isinstance(use_in, list) or any(k not in COMMAND_LABELS for k in use_in):
                 return None, "Use in has a command this plugin doesn't work in."
@@ -223,7 +240,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         rx_sig = bool(body.get("rx_sig"))
         rx_ntp = bool(body.get("rx_note_to_pharmacist"))
         if use_in == [] and not rx_sig and not rx_ntp:
-            return None, "Pick at least one place to use it, or choose All commands."
+            return None, "Pick at least one place to use this phrase."
         for field, on in (("sig", rx_sig), ("note_to_pharmacist", rx_ntp)):
             message = rx_message(RX_FIELDS[field][0], RX_FIELDS[field][1], text) if on else ""
             if message:
@@ -335,7 +352,8 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             wanted = {int(str(i)) for i in raw_ids}
         except (TypeError, ValueError):
             return _error("Pick at least one phrase.")
-        practice = {p.dbid for p in usable_phrases(me).values() if p.scope == "practice"}
+        # Checked against all practice phrases, so one this person also has a copy of can still be hidden.
+        practice = set(Phrase.objects.filter(scope="practice", archived=False, dbid__in=sorted(wanted)).values_list("dbid", flat=True))
         ids = sorted(wanted & practice)
         if not ids:
             return _error("Only practice phrases can be hidden.")
@@ -372,7 +390,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         me = self._me()
         if me is None:
             return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
-        note = Note.objects.filter(id=self.request.path_params.get("note_id")).select_related("patient", "provider").defer(*NOTE_BLOBS).first()
+        note = Note.objects.filter(id=self.request.path_params.get("note_id")).select_related("patient", "provider", "location").defer(*NOTE_BLOBS).first()
         if note is None:
             return _error("Note not found.", HTTPStatus.NOT_FOUND)
         state = CurrentNoteStateEvent.objects.filter(note__dbid=note.dbid).values_list("state", flat=True).first()
@@ -390,7 +408,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         answers = [str(a) for a in (body.get("answers") or []) if isinstance(a, (str, int, float))]
 
         zone = remember_timezone(me, str(body.get("tz") or "") or None)
-        values = placeholder_values(note.patient, note, zone_name=zone, owner_dbid=me)
+        values = placeholder_values(note.patient, note, zone_name=zone, owner_dbid=me, needed=placeholder_names([phrase.text]))
         if target in RX_FIELDS:
             if not phrase_fits_rx(phrase, target):
                 return _error(f".{phrase.code} isn't set up for the {RX_FIELDS[target][0].lower()}.")
@@ -429,22 +447,40 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         command = INSERTABLE[target](note_uuid=str(note.id), command_uuid=command_uuid, **{INSERT_FIELD[target]: filled.text})
         return [command.originate(), JSONResponse({"ok": True, "target": target})]
 
-    # ---------- admin: practice phrases, practice settings, import ----------
+    # ---------- the app: my phrases, practice phrases, practice settings, import ----------
 
     @api.get("/admin/data")
     def admin_data(self) -> list[Response | Effect]:
-        if not self._admin():
-            return _error("Only your practice's admins can open this.", HTTPStatus.FORBIDDEN)
+        """Everything the app shows: the signed-in staff member's own phrases and the practice phrases.
+
+        Open to all staff. Practice phrases come back for everyone, read-only unless is_admin is true.
+        """
         me = self._me()
+        if me is None:
+            return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
         values = practice_values()
-        phrases = [
-            _phrase_json(p, me, set(), None)
-            for p in Phrase.objects.filter(scope="practice", archived=False).select_related("owner").order_by("code")
-        ]
-        used = {name: sum(1 for p in phrases if "{" + name + "}" in p["text"]) for name in values}
+        hidden = hidden_ids(me)
+        rows = Phrase.objects.filter(Q(scope="practice") | Q(scope="personal", owner_id=me), archived=False).select_related("owner").order_by("code")
+        mine: list[dict[str, Any]] = []
+        phrases: list[dict[str, Any]] = []
+        for p in rows:
+            (phrases if p.scope == "practice" else mine).append(_phrase_json(p, me, set(), None, hidden))
+        texts = [p["text"] for p in phrases]
+        used = {name: sum(1 for t in texts if "{" + name + "}" in t) for name in values}
+        custom = custom_placeholders()
+        admin = self._admin()
         return [
             JSONResponse(
                 {
+                    "chart_groups": [{"name": g, "items": [{"name": n, "label": label} for n, label in items]} for g, items in CHART_GROUPS],
+                    "chart_enabled": enabled_chart_placeholders(),
+                    "custom": [{"name": n, "key": k, "used_in": sum(1 for t in texts if "{" + n + "}" in t)} for n, k in sorted(custom.items())],
+                    # Admins pick a custom placeholder's source from the metadata keys already in use.
+                    "metadata_keys": list(PatientMetadata.objects.order_by("key").values_list("key", flat=True).distinct()[:MAX_METADATA_KEYS]) if admin else [],
+                    "menu_placeholders": self._menu_placeholders(),
+                    "is_admin": admin,
+                    "admin_team": admin_team_name(self.secrets),
+                    "mine": mine,
                     "phrases": phrases,
                     "values": [{"name": n, "value": v, "used_in": used[n]} for n, v in sorted(values.items())],
                     "allow_copy_text": bool(get_setting("allow_copy_text")),
@@ -467,6 +503,8 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             return _error("Name it with lowercase letters and underscores, like clinic_fax.")
         if name in PATIENT_PLACEHOLDERS:
             return _error(f"{{{name}}} already comes from the chart.")
+        if name in custom_placeholders():
+            return _error(f"{{{name}}} is already a custom patient placeholder.")
         if len(value) > MAX_VALUE_LENGTH or "\n" in value:
             return _error(f"Values are one line, up to {MAX_VALUE_LENGTH} characters.")
         PracticeValue.objects.update_or_create(name=name, defaults={"value": value})
@@ -486,11 +524,46 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         body = self.request.json() or {}
         if "allow_copy_text" in body:
             set_setting("allow_copy_text", bool(body["allow_copy_text"]))
-        return [JSONResponse({"allow_copy_text": bool(get_setting("allow_copy_text"))})]
+        if "chart_placeholders" in body:
+            chosen = body["chart_placeholders"]
+            if not isinstance(chosen, list) or any(n not in PATIENT_PLACEHOLDERS for n in chosen):
+                return _error("That isn't a chart placeholder.")
+            set_setting("chart_placeholders", [n for n in PATIENT_PLACEHOLDERS if n in chosen])
+        return [JSONResponse({"allow_copy_text": bool(get_setting("allow_copy_text")), "chart_enabled": enabled_chart_placeholders()})]
+
+    @api.post("/admin/custom-placeholders")
+    def save_custom_placeholder(self) -> list[Response | Effect]:
+        """Add or change a custom patient placeholder: a name and the patient metadata key it reads."""
+        if not self._admin():
+            return _error("Only your practice's admins can change placeholders.", HTTPStatus.FORBIDDEN)
+        body = self.request.json() or {}
+        name = str(body.get("name") or "").strip().lower()
+        key = str(body.get("key") or "").strip()
+        if not PRACTICE_NAME_RULE.fullmatch(name):
+            return _error("Name it with lowercase letters and underscores, like care_coordinator.")
+        if name in PATIENT_PLACEHOLDERS:
+            return _error(f"{{{name}}} already comes from the chart.")
+        if name in practice_values():
+            return _error(f"{{{name}}} is already practice info.")
+        if not key or len(key) > 256:
+            return _error("Pick the patient detail it reads from.")
+        custom = custom_placeholders()
+        custom[name] = key
+        set_setting("custom_placeholders", custom)
+        return [JSONResponse({"name": name, "key": key})]
+
+    @api.delete("/admin/custom-placeholders/<name>")
+    def delete_custom_placeholder(self) -> list[Response | Effect]:
+        if not self._admin():
+            return _error("Only your practice's admins can change placeholders.", HTTPStatus.FORBIDDEN)
+        custom = custom_placeholders()
+        custom.pop(str(self.request.path_params.get("name") or ""), None)
+        set_setting("custom_placeholders", custom)
+        return [JSONResponse({"ok": True})]
 
     def _check_import(self, raw: str) -> list[dict[str, Any]]:
         existing = set(Phrase.objects.filter(scope="practice", archived=False).values_list("code", flat=True))
-        names = set(practice_values())
+        names = known_names()
         seen: set[str] = set()
         rows: list[dict[str, Any]] = []
         for line in [ln.strip() for ln in raw.splitlines() if ln.strip()][:MAX_IMPORT_LINES]:

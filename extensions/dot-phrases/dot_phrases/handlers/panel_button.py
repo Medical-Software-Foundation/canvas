@@ -7,8 +7,10 @@ from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note
 
-# Note states a provider can still edit: new, pushed, unlocked, restored, undeleted, converted.
-EDITABLE_NOTE_STATES = {"NEW", "PSH", "ULK", "RST", "UND", "CVD"}
+# Note states a provider can still edit: new, pushed, unlocked, restored, undeleted, and every
+# appointment stage before the visit ends (scheduling, booked, checked in, check-in reverted), so
+# staff can prechart. Locked, signed, deleted, cancelled, and no-show notes can't be edited.
+EDITABLE_NOTE_STATES = {"NEW", "PSH", "ULK", "RST", "UND", "SCH", "BKD", "CVD", "RVT"}
 
 
 class DotPhrasesButton(ActionButton):
