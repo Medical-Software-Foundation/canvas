@@ -204,7 +204,7 @@ class BlockUnfinished(BaseHandler):
                 return f".{code} can't go in the {name}: {issue}. Type the text instead."
             if combined_rx_length(text, phrases, field, values) > field_max:
                 return f"Together, the phrases in the {name} are over {field_max:,} characters. Use fewer, or type the text instead."
-            return f"Filling in .{code}. If it stays, retype it."
+            return f"Dot phrase .{code} is still loading. If it doesn't load, retype the code."
         command_label = COMMAND_LABELS.get(spec.key, spec.label)
         if phrase.use_in is not None and spec.key not in phrase.use_in:
             return f".{code} isn't set up for {command_label}."
@@ -216,4 +216,4 @@ class BlockUnfinished(BaseHandler):
             if combined_length(text, phrases, values, spec.key) > limit:
                 return f"Together, the phrases here are over the {limit:,}-character limit for {command_label}. Use fewer, or shorten one."
         # The swap runs after the command saves, so a code that fits can be seen here for a moment.
-        return f"Filling in .{code}. If it stays, retype it."
+        return f"Dot phrase .{code} is still loading. If it doesn't load, retype the code."

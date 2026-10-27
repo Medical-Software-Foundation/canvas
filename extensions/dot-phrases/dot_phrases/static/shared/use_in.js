@@ -37,6 +37,8 @@ window.DotPhrasesUseIn = function (labels, esc) {
     if (!/\{\s*[a-z]|\*\*\*/i.test(text || "")) { return false; }
     return d.use_in === null || USE_REVIEWS.some(function (k) { return d.use_in.indexOf(k) >= 0; });
   }
+  // Each group's commands in alphabetical order by the name people see.
+  function byLabel(keys) { return keys.slice().sort(function (a, b) { return useLabel(a).localeCompare(useLabel(b)); }); }
   function useListHtml(d) {
     var on = useChecked(d);
     var box = function (k) { return '<label class="pk-ck"><input type="checkbox" data-cmdck="' + k + '"' + (on.indexOf(k) >= 0 ? " checked" : "") + "> " + esc(useLabel(k)) + "</label>"; };
@@ -46,7 +48,7 @@ window.DotPhrasesUseIn = function (labels, esc) {
       '<div class="use-rxhint">Used in Prescribe, Refill, and Adjust prescription. Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210. Prescriptions with unfilled placeholders cannot be sent.</div>' +
       '<div class="pk-gh use-bulk"><span>Note commands</span><button type="button" class="pk-all" data-useall>Select all</button><button type="button" class="pk-all" data-useclear>Clear all</button></div>' +
       USE_GROUPS.map(function (g, i) {
-        return '<div class="pk-grp"><div class="pk-gh"><span>' + esc(g[0]) + '</span><button type="button" class="pk-all" data-grpall="' + i + '">Select all</button></div><div class="pk-cols">' + g[1].map(box).join("") + "</div></div>";
+        return '<div class="pk-grp"><div class="pk-gh"><span>' + esc(g[0]) + '</span><button type="button" class="pk-all" data-grpall="' + i + '">Select all</button></div><div class="pk-cols">' + byLabel(g[1]).map(box).join("") + "</div></div>";
       }).join("");
   }
   function useBlockHtml(d) {

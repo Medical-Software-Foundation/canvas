@@ -273,7 +273,8 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 /* Use in checklist: a summary line with Change, and the checklist under it. Not sourced: the summary
    reuses the editor's field colors; links and checkboxes use the picker's teal (#2c7f8c) */
 .panel-pk .wi{font-size:13px;padding:8px 10px}
-.panel-pk .pk-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
+.panel-pk .pk-cols{display:block;column-count:2;column-gap:12px}
+.panel-pk .pk-cols .pk-ck{break-inside:avoid}
 .panel-pk .pk-ck{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;color:#2c4155;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;margin:0}
 .panel-pk .pk-ck input{width:15px;height:15px;margin:0;padding:0;accent-color:#2c7f8c;flex-shrink:0}
 .panel-pk .pk-gh{display:flex;align-items:baseline;gap:10px;font-size:12px;font-weight:600;color:#5e7a8a;margin:8px 0 2px}
@@ -299,4 +300,6 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .pp-titles{flex:1;min-width:0}
 .ed-sub{font-size:12.5px;color:#5e7a8a;line-height:1.45;margin:2px 0 0}
 .ed-sub:empty{display:none}
+/* Insert buttons while an insert is saving */
+#plist [data-insert][disabled]{opacity:.5;cursor:default}
 {% endverbatim %}

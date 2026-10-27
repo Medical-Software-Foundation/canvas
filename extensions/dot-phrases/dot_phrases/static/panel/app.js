@@ -281,12 +281,20 @@
   });
   $("#q").addEventListener("input", renderList);
 
+  // One insert at a time: a second click while the first is saving, or just after, is ignored, so a
+  // phrase isn't added to the note twice. The note can take a moment to show the new command.
+  var insertBusy = false;
   function insert(p, to) {
+    if (insertBusy) { return Promise.resolve(); }
+    insertBusy = true;
+    $$("#plist [data-insert]").forEach(function (b) { b.disabled = true; });
     var ans = openId === p.id ? answers : [];
     return api("POST", "/notes/" + encodeURIComponent(NOTE_ID) + "/insert", { phrase_id: p.id, target: to, answers: ans, tz: browserZone() }).then(function () {
       toast(state.rxFields[to] ? "Filled the prescription's " + targetLabel(to).toLowerCase() : "Added as a new " + targetLabel(to));
       openId = null; return load();
-    }).catch(function (e) { toast(e.message); });
+    }).catch(function (e) { toast(e.message); }).then(function () {
+      setTimeout(function () { insertBusy = false; $$("#plist [data-insert]").forEach(function (b) { b.disabled = false; }); }, 1500);
+    });
   }
 
   $("#plist").addEventListener("click", function (e) {
