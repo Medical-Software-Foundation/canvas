@@ -95,7 +95,7 @@ def own_blocks(staff: Staff, start: datetime, end: datetime) -> list[dict]:
     if not name:
         return []
     calendars = {
-        cal.id: (cal, kind)
+        cal.dbid: (cal, kind)
         for cal in Calendar.objects.filter(
             Q(title__startswith=f"{name}: Clinic")
             | Q(title__startswith=f"{name}: Admin")
@@ -116,7 +116,7 @@ def own_blocks(staff: Staff, start: datetime, end: datetime) -> list[dict]:
     # event pointing at the parent; skip the parent's occurrence on that day.
     overridden: dict[int, list[datetime]] = {}
     for child in Event.objects.filter(
-        recurring_parent_event_id__in=[e.id for e in events if e.recurrence],
+        recurring_parent_event_id__in=[e.dbid for e in events if e.recurrence],
         original_starts_at__isnull=False,
     ):
         overridden.setdefault(child.recurring_parent_event_id, []).append(
@@ -129,7 +129,7 @@ def own_blocks(staff: Staff, start: datetime, end: datetime) -> list[dict]:
         tz = ZoneInfo(str(cal.timezone or "UTC"))
         day = start.astimezone(tz).date() - timedelta(days=1)
         last = end.astimezone(tz).date()
-        moved = {dt.astimezone(tz).date() for dt in overridden.get(ev.id, [])}
+        moved = {dt.astimezone(tz).date() for dt in overridden.get(ev.dbid, [])}
         while day <= last:
             if occurs_on(ev, day, tz) and day not in moved:
                 window = window_on(ev, day, tz)

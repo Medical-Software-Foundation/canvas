@@ -13,7 +13,7 @@ NY = ZoneInfo("America/New_York")
 
 def _event(start, end, recurrence=None, **kw):
     return SimpleNamespace(
-        id=kw.get("id", 1),
+        dbid=kw.get("id", 1),
         calendar_id=kw.get("calendar_id", 10),
         title=kw.get("title", "Available"),
         starts_at=start,
@@ -146,12 +146,12 @@ class TestOwnBlocks:
 
     def test_clinic_and_admin_blocks(self) -> None:
         clinic = SimpleNamespace(
-            id=10, title="Jane Doe: Clinic", timezone="America/New_York"
+            dbid=10, title="Jane Doe: Clinic", timezone="America/New_York"
         )
         admin = SimpleNamespace(
-            id=11, title="Jane Doe: Admin: Main", timezone="America/New_York"
+            dbid=11, title="Jane Doe: Admin: Main", timezone="America/New_York"
         )
-        other = SimpleNamespace(id=12, title="Jane Doe: Something", timezone="UTC")
+        other = SimpleNamespace(dbid=12, title="Jane Doe: Something", timezone="UTC")
         events = [
             _event(MON_9, MON_17, id=1, calendar_id=10),
             _event(
@@ -170,7 +170,7 @@ class TestOwnBlocks:
 
     def test_moved_occurrence_is_skipped(self) -> None:
         clinic = SimpleNamespace(
-            id=10, title="Jane Doe: Clinic", timezone="America/New_York"
+            dbid=10, title="Jane Doe: Clinic", timezone="America/New_York"
         )
         weekly = _event(
             datetime(2026, 10, 19, 9, tzinfo=NY),
@@ -187,7 +187,7 @@ class TestOwnBlocks:
         assert result == []
 
     def test_utc_default_timezone(self) -> None:
-        clinic = SimpleNamespace(id=10, title="Jane Doe: Clinic", timezone=None)
+        clinic = SimpleNamespace(dbid=10, title="Jane Doe: Clinic", timezone=None)
         ev = _event(
             datetime(2026, 10, 26, 14, tzinfo=timezone.utc),
             datetime(2026, 10, 26, 16, tzinfo=timezone.utc),
