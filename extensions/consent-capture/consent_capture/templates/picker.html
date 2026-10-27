@@ -316,6 +316,8 @@
     .pt-doc p { font-size: 16px; line-height: 1.55; margin: 0 0 8px; color: var(--body); }
     .pt-doc p:last-child { margin-bottom: 0; }
     .sigcard { margin-top: 10px; padding: 14px 18px; }
+    #bQs { flex: none; }
+    #bQs:not(:empty) { margin-top: 10px; }
     .siglab { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--secondary); margin-bottom: 9px; }
     .sigright { display: inline-flex; align-items: center; gap: 10px; }
     .sigmode { display: inline-flex; gap: 2px; background: var(--field); border: 1.5px solid var(--border); border-radius: 9px; padding: 3px; }
@@ -626,6 +628,7 @@
       <div class="pt-head"><div class="pt-inner"><div class="progress" id="bProgress"></div><h1 id="bTitle">Consent</h1><p class="sub" id="bSub">Read the consent below, then sign in the box.</p></div></div>
       <div class="pad">
       <div class="pt-doc" id="bText"></div>
+      <div id="bQs"></div>
       <div class="card sigcard">
         <div id="sigSlot"></div>
         <div class="reuse-panel hidden" id="bReusePanel">
@@ -641,7 +644,7 @@
     </div></div>
     <div class="footer signfoot"><div class="inner"><div class="btnrow">
       <button type="button" class="btn ghost" id="bSkip">Skip</button><span class="spacer"></span>
-      <button type="button" class="btn primary" id="bNext" disabled>Next</button>
+      <button type="button" class="btn primary" id="bNext" disabled>Accept and Sign</button>
     </div></div></div>
   </div>
 
@@ -873,7 +876,8 @@
       if (!c.method_enabled) return [''];
       return methodsFor(c).filter(function (m) { return m !== 'Written' || deviceSigningFor(c); });
     }
-    function needsAction(c) { return c.active !== false && c.status !== 'on_file' && c.status !== 'declined'; }
+    // A declined consent stays in the list so it can be asked again; it doesn't turn the button red.
+    function needsAction(c) { return c.active !== false && c.status !== 'on_file'; }
 
     function renderHub() {
       var list = $('hubList'); list.innerHTML = '';
@@ -913,7 +917,7 @@
       }
       function expiredMeta(c) { return c.expiration_date ? ('Expired ' + fmtDate(c.expiration_date) + ', needs renewal') : 'Expired, needs renewal'; }
       function actionRow(i, pillCls, pillText) {
-        var c = CONSENTS[i], expired = c.status === 'expired';
+        var c = CONSENTS[i], expired = c.status === 'expired', declined = c.status === 'declined';
         var row = el('div', 'crow click'); row.setAttribute('role', 'button'); row.tabIndex = 0;
         var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'pick'; cb.setAttribute('data-idx', String(i));
         cb.setAttribute('aria-label', 'Select ' + c.display);
@@ -925,7 +929,7 @@
         var col = el('div', 'cmain'); col.appendChild(el('span', 'cname', c.display));
         if (expired) col.appendChild(el('span', 'csub', expiredMeta(c)));
         row.appendChild(col);
-        row.appendChild(el('span', 'pill ' + (expired ? 'expired' : pillCls), expired ? 'Renew' : pillText));
+        row.appendChild(el('span', 'pill ' + (declined ? 'declined' : expired ? 'expired' : pillCls), declined ? 'Declined' : expired ? 'Renew' : pillText));
         row.appendChild(el('span', 'chev', '›'));
         // Selecting a consent's name still opens it on its own.
         row.addEventListener('click', function () { startWizard(i); });
@@ -1197,6 +1201,8 @@
       return {
         patient_id: PATIENT_ID, consent_code: c.code, consent_system: c.system,
         method: method, answers: answers || {},
+        // Fingerprint of the consent text shown; the server refuses if it has changed.
+        statement_sha256: c.statement_sha256 || '',
         local_date: st.date || localDateISO(), local_time: localTimeStr(), local_tz: localTZ(),
         consent_by: c.obtained_by_enabled ? st.who : 'patient', representative_name: st.repName, representative_relationship: st.repRel,
         capacity_confirmed: st.capacity === 'yes'
@@ -1570,7 +1576,7 @@
     function startSigning(itemIdxs) { S.queue = itemIdxs.slice(); S.qi = 0; loadSign(); }
     function currentItem() { return S.items[S.queue[S.qi]]; }
     function loadSign() {
-      var it = currentItem(), last = S.qi === S.queue.length - 1;
+      var it = currentItem();
       S.reconfirmItem = !!it.reconfirm;
       $('bProgress').textContent = S.queue.length === 1 ? '' : 'Consent ' + (S.qi + 1) + ' of ' + S.queue.length;
       $('bTitle').textContent = it.c.display;
@@ -1579,6 +1585,9 @@
       if (ps.length) ps.forEach(function (p) { text.appendChild(el('p', null, p)); });
       else text.appendChild(el('p', null, 'Review the consent with your care team.'));
       text.scrollTop = 0;
+      // A consent signed on this device asks its questions here, before the signature.
+      var qhost = $('bQs'); qhost.innerHTML = '';
+      if ((it.c.questions || []).length) renderQuestions(qhost, it.c.questions, it.answers, validateSign);
       $('bAttest').innerHTML = '';
       $('bAttest').appendChild(document.createTextNode('Signing as '));
       $('bAttest').appendChild(el('b', null, signerName()));
@@ -1595,13 +1604,12 @@
       note.textContent = 'Your signature will be used for the next ' + (ahead === 1 ? 'consent' : ahead + ' consents') + '. You’ll still review and accept each one.';
       show('bsign');
       mountPad();
-      applyReuseView(last);
+      applyReuseView();
     }
-    function nextLabel(last) { return (last || S.reuseActive) ? 'Accept and Sign' : 'Next'; }
-    function applyReuseView(last) {
+    function applyReuseView() {
       var on = S.reuseActive;
-      if (last === undefined) last = S.qi === S.queue.length - 1;
-      $('bSub').innerHTML = on ? (S.reconfirmItem ? 'Check the name below, then select <b>Accept and Sign</b>.' : 'Read the consent below, then select <b>Accept and Sign</b>.') : 'Read the consent below, then sign in the box.';
+      var asks = (currentItem().c.questions || []).length ? ', answer the questions' : '';
+      $('bSub').innerHTML = on ? (S.reconfirmItem ? 'Check the name below, then select <b>Accept and Sign</b>.' : 'Read the consent below' + asks + ', then select <b>Accept and Sign</b>.') : 'Read the consent below' + asks + ', then sign in the box.';
       $('bReusePanel').classList.toggle('hidden', !on);
       $('sigSlot').classList.toggle('hidden', on);
       $('bReuseFresh').classList.toggle('hidden', S.reconfirmItem);
@@ -1610,7 +1618,6 @@
         $('bReuseLbl').textContent = S.reuseSrc.label;
         $('bReuseName').textContent = S.reuseSrc.entered ? (S.reuseSrc.typed ? 'Typed name: ' : 'Printed name: ') + S.reuseSrc.entered : '';
       }
-      $('bNext').textContent = nextLabel(last);
       syncPrintedName(); validateSign();
     }
     $('bReuseFresh').addEventListener('click', function () { S.reuseActive = false; applyReuseView(); sizePad(); fitCanvas(); });
@@ -1768,9 +1775,10 @@
     function validateSign() {
       pad.querySelector('.clearbtn').disabled = !hasSig();
       if (!S || !$('bsignView').classList.contains('active')) return;
-      if (S.reuseActive) { $('bNext').disabled = false; return; }
+      var it = currentItem(), qOk = answersValid(it.c.questions || [], it.answers);
+      if (S.reuseActive) { $('bNext').disabled = !qOk; return; }
       var pnOk = !PRACTICE.ask_printed_name || SIG.mode === 'type' || $('pnInput').value.trim() !== '';
-      $('bNext').disabled = !(hasSig() && pnOk);
+      $('bNext').disabled = !(hasSig() && pnOk && qOk);
     }
     $('pnInput').addEventListener('input', validateSign);
 
@@ -2059,7 +2067,8 @@
         if (k >= todo.length) { finishRecording(); return; }
         var it = todo[k++];
         var declined = it.status === 'declined';
-        var payload = basePayload(it.c, it.method, S, it.method === 'Written' ? {} : it.answers);
+        // Signed on this device: the answers given on the signing screen go with it.
+        var payload = basePayload(it.c, it.method, S, (it.method !== 'Written' || it.status === 'signed') ? it.answers : {});
         if (it.status === 'signed') {
           payload.signature = { image: it.sig, signed_with: it.signedWith, entered_name: it.entered, name_kept: !!it.nameKept,
             reused: !!it.reused, reconfirmed: !!it.reconfirmed,

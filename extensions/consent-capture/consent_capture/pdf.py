@@ -65,6 +65,37 @@ _HELV_WIDTHS = {
 }
 
 
+# Letters the PDF's Windows-1252 fonts can't draw, mapped to the plain letter
+# (Vietnamese and other Latin letters: "ễ" -> "e", "ł" -> "l"). Applied to every
+# string drawn on the PDF, so a signer's name such as "Nguyễn" prints as "Nguyen"
+# instead of "Nguy?n". The real characters are kept on the plugin's own record.
+# Consent text is never folded: Consent Settings refuses text the PDF can't print.
+# Generated from Unicode decomposition (the sandbox has no ``unicodedata``).
+_FOLD_PAIRS = (
+    "ĀAāaĂAăaĄAąaĆCćcĈCĉcĊCċcČCčcĎDďdĐDđdĒEēeĔEĕeĖEėeĘEęeĚEěeĜGĝgĞGğgĠGġgĢGģgĤHĥhĦHħhĨIĩiĪIīiĬIĭiĮIįiİIıiĴJĵjĶKķkĸkĹLĺlĻLļlĽLľlĿLŀlŁLłlŃNńnŅNņnŇNňnŉnŌOōoŎOŏoŐOőoŔRŕrŖRŗrŘRřrŚSśsŜSŝsŞSşsŢTţtŤTťtŦTŧtŨUũuŪUūuŬUŭuŮUůuŰUűuŲUųuŴWŵwŶYŷyŹZźzŻZżzſsƀbƗIƚlƠOơoƯUưuǍAǎaǏIǐiǑOǒoǓUǔuǕUǖuǗUǘuǙUǚuǛUǜuǞAǟaǠAǡaǢÆǣæǦGǧgǨKǩkǪOǫoǬOǭoǰjǴGǵgǸNǹnǺAǻaǼÆǽæǾØǿøȀAȁaȂAȃaȄEȅeȆEȇeȈIȉiȊIȋiȌOȍoȎOȏoȐRȑrȒRȓrȔUȕuȖUȗuȘSșsȚTțtȞHȟhȦAȧaȨEȩeȪOȫoȬOȭoȮOȯoȰOȱoȲYȳyḀAḁaḂBḃbḄBḅbḆBḇbḈCḉcḊDḋdḌDḍdḎDḏdḐDḑdḒDḓdḔEḕeḖEḗeḘEḙeḚEḛeḜEḝeḞFḟfḠGḡgḢHḣhḤHḥhḦHḧhḨHḩhḪHḫhḬIḭiḮIḯiḰKḱkḲKḳkḴKḵkḶLḷlḸLḹlḺLḻlḼLḽlḾMḿmṀMṁmṂMṃmṄNṅnṆNṇnṈNṉnṊNṋnṌOṍoṎOṏoṐOṑoṒOṓoṔPṕpṖPṗpṘRṙrṚRṛrṜRṝrṞRṟrṠSṡsṢSṣsṤSṥsṦSṧsṨSṩsṪTṫtṬTṭtṮTṯtṰTṱtṲUṳuṴUṵuṶUṷuṸUṹuṺUṻuṼVṽvṾVṿvẀWẁwẂWẃwẄWẅwẆWẇwẈWẉwẊXẋxẌXẍxẎYẏyẐZẑzẒZẓzẔZẕzẖhẗtẘwẙyẛsẠAạaẢAảaẤAấaẦAầaẨAẩaẪAẫaẬAậaẮAắaẰAằaẲAẳaẴAẵaẶAặaẸEẹeẺEẻeẼEẽeẾEếeỀEềeỂEểeỄEễeỆEệeỈIỉiỊIịiỌOọoỎOỏoỐOốoỒOồoỔOổoỖOỗoỘOộoỚOớoỜOờoỞOởoỠOỡoỢOợoỤUụuỦUủuỨUứuỪUừuỬUửuỮUữuỰUựuỲYỳyỴYỵyỶYỷyỸYỹy"
+)
+_FOLD_TABLE = {ord(_FOLD_PAIRS[i]): _FOLD_PAIRS[i + 1] for i in range(0, len(_FOLD_PAIRS), 2)}
+
+
+def fold_for_pdf(text):
+    """``text`` with letters the PDF can't draw replaced by their plain letter."""
+    return (text or "").translate(_FOLD_TABLE)
+
+
+def unprintable_chars(text):
+    """Characters in ``text`` the PDF can't print as-is (outside Windows-1252), in
+    order of first appearance. Used to refuse consent text that would print as "?"."""
+    out = []
+    for ch in text or "":
+        if ch in out:
+            continue
+        try:
+            ch.encode("cp1252")
+        except UnicodeEncodeError:
+            out.append(ch)
+    return out
+
+
 def _escape(text):
     """Escape characters that are special inside a PDF text string."""
     return (
@@ -416,7 +447,7 @@ def _assemble_pdf(content_streams, signature=None):
     XObject (``/Sig``) when ``signature`` carries one (``jpeg`` bytes, ``width``,
     ``height``, ``components``).
     """
-    page_bytes = [s.encode("cp1252", "replace") for s in content_streams]
+    page_bytes = [fold_for_pdf(s).encode("cp1252", "replace") for s in content_streams]
     n = len(page_bytes)
     image_num = 5 + 2 * n
     has_image = bool(signature and signature.get("jpeg"))

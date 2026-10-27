@@ -95,8 +95,9 @@ Consent Capture turns that into a guided flow that:
      No blocks it. The wording follows the patient/representative choice and never
      inserts a name.
    - Any configured **questions** (Yes/No, Acknowledge, or typed answer).
-     **Written** consents skip the questions — the signed document is the record — so
-     none are shown or evaluated for them.
+     **Written** consents on a camera photo or upload skip the questions (the signed
+     document is the record). A Written consent signed on this device asks them on
+     the signing screen and prints the answers on its PDF.
 4. On **Record Consent**, the plugin:
    1. For verbal/electronic/other: generates a documentation PDF (built without an
       external PDF library, since the sandbox has none) with the method, capacity
@@ -117,17 +118,20 @@ device**. It opens on that tab when it's available.
 
 1. Staff select **Continue**, and a hand-off screen asks them to give the device to
    the signer.
-2. The signer reads the consent and signs in the box (finger, stylus, mouse or
-   trackpad, or a typed signature, as the practice allows), then selects
-   **Accept and Sign**. The line under the box reads "Signing as [name][,
+2. The signer reads the consent, answers its questions, and signs in the box
+   (finger, stylus, mouse or trackpad, or a typed signature, as the practice
+   allows), then selects **Accept and Sign**. The server checks the answers the
+   same way it does for a generated form. The line under the box reads "Signing as [name][,
    relationship of patient]. By signing, I agree to the consent above."
 3. A "Thank you" screen asks the signer to hand the device back.
 4. Staff check the signature on **Review consent** and select **Record Consent**.
 
 The consent is saved as **Written**. The plugin generates the PDF with a Signature
 section: the signature image, the signer and their role, a printed or typed name
-when it differs, the date and time signed, "Signed in person on staff device", and
-a note when the signer confirmed under a corrected name. On File and the done screen show
+when it differs, the date and time signed, "Signed in person on staff device", a
+note when the signer applied the signature from an earlier consent in the session,
+and a note when the signer confirmed under a corrected name. The questions and
+answers print above the signature. On File and the done screen show
 how it was signed ("Signed on this device (finger or stylus)", "(mouse or trackpad)"
 or "(typed)").
 
@@ -151,20 +155,41 @@ The Consents list has a checkbox on every Required and Optional consent, a **Sel
 all** at the top and in each section, and **Start (N)**. Staff choose each consent's
 method (only the methods it offers; Written only when it can be signed on the
 device), answer **Who is giving consent?**, capacity and the effective date once,
-and hand the device over. The signer goes through "Consent 1 of N" with **Next** or
-**Skip**, and **Review consents** shows each one's status with **Sign now** and
+and hand the device over. The signer goes through "Consent 1 of N" with **Accept
+and Sign** or **Skip**, and **Review consents** shows each one's status with **Sign now** and
 **Decline** for anything unfinished. **Record Consents (N)** records only the
 finished ones, each with its own signature, PDF and FHIR `Consent`; the rest stay
 Needed. With **Allow reusing a signature** on, later consents offer the signer's
-first signature for them to accept, and the record notes "reused signature".
+first signature for them to accept. The PDF notes "Signer applied the signature
+from an earlier consent in this session and accepted this consent separately."
 
 ### Declined consents
 
 **Decline** on **Review consents** records a FHIR `Consent` with `status =
 rejected` and a PDF whose Outcome reads "Declined". A declined consent counts as
 asked and answered: it clears the red button and the banner and shows as
-**Declined** under On File. Declines recorded in the patient portal count the same
-way.
+**Declined** under On File. It stays in the Consents list with a gray
+**Declined** tag, so it can be recorded later if the patient changes their mind.
+A declined consent has no method on its PDF or record, since nothing was signed.
+
+> **Upgrade note (1.38.0).** Declines recorded in the patient portal (FHIR
+> `Consent` state `rejected_via_patient_portal`) now count as asked and answered
+> too, so a required consent the patient declined in the portal no longer turns
+> the button red or shows the banner.
+
+### Consent text and the PDF
+
+- **Changed while open.** The Consents window sends back a fingerprint (SHA-256)
+  of the consent text it showed. If an admin edited the consent in the meantime,
+  recording or declining is refused with "This consent was changed while it was
+  open. Close Consents, reopen it, and have the signer review it again." The PDF
+  never puts new wording above a signature given to the old wording.
+- **Characters the PDF can't print.** The PDF uses the standard Windows-1252
+  fonts. Consent Settings refuses consent text, capacity statements and question
+  prompts with characters outside that set, and lists them, so the PDF always
+  matches the screen. Names are accepted as entered: letters the PDF can't draw
+  print as their plain letter ("Nguyễn" prints as "Nguyen"), and the plugin's
+  record keeps the name as entered.
 
 > Canvas keeps **one consent per coding** and overwrites it on re-consent, so a
 > coding shows a single current record; the On File section still lists distinct

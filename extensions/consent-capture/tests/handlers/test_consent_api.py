@@ -23,6 +23,7 @@ from consent_capture.handlers.consent_api import (
     serialize_coding,
     serialize_definition,
 )
+from consent_capture.signing import statement_fingerprint
 
 MODULE = "consent_capture.handlers.consent_api"
 
@@ -277,6 +278,9 @@ def _defn(**over):
     return d
 
 
+DEFAULT_STATEMENT_SHA256 = statement_fingerprint(["Line one."])[1]
+
+
 def _make_api(body, staff_id="staff-9", secrets=None):
     """Build a ConsentApi with a mocked request and dict secrets."""
     api = ConsentApi()
@@ -286,6 +290,9 @@ def _make_api(body, staff_id="staff-9", secrets=None):
     # Capacity-specific tests pass it explicitly (including False) and are respected.
     if isinstance(body, dict):
         body.setdefault("capacity_confirmed", True)
+        # The picker sends back the fingerprint of the text it showed; default it to
+        # the text of _defn() so tests that don't change verbiage record normally.
+        body.setdefault("statement_sha256", DEFAULT_STATEMENT_SHA256)
     api.request.json.return_value = body
     api.request.headers.get.return_value = staff_id
     api.secrets = secrets if secrets is not None else {
@@ -645,7 +652,7 @@ class TestCollectQuestions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ) as mock_pdf, patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -703,7 +710,7 @@ class TestCollectCapacity:
             patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"),
             patch(f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"),
             patch(f"{MODULE}.build_consent_payload", return_value={}),
-            patch(f"{MODULE}.parse_statement", return_value=[]),
+            patch(f"{MODULE}.parse_statement", return_value=["Line one."]),
         )
         with patch(f"{MODULE}.definition_by_code", return_value=defn), p1, p2, p3 as mock_pdf, p4, p5, patch(
             f"{MODULE}.CanvasFhir"
@@ -725,7 +732,7 @@ class TestCollectCapacity:
             patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"),
             patch(f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"),
             patch(f"{MODULE}.build_consent_payload", return_value={}),
-            patch(f"{MODULE}.parse_statement", return_value=[]),
+            patch(f"{MODULE}.parse_statement", return_value=["Line one."]),
         )
         with patch(f"{MODULE}.definition_by_code", return_value=defn), p1, p2, p3 as mock_pdf, p4, p5, patch(
             f"{MODULE}.CanvasFhir"
@@ -756,7 +763,7 @@ class TestCollectMethodOptions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ) as mock_pdf, patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -772,7 +779,7 @@ class TestCollectMethodOptions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ), patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -791,7 +798,7 @@ class TestCollectMethodOptions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="GEN"
         ) as mock_pdf, patch(f"{MODULE}.build_consent_payload", return_value={}) as mock_payload, patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -814,7 +821,7 @@ class TestCollectMethodOptions:
             f"{MODULE}._resolve_patient", return_value=("Jane Doe", "")
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.build_consent_payload", return_value={}
-        ) as mock_payload, patch(f"{MODULE}.parse_statement", return_value=[]), patch(
+        ) as mock_payload, patch(f"{MODULE}.parse_statement", return_value=["Line one."]), patch(
             f"{MODULE}.CanvasFhir"
         ) as mock_fhir, patch(f"{MODULE}.log"):
             mock_fhir.return_value.create.return_value = {}
@@ -834,7 +841,7 @@ class TestCollectMethodOptions:
             f"{MODULE}._resolve_patient", return_value=("Jane Doe", "")
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.build_consent_payload", return_value={}
-        ), patch(f"{MODULE}.parse_statement", return_value=[]), patch(
+        ), patch(f"{MODULE}.parse_statement", return_value=["Line one."]), patch(
             f"{MODULE}.CanvasFhir"
         ) as mock_fhir, patch(f"{MODULE}.log"):
             mock_fhir.return_value.create.return_value = {}
@@ -1071,7 +1078,7 @@ class TestCollectFhirErrorHandling:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ), patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir, patch(f"{MODULE}.log"):
             mock_fhir.return_value.create.side_effect = exc
             return api.collect()
@@ -1380,6 +1387,52 @@ class TestAdminUpsert:
             assert update_kwargs["verbiage"] == "New."
             assert update_kwargs["display"] == "Universal Consent"
         assert result[0].content["ok"] is True
+
+    def test_unprintable_consent_text_refused(self):
+        api = _admin({"code": "universal", "system": "INTERNAL", "verbiage": "Tôi đồng ý."})
+        with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(
+            f"{MODULE}.ConsentDefinition"
+        ) as mock_cd:
+            mock_pcc.objects.filter.return_value.first.return_value = _coding()
+            result = api.upsert_consent()
+            assert mock_cd.objects.create.mock_calls == []
+            assert mock_cd.objects.filter.return_value.update.mock_calls == []
+        assert result[0].content == {
+            "ok": False,
+            "error": "The consent text has characters the PDF can't print: đ ồ. Replace them, then save again.",
+        }
+
+    def test_unprintable_question_refused(self):
+        api = _admin(
+            {
+                "code": "universal",
+                "system": "INTERNAL",
+                "verbiage": "Plain.",
+                "questions": [{"id": "a", "prompt": "Age ≥ 18?", "type": "yes_no"}],
+            }
+        )
+        with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(f"{MODULE}.ConsentDefinition"):
+            mock_pcc.objects.filter.return_value.first.return_value = _coding()
+            result = api.upsert_consent()
+        assert result[0].content["error"] == (
+            "A question has characters the PDF can't print: ≥. Replace them, then save again."
+        )
+
+    def test_unprintable_capacity_statement_refused(self):
+        api = _admin(
+            {
+                "code": "universal",
+                "system": "INTERNAL",
+                "verbiage": "Plain.",
+                "capacity_representative_template": "Đã xác nhận",
+            }
+        )
+        with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(f"{MODULE}.ConsentDefinition"):
+            mock_pcc.objects.filter.return_value.first.return_value = _coding()
+            result = api.upsert_consent()
+        assert result[0].content["error"].startswith(
+            "The representative capacity statement has characters the PDF can't print: Đ ậ."
+        )
 
     def test_update_unknown_dbid(self):
         api = _admin({"dbid": 99, "code": "universal", "system": "INTERNAL"})
@@ -1725,9 +1778,43 @@ class TestDeviceSignature:
     def test_reuse_allowed_when_setting_on(self):
         result, mock_pdf, _, mock_ccd = self._run(_sig_body({"reused": True}), settings={"reuse_signature": True})
         assert result[0].content["ok"] is True
-        # Reuse is kept on the plugin's record, not printed on the PDF.
-        assert mock_pdf.mock_calls[0].kwargs["signature"]["notes"] == ["Signed in person on staff device."]
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["notes"] == [
+            "Signed in person on staff device.",
+            "Signer applied the signature from an earlier consent in this session "
+            "and accepted this consent separately.",
+        ]
         assert mock_ccd.objects.create.mock_calls[0].kwargs["reused_signature"] is True
+
+    def test_questions_required_when_signed_on_device(self):
+        defn = _defn(allow_device_signature=True, questions=[AFFIRM_Q])
+        result, mock_pdf, _, _ = self._run(_sig_body(), defn=defn)
+        assert result[0].content["ok"] is False
+        assert mock_pdf.mock_calls == []
+
+    def test_answers_printed_when_signed_on_device(self):
+        defn = _defn(allow_device_signature=True, questions=[AFFIRM_Q])
+        result, mock_pdf, _, _ = self._run(_sig_body(answers={"a": "yes"}), defn=defn)
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["responses"]
+
+    def test_text_changed_while_open_is_refused(self):
+        body = _sig_body(statement_sha256=statement_fingerprint(["Old wording."])[1])
+        result, mock_pdf, mock_payload, mock_ccd = self._run(body)
+        assert result[0].content == {
+            "ok": False,
+            "error": "This consent was changed while it was open. Close Consents, reopen it, "
+            "and have the signer review it again.",
+        }
+        assert mock_pdf.mock_calls == []
+        assert mock_payload.mock_calls == []
+        assert mock_ccd.objects.create.mock_calls == []
+
+    def test_missing_fingerprint_is_refused(self):
+        body = _sig_body()
+        body["statement_sha256"] = ""
+        result, mock_pdf, _, _ = self._run(body)
+        assert result[0].content["ok"] is False
+        assert mock_pdf.mock_calls == []
 
     def test_written_without_signature_still_needs_a_document(self):
         body = _sig_body()
@@ -1770,8 +1857,24 @@ class TestDecline:
         assert mock_payload.mock_calls[0].kwargs["status"] == "rejected"
         stored = mock_ccd.objects.create.mock_calls[0].kwargs
         assert stored["status"] == "declined"
-        assert stored["method"] == "Written"
+        # Nothing was signed, so no method on the PDF or the record.
+        assert stored["method"] == ""
+        assert mock_pdf.mock_calls[0].kwargs["method"] == ""
+        assert result[0].content["preview"]["method"] == ""
         assert stored["pages"] == 1
+
+    def test_decline_refused_when_text_changed(self):
+        result, mock_pdf, mock_payload, _ = self._run(
+            {
+                "patient_id": "patient-1",
+                "consent_code": "universal",
+                "method": "Written",
+                "statement_sha256": statement_fingerprint(["Old wording."])[1],
+            }
+        )
+        assert "changed while it was open" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
+        assert mock_payload.mock_calls == []
 
     def test_validation_shared_with_collect(self):
         result, mock_pdf, _, _ = self._run({"patient_id": "", "consent_code": "universal"})

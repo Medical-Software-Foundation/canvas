@@ -56,7 +56,7 @@ from consent_capture.constants import (
 )
 from consent_capture.fhir import build_consent_payload
 from consent_capture.models import ConsentCaptureDetail, ConsentDefinition
-from consent_capture.pdf import generate_consent_pdf_base64, pdf_page_count
+from consent_capture.pdf import generate_consent_pdf_base64, pdf_page_count, unprintable_chars
 from consent_capture.questions import evaluate_answers, normalize_questions
 from consent_capture.service import (
     clean_practice_settings,
@@ -187,6 +187,28 @@ def _resolve_staff(staff_id):
 
 def _error(message):
     return JSONResponse({"ok": False, "error": message}, status_code=HTTPStatus.OK)
+
+
+def _stale_statement(body, statement_sha256, code, patient_id):
+    """Refuse a recording when the consent text changed after the picker showed it.
+
+    The picker sends back the fingerprint of the text it displayed; the PDF and the
+    stored fingerprint are built from the text now in Consent Settings. If an admin
+    edited the consent while the signer was reading it, the two differ, and
+    recording would put the new wording above a signature given to the old one.
+    Returns an error response list, or ``None`` when the text is unchanged."""
+    if body.get("statement_sha256") == statement_sha256:
+        return None
+    log.info(
+        "ConsentApi: consent %s not recorded for patient %s (text changed while open)"
+        % (code, patient_id)
+    )
+    return [
+        _error(
+            "This consent was changed while it was open. Close Consents, reopen it, "
+            "and have the signer review it again."
+        )
+    ]
 
 
 def _store_capture_detail(
@@ -544,6 +566,11 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             sig["name_kept"] or " ".join(entered.lower().split()) != " ".join(signer.lower().split())
         )
         notes = ["Signed in person on staff device."]
+        if sig["reused"]:
+            notes.append(
+                "Signer applied the signature from an earlier consent in this session "
+                "and accepted this consent separately."
+            )
         if sig["reconfirmed"]:
             notes.append("Confirmed under the corrected name.")
         if sig["name_kept"]:
@@ -586,7 +613,9 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         # required-but-missing answer or an unaffirmed affirmation blocks recording;
         # the responses are printed on the generated PDF (verbal/electronic).
         responses: list = []
-        if method_generates_pdf(method):
+        # A consent signed on the device is a generated form, so its questions are
+        # asked, checked, and printed like any other generated PDF.
+        if method_generates_pdf(method) or device:
             answers = body.get("answers") or {}
             answers_ok, answers_error, responses = evaluate_answers(
                 definition.questions or [], answers
@@ -600,6 +629,10 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
 
         title = definition.display or definition.code
         paragraphs = parse_statement(definition.verbiage)
+        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
+        stale = _stale_statement(body, statement_sha256, definition.code, patient_id)
+        if stale:
+            return stale
 
         # "Written" consents are signed on paper / an external document: the provider
         # uploads or camera-captures it in the picker, which assembles the pages into a
@@ -654,7 +687,6 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         # capacity) so it can be shown under "On File" — Canvas has no settable
         # obtainer field on a FHIR Consent. Must not fail the capture: the consent
         # is already recorded.
-        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
         extra = {
             "status": "accepted",
             "statement_text": statement_text,
@@ -720,7 +752,13 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         today = ctx["today"]
         title = definition.display or definition.code
         paragraphs = parse_statement(definition.verbiage)
+        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
+        stale = _stale_statement(body, statement_sha256, definition.code, patient_id)
+        if stale:
+            return stale
 
+        # No method on a declined record: nothing was signed, and "Written" would
+        # suggest a signed form exists.
         pdf_b64 = generate_consent_pdf_base64(
             title=title,
             patient_name=ctx["patient_name"],
@@ -730,7 +768,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             statement_paragraphs=paragraphs,
             time=ctx["time_display"],
             consented_by=ctx["consented_by"],
-            method=ctx["method"],
+            method="",
             capacity_statement=ctx["capacity_statement"],
             outcome="Declined",
         )
@@ -751,7 +789,6 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             "ConsentApi: recorded declined consent %s for patient %s, collected by %s"
             % (definition.code, patient_id, ctx["staff_name"])
         )
-        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
         _store_capture_detail(
             patient_id=patient_id,
             system=definition.system,
@@ -759,7 +796,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             effective_date=today,
             obtained_by_id=str(ctx["staff_id"] or ""),
             obtained_by_name=ctx["staff_name"],
-            method=ctx["method"],
+            method="",
             consented_by=ctx["consented_by"],
             capacity_statement=ctx["capacity_statement"],
             pages=pdf_page_count(base64.b64decode(pdf_b64)),
@@ -785,7 +822,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                         "code": definition.code,
                         "title": title,
                         "consented_by": ctx["consented_by"],
-                        "method": ctx["method"],
+                        "method": "",
                         "collected_by": ctx["staff_name"],
                         "date": today,
                         "declined": True,
@@ -946,6 +983,27 @@ def _validated_satisfied_by(raw, system, code):
             continue
         out.append({"system": pair[0], "code": pair[1], "display": coding_display[pair]})
     return out
+
+
+def _unprintable_error(body):
+    """A message when consent text that prints on the PDF has characters the PDF
+    can't print (it would show "?"), or ``None``. The PDF is the signed record, so
+    it must read exactly like the screen."""
+    checks = [("The consent text", body.get("verbiage") or "")]
+    checks.append(("The patient capacity statement", body.get("capacity_patient_template") or ""))
+    checks.append(
+        ("The representative capacity statement", body.get("capacity_representative_template") or "")
+    )
+    for question in normalize_questions(body.get("questions")):
+        checks.append(("A question", question.get("prompt") or ""))
+    for label, text in checks:
+        bad = unprintable_chars(text)
+        if bad:
+            return "%s has characters the PDF can't print: %s. Replace them, then save again." % (
+                label,
+                " ".join(bad),
+            )
+    return None
 
 
 def serialize_definition(defn):
@@ -1198,6 +1256,10 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
                     "Choose an available coding."
                 )
             ]
+
+        unprintable = _unprintable_error(body)
+        if unprintable:
+            return [_error(unprintable)]
 
         values = {
             "code": code,

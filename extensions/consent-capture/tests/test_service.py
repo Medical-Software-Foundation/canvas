@@ -1,5 +1,6 @@
 """Tests for consent_capture/service.py."""
 
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, call, patch
 
@@ -218,6 +219,8 @@ class TestPickerItems:
         assert all(it["active"] is True for it in items)  # active definitions are recordable
         assert items[0]["display"] == "Universal"
         assert items[0]["paragraphs"] == ["Read."]
+        # Fingerprint of the text shown, sent back when recording.
+        assert items[0]["statement_sha256"] == hashlib.sha256(b"Read.").hexdigest()
         assert items[0]["questions"] == [{"id": "q1", "prompt": "OK?"}]
         assert items[0]["method_options"] == ["Verbal"]         # normalized subset
         assert items[0]["required"] is True

@@ -66,6 +66,13 @@ const CONSENTS = [
     required: false, active: true, on_file: false, status: 'needed',
     effective_date: '', expiration_date: '',
   },
+  {
+    code: 'RESEARCH', system: 'INTERNAL', display: 'Research Participation',
+    paragraphs: PARAGRAPHS.slice(0, 1), method_enabled: true, obtained_by_enabled: true, capacity_enabled: false,
+    method_options: METHOD_OPTIONS, questions: [], allow_device_signature: true,
+    required: false, active: true, on_file: false, status: 'declined',
+    effective_date: '2025-09-02', expiration_date: '',
+  },
 ];
 
 // RECORDS drives the On File history (one row per recording, newest first).

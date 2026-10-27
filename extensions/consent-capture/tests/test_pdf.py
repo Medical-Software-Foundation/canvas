@@ -18,8 +18,10 @@ from consent_capture.pdf import (
     _text_width,
     _wrap,
     generate_consent_pdf,
+    fold_for_pdf,
     generate_consent_pdf_base64,
     pdf_page_count,
+    unprintable_chars,
 )
 
 
@@ -494,3 +496,42 @@ class TestOutcomeRow:
 
     def test_no_outcome_row_by_default(self):
         assert "OUTCOME" not in _texts(_build_ops("T", "P", "", "S", "2026-10-22", []))
+
+
+class TestFoldForPdf:
+    def test_letters_outside_cp1252_fold_to_the_plain_letter(self):
+        assert fold_for_pdf("Nguyễn Thị Đặng") == "Nguyen Thi Dang"
+        assert fold_for_pdf("Łukasz Wałęsa") == "Lukasz Walesa"
+        assert fold_for_pdf("Ştefan Ţăran") == "Stefan Taran"
+
+    def test_cp1252_letters_are_kept(self):
+        assert fold_for_pdf("José Müller Ñúñez") == "José Müller Ñúñez"
+
+    def test_empty(self):
+        assert fold_for_pdf("") == ""
+        assert fold_for_pdf(None) == ""
+
+    def test_name_prints_folded_on_the_pdf(self):
+        pdf_bytes = generate_consent_pdf(
+            title="Consent to Treat",
+            patient_name="Nguyễn Văn An",
+            patient_dob="1990-01-01",
+            staff_name="José Ruiz",
+            date="2026-07-07",
+            statement_paragraphs=["I consent."],
+        )
+        assert b"Nguyen Van An" in pdf_bytes
+        assert "José".encode("cp1252") in pdf_bytes
+        assert b"Nguy?n" not in pdf_bytes
+
+
+class TestUnprintableChars:
+    def test_lists_each_character_once_in_order(self):
+        assert unprintable_chars("Tiếng Việt ễ ≥ 5") == ["ế", "ệ", "ễ", "≥"]
+
+    def test_cp1252_text_is_printable(self):
+        assert unprintable_chars("Café “quoted” — €5 • ok") == []
+
+    def test_empty(self):
+        assert unprintable_chars("") == []
+        assert unprintable_chars(None) == []

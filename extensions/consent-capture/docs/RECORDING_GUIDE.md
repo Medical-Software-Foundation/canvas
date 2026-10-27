@@ -195,13 +195,18 @@ and On File shows how it was signed.
 2. Tap **Start**. Choose how each consent is being obtained, then answer **Who is giving
    consent?**, capacity, and the effective date once for all of them.
 3. Tap **Continue**, hand the device to the signer, and tap **Start Signing**. The signer
-   goes through each consent ("Consent 1 of 3") with **Next** or **Skip**.
+   goes through each consent ("Consent 1 of 3"), answers its questions, and taps **Accept
+   and Sign** or **Skip**.
 4. On **Review consents**, each consent shows its status. Use **Sign now** for one that wasn't
    signed, or **Decline** when the patient declines it.
 5. Tap **Record Consents**. Only finished consents are recorded; the rest stay Needed.
 
 A declined consent shows as **Declined** under On File and no longer turns the **Consents**
-button red.
+button red. It stays in the list with a gray **Declined** tag, so it can be recorded later if
+the patient changes their mind.
+
+When a consent is a HIPAA authorization, select **Print a copy** after recording and give the
+copy to the signer.
 
 ---
 

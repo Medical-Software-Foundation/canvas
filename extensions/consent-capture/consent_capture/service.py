@@ -25,7 +25,7 @@ from consent_capture.models import (
     ConsentDefinition,
     ConsentPracticeSettings,
 )
-from consent_capture.signing import SIGNED_WITH_LABELS
+from consent_capture.signing import SIGNED_WITH_LABELS, statement_fingerprint
 
 
 def active_definitions():
@@ -336,11 +336,15 @@ def _picker_item(d, info, is_active):
     status = {"active": "on_file", "declined": "declined", "expired": "expired"}.get(
         state, "needed"
     )
+    paragraphs = parse_statement(d.verbiage)
     return {
         "code": d.code,
         "system": d.system,
         "display": d.display or d.code,
-        "paragraphs": parse_statement(d.verbiage),
+        "paragraphs": paragraphs,
+        # Sent back when recording, so the server can refuse a consent whose text
+        # changed after the signer was shown it.
+        "statement_sha256": statement_fingerprint(paragraphs)[1],
         "method_enabled": bool(d.method_enabled),
         "obtained_by_enabled": bool(d.obtained_by_enabled),
         "capacity_enabled": bool(d.capacity_enabled),
