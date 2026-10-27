@@ -1703,9 +1703,17 @@
       try { cv.setPointerCapture(e.pointerId); } catch (x) {}
       drawStroke(live.pts);
     });
+    // The box the signer can see, in stroke coordinates. Ink outside it never shows
+    // on screen, so it isn't kept either: the saved image matches the box.
+    function inBox(p) { var r = cv.getBoundingClientRect(), k = VIEW.scale || 1; return p.x >= 0 && p.y >= 0 && p.x <= r.width / k && p.y <= r.height / k; }
     cv.addEventListener('pointermove', function (e) {
       if (!live) return;
-      var p = pos(e), pts = live.pts, prev = pts[pts.length - 1];
+      var p = pos(e);
+      // Pointer capture keeps reporting a finger that slides off the box. Drop
+      // those points, and start a new line if it comes back in.
+      if (!inBox(p)) { live.out = true; return; }
+      if (live.out) { live.out = false; live.pts = [p]; strokes.push(live.pts); drawStroke(live.pts); return; }
+      var pts = live.pts, prev = pts[pts.length - 1];
       pts.push(p); inkPoints[live.kind]++;
       if (ctx) { ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke(); }
       if (!sigpad.classList.contains('signed')) sigpad.classList.add('signed');
