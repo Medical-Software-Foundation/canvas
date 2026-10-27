@@ -297,13 +297,13 @@ def _visit_values(patient: Patient, note: Note | None, zone: timezone | ZoneInfo
     """The last visit before this note and the next one scheduled, skipping cancelled and no-shows."""
     now = datetime.now(UTC)
     reference = getattr(note, "datetime_of_service", None) or now
-    moved = Appointment.objects.filter(patient=patient, appointment_rescheduled_from__isnull=False).values_list(
-        "appointment_rescheduled_from_id", flat=True
+    moved = Appointment.objects.filter(patient=patient, appointment_rescheduled_from__isnull=False).values(
+        "appointment_rescheduled_from_id"
     )
     visits = (
         Appointment.objects.filter(patient=patient, entered_in_error__isnull=True)
         .exclude(status__in=["cancelled", "noshowed"])
-        .exclude(dbid__in=list(moved))
+        .exclude(dbid__in=moved)
     )
     if note is not None:
         visits = visits.exclude(note_id=note.dbid)
@@ -341,11 +341,15 @@ def placeholder_values(
     zone_name: str | None = None,
     owner_dbid: int | None = None,
     needed: set[str] | None = None,
+    practice: dict[str, str] | None = None,
+    custom: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Chart placeholder values for one chart, plus practice info and custom patient placeholders.
 
     Anything the chart has no value for is left out, so its placeholder stays as typed. Pass the
-    placeholder names a phrase uses as `needed` to skip lookups nothing will use; None looks up all.
+    placeholder names a phrase uses as `needed` to skip lookups nothing will use and return only
+    those values; None looks up and returns all. Pass practice info and custom placeholders when the
+    caller already read them, so they aren't read twice.
     """
     zone = local_zone(patient, note, zone_name, owner_dbid)
     today = today or datetime.now(zone).date()
@@ -353,7 +357,7 @@ def placeholder_values(
     def wanted(group: str) -> bool:
         return needed is None or bool(needed & _LOOKUPS[group])
 
-    values: dict[str, str] = dict(practice_values())
+    values: dict[str, str] = dict(practice_values() if practice is None else practice)
     values["today"] = today.strftime("%m/%d/%Y")
     if patient is not None:
         values["first_name"] = patient.first_name or ""
@@ -374,7 +378,7 @@ def placeholder_values(
         if wanted("coverage"):
             visit_day = note.datetime_of_service.astimezone(zone).date() if note is not None and note.datetime_of_service else today
             values.update(_coverage_values(patient, visit_day))
-        custom = custom_placeholders()
+        custom = custom_placeholders() if custom is None else custom
         if needed is not None:
             custom = {name: key for name, key in custom.items() if name in needed}
         if custom:
@@ -385,7 +389,7 @@ def placeholder_values(
         values["provider"] = staff_name(getattr(note, "provider", None))
         if wanted("location") and getattr(note, "location_id", None):
             values["practice_location"] = str(getattr(note.location, "full_name", "") or "")
-    return {key: value for key, value in values.items() if value}
+    return {key: value for key, value in values.items() if value and (needed is None or key.lower() in needed)}
 
 
 def phrase_fits_rx(phrase: Phrase, field: str) -> bool:

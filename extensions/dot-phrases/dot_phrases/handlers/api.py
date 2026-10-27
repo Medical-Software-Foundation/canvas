@@ -78,6 +78,8 @@ CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 MAX_VALUE_LENGTH = 500
 MAX_IMPORT_LINES = 2000
 MAX_METADATA_KEYS = 200
+MAX_VALUE_NAMES = 20
+METADATA_KEYS_CACHE = "dot-phrases:metadata-keys"
 IMPORT_USE_IN = {"plan": "plan", "hpi": "hpi", "instruct": "instruct", "perform": "perform"}
 
 
@@ -148,6 +150,14 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
     def panel_css(self) -> list[Response | Effect]:
         return self._asset("static/panel/app.css", "text/css")
 
+    @api.get("/shared/use_in.js")
+    def shared_use_in_js(self) -> list[Response | Effect]:
+        return self._asset("static/shared/use_in.js", "application/javascript")
+
+    @api.get("/shared/use_in.css")
+    def shared_use_in_css(self) -> list[Response | Effect]:
+        return self._asset("static/shared/use_in.css", "text/css")
+
     @api.get("/icon.svg")
     def icon(self) -> list[Response | Effect]:
         return self._asset("assets/icon.svg", "image/svg+xml")
@@ -178,10 +188,18 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         note = Note.objects.filter(id=note_id).select_related("patient", "provider", "note_type_version", "location").defer(*NOTE_BLOBS).first() if note_id else None
         # The panel sends the browser's time zone; remember it so this person's typed codes use it too.
         zone = remember_timezone(me, self.request.query_params.get("tz"))
-        values = placeholder_values(note.patient if note else None, note, zone_name=zone, owner_dbid=me)
+        usable = usable_phrases(me)
+        # Each setting is read once for this request.
+        enabled, custom, practice = enabled_chart_placeholders(), custom_placeholders(), practice_values()
+        # Only the values the panel shows or uses: its menu placeholders, practice info, and whatever
+        # this person's phrases contain. A hidden placeholder no phrase uses never reaches the browser.
+        needed = set(enabled) | set(custom) | set(practice) | placeholder_names([p.text for p in usable.values()])
+        values = placeholder_values(
+            note.patient if note else None, note, zone_name=zone, owner_dbid=me, needed=needed, practice=practice, custom=custom
+        )
         favorites = favorite_ids(me)
         hidden = hidden_ids(me)
-        phrases = [_phrase_json(p, me, favorites, values, hidden) for p in usable_phrases(me).values()]
+        phrases = [_phrase_json(p, me, favorites, values, hidden) for p in usable.values()]
         rx_targets: list[str] = []
         if note is not None and self._staged_rx(note.id) is not None:
             rx_targets = list(RX_FIELDS)
@@ -197,23 +215,33 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
                     "commands": [{"key": k, "label": COMMAND_LABELS[k]} for k in NOTE_COMMAND_KEYS],
                     "field_limits": FIELD_LIMITS,
                     "rx_fields": {k: {"label": v[0], "max": v[1]} for k, v in RX_FIELDS.items()},
-                    "practice_names": sorted(practice_values()),
-                    "patient_placeholders": self._patient_placeholders(),
-                    "menu_placeholders": self._menu_placeholders(),
+                    "practice_names": sorted(practice),
+                    "patient_placeholders": self._patient_placeholders(custom),
+                    "menu_placeholders": self._menu_placeholders(enabled, custom),
                     "values": values,
                 }
             )
         ]
 
-    def _patient_placeholders(self) -> dict[str, str]:
+    def _patient_placeholders(self, custom: dict[str, str]) -> dict[str, str]:
         """Every chart and custom patient placeholder, with its label."""
-        return {**PATIENT_PLACEHOLDERS, **{name: name.replace("_", " ").capitalize() for name in custom_placeholders()}}
+        return {**PATIENT_PLACEHOLDERS, **{name: name.replace("_", " ").capitalize() for name in custom}}
 
-    def _menu_placeholders(self) -> list[dict[str, str]]:
+    def _menu_placeholders(self, enabled: list[str], custom: dict[str, str]) -> list[dict[str, str]]:
         """The patient placeholders the editor's Patient menu shows: the chart ones the practice chose, then custom ones."""
-        labels = self._patient_placeholders()
-        names = enabled_chart_placeholders() + sorted(custom_placeholders())
-        return [{"name": name, "label": labels[name]} for name in names]
+        labels = self._patient_placeholders(custom)
+        return [{"name": name, "label": labels[name]} for name in enabled + sorted(custom)]
+
+    def _metadata_keys(self) -> list[str]:
+        """Patient metadata keys in use, for the custom placeholder picker, plus one extra when there are
+        more than MAX_METADATA_KEYS so the app can say the list is cut off. Listing them reads the whole
+        metadata table, so the list is kept in the plugin cache for 10 minutes and refreshed after a save."""
+        cache = get_cache()
+        keys = cache.get(METADATA_KEYS_CACHE)
+        if keys is None:
+            keys = list(PatientMetadata.objects.order_by("key").values_list("key", flat=True).distinct()[: MAX_METADATA_KEYS + 1])
+            cache.set(METADATA_KEYS_CACHE, keys, timeout_seconds=600)
+        return [str(k) for k in keys]
 
     # ---------- phrase writes ----------
 
@@ -375,6 +403,28 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         record_use([phrase.dbid])
         return [JSONResponse({"ok": True})]
 
+    @api.get("/notes/<note_id>/values")
+    def note_values(self) -> list[Response | Effect]:
+        """Values for a few chart or custom placeholders, for the panel editor's preview.
+
+        The panel only gets the values it shows up front; this fills in others as they're typed.
+        """
+        me = self._me()
+        if me is None:
+            return _error("No signed-in staff member.", HTTPStatus.UNAUTHORIZED)
+        note = Note.objects.filter(id=self.request.path_params.get("note_id")).select_related("patient", "provider", "location").defer(*NOTE_BLOBS).first()
+        if note is None:
+            return _error("Note not found.", HTTPStatus.NOT_FOUND)
+        custom = custom_placeholders()
+        allowed = set(PATIENT_PLACEHOLDERS) | set(custom)
+        raw = str(self.request.query_params.get("names") or "")
+        names = {n.strip().lower() for n in raw.split(",") if n.strip().lower() in allowed}
+        if not names or len(names) > MAX_VALUE_NAMES:
+            return _error("Ask for between 1 and 20 placeholders.")
+        zone = remember_timezone(me, self.request.query_params.get("tz"))
+        values = placeholder_values(note.patient, note, zone_name=zone, owner_dbid=me, needed=names, custom=custom)
+        return [JSONResponse({"values": values})]
+
     # ---------- insert into the note ----------
 
     def _staged_rx(self, note_uuid: Any) -> Command | None:
@@ -469,15 +519,18 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         used = {name: sum(1 for t in texts if "{" + name + "}" in t) for name in values}
         custom = custom_placeholders()
         admin = self._admin()
+        enabled = enabled_chart_placeholders()
+        keys = self._metadata_keys() if admin else []
         return [
             JSONResponse(
                 {
                     "chart_groups": [{"name": g, "items": [{"name": n, "label": label} for n, label in items]} for g, items in CHART_GROUPS],
-                    "chart_enabled": enabled_chart_placeholders(),
+                    "chart_enabled": enabled,
                     "custom": [{"name": n, "key": k, "used_in": sum(1 for t in texts if "{" + n + "}" in t)} for n, k in sorted(custom.items())],
                     # Admins pick a custom placeholder's source from the metadata keys already in use.
-                    "metadata_keys": list(PatientMetadata.objects.order_by("key").values_list("key", flat=True).distinct()[:MAX_METADATA_KEYS]) if admin else [],
-                    "menu_placeholders": self._menu_placeholders(),
+                    "metadata_keys": keys[:MAX_METADATA_KEYS],
+                    "metadata_keys_capped": len(keys) > MAX_METADATA_KEYS,
+                    "menu_placeholders": self._menu_placeholders(enabled, custom),
                     "is_admin": admin,
                     "admin_team": admin_team_name(self.secrets),
                     "mine": mine,
@@ -550,6 +603,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         custom = custom_placeholders()
         custom[name] = key
         set_setting("custom_placeholders", custom)
+        get_cache().delete(METADATA_KEYS_CACHE)
         return [JSONResponse({"name": name, "key": key})]
 
     @api.delete("/admin/custom-placeholders/<name>")

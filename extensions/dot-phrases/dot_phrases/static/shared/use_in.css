@@ -1,0 +1,21 @@
+{% verbatim %}
+/* Dot Phrases: Use in checklist styles shared by the app and the chart panel. Each screen's own
+   stylesheet sets its sizes (the panel is narrower). Colors come from the screens' palette. */
+.wi{display:flex;align-items:center;gap:12px;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:9px 12px;font-size:14px}
+.wi-t{flex:1;color:#2c4155}
+.wi-t b{color:#0d203c;font-weight:600}
+.wi-link{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:#2c7f8c;cursor:pointer}
+.use-list{margin-top:10px}
+.use-list[hidden],.use-rem[hidden]{display:none}
+.use-rem{font-size:12.5px;color:#9a5b00;margin-top:6px}
+.use-rxhint{font-size:12px;color:#8ea8b5;margin:2px 0 6px;line-height:1.45}
+.use-cnt{font-size:12px;color:#8ea8b5;margin-left:4px}
+.use-cnt.bad{color:#c62828}
+.pk-gh.use-bulk{display:flex;align-items:baseline;gap:16px;padding:10px 0 8px;margin:8px 0 0;border-top:1px solid #eef4f6;border-bottom:1px solid #eef4f6}
+/* More specific than each screen's own .pk-all rule, which loads after this file */
+.pk-gh.use-bulk .pk-all{margin-left:0}
+.pk-gh.use-bulk .pk-all[data-useall]{margin-left:auto}
+.use-rem b{font-weight:700}
+.use-hint{font-size:12.5px;color:#5e7a8a;margin-top:6px;line-height:1.45}
+.use-hint[hidden]{display:none}
+{% endverbatim %}

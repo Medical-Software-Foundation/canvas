@@ -54,7 +54,7 @@ def test_placeholder_values_from_the_chart() -> None:
     patient = SimpleNamespace(first_name="Jane", nickname="", last_name="Sample", birth_date=date(1959, 3, 14), preferred_pronouns="she/her")
     note = SimpleNamespace(provider=SimpleNamespace(first_name="Sam", last_name="Lee"))
     with patch("dot_phrases.library.practice_values", return_value={"after_hours_line": "(555) 010-2000"}):
-        values = placeholder_values(patient, note, today=date(2026, 10, 13), needed=set())
+        values = placeholder_values(patient, note, today=date(2026, 10, 13), needed={"age", "dob", "subject_pronoun", "provider", "after_hours_line", "preferred_name"})
     assert values["age"] == "67"
     assert values["dob"] == "03/14/1959"
     assert values["subject_pronoun"] == "she"
@@ -82,12 +82,22 @@ class TestChartLookups:
 
     def test_only_looks_up_what_the_phrase_uses(self, models: Any) -> None:
         models.facility.objects.filter.return_value.select_related.return_value.order_by.return_value = []
-        values = placeholder_values(_chart_patient(), None, today=date(2026, 10, 20), needed={"facility"})
+        values = placeholder_values(_chart_patient(), None, today=date(2026, 10, 20), needed={"facility", "mrn"})
         assert values["mrn"] == "A1B2C3D4E"
         models.facility.objects.filter.assert_called_once_with(patient=ANY, state="active")
         models.business_line.objects.filter.assert_not_called()
         models.appointment.objects.filter.assert_not_called()
         models.coverage.objects.filter.assert_not_called()
+
+    def test_practice_info_matches_regardless_of_case(self, models: Any) -> None:
+        models_values = {"After_Hours_Line": "(555) 010-2000"}
+        with patch("dot_phrases.library.practice_values", return_value=models_values):
+            values = placeholder_values(_chart_patient(), None, today=date(2026, 10, 20), needed={"after_hours_line"})
+        assert values == {"After_Hours_Line": "(555) 010-2000"}
+
+    def test_returns_only_the_values_asked_for(self, models: Any) -> None:
+        values = placeholder_values(_chart_patient(), None, today=date(2026, 10, 20), needed={"first_name"})
+        assert values == {"first_name": "Jane"}
 
     def test_business_line_name(self, models: Any) -> None:
         models.business_line.objects.filter.return_value.values_list.return_value.first.return_value = "Demo Health"
@@ -115,7 +125,7 @@ class TestChartLookups:
         assert models.coverage.objects.filter.call_args.kwargs == {"patient": ANY, "coverage_rank": 1, "stack": "IN_USE", "coverage_start_date__lte": date(2026, 10, 15)}
 
     def test_last_and_next_visit_skip_cancelled_no_shows_and_this_note(self, models: Any) -> None:
-        models.appointment.objects.filter.return_value.values_list.return_value = [3]
+        moved = models.appointment.objects.filter.return_value.values.return_value
         visits = models.appointment.objects.filter.return_value.exclude.return_value.exclude.return_value
         found = visits.exclude.return_value.filter.return_value.order_by.return_value.values_list.return_value
         found.first.side_effect = [datetime(2026, 9, 2, 10, 0, tzinfo=UTC), datetime(2099, 11, 5, 21, 30, tzinfo=UTC)]
@@ -124,7 +134,7 @@ class TestChartLookups:
         assert values["last_visit"] == "09/02/2026 at 10:00 AM"
         assert values["next_visit"] == "11/05/2099 at 9:30 PM"
         models.appointment.objects.filter.return_value.exclude.assert_called_once_with(status__in=["cancelled", "noshowed"])
-        models.appointment.objects.filter.return_value.exclude.return_value.exclude.assert_called_once_with(dbid__in=[3])
+        models.appointment.objects.filter.return_value.exclude.return_value.exclude.assert_called_once_with(dbid__in=moved)
         visits.exclude.assert_called_once_with(note_id=9)
 
     def test_practice_location_from_the_note(self, models: Any) -> None:

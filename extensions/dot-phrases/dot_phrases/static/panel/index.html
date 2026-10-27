@@ -6,7 +6,7 @@
 <title>Dot Phrases</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="{{ api_base }}/panel/app.css?v={{ cache_bust }}">
+<link rel="stylesheet" href="{{ api_base }}/shared/use_in.css?v={{ cache_bust }}"><link rel="stylesheet" href="{{ api_base }}/panel/app.css?v={{ cache_bust }}">
 </head>
 <body data-api-base="{{ api_base }}" data-note-id="{{ note_id }}">
   <div id="ppList">
@@ -30,12 +30,13 @@
   </div>
   <div id="ppEdit" hidden>
     <div class="pp-band">
-      <div class="pp-head"><button class="pp-back" id="edBack" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button><h2 id="edTitle">Edit phrase</h2></div>
+      <div class="pp-head"><button class="pp-back" id="edBack" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button><div class="pp-titles"><h2 id="edTitle">Edit phrase</h2><p class="ed-sub" id="edSub"></p></div></div>
     </div>
     <div class="pp-content"><div id="editorSlot"></div></div>
   </div>
   <div class="off-chart" id="offChart" hidden role="status"><div><b>Dot Phrases works on the Chart tab</b><p>Go back to the Chart to insert phrases. Anything you started is still here.</p></div></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="{{ api_base }}/shared/use_in.js?v={{ cache_bust }}"></script>
   <script src="{{ api_base }}/panel/app.js?v={{ cache_bust }}"></script>
 </body>
 </html>

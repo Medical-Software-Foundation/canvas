@@ -272,16 +272,6 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .off-chart p{margin:6px 0 0;font-size:13px;color:#5e7a8a;line-height:1.5}
 /* Use in checklist: a summary line with Change, and the checklist under it. Not sourced: the summary
    reuses the editor's field colors; links and checkboxes use the picker's teal (#2c7f8c) */
-.wi{display:flex;align-items:center;gap:12px;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:9px 12px;font-size:14px}
-.wi-t{flex:1;color:#2c4155}
-.wi-t b{color:#0d203c;font-weight:600}
-.wi-link{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:#2c7f8c;cursor:pointer}
-.use-list{margin-top:10px}
-.use-list[hidden],.use-rem[hidden]{display:none}
-.use-rem{font-size:12.5px;color:#9a5b00;margin-top:6px}
-.use-rxhint{font-size:12px;color:#8ea8b5;margin:2px 0 6px;line-height:1.45}
-.use-cnt{font-size:12px;color:#8ea8b5;margin-left:4px}
-.use-cnt.bad{color:#c62828}
 .panel-pk .wi{font-size:13px;padding:8px 10px}
 .panel-pk .pk-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
 .panel-pk .pk-ck{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;color:#2c4155;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;margin:0}
@@ -291,6 +281,9 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 /* "Adding to" line pinned to the bottom of the chart panel, from the Order Favorites panel
    (order_favorites/static/panel/app.css .pp-foot, .target) */
 .pp-foot{position:sticky;bottom:0;z-index:5;background:#fff;border-top:1.5px solid #dce8ec;padding:12px 16px}
+/* The list view fills the panel's height, so Adding to sits at the bottom even with a short list */
+#ppList:not([hidden]){display:flex;flex-direction:column;min-height:100vh}
+#ppList #plist{flex:1}
 .pp-foot .lbl{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:0 0 4px}
 .pp-foot .target{font-size:13px;color:#0d203c;font-weight:600;line-height:1.4}
 .pp-foot .target span{display:block;font-size:12px;font-weight:500;color:#5e7a8a}
@@ -301,8 +294,9 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .hd-empty p{margin:2px 0 0;font-size:12.5px;color:#5e7a8a;line-height:1.45}
 .ml-foot.hd-note{font-size:12.5px;color:#5e7a8a;line-height:1.45}
 /* Select all note commands / Clear all, above the Use in groups */
-.use-bulk{display:flex;align-items:baseline;gap:16px;padding:10px 0 8px;margin:8px 0 0;border-top:1px solid #eef4f6;border-bottom:1px solid #eef4f6}
-.use-bulk .pk-all{margin-left:0}
-.use-bulk .pk-all[data-useall]{margin-left:auto}
-.use-rem b{font-weight:700}
+/* Hint under Works in while the checklist is closed; same size and color as the other help text */
+/* Who can use the phrase, under the edit screen's title. Same size and color as the other notes */
+.pp-titles{flex:1;min-width:0}
+.ed-sub{font-size:12.5px;color:#5e7a8a;line-height:1.45;margin:2px 0 0}
+.ed-sub:empty{display:none}
 {% endverbatim %}

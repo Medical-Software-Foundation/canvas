@@ -6,7 +6,7 @@
 <title>Dot Phrases</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="{{ api_base }}/admin/app.css?v={{ cache_bust }}">
+<link rel="stylesheet" href="{{ api_base }}/shared/use_in.css?v={{ cache_bust }}"><link rel="stylesheet" href="{{ api_base }}/admin/app.css?v={{ cache_bust }}">
 </head>
 <body data-api-base="{{ api_base }}">
   <section class="admin-app">
@@ -18,6 +18,7 @@
     <div class="ax-main" id="axMain"><p class="ax-sub">Loading…</p></div>
   </section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="{{ api_base }}/shared/use_in.js?v={{ cache_bust }}"></script>
   <script src="{{ api_base }}/admin/app.js?v={{ cache_bust }}"></script>
 </body>
 </html>

@@ -339,7 +339,29 @@
     if (v === "manage") { renderManage(); }
     window.scrollTo(0, 0);
   }
-  function openEditScreen(title, from) { editReturn = from || "manage"; $("#edTitle").textContent = title; showView("edit"); }
+  // Open the Dot Phrases app in a new browser tab, so work in the panel stays put.
+  function openApp(query) {
+    var win = window.open(API + "/admin/" + query, "_blank");
+    if (win) { win.opener = null; } else { toast("Canvas blocked the new tab. Open Dot Phrases from the app drawer instead."); }
+  }
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("[data-openpractice]")) { e.preventDefault(); openApp("?tab=phrases"); }
+  });
+  // Values the panel didn't get up front (hidden placeholders no saved phrase uses) are fetched when
+  // they're typed, so the preview and length check match what the note will get.
+  var askedFor = {};
+  function askForValues(text, then) {
+    var names = [], m; PLACEHOLDER.lastIndex = 0;
+    while ((m = PLACEHOLDER.exec(text || ""))) {
+      var n = m[4] && m[4].toLowerCase();
+      if (n && n in state.patientNames && !(n in state.values) && !askedFor[n]) { askedFor[n] = true; names.push(n); }
+    }
+    if (!names.length || !NOTE_ID) { return; }
+    api("GET", "/notes/" + encodeURIComponent(NOTE_ID) + "/values?names=" + encodeURIComponent(names.join(",")) + "&tz=" + encodeURIComponent(browserZone()))
+      .then(function (d) { var got = d.values || {}; Object.keys(got).forEach(function (k) { state.values[k] = got[k]; }); if (Object.keys(got).length) { then(); } })
+      .catch(function () {});
+  }
+  function openEditScreen(title, from) { editReturn = from || "manage"; $("#edTitle").textContent = title; $("#edSub").textContent = ""; showView("edit"); }
   function leaveEdit() { editDirty = null; showView(editReturn); }
   // The back arrow asks before dropping unsaved edits. Cancel is a deliberate discard, so it doesn't ask.
   function askDiscard(title) {
@@ -458,12 +480,7 @@
     var del = t.closest("[data-mdel]");
     if (del) { e.stopPropagation(); openConfirm(anyPhrase(Number(del.getAttribute("data-mdel"))), "manage"); return; }
     var adm = t.closest("[data-madmin]");
-    if (adm) {
-      e.stopPropagation();
-      var win = window.open(API + "/admin/?phrase=" + encodeURIComponent(adm.getAttribute("data-madmin")), "_blank");
-      if (win) { win.opener = null; } else { toast("Canvas blocked the new tab. Open Dot Phrases from the app drawer instead."); }
-      return;
-    }
+    if (adm) { e.stopPropagation(); openApp("?phrase=" + encodeURIComponent(adm.getAttribute("data-madmin"))); return; }
     var cp = t.closest("[data-mcopy]");
     if (cp) { e.stopPropagation(); copyAsMine(anyPhrase(Number(cp.getAttribute("data-mcopy")))); return; }
     var ed = t.closest("[data-medit]");
@@ -518,120 +535,33 @@
       '<div class="gd-ex-row"><div class="gd-ex-k">You pick</div><div>Left, and type 2 weeks</div></div>' +
       '<div class="gd-ex-row"><div class="gd-ex-k">Note gets</div><div><b>Connie is a 67-year-old seen today for left knee pain for 2 weeks.</b></div></div></section>';
   }
-  // ---- Use in: one checklist. Every note command starts checked; the Sig and note to pharmacist ----
-  // ---- start unchecked, so text only reaches a pharmacy when someone picks it. ----
-  var USE_COMMON = ["plan", "hpi", "instruct", "perform", "assess", "diagnose"];
-  var USE_GROUPS = [
-    ["Common commands", USE_COMMON],
-    ["Visit, orders, and tasks", ["rfv", "followup", "task", "refer", "imaging", "laborder", "poclab", "vitals"]],
-    ["History", ["pmh", "removepmh", "psh", "fhx", "allergy", "removeallergy", "immstmt", "medstmt"]],
-    ["Conditions and medications", ["updatedx", "resolve", "stopmed"]],
-    ["Goals", ["goal", "updategoal", "closegoal"]],
-    ["Reviews", ["labreview", "imgreview", "refreview", "docreview"]]
-  ];
-  var USE_ALL = USE_GROUPS.reduce(function (a, g) { return a.concat(g[1]); }, []);
-  var USE_REVIEWS = USE_GROUPS[USE_GROUPS.length - 1][1];
-  function useLabel(k) { return k === "hpi" ? "HPI" : (state.labels[k] || k); }
-  function useChecked(d) { return d.use_in === null ? USE_ALL.slice() : d.use_in.slice(); }
-  // Every note command checked is saved as "all note commands", so commands added later are included.
-  function useSet(d, list) {
-    var keep = USE_ALL.filter(function (k) { return list.indexOf(k) >= 0; });
-    d.use_in = keep.length === USE_ALL.length ? null : keep;
-  }
-  function useSummary(d) {
-    var rx = [];
-    if (d.rx.sig) { rx.push("Sig"); }
-    if (d.rx.note_to_pharmacist) { rx.push("note to pharmacist"); }
-    var notes = d.use_in === null ? "all note commands" : d.use_in.length > 3 ? d.use_in.length + " note commands" : d.use_in.map(useLabel).join(", ");
-    if (notes) { return [notes].concat(rx).join(", "); }
-    if (rx.length === 2) { return "Sig and note to pharmacist"; }
-    return rx.length ? rx[0] + " only" : "nothing yet";
-  }
-  function useNeedsReminder(d, text) {
-    // Any placeholder can be left incomplete: chart values the chart doesn't have, blanks, and choices.
-    if (!/\{\s*[a-z]|\*\*\*/i.test(text || "")) { return false; }
-    return d.use_in === null || USE_REVIEWS.some(function (k) { return d.use_in.indexOf(k) >= 0; });
-  }
-  function useListHtml(d) {
-    var on = useChecked(d);
-    var box = function (k) { return '<label class="pk-ck"><input type="checkbox" data-cmdck="' + k + '"' + (on.indexOf(k) >= 0 ? " checked" : "") + "> " + esc(useLabel(k)) + "</label>"; };
-    var rxBox = function (k, label) { return '<label class="pk-ck"><input type="checkbox" data-rx="' + k + '"' + (d.rx[k] ? " checked" : "") + "> " + label + ' <span class="use-cnt" id="useC_' + k + '"></span></label>'; };
-    return '<div class="pk-gh"><span>Prescriptions</span><button type="button" class="pk-all" data-rxall>Select all</button></div>' +
-      '<div class="pk-cols use-rx">' + rxBox("sig", "Sig") + rxBox("note_to_pharmacist", "Note to pharmacist") + "</div>" +
-      '<div class="use-rxhint">Used in Prescribe, Refill, and Adjust prescription. Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210. Prescriptions with unfilled placeholders cannot be sent.</div>' +
-      '<div class="pk-gh use-bulk"><span>Note commands</span><button type="button" class="pk-all" data-useall>Select all</button><button type="button" class="pk-all" data-useclear>Clear all</button></div>' +
-      USE_GROUPS.map(function (g, i) {
-        return '<div class="pk-grp"><div class="pk-gh"><span>' + esc(g[0]) + '</span><button type="button" class="pk-all" data-grpall="' + i + '">Select all</button></div><div class="pk-cols">' + g[1].map(box).join("") + "</div></div>";
-      }).join("");
-  }
-  function useBlockHtml(d) {
-    return '<div class="wi"><span class="wi-t">Works in: <b class="use-sum"></b></span><button type="button" class="wi-link" data-usetoggle aria-expanded="false">Change</button></div>' +
-      '<div class="use-rem" hidden>Review commands cannot flag incomplete placeholders.</div>' +
-      '<div class="pk use-list" hidden>' + useListHtml(d) + "</div>";
-  }
-  // Bring the checklist, summary, and reminder in line with the draft.
-  function useSync(scope, d, text) {
-    var on = useChecked(d);
-    Array.prototype.forEach.call(scope.querySelectorAll("[data-cmdck]"), function (b) { b.checked = on.indexOf(b.getAttribute("data-cmdck")) >= 0; });
-    Array.prototype.forEach.call(scope.querySelectorAll("[data-rx]"), function (b) { b.checked = !!d.rx[b.getAttribute("data-rx")]; });
-    Array.prototype.forEach.call(scope.querySelectorAll("[data-grpall]"), function (b) {
-      var keys = USE_GROUPS[Number(b.getAttribute("data-grpall"))][1];
-      b.textContent = keys.every(function (k) { return on.indexOf(k) >= 0; }) ? "Clear all" : "Select all";
-    });
-    var rxAll = scope.querySelector("[data-rxall]"); if (rxAll) { rxAll.textContent = d.rx.sig && d.rx.note_to_pharmacist ? "Clear all" : "Select all"; }
-    var sum = scope.querySelector(".use-sum"); if (sum) { sum.textContent = useSummary(d); }
-    var rem = scope.querySelector(".use-rem"); if (rem) { rem.hidden = !useNeedsReminder(d, text); }
-  }
-  // Clicks and changes inside the Use in block. Returns true when it handled the event.
-  function useHandle(e, scope, d) {
-    var t = e.target;
-    var tog = t.closest && t.closest("[data-usetoggle]");
-    if (tog && e.type === "click") {
-      var list = scope.querySelector(".use-list"), open = list.hidden;
-      list.hidden = !open; tog.textContent = open ? "Done" : "Change"; tog.setAttribute("aria-expanded", String(open)); return true;
-    }
-    var grp = t.closest && t.closest("[data-grpall]");
-    if (grp && e.type === "click") {
-      var keys = USE_GROUPS[Number(grp.getAttribute("data-grpall"))][1], cur = useChecked(d);
-      var full = keys.every(function (k) { return cur.indexOf(k) >= 0; });
-      useSet(d, full ? cur.filter(function (k) { return keys.indexOf(k) < 0; }) : cur.concat(keys)); return true;
-    }
-    // Every note command at once. Sig and Note to pharmacist have their own row, since those reach a pharmacy.
-    if (t.closest && t.closest("[data-useall]") && e.type === "click") { useSet(d, USE_ALL); return true; }
-    if (t.closest && t.closest("[data-useclear]") && e.type === "click") { d.use_in = []; return true; }
-    if (t.closest && t.closest("[data-rxall]") && e.type === "click") {
-      var both = d.rx.sig && d.rx.note_to_pharmacist; d.rx.sig = !both; d.rx.note_to_pharmacist = !both; return true;
-    }
-    var changed = e.type === "change" || e.type === "input";
-    if (changed && t.getAttribute && t.getAttribute("data-cmdck")) {
-      var k = t.getAttribute("data-cmdck"), set = useChecked(d), i = set.indexOf(k);
-      if (t.checked && i < 0) { set.push(k); } else if (!t.checked && i >= 0) { set.splice(i, 1); }
-      useSet(d, set); return true;
-    }
-    if (changed && t.getAttribute && t.getAttribute("data-rx")) { d.rx[t.getAttribute("data-rx")] = t.checked; return true; }
-    return false;
-  }
-  function useIsEmpty(d) { return d.use_in !== null && !d.use_in.length && !d.rx.sig && !d.rx.note_to_pharmacist; }
+  // ---- Use in checklist: shared with the other screen, in static/shared/use_in.js ----
+  var useIn = window.DotPhrasesUseIn(function () { return state.labels; }, esc);
+  var useBlockHtml = useIn.useBlockHtml, useSync = useIn.useSync, useHandle = useIn.useHandle, useIsEmpty = useIn.useIsEmpty, useSummary = useIn.useSummary;
   function openEditor(p, from) {
     var editing = !!(p && p.mine);
     if (from) { openEditScreen(editing ? "Edit phrase" : "New phrase", from); } else { $("#edTitle").textContent = editing ? "Edit phrase" : "New phrase"; }
+    // One line under the title about who can use the phrase. Admins get a link to the Practice phrases tab.
+    $("#edSub").innerHTML = "Only you can use this phrase. " + (state.isAdmin ?
+      'To share one with everyone, add it on the <a href="#" class="linkish" data-openpractice><b>Practice phrases</b></a> tab of the Dot Phrases app.' :
+      "Practice phrases are made by your practice's admins.");
     // The draft behind the Use in checklist. A new phrase works in every note command and no prescription field.
     var draft = { use_in: p && p.use_in ? p.use_in.slice() : null, rx: { sig: !!(p && p.rx_sig), note_to_pharmacist: !!(p && p.rx_note_to_pharmacist) } };
     $("#editorSlot").innerHTML = '<div class="ed">' +
-      '<label for="fCode">Code</label><input id="fCode" value="' + esc(p ? p.code : "") + '" maxlength="64" placeholder="e.g. kneehpi"><div class="hint">Starts with a letter. Letters and numbers only.</div>' +
+      '<label for="fCode">Code</label><input id="fCode" value="' + esc(p ? p.code : "") + '" maxlength="64" placeholder="kneehpi"><div class="hint">Starts with a letter. Letters and numbers only.</div>' +
       '<label for="fText">Text</label><div class="ax-editor"><textarea class="ax-ta ax-ta-flat" id="fText" rows="4">' + esc(p ? p.text : "") + "</textarea>" + insertBar() + "</div>" +
       '<div class="hint">Placeholders go in curly brackets. Use the menus above, or type them.</div>' +
       '<div class="ax-guide pp-guide" id="fGuide" hidden>' + guideHtml() + "</div>" +
       '<label>Use in</label><div id="fUseBlock" class="panel-pk">' + useBlockHtml(draft) + "</div>" +
       '<div class="warn" id="fLim"></div>' +
       '<div class="err" id="fRx"></div>' +
-      '<div class="note">Personal phrases are only for you.' + (state.isAdmin ? " To share one with everyone, add it on the <b>Practice phrases</b> tab of the Dot Phrases app." : " Practice phrases are made by your practice's admins.") + "</div>" +
       '<div class="err" id="fErr"></div>' +
       '<div class="row ed-acts">' + (editing ? '<button class="pp-btn pp-del-out" id="fDelete" title="Delete .' + esc(p.code) + '" aria-label="Delete .' + esc(p.code) + '">' + TRASH_ICON + "</button>" : "") +
       '<span class="grow"></span><button class="pp-btn" id="fCancel">Cancel</button><button class="pp-btn pp-primary" id="fSave">Save</button></div></div>';
     var root = $("#editorSlot .ed");
     function upd() {
       var text = $("#fText").value;
+      askForValues(text, upd);
       var len = fill(text, [], false).length;
       var keys = Object.keys(state.limits);
       var over = keys.filter(function (k) { return len > state.limits[k]; });
@@ -717,6 +647,7 @@
   }
   // Confirm before deleting. Shown on the edit screen; Cancel goes back to the editor, or to the list it came from.
   function openConfirm(p, from) {
+    $("#edSub").textContent = "";
     var fromEditor = !from;
     editDirty = null;
     if (from) { openEditScreen("Delete phrase", from); }

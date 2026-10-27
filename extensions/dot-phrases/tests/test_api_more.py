@@ -31,7 +31,7 @@ def test_list_phrases_returns_previews_favorites_and_prescription_targets(db: An
     with (
         patch(f"{MODULE}.Note") as note_model,
         patch(f"{MODULE}.usable_phrases", return_value=rows),
-        patch(f"{MODULE}.placeholder_values", return_value={"after_hours_line": "(555) 010-2000"}),
+        patch(f"{MODULE}.placeholder_values", return_value={"after_hours_line": "(555) 010-2000"}) as values_for,
         patch(f"{MODULE}.Command") as command_model,
         patch(f"{MODULE}.hidden_ids", return_value={2}),
         patch(f"{MODULE}.note_label", return_value={"title": "RFV 1", "when": "", "provider": ""}) as label,
@@ -53,6 +53,10 @@ def test_list_phrases_returns_previews_favorites_and_prescription_targets(db: An
     assert [m["name"] for m in data["menu_placeholders"]][:3] == ["first_name", "preferred_name", "last_name"]
     assert "mrn" not in [m["name"] for m in data["menu_placeholders"]]
     label.assert_called_once_with(note)
+    # Only menu placeholders, practice info, and placeholders the phrases use are looked up and sent.
+    needed = values_for.call_args.kwargs["needed"]
+    assert {"first_name", "after_hours_line"} <= needed
+    assert not {"mrn", "member_id", "group_number", "insurance"} & needed
 
 
 def test_list_phrases_needs_a_signed_in_staff_member(db: Any) -> None:
@@ -101,18 +105,26 @@ def test_pages_and_assets_render(db: Any) -> None:
         assert response(make_api().admin_js()).headers["Content-Type"] == "application/javascript"
         assert response(make_api().admin_css()).headers["Content-Type"] == "text/css"
         assert response(make_api().icon()).headers["Content-Type"] == "image/svg+xml"
+        assert response(make_api().shared_use_in_js()).headers["Content-Type"] == "application/javascript"
+        assert response(make_api().shared_use_in_css()).headers["Content-Type"] == "text/css"
     assert render.call_args_list[0].args[1]["note_id"] == "n"
     assert render.call_args_list[0].args[1]["cache_bust"]
 
 
 def test_admin_data_and_settings(db: Any) -> None:
     db.phrase_model.objects.filter.return_value.select_related.return_value.order_by.return_value = [phrase(scope="practice", text="Call {after_hours_line}.")]
-    with patch(f"{MODULE}.hidden_ids", return_value=set()), patch(f"{MODULE}.PatientMetadata") as metadata:
+    from tests.conftest import MemoryCache
+
+    cache = MemoryCache()
+    with patch(f"{MODULE}.hidden_ids", return_value=set()), patch(f"{MODULE}.PatientMetadata") as metadata, patch(f"{MODULE}.get_cache", return_value=cache):
         metadata.objects.order_by.return_value.values_list.return_value.distinct.return_value = ["program_name"]
         data = body_of(response(make_api(staff_id=ADMIN_ID).admin_data()))
+        again = body_of(response(make_api(staff_id=ADMIN_ID).admin_data()))
     assert data["values"] == [{"name": "after_hours_line", "value": "(555) 010-2000", "used_in": 1}]
     assert data["is_admin"] is True
-    assert data["metadata_keys"] == ["program_name"]
+    assert data["metadata_keys"] == again["metadata_keys"] == ["program_name"]
+    # The metadata key list is read once, then served from the cache.
+    assert metadata.objects.order_by.call_count == 1
     assert [g["name"] for g in data["chart_groups"]] == ["Patient", "Visit", "Coverage"]
     assert "mrn" not in data["chart_enabled"]
     with patch(f"{MODULE}.set_setting") as set_setting:
@@ -149,10 +161,14 @@ def test_chart_placeholder_choices_are_saved_in_list_order(db: Any) -> None:
 
 
 def test_custom_placeholders_are_admin_only_and_checked(db: Any, practice_settings: Any) -> None:
+    from tests.conftest import MemoryCache
+
     def fake_set(key: str, value: Any) -> None:
         practice_settings[key] = value
 
-    with patch(f"{MODULE}.set_setting", side_effect=fake_set):
+    cache = MemoryCache()
+    cache.set("dot-phrases:metadata-keys", ["old_key"])
+    with patch(f"{MODULE}.set_setting", side_effect=fake_set), patch(f"{MODULE}.get_cache", return_value=cache):
         assert response(make_api(body={"name": "program", "key": "program_name"}).save_custom_placeholder()).status_code == HTTPStatus.FORBIDDEN
         bad_name = response(make_api(staff_id=ADMIN_ID, body={"name": "Program!", "key": "program_name"}).save_custom_placeholder())
         chart = response(make_api(staff_id=ADMIN_ID, body={"name": "first_name", "key": "x"}).save_custom_placeholder())
@@ -162,7 +178,43 @@ def test_custom_placeholders_are_admin_only_and_checked(db: Any, practice_settin
         assert practice_settings["custom_placeholders"] == {"program": "program_name"}
         response(make_api(staff_id=ADMIN_ID, path={"name": "program"}).delete_custom_placeholder())
     assert [r.status_code for r in (bad_name, chart, practice, no_key, ok)] == [400, 400, 400, 400, 200]
+    # Saving one refreshes the metadata key list next time the app loads.
+    assert cache.get("dot-phrases:metadata-keys") is None
     assert practice_settings["custom_placeholders"] == {}
+
+
+def test_metadata_key_list_says_when_it_is_cut_off(db: Any) -> None:
+    from tests.conftest import MemoryCache
+
+    db.phrase_model.objects.filter.return_value.select_related.return_value.order_by.return_value = []
+    keys = [f"key_{i:03d}" for i in range(201)]
+    with patch(f"{MODULE}.hidden_ids", return_value=set()), patch(f"{MODULE}.PatientMetadata") as metadata, patch(f"{MODULE}.get_cache", return_value=MemoryCache()):
+        metadata.objects.order_by.return_value.values_list.return_value.distinct.return_value = keys
+        data = body_of(response(make_api(staff_id=ADMIN_ID).admin_data()))
+    assert len(data["metadata_keys"]) == 200
+    assert data["metadata_keys_capped"] is True
+
+
+class TestNoteValues:
+    @pytest.fixture
+    def note(self, db: Any) -> Any:
+        found = SimpleNamespace(id="note-uuid", dbid=5, patient=SimpleNamespace(), provider=None)
+        with patch(f"{MODULE}.Note") as note_model, patch(f"{MODULE}.placeholder_values", return_value={"last_visit": "09/02/2026 at 10:00 AM"}) as values_for:
+            note_model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = found
+            yield SimpleNamespace(values_for=values_for, model=note_model)
+
+    def test_returns_only_the_placeholders_asked_for(self, note: Any) -> None:
+        data = body_of(response(make_api(path={"note_id": "note-uuid"}, query={"names": "last_visit,shoe_size,LAST_VISIT"}).note_values()))
+        assert data == {"values": {"last_visit": "09/02/2026 at 10:00 AM"}}
+        assert note.values_for.call_args.kwargs["needed"] == {"last_visit"}
+
+    def test_refuses_no_names_or_too_many(self, note: Any) -> None:
+        assert response(make_api(path={"note_id": "note-uuid"}, query={"names": "shoe_size"}).note_values()).status_code == HTTPStatus.BAD_REQUEST
+
+    def test_missing_note_or_staff_member(self, note: Any) -> None:
+        note.model.objects.filter.return_value.select_related.return_value.defer.return_value.first.return_value = None
+        assert response(make_api(path={"note_id": "x"}, query={"names": "mrn"}).note_values()).status_code == HTTPStatus.NOT_FOUND
+        assert response(make_api(staff_id=None, path={"note_id": "x"}, query={"names": "mrn"}).note_values()).status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_delete_value_needs_an_admin(db: Any) -> None:
