@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.240.0",
-    "plugin_version": "0.1.1",
+    "plugin_version": "0.2.0",
     "name": "my_schedule",
     "description": "Opens Canvas on a My Schedule page for the roles listed in RESTRICTED_ROLES (for example MD, NP, PA), showing only the logged-in clinician's own appointments, and hides the built-in Schedule for those roles.",
     "components": {
@@ -21,7 +21,7 @@
                 "description": "Serves the My Schedule page and the logged-in staff member's own appointments, with optional status, cancel and no-show actions on them.",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Note", "CurrentNoteStateEvent", "NoteType", "Patient", "PracticeLocation"],
+                    "read": ["Appointment", "AppointmentLabel", "TaskLabel", "Calendar", "CalendarEvent", "Note", "CurrentNoteStateEvent", "NoteType", "Patient", "PracticeLocation", "Staff"],
                     "write": ["Appointment", "Note"]
                 }
             },
@@ -73,7 +73,9 @@
         {"name": "BOOK_ONLY_SELF"},
         {"name": "ALLOW_STATUS_UPDATES"},
         {"name": "ALLOW_CANCEL"},
-        {"name": "ALLOW_NO_SHOW"}
+        {"name": "ALLOW_NO_SHOW"},
+        {"name": "GRID_START_HOUR"},
+        {"name": "GRID_END_HOUR"}
     ],
     "tags": {},
     "references": [],

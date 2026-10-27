@@ -19,8 +19,10 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
+from canvas_sdk.v1.data.staff import Staff
 
 from my_schedule.handlers.access import parse_flag
+from my_schedule.handlers.availability import own_blocks
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -65,9 +67,16 @@ def _note_state(appt: Appointment) -> str | None:
 
 def _serialize_appointment(appt: Appointment) -> dict:
     patient = appt.patient
+    start = appt.start_time
+    end = (
+        start + timedelta(minutes=appt.duration_minutes)
+        if start and appt.duration_minutes
+        else None
+    )
     return {
         "id": str(appt.id),
-        "start_time": appt.start_time.isoformat() if appt.start_time else None,
+        "start_time": start.isoformat() if start else None,
+        "end_time": end.isoformat() if end else None,
         "duration_minutes": appt.duration_minutes,
         "patient_id": str(patient.id) if patient else "",
         "patient_name": f"{patient.first_name} {patient.last_name}".strip()
@@ -75,8 +84,16 @@ def _serialize_appointment(appt: Appointment) -> dict:
         else "",
         "appointment_type": appt.note_type.name if appt.note_type else "",
         "reason_for_visit": appt.description or "",
+        "comment": appt.comment or "",
         "location": appt.location.full_name if appt.location else "",
         "status": appt.status or "",
+        # Opens the appointment note, where check-in and the video button live.
+        "note_dbid": appt.note_id or None,
+        "meeting_link": appt.meeting_link or "",
+        "labels": [
+            {"name": label.name, "color": label.color or ""}
+            for label in appt.labels.all()
+        ],
     }
 
 
@@ -137,8 +154,12 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/")
     def index(self) -> list[Response | Effect]:
         actions = self._actions()
+        staff = Staff.objects.filter(id=self._staff_id()).first()
         context = {
             "cache_bust": _CACHE_BUST,
+            "staff_name": f"{staff.first_name} {staff.last_name}".strip()
+            if staff
+            else "",
             "allow_status": "true" if actions["status"] else "false",
             "allow_cancel": "true" if actions["cancel"] else "false",
             "allow_noshow": "true" if actions["noshow"] else "false",
@@ -179,11 +200,33 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
             .exclude(status=AppointmentProgressStatus.CANCELLED)
             .exclude(note__current_state__state=NoteStates.DELETED)
             .select_related("patient", "note_type", "location")
+            .prefetch_related("labels")
             .order_by("start_time")
         )
+        staff = Staff.objects.filter(id=self._staff_id()).first()
+        blocks = own_blocks(staff, start, end) if staff else []
         return [
-            JSONResponse({"appointments": [_serialize_appointment(a) for a in appts]})
+            JSONResponse(
+                {
+                    "appointments": [_serialize_appointment(a) for a in appts],
+                    "blocks": blocks,
+                    "grid": self._grid_hours(),
+                }
+            )
         ]
+
+    def _grid_hours(self) -> dict[str, int]:
+        """Hours the day and week grids show by default (they widen to fit any visit)."""
+
+        def hour(key: str, default: int) -> int:
+            try:
+                value = int((self.secrets.get(key) or "").strip())
+            except ValueError:
+                return default
+            return value if 0 <= value <= 24 else default
+
+        start, end = hour("GRID_START_HOUR", 7), hour("GRID_END_HOUR", 19)
+        return {"start": start, "end": end} if start < end else {"start": 7, "end": 19}
 
     @api.post("/appointment/<appointment_id>/status")
     def update_status(self) -> list[Response | Effect]:
@@ -250,7 +293,7 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
             Response(
                 render_to_string("static/main.js").encode(),
                 status_code=HTTPStatus.OK,
-                content_type="text/javascript",
+                content_type="text/javascript; charset=utf-8",
             )
         ]
 
@@ -260,6 +303,6 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
             Response(
                 render_to_string("static/styles.css").encode(),
                 status_code=HTTPStatus.OK,
-                content_type="text/css",
+                content_type="text/css; charset=utf-8",
             )
         ]

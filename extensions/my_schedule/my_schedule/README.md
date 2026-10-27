@@ -8,9 +8,12 @@ one provider's patient bookings aren't on show to every other provider. Canvas's
 Schedule shows every schedulable provider to everyone. This plugin gives chosen
 roles (the ones you list, for example MD, NP and PA) a **My Schedule** page instead:
 
-- At login, restricted staff land on My Schedule, a full-page day, week and month
-  view of **their own** appointments: time, patient (links to the chart), visit
-  type, reason, location and status.
+- At login, restricted staff land on My Schedule: a full-page calendar of **their own**
+  visits that looks like Canvas's Schedule. Day and week views are a time grid (white
+  where they're available, gray where they're not, a line for the current time); month
+  view lists each day's visits. Clicking a visit opens a card with the patient (links to
+  the chart), **Open visit note** (where check-in and the video button live), **Join
+  video** when the visit has a meeting link, status, reason, location and labels.
 - For restricted staff, the built-in **Schedule** menu item and the
   **Appointments** filter in the global panel are hidden.
 - When restricted staff book from a patient's chart, the booking window offers
@@ -45,6 +48,7 @@ All settings are optional. Blank means the default.
 | `ALLOW_STATUS_UPDATES` | `no` | Show a status picker on each appointment. |
 | `ALLOW_CANCEL` | `no` | Show a Cancel button on each appointment. |
 | `ALLOW_NO_SHOW` | `no` | Show a No-show button on each appointment. |
+| `GRID_START_HOUR` / `GRID_END_HOUR` | `7` / `19` | Hours the day and week grids show (0-24). The grid widens on its own to fit any visit outside them. |
 
 Actions only ever work on the logged-in staff member's own appointments. A
 request for anyone else's appointment gets the same 404 as one that doesn't exist.
@@ -59,6 +63,7 @@ request for anyone else's appointment gets the same 404 as one that doesn't exis
 | `handlers/hide_native_schedule.py` | Hides the Schedule menu item and Appointments panel filter for restricted staff |
 | `handlers/booking_providers.py` | Limits the booking window's provider list for restricted staff |
 | `handlers/access.py` | Who is restricted, from the settings |
+| `handlers/availability.py` | The clinician's own availability for shading: calendars titled "<First Last>: Clinic" (open) and "<First Last>: Admin" (blocked), with weekly repeats and exceptions |
 
 ## Conflicts
 
