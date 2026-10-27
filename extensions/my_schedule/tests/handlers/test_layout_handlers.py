@@ -1,4 +1,5 @@
 """Tests for the homepage, menu, panel and booking handlers."""
+
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,10 +21,12 @@ from my_schedule.handlers.homepage import APP_IDENTIFIER, MyScheduleHomepage
 MANIFEST = Path(__file__).parents[2] / "my_schedule" / "CANVAS_MANIFEST.json"
 
 MD = SimpleNamespace(
-    id="md-key", roles=SimpleNamespace(all=lambda: [SimpleNamespace(internal_code="MD")])
+    id="md-key",
+    roles=SimpleNamespace(all=lambda: [SimpleNamespace(internal_code="MD")]),
 )
 CC = SimpleNamespace(
-    id="cc-key", roles=SimpleNamespace(all=lambda: [SimpleNamespace(internal_code="CC")])
+    id="cc-key",
+    roles=SimpleNamespace(all=lambda: [SimpleNamespace(internal_code="CC")]),
 )
 
 
@@ -69,10 +72,10 @@ class TestHomepage:
 
 class TestHideMenu:
     def test_restricted_staff_lose_only_schedule(self) -> None:
-        with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=MD) as lookup:
-            effects = _handler(
-                HideNativeScheduleMenu, actor="7"
-            ).compute()
+        with patch.object(
+            hide_native_schedule, "staff_by_user_dbid", return_value=MD
+        ) as lookup:
+            effects = _handler(HideNativeScheduleMenu, actor="7").compute()
         lookup.assert_called_once_with("7")
         items = json.loads(effects[0].payload)["data"]["items"]
         assert "schedule" not in items
@@ -85,7 +88,9 @@ class TestHideMenu:
             assert handler.compute() == []
 
     def test_missing_actor_unchanged(self) -> None:
-        with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=None) as lookup:
+        with patch.object(
+            hide_native_schedule, "staff_by_user_dbid", return_value=None
+        ) as lookup:
             assert _handler(HideNativeScheduleMenu).compute() == []
         lookup.assert_called_once_with(None)
 
@@ -93,27 +98,25 @@ class TestHideMenu:
 class TestHidePanelFilter:
     def test_restricted_staff_lose_only_appointments(self) -> None:
         with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=MD):
-            effects = _handler(
-                HideAppointmentsPanelFilter, actor="7"
-            ).compute()
+            effects = _handler(HideAppointmentsPanelFilter, actor="7").compute()
         data = json.loads(effects[0].payload)["data"]
-        expected = {s.value for s in PanelConfiguration.PanelGlobalSection} - {"appointment"}
+        expected = {s.value for s in PanelConfiguration.PanelGlobalSection} - {
+            "appointment"
+        }
         assert set(data["sections"]) == expected
 
     def test_patient_panel_is_left_alone(self) -> None:
-        with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=MD) as lookup:
-            handler = _handler(
-                HideAppointmentsPanelFilter, actor="7"
-            )
+        with patch.object(
+            hide_native_schedule, "staff_by_user_dbid", return_value=MD
+        ) as lookup:
+            handler = _handler(HideAppointmentsPanelFilter, actor="7")
             handler.event.target = SimpleNamespace(id="patient-key")
             assert handler.compute() == []
         lookup.assert_not_called()
 
     def test_unrestricted_staff_unchanged(self) -> None:
         with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=CC):
-            handler = _handler(
-                HideAppointmentsPanelFilter, actor="8"
-            )
+            handler = _handler(HideAppointmentsPanelFilter, actor="8")
             assert handler.compute() == []
 
 
@@ -129,7 +132,10 @@ class TestBookOnlySelf:
             effects = _handler(
                 BookOnlySelf, actor="7", context={"providers": PROVIDERS}
             ).compute()
-        assert effects[0].type == EffectType.APPOINTMENT__FORM__PROVIDERS__POST_SEARCH_RESULTS
+        assert (
+            effects[0].type
+            == EffectType.APPOINTMENT__FORM__PROVIDERS__POST_SEARCH_RESULTS
+        )
         assert json.loads(effects[0].payload) == {"providers": [PROVIDERS[1]]}
 
     def test_restricted_staff_not_in_list_get_empty_list(self) -> None:
@@ -141,11 +147,15 @@ class TestBookOnlySelf:
 
     def test_unrestricted_staff_unchanged(self) -> None:
         with patch.object(booking_providers, "staff_by_user_dbid", return_value=CC):
-            handler = _handler(BookOnlySelf, actor="7", context={"providers": PROVIDERS})
+            handler = _handler(
+                BookOnlySelf, actor="7", context={"providers": PROVIDERS}
+            )
             assert handler.compute() == []
 
     def test_setting_off_leaves_list_alone(self) -> None:
-        with patch.object(booking_providers, "staff_by_user_dbid", return_value=MD) as lookup:
+        with patch.object(
+            booking_providers, "staff_by_user_dbid", return_value=MD
+        ) as lookup:
             handler = _handler(
                 BookOnlySelf,
                 actor="7",

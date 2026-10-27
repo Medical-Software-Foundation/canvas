@@ -55,5 +55,7 @@ def staff_by_user_dbid(user_dbid: str | None) -> Staff | None:
     except (TypeError, ValueError):
         return None
     return (
-        Staff.objects.filter(user__dbid=dbid, active=True).prefetch_related("roles").first()
+        Staff.objects.filter(user__dbid=dbid, active=True)
+        .prefetch_related("roles")
+        .first()
     )

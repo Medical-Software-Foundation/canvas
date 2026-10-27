@@ -70,7 +70,9 @@ def _serialize_appointment(appt: Appointment) -> dict:
         "start_time": appt.start_time.isoformat() if appt.start_time else None,
         "duration_minutes": appt.duration_minutes,
         "patient_id": str(patient.id) if patient else "",
-        "patient_name": f"{patient.first_name} {patient.last_name}".strip() if patient else "",
+        "patient_name": f"{patient.first_name} {patient.last_name}".strip()
+        if patient
+        else "",
         "appointment_type": appt.note_type.name if appt.note_type else "",
         "reason_for_visit": appt.description or "",
         "location": appt.location.full_name if appt.location else "",
@@ -92,10 +94,30 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
 
     def _actions(self) -> dict[str, bool]:
         return {
-            "status": parse_flag(self.secrets.get("ALLOW_STATUS_UPDATES"), default=False),
+            "status": parse_flag(
+                self.secrets.get("ALLOW_STATUS_UPDATES"), default=False
+            ),
             "cancel": parse_flag(self.secrets.get("ALLOW_CANCEL"), default=False),
             "noshow": parse_flag(self.secrets.get("ALLOW_NO_SHOW"), default=False),
         }
+
+    def _is_json_request(self) -> bool:
+        """Actions require a JSON body type, which a cross-site form post can't send."""
+        headers = {key.lower(): value for key, value in self.request.headers.items()}
+        return (
+            headers.get("content-type", "").split(";")[0].strip() == "application/json"
+        )
+
+    def _action_guard(self, action: str, label: str) -> list[Response | Effect] | None:
+        """Refuse when the action is turned off or the request isn't JSON."""
+        if not self._actions()[action]:
+            return _error(f"{label} is turned off", HTTPStatus.FORBIDDEN)
+        if not self._is_json_request():
+            return _error(
+                "Send the request as application/json",
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+        return None
 
     def _own_appointment(self) -> Appointment | None:
         """The appointment in the path, only if the caller is its provider."""
@@ -123,7 +145,8 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
         }
         return [
             HTMLResponse(
-                render_to_string("static/index.html", context), status_code=HTTPStatus.OK
+                render_to_string("static/index.html", context),
+                status_code=HTTPStatus.OK,
             )
         ]
 
@@ -142,7 +165,9 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
                 HTTPStatus.BAD_REQUEST,
             )
         if end <= start or end - start > MAX_RANGE:
-            return _error("the date range must be between 0 and 43 days", HTTPStatus.BAD_REQUEST)
+            return _error(
+                "the date range must be between 0 and 43 days", HTTPStatus.BAD_REQUEST
+            )
 
         appts = (
             Appointment.objects.filter(
@@ -156,12 +181,14 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
             .select_related("patient", "note_type", "location")
             .order_by("start_time")
         )
-        return [JSONResponse({"appointments": [_serialize_appointment(a) for a in appts]})]
+        return [
+            JSONResponse({"appointments": [_serialize_appointment(a) for a in appts]})
+        ]
 
     @api.post("/appointment/<appointment_id>/status")
     def update_status(self) -> list[Response | Effect]:
-        if not self._actions()["status"]:
-            return _error("Status updates are turned off", HTTPStatus.FORBIDDEN)
+        if refused := self._action_guard("status", "Status updates"):
+            return refused
         appt = self._own_appointment()
         if appt is None:
             return _error("Appointment not found", HTTPStatus.NOT_FOUND)
@@ -179,29 +206,43 @@ class MyScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/appointment/<appointment_id>/cancel")
     def cancel(self) -> list[Response | Effect]:
-        if not self._actions()["cancel"]:
-            return _error("Cancelling is turned off", HTTPStatus.FORBIDDEN)
+        if refused := self._action_guard("cancel", "Cancelling"):
+            return refused
         appt = self._own_appointment()
         if appt is None:
             return _error("Appointment not found", HTTPStatus.NOT_FOUND)
         if not appt.note_id:
-            return _error("This appointment can't be cancelled here", HTTPStatus.BAD_REQUEST)
+            return _error(
+                "This appointment can't be cancelled here", HTTPStatus.BAD_REQUEST
+            )
         if _note_state(appt) not in CANCELLABLE_NOTE_STATES:
-            return _error("This appointment can no longer be cancelled", HTTPStatus.CONFLICT)
-        return [AppointmentEffect(instance_id=str(appt.id)).cancel(), JSONResponse({"ok": True})]
+            return _error(
+                "This appointment can no longer be cancelled", HTTPStatus.CONFLICT
+            )
+        return [
+            AppointmentEffect(instance_id=str(appt.id)).cancel(),
+            JSONResponse({"ok": True}),
+        ]
 
     @api.post("/appointment/<appointment_id>/noshow")
     def noshow(self) -> list[Response | Effect]:
-        if not self._actions()["noshow"]:
-            return _error("No-show is turned off", HTTPStatus.FORBIDDEN)
+        if refused := self._action_guard("noshow", "No-show"):
+            return refused
         appt = self._own_appointment()
         if appt is None:
             return _error("Appointment not found", HTTPStatus.NOT_FOUND)
         if not appt.note_id:
-            return _error("This appointment can't be marked no-show", HTTPStatus.BAD_REQUEST)
+            return _error(
+                "This appointment can't be marked no-show", HTTPStatus.BAD_REQUEST
+            )
         if _note_state(appt) not in NOSHOW_NOTE_STATES:
-            return _error("This appointment can't be marked no-show now", HTTPStatus.CONFLICT)
-        return [NoteEffect(instance_id=str(appt.note.id)).no_show(), JSONResponse({"ok": True})]
+            return _error(
+                "This appointment can't be marked no-show now", HTTPStatus.CONFLICT
+            )
+        return [
+            NoteEffect(instance_id=str(appt.note.id)).no_show(),
+            JSONResponse({"ok": True}),
+        ]
 
     @api.get("/main.js")
     def main_js(self) -> list[Response | Effect]:

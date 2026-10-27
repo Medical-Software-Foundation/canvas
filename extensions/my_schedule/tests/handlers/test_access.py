@@ -1,6 +1,7 @@
 """Tests for my_schedule.handlers.access."""
+
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +15,9 @@ from my_schedule.handlers.access import (
 )
 
 
-def _staff(staff_id: str = "staff-1", roles: tuple[str, ...] = ("MD",)) -> SimpleNamespace:
+def _staff(
+    staff_id: str = "staff-1", roles: tuple[str, ...] = ("MD",)
+) -> SimpleNamespace:
     role_objs = [SimpleNamespace(internal_code=code) for code in roles]
     return SimpleNamespace(id=staff_id, roles=SimpleNamespace(all=lambda: role_objs))
 
@@ -49,7 +52,10 @@ class TestRestrictedRoles:
         assert restricted_roles({"RESTRICTED_ROLES": "  "}) == {"MD", "NP", "PA"}
 
     def test_configured_roles_are_uppercased(self) -> None:
-        assert restricted_roles({"RESTRICTED_ROLES": "md, netpharm"}) == {"MD", "NETPHARM"}
+        assert restricted_roles({"RESTRICTED_ROLES": "md, netpharm"}) == {
+            "MD",
+            "NETPHARM",
+        }
 
 
 class TestIsRestricted:
@@ -76,7 +82,9 @@ class TestIsRestricted:
 
     def test_exempt_staff_id_wins(self) -> None:
         secrets = {"EXEMPT_STAFF_IDS": "staff-9, staff-1"}
-        assert is_restricted(_staff(staff_id="staff-1", roles=("MD",)), secrets) is False
+        assert (
+            is_restricted(_staff(staff_id="staff-1", roles=("MD",)), secrets) is False
+        )
         assert is_restricted(_staff(staff_id="staff-2", roles=("MD",)), secrets) is True
 
     def test_no_roles_is_not_restricted(self) -> None:

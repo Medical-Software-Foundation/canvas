@@ -45,5 +45,7 @@ class HideAppointmentsPanelFilter(BaseHandler):
             return []
         sections = [s for s in GlobalSection if s is not GlobalSection.APPOINTMENT]
         return [
-            PanelConfiguration(sections=sections, page=PanelConfiguration.Page.GLOBAL).apply()
+            PanelConfiguration(
+                sections=sections, page=PanelConfiguration.Page.GLOBAL
+            ).apply()
         ]

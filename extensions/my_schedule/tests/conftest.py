@@ -1,4 +1,5 @@
 """Put the plugin container on sys.path so tests can import the inner package."""
+
 import os
 import sys
 

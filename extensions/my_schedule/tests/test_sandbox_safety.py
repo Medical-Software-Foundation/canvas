@@ -1,4 +1,5 @@
 """Every plugin module must load in the plugin runner's sandbox, as it will on install."""
+
 from pathlib import Path
 
 import pytest

@@ -2,6 +2,7 @@
 
 The important ones prove the API only ever answers for the logged-in staff member.
 """
+
 import json
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -32,7 +33,8 @@ def _api(query=None, path=None, body=None, secrets=None, headers=None) -> MySche
         return json.loads(raw)
 
     api.request = SimpleNamespace(
-        headers=headers or {"canvas-logged-in-user-id": ME},
+        headers=headers
+        or {"canvas-logged-in-user-id": ME, "Content-Type": "application/json"},
         query_params=query or {},
         path_params=path or {},
         json=_json,
@@ -64,7 +66,9 @@ def _appt(note_state=NoteStates.BOOKED, note_id=5):
 
 class TestParseIso:
     def test_accepts_z(self) -> None:
-        assert _parse_iso("2026-10-27T00:00:00Z") == datetime(2026, 10, 27, tzinfo=timezone.utc)
+        assert _parse_iso("2026-10-27T00:00:00Z") == datetime(
+            2026, 10, 27, tzinfo=timezone.utc
+        )
 
     def test_rejects_naive(self) -> None:
         with pytest.raises(ValueError):
@@ -101,8 +105,14 @@ class TestSerialize:
 
     def test_blanks(self) -> None:
         appt = SimpleNamespace(
-            id="a2", start_time=None, duration_minutes=None, patient=None,
-            note_type=None, description=None, location=None, status=None,
+            id="a2",
+            start_time=None,
+            duration_minutes=None,
+            patient=None,
+            note_type=None,
+            description=None,
+            location=None,
+            status=None,
         )
         result = _serialize_appointment(appt)
         assert result["patient_name"] == ""
@@ -112,7 +122,9 @@ class TestSerialize:
 
 class TestIndex:
     def test_flags_off_by_default(self) -> None:
-        with patch.object(schedule_api, "render_to_string", return_value="<html>") as render:
+        with patch.object(
+            schedule_api, "render_to_string", return_value="<html>"
+        ) as render:
             _api().index()
         context = render.call_args.args[1]
         assert context["allow_status"] == "false"
@@ -120,27 +132,35 @@ class TestIndex:
         assert context["allow_noshow"] == "false"
 
     def test_flags_on(self) -> None:
-        with patch.object(schedule_api, "render_to_string", return_value="<html>") as render:
+        with patch.object(
+            schedule_api, "render_to_string", return_value="<html>"
+        ) as render:
             _api(secrets=ALL_ON).index()
         context = render.call_args.args[1]
-        assert context["allow_status"] == context["allow_cancel"] == context["allow_noshow"] == "true"
+        assert (
+            context["allow_status"]
+            == context["allow_cancel"]
+            == context["allow_noshow"]
+            == "true"
+        )
+
+
+DAY = {"start": "2026-10-27T00:00:00Z", "end": "2026-10-28T00:00:00Z"}
 
 
 class TestAppointments:
-    QUERY = {"start": "2026-10-27T00:00:00Z", "end": "2026-10-28T00:00:00Z"}
-
     def test_scoped_to_logged_in_staff(self) -> None:
         with patch.object(schedule_api, "Appointment") as model:
             qs = model.objects.filter.return_value
             qs.exclude.return_value.exclude.return_value.select_related.return_value.order_by.return_value = []
-            response = _api(query=self.QUERY).appointments()[0]
+            response = _api(query=DAY).appointments()[0]
         assert response.status_code == HTTPStatus.OK
         kwargs = model.objects.filter.call_args.kwargs
         assert kwargs["provider__id"] == ME
         assert kwargs["entered_in_error__isnull"] is True
 
     def test_provider_param_is_ignored(self) -> None:
-        query = dict(self.QUERY, provider_id="someone-else", provider="someone-else")
+        query = dict(DAY, provider_id="someone-else", provider="someone-else")
         with patch.object(schedule_api, "Appointment") as model:
             qs = model.objects.filter.return_value
             qs.exclude.return_value.exclude.return_value.select_related.return_value.order_by.return_value = []
@@ -174,15 +194,51 @@ class TestActions:
         model.objects.filter.assert_not_called()
 
     @pytest.mark.parametrize("action", ["update_status", "cancel", "noshow"])
+    @pytest.mark.parametrize(
+        "content_type", [None, "text/plain", "application/x-www-form-urlencoded"]
+    )
+    def test_non_json_requests_refused(self, action, content_type) -> None:
+        headers = {"canvas-logged-in-user-id": ME}
+        if content_type:
+            headers["content-type"] = content_type
+        with patch.object(schedule_api, "Appointment") as model:
+            api = _api(
+                path={"appointment_id": APPT_ID}, secrets=ALL_ON, headers=headers
+            )
+            response = getattr(api, action)()[0]
+        assert response.status_code == HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+        model.objects.filter.assert_not_called()
+
+    def test_json_with_charset_accepted(self) -> None:
+        headers = {
+            "canvas-logged-in-user-id": ME,
+            "content-type": "application/json; charset=utf-8",
+        }
+        with patch.object(schedule_api, "Appointment") as model:
+            model.objects.filter.return_value.select_related.return_value.first.return_value = None
+            api = _api(
+                path={"appointment_id": APPT_ID}, secrets=ALL_ON, headers=headers
+            )
+            assert api.cancel()[0].status_code == HTTPStatus.NOT_FOUND
+
+    @pytest.mark.parametrize("action", ["update_status", "cancel", "noshow"])
     def test_someone_elses_appointment_is_not_found(self, action) -> None:
         with patch.object(schedule_api, "Appointment") as model:
             model.objects.filter.return_value.select_related.return_value.first.return_value = None
-            api = _api(path={"appointment_id": APPT_ID}, body={"status": "arrived"}, secrets=ALL_ON)
+            api = _api(
+                path={"appointment_id": APPT_ID},
+                body={"status": "arrived"},
+                secrets=ALL_ON,
+            )
             result = getattr(api, action)()
         assert len(result) == 1
         assert result[0].status_code == HTTPStatus.NOT_FOUND
         kwargs = model.objects.filter.call_args.kwargs
-        assert kwargs == {"id": APPT_ID, "provider__id": ME, "entered_in_error__isnull": True}
+        assert kwargs == {
+            "id": APPT_ID,
+            "provider__id": ME,
+            "entered_in_error__isnull": True,
+        }
 
     @pytest.mark.parametrize("action", ["update_status", "cancel", "noshow"])
     def test_non_uuid_id_is_not_found_without_query(self, action) -> None:
@@ -202,7 +258,9 @@ class TestActions:
         ):
             self._own(model, _appt())
             result = _api(
-                path={"appointment_id": APPT_ID}, body={"status": "arrived"}, secrets=ALL_ON
+                path={"appointment_id": APPT_ID},
+                body={"status": "arrived"},
+                secrets=ALL_ON,
             ).update_status()
         effect.assert_called_once_with(
             instance_id=APPT_ID, status=AppointmentProgressStatus.ARRIVED
@@ -212,18 +270,29 @@ class TestActions:
 
     @pytest.mark.parametrize(
         "body",
-        [{"status": "noshowed"}, {"status": "cancelled"}, {}, ["x"], {"status": []}, {"status": {}}],
+        [
+            {"status": "noshowed"},
+            {"status": "cancelled"},
+            {},
+            ["x"],
+            {"status": []},
+            {"status": {}},
+        ],
     )
     def test_status_rejects_other_values(self, body) -> None:
         with patch.object(schedule_api, "Appointment") as model:
             self._own(model, _appt())
-            result = _api(path={"appointment_id": APPT_ID}, body=body, secrets=ALL_ON).update_status()
+            result = _api(
+                path={"appointment_id": APPT_ID}, body=body, secrets=ALL_ON
+            ).update_status()
         assert result[0].status_code == HTTPStatus.BAD_REQUEST
 
     def test_status_rejects_bad_json(self) -> None:
         with patch.object(schedule_api, "Appointment") as model:
             self._own(model, _appt())
-            result = _api(path={"appointment_id": APPT_ID}, secrets=ALL_ON).update_status()
+            result = _api(
+                path={"appointment_id": APPT_ID}, secrets=ALL_ON
+            ).update_status()
         assert result[0].status_code == HTTPStatus.BAD_REQUEST
 
     @pytest.mark.parametrize("state", [NoteStates.BOOKED, NoteStates.CONVERTED])

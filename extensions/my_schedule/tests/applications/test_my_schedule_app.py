@@ -1,4 +1,5 @@
 """Tests for my_schedule.applications.my_schedule_app."""
+
 import json
 
 from my_schedule.applications.my_schedule_app import MyScheduleApp
