@@ -14,6 +14,8 @@ from my_schedule.handlers.access import (
     staff_by_user_dbid,
 )
 
+CLINICIANS = {"RESTRICTED_ROLES": "MD,NP,PA"}
+
 
 def _staff(
     staff_id: str = "staff-1", roles: tuple[str, ...] = ("MD",)
@@ -47,9 +49,9 @@ class TestParseFlag:
 
 
 class TestRestrictedRoles:
-    def test_default_when_blank(self) -> None:
-        assert restricted_roles({}) == {"MD", "NP", "PA"}
-        assert restricted_roles({"RESTRICTED_ROLES": "  "}) == {"MD", "NP", "PA"}
+    def test_blank_restricts_nobody(self) -> None:
+        assert restricted_roles({}) == set()
+        assert restricted_roles({"RESTRICTED_ROLES": "  "}) == set()
 
     def test_configured_roles_are_uppercased(self) -> None:
         assert restricted_roles({"RESTRICTED_ROLES": "md, netpharm"}) == {
@@ -63,17 +65,20 @@ class TestIsRestricted:
         assert is_restricted(None, {}) is False
 
     @pytest.mark.parametrize("role", ["MD", "NP", "PA"])
-    def test_default_roles_are_restricted(self, role: str) -> None:
-        assert is_restricted(_staff(roles=(role,)), {}) is True
+    def test_listed_roles_are_restricted(self, role: str) -> None:
+        assert is_restricted(_staff(roles=(role,)), CLINICIANS) is True
+
+    def test_nobody_restricted_when_blank(self) -> None:
+        assert is_restricted(_staff(roles=("MD",)), {}) is False
 
     def test_other_roles_are_not_restricted(self) -> None:
-        assert is_restricted(_staff(roles=("CC", "AD")), {}) is False
+        assert is_restricted(_staff(roles=("CC", "AD")), CLINICIANS) is False
 
     def test_any_listed_role_restricts_mixed_roles(self) -> None:
-        assert is_restricted(_staff(roles=("AD", "MD")), {}) is True
+        assert is_restricted(_staff(roles=("AD", "MD")), CLINICIANS) is True
 
     def test_role_match_ignores_case(self) -> None:
-        assert is_restricted(_staff(roles=("md",)), {}) is True
+        assert is_restricted(_staff(roles=("md",)), CLINICIANS) is True
 
     def test_custom_role_list_replaces_default(self) -> None:
         secrets = {"RESTRICTED_ROLES": "NetPharm"}
@@ -81,14 +86,14 @@ class TestIsRestricted:
         assert is_restricted(_staff(roles=("NETPHARM",)), secrets) is True
 
     def test_exempt_staff_id_wins(self) -> None:
-        secrets = {"EXEMPT_STAFF_IDS": "staff-9, staff-1"}
+        secrets = {**CLINICIANS, "EXEMPT_STAFF_IDS": "staff-9, staff-1"}
         assert (
             is_restricted(_staff(staff_id="staff-1", roles=("MD",)), secrets) is False
         )
         assert is_restricted(_staff(staff_id="staff-2", roles=("MD",)), secrets) is True
 
     def test_no_roles_is_not_restricted(self) -> None:
-        assert is_restricted(_staff(roles=()), {}) is False
+        assert is_restricted(_staff(roles=()), CLINICIANS) is False
 
 
 class TestStaffLookups:

@@ -6,7 +6,7 @@ my_schedule
 Some practices want each clinician to open Canvas on their own schedule only, so
 one provider's patient bookings aren't on show to every other provider. Canvas's
 Schedule shows every schedulable provider to everyone. This plugin gives chosen
-roles (by default MD, NP and PA) a **My Schedule** page instead:
+roles (the ones you list, for example MD, NP and PA) a **My Schedule** page instead:
 
 - At login, restricted staff land on My Schedule, a full-page day, week and month
   view of **their own** appointments: time, patient (links to the chart), visit
@@ -39,7 +39,7 @@ All settings are optional. Blank means the default.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `RESTRICTED_ROLES` | `MD,NP,PA` | Comma-separated role codes. Staff with **any** of these roles are restricted. |
+| `RESTRICTED_ROLES` | none | Comma-separated role codes, for example `MD,NP,PA`. Staff with **any** of these roles are restricted. **Blank restricts nobody**, so installing changes nothing until you set it. |
 | `EXEMPT_STAFF_IDS` | none | Comma-separated staff IDs that are never restricted, even with a listed role (for example a medical director who manages the schedule). |
 | `BOOK_ONLY_SELF` | `yes` | Restricted staff can only pick themselves as the provider in the booking window. Set `no` to leave the list alone. |
 | `ALLOW_STATUS_UPDATES` | `no` | Show a status picker on each appointment. |

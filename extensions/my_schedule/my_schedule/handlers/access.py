@@ -1,15 +1,14 @@
 """Who My Schedule restricts, read from the plugin's settings.
 
 A staff member is restricted when any of their roles is listed in
-RESTRICTED_ROLES (default MD, NP, PA) and their staff ID is not listed in
+RESTRICTED_ROLES (blank restricts nobody; most practices set MD,NP,PA) and
+their staff ID is not listed in
 EXEMPT_STAFF_IDS. Restricted staff land on My Schedule, don't see the native
 Schedule menu item or the Appointments panel filter, and (with BOOK_ONLY_SELF)
 can only pick themselves as the provider when booking.
 """
 
 from canvas_sdk.v1.data.staff import Staff
-
-DEFAULT_RESTRICTED_ROLES = frozenset({"MD", "NP", "PA"})
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
@@ -31,9 +30,12 @@ def parse_flag(raw: str | None, default: bool) -> bool:
 
 
 def restricted_roles(secrets: dict) -> set[str]:
-    """Role codes that restrict a staff member. Blank means the default MD, NP, PA."""
-    codes = {code.upper() for code in parse_list(secrets.get("RESTRICTED_ROLES"))}
-    return codes or set(DEFAULT_RESTRICTED_ROLES)
+    """Role codes that restrict a staff member.
+
+    Blank restricts nobody, so installing the plugin changes nothing until a
+    practice lists its roles (the same rule as Canvas's planned native setting).
+    """
+    return {code.upper() for code in parse_list(secrets.get("RESTRICTED_ROLES"))}
 
 
 def is_restricted(staff: Staff | None, secrets: dict) -> bool:

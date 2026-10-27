@@ -37,7 +37,7 @@ def _handler(cls, *, actor=None, context=None, secrets=None):
         context=context or {},
         target=SimpleNamespace(id=None),
     )
-    handler.secrets = secrets or {}
+    handler.secrets = {"RESTRICTED_ROLES": "MD,NP,PA", **(secrets or {})}
     return handler
 
 
