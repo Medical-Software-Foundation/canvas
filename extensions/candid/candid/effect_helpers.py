@@ -145,6 +145,53 @@ def active_coverages_ordered(claim: Claim) -> list:
     )
 
 
+# Canvas stores a CMS-1500 box 22 resubmission code on each claim coverage.
+# Candid's submission path has nowhere to put it: POST /encounters/v4 exposes no
+# claim-frequency or original-reference field, and the only claim_frequency_code
+# in the schema hangs off external_claim_submission, which reports claims filed
+# outside Candid.
+#
+# Candid confirmed this directly (Aug 2026): corrections cannot be submitted via
+# the API at all. Voids, corrections, and fresh claims all go through the same
+# Candid UI workflow, where Candid derives the frequency code from the submission
+# type the biller picks, and they must wait for the original claim to adjudicate
+# first or the correction comes back as a duplicate denial.
+#
+# So the code on the coverage can never do anything here. Say that on the claim
+# rather than letting it sit there looking like it worked.
+RESUBMISSION_CODE_LABELS = {
+    "6": "6 (corrected claim)",
+    "7": "7 (replacement of prior claim)",
+    "8": "8 (void/cancel prior claim)",
+}
+
+
+def resubmission_code_comment(claim: Claim, claim_effect: ClaimEffect) -> Effect | None:
+    """Warn on the claim when a resubmission code is set but was not sent to Candid.
+
+    Returns None when no active coverage carries one, so callers can fold the
+    result into an effect list without branching on the claim's contents.
+    """
+    codes = [
+        RESUBMISSION_CODE_LABELS.get(coverage.resubmission_code, coverage.resubmission_code)
+        for coverage in active_coverages_ordered(claim)
+        if coverage.resubmission_code
+    ]
+    if not codes:
+        return None
+
+    return claim_effect.add_comment(
+        comment=(
+            f"Resubmission code {', '.join(codes)} is set on this claim. Candid has no "
+            "API field for it, so it was not sent and this claim was filed as an "
+            "original. Corrections and voids are submitted in the Candid UI, where "
+            "Candid sets the frequency code from the submission type you choose. Wait "
+            "for the original claim to adjudicate before submitting the correction, "
+            "otherwise it can come back as a duplicate denial."
+        )
+    )
+
+
 def format_date_display(date_str: str) -> str:
     """Convert an ISO date string (YYYY-MM-DD...) to MM-DD-YYYY display format."""
     y, m, d = date_str[:10].split("-")
