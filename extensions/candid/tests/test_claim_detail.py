@@ -23,6 +23,7 @@ def _fake_claim() -> MagicMock:
     claim.banner_alerts.filter.return_value.first.return_value = None
     claim.comments.filter.return_value.order_by.return_value = []
     claim.current_queue.name = "FiledAwaitingResponse"
+    claim.current_queue.display_name = "Filed Awaiting Response"
     return claim
 
 
@@ -91,6 +92,8 @@ def test_get_returns_sync_history_from_metadata():
     assert resp.status_code == 200
     assert body["sync_history"] == history
     assert body["candid_claim_status"] == "paid"
+    # The customer's queue label, not the internal queue code
+    assert body["current_queue"] == "Filed Awaiting Response"
 
 
 def test_get_sync_history_defaults_to_empty_when_missing():

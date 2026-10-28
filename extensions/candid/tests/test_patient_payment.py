@@ -278,3 +278,101 @@ def test_endpoint_dedupes_repeated_claim_id_into_one_effect_set():
         if c.kwargs.get("key") == META_REPORTED_PAYMENT_IDS
     ]
     assert len(reported_upserts) == 1
+
+
+# ---------------------------------------------------------------------------
+# PLUGIN-498: tagging, no-answer handling, overlapping reports
+# ---------------------------------------------------------------------------
+
+
+def test_endpoint_tags_payment_note_as_sent_from_canvas() -> None:
+    """The payment note carries the tag the sync uses to skip Canvas's own payments."""
+    from candid.effect_helpers import CANVAS_REPORTED_NOTE_TAG
+
+    _, client = _run_endpoint(
+        _payment_context(
+            payment_method="card",
+            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}],
+        )
+    )
+
+    payload = client.submit_payment.call_args[0][0]
+    assert payload["payment_note"] == f"card {CANVAS_REPORTED_NOTE_TAG}"
+
+
+def test_endpoint_timeout_creates_unconfirmed_task_and_writes_no_metadata() -> None:
+    """Candid accepts the payment but answers too late: one task, no retry, no metadata."""
+    from requests import RequestException
+
+    from candid.api.report_payment import CandidReportPaymentAPI
+
+    mock_claim = MagicMock()
+    mock_claim.id = "abc-123"
+
+    with (
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("candid.api.report_payment.ClaimEffect") as MockEffect,
+        patch("candid.api.report_payment.Claim") as MockClaim,
+        patch("candid.api.report_payment.get_claim_metadata_set", return_value=set()),
+        patch("candid.api.report_payment.AddTask") as MockTask,
+    ):
+        client = MockClient.from_secrets.return_value
+        client.submit_payment.side_effect = RequestException("Read timed out")
+        MockClaim.objects.filter.return_value = [mock_claim]
+
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
+        handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = _payment_context(
+            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}]
+        )
+
+        effects = handler.post()
+
+    client.submit_payment.assert_called_once()
+    assert effects == [MockTask.return_value.apply.return_value]
+    assert "Unconfirmed" in MockTask.call_args.kwargs["title"]
+    assert "RequestException" in MockTask.call_args.kwargs["title"]
+    MockEffect.return_value.upsert_metadata.assert_not_called()
+
+
+def test_endpoint_keeps_ids_saved_by_an_overlapping_report() -> None:
+    """A report saved another ID on the claim while ours was in flight: both are kept."""
+    import json
+
+    from candid.api.report_payment import CandidReportPaymentAPI
+    from candid.effect_helpers import META_REPORTED_PAYMENT_IDS
+
+    mock_claim = MagicMock()
+    mock_claim.id = "claim-1"
+    # First read (before submit) sees nothing; the re-read after submit sees
+    # the overlapping report's ID.
+    reads = iter([set(), {"pay-other"}])
+
+    with (
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("candid.api.report_payment.ClaimEffect") as MockEffect,
+        patch("candid.api.report_payment.Claim") as MockClaim,
+        patch("candid.api.report_payment.get_claim_metadata", return_value=[{"x": 1}]),
+        patch(
+            "candid.api.report_payment.get_claim_metadata_set",
+            side_effect=lambda claim, key: next(reads) if key == META_REPORTED_PAYMENT_IDS else set(),
+        ),
+        patch("candid.api.report_payment.append_sync_history"),
+        patch("candid.api.report_payment.notify_claim_updated"),
+    ):
+        MockClient.from_secrets.return_value.submit_payment.return_value = (True, "pay-mine")
+        MockClaim.objects.filter.return_value = [mock_claim]
+
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
+        handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = _payment_context(
+            claim_payments=[{"claim_id": "claim-1", "allocated_cents": "10000.00"}]
+        )
+
+        handler.post()
+
+    upsert = MockEffect.return_value.upsert_metadata
+    written = [c.kwargs["value"] for c in upsert.call_args_list if c.kwargs["key"] == META_REPORTED_PAYMENT_IDS]
+    assert written == [json.dumps(["pay-mine", "pay-other"])]

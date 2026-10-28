@@ -10,13 +10,13 @@ in the same effect batch as the postings they cover.
 
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
-from decimal import Decimal
+from datetime import UTC, date, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect, LineItemTransaction, PaymentMethod
-from canvas_sdk.v1.data import Claim
+from canvas_sdk.v1.data import BulkPatientPosting, Claim
 from canvas_sdk.v1.data.claim import ClaimQueues
 from logger import log
 
@@ -24,6 +24,7 @@ from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.api.payload_builder import OVERFLOW_CHARGE_CENTS, OVERFLOW_CPT_CODE
 from candid.effect_helpers import (
+    CANVAS_REPORTED_NOTE_TAG,
     DEFAULT_CLAIM_STATUS,
     ERA_DESC_PREFIX,
     META_CLAIM_STATUS,
@@ -50,6 +51,15 @@ PR_COINSURANCE = "PR-2"
 PR_COPAY = "PR-3"
 # Canvas's "Transfer" adjustment group, the code billers use for manual balance moves
 TRANSFER_CODE = "TR-0"
+
+# Medicare sequestration. Candid's encounter carries no CARCs for it (the
+# per-line ERA adjustments come back empty), so it's inferred: Medicare pays
+# 98% of its share, leaving 2/98 of what it paid unpaid on the primary.
+SEQUESTRATION_CODE = "CO-253"
+SEQUESTRATION_REASON = "253"
+MEDICARE_PLAN_TYPE = "medicare"
+# Opt-in per instance until billing confirms the inference everywhere.
+SEQUESTRATION_SETTING = "CANDID_POST_MEDICARE_SEQUESTRATION"
 
 
 def _cents_to_dollars(cents: int | None) -> Decimal | None:
@@ -206,12 +216,20 @@ def _has_delta(
 # ---------------------------------------------------------------------------
 
 
+def _sequestration_cents(paid_cents: int) -> int:
+    """Medicare's 2% sequestration on a line it paid ``paid_cents`` on."""
+    return int(
+        (Decimal(paid_cents) * 2 / 98).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    )
+
+
 def _build_insurance_transactions(
     service_lines: list[dict],
     line_items: list,
     canvas_claim_id: str,
     transfer_to: str | None = None,
     pr_transfer_to: str = PATIENT_COVERAGE_ID,
+    sequestration: bool = False,
 ) -> list[LineItemTransaction]:
     """Build insurance payment + adjustment transactions from encounter service lines.
 
@@ -219,7 +237,9 @@ def _build_insurance_transactions(
     adjustment transactions include ``transfer_remaining_balance_to`` so the
     remaining balance moves to the appropriate payer after insurance pays.
     Patient responsibility (deductible, coinsurance, copay) moves to
-    ``pr_transfer_to``.
+    ``pr_transfer_to``. With ``sequestration`` (a Medicare primary on an
+    instance that opted in), each paid line also gets an inferred CO-253
+    write-off unless the payer reported one.
     """
     txns: list[LineItemTransaction] = []
     line_items_by_id = {str(li.id): li for li in line_items}
@@ -268,6 +288,10 @@ def _build_insurance_transactions(
             "service_line_adjustments", []
         )
         manual_adjs = sl.get("service_line_manual_adjustments", [])
+        if sequestration:
+            txns.extend(
+                _sequestration_transactions(sl, line_item_id, era_adjs + manual_adjs)
+            )
         for adj in era_adjs + manual_adjs:
             adj_amount = _cents_to_dollars(adj.get("adjustment_amount_cents"))
             group_code = adj.get("adjustment_group_code", "")
@@ -303,6 +327,34 @@ def _build_insurance_transactions(
                 )
 
     return txns
+
+
+def _sequestration_transactions(
+    sl: dict, line_item_id: str, reported_adjs: list[dict]
+) -> list[LineItemTransaction]:
+    """Inferred CO-253 write-off for one Medicare-paid service line, if any.
+
+    Skipped when the payer reported a 253 itself, or when the inferred amount
+    would exceed what's left of the allowed amount after Medicare's payment.
+    """
+    if any(
+        adj.get("adjustment_reason_code") == SEQUESTRATION_REASON
+        for adj in reported_adjs
+    ):
+        return []
+    paid_cents = sl.get("primary_paid_amount_cents") or 0
+    allowed_cents = sl.get("allowed_amount_cents") or 0
+    seq_cents = _sequestration_cents(paid_cents) if paid_cents > 0 else 0
+    if not seq_cents or seq_cents > allowed_cents - paid_cents:
+        return []
+    return [
+        LineItemTransaction(
+            claim_line_item_id=line_item_id,
+            adjustment=_cents_to_dollars(seq_cents),
+            adjustment_code=SEQUESTRATION_CODE,
+            write_off=True,
+        )
+    ]
 
 
 def _build_secondary_transactions(
@@ -398,17 +450,101 @@ def _coverage_id_at(coverages_ordered: list, payer_order: int) -> str | None:
     return None
 
 
+# How far a Candid payment's timestamp may be from a Canvas-collected payment
+# for the same patient and amount and still count as Canvas's own payment.
+ECHO_WINDOW = timedelta(minutes=10)
+
+
+def _allocated_to(target: dict, candid_claim_id: str, canvas_claim_id: str) -> bool:
+    """Whether an allocation target points at this claim.
+
+    Candid answers with ``claim`` / ``service_line`` targets carrying
+    ``claim_id``; the create-time ``claim_by_encounter_external_id`` form
+    (which Mock Candid echoes back) is matched by the Canvas claim ID.
+    """
+    if target.get("type") == "claim_by_encounter_external_id":
+        return target.get("value") == f"canvas:{canvas_claim_id}"
+    return target.get("claim_id") == candid_claim_id
+
+
+def _claim_share_cents(
+    payment: dict, candid_claim_id: str, canvas_claim_id: str
+) -> int:
+    """Cents of a Candid patient payment allocated to one Candid claim.
+
+    A payment split across several claims comes back from every claim's
+    lookup, so posting its full ``amount_cents`` would count it once per claim.
+    Falls back to the full amount when the response has no allocations, or
+    when none of them names a claim.
+    """
+    allocations = payment.get("allocations")
+    if allocations is None:
+        return payment.get("amount_cents") or 0
+    targets = [alloc.get("target") or {} for alloc in allocations]
+    if allocations and not any(
+        "claim_id" in t or t.get("type") == "claim_by_encounter_external_id"
+        for t in targets
+    ):
+        # A target shape we don't know: post the full amount, as before,
+        # rather than silently dropping a real payment.
+        log.warning(
+            f"Candid sync: patient payment {payment.get('patient_payment_id')} "
+            f"has no claim-level allocation; posting its full amount"
+        )
+        return payment.get("amount_cents") or 0
+    return sum(
+        alloc.get("amount_cents") or 0
+        for alloc in allocations
+        if _allocated_to(alloc.get("target") or {}, candid_claim_id, canvas_claim_id)
+    )
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _is_canvas_payment(payment: dict) -> bool:
+    """True if this Candid patient payment is one Canvas reported to Candid.
+
+    Payments reported by this plugin carry ``CANVAS_REPORTED_NOTE_TAG``. Older
+    ones don't, so also match a Canvas-collected payment for the same patient
+    and total within ``ECHO_WINDOW`` of the Candid payment.
+    """
+    if CANVAS_REPORTED_NOTE_TAG in (payment.get("payment_note") or ""):
+        return True
+    patient_key = (payment.get("patient_external_id") or "").removeprefix("canvas:")
+    paid_at = _parse_timestamp(payment.get("payment_timestamp"))
+    total = _cents_to_dollars(payment.get("amount_cents"))
+    if not (patient_key and paid_at and total):
+        return False
+    return BulkPatientPosting.objects.filter(
+        payer__id=patient_key,
+        total_paid=total,
+        created__gte=paid_at - ECHO_WINDOW,
+        created__lte=paid_at + ECHO_WINDOW,
+    ).exists()
+
+
 def _post_patient_payments(
     claim_effect: ClaimEffect,
     candid_payments: list[dict],
     known_payment_ids: set[str],
     first_line_id: str,
+    candid_claim_id: str,
+    canvas_claim_id: str,
 ) -> tuple[list[Effect], list[str]]:
-    """Build post_payment effects for new patient payments.
+    """Build post_payment effects for new patient payments on one Candid claim.
 
-    Mutates ``known_payment_ids`` so callers across encounters/claims dedupe
-    against payments already queued in this run. Returns ``(effects,
-    attempted_payment_ids)``.
+    Posts only the share each payment allocates to ``candid_claim_id`` and
+    skips payments Canvas itself reported. Mutates ``known_payment_ids`` so
+    callers across encounters/claims dedupe against payments already queued in
+    this run. Returns ``(effects, attempted_payment_ids)``.
     """
     effects: list[Effect] = []
     attempted: list[str] = []
@@ -417,7 +553,16 @@ def _post_patient_payments(
         if not payment_id or payment_id in known_payment_ids:
             continue
 
-        amount_dollars = _cents_to_dollars(payment.get("amount_cents", 0))
+        if _is_canvas_payment(payment):
+            log.info(
+                f"Candid sync: skipping patient payment {payment_id}, "
+                f"which Canvas reported to Candid"
+            )
+            continue
+
+        amount_dollars = _cents_to_dollars(
+            _claim_share_cents(payment, candid_claim_id, canvas_claim_id)
+        )
         if not amount_dollars:
             continue
 
@@ -506,6 +651,7 @@ class _SyncState:
     synced_pmt_ids: set[str]
     known_payment_ids: set[str]
     prev_synced_amounts: dict[str, int | None]
+    post_sequestration: bool = False
 
     effects: list[Effect] = field(default_factory=list)
     attempted_era_ids: list[str] = field(default_factory=list)
@@ -518,7 +664,11 @@ class _SyncState:
     moved_to_secondary: dict[str, Decimal] = field(default_factory=dict)
 
 
-def _init_sync_state(claim: Claim) -> _SyncState:
+def _setting_enabled(secrets: dict, key: str) -> bool:
+    return (secrets.get(key) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _init_sync_state(claim: Claim, secrets: dict | None = None) -> _SyncState:
     """Read the claim's coverages, line items, and dedup metadata into a state object."""
     canvas_claim_id = str(claim.id)
     line_items = list(claim.get_active_claim_line_items())
@@ -544,6 +694,12 @@ def _init_sync_state(claim: Claim) -> _SyncState:
             "tertiary": None,
         },
         secondary_coverage=coverages_ordered[1] if len(coverages_ordered) > 1 else None,
+        post_sequestration=bool(
+            coverages_ordered
+            and getattr(coverages_ordered[0], "payer_plan_type", None)
+            == MEDICARE_PLAN_TYPE
+            and _setting_enabled(secrets or {}, SEQUESTRATION_SETTING)
+        ),
     )
 
 
@@ -604,6 +760,7 @@ def _post_era_payments(
             state.canvas_claim_id,
             transfer_to=transfer_to,
             pr_transfer_to=state.secondary_id or PATIENT_COVERAGE_ID,
+            sequestration=state.post_sequestration,
         )
         if insurance_txns:
             _append_payment_effect(state, state.primary_id, insurance_txns, primary_era)
@@ -690,6 +847,8 @@ def _post_patient_payments_for_candid_claim(
         candid_payments,
         state.known_payment_ids,
         str(state.first_line.id),
+        candid_claim_id,
+        state.canvas_claim_id,
     )
     state.effects.extend(payment_effects)
     state.payment_effect_count = state.payment_effect_count + len(payment_effects)
@@ -833,7 +992,7 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
         return []
 
     client = CandidClient.from_secrets(secrets)
-    state = _init_sync_state(claim)
+    state = _init_sync_state(claim, secrets)
 
     for encounter_record in encounters_meta:
         candid_encounter_id = encounter_record.get("candid_encounter_id")

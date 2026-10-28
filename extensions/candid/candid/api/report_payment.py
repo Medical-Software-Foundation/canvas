@@ -11,10 +11,12 @@ from canvas_sdk.effects.task.task import AddTask
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPIRoute
 from canvas_sdk.v1.data import Claim
 from logger import log
+from requests import RequestException
 
 from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import (
+    CANVAS_REPORTED_NOTE_TAG,
     LOG_TYPE_PAYMENT_REPORTED,
     META_ENCOUNTERS,
     META_REPORTED_PAYMENT_IDS,
@@ -146,11 +148,31 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
             "patient_external_id": f"canvas:{patient_id}",
             "amount_cents": total_cents,
             "payment_timestamp": timestamp,
-            "payment_note": payment_method,
+            "payment_note": f"{payment_method} {CANVAS_REPORTED_NOTE_TAG}".strip(),
             "allocations": allocations,
         }
 
-        success, result_msg = client.submit_payment(payload)
+        try:
+            success, result_msg = client.submit_payment(payload)
+        except RequestException as exc:
+            # No answer (e.g. read timeout): Candid may still have created the
+            # payment. Don't retry, which could create a second one; the note
+            # tag keeps the sync from importing it back into Canvas.
+            log.warning(
+                f"Candid: no response reporting patient payment for patient "
+                f"{patient_id}: {type(exc).__name__}"
+            )
+            return [
+                AddTask(
+                    patient_id=patient_id,
+                    title=(
+                        "Candid: Payment Notification Unconfirmed — no response "
+                        f"from Candid ({type(exc).__name__}). Check Candid before "
+                        "re-entering it there."
+                    ),
+                    labels=["Candid Integration"],
+                ).apply()
+            ]
         if not success:
             log.warning(
                 f"Candid: failed to report patient payment for patient "
@@ -174,7 +196,13 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
         effects: list[Effect] = []
         for claim_ext_id, reported_set in reportable_claims.items():
             claim_effect = ClaimEffect(claim_id=claim_ext_id)
-            merged = sorted(reported_set | {payment_id})
+            # Re-read after the Candid round trip: another report for this
+            # claim may have saved its ID meanwhile, and writing back only the
+            # set read at the start would drop it.
+            latest_set = get_claim_metadata_set(
+                claims_by_id[claim_ext_id], META_REPORTED_PAYMENT_IDS
+            )
+            merged = sorted(reported_set | latest_set | {payment_id})
             effects.append(
                 claim_effect.upsert_metadata(
                     key=META_REPORTED_PAYMENT_IDS,

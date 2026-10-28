@@ -87,6 +87,8 @@ A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candi
 **Patient payment sync (Candid -> Canvas):**
 - For each Candid claim within the encounter, queries `GET /patient-payments/v4?claim_id={candid_claim_id}`
 - Skips payments already reported to Candid or synced on a previous run
+- Skips payments Canvas itself reported to Candid, even when their ID never reached the claim's metadata (the report timed out, two reports overlapped, or a sync read the metadata first). They're recognized by the `[sent from Canvas]` tag in their `payment_note`, or, for payments reported before the tag existed, by a payment collected in Canvas for the same patient and total within 10 minutes of the Candid payment
+- Posts only the share of each payment that Candid allocated to that Candid claim (from the payment's `allocations`), so a payment split across several claims isn't posted in full on each
 - New payments are posted via `ClaimEffect.post_payment(claim_coverage_id="patient")`
 
 **After sync:** updates the claim status banner with current Candid status and last sync date.
@@ -97,11 +99,12 @@ When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSE
 
 - Builds allocations mapping Canvas claim IDs to Candid encounter external IDs using `canvas:{claim_id}` (matching the `external_id` set at submission time)
 - Handles partial allocations (allocated amounts go to specific encounters, remainder goes as unattributed)
-- Submits the payment to Candid's `POST /api/patient-payments/v4`
+- Submits the payment to Candid's `POST /api/patient-payments/v4`, with `[sent from Canvas]` appended to its `payment_note` so the sync never imports it back
 - Stores the returned `patient_payment_id` on each allocated claim's metadata so the sync knows not to re-post it
 - Appends a `payment_reported` entry to each allocated claim's `candid_sync_history` metadata for the timeline UI
 - Skips reporting if the originating payment description matches `Candid patient payment ` — this prevents a feedback loop where a payment pulled from Candid is reported right back
 - On failure, creates a Canvas Task labeled "Candid Integration" with the error details to notify clinicians
+- If Candid doesn't answer (a timeout or connection error), it creates a "Payment Notification Unconfirmed" task instead and doesn't retry: Candid may have recorded the payment anyway, and a retry could record it twice
 
 ### Claim Banners
 
@@ -173,6 +176,7 @@ Declared in `CANVAS_MANIFEST.json` under `"variables"`. Sensitive values are enc
 | `CANDID_CLIENT_SECRET` | Yes | Candid OAuth2 client secret — also used as the shared API key on the plugin's own `/submit`, `/sync`, `/sync-patient-payments`, and `/report-payment` SimpleAPI routes |
 | `CANDID_BASE_URL` | No | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
 | `CANDID_SYNC_START_HOUR` | No | The hour the nightly sync starts, as a whole number from `0` to `23`, in the instance's time zone (`INSTALLATION_TIME_ZONE`), not the user's. Blank means `2` (2 AM). A value that isn't a whole number from 0 to 23 also uses `2` and logs a warning. A cycle runs one batch per hour (each batch stops at 45 minutes or 4,000 claims, whichever comes first) until every pending claim is synced, so a cycle takes as many hours as it needs batches: on an instance with about 4,100 pending claims it took three batches, finishing about 2.5 hours after the start. Check how many batches your instance's cycle needs in its logs ("continuing next hour" / "cycle complete"), and pick an hour that leaves that much room before anything time-sensitive on the instance, such as scheduled patient texts. A cycle already running finishes even if the hour is changed, and at most one cycle starts per day. In a time zone with daylight saving time, an hour that doesn't exist on the spring-forward day (e.g. 2 AM in US time zones) starts no cycle that day. |
+| `CANDID_POST_MEDICARE_SEQUESTRATION` | No | Set to `true` to post Medicare's 2% sequestration as a `CO-253` write-off when a primary ERA is synced. Candid doesn't send the CO-253 adjustment codes, so the plugin works the amount out per line: 2/98 of what Medicare paid (Medicare pays 98% of its share). Only claims whose primary coverage has plan type `medicare` get it, so Medicare Advantage plans don't. It's skipped on a line where the payer reported a 253 itself, or where the amount would be more than what's left after Medicare's payment. Blank or anything other than `true`/`yes`/`1`/`on` means off. It applies to primary ERAs synced after it's turned on, not to claims already posted. |
 
 The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal machine-to-machine routes (`/submit`, `/sync`, `/sync-patient-payments`, `/report-payment`) use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`). The user-facing routes — `/claim-detail`, `/dashboard`, and the `/app/*` asset routes — require a logged-in **staff** session (`StaffSessionAuthMixin`), as does the `CandidTimelineWebSocket`.
 
