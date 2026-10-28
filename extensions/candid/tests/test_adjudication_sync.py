@@ -15,10 +15,13 @@ from candid.adjudication_sync import (
     _determine_target_queue,
     _match_line_item,
     sync_claim_adjudications,
+    sync_patient_payments,
 )
 from canvas_sdk.v1.data.claim import ClaimQueues
 from candid.effect_helpers import (
     ERA_DESC_PREFIX,
+    META_LAST_SYNC,
+    META_REPORTED_PAYMENT_IDS,
     META_SYNCED_AMOUNTS,
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
@@ -1793,3 +1796,132 @@ def test_sequestration_writes_off_remainder_when_medicare_rounded_down() -> None
     )
 
     assert [t.adjustment for t in _adjustments(txns, "CO-253")] == [Decimal("0.52")]
+
+
+# sync_patient_payments (patient-payments-only path from the queue move)
+# ---------------------------------------------------------------------------
+
+
+def _run_patient_payment_only_sync(
+    claim: MagicMock,
+    encounters: dict | Exception,
+    payments: list[dict] | Exception,
+):
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.BulkPatientPosting") as MBPP,
+        patch("candid.adjudication_sync.notify_claim_updated") as mock_notify,
+    ):
+        client = MC.from_secrets.return_value
+        if isinstance(encounters, Exception):
+            client.get_encounter.side_effect = encounters
+        else:
+            client.get_encounter.side_effect = lambda eid: encounters[eid]
+        if isinstance(payments, Exception):
+            client.get_patient_payments.side_effect = payments
+        else:
+            client.get_patient_payments.return_value = payments
+        MBPP.objects.filter.return_value.exists.return_value = False
+        effects = sync_patient_payments(claim, MOCK_SECRETS)
+        return effects, MCE.return_value, client, mock_notify
+
+
+def test_patient_payment_sync_posts_new_payment_and_records_ids() -> None:
+    li = _fake_line_item("99213", Decimal("100.00"), li_id="li-1")
+    claim = _fake_claim(
+        [li],
+        metadata={
+            "candid_encounters": [{"candid_encounter_id": "enc-abc"}, {"split": 2}],
+            META_SYNCED_PAYMENT_IDS: ["pay-old"],
+        },
+    )
+    encounters = {"enc-abc": _encounter_response(service_lines=[_candid_service_line()])}
+
+    effects, ce, client, mock_notify = _run_patient_payment_only_sync(
+        claim,
+        encounters,
+        [
+            {"patient_payment_id": "pay-old", "amount_cents": 1000},
+            {"patient_payment_id": "pay-new", "amount_cents": 2500},
+        ],
+    )
+
+    client.get_encounter.assert_called_once_with("enc-abc")
+    client.get_patient_payments.assert_called_once_with("candid-claim-1")
+    ce.post_payment.assert_called_once()
+    kwargs = ce.post_payment.call_args.kwargs
+    assert kwargs["claim_coverage_id"] == "patient"
+    assert kwargs["claim_description"] == f"{PATIENT_PAYMENT_DESC_PREFIX}pay-new"
+    txn = kwargs["line_item_transactions"][0]
+    assert txn.claim_line_item_id == "li-1"
+    assert txn.payment == Decimal("25.00")
+
+    meta = {c.kwargs["key"]: c.kwargs["value"] for c in ce.upsert_metadata.call_args_list}
+    assert json.loads(meta[META_SYNCED_PAYMENT_IDS]) == ["pay-new", "pay-old"]
+    assert META_LAST_SYNC in meta
+    # Dedup IDs are written first; refresh broadcast goes last
+    assert effects[0] is ce.upsert_metadata.return_value
+    mock_notify.assert_called_once_with(CANVAS_CLAIM_ID)
+    assert effects[-1] is mock_notify.return_value
+
+
+def test_patient_payment_sync_noop_when_nothing_new() -> None:
+    li = _fake_line_item("99213", Decimal("100.00"))
+    claim = _fake_claim(
+        [li],
+        metadata={
+            "candid_encounters": [{"candid_encounter_id": "enc-abc"}],
+            META_REPORTED_PAYMENT_IDS: ["pay-1"],
+        },
+    )
+    encounters = {"enc-abc": _encounter_response(service_lines=[])}
+
+    effects, ce, _, mock_notify = _run_patient_payment_only_sync(
+        claim, encounters, [{"patient_payment_id": "pay-1", "amount_cents": 500}]
+    )
+
+    assert effects == []
+    ce.post_payment.assert_not_called()
+    ce.upsert_metadata.assert_not_called()
+    mock_notify.assert_not_called()
+
+
+def test_patient_payment_sync_skips_without_encounters_metadata() -> None:
+    claim = _fake_claim([_fake_line_item("99213", Decimal("100.00"))], metadata={})
+    with patch("candid.adjudication_sync.CandidClient") as MC:
+        assert sync_patient_payments(claim, MOCK_SECRETS) == []
+    MC.from_secrets.assert_not_called()
+
+
+def test_patient_payment_sync_skips_claim_without_line_items() -> None:
+    claim = _fake_claim([], metadata={"candid_encounters": [{"candid_encounter_id": "e"}]})
+    with patch("candid.adjudication_sync.CandidClient") as MC:
+        assert sync_patient_payments(claim, MOCK_SECRETS) == []
+    MC.from_secrets.assert_not_called()
+
+
+def test_patient_payment_sync_tolerates_encounter_fetch_failure() -> None:
+    claim = _fake_claim(
+        [_fake_line_item("99213", Decimal("100.00"))],
+        metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
+    )
+    effects, ce, client, _ = _run_patient_payment_only_sync(
+        claim, RuntimeError("timeout"), []
+    )
+    assert effects == []
+    client.get_patient_payments.assert_not_called()
+    ce.post_payment.assert_not_called()
+
+
+def test_patient_payment_sync_tolerates_payments_fetch_failure() -> None:
+    claim = _fake_claim(
+        [_fake_line_item("99213", Decimal("100.00"))],
+        metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
+    )
+    encounters = {"enc-abc": _encounter_response(service_lines=[])}
+    effects, ce, _, _ = _run_patient_payment_only_sync(
+        claim, encounters, RuntimeError("500")
+    )
+    assert effects == []
+    ce.post_payment.assert_not_called()

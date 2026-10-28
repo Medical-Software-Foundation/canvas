@@ -727,3 +727,427 @@ def test_build_claim_payload_includes_supervising_leaves_billing_and_rendering()
     assert payload["supervising_provider"]["npi"] == "9998887776"
     assert payload["billing_provider"]["npi"] == "1234567890"
     assert payload["rendering_provider"]["npi"] == "0987654321"
+
+
+# ---------------------------------------------------------------------------
+# build_split_payloads with >12 diagnoses
+# ---------------------------------------------------------------------------
+
+
+def test_build_split_payloads_splits_over_twelve_diagnoses() -> None:
+    claim = _full_claim_for_payload()
+    codes = [f"DX{i:03d}" for i in range(14)]
+    claim.diagnosis_codes.order_by.return_value.values_list.return_value = codes
+    line = claim.get_active_claim_line_items.return_value[0]
+    linked = []
+    for code in ("DX000", "DX005", "DX013"):
+        dx = MagicMock()
+        dx.claim_diagnosis_code.code = code
+        linked.append(dx)
+    line.diagnosis_codes.filter.return_value = linked
+
+    splits = build_split_payloads(claim)
+
+    assert len(splits) == 2
+    (primary, primary_errors), (supplemental, supp_errors) = splits
+    assert primary_errors == [] and supp_errors == []
+
+    assert primary["external_id"] == "canvas:claim-uuid-1-1"
+    assert [d["code"] for d in primary["diagnoses"]] == codes[:12]
+    assert primary["diagnoses"][0]["code_type"] == "ABK"
+    # Pointer 13 lives on the supplemental split, so it's dropped here
+    assert primary["service_lines"][0]["procedure_code"] == "99213"
+    assert primary["service_lines"][0]["diagnosis_pointers"] == [0, 5]
+
+    assert supplemental["external_id"] == "canvas:claim-uuid-1-2"
+    assert supplemental["diagnoses"] == [
+        {"code": "DX012", "code_type": "ABK"},
+        {"code": "DX013", "code_type": "ABF"},
+    ]
+    assert supplemental["service_lines"] == [
+        {
+            "procedure_code": OVERFLOW_CPT_CODE,
+            "description": (
+                "Supplemental claim for additional diagnosis codes exceeding CMS-1500 limit"
+            ),
+            "modifiers": [],
+            "units": "UN",
+            "quantity": "1",
+            "charge_amount_cents": OVERFLOW_CHARGE_CENTS,
+            "diagnosis_pointers": [0, 1],
+            "external_id": "canvas:claim-uuid-1-2-sl0",
+        }
+    ]
+    # Splits are independent copies: patient data isn't shared by reference
+    assert supplemental["patient"] == primary["patient"]
+    assert supplemental["patient"] is not primary["patient"]
+
+
+def test_build_split_payloads_returns_errors_without_splitting() -> None:
+    claim = _full_claim_for_payload()
+    claim.diagnosis_codes.order_by.return_value.values_list.return_value = [
+        f"DX{i:03d}" for i in range(20)
+    ]
+    claim.patient = None
+
+    splits = build_split_payloads(claim)
+
+    assert len(splits) == 1
+    assert "Claim patient info is missing" in splits[0][1]
+
+
+def test_build_claim_payload_reports_unexpected_step_error() -> None:
+    claim = _full_claim_for_payload()
+    claim.diagnosis_codes.order_by.side_effect = RuntimeError("db gone")
+
+    payload, errors = build_claim_payload(claim)
+
+    assert "Unexpected error building diagnoses: db gone" in errors
+    # Other steps still ran
+    assert payload["patient"]["first_name"] == "Bob"
+
+
+# ---------------------------------------------------------------------------
+# Core fields, diagnoses, service lines
+# ---------------------------------------------------------------------------
+
+
+def test_core_fields_errors_when_identifiers_missing() -> None:
+    claim = _full_claim_for_payload()
+    claim.id = None
+    line = claim.line_items.first.return_value
+    line.from_date = None
+    line.place_of_service = None
+
+    _, errors = build_claim_payload(claim)
+
+    assert "External encounter id is missing" in errors
+    assert "Date of service is missing" in errors
+    assert "Place of service is missing" in errors
+
+
+def test_core_fields_prior_auth_and_accept_assign_default() -> None:
+    claim = _full_claim_for_payload()
+    claim.prior_auth = 12345
+    claim.accept_assign = None
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert payload["prior_authorization_number"] == "12345"
+    assert payload["provider_accepts_assignment"] is True
+
+
+def test_core_fields_respect_accept_assign_false() -> None:
+    claim = _full_claim_for_payload()
+    claim.accept_assign = False
+    payload, _ = build_claim_payload(claim)
+    assert payload["provider_accepts_assignment"] is False
+
+
+def test_date_of_service_uses_note_datetime_in_instance_tz() -> None:
+    from zoneinfo import ZoneInfo
+
+    claim = _full_claim_for_payload()
+    claim.note = MagicMock()
+    claim.note.datetime_of_service = datetime(2026, 2, 1, 3, 0, tzinfo=ZoneInfo("UTC"))
+
+    central, _ = build_claim_payload(claim)
+    utc, _ = build_claim_payload(claim, tz=ZoneInfo("UTC"))
+
+    assert central["date_of_service"] == "2026-01-31"
+    assert utc["date_of_service"] == "2026-02-01"
+
+
+def test_place_of_service_falls_back_to_note_then_note_type() -> None:
+    claim = _full_claim_for_payload()
+    claim.line_items.first.return_value.place_of_service = ""
+    claim.note = MagicMock()
+    claim.note.place_of_service = "02"
+    payload, _ = build_claim_payload(claim)
+    assert payload["place_of_service_code"] == "02"
+
+    claim.note.place_of_service = None
+    claim.note.note_type_version.default_place_of_service = "22"
+    payload, _ = build_claim_payload(claim)
+    assert payload["place_of_service_code"] == "22"
+
+    claim.note.note_type_version = None
+    _, errors = build_claim_payload(claim)
+    assert "Place of service is missing" in errors
+
+
+def test_missing_diagnoses_is_an_error() -> None:
+    claim = _full_claim_for_payload()
+    claim.diagnosis_codes.order_by.return_value.values_list.return_value = []
+    payload, errors = build_claim_payload(claim)
+    assert "Diagnosis code is missing" in errors
+    assert "diagnoses" not in payload
+
+
+def test_service_line_quantity_charge_and_modifiers() -> None:
+    claim = _full_claim_for_payload()
+    line = claim.get_active_claim_line_items.return_value[0]
+    line.units = 2
+    line.charge = Decimal("125.50")
+    line.modifiers.values_list.return_value = ["25", "59"]
+
+    payload, _ = build_claim_payload(claim)
+
+    sl = payload["service_lines"][0]
+    assert sl["quantity"] == "2"
+    assert sl["charge_amount_cents"] == "12550"
+    assert sl["modifiers"] == ["25", "59"]
+    assert sl["external_id"] == "li-99213"
+
+
+def test_service_line_omits_optional_fields_when_absent() -> None:
+    claim = _full_claim_for_payload()
+    line = claim.get_active_claim_line_items.return_value[0]
+    line.units = None
+    line.charge = None
+    unlinked = MagicMock()
+    unlinked.claim_diagnosis_code = None
+    line.diagnosis_codes.filter.return_value = [unlinked]
+
+    payload, _ = build_claim_payload(claim)
+
+    sl = payload["service_lines"][0]
+    assert "quantity" not in sl
+    assert "charge_amount_cents" not in sl
+    assert "diagnosis_pointers" not in sl
+    assert "modifiers" not in sl
+
+
+def test_no_active_line_items_omits_service_lines() -> None:
+    claim = _full_claim_for_payload()
+    claim.get_active_claim_line_items.return_value = []
+    payload, _ = build_claim_payload(claim)
+    assert "service_lines" not in payload
+
+
+# ---------------------------------------------------------------------------
+# Patient
+# ---------------------------------------------------------------------------
+
+
+def test_patient_payload_uses_note_patient_and_addr2() -> None:
+    claim = _full_claim_for_payload()
+    claim.patient.addr2 = "Apt 4"
+    claim.patient.zip = "62701-1234"
+    claim.patient.sex = "F"
+    claim.note = MagicMock()
+    claim.note.datetime_of_service = None
+    claim.note.patient.id = "note-pat-9"
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    patient = payload["patient"]
+    assert patient["external_id"] == "canvas:note-pat-9"
+    assert patient["gender"] == "female"
+    assert patient["date_of_birth"] == "1990-01-01"
+    assert patient["address"] == {
+        "address1": "200 Oak Ave",
+        "address2": "Apt 4",
+        "city": "Springfield",
+        "state": "IL",
+        "zip_code": "62701",
+    }
+
+
+def test_missing_patient_is_an_error() -> None:
+    claim = _full_claim_for_payload()
+    claim.patient = None
+    payload, errors = build_claim_payload(claim)
+    assert "Claim patient info is missing" in errors
+    assert "patient" not in payload
+
+
+@pytest.mark.parametrize(
+    "sex,gender", [("M", "male"), ("O", "other"), ("UNK", "unknown"), ("X", "unknown")]
+)
+def test_patient_gender_mapping(sex: str, gender: str) -> None:
+    claim = _full_claim_for_payload()
+    claim.patient.sex = sex
+    payload, _ = build_claim_payload(claim)
+    assert payload["patient"]["gender"] == gender
+
+
+# ---------------------------------------------------------------------------
+# Providers and facility
+# ---------------------------------------------------------------------------
+
+
+def test_missing_provider_errors_once_and_skips_provider_sections() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider = None
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == ["Claim provider info is missing"]
+    for key in ("billing_provider", "rendering_provider", "service_facility"):
+        assert key not in payload
+
+
+def test_billing_provider_missing_fields_listed() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider.billing_provider_tax_id = ""
+    claim.provider.billing_provider_zip = ""
+
+    payload, errors = build_claim_payload(claim)
+
+    assert (
+        "The following items were missing for the billing provider: "
+        "billing_provider_tax_id, billing_provider_zip_code"
+    ) in errors
+    assert "billing_provider" not in payload
+
+
+def test_billing_provider_optional_fields() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider.billing_provider_addr2 = "Suite 1"
+    claim.provider.billing_provider_name = ""
+    claim.provider.billing_provider_taxonomy = ""
+
+    payload, _ = build_claim_payload(claim)
+
+    bp = payload["billing_provider"]
+    assert bp["address"]["address2"] == "Suite 1"
+    assert "organization_name" not in bp
+    assert "taxonomy_code" not in bp
+
+
+def test_rendering_provider_requires_npi_or_name() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider.provider_npi = "0"
+    claim.provider.provider_last_name = ""
+
+    payload, errors = build_claim_payload(claim)
+
+    assert "Rendering provider: NPI OR first+last name is required" in errors
+    assert "rendering_provider" not in payload
+
+
+def test_rendering_provider_address_includes_addr2() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider.provider_zip = "627011234"
+    claim.provider.provider_addr2 = "Floor 2"
+    claim.provider.provider_taxonomy = ""
+
+    payload, _ = build_claim_payload(claim)
+
+    rp = payload["rendering_provider"]
+    assert rp["address"]["address2"] == "Floor 2"
+    assert "taxonomy_code" not in rp
+
+
+def test_service_facility_addr2_included() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider.facility_addr2 = "Bldg B"
+    payload, _ = build_claim_payload(claim)
+    assert payload["service_facility"]["address"]["address2"] == "Bldg B"
+
+
+def test_service_facility_required_for_telehealth() -> None:
+    claim = _full_claim_for_payload()
+    claim.line_items.first.return_value.place_of_service = "02"
+    claim.provider.facility_name = ""
+
+    payload, errors = build_claim_payload(claim)
+
+    assert (
+        "Service facility information is required for telehealth claims, "
+        "but was missing: service_facility_org_name"
+    ) in errors
+    assert "service_facility" not in payload
+
+
+def test_service_facility_optional_for_in_person() -> None:
+    claim = _full_claim_for_payload()
+    claim.provider.facility_name = ""
+    payload, errors = build_claim_payload(claim)
+    assert errors == []
+    assert "service_facility" not in payload
+
+
+def test_supervising_provider_optional_names_omitted() -> None:
+    claim = MagicMock(spec=Claim)
+    claim.incident_to = False
+    claim.supervising_provider = MagicMock(
+        npi="9998887776", first_name="", last_name="", taxonomy=""
+    )
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_supervising_provider(claim, payload, errors)
+
+    assert errors == []
+    assert payload["supervising_provider"] == {"npi": "9998887776"}
+
+
+# ---------------------------------------------------------------------------
+# Subscribers
+# ---------------------------------------------------------------------------
+
+
+def _subscriber_coverage(coverage_id: str, payer_order: str) -> MagicMock:
+    claim = _full_claim_for_payload()
+    cov = claim.coverages.active.return_value[0]
+    cov.id = coverage_id
+    cov.payer_order = payer_order
+    return cov
+
+
+def test_subscribers_primary_and_secondary_with_optional_fields() -> None:
+    claim = _full_claim_for_payload()
+    primary = claim.coverages.active.return_value[0]
+    primary.subscriber_group = "GRP1"
+    primary.subscriber_addr2 = "Unit 3"
+    secondary = _subscriber_coverage("cov-secondary", "Secondary")
+    secondary.payer_id = "PAYER2"
+    secondary.subscriber_dob = None
+    secondary.coverage = None
+    secondary.subscriber_addr1 = ""
+    claim.coverages.active.return_value = [secondary, primary]
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    sp = payload["subscriber_primary"]
+    assert sp["insurance_card"]["group_number"] == "GRP1"
+    assert sp["insurance_card"]["plan_name"] == "Gold PPO"
+    assert sp["insurance_card"]["emr_payer_crosswalk"] == "CANVAS"
+    assert sp["address"]["address2"] == "Unit 3"
+    assert sp["date_of_birth"] == "1990-01-01"
+    ss = payload["subscriber_secondary"]
+    assert ss["insurance_card"]["payer_id"] == "PAYER2"
+    assert "date_of_birth" not in ss
+    assert "plan_name" not in ss["insurance_card"]
+    assert "address" not in ss
+
+
+def test_incomplete_primary_subscriber_errors_for_insurance_pay() -> None:
+    claim = _full_claim_for_payload()
+    claim.coverages.active.return_value[0].subscriber_number = ""
+
+    payload, errors = build_claim_payload(claim)
+
+    assert (
+        "Because the responsible_party is INSURANCE_PAY, the primary subscriber "
+        "is required but has missing fields"
+    ) in errors
+    assert "subscriber_primary" not in payload
+
+
+def test_incomplete_secondary_subscriber_is_dropped_silently() -> None:
+    claim = _full_claim_for_payload()
+    secondary = _subscriber_coverage("cov-secondary", "Secondary")
+    secondary.payer_name = ""
+    claim.coverages.active.return_value.append(secondary)
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert "subscriber_secondary" not in payload
+    assert "subscriber_primary" in payload
