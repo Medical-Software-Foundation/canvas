@@ -479,7 +479,7 @@
       var ok = impRows.filter(function (r) { return !r.why; }).length, bad = impRows.length - ok;
       body = '<p class="ax-sum">' + ok + " ready to import." + (bad ? ' <span class="bad">' + bad + " need fixing and will be skipped.</span>" : "") + "</p>" +
         '<table class="ax-check-tbl"><tbody>' + impRows.map(function (r) {
-          return '<tr><td class="st ' + (r.why ? "bad" : "ok") + '">' + (r.why ? "✕" : "✓") + '</td><td class="code">.' + esc(r.code || "?") + "</td><td>" + (r.why ? "" : (chips(r) || '<span class="tag any">All commands</span>')) + "</td><td>" + esc(r.text) + (r.why ? '<span class="why">' + esc(r.why) + "</span>" : "") + "</td></tr>";
+          return '<tr><td class="st ' + (r.why ? "bad" : "ok") + '">' + (r.why ? "✕" : "✓") + '</td><td class="code">.' + esc(r.code || "?") + "</td><td>" + (r.why ? "" : (chips(r) || '<span class="tag any">Default commands</span>')) + "</td><td>" + esc(r.text) + (r.why ? '<span class="why">' + esc(r.why) + "</span>" : "") + "</td></tr>";
         }).join("") + "</tbody></table>" +
         '<div class="ax-imp-row"><button class="ax-btn" data-back1>Back to the list</button><span class="grow"></span><button class="ax-btn primary" data-import' + (ok ? "" : " disabled") + ">Import " + ok + " phrase" + (ok === 1 ? "" : "s") + "</button></div>";
     } else {

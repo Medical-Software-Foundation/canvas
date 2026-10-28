@@ -36,7 +36,7 @@ Where codes can expand (orders, referrals, reviews, and prescriptions only when 
 Known limits:
 
 - Questionnaire, ROS, Physical Exam, and Structured Assessment text answers don't save a plugin edit, so codes don't expand there. Change Medication, Clipboard, Private Note, Visual Exam Finding, and Snooze Protocol can't be edited by plugins.
-- The four review commands can't block recording. A phrase set up for them still expands there, and any [brackets] or *** left in it can be recorded unfilled, including in the message to the patient.
+- The four review commands can't block recording. A phrase set up for them still expands there, and any [brackets] or *** left in it can be recorded unfilled, including in the message to the patient. A code typed in a review command for a phrase not set up for it stays as typed and can be recorded that way.
 - Recording is blocked per command. Signing the whole note with an unrecorded command is only blocked when the practice's setting for uncommitted commands is on.
 - Blocking applies to recording and review in the Canvas UI. Commands committed through the SDK aren't blocked.
 - Unfilled [brackets] from a phrase are remembered for up to 14 days, the longest the plugin cache keeps anything. After that, or after a cache reset, they no longer block recording, though they stay visible in the text.

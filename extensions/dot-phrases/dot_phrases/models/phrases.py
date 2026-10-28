@@ -27,8 +27,8 @@ class Phrase(CustomModel):
 
     use_in is None for the default note commands (catalog.DEFAULT_USE_IN: every one except orders,
     referrals, and reviews), or a list of command keys from catalog.NOTE_COMMANDS.
-    Prescription fields are opt-in through rx_sig and rx_note_to_pharmacist, and are never
-    included in "all commands".
+    Prescription fields are opt-in through rx_sig and rx_note_to_pharmacist, and are never part of
+    the default.
     """
 
     code = TextField()

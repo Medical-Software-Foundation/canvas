@@ -158,7 +158,7 @@
 
   // ---- where Insert can put a phrase ----
   function targetsFor(p) {
-    var t = INSERTABLE.filter(function (k) { return p.use_in === null || p.use_in.indexOf(k) >= 0; });
+    var t = INSERTABLE.filter(function (k) { return (p.use_in === null ? useIn.defaultKeys : p.use_in).indexOf(k) >= 0; });
     if (state.rxTargets.indexOf("sig") >= 0 && p.rx_sig) { t.push("sig"); }
     if (state.rxTargets.indexOf("note_to_pharmacist") >= 0 && p.rx_note_to_pharmacist) { t.push("note_to_pharmacist"); }
     return t;
@@ -167,7 +167,8 @@
   function noTargetMsg(p) {
     if (p.rx_sig) { return "Sig phrase. Open a prescription in this note to insert it, or type ." + p.code + " in the Sig."; }
     if (p.rx_note_to_pharmacist) { return "Note to pharmacist phrase. Open a prescription in this note to insert it, or type ." + p.code + " there."; }
-    var where = (p.use_in || []).map(function (k) { return state.labels[k] || k; }).join(", ");
+    if (p.use_in === null) { return "Works in the default commands. Type ." + p.code + " in one of those."; }
+    var where = p.use_in.map(function (k) { return state.labels[k] || k; }).join(", ");
     return "Works in " + where + ". Type ." + p.code + " in one of those.";
   }
 
