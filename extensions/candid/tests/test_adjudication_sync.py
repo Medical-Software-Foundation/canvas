@@ -1380,8 +1380,8 @@ def test_sync_skips_untagged_payment_matching_a_canvas_collection() -> None:
     kwargs = MBPP.objects.filter.call_args.kwargs
     assert kwargs["payer__id"] == "patient-key-1"
     assert kwargs["total_paid"] == Decimal("160.00")
-    assert kwargs["created__gte"].isoformat() == "2026-09-01T14:08:11+00:00"
-    assert kwargs["created__lte"].isoformat() == "2026-09-01T14:28:11+00:00"
+    assert kwargs["created__gte"].isoformat() == "2026-09-01T14:16:11+00:00"
+    assert kwargs["created__lte"].isoformat() == "2026-09-01T14:20:11+00:00"
 
 
 def test_sync_posts_only_this_claims_share_of_a_split_payment() -> None:
@@ -1480,7 +1480,7 @@ def test_sync_skips_echo_check_without_patient_or_timestamp() -> None:
     assert len(_patient_postings(ce)) == 3
     # Only p3 (naive timestamp, read as UTC) reaches the lookup
     MBPP.objects.filter.assert_called_once()
-    assert MBPP.objects.filter.call_args.kwargs["created__gte"].isoformat() == "2026-10-16T20:40:00+00:00"
+    assert MBPP.objects.filter.call_args.kwargs["created__gte"].isoformat() == "2026-10-16T20:48:00+00:00"
 
 
 # ---------------------------------------------------------------------------
@@ -1673,3 +1673,123 @@ def test_sync_skips_echo_lookup_when_nothing_is_allocated_here() -> None:
 
     assert _patient_postings(ce) == []
     MBPP.objects.filter.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Review fixes: overflow splits, empty allocations, saved echoes, rounding
+# ---------------------------------------------------------------------------
+
+
+def test_sync_posts_full_share_of_payment_split_over_overflow_encounters() -> None:
+    """$60 on split 1's Candid claim + $40 on split 2's: one $100 posting, not $60."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim([li], metadata={"candid_encounters": SPLIT_ENCOUNTERS})
+    enc1 = _encounter_response(service_lines=[_candid_service_line()], eras=[])
+    enc2 = _encounter_response(service_lines=[_candid_service_line()], eras=[])
+    enc2["claims"][0]["claim_id"] = "candid-claim-2"
+    payment = {
+        "patient_payment_id": "pay-split-overflow",
+        "amount_cents": 10000,
+        "allocations": [
+            {"amount_cents": 6000, "target": {"type": "claim", "claim_id": "candid-claim-1"}},
+            {"amount_cents": 4000, "target": {"type": "claim", "claim_id": "candid-claim-2"}},
+        ],
+    }
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+        patch("candid.adjudication_sync.BulkPatientPosting") as MBPP,
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = [enc1, enc2]
+        MC.from_secrets.return_value.get_patient_payments.return_value = [payment]
+        MBPP.objects.filter.return_value.exists.return_value = False
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+        postings = _patient_postings(MCE.return_value)
+
+    assert len(postings) == 1
+    assert [t.payment for t in postings[0].kwargs["line_item_transactions"]] == [Decimal("100.00")]
+
+
+def test_sync_matches_split_encounter_external_ids() -> None:
+    ce, _ = _patient_payment_sync(
+        [
+            {
+                "patient_payment_id": "pay-split-ext",
+                "amount_cents": 1000,
+                "allocations": [
+                    {"amount_cents": 1000, "target": {"type": "claim_by_encounter_external_id", "value": "canvas:00000000-0000-0000-0000-000000000001-2"}},
+                ],
+            }
+        ]
+    )
+
+    txns = _patient_postings(ce)[0].kwargs["line_item_transactions"]
+    assert [t.payment for t in txns] == [Decimal("10.00")]
+
+
+def test_sync_posts_full_amount_for_empty_allocations() -> None:
+    ce, _ = _patient_payment_sync(
+        [{"patient_payment_id": "pay-empty", "amount_cents": 2500, "allocations": []}]
+    )
+
+    txns = _patient_postings(ce)[0].kwargs["line_item_transactions"]
+    assert [t.payment for t in txns] == [Decimal("25.00")]
+
+
+def test_sync_saves_skipped_canvas_payments_as_reported() -> None:
+    """Tagged and matched echoes are saved to reported IDs so later syncs skip them free."""
+    from candid.effect_helpers import (
+        CANVAS_REPORTED_NOTE_TAG,
+        META_REPORTED_PAYMENT_IDS,
+    )
+
+    ce, _ = _patient_payment_sync(
+        [
+            {"patient_payment_id": "pay-tagged", "amount_cents": 500, "payment_note": f"card {CANVAS_REPORTED_NOTE_TAG}"},
+            {
+                "patient_payment_id": "pay-matched",
+                "amount_cents": 3000,
+                "patient_external_id": "canvas:patient-key-1",
+                "payment_timestamp": "2026-10-16T20:50:00Z",
+            },
+        ],
+        echo_exists=True,
+    )
+
+    assert _patient_postings(ce) == []
+    saved = [
+        c.kwargs["value"] for c in ce.upsert_metadata.call_args_list
+        if c.kwargs.get("key") == META_REPORTED_PAYMENT_IDS
+    ]
+    assert saved == [json.dumps(["pay-matched", "pay-tagged"])]
+
+
+def test_sync_tagged_payment_skips_share_work_and_warning() -> None:
+    """A tagged payment with an unknown target shape is skipped without the full-amount warning."""
+    from candid.effect_helpers import CANVAS_REPORTED_NOTE_TAG
+
+    with patch("candid.adjudication_sync.log") as mock_log:
+        ce, _ = _patient_payment_sync(
+            [
+                {
+                    "patient_payment_id": "pay-tagged-odd",
+                    "amount_cents": 500,
+                    "payment_note": f"card {CANVAS_REPORTED_NOTE_TAG}",
+                    "allocations": [{"amount_cents": 500, "target": {"type": "something_new"}}],
+                }
+            ]
+        )
+
+    assert _patient_postings(ce) == []
+    mock_log.warning.assert_not_called()
+
+
+def test_sequestration_writes_off_remainder_when_medicare_rounded_down() -> None:
+    """Estimate 53¢ but only 52¢ left (Medicare rounded its 2% down): write off the 52¢."""
+    txns = _medicare_sync(
+        [_candid_service_line("90836", 30000, primary_paid_amount_cents=2573, allowed_amount_cents=2625)],
+        SEQ_SECRETS,
+    )
+
+    assert [t.adjustment for t in _adjustments(txns, "CO-253")] == [Decimal("0.52")]

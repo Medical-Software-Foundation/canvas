@@ -77,14 +77,14 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
         )
 
         allocations: list[dict] = []
-        # {claim_id: reported_payment_ids_set} — cached so the success path
-        # doesn't re-read META_REPORTED_PAYMENT_IDS, and keyed by claim_id so a
-        # claim that appears in multiple claim_payments gets exactly one set of
+        # Claim IDs to update after a successful report, kept in a dict (in
+        # order, no repeats) so a claim that appears in multiple
+        # claim_payments gets exactly one set of
         # post-success effects. Two metadata writes to the same key in one batch
         # would race (each reads the pre-handler snapshot; last write wins),
         # clobbering candid_sync_history. The allocations list is NOT deduped --
         # multiple allocations to the same encounter correctly sum on Candid.
-        reportable_claims: dict[str, set[str]] = {}
+        reportable_claims: dict[str, None] = {}
         unallocated_cents = total_cents
 
         for cp in claim_payments:
@@ -123,7 +123,7 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
                         "amount_cents": cp_cents,
                     }
                 )
-                reportable_claims.setdefault(claim_ext_id, reported_set)
+                reportable_claims.setdefault(claim_ext_id, None)
             else:
                 log.info(
                     f"Candid: claim {claim_ext_id} has no encounter metadata — "
@@ -194,15 +194,16 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
 
         now = datetime.now(UTC).isoformat()
         effects: list[Effect] = []
-        for claim_ext_id, reported_set in reportable_claims.items():
+        for claim_ext_id in reportable_claims:
             claim_effect = ClaimEffect(claim_id=claim_ext_id)
-            # Re-read after the Candid round trip: another report for this
-            # claim may have saved its ID meanwhile, and writing back only the
-            # set read at the start would drop it.
+            # Re-read after the Candid round trip to pick up IDs a report that
+            # finished meanwhile saved. This narrows the overlap window but
+            # can't close it; the payment_note tag and the sync (which saves
+            # tagged IDs it finds) are what keep a lost ID from re-importing.
             latest_set = get_claim_metadata_set(
                 claims_by_id[claim_ext_id], META_REPORTED_PAYMENT_IDS
             )
-            merged = sorted(reported_set | latest_set | {payment_id})
+            merged = sorted(latest_set | {payment_id})
             effects.append(
                 claim_effect.upsert_metadata(
                     key=META_REPORTED_PAYMENT_IDS,

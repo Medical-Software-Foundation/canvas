@@ -150,3 +150,11 @@ def test_post_triggers_sync_and_reports_effect_count():
     assert effects[:2] == ["effect-a", "effect-b"]
     body = json.loads(effects[2].content)
     assert body == {"status": "synced", "effects_count": 2}
+
+
+def test_get_returns_no_queue_when_claim_has_none():
+    claim = _fake_claim()
+    claim.current_queue = None
+    body, resp = _run_get({"claim_id": "claim-1"}, {}, claim)
+    assert resp.status_code == 200
+    assert body["current_queue"] is None

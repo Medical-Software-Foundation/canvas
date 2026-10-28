@@ -351,7 +351,11 @@ def _sequestration_transactions(
         sl.get(f) or 0 for f in ("deductible_cents", "coinsurance_cents", "copay_cents")
     )
     seq_cents = _sequestration_cents(paid_cents) if paid_cents > 0 else 0
-    if not seq_cents or seq_cents > allowed_cents - paid_cents - patient_cents:
+    remaining_cents = allowed_cents - paid_cents - patient_cents
+    if seq_cents == remaining_cents + 1:
+        # Medicare rounded its 2% down by a cent: write off what's left
+        seq_cents = remaining_cents
+    if seq_cents <= 0 or seq_cents > remaining_cents:
         return []
     return [
         LineItemTransaction(
@@ -458,25 +462,31 @@ def _coverage_id_at(coverages_ordered: list, payer_order: int) -> str | None:
 
 # How far a Candid payment's timestamp may be from a Canvas-collected payment
 # for the same patient and amount and still count as Canvas's own payment.
-ECHO_WINDOW = timedelta(minutes=10)
+ECHO_WINDOW = timedelta(minutes=2)
 
 
-def _allocated_to(target: dict, candid_claim_id: str, canvas_claim_id: str) -> bool:
-    """Whether an allocation target points at this claim.
+def _allocated_to(
+    target: dict, candid_claim_ids: set[str], canvas_claim_id: str
+) -> bool:
+    """Whether an allocation target points at this Canvas claim.
 
     Candid answers with ``claim`` / ``service_line`` targets carrying
-    ``claim_id``; the create-time ``claim_by_encounter_external_id`` form
-    (which Mock Candid echoes back) is matched by the Canvas claim ID.
+    ``claim_id``, matched against every Candid claim of this Canvas claim
+    (overflow splits included). The create-time
+    ``claim_by_encounter_external_id`` form (which Mock Candid echoes back) is
+    matched by ``canvas:{id}`` or a split's ``canvas:{id}-N``.
     """
     if target.get("type") == "claim_by_encounter_external_id":
-        return target.get("value") == f"canvas:{canvas_claim_id}"
-    return target.get("claim_id") == candid_claim_id
+        value = target.get("value") or ""
+        external_id = f"canvas:{canvas_claim_id}"
+        return value == external_id or value.startswith(f"{external_id}-")
+    return target.get("claim_id") in candid_claim_ids
 
 
 def _claim_share_cents(
-    payment: dict, candid_claim_id: str, canvas_claim_id: str
+    payment: dict, candid_claim_ids: set[str], canvas_claim_id: str
 ) -> int:
-    """Cents of a Candid patient payment allocated to one Candid claim.
+    """Cents of a Candid patient payment allocated to this Canvas claim.
 
     A payment split across several claims comes back from every claim's
     lookup, so posting its full ``amount_cents`` would count it once per claim.
@@ -484,10 +494,10 @@ def _claim_share_cents(
     when none of them names a claim.
     """
     allocations = payment.get("allocations")
-    if allocations is None:
+    if not allocations:
         return payment.get("amount_cents") or 0
     targets = [alloc.get("target") or {} for alloc in allocations]
-    if allocations and not any(
+    if not any(
         "claim_id" in t or t.get("type") == "claim_by_encounter_external_id"
         for t in targets
     ):
@@ -501,7 +511,7 @@ def _claim_share_cents(
     return sum(
         alloc.get("amount_cents") or 0
         for alloc in allocations
-        if _allocated_to(alloc.get("target") or {}, candid_claim_id, canvas_claim_id)
+        if _allocated_to(alloc.get("target") or {}, candid_claim_ids, canvas_claim_id)
     )
 
 
@@ -515,15 +525,18 @@ def _parse_timestamp(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def _is_canvas_payment(payment: dict) -> bool:
-    """True if this Candid patient payment is one Canvas reported to Candid.
+def _is_tagged_canvas_payment(payment: dict) -> bool:
+    """True if Canvas reported this payment: it carries ``CANVAS_REPORTED_NOTE_TAG``."""
+    return CANVAS_REPORTED_NOTE_TAG in (payment.get("payment_note") or "")
 
-    Payments reported by this plugin carry ``CANVAS_REPORTED_NOTE_TAG``. Older
-    ones don't, so also match a Canvas-collected payment for the same patient
-    and total within ``ECHO_WINDOW`` of the Candid payment.
+
+def _matches_canvas_collection(payment: dict) -> bool:
+    """True if an untagged payment matches one collected in Canvas.
+
+    Payments reported before the tag existed carry no tag, so match a
+    Canvas-collected payment for the same patient and total within
+    ``ECHO_WINDOW`` of the Candid payment's timestamp.
     """
-    if CANVAS_REPORTED_NOTE_TAG in (payment.get("payment_note") or ""):
-        return True
     patient_key = (payment.get("patient_external_id") or "").removeprefix("canvas:")
     paid_at = _parse_timestamp(payment.get("payment_timestamp"))
     total = _cents_to_dollars(payment.get("amount_cents"))
@@ -542,15 +555,16 @@ def _post_patient_payments(
     candid_payments: list[dict],
     known_payment_ids: set[str],
     first_line_id: str,
-    candid_claim_id: str,
+    candid_claim_ids: set[str],
     canvas_claim_id: str,
+    reported_found: list[str],
 ) -> tuple[list[Effect], list[str]]:
-    """Build post_payment effects for new patient payments on one Candid claim.
+    """Build post_payment effects for new patient payments on one Canvas claim.
 
-    Posts only the share each payment allocates to ``candid_claim_id`` and
-    skips payments Canvas itself reported. Mutates ``known_payment_ids`` so
-    callers across encounters/claims dedupe against payments already queued in
-    this run. Returns ``(effects, attempted_payment_ids)``.
+    Posts only the share each payment allocates to this claim's Candid claims
+    and skips payments Canvas itself reported, adding their IDs to
+    ``reported_found`` so they're saved and not checked again. Mutates
+    ``known_payment_ids``. Returns ``(effects, attempted_payment_ids)``.
     """
     effects: list[Effect] = []
     attempted: list[str] = []
@@ -559,18 +573,23 @@ def _post_patient_payments(
         if not payment_id or payment_id in known_payment_ids:
             continue
 
+        if _is_tagged_canvas_payment(payment):
+            reported_found.append(payment_id)
+            known_payment_ids.add(payment_id)
+            continue
+
         amount_dollars = _cents_to_dollars(
-            _claim_share_cents(payment, candid_claim_id, canvas_claim_id)
+            _claim_share_cents(payment, candid_claim_ids, canvas_claim_id)
         )
         if not amount_dollars:
             continue
 
-        if _is_canvas_payment(payment):
+        if _matches_canvas_collection(payment):
             log.info(
                 f"Candid sync: skipping patient payment {payment_id}, "
-                f"which Canvas reported to Candid"
+                f"which matches a payment collected in Canvas"
             )
-            # Checked once per run, not again for the claim's other encounters
+            reported_found.append(payment_id)
             known_payment_ids.add(payment_id)
             continue
 
@@ -660,6 +679,11 @@ class _SyncState:
     known_payment_ids: set[str]
     prev_synced_amounts: dict[str, int | None]
     post_sequestration: bool = False
+    reported_pmt_ids: set[str] = field(default_factory=set)
+    # Patient payments fetched per Candid claim, posted once all are known
+    fetched_payments: dict[str, dict] = field(default_factory=dict)
+    candid_claim_ids: set[str] = field(default_factory=set)
+    reported_found: list[str] = field(default_factory=list)
 
     effects: list[Effect] = field(default_factory=list)
     attempted_era_ids: list[str] = field(default_factory=list)
@@ -695,6 +719,7 @@ def _init_sync_state(claim: Claim, secrets: dict | None = None) -> _SyncState:
         synced_era_ids=get_claim_metadata_set(claim, META_SYNCED_ERA_IDS),
         synced_pmt_ids=synced_pmt_ids,
         known_payment_ids=synced_pmt_ids | reported_pmt_ids,
+        reported_pmt_ids=reported_pmt_ids,
         prev_synced_amounts=get_claim_metadata(claim, META_SYNCED_AMOUNTS)
         or {
             "primary": None,
@@ -837,9 +862,15 @@ def _append_payment_effect(
 def _post_patient_payments_for_candid_claim(
     state: _SyncState, client: CandidClient, candid_claim_id: str
 ) -> None:
-    """Fetch and post patient payments for one Candid claim. No-op without line items or a claim_id."""
+    """Fetch one Candid claim's patient payments into the state.
+
+    No-op without line items or a claim_id. They're posted by ``_post_collected_patient_payments`` once every Candid
+    claim of the Canvas claim is known, so a payment split across overflow
+    splits is posted once, with the full share for this Canvas claim.
+    """
     if not (state.first_line and candid_claim_id):
         return
+    state.candid_claim_ids.add(candid_claim_id)
 
     try:
         candid_payments = client.get_patient_payments(candid_claim_id)
@@ -850,17 +881,38 @@ def _post_patient_payments_for_candid_claim(
         )
         return
 
+    for payment in candid_payments:
+        payment_id = payment.get("patient_payment_id")
+        if payment_id:
+            state.fetched_payments.setdefault(payment_id, payment)
+
+
+def _post_collected_patient_payments(state: _SyncState) -> None:
+    """Post the patient payments fetched for all of this claim's Candid claims."""
+    if not (state.first_line and state.fetched_payments):
+        return
     payment_effects, attempted = _post_patient_payments(
         state.claim_effect,
-        candid_payments,
+        list(state.fetched_payments.values()),
         state.known_payment_ids,
         str(state.first_line.id),
-        candid_claim_id,
+        state.candid_claim_ids,
         state.canvas_claim_id,
+        state.reported_found,
     )
     state.effects.extend(payment_effects)
     state.payment_effect_count = state.payment_effect_count + len(payment_effects)
     state.attempted_payment_ids.extend(attempted)
+    if state.reported_found:
+        # Save them as reported so later syncs skip them without a lookup
+        state.effects.append(
+            state.claim_effect.upsert_metadata(
+                key=META_REPORTED_PAYMENT_IDS,
+                value=json.dumps(
+                    sorted(state.reported_pmt_ids | set(state.reported_found))
+                ),
+            )
+        )
 
 
 def _process_encounter(
@@ -1021,6 +1073,7 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
             overflow=(encounter_record.get("split") or 1) > 1,
         )
 
+    _post_collected_patient_payments(state)
     _finalize_effects(state, claim)
 
     log.info(
@@ -1070,6 +1123,7 @@ def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:
         synced_era_ids=set(),
         synced_pmt_ids=synced_pmt_ids,
         known_payment_ids=synced_pmt_ids | reported_pmt_ids,
+        reported_pmt_ids=reported_pmt_ids,
         prev_synced_amounts={},
     )
 
@@ -1089,6 +1143,7 @@ def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:
             _post_patient_payments_for_candid_claim(
                 state, client, candid_claim.get("claim_id", "")
             )
+    _post_collected_patient_payments(state)
 
     if state.effects:
         now = datetime.now(UTC).isoformat()

@@ -123,7 +123,11 @@ class CandidClaimDetailAPI(StaffSessionAuthMixin, SimpleAPIRoute):
                     "submission_error": submission_error,
                     "comments": comments,
                     "sync_history": sync_history,
-                    "current_queue": claim.current_queue.display_name,
+                    "current_queue": (
+                        claim.current_queue.display_name
+                        if claim.current_queue
+                        else None
+                    ),
                 }
             )
         ]
