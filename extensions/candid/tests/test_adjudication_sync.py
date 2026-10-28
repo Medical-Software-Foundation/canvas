@@ -1653,3 +1653,23 @@ def test_sequestration_counts_reported_patient_responsibility() -> None:
 
     assert _adjustments(explained, "CO-253") == []
     assert [t.adjustment for t in _adjustments(leftover, "CO-253")] == [Decimal("1.23")]
+
+
+def test_sync_skips_echo_lookup_when_nothing_is_allocated_here() -> None:
+    """No share on this claim: no BulkPatientPosting query at all."""
+    ce, MBPP = _patient_payment_sync(
+        [
+            {
+                "patient_payment_id": "pay-other-claim",
+                "amount_cents": 3000,
+                "patient_external_id": "canvas:patient-key-1",
+                "payment_timestamp": "2026-10-16T20:50:00Z",
+                "allocations": [
+                    {"amount_cents": 3000, "target": {"type": "claim", "claim_id": "candid-claim-9"}}
+                ],
+            }
+        ]
+    )
+
+    assert _patient_postings(ce) == []
+    MBPP.objects.filter.assert_not_called()

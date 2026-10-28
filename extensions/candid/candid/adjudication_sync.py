@@ -559,17 +559,19 @@ def _post_patient_payments(
         if not payment_id or payment_id in known_payment_ids:
             continue
 
+        amount_dollars = _cents_to_dollars(
+            _claim_share_cents(payment, candid_claim_id, canvas_claim_id)
+        )
+        if not amount_dollars:
+            continue
+
         if _is_canvas_payment(payment):
             log.info(
                 f"Candid sync: skipping patient payment {payment_id}, "
                 f"which Canvas reported to Candid"
             )
-            continue
-
-        amount_dollars = _cents_to_dollars(
-            _claim_share_cents(payment, candid_claim_id, canvas_claim_id)
-        )
-        if not amount_dollars:
+            # Checked once per run, not again for the claim's other encounters
+            known_payment_ids.add(payment_id)
             continue
 
         description = f"{PATIENT_PAYMENT_DESC_PREFIX}{payment_id}"
