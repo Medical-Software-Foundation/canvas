@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 from canvas_sdk.events import EventType
 
+from dot_phrases.catalog import NOTE_COMMANDS
 from dot_phrases.handlers.note_events import BlockUnfinished, ExpandPhrases, leftovers_key
 
 MODULE = "dot_phrases.handlers.note_events"
@@ -213,7 +214,7 @@ def test_expand_listens_to_every_supported_command() -> None:
     assert EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_UPDATE) in ExpandPhrases.RESPONDS_TO
 
 def test_code_that_fits_says_it_is_still_loading() -> None:
-    spec = SimpleNamespace(key="plan", label="Plan")
+    spec = next(s for s in NOTE_COMMANDS if s.key == "plan")
     phrase_ = SimpleNamespace(use_in=None, text="Follow up in 2 weeks.")
     message = BlockUnfinished._code_message("fu2w", phrase_, spec, "narrative", False, ".fu2w", {"fu2w": phrase_}, {})
     assert message == "Dot phrase .fu2w is still loading. If it doesn't load, retype the code."

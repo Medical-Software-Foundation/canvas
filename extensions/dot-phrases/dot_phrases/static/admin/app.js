@@ -127,7 +127,7 @@
     if (data.isAdmin) { tabs.push(["settings", "Practice settings"]); }
     if (!data.isAdmin && adTab === "settings") { adTab = "mine"; }
     $("#axTabs").innerHTML = tabs.map(function (t) { return '<button class="' + (t[0] === adTab ? "on" : "") + '" data-t="' + t[0] + '">' + t[1] + "</button>"; }).join("");
-    $("#axSub").textContent = data.isAdmin ? "Your personal phrases, practice phrases everyone can use, and practice settings. Practice phrases and settings are limited to the plugin's admin team."
+    $("#axSub").textContent = data.isAdmin ? "Your personal phrases, practice phrases everyone can use, and practice settings. Only admins can change practice phrases and settings."
       : "Your personal phrases, and the practice phrases everyone can use.";
   }
   // The practice tab is read-only for anyone who isn't an admin.
@@ -248,9 +248,9 @@
   }
   function detailHtml() {
     if (!adSel) {
-      return guideOpen ? '<div class="ax-dmeta" style="margin-bottom:10px">Pick a phrase on the left to edit it, or make a new one.</div><div class="ax-guide">' + guideHtml() + "</div>"
-        : adTab === "mine" ? '<div class="ax-blank"><div><b>Pick a phrase to edit</b>Or make a new one. Only you can use your phrases.</div></div>'
-        : '<div class="ax-blank"><div><b>Pick a phrase to edit</b>Or make a new one. Changes reach everyone the next time they use it.</div></div>';
+      return guideOpen ? '<div class="ax-dmeta" style="margin-bottom:10px">Select a phrase on the left to edit it, or make a new one.</div><div class="ax-guide">' + guideHtml() + "</div>"
+        : adTab === "mine" ? '<div class="ax-blank"><div><b>Select a phrase to edit</b>Or make a new one. Only you can use your phrases.</div></div>'
+        : '<div class="ax-blank"><div><b>Select a phrase to edit</b>Or make a new one. Changes reach everyone the next time they use it.</div></div>';
     }
     var p = adSel === "new" ? null : adSel, d = adDraft, ro = false, mineTab = adTab === "mine";
     var meta = mineTab ? (p ? "Your phrase. Only you can use it. Used " + (p.uses || 0) + (p.uses === 1 ? " time." : " times.") : "New phrase. Only you can use it.")
@@ -269,7 +269,7 @@
       '<div class="ax-pair"><div><label class="ax-lbl" for="axText">What you write</label><div class="ax-editor' + (ro ? " ro" : "") + '">' +
       '<textarea class="ax-ta ax-ta-flat" id="axText" rows="7"' + (ro ? " disabled" : "") + ">" + esc(d.text) + "</textarea>" + (ro ? "" : insertBar()) + "</div>" +
       (ro ? "" : '<div class="ax-help">Placeholders go in curly brackets. Use the menus above, or type them.</div>') + "</div>" +
-      '<div><div class="ax-lbl">What lands in the note, for a sample patient</div><div class="ax-result" id="axResult"></div><div class="ax-help" id="axAsks"></div></div></div>' +
+      '<div><div class="ax-lbl">Preview with a sample patient</div><div class="ax-result" id="axResult"></div><div class="ax-help" id="axAsks"></div></div></div>' +
       '<div class="ax-guide" id="axGuide"' + (guideOpen ? "" : " hidden") + ">" + guideHtml() + "</div>" +
       '<div class="ax-lbl">Use in</div><div id="axUseBlock" class="ax-pk">' + useBlockHtml(d) + "</div>" +
       '<div class="ax-warn" id="axLim"></div><div class="ax-err" id="axRx"></div><div class="ax-err" id="axErr"></div>' + foot;
@@ -279,7 +279,7 @@
   function myCopy(p) { return data.mine.filter(function (m) { return m.code === p.code; })[0] || null; }
   function roDetailHtml() {
     if (!adSel || adSel === "new") {
-      return '<div class="ax-blank"><div><b>Pick a practice phrase</b>Make your own copy to change the wording, or hide ones you don\'t use from your chart panel list.</div></div>';
+      return '<div class="ax-blank"><div><b>Select a practice phrase</b>Make your own copy to change the wording, or hide ones you don\'t use from your chart panel list.</div></div>';
     }
     var p = adSel, copy = myCopy(p), who = data.adminTeam || "your practice's Dot Phrases admins";
     var d = { use_in: p.use_in, rx: { sig: p.rx_sig, note_to_pharmacist: p.rx_note_to_pharmacist } };
@@ -288,7 +288,7 @@
     return '<div class="ax-dhead"><div><div class="ax-dcode">.' + esc(p.code) + '</div><div class="ax-dmeta">Practice phrase. Only ' + esc(who) + " can change it. Used " + (p.uses || 0) + (p.uses === 1 ? " time." : " times.") + "</div></div></div>" +
       '<div class="ax-note-ro">' + LOCK_ICON + "<span>" + note + "</span></div>" +
       '<div class="ax-pair"><div><div class="ax-lbl">Text</div><div class="ax-ro">' + esc(p.text) + "</div></div>" +
-      '<div><div class="ax-lbl">What lands in the note, for a sample patient</div><div class="ax-result ax-result-ro">' + fill(p.text, true) + '</div><div class="ax-help">' + esc(asksSentence(p.text)) + "</div></div></div>" +
+      '<div><div class="ax-lbl">Preview with a sample patient</div><div class="ax-result ax-result-ro">' + fill(p.text, true) + '</div><div class="ax-help">' + esc(asksSentence(p.text)) + "</div></div></div>" +
       '<div class="ax-lbl">Use in</div><div class="wi"><span class="wi-t">Works in: <b>' + esc(useSummary(d)) + "</b></span></div>" +
       '<div class="ax-foot"><button class="ax-btn" data-hide>' + (p.hidden ? "Show in my list" : "Hide from my list") + "</button>" +
       '<div class="ax-dacts">' + (copy ? '<button class="ax-btn primary" data-opencopy>Open my copy</button>' : '<button class="ax-btn primary" data-copy>Make my own copy</button>') + "</div></div>";
@@ -400,7 +400,7 @@
     if (!d.text.trim()) { return err("Write the text this phrase puts in the note."); }
     var u = unknownPlaceholders(d.text);
     if (u.length) { $("#axErr").innerHTML = esc(u.join(", ") + " isn't a placeholder.") + " " + (data.isAdmin ? "Add it on the <b>Practice settings</b> tab, or fix the spelling." : "Fix the spelling, or ask your Dot Phrases admins to add it as practice info."); return; }
-    if (useIsEmpty(d)) { return err("Pick at least one place to use this phrase."); }
+    if (useIsEmpty(d)) { return err("Select at least one place to use this phrase."); }
     if (rxMessages(d).length) { err(""); $("#axRx").scrollIntoView({ block: "nearest" }); return; }
     var body = { code: d.code, text: d.text.trim(), use_in: d.use_in, rx_sig: !!d.rx.sig, rx_note_to_pharmacist: !!d.rx.note_to_pharmacist, scope: adTab === "mine" ? "personal" : "practice" };
     // One save at a time, so a double click can't create the same phrase twice.
@@ -448,13 +448,13 @@
   function customPlaceholdersHtml() {
     var keyOptions = function (current) {
       var keys = data.metadataKeys.slice(); if (current && keys.indexOf(current) < 0) { keys.unshift(current); }
-      return '<option value="">Pick a patient detail</option>' + keys.map(function (k) { return '<option value="' + esc(k) + '"' + (k === current ? " selected" : "") + ">" + esc(k) + "</option>"; }).join("");
+      return '<option value="">Select a patient detail</option>' + keys.map(function (k) { return '<option value="' + esc(k) + '"' + (k === current ? " selected" : "") + ">" + esc(k) + "</option>"; }).join("");
     };
     var rowsHtml = data.custom.map(function (c) {
       return '<tr><td><span class="tok">{' + esc(c.name) + '}</span></td><td><select class="ax-sel" data-ckey="' + esc(c.name) + '" aria-label="Patient detail for ' + esc(c.name) + '">' + keyOptions(c.key) + "</select></td>" +
         '<td class="used">' + c.used_in + " phrase" + (c.used_in === 1 ? "" : "s") + '</td><td><button class="ax-btn quiet" data-csave="' + esc(c.name) + '">Save</button><button class="ax-btn quiet" data-cdel="' + esc(c.name) + '">Remove</button></td></tr>';
     }).join("");
-    return '<section class="ax-sec"><h3>Custom patient placeholders</h3><p>Filled from a patient detail your practice or its plugins store on the patient (patient metadata), such as a program or care coordinator. Pick the detail each one reads from.</p>' +
+    return '<section class="ax-sec"><h3>Custom patient placeholders</h3><p>Filled from a patient detail your practice or its plugins store on the patient (patient metadata). Select the detail each one reads from.</p>' +
       '<table class="ax-tbl"><thead><tr><th style="width:30%">Name</th><th>Reads from</th><th style="width:100px">Used in</th><th style="width:140px"></th></tr></thead><tbody>' + rowsHtml +
       '<tr class="add"><td><input class="ax-in" id="axCName" placeholder="care_coordinator" aria-label="New placeholder name"></td><td><select class="ax-sel" id="axCKey" aria-label="Patient detail it reads from">' + keyOptions("") + "</select></td>" +
       '<td colspan="2"><button class="ax-btn" data-cadd>Add</button></td></tr></tbody></table>' +

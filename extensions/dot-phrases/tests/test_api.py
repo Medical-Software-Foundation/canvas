@@ -111,7 +111,7 @@ class TestCreatePhrase:
             ({"code": "fu2w", "text": ""}, "Write the text"),
             ({"code": "fu2w", "text": "Hi {frist_name}"}, "{frist_name} isn't a placeholder"),
             ({"code": "fu2w", "text": "x", "scope": "practice", "use_in": ["bogus"]}, "Use in has a command"),
-            ({"code": "fu2w", "text": "x", "scope": "practice", "use_in": []}, "Pick at least one place"),
+            ({"code": "fu2w", "text": "x", "scope": "practice", "use_in": []}, "Select at least one place"),
             ({"code": "gen", "text": "x" * 211, "use_in": [], "rx_note_to_pharmacist": True}, "over 210 characters"),
             ({"code": "sig", "text": "Take 1 tablet\ndaily", "use_in": [], "rx_sig": True}, "has a line break"),
         ],

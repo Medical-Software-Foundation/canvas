@@ -643,7 +643,7 @@
       if (!/^[a-z][a-z0-9]*$/.test(code) || !text) { return err("Enter a code that starts with a letter, and the text it inserts."); }
       var u = unknownPlaceholders(text); if (u.length) { return err("Unknown placeholder: " + u.join(", ") + "."); }
       var rx = { sig: draft.rx.sig, ntp: draft.rx.note_to_pharmacist };
-      if (useIsEmpty(draft)) { return err("Pick at least one place to use this phrase."); }
+      if (useIsEmpty(draft)) { return err("Select at least one place to use this phrase."); }
       if (s.errs.length) { err(""); $("#fRx").scrollIntoView({ block: "nearest" }); return; }
       var body = { code: code, text: text, use_in: draft.use_in, rx_sig: rx.sig, rx_note_to_pharmacist: rx.ntp, scope: "personal" };
       // One save at a time, so a double click can't create the same phrase twice.

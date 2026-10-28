@@ -268,7 +268,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         rx_sig = bool(body.get("rx_sig"))
         rx_ntp = bool(body.get("rx_note_to_pharmacist"))
         if use_in == [] and not rx_sig and not rx_ntp:
-            return None, "Pick at least one place to use this phrase."
+            return None, "Select at least one place to use this phrase."
         for field, on in (("sig", rx_sig), ("note_to_pharmacist", rx_ntp)):
             message = rx_message(RX_FIELDS[field][0], RX_FIELDS[field][1], text) if on else ""
             if message:
@@ -375,11 +375,11 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         body = self.request.json() or {}
         raw_ids = body.get("phrase_ids")
         if not isinstance(raw_ids, list) or not raw_ids:
-            return _error("Pick at least one phrase.")
+            return _error("Select at least one phrase.")
         try:
             wanted = {int(str(i)) for i in raw_ids}
         except (TypeError, ValueError):
-            return _error("Pick at least one phrase.")
+            return _error("Select at least one phrase.")
         # Checked against all practice phrases, so one this person also has a copy of can still be hidden.
         practice = set(Phrase.objects.filter(scope="practice", archived=False, dbid__in=sorted(wanted)).values_list("dbid", flat=True))
         ids = sorted(wanted & practice)
@@ -450,7 +450,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             phrase_id = int(str(body.get("phrase_id")))
         except (TypeError, ValueError):
-            return _error("Pick a phrase.")
+            return _error("Select a phrase.")
         phrase = next((p for p in usable_phrases(me).values() if p.dbid == phrase_id), None)
         if phrase is None:
             return _error("Phrase not found.", HTTPStatus.NOT_FOUND)
@@ -482,7 +482,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             ]
 
         if target not in INSERTABLE:
-            return _error("Pick where to add it.")
+            return _error("Select where to add it.")
         if phrase.use_in is not None and target not in phrase.use_in:
             return _error(f".{phrase.code} isn't set up for {COMMAND_LABELS[target]}.")
         filled = fill(phrase.text, values, answers)
@@ -599,7 +599,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
         if name in practice_values():
             return _error(f"{{{name}}} is already practice info.")
         if not key or len(key) > 256:
-            return _error("Pick the patient detail it reads from.")
+            return _error("Select the patient detail it reads from.")
         custom = custom_placeholders()
         custom[name] = key
         set_setting("custom_placeholders", custom)
