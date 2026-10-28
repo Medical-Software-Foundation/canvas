@@ -335,7 +335,8 @@ def _sequestration_transactions(
     """Inferred CO-253 write-off for one Medicare-paid service line, if any.
 
     Skipped when the payer reported a 253 itself, or when the inferred amount
-    would exceed what's left of the allowed amount after Medicare's payment.
+    would exceed what's left of the allowed amount after Medicare's payment and
+    the patient responsibility Candid reports.
     """
     if any(
         adj.get("adjustment_reason_code") == SEQUESTRATION_REASON
@@ -344,8 +345,11 @@ def _sequestration_transactions(
         return []
     paid_cents = sl.get("primary_paid_amount_cents") or 0
     allowed_cents = sl.get("allowed_amount_cents") or 0
+    patient_cents = sum(
+        sl.get(f) or 0 for f in ("deductible_cents", "coinsurance_cents", "copay_cents")
+    )
     seq_cents = _sequestration_cents(paid_cents) if paid_cents > 0 else 0
-    if not seq_cents or seq_cents > allowed_cents - paid_cents:
+    if not seq_cents or seq_cents > allowed_cents - paid_cents - patient_cents:
         return []
     return [
         LineItemTransaction(

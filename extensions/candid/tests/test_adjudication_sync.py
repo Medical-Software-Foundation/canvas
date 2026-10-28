@@ -1636,3 +1636,20 @@ def test_sync_posts_full_amount_when_no_allocation_names_a_claim() -> None:
 
     txns = _patient_postings(ce)[0].kwargs["line_item_transactions"]
     assert [t.payment for t in txns] == [Decimal("30.00")]
+
+
+def test_sequestration_counts_reported_patient_responsibility() -> None:
+    """Allowed fully explained by payment + PR (Mock Candid's standard remit): no CO-253."""
+    explained = _medicare_sync(
+        [_candid_service_line("90836", 10000, primary_paid_amount_cents=6000, allowed_amount_cents=8000,
+                              deductible_cents=1000, coinsurance_cents=1000)],
+        SEQ_SECRETS,
+    )
+    leftover = _medicare_sync(
+        [_candid_service_line("90836", 30000, primary_paid_amount_cents=6043, allowed_amount_cents=7707,
+                              coinsurance_cents=1541)],
+        SEQ_SECRETS,
+    )
+
+    assert _adjustments(explained, "CO-253") == []
+    assert [t.adjustment for t in _adjustments(leftover, "CO-253")] == [Decimal("1.23")]
