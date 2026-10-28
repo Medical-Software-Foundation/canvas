@@ -1308,7 +1308,7 @@ def test_sync_continues_when_patient_payments_fetch_fails() -> None:
 
 
 def _patient_payment_sync(payments: list[dict], echo_exists: bool = False):
-    """Run a full sync whose Candid claim returns ``payments``; return (ce, BulkPatientPosting mock)."""
+    """Run a full sync whose Candid claim returns ``payments``; return (ce, PaymentCollection mock)."""
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
     claim = _fake_claim(
         [li],
@@ -1324,11 +1324,11 @@ def _patient_payment_sync(payments: list[dict], echo_exists: bool = False):
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.BulkPatientPosting") as MBPP,
+        patch("candid.adjudication_sync.PaymentCollection") as MBPP,
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = payments
-        MBPP.objects.filter.return_value.exists.return_value = echo_exists
+        MBPP.objects.filter.return_value.exclude.return_value.exists.return_value = echo_exists
         sync_claim_adjudications(claim, MOCK_SECRETS)
         return MCE.return_value, MBPP
 
@@ -1380,11 +1380,21 @@ def test_sync_skips_untagged_payment_matching_a_canvas_collection() -> None:
     )
 
     assert _patient_postings(ce) == []
-    kwargs = MBPP.objects.filter.call_args.kwargs
-    assert kwargs["payer__id"] == "patient-key-1"
-    assert kwargs["total_paid"] == Decimal("160.00")
+    call = MBPP.objects.filter.call_args
+    (patient_q,) = call.args
+    # Matches the collection's payer (patient billing) or the patient on a
+    # claim it posted to (the claim page, other plugins' post_payment).
+    assert ("bulkpatientposting__payer__id", "patient-key-1") in patient_q.children
+    assert ("postings__claim__note__patient__id", "patient-key-1") in patient_q.children
+    assert patient_q.connector == "OR"
+    kwargs = call.kwargs
+    assert kwargs["total_collected"] == Decimal("160.00")
     assert kwargs["created__gte"].isoformat() == "2026-09-01T14:16:11+00:00"
     assert kwargs["created__lte"].isoformat() == "2026-09-01T14:20:11+00:00"
+    # This plugin's own Candid imports are not Canvas collections.
+    MBPP.objects.filter.return_value.exclude.assert_called_once_with(
+        description__startswith="Candid patient payment"
+    )
 
 
 def test_sync_posts_only_this_claims_share_of_a_split_payment() -> None:
@@ -1659,7 +1669,7 @@ def test_sequestration_counts_reported_patient_responsibility() -> None:
 
 
 def test_sync_skips_echo_lookup_when_nothing_is_allocated_here() -> None:
-    """No share on this claim: no BulkPatientPosting query at all."""
+    """No share on this claim: no PaymentCollection query at all."""
     ce, MBPP = _patient_payment_sync(
         [
             {
@@ -1702,11 +1712,11 @@ def test_sync_posts_full_share_of_payment_split_over_overflow_encounters() -> No
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.BulkPatientPosting") as MBPP,
+        patch("candid.adjudication_sync.PaymentCollection") as MBPP,
     ):
         MC.from_secrets.return_value.get_encounter.side_effect = [enc1, enc2]
         MC.from_secrets.return_value.get_patient_payments.return_value = [payment]
-        MBPP.objects.filter.return_value.exists.return_value = False
+        MBPP.objects.filter.return_value.exclude.return_value.exists.return_value = False
         sync_claim_adjudications(claim, MOCK_SECRETS)
         postings = _patient_postings(MCE.return_value)
 
@@ -1810,7 +1820,7 @@ def _run_patient_payment_only_sync(
     with (
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
-        patch("candid.adjudication_sync.BulkPatientPosting") as MBPP,
+        patch("candid.adjudication_sync.PaymentCollection") as MBPP,
         patch("candid.adjudication_sync.notify_claim_updated") as mock_notify,
     ):
         client = MC.from_secrets.return_value
@@ -1822,7 +1832,7 @@ def _run_patient_payment_only_sync(
             client.get_patient_payments.side_effect = payments
         else:
             client.get_patient_payments.return_value = payments
-        MBPP.objects.filter.return_value.exists.return_value = False
+        MBPP.objects.filter.return_value.exclude.return_value.exists.return_value = False
         effects = sync_patient_payments(claim, MOCK_SECRETS)
         return effects, MCE.return_value, client, mock_notify
 
@@ -1925,3 +1935,31 @@ def test_patient_payment_sync_tolerates_payments_fetch_failure() -> None:
     )
     assert effects == []
     ce.post_payment.assert_not_called()
+
+
+def test_canvas_collection_lookup_resolves_against_sdk_models() -> None:
+    """The echo lookup's field paths exist on the SDK models (no mocked queryset)."""
+    from django.db.models import QuerySet
+
+    from candid.adjudication_sync import _matches_canvas_collection
+
+    queries: list[str] = []
+
+    def fake_exists(qs: QuerySet) -> bool:
+        queries.append(str(qs.query))
+        return True
+
+    with patch.object(QuerySet, "exists", fake_exists):
+        assert _matches_canvas_collection(
+            {
+                "patient_external_id": "canvas:patient-key-1",
+                "payment_timestamp": "2026-09-01T14:18:11Z",
+                "amount_cents": 16000,
+            }
+        )
+
+    (sql,) = queries
+    assert "paymentcollection" in sql
+    assert "bulkpatientposting" in sql
+    assert "baseposting" in sql
+    assert "Candid patient payment" in sql

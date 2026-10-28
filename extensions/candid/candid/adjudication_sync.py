@@ -16,8 +16,9 @@ from typing import Any
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect, LineItemTransaction, PaymentMethod
-from canvas_sdk.v1.data import BulkPatientPosting, Claim
+from canvas_sdk.v1.data import Claim, PaymentCollection
 from canvas_sdk.v1.data.claim import ClaimQueues
+from django.db.models import Q
 from logger import log
 
 from candid.api.broadcast import notify_claim_updated
@@ -533,21 +534,31 @@ def _is_tagged_canvas_payment(payment: dict) -> bool:
 def _matches_canvas_collection(payment: dict) -> bool:
     """True if an untagged payment matches one collected in Canvas.
 
-    Payments reported before the tag existed carry no tag, so match a
-    Canvas-collected payment for the same patient and total within
-    ``ECHO_WINDOW`` of the Candid payment's timestamp.
+    Payments reported before the tag existed carry no tag, so match a Canvas
+    ``PaymentCollection`` for the same patient and total within
+    ``ECHO_WINDOW`` of the Candid payment's timestamp. Every path that reports
+    a payment to Candid (patient billing, the claim page, and plugins'
+    ``post_payment``) creates a ``PaymentCollection``; only patient billing
+    also creates a ``BulkPatientPosting``. The patient is the
+    collection's payer, or the patient on a claim it posted to. Collections
+    this plugin created for its own Candid imports are excluded.
     """
     patient_key = (payment.get("patient_external_id") or "").removeprefix("canvas:")
     paid_at = _parse_timestamp(payment.get("payment_timestamp"))
     total = _cents_to_dollars(payment.get("amount_cents"))
     if not (patient_key and paid_at and total):
         return False
-    return BulkPatientPosting.objects.filter(
-        payer__id=patient_key,
-        total_paid=total,
-        created__gte=paid_at - ECHO_WINDOW,
-        created__lte=paid_at + ECHO_WINDOW,
-    ).exists()
+    return (
+        PaymentCollection.objects.filter(
+            Q(bulkpatientposting__payer__id=patient_key)
+            | Q(postings__claim__note__patient__id=patient_key),
+            total_collected=total,
+            created__gte=paid_at - ECHO_WINDOW,
+            created__lte=paid_at + ECHO_WINDOW,
+        )
+        .exclude(description__startswith=PATIENT_PAYMENT_DESC_PREFIX.strip())
+        .exists()
+    )
 
 
 def _post_patient_payments(
