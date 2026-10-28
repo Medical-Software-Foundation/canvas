@@ -160,14 +160,14 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
             # tag keeps the sync from importing it back into Canvas.
             log.warning(
                 f"Candid: no response reporting patient payment for patient "
-                f"{patient_id}: {type(exc).__name__}"
+                f"{patient_id}: {exc.__class__.__name__}"
             )
             return [
                 AddTask(
                     patient_id=patient_id,
                     title=(
                         "Candid: Payment Notification Unconfirmed — no response "
-                        f"from Candid ({type(exc).__name__}). Check Candid before "
+                        f"from Candid ({exc.__class__.__name__}). Check Candid before "
                         "re-entering it there."
                     ),
                     labels=["Candid Integration"],

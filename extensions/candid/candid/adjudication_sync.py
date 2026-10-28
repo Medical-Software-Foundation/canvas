@@ -11,7 +11,7 @@ in the same effect batch as the postings they cover.
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 
 from canvas_sdk.effects import Effect
@@ -217,10 +217,12 @@ def _has_delta(
 
 
 def _sequestration_cents(paid_cents: int) -> int:
-    """Medicare's 2% sequestration on a line it paid ``paid_cents`` on."""
-    return int(
-        (Decimal(paid_cents) * 2 / 98).quantize(Decimal(1), rounding=ROUND_HALF_UP)
-    )
+    """Medicare's 2% sequestration on a line it paid ``paid_cents`` on.
+
+    2/98 of the payment, rounded half up, in whole-number math: the plugin
+    sandbox doesn't allow importing decimal's rounding constants.
+    """
+    return (paid_cents * 2 + 49) // 98
 
 
 def _build_insurance_transactions(
