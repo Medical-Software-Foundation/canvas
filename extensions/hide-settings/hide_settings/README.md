@@ -79,4 +79,10 @@ Which roles keep Settings is chosen on the **Settings Access** page, not in a va
 
 ## Screenshots
 
-<!-- TODO before merge: add a screenshot of the Settings Access page and of the menu without Settings. -->
+The **Settings Access** page, with one role allowed:
+
+<img src="screenshots/settings-access-page.png" alt="Settings Access page listing staff roles by domain, with the Test role checked" width="720">
+
+The main menu for a staff member who holds an allowed role (left) and one who doesn't (right):
+
+<img src="screenshots/menu-with-settings.png" alt="Main menu with the Settings item" width="360"> <img src="screenshots/menu-without-settings.png" alt="Main menu without the Settings item" width="360">
