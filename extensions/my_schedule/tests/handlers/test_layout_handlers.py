@@ -82,6 +82,30 @@ class TestHideMenu:
         expected = {i.value for i in ProviderMenuConfiguration.Items} - {"schedule"}
         assert set(items) == expected
 
+    def test_hide_menu_items_also_hidden(self) -> None:
+        secrets = {"HIDE_MENU_ITEMS": " settings, Help Center ,REVENUE,nonsense,"}
+        with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=MD):
+            effects = _handler(
+                HideNativeScheduleMenu, actor="7", secrets=secrets
+            ).compute()
+        items = json.loads(effects[0].payload)["data"]["items"]
+        expected = {i.value for i in ProviderMenuConfiguration.Items} - {
+            "schedule",
+            "settings",
+            "help_center",
+            "revenue",
+        }
+        assert set(items) == expected
+
+    def test_hide_menu_items_ignored_for_unrestricted(self) -> None:
+        with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=CC):
+            handler = _handler(
+                HideNativeScheduleMenu,
+                actor="8",
+                secrets={"HIDE_MENU_ITEMS": "settings"},
+            )
+            assert handler.compute() == []
+
     def test_unrestricted_staff_unchanged(self) -> None:
         with patch.object(hide_native_schedule, "staff_by_user_dbid", return_value=CC):
             handler = _handler(HideNativeScheduleMenu, actor="8")

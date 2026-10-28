@@ -17,7 +17,7 @@ GlobalSection = PanelConfiguration.PanelGlobalSection
 
 
 class HideNativeScheduleMenu(BaseHandler):
-    """Every provider menu item except Schedule, for restricted staff."""
+    """Every provider menu item except Schedule (and HIDE_MENU_ITEMS), for restricted staff."""
 
     RESPONDS_TO = EventType.Name(EventType.GET_PROVIDER_MENU_CONFIGURATION)
 
@@ -26,8 +26,24 @@ class HideNativeScheduleMenu(BaseHandler):
         staff = staff_by_user_dbid(self.event.actor.id)
         if not is_restricted(staff, self.secrets):
             return []
-        items = [item for item in Items if item is not Items.SCHEDULE]
+        hidden = {Items.SCHEDULE} | extra_hidden_items(self.secrets)
+        items = [item for item in Items if item not in hidden]
         return [ProviderMenuConfiguration(items=items).apply()]
+
+
+def extra_hidden_items(secrets: dict) -> set:
+    """Menu items named in HIDE_MENU_ITEMS (by name or value, any case).
+
+    Lets the answer match another plugin that also sets the provider menu, since
+    Canvas uses only one plugin's list. Unknown names are ignored.
+    """
+    wanted = {
+        part.strip().lower().replace(" ", "_")
+        for part in (secrets.get("HIDE_MENU_ITEMS") or "").split(",")
+    }
+    return {
+        item for item in Items if item.name.lower() in wanted or item.value in wanted
+    }
 
 
 class HideAppointmentsPanelFilter(BaseHandler):

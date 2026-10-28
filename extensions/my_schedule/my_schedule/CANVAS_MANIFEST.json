@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.240.0",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.2.1",
     "name": "my_schedule",
     "description": "Opens Canvas on a My Schedule page for the roles listed in RESTRICTED_ROLES (for example MD, NP, PA), showing only the logged-in clinician's own appointments, and hides the built-in Schedule for those roles.",
     "components": {
@@ -71,6 +71,7 @@
         {"name": "RESTRICTED_ROLES"},
         {"name": "EXEMPT_STAFF_IDS"},
         {"name": "BOOK_ONLY_SELF"},
+        {"name": "HIDE_MENU_ITEMS"},
         {"name": "ALLOW_STATUS_UPDATES"},
         {"name": "ALLOW_CANCEL"},
         {"name": "ALLOW_NO_SHOW"},

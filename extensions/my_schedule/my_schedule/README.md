@@ -32,6 +32,8 @@ This changes what restricted staff see by default. **It is not access control.**
   link to it.
 - A patient's chart still lists that patient's visits with any provider.
 - Staff names still appear elsewhere in Canvas (task assignees, note providers).
+- Other plugins' own schedule views (for example a scribe app's day list) are
+  not hidden.
 
 Uninstalling returns everyone to the normal Schedule, because Canvas works out
 the homepage, menu and panel on each page load.
@@ -45,6 +47,7 @@ All settings are optional. Blank means the default.
 | `RESTRICTED_ROLES` | none | Comma-separated role codes, for example `MD,NP,PA`. Staff with **any** of these roles are restricted. **Blank restricts nobody**, so installing changes nothing until you set it. |
 | `EXEMPT_STAFF_IDS` | none | Comma-separated staff IDs that are never restricted, even with a listed role (for example a medical director who manages the schedule). |
 | `BOOK_ONLY_SELF` | `yes` | Restricted staff can only pick themselves as the provider in the booking window. Set `no` to leave the list alone. |
+| `HIDE_MENU_ITEMS` | blank | Extra provider menu items to hide for restricted staff, comma-separated by name (for example `SETTINGS`). Use it to match another plugin that also sets the menu. |
 | `ALLOW_STATUS_UPDATES` | `no` | Show a status picker on each appointment. |
 | `ALLOW_CANCEL` | `no` | Show a Cancel button on each appointment. |
 | `ALLOW_NO_SHOW` | `no` | Show a No-show button on each appointment. |
@@ -72,3 +75,7 @@ an instance. Check for `GET_HOMEPAGE_CONFIGURATION`,
 `GET_PROVIDER_MENU_CONFIGURATION`, `PANEL_SECTIONS_CONFIGURATION` and
 `APPOINTMENT__FORM__PROVIDERS__POST_SEARCH` handlers in other installed plugins
 (for example `schedule_view`) before installing.
+
+If another plugin also sets the provider menu, Canvas uses only one plugin's
+list. Set `HIDE_MENU_ITEMS` so this plugin's list matches the other one (for
+example, if it hides Settings for non-admins, set `HIDE_MENU_ITEMS=SETTINGS`), then check the menu as a restricted user.
