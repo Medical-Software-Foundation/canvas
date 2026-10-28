@@ -110,7 +110,7 @@ When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSE
 
 Claims processed through Candid display a status banner:
 - **After submission:** "Candid: Submitted 2026-04-24 (2 encounters) | Awaiting response"
-- **After sync:** "Candid: Era Received | Submitted 2026-04-24 | Last synced 2026-04-28"
+- **After sync:** "Candid status: Era Received | Submitted 2026-04-24 | Last synced 2026-04-28"
 - Denied/rejected claims show a **warning** banner instead of info
 
 ### Claim Timeline Application

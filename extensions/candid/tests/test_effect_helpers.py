@@ -69,6 +69,18 @@ def test_sync_banner_includes_status_and_dates_in_narrative() -> None:
         assert "04-28-2026" in narrative
 
 
+def test_sync_banner_labels_candid_status_so_it_isnt_read_as_the_queue() -> None:
+    """PLUGIN-453: Candid's "rejected" status reads as Candid's, not the Canvas queue's."""
+    with patch("candid.effect_helpers.ClaimEffect") as MCE:
+        sync_banner(
+            claim_id="claim-1",
+            claim_status="rejected",
+            last_sync_at="2026-04-28T12:00:00+00:00",
+        )
+    narrative = MCE.return_value.add_banner.call_args.kwargs["narrative"]
+    assert narrative == "Candid status: Rejected | Last synced 04-28-2026"
+
+
 # ---------------------------------------------------------------------------
 # active_coverages_ordered
 # ---------------------------------------------------------------------------
@@ -246,7 +258,7 @@ def test_banner_narrative_is_truncated() -> None:
         sync_banner("claim-1", "x" * 200, "2026-04-28")
     narrative = MCE.return_value.add_banner.call_args.kwargs["narrative"]
     assert len(narrative) == BANNER_NARRATIVE_MAX
-    assert narrative.startswith("Candid: Xxx")
+    assert narrative.startswith("Candid status: Xxx")
 
 
 # ---------------------------------------------------------------------------

@@ -22,8 +22,6 @@ def _fake_claim() -> MagicMock:
     claim.postings.active.return_value.filter.return_value = []
     claim.banner_alerts.filter.return_value.first.return_value = None
     claim.comments.filter.return_value.order_by.return_value = []
-    claim.current_queue.name = "FiledAwaitingResponse"
-    claim.current_queue.display_name = "Filed Awaiting Response"
     return claim
 
 
@@ -92,8 +90,6 @@ def test_get_returns_sync_history_from_metadata():
     assert resp.status_code == 200
     assert body["sync_history"] == history
     assert body["candid_claim_status"] == "paid"
-    # The customer's queue label, not the internal queue code
-    assert body["current_queue"] == "Filed Awaiting Response"
 
 
 def test_get_sync_history_defaults_to_empty_when_missing():
@@ -152,12 +148,11 @@ def test_post_triggers_sync_and_reports_effect_count():
     assert body == {"status": "synced", "effects_count": 2}
 
 
-def test_get_returns_no_queue_when_claim_has_none():
-    claim = _fake_claim()
-    claim.current_queue = None
-    body, resp = _run_get({"claim_id": "claim-1"}, {}, claim)
+def test_get_does_not_return_current_queue():
+    """The panel never showed the queue; the claim page's queue list owns that label."""
+    body, resp = _run_get({"claim_id": "claim-1"}, {}, _fake_claim())
     assert resp.status_code == 200
-    assert body["current_queue"] is None
+    assert "current_queue" not in body
 
 
 def test_get_joins_posting_info_onto_synced_ids():
@@ -214,7 +209,6 @@ def test_get_joins_posting_info_onto_synced_ids():
         {"comment": "Candid: synced", "created": "2026-02-04T00:00:00+00:00"},
         {"comment": "Candid: no date", "created": None},
     ]
-    assert body["current_queue"] == "Filed Awaiting Response"
 
 
 def test_post_returns_404_when_claim_missing():

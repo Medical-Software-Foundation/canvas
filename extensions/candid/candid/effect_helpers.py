@@ -184,7 +184,9 @@ def sync_banner(
 ) -> Effect:
     status_display = claim_status.replace("_", " ").title()
 
-    parts = [f"Candid: {status_display}"]
+    # "Candid status:" so a Candid claim status such as "Rejected" isn't read
+    # as the claim's Canvas queue, which a customer may have renamed.
+    parts = [f"Candid status: {status_display}"]
     if submitted_at:
         parts.append(f"Submitted {format_date_display(submitted_at)}")
     parts.append(f"Last synced {format_date_display(last_sync_at)}")
