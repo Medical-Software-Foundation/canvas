@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from dot_phrases.catalog import DEFAULT_USE_IN, NOTE_COMMAND_KEYS
 from dot_phrases.handlers.api import DotPhrasesAPI
 
 MODULE = "dot_phrases.handlers.api"
@@ -72,9 +73,17 @@ class TestCreatePhrase:
         response(make_api(body={"code": "fu2w", "text": "x", "use_in": ["plan"]}).create_phrase())
         assert db.phrase_model.objects.create.call_args.kwargs["use_in"] == ["plan"]
 
-    def test_no_use_in_means_every_note_command(self, db: Any) -> None:
+    def test_no_use_in_means_the_default_commands(self, db: Any) -> None:
         response(make_api(body={"code": "fu2w", "text": "x"}).create_phrase())
         assert db.phrase_model.objects.create.call_args.kwargs["use_in"] is None
+
+    def test_exactly_the_default_commands_is_saved_as_the_default(self, db: Any) -> None:
+        response(make_api(body={"code": "fu2w", "text": "x", "use_in": sorted(DEFAULT_USE_IN)}).create_phrase())
+        assert db.phrase_model.objects.create.call_args.kwargs["use_in"] is None
+
+    def test_every_note_command_including_reviews_is_saved_as_a_list(self, db: Any) -> None:
+        response(make_api(body={"code": "fu2w", "text": "x", "use_in": list(NOTE_COMMAND_KEYS)}).create_phrase())
+        assert db.phrase_model.objects.create.call_args.kwargs["use_in"] == list(NOTE_COMMAND_KEYS)
 
     def test_personal_phrase_can_be_prescriptions_only(self, db: Any) -> None:
         response(make_api(body={"code": "taper", "text": "Take 1 tablet", "use_in": [], "rx_sig": True}).create_phrase())

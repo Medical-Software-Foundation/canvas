@@ -676,9 +676,8 @@
   }
   // Practice phrases are read-only here; admins edit them in the Dot Phrases app.
   function openViewer(p) {
-    var where = [p.use_in === null ? "All commands" : p.use_in.map(function (k) { return state.labels[k] || k; }).join(", ")];
-    if (p.rx_sig) { where.push("Sig"); }
-    if (p.rx_note_to_pharmacist) { where.push("Note to pharmacist"); }
+    var summary = useIn.useSummary({ use_in: p.use_in, rx: { sig: p.rx_sig, note_to_pharmacist: p.rx_note_to_pharmacist } });
+    var where = [summary.charAt(0).toUpperCase() + summary.slice(1)];
     openEditScreen("Practice phrase", "manage"); editDirty = null;
     $("#editorSlot").innerHTML = '<div class="ed"><label>Code</label><div class="ro">.' + esc(p.code) + "</div>" +
       '<label>Text</label><div class="ro">' + esc(p.text) + "</div>" +

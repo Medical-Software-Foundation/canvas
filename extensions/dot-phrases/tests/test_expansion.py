@@ -3,6 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
+from dot_phrases.catalog import DEFAULT_USE_IN, NOTE_COMMAND_KEYS, works_in
 from dot_phrases.expansion import expand_note_field, expand_rx_field
 
 
@@ -42,8 +45,19 @@ class TestNoteFields:
         assert result.text == ".allergylong"
 
     def test_review_commands_expand_phrases_with_fill_ins_too(self) -> None:
-        result = expand_note_field(".kneehpi .fallprec", {**PHRASES, "kneehpi": phrase(2, "kneehpi", "Side {pick s: a | b}")}, VALUES, "labreview")
+        phrases = {
+            "kneehpi": phrase(2, "kneehpi", "Side {pick s: a | b}", use_in=["labreview"]),
+            "fallprec": phrase(3, "fallprec", "Discussed fall precautions with {first_name}.", use_in=["plan", "labreview"]),
+        }
+        result = expand_note_field(".kneehpi .fallprec", phrases, VALUES, "labreview")
         assert result.text == "Side [a / b] Discussed fall precautions with Jane."
+
+    @pytest.mark.parametrize("review", ["labreview", "imgreview", "refreview", "docreview"])
+    def test_default_phrases_stay_as_typed_in_review_commands(self, review: str) -> None:
+        assert expand_note_field(".fallprec", PHRASES, VALUES, review).text == ".fallprec"
+
+    def test_default_phrases_expand_in_other_note_commands(self) -> None:
+        assert expand_note_field(".fallprec", PHRASES, VALUES, "goal").text == "Discussed fall precautions with Jane."
 
     def test_unknown_codes_stay(self) -> None:
         assert expand_note_field("See .typo", PHRASES, VALUES, "plan").text == "See .typo"
@@ -66,3 +80,12 @@ class TestPrescriptionFields:
 
     def test_half_ml_sig_is_left_alone(self) -> None:
         assert expand_rx_field("Take .5 mL daily", PHRASES, "sig").text == "Take .5 mL daily"
+
+
+class TestDefaultUseIn:
+    def test_default_is_every_note_command_except_the_reviews(self) -> None:
+        assert set(NOTE_COMMAND_KEYS) - DEFAULT_USE_IN == {"labreview", "imgreview", "refreview", "docreview"}
+
+    def test_works_in_follows_the_default_or_the_list(self) -> None:
+        assert works_in(None, "plan") and not works_in(None, "labreview")
+        assert works_in(["labreview"], "labreview") and not works_in(["labreview"], "plan")

@@ -12,7 +12,7 @@ from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Command, Staff
 from logger import log
 
-from dot_phrases.catalog import ALL_COMMANDS, COMMAND_LABELS, RX_FIELDS, RX_KEYS, CommandSpec, spec_for_event
+from dot_phrases.catalog import ALL_COMMANDS, COMMAND_LABELS, RX_FIELDS, RX_KEYS, CommandSpec, spec_for_event, works_in
 from dot_phrases.expansion import combined_length, combined_rx_length, expand_note_field, expand_rx_field, limit_for
 from dot_phrases.library import phrase_fits_rx, placeholder_values, record_use, usable_phrases
 from dot_phrases.text import CODE_PATTERN, codes_in, fill, placeholder_names, rx_field_name, rx_issue
@@ -206,7 +206,7 @@ class BlockUnfinished(BaseHandler):
                 return f"Together, the phrases in the {name} are over {field_max:,} characters. Use fewer, or type the text instead."
             return f"Dot phrase .{code} is still loading. If it doesn't load, retype the code."
         command_label = COMMAND_LABELS.get(spec.key, spec.label)
-        if phrase.use_in is not None and spec.key not in phrase.use_in:
+        if not works_in(phrase.use_in, spec.key):
             return f".{code} isn't set up for {command_label}."
         limit = limit_for(spec.key)
         if limit is not None:

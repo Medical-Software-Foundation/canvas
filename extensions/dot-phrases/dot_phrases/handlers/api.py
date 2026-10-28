@@ -25,12 +25,14 @@ from django.db.models import Q
 
 from dot_phrases.catalog import (
     COMMAND_LABELS,
+    DEFAULT_USE_IN,
     FIELD_LIMITS,
     INSERT_FIELD,
     INSERTABLE,
     NOTE_COMMAND_KEYS,
     RX_FIELDS,
     RX_SCHEMA_KEYS,
+    works_in,
 )
 from dot_phrases.handlers.note_events import leftovers_key
 from dot_phrases.handlers.panel_button import EDITABLE_NOTE_STATES
@@ -265,6 +267,8 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
             if not isinstance(use_in, list) or any(k not in COMMAND_LABELS for k in use_in):
                 return None, "Use in has a command this plugin doesn't work in."
             use_in = [k for k in NOTE_COMMAND_KEYS if k in use_in]
+            if set(use_in) == DEFAULT_USE_IN:
+                use_in = None
         rx_sig = bool(body.get("rx_sig"))
         rx_ntp = bool(body.get("rx_note_to_pharmacist"))
         if use_in == [] and not rx_sig and not rx_ntp:
@@ -483,7 +487,7 @@ class DotPhrasesAPI(StaffSessionAuthMixin, SimpleAPI):
 
         if target not in INSERTABLE:
             return _error("Select where to add it.")
-        if phrase.use_in is not None and target not in phrase.use_in:
+        if not works_in(phrase.use_in, target):
             return _error(f".{phrase.code} isn't set up for {COMMAND_LABELS[target]}.")
         filled = fill(phrase.text, values, answers)
         limit = FIELD_LIMITS.get(target)

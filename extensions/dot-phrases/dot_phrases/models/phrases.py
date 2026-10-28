@@ -25,7 +25,8 @@ class Phrase(CustomModel):
     members of the ADMIN_TEAM team change it). A personal phrase with the same code as a
     practice phrase is used instead of it, for that provider only.
 
-    use_in is None for "all commands", or a list of command keys from catalog.NOTE_COMMANDS.
+    use_in is None for every note command except the review commands (catalog.DEFAULT_USE_IN), or a
+    list of command keys from catalog.NOTE_COMMANDS.
     Prescription fields are opt-in through rx_sig and rx_note_to_pharmacist, and are never
     included in "all commands".
     """

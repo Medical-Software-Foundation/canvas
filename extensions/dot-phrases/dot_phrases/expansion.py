@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, NamedTuple
 
-from dot_phrases.catalog import FIELD_LIMITS, RX_FIELDS
+from dot_phrases.catalog import FIELD_LIMITS, RX_FIELDS, works_in
 from dot_phrases.library import phrase_fits_rx
 from dot_phrases.text import CODE_PATTERN, fill, rx_problems
 
@@ -18,8 +18,7 @@ class Expanded(NamedTuple):
 
 
 def _allowed_in(phrase: Any, command_key: str) -> bool:
-    use_in = phrase.use_in
-    return use_in is None or command_key in use_in
+    return works_in(phrase.use_in, command_key)
 
 
 def expand_note_field(
@@ -32,8 +31,8 @@ def expand_note_field(
 
     A code stays as typed when the phrase isn't set up for this command, or when the filled text is
     too long for the field. The validation handler then explains why it stayed. Fill-ins expand
-    everywhere the phrase is set up for, including the review commands, which can't block recording;
-    an admin who doesn't want that leaves the review commands out of the phrase's commands.
+    everywhere the phrase is set up for. The review commands, which can't block recording, are
+    left out unless the phrase lists them.
     """
     used: list[int] = []
     leftovers: list[str] = []

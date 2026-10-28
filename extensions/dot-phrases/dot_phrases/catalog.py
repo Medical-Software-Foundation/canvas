@@ -121,6 +121,14 @@ ALL_COMMANDS: tuple[CommandSpec, ...] = NOTE_COMMANDS + RX_COMMANDS
 RX_KEYS = frozenset(spec.key for spec in RX_COMMANDS)
 NOTE_COMMAND_KEYS: tuple[str, ...] = tuple(spec.key for spec in NOTE_COMMANDS)
 COMMAND_LABELS: dict[str, str] = {spec.key: spec.label for spec in NOTE_COMMANDS}
+# A phrase with use_in None works in every note command except the review commands, which can't
+# block recording when placeholders are left incomplete.
+DEFAULT_USE_IN = frozenset(spec.key for spec in NOTE_COMMANDS if spec.validates)
+
+
+def works_in(use_in: list[str] | None, command_key: str) -> bool:
+    """Whether a phrase with this use_in is set up for this note command."""
+    return command_key in DEFAULT_USE_IN if use_in is None else command_key in use_in
 
 # The chart panel can add these as a new command in the note.
 INSERTABLE: dict[str, Any] = {

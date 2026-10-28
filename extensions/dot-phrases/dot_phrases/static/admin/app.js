@@ -327,7 +327,7 @@
     $("#axResult").innerHTML = d.text ? fill(d.text, true) : '<span style="color:#8ea8b5">Start writing on the left.</span>';
     $("#axAsks").textContent = d.text ? asksSentence(d.text) : "";
     useSync($("#axUseBlock"), d, d.text);
-    var len = fill(d.text, false).length, keys = d.use_in === null ? Object.keys(data.limits) : d.use_in.filter(function (k) { return data.limits[k]; });
+    var len = fill(d.text, false).length, keys = (d.use_in === null ? useIn.defaultKeys : d.use_in).filter(function (k) { return data.limits[k]; });
     var over = keys.filter(function (k) { return len > data.limits[k]; });
     $("#axLim").textContent = over.length ? "Too long for " + over.map(function (k) { return data.labels[k] + " (" + data.limits[k] + " characters)"; }).join(" and ") + ", so it won't expand there." : "";
     ["sig", "note_to_pharmacist"].forEach(function (k) {
