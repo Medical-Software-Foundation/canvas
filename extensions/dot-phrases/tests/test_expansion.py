@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -83,8 +85,19 @@ class TestPrescriptionFields:
 
 
 class TestDefaultUseIn:
-    def test_default_is_every_note_command_except_the_reviews(self) -> None:
-        assert set(NOTE_COMMAND_KEYS) - DEFAULT_USE_IN == {"labreview", "imgreview", "refreview", "docreview"}
+    def test_default_leaves_out_orders_referrals_and_reviews(self) -> None:
+        off = {"laborder", "imaging", "refer", "labreview", "imgreview", "refreview", "docreview"}
+        assert set(NOTE_COMMAND_KEYS) - DEFAULT_USE_IN == off
+
+    def test_checklist_default_matches_the_server_default(self) -> None:
+        # The Use in checklist starts with USE_GROUPS_IN checked; it has to match DEFAULT_USE_IN.
+        script = (Path(__file__).parent.parent / "dot_phrases/static/shared/use_in.js").read_text()
+        block = script[script.index("var USE_GROUPS_IN") : script.index("var USE_GROUPS_OUT")]
+        assert set(re.findall(r'"([a-z]+)"', block)) - {"Visit", "Conditions", "Medications", "Allergies", "History", "Goals"} == DEFAULT_USE_IN
+
+    def test_default_phrases_stay_as_typed_in_orders(self) -> None:
+        for key in ("laborder", "imaging", "refer"):
+            assert expand_note_field(".fallprec", PHRASES, VALUES, key).text == ".fallprec"
 
     def test_works_in_follows_the_default_or_the_list(self) -> None:
         assert works_in(None, "plan") and not works_in(None, "labreview")

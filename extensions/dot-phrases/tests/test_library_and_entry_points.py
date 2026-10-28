@@ -8,6 +8,7 @@ from unittest.mock import ANY, patch
 
 import pytest
 
+from dot_phrases.handlers import admin_app, panel_button
 from dot_phrases.handlers.admin_app import DotPhrasesAdminApp
 from dot_phrases.handlers.panel_button import DotPhrasesButton
 from dot_phrases.library import admin_team_name, hidden_ids, is_admin, placeholder_values, usable_phrases
@@ -185,7 +186,7 @@ class TestPanelButton:
             notes.objects.filter.return_value.values_list.return_value.first.return_value = "note-uuid"
             effects = self.button().handle()
         data = json.loads(effects[0].payload)["data"]
-        assert data["url"] == "/plugin-io/api/dot_phrases/panel/?note_id=note-uuid"
+        assert data["url"] == f"/plugin-io/api/dot_phrases/panel/?note_id=note-uuid&v={panel_button._CACHE_BUST}"
         assert data["target"] == "right_chart_pane"
 
 
@@ -208,7 +209,7 @@ class TestAdminApp:
     def test_opens_the_admin_page(self) -> None:
         effect = self.app("abc").on_open()
         data = json.loads(effect.payload)["data"]  # type: ignore[union-attr]
-        assert data["url"] == "/plugin-io/api/dot_phrases/admin/"
+        assert data["url"] == f"/plugin-io/api/dot_phrases/admin/?v={admin_app._CACHE_BUST}"
 
 
 def test_hidden_ids_are_per_staff_member_and_empty_without_one() -> None:

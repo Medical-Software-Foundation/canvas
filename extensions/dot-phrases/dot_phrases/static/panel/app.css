@@ -294,7 +294,6 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .hd-empty b{display:block;font-size:14px;color:#0d203c;font-weight:600}
 .hd-empty p{margin:2px 0 0;font-size:12.5px;color:#5e7a8a;line-height:1.45}
 .ml-foot.hd-note{font-size:12.5px;color:#5e7a8a;line-height:1.45}
-/* Select all note commands / Clear all, above the Use in groups */
 /* Hint under Works in while the checklist is closed; same size and color as the other help text */
 /* Who can use the phrase, under the edit screen's title. Same size and color as the other notes */
 .pp-titles{flex:1;min-width:0}

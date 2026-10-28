@@ -31,8 +31,8 @@ def expand_note_field(
 
     A code stays as typed when the phrase isn't set up for this command, or when the filled text is
     too long for the field. The validation handler then explains why it stayed. Fill-ins expand
-    everywhere the phrase is set up for. The review commands, which can't block recording, are
-    left out unless the phrase lists them.
+    everywhere the phrase is set up for. Commands whose text is sent outside the chart (orders,
+    referrals, reviews) are left out unless the phrase lists them.
     """
     used: list[int] = []
     leftovers: list[str] = []

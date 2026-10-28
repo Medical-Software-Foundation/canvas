@@ -328,7 +328,6 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .ph-tbl td.ex,.ph-tbl th.ex{width:auto;text-align:left;padding-right:16px;white-space:normal;overflow-wrap:anywhere}
 .ph-tbl tbody tr:nth-child(even) td{background:#fbfdfd}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-/* Select all note commands / Clear all, above the Use in groups */
 /* Hint under Works in while the checklist is closed; same size and color as the other help text */
 {% endverbatim %}
 /* Wider phrase list, so longer previews fit */

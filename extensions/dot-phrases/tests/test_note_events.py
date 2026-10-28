@@ -171,10 +171,15 @@ class TestBlockUnfinished:
         assert ".near is too long for Allergy: 513 characters, and the limit is 512." in payload(result[0])["errors"][0]["message"]
 
     def test_lab_order_comment_holds_128_characters(self, env: Any) -> None:
-        long = phrase(9, "labnote", "x" * 129)
+        long = phrase(9, "labnote", "x" * 129, use_in=["laborder"])
         with patch(f"{MODULE}.usable_phrases", return_value={**PHRASES, "labnote": long}):
             result = BlockUnfinished(event(EventType.LAB_ORDER_COMMAND__POST_VALIDATION, {"comment": ".labnote"})).compute()
         assert ".labnote is too long for Lab order: 129 characters, and the limit is 128." in payload(result[0])["errors"][0]["message"]
+
+    def test_default_phrase_is_not_set_up_for_lab_order(self, env: Any) -> None:
+        with patch(f"{MODULE}.usable_phrases", return_value=PHRASES):
+            result = BlockUnfinished(event(EventType.LAB_ORDER_COMMAND__POST_VALIDATION, {"comment": ".fallprec"})).compute()
+        assert ".fallprec isn't set up for Lab order." in payload(result[0])["errors"][0]["message"]
 
     def test_too_long_together_says_so(self, env: Any) -> None:
         half = phrase(10, "half", "x" * 300)

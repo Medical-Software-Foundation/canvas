@@ -3,20 +3,25 @@
    Each screen calls DotPhrasesUseIn with a function that returns its command labels and its HTML escaper. */
 window.DotPhrasesUseIn = function (labels, esc) {
   "use strict";
-  // ---- Use in: one checklist. Every note command except the reviews starts checked; the review ----
-  // ---- commands can't block incomplete placeholders, and the Sig and note to pharmacist reach a pharmacy. ----
-  var USE_COMMON = ["plan", "hpi", "instruct", "perform", "assess", "diagnose"];
-  var USE_GROUPS = [
-    ["Common commands", USE_COMMON],
-    ["Visit, orders, and tasks", ["rfv", "followup", "task", "refer", "imaging", "laborder", "poclab", "vitals"]],
-    ["History", ["pmh", "removepmh", "psh", "fhx", "allergy", "removeallergy", "immstmt", "medstmt"]],
-    ["Conditions and medications", ["updatedx", "resolve", "stopmed"]],
-    ["Goals", ["goal", "updategoal", "closegoal"]],
+  // Commands whose text stays in the chart start checked. Orders, referrals, reviews, and the Sig and
+  // Note to pharmacist start unchecked, since their text is sent outside the chart. Matches
+  // catalog.DEFAULT_USE_IN on the server.
+  var USE_GROUPS_IN = [
+    ["Visit", ["rfv", "hpi", "vitals", "plan", "instruct", "perform", "followup", "task", "poclab"]],
+    ["Conditions", ["assess", "diagnose", "updatedx", "resolve"]],
+    ["Medications", ["medstmt", "stopmed", "immstmt"]],
+    ["Allergies", ["allergy", "removeallergy"]],
+    ["History", ["pmh", "removepmh", "psh", "fhx"]],
+    ["Goals", ["goal", "updategoal", "closegoal"]]
+  ];
+  var USE_GROUPS_OUT = [
+    ["Orders and referrals", ["imaging", "laborder", "refer"]],
     ["Reviews", ["labreview", "imgreview", "refreview", "docreview"]]
   ];
+  var USE_GROUPS = USE_GROUPS_IN.concat(USE_GROUPS_OUT);
   var USE_ALL = USE_GROUPS.reduce(function (a, g) { return a.concat(g[1]); }, []);
-  var USE_REVIEWS = USE_GROUPS[USE_GROUPS.length - 1][1];
-  var USE_DEFAULT = USE_ALL.filter(function (k) { return USE_REVIEWS.indexOf(k) < 0; });
+  var USE_REVIEWS = USE_GROUPS_OUT[1][1];
+  var USE_DEFAULT = USE_GROUPS_IN.reduce(function (a, g) { return a.concat(g[1]); }, []);
   function useLabel(k) { var all = labels() || {}; return k === "hpi" ? "HPI" : (all[k] || k); }
   function useChecked(d) { return d.use_in === null ? USE_DEFAULT.slice() : d.use_in.slice(); }
   // Exactly the default commands checked is saved as the default (null), so commands added later are included.
@@ -28,16 +33,13 @@ window.DotPhrasesUseIn = function (labels, esc) {
   function useSummary(d) {
     var rx = [];
     if (d.rx.sig) { rx.push("Sig"); }
-    if (d.rx.note_to_pharmacist) { rx.push("note to pharmacist"); }
-    // The default and the full list read as "all commands except ...", naming what is left out.
-    if (d.use_in === null || d.use_in.length === USE_ALL.length) {
-      var left = d.use_in === null ? ["reviews"] : [];
-      if (!rx.length) { left.push("prescriptions"); } else if (rx.length === 1) { left.push(d.rx.sig ? "note to pharmacist" : "Sig"); }
-      return "all commands" + (left.length ? " except " + left.join(" and ") : "");
-    }
+    if (d.rx.note_to_pharmacist) { rx.push("Note to pharmacist"); }
+    if (d.use_in === null && !rx.length) { return "Default commands"; }
+    if (d.use_in !== null && d.use_in.length === USE_ALL.length && rx.length === 2) { return "All commands"; }
+    if (d.use_in === null) { return ["Default commands"].concat(rx).join(", "); }
     var notes = d.use_in.length > 3 ? d.use_in.length + " note commands" : d.use_in.map(useLabel).join(", ");
     if (notes) { return [notes].concat(rx).join(", "); }
-    if (rx.length === 2) { return "Sig and note to pharmacist"; }
+    if (rx.length === 2) { return "Sig and Note to pharmacist"; }
     return rx.length ? rx[0] + " only" : "nothing yet";
   }
   function useNeedsReminder(d, text) {
@@ -51,18 +53,23 @@ window.DotPhrasesUseIn = function (labels, esc) {
     var on = useChecked(d);
     var box = function (k) { return '<label class="pk-ck"><input type="checkbox" data-cmdck="' + k + '"' + (on.indexOf(k) >= 0 ? " checked" : "") + "> " + esc(useLabel(k)) + "</label>"; };
     var rxBox = function (k, label) { return '<label class="pk-ck"><input type="checkbox" data-rx="' + k + '"' + (d.rx[k] ? " checked" : "") + "> " + label + ' <span class="use-cnt" id="useC_' + k + '"></span></label>'; };
-    return '<div class="pk-gh"><span>Prescriptions</span><button type="button" class="pk-all" data-rxall>Select all</button></div>' +
-      '<div class="pk-cols use-rx">' + rxBox("sig", "Sig") + rxBox("note_to_pharmacist", "Note to pharmacist") + "</div>" +
-      '<div class="use-rxhint">Used in Prescribe, Refill, and Adjust prescription. Sent to the pharmacy as a single line of standard characters. Limits: Sig 1,000 characters, note to pharmacist 210. Prescriptions with unfilled placeholders cannot be sent.</div>' +
-      '<div class="pk-gh use-bulk"><span>Note commands</span><button type="button" class="pk-all" data-useall>Select all</button><button type="button" class="pk-all" data-useclear>Clear all</button></div>' +
-      USE_GROUPS.map(function (g, i) {
-        var note = g[1] === USE_REVIEWS ? '<div class="use-rxhint">Off by default. Review commands cannot flag incomplete placeholders.</div>' : "";
-        return '<div class="pk-grp"><div class="pk-gh"><span>' + esc(g[0]) + '</span><button type="button" class="pk-all" data-grpall="' + i + '">Select all</button></div>' + note + '<div class="pk-cols">' + byLabel(g[1]).map(box).join("") + "</div></div>";
-      }).join("");
+    var WHY = {
+      "Medications": "Sig and Note to pharmacist are used in Prescribe, Refill, and Adjust prescription commands. Select Sig for prescription directions or Note to pharmacist for pharmacy notes. Sig has a 1,000-character limit, and Note to pharmacist has a 210-character limit.",
+      "Orders and referrals": "Phrase text appears on the order or referral sent to the receiving lab, imaging center, or specialist. Select these for phrases meant for the receiving provider or facility.",
+      "Reviews": "Phrase text can appear in the patient message or the internal comment. Placeholders are not flagged in these commands, so any left incomplete in the <b>Patient message</b> field can be sent to the patient when the communication method sends it to their portal. Select these for phrases meant for internal comments or patient communication."
+    };
+    var group = function (g, i) {
+      var why = WHY[g[0]] ? '<div class="use-rxhint">' + WHY[g[0]] + "</div>" : "";
+      var meds = g[0] === "Medications";
+      var btn = meds ? "data-medall" : 'data-grpall="' + i + '"';
+      var rx = meds ? '<div class="pk-cols use-rx">' + rxBox("sig", "Sig") + rxBox("note_to_pharmacist", "Note to pharmacist") + "</div>" : "";
+      return '<div class="pk-grp"><div class="pk-gh"><span>' + esc(g[0]) + '</span><button type="button" class="pk-all" ' + btn + ">Select all</button></div>" + why + '<div class="pk-cols">' + byLabel(g[1]).map(box).join("") + "</div>" + rx + "</div>";
+    };
+    return USE_GROUPS.map(group).join("");
   }
   function useBlockHtml(d) {
     return '<div class="wi"><span class="wi-t">Works in: <b class="use-sum"></b></span><button type="button" class="wi-link" data-usetoggle aria-expanded="false">Change</button></div>' +
-      '<div class="use-hint">Review commands and prescriptions are off by default. Review commands cannot flag incomplete placeholders, and prescription text goes to the pharmacy. Select <b>Change</b> to choose where this phrase works.</div>' +
+      '<div class="use-hint">Orders, Referrals, Reviews, Sig, and Note to pharmacist are off by default. Their phrase text may be shared with patients, pharmacies, or outside providers. Select them only when appropriate.</div>' +
       '<div class="use-rem" hidden>Review commands cannot flag incomplete placeholders.</div>' +
       '<div class="pk use-list" hidden>' + useListHtml(d) + "</div>";
   }
@@ -75,7 +82,8 @@ window.DotPhrasesUseIn = function (labels, esc) {
       var keys = USE_GROUPS[Number(b.getAttribute("data-grpall"))][1];
       b.textContent = keys.every(function (k) { return on.indexOf(k) >= 0; }) ? "Clear all" : "Select all";
     });
-    var rxAll = scope.querySelector("[data-rxall]"); if (rxAll) { rxAll.textContent = d.rx.sig && d.rx.note_to_pharmacist ? "Clear all" : "Select all"; }
+    var MEDS = USE_GROUPS_IN[2][1];
+    var medAll = scope.querySelector("[data-medall]"); if (medAll) { medAll.textContent = MEDS.every(function (k) { return on.indexOf(k) >= 0; }) && d.rx.sig && d.rx.note_to_pharmacist ? "Clear all" : "Select all"; }
     var sum = scope.querySelector(".use-sum"); if (sum) { sum.textContent = useSummary(d); }
     var rem = scope.querySelector(".use-rem"); if (rem) { rem.hidden = !useNeedsReminder(d, text); }
   }
@@ -95,11 +103,12 @@ window.DotPhrasesUseIn = function (labels, esc) {
       var full = keys.every(function (k) { return cur.indexOf(k) >= 0; });
       useSet(d, full ? cur.filter(function (k) { return keys.indexOf(k) < 0; }) : cur.concat(keys)); return true;
     }
-    // Every note command at once. Sig and Note to pharmacist have their own row, since those reach a pharmacy.
-    if (t.closest && t.closest("[data-useall]") && e.type === "click") { useSet(d, USE_ALL); return true; }
-    if (t.closest && t.closest("[data-useclear]") && e.type === "click") { d.use_in = []; return true; }
-    if (t.closest && t.closest("[data-rxall]") && e.type === "click") {
-      var both = d.rx.sig && d.rx.note_to_pharmacist; d.rx.sig = !both; d.rx.note_to_pharmacist = !both; return true;
+    // Medications' button covers its commands and the Sig and Note to pharmacist.
+    if (t.closest && t.closest("[data-medall]") && e.type === "click") {
+      var meds = USE_GROUPS_IN[2][1], cur2 = useChecked(d);
+      var full2 = meds.every(function (k) { return cur2.indexOf(k) >= 0; }) && d.rx.sig && d.rx.note_to_pharmacist;
+      useSet(d, full2 ? cur2.filter(function (k) { return meds.indexOf(k) < 0; }) : cur2.concat(meds));
+      d.rx.sig = !full2; d.rx.note_to_pharmacist = !full2; return true;
     }
     var changed = e.type === "change" || e.type === "input";
     if (changed && t.getAttribute && t.getAttribute("data-cmdck")) {

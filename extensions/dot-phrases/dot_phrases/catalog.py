@@ -62,6 +62,9 @@ class CommandSpec(NamedTuple):
     fields: tuple[tuple[str, str], ...]
     # Review commands do not fire POST_VALIDATION, so nothing can block them.
     validates: bool = True
+    # Off for a new phrase when the command's text is sent outside the chart (orders, referrals,
+    # and review messages to the patient), so a phrase reaches those readers only when chosen.
+    default_on: bool = True
 
 
 _REVIEW = (("message_to_patient", "message_to_patient"), ("internal_comment", "comment"))
@@ -92,16 +95,16 @@ NOTE_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("followup", "Follow-up", "FOLLOW_UP", FollowUpCommand, (("comment", "comment"),)),
     CommandSpec("task", "Task", "TASK", TaskCommand, (("title", "title"), ("comment", "comment"))),
     # Refer stores its internal comment as "internal_comment" in the event; the SDK field is "comment".
-    CommandSpec("refer", "Refer", "REFER", ReferCommand, (("notes_to_specialist", "notes_to_specialist"), ("internal_comment", "comment"))),
-    CommandSpec("imaging", "Imaging order", "IMAGING_ORDER", ImagingOrderCommand, (("additional_details", "additional_details"), ("comment", "comment"))),
+    CommandSpec("refer", "Refer", "REFER", ReferCommand, (("notes_to_specialist", "notes_to_specialist"), ("internal_comment", "comment")), default_on=False),
+    CommandSpec("imaging", "Imaging order", "IMAGING_ORDER", ImagingOrderCommand, (("additional_details", "additional_details"), ("comment", "comment")), default_on=False),
     CommandSpec("vitals", "Vitals", "VITALS", VitalsCommand, (("note", "note"),)),
     # The lab order comment is sent to the lab with the order.
-    CommandSpec("laborder", "Lab order", "LAB_ORDER", LabOrderCommand, (("comment", "comment"),)),
+    CommandSpec("laborder", "Lab order", "LAB_ORDER", LabOrderCommand, (("comment", "comment"),), default_on=False),
     CommandSpec("poclab", "Point-of-care lab test", "POC_LAB_TEST", POCLabTestCommand, (("remarks", "remarks"),)),
-    CommandSpec("labreview", "Lab review", "LAB_REVIEW", LabReviewCommand, _REVIEW, validates=False),
-    CommandSpec("imgreview", "Imaging review", "IMAGING_REVIEW", ImagingReviewCommand, _REVIEW, validates=False),
-    CommandSpec("refreview", "Referral review", "REFERRAL_REVIEW", ReferralReviewCommand, _REVIEW, validates=False),
-    CommandSpec("docreview", "Document review", "UNCATEGORIZED_DOCUMENT_REVIEW", UncategorizedDocumentReviewCommand, _REVIEW, validates=False),
+    CommandSpec("labreview", "Lab review", "LAB_REVIEW", LabReviewCommand, _REVIEW, validates=False, default_on=False),
+    CommandSpec("imgreview", "Imaging review", "IMAGING_REVIEW", ImagingReviewCommand, _REVIEW, validates=False, default_on=False),
+    CommandSpec("refreview", "Referral review", "REFERRAL_REVIEW", ReferralReviewCommand, _REVIEW, validates=False, default_on=False),
+    CommandSpec("docreview", "Document review", "UNCATEGORIZED_DOCUMENT_REVIEW", UncategorizedDocumentReviewCommand, _REVIEW, validates=False, default_on=False),
 )
 
 # Prescription text goes to the pharmacy. Canvas rejects anything outside printable ASCII, and the
@@ -121,9 +124,9 @@ ALL_COMMANDS: tuple[CommandSpec, ...] = NOTE_COMMANDS + RX_COMMANDS
 RX_KEYS = frozenset(spec.key for spec in RX_COMMANDS)
 NOTE_COMMAND_KEYS: tuple[str, ...] = tuple(spec.key for spec in NOTE_COMMANDS)
 COMMAND_LABELS: dict[str, str] = {spec.key: spec.label for spec in NOTE_COMMANDS}
-# A phrase with use_in None works in every note command except the review commands, which can't
-# block recording when placeholders are left incomplete.
-DEFAULT_USE_IN = frozenset(spec.key for spec in NOTE_COMMANDS if spec.validates)
+# A phrase with use_in None works in the default note commands: every one except those whose text
+# is sent outside the chart (default_on=False).
+DEFAULT_USE_IN = frozenset(spec.key for spec in NOTE_COMMANDS if spec.default_on)
 
 
 def works_in(use_in: list[str] | None, command_key: str) -> bool:

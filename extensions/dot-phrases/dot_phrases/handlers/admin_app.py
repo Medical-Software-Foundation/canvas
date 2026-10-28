@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import PanelApplication
+
+# Changes on every install, so browsers load the newest page.
+_CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 
 
 class DotPhrasesAdminApp(PanelApplication):
@@ -32,7 +37,7 @@ class DotPhrasesAdminApp(PanelApplication):
         # The page and its API check who is signed in on every request, so only admins can change
         # practice phrases or settings, whatever the page shows.
         return LaunchModalEffect(
-            url="/plugin-io/api/dot_phrases/admin/",
+            url=f"/plugin-io/api/dot_phrases/admin/?v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.PAGE,
             title="Dot Phrases",
         ).apply()
