@@ -419,3 +419,28 @@ def test_submit_payment_returns_formatted_error() -> None:
     client = _authed_client()
     client.http.post.return_value = _error_response(409, {"errorName": "Conflict"})
     assert client.submit_payment({}) == (False, "<409 Conflict>")
+
+
+def test_submit_payment_raises_unconfirmed_on_5xx() -> None:
+    """A gateway error or server failure may follow a created payment."""
+    import pytest
+
+    from candid.api.client import CandidUnconfirmedError
+
+    for status in (500, 502, 503, 504):
+        client = _authed_client()
+        client.http.post.return_value = _error_response(status, {"errorName": "BadGateway"})
+        with pytest.raises(CandidUnconfirmedError) as info:
+            client.submit_payment({})
+        assert info.value.status_code == status
+        assert str(info.value) == f"HTTP {status}: <{status} BadGateway>"
+
+
+def test_authenticate_fetches_the_token_up_front() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok-up-front"})
+    with patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError("no cache")):
+        client.authenticate()
+    assert client._instance_token == "tok-up-front"
+    assert client.http.post.call_args.args[0].endswith("/api/auth/v2/token")

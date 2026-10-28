@@ -333,6 +333,7 @@ def test_endpoint_timeout_creates_unconfirmed_task_and_writes_no_metadata() -> N
     assert effects == [MockTask.return_value.apply.return_value]
     assert "Unconfirmed" in MockTask.call_args.kwargs["title"]
     assert "RequestException" in MockTask.call_args.kwargs["title"]
+    client.authenticate.assert_called_once()
     MockEffect.return_value.upsert_metadata.assert_not_called()
 
 
@@ -376,3 +377,199 @@ def test_endpoint_keeps_ids_saved_by_an_overlapping_report() -> None:
     upsert = MockEffect.return_value.upsert_metadata
     written = [c.kwargs["value"] for c in upsert.call_args_list if c.kwargs["key"] == META_REPORTED_PAYMENT_IDS]
     assert written == [json.dumps(["pay-mine", "pay-other"])]
+
+
+# ---------------------------------------------------------------------------
+# /report-payment failure paths, through the real CandidClient
+# ---------------------------------------------------------------------------
+
+
+def _http_response(status: int, body: dict | None = None) -> MagicMock:
+    from requests import HTTPError
+
+    r = MagicMock()
+    r.status_code = status
+    r.ok = status < 400
+    r.json.return_value = body or {}
+    r.text = ""
+    if status >= 400:
+        r.raise_for_status.side_effect = HTTPError(f"{status} error", response=r)
+    else:
+        r.raise_for_status.return_value = None
+    return r
+
+
+def _report_with_real_client(token_result, payment_result):
+    """Run /report-payment with a real CandidClient whose HTTP calls are faked.
+
+    ``token_result`` / ``payment_result`` are a response mock to return or an
+    exception to raise for the token POST and the patient-payment POST.
+    Returns ``(effects, task_titles, http_mock, claim_effect_mock)``.
+    """
+    from candid.api.client import CandidClient
+    from candid.api.report_payment import CandidReportPaymentAPI
+
+    client = CandidClient.from_secrets(MOCK_SECRETS)
+    client.http = MagicMock()
+
+    def fake_post(url, **kwargs):
+        result = token_result if url.endswith("/api/auth/v2/token") else payment_result
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    client.http.post.side_effect = fake_post
+
+    mock_claim = MagicMock()
+    mock_claim.id = "abc-123"
+    cache = MagicMock()
+    cache.get.return_value = None
+
+    with (
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("canvas_sdk.caching.plugins.get_cache", return_value=cache),
+        patch("candid.api.report_payment.ClaimEffect") as MockEffect,
+        patch("candid.api.report_payment.Claim") as MockClaim,
+        patch("candid.api.report_payment.get_claim_metadata_set", return_value=set()),
+        patch("candid.api.report_payment.get_claim_metadata", return_value="[{}]"),
+        patch("candid.api.report_payment.notify_claim_updated", return_value=MagicMock()),
+        patch("candid.api.report_payment.AddTask") as MockTask,
+    ):
+        MockClient.from_secrets.return_value = client
+        MockClaim.objects.filter.return_value = [mock_claim]
+
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
+        handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = _payment_context(
+            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}]
+        )
+        effects = handler.post()
+
+    titles = [c.kwargs["title"] for c in MockTask.call_args_list]
+    return effects, titles, client.http, MockEffect
+
+
+def _payment_posts(http: MagicMock) -> list:
+    return [
+        c for c in http.post.call_args_list
+        if c.args[0].endswith("/api/patient-payments/v4")
+    ]
+
+
+def test_auth_http_error_creates_failed_task_and_sends_nothing() -> None:
+    """A 401 from Candid's token endpoint: the payment was never sent, so it's "Failed", not "Unconfirmed"."""
+    from candid.effect_helpers import CANVAS_REPORTED_NOTE_TAG
+
+    effects, titles, http, MockEffect = _report_with_real_client(
+        _http_response(401), _http_response(200, {"patient_payment_id": "pp-1"})
+    )
+
+    assert _payment_posts(http) == []
+    assert len(effects) == 1
+    (title,) = titles
+    assert "Payment Notification Failed" in title
+    assert "couldn't sign in to Candid (HTTPError)" in title
+    assert "wasn't sent" in title
+    assert "Unconfirmed" not in title
+    assert CANVAS_REPORTED_NOTE_TAG in title
+    MockEffect.return_value.upsert_metadata.assert_not_called()
+
+
+def test_auth_timeout_creates_failed_task_and_sends_nothing() -> None:
+    """A timeout fetching the token also means nothing was sent."""
+    from requests import RequestException
+
+    effects, titles, http, _ = _report_with_real_client(
+        RequestException("token read timed out"),
+        _http_response(200, {"patient_payment_id": "pp-1"}),
+    )
+
+    assert _payment_posts(http) == []
+    (title,) = titles
+    assert "couldn't sign in to Candid (RequestException)" in title
+
+
+def test_auth_response_without_token_creates_failed_task() -> None:
+    """Candid answers 200 but with no access_token: RuntimeError, still not sent."""
+    effects, titles, http, _ = _report_with_real_client(
+        _http_response(200, {}), _http_response(200, {"patient_payment_id": "pp-1"})
+    )
+
+    assert _payment_posts(http) == []
+    (title,) = titles
+    assert "couldn't sign in to Candid (RuntimeError)" in title
+
+
+def test_payment_transport_error_after_sign_in_is_unconfirmed() -> None:
+    """Signed in, then the payment POST times out: Candid may have it."""
+    from requests import RequestException
+
+    from candid.effect_helpers import CANVAS_REPORTED_NOTE_TAG
+
+    effects, titles, http, MockEffect = _report_with_real_client(
+        _http_response(200, {"access_token": "tok"}),
+        RequestException("Read timed out"),
+    )
+
+    assert len(_payment_posts(http)) == 1
+    assert len(effects) == 1
+    (title,) = titles
+    assert "Payment Notification Unconfirmed" in title
+    assert "(RequestException)" in title
+    assert "Check Candid before re-entering it there" in title
+    assert CANVAS_REPORTED_NOTE_TAG in title
+    MockEffect.return_value.upsert_metadata.assert_not_called()
+
+
+def test_payment_5xx_is_unconfirmed_not_failed() -> None:
+    """A 502/503/504 (or other 5xx) is as uncertain as a timeout."""
+    from candid.effect_helpers import CANVAS_REPORTED_NOTE_TAG
+
+    for status in (500, 502, 503, 504):
+        effects, titles, http, MockEffect = _report_with_real_client(
+            _http_response(200, {"access_token": "tok"}),
+            _http_response(status, {"errorName": "BadGateway"}),
+        )
+
+        assert len(_payment_posts(http)) == 1, status
+        assert len(effects) == 1, status
+        (title,) = titles
+        assert "Payment Notification Unconfirmed" in title, status
+        assert f"(HTTP {status})" in title, status
+        assert "Failed" not in title, status
+        assert CANVAS_REPORTED_NOTE_TAG in title, status
+        MockEffect.return_value.upsert_metadata.assert_not_called()
+
+
+def test_payment_4xx_is_failed_with_manual_entry_hint() -> None:
+    """A 4xx means Candid refused it: "Failed", and the task says to tag a manual entry."""
+    from candid.effect_helpers import CANVAS_REPORTED_NOTE_TAG
+
+    effects, titles, http, _ = _report_with_real_client(
+        _http_response(200, {"access_token": "tok"}),
+        _http_response(422, {"errorName": "UnprocessableEntity"}),
+    )
+
+    assert len(_payment_posts(http)) == 1
+    (title,) = titles
+    assert "Payment Notification Failed — <422 UnprocessableEntity>" in title
+    assert f"If you enter it in Candid by hand, put {CANVAS_REPORTED_NOTE_TAG} in the note." in title
+
+
+def test_payment_success_through_real_client_saves_reported_id() -> None:
+    effects, titles, http, MockEffect = _report_with_real_client(
+        _http_response(200, {"access_token": "tok"}),
+        _http_response(201, {"patient_payment_id": "pp-1"}),
+    )
+
+    assert titles == []
+    assert len(_payment_posts(http)) == 1
+    from candid.effect_helpers import META_REPORTED_PAYMENT_IDS
+
+    reported = [
+        c.kwargs["value"]
+        for c in MockEffect.return_value.upsert_metadata.call_args_list
+        if c.kwargs["key"] == META_REPORTED_PAYMENT_IDS
+    ]
+    assert reported == ['["pp-1"]']

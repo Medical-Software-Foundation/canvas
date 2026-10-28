@@ -14,7 +14,7 @@ from logger import log
 from requests import RequestException
 
 from candid.api.broadcast import notify_claim_updated
-from candid.api.client import CandidClient
+from candid.api.client import CandidClient, CandidUnconfirmedError
 from candid.effect_helpers import (
     CANVAS_REPORTED_NOTE_TAG,
     LOG_TYPE_PAYMENT_REPORTED,
@@ -27,6 +27,21 @@ from candid.effect_helpers import (
     get_claim_metadata,
     get_claim_metadata_set,
 )
+
+
+# Appended to every report-failure task: a payment a biller enters in Candid
+# by hand without the tag would be imported back into Canvas by the next sync.
+MANUAL_ENTRY_HINT = (
+    f"If you enter it in Candid by hand, put {CANVAS_REPORTED_NOTE_TAG} in the note."
+)
+
+
+def _payment_task(patient_id: str, message: str) -> Effect:
+    return AddTask(
+        patient_id=patient_id,
+        title=f"Candid: {message}",
+        labels=["Candid Integration"],
+    ).apply()
 
 
 def _unattributed(amount_cents: int) -> dict:
@@ -144,6 +159,23 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
 
         client = CandidClient.from_secrets(self.secrets)
 
+        # Sign in first, on its own: a failure here (bad credentials, Candid's
+        # auth endpoint down) means the payment was never sent.
+        try:
+            client.authenticate()
+        except (RequestException, RuntimeError) as exc:
+            log.warning(
+                f"Candid: couldn't sign in to report patient payment for patient "
+                f"{patient_id}: {exc.__class__.__name__}"
+            )
+            return [
+                _payment_task(
+                    patient_id,
+                    "Payment Notification Failed — couldn't sign in to Candid "
+                    f"({exc.__class__.__name__}), so it wasn't sent. {MANUAL_ENTRY_HINT}",
+                )
+            ]
+
         payload = {
             "patient_external_id": f"canvas:{patient_id}",
             "amount_cents": total_cents,
@@ -154,24 +186,29 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
 
         try:
             success, result_msg = client.submit_payment(payload)
-        except RequestException as exc:
-            # No answer (e.g. read timeout): Candid may still have created the
-            # payment. Don't retry, which could create a second one; the note
-            # tag keeps the sync from importing it back into Canvas.
+        except (RequestException, CandidUnconfirmedError) as exc:
+            # No usable answer: a timeout or dropped connection (sign-in already
+            # worked, so a RequestException here is a transport error), or a
+            # 5xx. Candid may still have created the payment. Don't retry,
+            # which could create a second one; the note tag keeps the sync from
+            # importing it back into Canvas. (The 0.24x sandbox only allows
+            # RequestException from requests, not Timeout/ConnectionError.)
+            reason = (
+                f"HTTP {exc.status_code}"
+                if isinstance(exc, CandidUnconfirmedError)
+                else exc.__class__.__name__
+            )
             log.warning(
-                f"Candid: no response reporting patient payment for patient "
-                f"{patient_id}: {exc.__class__.__name__}"
+                f"Candid: no confirmation reporting patient payment for patient "
+                f"{patient_id}: {exc}"
             )
             return [
-                AddTask(
-                    patient_id=patient_id,
-                    title=(
-                        "Candid: Payment Notification Unconfirmed — no response "
-                        f"from Candid ({exc.__class__.__name__}). Check Candid before "
-                        "re-entering it there."
-                    ),
-                    labels=["Candid Integration"],
-                ).apply()
+                _payment_task(
+                    patient_id,
+                    f"Payment Notification Unconfirmed — no confirmation from Candid "
+                    f"({reason}). Check Candid before re-entering it there. "
+                    f"{MANUAL_ENTRY_HINT}",
+                )
             ]
         if not success:
             log.warning(
@@ -179,11 +216,10 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
                 f"{patient_id}: {result_msg}"
             )
             return [
-                AddTask(
-                    patient_id=patient_id,
-                    title=f"Candid: Payment Notification Failed — {result_msg}",
-                    labels=["Candid Integration"],
-                ).apply()
+                _payment_task(
+                    patient_id,
+                    f"Payment Notification Failed — {result_msg}. {MANUAL_ENTRY_HINT}",
+                )
             ]
 
         payment_id = result_msg

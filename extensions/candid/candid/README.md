@@ -103,8 +103,10 @@ When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSE
 - Stores the returned `patient_payment_id` on each allocated claim's metadata so the sync knows not to re-post it
 - Appends a `payment_reported` entry to each allocated claim's `candid_sync_history` metadata for the timeline UI
 - Skips reporting if the originating payment description matches `Candid patient payment ` — this prevents a feedback loop where a payment pulled from Candid is reported right back
-- On failure, creates a Canvas Task labeled "Candid Integration" with the error details to notify clinicians
-- If Candid doesn't answer (a timeout or connection error), it creates a "Payment Notification Unconfirmed" task instead and doesn't retry: Candid may have recorded the payment anyway, and a retry could record it twice
+- Gets the Candid sign-in token before sending anything. If sign-in fails (bad credentials, an error or no answer from the token endpoint), the payment was never sent: it creates a "Payment Notification Failed — couldn't sign in to Candid" task labeled "Candid Integration"
+- If Candid refuses the payment (a 4xx), it creates a "Payment Notification Failed" task with the error details
+- If Candid doesn't confirm it (a timeout or dropped connection, or a 5xx such as 502/503/504), it creates a "Payment Notification Unconfirmed" task instead and doesn't retry: Candid may have recorded the payment anyway, and a retry could record it twice
+- Every one of these tasks says to put `[sent from Canvas]` in the note if a biller enters the payment in Candid by hand, so the sync doesn't import it back
 
 ### Claim Banners
 
