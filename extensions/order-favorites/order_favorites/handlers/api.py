@@ -185,7 +185,7 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             except (TypeError, ValueError):
                 continue
         if not ids:
-            return _error("Pick favorites to add.")
+            return _error("Select favorites to add.")
         by_id = {f.dbid: f for f in visible_to(me, _list_kinds()).filter(dbid__in=ids)}
         chosen = [by_id[i] for i in dict.fromkeys(ids) if i in by_id]
         # Order sets become their favorites; anything picked twice (alone and in a set) is added once.
@@ -421,7 +421,7 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             return _error("Canvas support is always an admin.")
         dbid = access.staff_dbid(staff_id)
         if dbid is None:
-            return _error("Pick an active staff member.")
+            return _error("Select an active staff member.")
         FavoritesAdmin.objects.get_or_create(staff_id=dbid)
         return _ok({"admins": self._admins_json(self._me())})
 

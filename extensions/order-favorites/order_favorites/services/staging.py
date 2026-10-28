@@ -1,10 +1,11 @@
 """Turn chosen favorites into staged prescribe and lab order commands in one note.
 
 Who is named on the order:
-  - Prescriptions: the note's provider when they are active with a usable NPI, otherwise the person
-    adding. A care manager staging orders in a provider's note never becomes the prescriber.
-  - Lab orders: the favorite's ordering provider if still active with a usable NPI, otherwise the
-    note's provider on the same terms, otherwise the person adding.
+  - Prescriptions: no prescriber is sent, so Canvas applies its own rule, as in its Prescribe command:
+    the person adding when their role is in the practice's prescriber roles, otherwise blank for the
+    prescriber to fill in before signing.
+  - Lab orders: a personal favorite's saved ordering provider if still active with a usable NPI,
+    otherwise the note's provider on the same terms, otherwise the person adding.
 Either can be changed in the command before it is signed.
 
 A lab favorite whose partner is inactive or whose tests the lab no longer offers is skipped whole,
@@ -30,18 +31,15 @@ def _note_provider_id(note: Note) -> str | None:
     return str(provider.id) if provider is not None else None
 
 
-def prescriber_for(note: Note, adder_id: str) -> str:
-    return _note_provider_id(note) or adder_id
-
-
 def ordering_provider_for(favorite: Favorite, note: Note, adder_id: str) -> str:
-    saved = usable_provider(favorite.details.get("ordering_provider_id") or None)
+    # Only personal favorites save an ordering provider; one left on an older practice favorite is ignored.
+    saved = None if favorite.shared else usable_provider(favorite.details.get("ordering_provider_id") or None)
     if saved is not None:
         return str(saved.id)
     return _note_provider_id(note) or adder_id
 
 
-def _rx_effect(favorite: Favorite, note: Note, prescriber_id: str) -> Effect:
+def _rx_effect(favorite: Favorite, note: Note) -> Effect:
     """Fields left blank on the favorite stay blank in the command, for the prescriber to fill in."""
     d = favorite.details
     unit = (
@@ -57,7 +55,6 @@ def _rx_effect(favorite: Favorite, note: Note, prescriber_id: str) -> Effect:
         quantity_to_dispense=Decimal(str(d["quantity"])) if d.get("quantity") not in (None, "") else None,
         type_to_dispense=unit,
         refills=int(d["refills"]) if d.get("refills") not in (None, "") else None,
-        prescriber_id=prescriber_id,
         pharmacy=d.get("pharmacy_ncpdp_id") or None,
     ).originate()
 
@@ -67,12 +64,10 @@ def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[di
     added: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     effects: list[Effect] = []
-    prescriber_id = prescriber_for(note, adder_id)
-
     for favorite in favorites:
         entry = {"id": favorite.dbid, "name": favorite.name, "kind": favorite.kind, "shared": favorite.shared}
         if favorite.kind == "rx":
-            effects.append(_rx_effect(favorite, note, prescriber_id))
+            effects.append(_rx_effect(favorite, note))
             added.append(entry)
             continue
 

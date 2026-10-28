@@ -204,14 +204,16 @@
     if (f.kind === "rx") {
       h += '<label>Medication</label><div class="cb" id="pMed"></div>';
       h += '<label for="fSig">Sig</label><textarea id="fSig" maxlength="1000"></textarea>';
-      h += '<div class="grid"><div><label for="fDays">Days supply</label><input id="fDays" type="number" min="1" max="365"></div><div><label for="fQty">Quantity</label><input id="fQty" type="number" min="0" step="any"></div></div>';
-      h += '<div class="grid"><div><label for="fUnit">Unit</label><select id="fUnit"></select></div><div><label for="fRef">Refills</label><input id="fRef" type="number" min="0" max="99"></div></div>';
+      // One grid of four: two rows of two in the narrow panel, one row in the app (see .grid.amounts).
+      h += '<div class="grid amounts"><div><label for="fDays">Days supply</label><input id="fDays" type="number" min="1" max="365"></div><div><label for="fQty">Quantity</label><input id="fQty" type="number" min="0" step="any"></div>' +
+        '<div><label for="fUnit">Unit</label><select id="fUnit"></select></div><div><label for="fRef">Refills</label><input id="fRef" type="number" min="0" max="99"></div></div>';
       h += '<label>Default pharmacy</label><div class="cb" id="pPharm"></div><div class="hint" id="phClear"></div>';
     } else {
       h += '<label for="fLab">Lab partner</label><select id="fLab"><option value="">Loading…</option></select>';
       h += '<label>Tests</label><div class="cb" id="pTests"></div><div class="warn" id="staleWarn" hidden></div>';
       h += '<label>Diagnosis</label><div class="cb" id="pDx"></div>';
-      h += '<label for="fProv">Ordering provider</label><select id="fProv"><option value="">The note\'s provider, or whoever adds it</option></select>';
+      // Practice lab favorites don't save an ordering provider: it would name one clinician on everyone's orders.
+      if (!opts.practice) { h += '<label for="fProv">Ordering provider</label><select id="fProv"><option value="">The note\'s provider, or whoever adds it</option></select>'; }
       h += '<label for="fComment">Comment</label><input id="fComment" maxlength="500">';
       h += '<label class="ck"><input type="checkbox" id="fFast"> Fasting required</label>';
     }
@@ -226,7 +228,7 @@
         var sel = $("#fUnit");
         var list = units.length ? units : (f.representative_ndc ? [{ description: f.unit, representative_ndc: f.representative_ndc, ncpdp_quantity_qualifier_code: f.ncpdp_quantity_qualifier_code }] : []);
         // Unit is optional: the first choice leaves it for the prescriber to pick on the order.
-        sel.innerHTML = '<option value="">' + (list.length ? "Pick on the order" : "Pick a medication first") + "</option>" +
+        sel.innerHTML = '<option value="">' + (list.length ? "Select on the order" : "Select a medication first") + "</option>" +
           list.map(function (u, i) { return '<option value="' + i + '"' + (f.representative_ndc && u.representative_ndc === f.representative_ndc ? " selected" : "") + ">" + esc(u.description) + "</option>"; }).join("");
         var setUnit = function () {
           var u = sel.value === "" ? null : list[+sel.value];
@@ -266,7 +268,7 @@
       };
       var tests = new Picker($("#pTests"), {
         multi: true, placeholder: "Search tests to add", foot: "Check as many as you need",
-        find: function (q) { return f.lab_partner_id ? api("GET", "/lookup/lab-tests?partner_id=" + encodeURIComponent(f.lab_partner_id) + "&q=" + encodeURIComponent(q)).then(function (d) { return d.results; }) : Promise.reject(new Error("Pick a lab partner first")); },
+        find: function (q) { return f.lab_partner_id ? api("GET", "/lookup/lab-tests?partner_id=" + encodeURIComponent(f.lab_partner_id) + "&q=" + encodeURIComponent(q)).then(function (d) { return d.results; }) : Promise.reject(new Error("Select a lab partner first")); },
         key: function (t) { return t.code; }, row: function (t) { return esc(t.name || t.code) + (t.name ? ' <span class="muted">' + esc(t.code) + "</span>" : ""); },
         selected: function () { return f.tests; },
         bad: function (t) { return stale.indexOf(t.code) >= 0; },
@@ -286,7 +288,7 @@
         var sel = $("#fLab");
         var opts2 = partners.slice();
         if (f.lab_partner_id && !opts2.some(function (p) { return p.id === f.lab_partner_id; })) { opts2.unshift({ id: f.lab_partner_id, name: (f.lab_partner_name || "This lab") + " (not active)" }); }
-        sel.innerHTML = '<option value="">Pick a lab partner</option>' + opts2.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === f.lab_partner_id ? " selected" : "") + ">" + esc(p.name) + "</option>"; }).join("");
+        sel.innerHTML = '<option value="">Select a lab partner</option>' + opts2.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === f.lab_partner_id ? " selected" : "") + ">" + esc(p.name) + "</option>"; }).join("");
         sel.onchange = function () {
           var p = opts2[sel.selectedIndex - 1];
           f.lab_partner_id = p ? p.id : ""; f.lab_partner_name = p ? p.name : "";
@@ -294,7 +296,7 @@
           f.tests = []; stale = []; tests.drawSelected(); drawStale(); changed();
         };
       }).catch(function () { $("#fLab").innerHTML = '<option value="">Couldn\'t load lab partners</option>'; });
-      once("providers", "/lookup/providers").then(function (list) {
+      if ($("#fProv")) once("providers", "/lookup/providers").then(function (list) {
         var sel = $("#fProv");
         var all = list.slice();
         if (f.ordering_provider_id && !all.some(function (p) { return p.id === f.ordering_provider_id; })) { all.unshift({ id: f.ordering_provider_id, name: (f.ordering_provider_name || "Saved provider") + " (no longer available)" }); }
@@ -338,7 +340,7 @@
     }).join("") + '</div><div class="hint" id="pkCount"></div>';
     container.innerHTML = h;
     var $ = function (s) { return container.querySelector(s); };
-    var changed = function () { $("#pkCount").textContent = plural(f.items.length, "favorite", "favorites") + " picked. Editing a favorite later changes it in every set that uses it."; if (opts.onChange) { opts.onChange(); } };
+    var changed = function () { $("#pkCount").textContent = plural(f.items.length, "favorite", "favorites") + " selected. Editing a favorite later changes it in every set that uses it."; if (opts.onChange) { opts.onChange(); } };
     $("#fName").value = f.name;
     $("#fName").addEventListener("input", function () { f.name = this.value; changed(); });
     container.querySelector(".picklist").addEventListener("click", function (e) {
@@ -352,7 +354,7 @@
       if (e.target.checked && i < 0) { f.items.push(id); } else if (!e.target.checked && i >= 0) { f.items.splice(i, 1); }
       changed();
     });
-    $("#pkCount").textContent = plural(f.items.length, "favorite", "favorites") + " picked. Editing a favorite later changes it in every set that uses it.";
+    $("#pkCount").textContent = plural(f.items.length, "favorite", "favorites") + " selected. Editing a favorite later changes it in every set that uses it.";
     return {
       payload: function () { return JSON.parse(JSON.stringify(f)); },
       dirty: function () { return JSON.stringify(f) !== start; },

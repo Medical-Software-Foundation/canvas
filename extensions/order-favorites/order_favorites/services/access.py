@@ -6,9 +6,8 @@ first time they use an admin route. After that FIRST_ADMIN is not read again.
 
 Canvas's root support login (the "Canvas Support" staff record) is always an admin, so Canvas
 support can manage favorites on any instance, including one with no admins left. It is recognized by
-its staff key, which is the same on every Canvas instance (checked on all 226 production instances,
-2026-10-14). It is never written to the admin list, so it doesn't show in Settings and doesn't count
-toward "at least one admin".
+the Canvas support login's staff key, which is the same on every Canvas instance. It is never written
+to the admin list, so it doesn't show in Settings and doesn't count toward "at least one admin".
 
 Every check fails closed: no staff id, an empty list with an empty or unknown FIRST_ADMIN, or an
 inactive staff member means "not an admin".
@@ -49,7 +48,7 @@ def _first_admin_dbid(secrets: dict[str, Any] | None) -> int | None:
 
 
 def listed_admins() -> Any:
-    """The practice's admin list. Root is left out even if an older version wrote it there."""
+    """The practice's admin list. Root is always left out."""
     return FavoritesAdmin.objects.exclude(staff__id=ROOT_STAFF_KEY)
 
 

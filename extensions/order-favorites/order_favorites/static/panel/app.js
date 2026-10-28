@@ -11,6 +11,7 @@
   var data = null;
   var tab = "all", filter = "all", q = "", view = "use", mFilter = "active", confirmDel = null, result = "";
   var selected = [], expanded = {}, showSel = false;
+  var adding = false; // an Add request is in flight
   var target = null, others = null, othersTotal = 0, picking = false; // the note orders go into, and the patient's other open notes
   var edit = null; // {editor, id, kind, practice}
   var newMenu = false, newFor = "mine";
@@ -76,7 +77,7 @@
   function card(f) {
     var on = selected.indexOf(f.id) >= 0;
     return '<div class="pc ' + (f.shared ? "pc-team" : "pc-mine") + (on ? " sel" : "") + '" data-card="' + f.id + '">' +
-      '<input type="checkbox" data-sel="' + f.id + '"' + (on ? " checked" : "") + ' aria-label="Pick ' + esc(f.name) + '">' +
+      '<input type="checkbox" data-sel="' + f.id + '"' + (on ? " checked" : "") + ' aria-label="Select ' + esc(f.name) + '">' +
       '<div class="pc-main"><div class="pc-top"><span class="pc-code">' + esc(f.name) + "</span></div>" + (expanded[f.id] ? OF.details(f) : OF.compact(f)) + "</div>" + side(f) + "</div>";
   }
 
@@ -127,7 +128,7 @@
       h += '<div class="tgt"><div class="target">' + esc(target.title) + (target.clicked ? "" : noteLink(target, I.open, "noteopen inline")) + "<span>" + esc(whenLine(target)) + '</span></div><button class="linkbtn" data-pick="1">Change</button></div>';
       if (!target.clicked) { h += '<div class="info" style="margin-top:-4px">Orders will go into this note, not the one you\'re in.</div>'; }
     } else {
-      h += '<div class="info">The note you opened this from is no longer open. Pick another open note for this patient.</div><button class="linkbtn" data-pick="1" style="margin-bottom:10px">Pick a note</button>';
+      h += '<div class="info">The note you opened this from is no longer open. Select another open note for this patient.</div><button class="linkbtn" data-pick="1" style="margin-bottom:10px">Select a note</button>';
     }
     if (n) {
       // Order sets count as their orders, so "2 selected (3 orders)" says exactly what will be added.
@@ -144,7 +145,7 @@
         }).join("") + "</div>";
       }
     }
-    h += '<button class="pp-btn pp-primary" id="add"' + (n && target && !picking ? "" : " disabled") + ">" + (n ? "Add " + n + " to note" : "Pick favorites to add") + "</button></div>";
+    h += '<button class="pp-btn pp-primary" id="add"' + (n && target && !picking && !adding ? "" : " disabled") + ">" + (adding ? "Adding…" : n ? "Add " + n + " to note" : "Select favorites to add") + "</button></div>";
     return h;
   }
   function openPicker() {
@@ -284,9 +285,12 @@
   }
 
   // ---------- adding ----------
+  // adding stays true until the request answers, so a re-render mid-request can't enable Add again.
   function addToNote() {
-    $("#add").disabled = true;
+    if (adding) { return; }
+    adding = true; render();
     OF.api("POST", "/notes/" + encodeURIComponent(target.id) + "/add", { favorite_ids: selected }).then(function (d) {
+      adding = false;
       result = "";
       if (d.added.length) { result += '<div class="rs ok">' + d.added.length + " added to " + esc(d.note.title) + ": " + d.added.map(function (f) { return esc(f.name); }).join(", ") + "</div>"; }
       d.skipped.forEach(function (s) {
@@ -299,6 +303,7 @@
       selected = []; showSel = false;
       render();
     }).catch(function (e) {
+      adding = false;
       result = '<div class="rs bad">' + esc(e.message) + "</div>";
       render();
     });

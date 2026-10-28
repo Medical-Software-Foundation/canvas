@@ -303,3 +303,5 @@ body{display:flex;flex-direction:column;min-height:0;font-family:"DM Sans",-appl
 /* Backstop when even the shrunk lists don't fit: the footer scrolls and Add stays pinned at its bottom. */
 #vUse .pp-foot{overflow-y:auto}
 #vUse .pp-foot #add{position:sticky;bottom:0;box-shadow:0 0 0 6px #fff}
+/* The four prescription amounts are one grid; in the panel it wraps to two rows of two. */
+.ed .grid.amounts{row-gap:18px}

@@ -75,11 +75,11 @@ def _rx_details(body: dict[str, Any]) -> dict[str, Any]:
     the prescribe command asks for whatever is missing before it can be signed."""
     fdb_code = _text(body, "fdb_code", 20, "Medication")
     if not fdb_code.isdigit():
-        raise Invalid("Pick the medication from the search list.")
+        raise Invalid("Select the medication from the search list.")
     ndc = _text(body, "representative_ndc", 20, "Unit", required=False)
     qualifier = _text(body, "ncpdp_quantity_qualifier_code", 10, "Unit", required=False)
     if bool(ndc) != bool(qualifier):
-        raise Invalid("Pick the unit from the list.")
+        raise Invalid("Select the unit from the list.")
     pharmacy_id = str(body.get("pharmacy_ncpdp_id") or "").strip()
     return {
         "fdb_code": fdb_code,
@@ -109,7 +109,7 @@ def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
         raise Invalid(f"A lab favorite can have at most {MAX_TESTS} tests.")
     check = check_tests(partner_id, codes)
     if not check["partner_found"] or not check["partner_active"]:
-        raise Invalid("Pick an active lab partner.")
+        raise Invalid("Select an active lab partner.")
     if check["stale"]:
         raise Invalid(f"{check['partner_name']} doesn't offer {', '.join(check['stale'])}. Remove it and add its replacement.")
     names = {t["code"]: str(t.get("name") or "") for t in body.get("tests") or [] if isinstance(t, dict)}
@@ -118,7 +118,7 @@ def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
     for dx in body.get("diagnoses") or []:
         code = normalize_icd10(str((dx or {}).get("code") or "")) if isinstance(dx, dict) else ""
         if not ICD10_CODE.match(code):
-            raise Invalid(f"{icd10_display(code) or 'A diagnosis'} isn't an ICD-10 code. Pick diagnoses from the search list.")
+            raise Invalid(f"{icd10_display(code) or 'A diagnosis'} isn't an ICD-10 code. Select diagnoses from the search list.")
         if code not in {d["code"] for d in diagnoses}:
             diagnoses.append({"code": code, "text": str(dx.get("text") or "")[:300]})
     if len(diagnoses) > MAX_DIAGNOSES:
@@ -150,18 +150,18 @@ def _set_details(body: dict[str, Any], owner: int | None, shared: bool) -> dict[
         try:
             dbid = int(str(value))
         except (TypeError, ValueError):
-            raise Invalid("Pick favorites from the list.") from None
+            raise Invalid("Select favorites from the list.") from None
         if dbid not in ids:
             ids.append(dbid)
     if not ids:
-        raise Invalid("Pick at least one favorite for the set.")
+        raise Invalid("Select at least one favorite for the set.")
     if len(ids) > MAX_SET_ITEMS:
         raise Invalid(f"An order set can have at most {MAX_SET_ITEMS} favorites.")
     allowed = Q(shared=True) if shared else Q(shared=True) | Q(shared=False, owner_id=owner)
     found = set(Favorite.objects.filter(allowed, dbid__in=ids, kind__in=ORDER_KINDS).values_list("dbid", flat=True))
     if len(found) != len(ids):
         raise Invalid(
-            "A practice order set can only include practice favorites." if shared else "Pick favorites from the list."
+            "A practice order set can only include practice favorites." if shared else "Select favorites from the list."
         )
     return {"items": ids}
 
@@ -180,6 +180,10 @@ def clean_favorite(
     if kind == "set":
         return kind, name, _set_details(body, owner, shared)
     details = _rx_details(body) if kind == "rx" else _lab_details(body)
+    if kind == "lab" and shared:
+        # A saved ordering provider would name one clinician on everyone's lab orders, and results go
+        # back to them, so only personal lab favorites keep one.
+        details["ordering_provider_id"] = details["ordering_provider_name"] = ""
     return kind, name, details
 
 

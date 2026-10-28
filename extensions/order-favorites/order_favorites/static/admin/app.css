@@ -306,3 +306,5 @@ button.tok:hover{border-color:var(--accent2);background:#fff}
 .picklist .pkh .pk-new:hover{text-decoration:underline}
 .picklist label.pk.just{background:#f2fafb;transition:background 1.2s}
 .picklist label.pk.just small b{color:#2c7f8c;font-weight:600}
+/* Prescription amounts on one row in the app, Unit a little wider (mockups/order-favorites-rx-fields-row.html). */
+.ed .grid.amounts{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr)}

@@ -91,25 +91,19 @@ def test_note_locked_while_panel_open_adds_nothing(make_staff: Any, make_note: A
     assert effects_of(results, "ORIGINATE_PRESCRIBE_COMMAND") == []
 
 
-def test_care_manager_adding_to_provider_note_names_the_provider_as_prescriber(make_staff: Any, make_note: Any) -> None:
+@pytest.mark.parametrize("adder_npi", ["", NPI])
+def test_prescriptions_leave_the_prescriber_to_canvas(make_staff: Any, make_note: Any, adder_npi: str) -> None:
+    # Canvas names the person adding when their role is in the practice's prescriber roles, otherwise
+    # leaves it blank. A covering prescriber in a colleague's note is never staged under the colleague.
     provider = make_staff(first="Dana", npi=NPI)
-    care_manager = make_staff(first="Casey")
+    me = make_staff(first="Casey", npi=adder_npi)
     note = make_note(provider=provider)
-    status, body, results = add(care_manager, note, [favorite(care_manager, shared=True).dbid])
+    status, body, results = add(me, note, [favorite(me, shared=True).dbid])
     assert status == 200
     [rx] = effects_of(results, "ORIGINATE_PRESCRIBE_COMMAND")
-    assert rx["prescriber_id"] == str(provider.id)
+    assert rx.get("prescriber_id") in (None, "")
     assert rx["note_uuid"] == str(note.id)
-    assert [a["id"] for a in body["added"]] == [Favorite.objects.get().dbid]
-
-
-@pytest.mark.parametrize(("npi", "active"), [("", True), ("1111155556", True), (NPI, False)])
-def test_prescriber_falls_back_to_the_adder_when_note_provider_cant_prescribe(make_staff: Any, make_note: Any, npi: str, active: bool) -> None:
-    provider = make_staff(npi=npi, active=active)
-    me = make_staff()
-    _status, _body, results = add(me, make_note(provider=provider), [favorite(me).dbid])
-    [rx] = effects_of(results, "ORIGINATE_PRESCRIBE_COMMAND")
-    assert rx["prescriber_id"] == str(me.id)
+    assert [x["id"] for x in body["added"]] == [Favorite.objects.get().dbid]
 
 
 def test_blank_prescription_fields_stay_blank_on_the_order(make_staff: Any, make_note: Any) -> None:
@@ -154,6 +148,22 @@ def test_lab_order_carries_tests_diagnoses_fasting_and_comment(make_staff: Any, 
     assert lab["diagnosis_codes"] == ["E119"]
     assert lab["fasting_required"] is True
     assert lab["comment"] == "Fasting 8h"
+
+
+def test_practice_lab_favorite_ignores_a_saved_ordering_provider(make_staff: Any, make_note: Any, make_partner: Any) -> None:
+    from order_favorites.services.favorites import clean_favorite
+
+    me = make_staff(first="Me", npi=NPI)
+    saved = make_staff(first="Saved", npi=NPI)
+    note_provider = make_staff(first="Note", npi=NPI)
+    partner = make_partner(tests=[("001", "Panel")])
+    body = {"kind": "lab", "name": "Practice lab", **lab_details(partner, ["001"], ordering_provider_id=str(saved.id))}
+    _kind, _name, details = clean_favorite(body, owner=me.dbid, shared=True)
+    assert details["ordering_provider_id"] == ""
+    # One saved before this rule is ignored when it's added.
+    old = favorite(me, kind="lab", shared=True, details=lab_details(partner, ["001"], ordering_provider_id=str(saved.id)))
+    _s, _b, results = add(me, make_note(provider=note_provider), [old.dbid])
+    assert effects_of(results, "ORIGINATE_LAB_ORDER_COMMAND")[0]["ordering_provider_key"] == str(note_provider.id)
 
 
 def test_lab_ordering_provider_prefers_favorite_then_note_provider_then_adder(make_staff: Any, make_note: Any, make_partner: Any) -> None:

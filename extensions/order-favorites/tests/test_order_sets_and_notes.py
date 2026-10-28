@@ -35,7 +35,7 @@ def test_personal_set_may_hold_own_and_practice_favorites(make_staff: Any) -> No
 
 def test_personal_set_cant_hold_someone_elses_personal_favorite(make_staff: Any) -> None:
     me, other = make_staff(), make_staff()
-    with pytest.raises(Invalid, match="Pick favorites from the list."):
+    with pytest.raises(Invalid, match="Select favorites from the list."):
         clean_favorite({"kind": "set", "name": "x", "items": [favorite(other).dbid]}, owner=me.dbid)
 
 
@@ -47,10 +47,10 @@ def test_practice_set_can_only_hold_practice_favorites(make_staff: Any) -> None:
 
 def test_set_needs_favorites_and_cant_hold_another_set(make_staff: Any) -> None:
     me = make_staff()
-    with pytest.raises(Invalid, match="Pick at least one favorite"):
+    with pytest.raises(Invalid, match="Select at least one favorite"):
         clean_favorite({"kind": "set", "name": "x", "items": []}, owner=me.dbid)
     inner = a_set(me, [favorite(me).dbid])
-    with pytest.raises(Invalid, match="Pick favorites from the list."):
+    with pytest.raises(Invalid, match="Select favorites from the list."):
         clean_favorite({"kind": "set", "name": "x", "items": [inner.dbid]}, owner=me.dbid)
 
 

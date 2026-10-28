@@ -46,8 +46,8 @@ Needs a Canvas release with per-user app drawer icons (1.364 or later).
 
 ## Who is named on the order
 
-- **Prescriptions:** the note's provider, when they are active and have an NPI. Otherwise the person adding the order. A care manager adding to a provider's note does not become the prescriber.
-- **Lab orders:** the favorite's ordering provider if one is saved and still active with an NPI, then the note's provider, then the person adding.
+- **Prescriptions:** the same as Canvas's Prescribe command. The person adding is the prescriber when their role is in the practice's prescriber roles. Otherwise the prescriber is left blank, and the prescriber fills it in before signing.
+- **Lab orders:** a personal favorite's saved ordering provider, if one is saved and still active with an NPI, then the note's provider, then the person adding. Practice lab favorites don't save an ordering provider, since it would name one clinician on everyone's lab orders and the results would go back to them.
 
 Both can be changed in the command before it is signed.
 
@@ -73,6 +73,17 @@ Separate several tests or diagnoses with `;`. A medication must match its exact 
 ## Patient access
 
 The panel opens only from a note Canvas already showed the user, and **Change** lists only that patient's notes. Plugins can't read Canvas's patient-group access rules, so the plugin's API doesn't check them itself; it relies on Canvas's chart screens for those limits.
+
+What that means for a practice: any signed-in staff member who has a note's ID can see that patient's open visit and chart review notes and booked appointments (reason for visit, date, provider) and stage orders in them, whether or not patient groups would let them open the chart. A practice that uses patient groups to limit chart access should weigh that before installing.
+
+## Moving from Prescription Favorites or Lab Order Favorites
+
+Favorites in those plugins don't carry over.
+
+1. Install Order Favorites next to the old plugin. They run side by side, with separate buttons and separate data.
+2. Move practice favorites with the CSV import (see Import format).
+3. Ask each person to re-create their personal favorites in Order Favorites.
+4. Uninstall the old plugin once everyone has switched.
 
 ## Data
 

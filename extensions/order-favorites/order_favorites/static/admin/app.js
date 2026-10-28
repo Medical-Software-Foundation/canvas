@@ -118,7 +118,7 @@
     var box = $("#detail");
     var f = sel ? byId(sel) : null;
     var editingNew = edit && !edit.id;
-    if (!f && !editingNew) { box.innerHTML = '<div class="ax-blank"><div><b>Pick ' + (tab === "set" ? "an order set" : "a favorite") + '</b>or add a new one.</div></div>'; edit = null; guard = null; return; }
+    if (!f && !editingNew) { box.innerHTML = '<div class="ax-blank"><div><b>Select ' + (tab === "set" ? "an order set" : "a favorite") + '</b>or add a new one.</div></div>'; edit = null; guard = null; return; }
 
     if (f && f.shared && !isAdmin()) {
       // Practice favorites are read-only for everyone but admins: copy or hide them.
@@ -146,7 +146,7 @@
     var copyNote = !f && copyOf ? 'A personal copy of the practice ' + (isSet ? "order set" : "favorite") + ' "' + copyOf + '". Changes to the practice one won\'t reach your copy.' : "";
     edit.editor = isSet
       ? OF.SetEditor($("#form"), value, { favorites: mine.favorites, practice: practice, kinds: kinds(), note: copyNote, onNew: openSub, baseline: baseline, justAdded: back ? back.justAdded : null })
-      : OF.Editor($("#form"), value, { note: copyNote });
+      : OF.Editor($("#form"), value, { note: copyNote, practice: practice });
     back = null;
     guard = OF.Guard($("#guardSlot"), dirty, function () { return edit ? edit.editor.name() : ""; });
     renderFoot();
@@ -163,7 +163,7 @@
       '<div id="guardSlot" hidden></div><div class="ed" style="margin-top:16px" id="form"></div><div class="ax-err" id="err" role="alert"></div>' +
       '<div class="ax-foot"><div class="ax-dacts"><button class="ax-btn" data-subback="1">Back to set</button><button class="ax-btn primary" id="subsave">Save and add to set</button></div></div>';
     edit = { id: null, kind: sub.kind, value: OF.blank(sub.kind), practice: sub.practice, editor: null };
-    edit.editor = OF.Editor($("#form"), edit.value, {});
+    edit.editor = OF.Editor($("#form"), edit.value, { practice: sub.practice });
     // Leaving the pane warns if the form or the set behind it has unsaved changes.
     guard = OF.Guard($("#guardSlot"), dirty, function () { return edit && edit.editor.name() || sub.draft.name; });
   }

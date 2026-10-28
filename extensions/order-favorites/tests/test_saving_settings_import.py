@@ -33,12 +33,12 @@ def admin(make_staff: Any) -> Any:
     [
         ({"name": ""}, "Name is required."),
         ({"fdb_code": ""}, "Medication is required."),
-        ({"fdb_code": "abc"}, "Pick the medication from the search list."),
+        ({"fdb_code": "abc"}, "Select the medication from the search list."),
         ({"days_supply": "0"}, "Days supply must be between 1 and 365."),
         ({"quantity": "0"}, "Quantity must be more than 0."),
         ({"quantity": "lots"}, "Quantity must be a number."),
         ({"refills": "100"}, "Refills must be between 0 and 99."),
-        ({"ncpdp_quantity_qualifier_code": ""}, "Pick the unit from the list."),
+        ({"ncpdp_quantity_qualifier_code": ""}, "Select the unit from the list."),
     ],
 )
 def test_prescription_values_that_are_filled_in_must_be_valid(change: dict[str, Any], message: str) -> None:
@@ -70,7 +70,7 @@ def test_lab_test_the_partner_doesnt_offer_cant_be_saved(make_partner: Any) -> N
 
 def test_lab_needs_an_active_partner_and_a_test(make_partner: Any) -> None:
     inactive = make_partner(active=False, tests=[("001", "CMP")])
-    with pytest.raises(Invalid, match="Pick an active lab partner."):
+    with pytest.raises(Invalid, match="Select an active lab partner."):
         clean_favorite({"kind": "lab", "name": "x", **lab_details(inactive, ["001"])})
     active = make_partner(name="Other", tests=[("001", "CMP")])
     with pytest.raises(Invalid, match="Add at least one test."):

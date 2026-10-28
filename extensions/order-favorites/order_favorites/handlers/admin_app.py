@@ -22,7 +22,7 @@ class OrderFavoritesApp(PanelApplication):
     """
 
     NAME = "Order Favorites"
-    # Kept from when only admins saw this icon, so an installed drawer entry isn't duplicated.
+    # Changing this would make Canvas treat it as a new drawer app.
     IDENTIFIER = "order_favorites__admin"
     ICON_URL = "/plugin-io/api/order_favorites/icon.svg"
 
