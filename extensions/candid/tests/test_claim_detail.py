@@ -22,7 +22,6 @@ def _fake_claim() -> MagicMock:
     claim.postings.active.return_value.filter.return_value = []
     claim.banner_alerts.filter.return_value.first.return_value = None
     claim.comments.filter.return_value.order_by.return_value = []
-    claim.current_queue.name = "FiledAwaitingResponse"
     return claim
 
 
@@ -147,3 +146,84 @@ def test_post_triggers_sync_and_reports_effect_count():
     assert effects[:2] == ["effect-a", "effect-b"]
     body = json.loads(effects[2].content)
     assert body == {"status": "synced", "effects_count": 2}
+
+
+def test_get_does_not_return_current_queue():
+    """The panel never showed the queue; the claim page's queue list owns that label."""
+    body, resp = _run_get({"claim_id": "claim-1"}, {}, _fake_claim())
+    assert resp.status_code == 200
+    assert "current_queue" not in body
+
+
+def test_get_joins_posting_info_onto_synced_ids():
+    from datetime import UTC, datetime
+
+    claim = _fake_claim()
+    era_posting = MagicMock(
+        description="Candid ERA era-1",
+        created=datetime(2026, 2, 1, tzinfo=UTC),
+        paid_amount="70.00",
+    )
+    pmt_posting = MagicMock(
+        description="Candid patient payment pay-1",
+        created=datetime(2026, 2, 2, tzinfo=UTC),
+        paid_amount="25.00",
+    )
+    undescribed = MagicMock(description="", created=datetime(2026, 2, 3, tzinfo=UTC))
+    claim.postings.active.return_value.filter.return_value = [
+        era_posting,
+        pmt_posting,
+        undescribed,
+    ]
+    banner = MagicMock(narrative="Candid: Paid")
+    claim.banner_alerts.filter.return_value.first.return_value = banner
+    claim.comments.filter.return_value.order_by.return_value = [
+        MagicMock(comment="Candid: synced", created=datetime(2026, 2, 4, tzinfo=UTC)),
+        MagicMock(comment="Candid: no date", created=None),
+    ]
+
+    body, resp = _run_get(
+        {"claim_id": "claim-1"},
+        {
+            "candid_synced_adjudication_ids": ["era-1", "era-unposted"],
+            "candid_synced_payment_ids": ["pay-1"],
+            META_CLAIM_STATUS: "paid",
+        },
+        claim,
+    )
+
+    assert resp.status_code == 200
+    claim.postings.active.return_value.filter.assert_called_once_with(
+        description__startswith="Candid "
+    )
+    assert body["synced_era_ids"] == [
+        {"id": "era-1", "posted_at": "2026-02-01T00:00:00+00:00"},
+        {"id": "era-unposted", "posted_at": None},
+    ]
+    assert body["synced_payment_ids"] == [
+        {"id": "pay-1", "posted_at": "2026-02-02T00:00:00+00:00", "paid_amount": "25.00"}
+    ]
+    assert body["banner"] == "Candid: Paid"
+    assert body["candid_claim_status"] == "paid"
+    assert body["comments"] == [
+        {"comment": "Candid: synced", "created": "2026-02-04T00:00:00+00:00"},
+        {"comment": "Candid: no date", "created": None},
+    ]
+
+
+def test_post_returns_404_when_claim_missing():
+    handler = CandidClaimDetailAPI.__new__(CandidClaimDetailAPI)
+    handler.secrets = MOCK_SECRETS
+    handler.request = MagicMock()
+    handler.request.json.return_value = {"claim_id": "nope"}
+
+    with (
+        patch("candid.api.claim_detail.Claim") as MockClaim,
+        patch("candid.api.claim_detail.sync_claim_adjudications") as mock_sync,
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = None
+        effects = handler.post()
+
+    assert effects[0].status_code == 404
+    assert json.loads(effects[0].content) == {"error": "claim not found"}
+    mock_sync.assert_not_called()

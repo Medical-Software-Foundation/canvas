@@ -88,6 +88,12 @@ DENIED_STATUSES = {"denied", "finalized_denied", "rejected", "failed"}
 ERA_DESC_PREFIX = "Candid ERA "
 PATIENT_PAYMENT_DESC_PREFIX = "Candid patient payment "
 
+# Appended to the payment_note of every patient payment Canvas reports to
+# Candid. The sync never imports a Candid payment carrying it, so a payment
+# Canvas sent can't come back even when its ID never reached claim metadata
+# (report timed out, overlapping reports, or a sync that read metadata first).
+CANVAS_REPORTED_NOTE_TAG = "[sent from Canvas]"
+
 PAYER_ORDER_RANK = {
     ClaimPayerOrder.PRIMARY: 1,
     ClaimPayerOrder.SECONDARY: 2,
@@ -178,7 +184,9 @@ def sync_banner(
 ) -> Effect:
     status_display = claim_status.replace("_", " ").title()
 
-    parts = [f"Candid: {status_display}"]
+    # "Candid status:" so a Candid claim status such as "Rejected" isn't read
+    # as the claim's Canvas queue, which a customer may have renamed.
+    parts = [f"Candid status: {status_display}"]
     if submitted_at:
         parts.append(f"Submitted {format_date_display(submitted_at)}")
     parts.append(f"Last synced {format_date_display(last_sync_at)}")
