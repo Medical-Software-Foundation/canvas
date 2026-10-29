@@ -1,0 +1,51 @@
+{
+    "sdk_version": "0.245.0",
+    "plugin_version": "0.5.4",
+    "name": "order_favorites",
+    "description": "Saved prescriptions and lab orders that staff add to a note in one action. A button in each open visit or chart review note opens a panel of practice and personal favorites; an app in the app drawer lets everyone manage their own favorites, and lets favorites admins manage practice favorites, import, and settings.",
+    "components": {
+        "protocols": [
+            {
+                "class": "order_favorites.handlers.note_button:OrderFavoritesButton",
+                "description": "Note-header button on open visit and chart review notes that opens the favorites panel for that note.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "order_favorites.handlers.api:OrderFavoritesAPI",
+                "description": "Serves the favorites panel and admin app, and the API that saves favorites and adds them to notes.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "handlers": [
+            {
+                "class": "order_favorites.handlers.admin_app:OrderFavoritesApp",
+                "description": "App drawer icon for everyone's own favorites; favorites admins also manage practice favorites, import, and settings there."
+            }
+        ]
+    },
+    "custom_data": {
+        "namespace": "canvas_medical__order_favorites",
+        "access": "read_write"
+    },
+    "variables": [
+        {
+            "name": "FIRST_ADMIN",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [
+        "https://docs.canvasmedical.com/sdk/custom-data-custom-models/"
+    ],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

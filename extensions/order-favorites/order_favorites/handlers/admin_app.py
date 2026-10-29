@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from canvas_sdk.effects import Effect
+from canvas_sdk.effects.launch_modal import LaunchModalEffect
+from canvas_sdk.handlers.application import PanelApplication
+
+from order_favorites.services.access import staff_dbid
+
+# Changes on every install, so Canvas never shows a drawer page cached from an older version.
+_CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
+
+
+class OrderFavoritesApp(PanelApplication):
+    """App drawer icon for Order Favorites.
+
+    Every active staff member sees it and gets "My favorites", to manage their own favorites without
+    opening a note. Favorites admins also get the practice favorites and Settings tabs; the page and
+    every admin route check admin status themselves. Needs a Canvas release with per-user app drawer
+    icons (1.364 or later).
+    """
+
+    NAME = "Order Favorites"
+    # Changing this would make Canvas treat it as a new drawer app.
+    IDENTIFIER = "order_favorites__admin"
+    ICON_URL = "/plugin-io/api/order_favorites/icon.svg"
+
+    def _staff_id(self) -> str | None:
+        user = self.event.context.get("user") or {}
+        return user.get("id") if user.get("type") == "Staff" else None
+
+    def visible(self) -> bool:
+        return staff_dbid(self._staff_id()) is not None
+
+    def on_open(self) -> Effect | list[Effect]:
+        return LaunchModalEffect(
+            url=f"/plugin-io/api/order_favorites/admin/?v={_CACHE_BUST}",
+            target=LaunchModalEffect.TargetType.PAGE,
+            title="Order Favorites",
+        ).apply()
