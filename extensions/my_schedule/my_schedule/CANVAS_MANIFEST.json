@@ -1,0 +1,86 @@
+{
+    "sdk_version": "0.240.0",
+    "plugin_version": "0.2.1",
+    "name": "my_schedule",
+    "description": "Opens Canvas on a My Schedule page for the roles listed in RESTRICTED_ROLES (for example MD, NP, PA), showing only the logged-in clinician's own appointments, and hides the built-in Schedule for those roles.",
+    "components": {
+        "applications": [
+            {
+                "class": "my_schedule.applications.my_schedule_app:MyScheduleApp",
+                "name": "My Schedule",
+                "description": "Your own appointments in day, week and month views.",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "menu_position": "top",
+                "menu_order": 100
+            }
+        ],
+        "handlers": [
+            {
+                "class": "my_schedule.handlers.schedule_api:MyScheduleAPI",
+                "description": "Serves the My Schedule page and the logged-in staff member's own appointments, with optional status, cancel and no-show actions on them.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "AppointmentLabel", "TaskLabel", "Calendar", "CalendarEvent", "Note", "CurrentNoteStateEvent", "NoteType", "Patient", "PracticeLocation", "Staff"],
+                    "write": ["Appointment", "Note"]
+                }
+            },
+            {
+                "class": "my_schedule.handlers.homepage:MyScheduleHomepage",
+                "description": "Opens My Schedule at login for restricted roles.",
+                "data_access": {
+                    "event": "GET_HOMEPAGE_CONFIGURATION",
+                    "read": ["Staff", "StaffRole"],
+                    "write": []
+                }
+            },
+            {
+                "class": "my_schedule.handlers.hide_native_schedule:HideNativeScheduleMenu",
+                "description": "Hides the built-in Schedule menu item for restricted roles.",
+                "data_access": {
+                    "event": "GET_PROVIDER_MENU_CONFIGURATION",
+                    "read": ["Staff", "StaffRole"],
+                    "write": []
+                }
+            },
+            {
+                "class": "my_schedule.handlers.hide_native_schedule:HideAppointmentsPanelFilter",
+                "description": "Hides the Appointments filter in the global panel for restricted roles.",
+                "data_access": {
+                    "event": "PANEL_SECTIONS_CONFIGURATION",
+                    "read": ["Staff", "StaffRole"],
+                    "write": []
+                }
+            },
+            {
+                "class": "my_schedule.handlers.booking_providers:BookOnlySelf",
+                "description": "Limits the booking window's provider list to the restricted staff member themselves.",
+                "data_access": {
+                    "event": "APPOINTMENT__FORM__PROVIDERS__POST_SEARCH",
+                    "read": ["Staff", "StaffRole"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "RESTRICTED_ROLES"},
+        {"name": "EXEMPT_STAFF_IDS"},
+        {"name": "BOOK_ONLY_SELF"},
+        {"name": "HIDE_MENU_ITEMS"},
+        {"name": "ALLOW_STATUS_UPDATES"},
+        {"name": "ALLOW_CANCEL"},
+        {"name": "ALLOW_NO_SHOW"},
+        {"name": "GRID_START_HOUR"},
+        {"name": "GRID_END_HOUR"}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

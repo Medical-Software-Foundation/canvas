@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>My Schedule</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css?v={{cache_bust}}">
+        <script type="text/javascript" src="main.js?v={{cache_bust}}" defer></script>
+    </head>
+    <body data-allow-status="{{allow_status}}"
+          data-allow-cancel="{{allow_cancel}}"
+          data-allow-noshow="{{allow_noshow}}"
+          data-staff-name="{{staff_name}}">
+        <div class="shell">
+            <aside class="rail" aria-label="Date and view">
+                <button type="button" id="today-btn" class="today-btn">Today</button>
+
+                <div class="stepper">
+                    <button type="button" id="prev-btn" class="stepper-btn" aria-label="Previous">&#8249;</button>
+                    <span id="stepper-label" class="stepper-label">Today</span>
+                    <button type="button" id="next-btn" class="stepper-btn" aria-label="Next">&#8250;</button>
+                </div>
+
+                <div class="mini" id="mini" aria-label="Pick a date"></div>
+
+                <div class="views" role="tablist" aria-label="View">
+                    <button type="button" class="view-btn active" data-view="day" role="tab" aria-selected="true">Day</button>
+                    <button type="button" class="view-btn" data-view="week" role="tab" aria-selected="false">Week</button>
+                    <button type="button" class="view-btn" data-view="month" role="tab" aria-selected="false">Month</button>
+                </div>
+
+                <p id="summary" class="summary" aria-live="polite"></p>
+            </aside>
+
+            <main class="stage">
+                <header class="stage-head">
+                    <h1 id="view-title" class="view-title">Today</h1>
+                </header>
+                <div id="content" class="content">
+                    <div class="state">Loading your schedule&hellip;</div>
+                </div>
+            </main>
+        </div>
+
+        <aside id="card" class="card" aria-label="Visit details" hidden>
+            <button type="button" id="card-close" class="card-close" aria-label="Close">&times;</button>
+            <div id="card-body"></div>
+        </aside>
+    </body>
+</html>
