@@ -1,0 +1,288 @@
+/* Harbor — a patient-facing theme for Canvas Theme Kit.
+ *
+ * Every color is checked against WCAG 2.1: all text tokens clear 4.5:1 on both
+ * the page background and the surface tint, and interactive borders clear 3:1
+ * per 1.4.11. That is not decoration in a patient portal — someone reading a lab
+ * result on a phone in bad light is the actual user.
+ *
+ * Base font size is 17px rather than 16, line height 1.6, and controls are 44px
+ * tall: patient-facing surfaces skew older and more mobile than staff tooling.
+ *
+ * No @import and no off-origin url() — both are rejected by the publisher, and
+ * a stylesheet that phones home from a patient page is exactly what that rule
+ * exists to prevent. The type stack is system fonts, so there is nothing to
+ * fetch and nothing to wait for.
+ */
+
+/* ---------- page ---------- */
+
+.ctk-page {
+  margin: 0;
+  padding: var(--ctk-space-6);
+  font-family: var(--ctk-font-family);
+  font-size: var(--ctk-font-size-base);
+  line-height: var(--ctk-line-height-base);
+  color: var(--ctk-color-fg);
+  background: var(--ctk-color-surface);
+  -webkit-text-size-adjust: 100%;
+}
+
+.ctk-shell {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+/* Long-form text gets a measure. Full-width paragraphs on a desktop monitor are
+   genuinely harder to read; the eye loses the line return. */
+.ctk-prose {
+  max-width: var(--ctk-measure);
+}
+
+/* ---------- type ---------- */
+
+.ctk-h1,
+.ctk-h2,
+.ctk-h3 {
+  line-height: var(--ctk-line-height-tight);
+  color: var(--ctk-color-fg);
+  margin: 0 0 var(--ctk-space-3);
+  text-wrap: balance;
+}
+
+.ctk-h1 { font-size: var(--ctk-font-size-2xl); font-weight: var(--ctk-font-weight-bold); }
+.ctk-h2 { font-size: var(--ctk-font-size-xl); font-weight: var(--ctk-font-weight-bold); }
+.ctk-h3 { font-size: var(--ctk-font-size-lg); font-weight: var(--ctk-font-weight-medium); }
+
+.ctk-lede {
+  font-size: var(--ctk-font-size-lg);
+  color: var(--ctk-color-fg-muted);
+  margin: 0 0 var(--ctk-space-6);
+}
+
+.ctk-muted { color: var(--ctk-color-fg-muted); }
+.ctk-small { font-size: var(--ctk-font-size-sm); }
+
+.ctk-eyebrow {
+  display: block;
+  font-size: var(--ctk-font-size-xs);
+  font-weight: var(--ctk-font-weight-bold);
+  letter-spacing: var(--ctk-letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--ctk-color-fg-muted);
+  margin-bottom: var(--ctk-space-2);
+}
+
+.ctk-link {
+  color: var(--ctk-color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ctk-link:hover { color: var(--ctk-color-accent-strong); }
+
+/* ---------- surfaces ---------- */
+
+.ctk-card {
+  background: var(--ctk-color-bg);
+  border: 1px solid var(--ctk-color-border);
+  border-radius: var(--ctk-radius-lg);
+  padding: var(--ctk-space-6);
+  box-shadow: var(--ctk-shadow-sm);
+}
+
+.ctk-card + .ctk-card { margin-top: var(--ctk-space-4); }
+
+.ctk-card--accent {
+  border-color: var(--ctk-color-accent);
+  border-left-width: 4px;
+}
+
+.ctk-stack > * + * { margin-top: var(--ctk-space-4); }
+
+.ctk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ctk-space-3);
+  align-items: center;
+}
+
+/* ---------- controls ---------- */
+
+.ctk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ctk-space-2);
+  min-height: var(--ctk-control-height);
+  padding: 0 var(--ctk-space-5);
+  font-family: inherit;
+  font-size: var(--ctk-font-size-base);
+  font-weight: var(--ctk-font-weight-medium);
+  color: var(--ctk-color-accent-contrast);
+  background: var(--ctk-color-accent);
+  border: 1px solid transparent;
+  border-radius: var(--ctk-radius-md);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.ctk-btn:hover { background: var(--ctk-color-accent-strong); }
+
+.ctk-btn[disabled],
+.ctk-btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ctk-btn--secondary {
+  color: var(--ctk-color-accent);
+  background: var(--ctk-color-bg);
+  border-color: var(--ctk-color-border-strong);
+}
+
+.ctk-btn--secondary:hover {
+  background: var(--ctk-color-accent-subtle);
+  border-color: var(--ctk-color-accent);
+}
+
+.ctk-btn--danger { background: var(--ctk-color-danger); }
+.ctk-btn--danger:hover { background: var(--ctk-color-danger); filter: brightness(0.9); }
+
+.ctk-btn--block { width: 100%; }
+
+.ctk-label {
+  display: block;
+  font-size: var(--ctk-font-size-sm);
+  font-weight: var(--ctk-font-weight-medium);
+  margin-bottom: var(--ctk-space-1);
+}
+
+.ctk-input,
+.ctk-select,
+.ctk-textarea {
+  width: 100%;
+  min-height: var(--ctk-control-height);
+  padding: var(--ctk-space-2) var(--ctk-space-3);
+  font-family: inherit;
+  font-size: var(--ctk-font-size-base);
+  color: var(--ctk-color-fg);
+  background: var(--ctk-color-bg);
+  /* border-strong, not border: an input boundary is a UI component and needs
+     3:1 under WCAG 1.4.11, where a decorative hairline does not. */
+  border: 1px solid var(--ctk-color-border-strong);
+  border-radius: var(--ctk-radius-sm);
+}
+
+.ctk-textarea { min-height: 7rem; resize: vertical; }
+
+.ctk-hint {
+  font-size: var(--ctk-font-size-sm);
+  color: var(--ctk-color-fg-muted);
+  margin-top: var(--ctk-space-1);
+}
+
+/* One focus treatment for everything interactive. :focus-visible so a mouse
+   click does not leave a ring behind, while keyboard navigation always shows
+   one — the accessibility failure here is silent, since the people who need it
+   are not the people who usually test it. */
+.ctk-btn:focus-visible,
+.ctk-input:focus-visible,
+.ctk-select:focus-visible,
+.ctk-textarea:focus-visible,
+.ctk-link:focus-visible {
+  outline: var(--ctk-focus-ring-width) solid var(--ctk-color-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- status ---------- */
+
+.ctk-badge {
+  display: inline-block;
+  padding: var(--ctk-space-1) var(--ctk-space-3);
+  font-size: var(--ctk-font-size-xs);
+  font-weight: var(--ctk-font-weight-bold);
+  letter-spacing: var(--ctk-letter-spacing-wide);
+  text-transform: uppercase;
+  border-radius: var(--ctk-radius-pill);
+  color: var(--ctk-color-accent);
+  background: var(--ctk-color-accent-subtle);
+}
+
+.ctk-badge--success { color: var(--ctk-color-success); background: var(--ctk-color-success-subtle); }
+.ctk-badge--warning { color: var(--ctk-color-warning); background: var(--ctk-color-warning-subtle); }
+.ctk-badge--danger  { color: var(--ctk-color-danger);  background: var(--ctk-color-danger-subtle); }
+
+.ctk-alert {
+  display: flex;
+  gap: var(--ctk-space-3);
+  padding: var(--ctk-space-4);
+  border-radius: var(--ctk-radius-md);
+  border-left: 4px solid var(--ctk-color-accent);
+  background: var(--ctk-color-accent-subtle);
+  color: var(--ctk-color-fg);
+}
+
+.ctk-alert--success { border-left-color: var(--ctk-color-success); background: var(--ctk-color-success-subtle); }
+.ctk-alert--warning { border-left-color: var(--ctk-color-warning); background: var(--ctk-color-warning-subtle); }
+.ctk-alert--danger  { border-left-color: var(--ctk-color-danger);  background: var(--ctk-color-danger-subtle); }
+
+/* Color is never the only signal — an alert is distinguished by its left rule
+   and its text, so it still reads for a colorblind patient. */
+
+/* ---------- data ---------- */
+
+.ctk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ctk-font-size-sm);
+}
+
+.ctk-table th,
+.ctk-table td {
+  text-align: left;
+  padding: var(--ctk-space-3);
+  border-bottom: 1px solid var(--ctk-color-border);
+}
+
+.ctk-table th {
+  font-size: var(--ctk-font-size-xs);
+  font-weight: var(--ctk-font-weight-bold);
+  letter-spacing: var(--ctk-letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--ctk-color-fg-muted);
+}
+
+.ctk-table tr:last-child td { border-bottom: 0; }
+
+.ctk-kv {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: var(--ctk-space-2) var(--ctk-space-4);
+}
+
+.ctk-kv dt { color: var(--ctk-color-fg-muted); font-size: var(--ctk-font-size-sm); }
+.ctk-kv dd { margin: 0; }
+
+/* ---------- accessibility ---------- */
+
+.ctk-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctk-btn { transition: none; }
+}
+
+@media (max-width: 30rem) {
+  .ctk-page { padding: var(--ctk-space-4); }
+  .ctk-card { padding: var(--ctk-space-4); border-radius: var(--ctk-radius-md); }
+  .ctk-btn { width: 100%; }
+}
