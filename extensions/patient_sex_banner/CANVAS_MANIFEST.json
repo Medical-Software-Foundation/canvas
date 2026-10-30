@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_sex_banner",
+    "description": "Displays a banner to let user know the patient sex is not male or female",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_sex_banner.protocols.my_protocol:Protocol",
+                "description": "Adds or removes the sex banner for a single patient on create/update.",
+                "data_access": {
+                    "event": "PATIENT_CREATED, PATIENT_UPDATED",
+                    "read": ["Patient"],
+                    "write": ["BannerAlert (via effects)"]
+                }
+            },
+            {
+                "class": "patient_sex_banner.protocols.backfill:BackfillBanners",
+                "description": "Paged cron task that backfills the sex banner across existing patients after install.",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Patient"],
+                    "write": ["BannerAlert (via effects)"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
