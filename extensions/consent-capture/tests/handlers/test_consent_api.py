@@ -23,6 +23,7 @@ from consent_capture.handlers.consent_api import (
     serialize_coding,
     serialize_definition,
 )
+from consent_capture.signing import statement_fingerprint
 
 MODULE = "consent_capture.handlers.consent_api"
 
@@ -198,9 +199,20 @@ class TestResolvePatient:
             mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
                 "Jane",
                 "Doe",
+                "",
                 dob,
             )
             assert _resolve_patient("patient-1") == ("Jane Doe", "1990-01-01")
+            mock_patient.objects.filter.return_value.values_list.assert_called_once_with(
+                "first_name", "last_name", "suffix", "birth_date"
+            )
+
+    def test_suffix_is_part_of_the_name(self):
+        with patch(f"{MODULE}.Patient") as mock_patient:
+            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
+                "Robert", "Lopez", "Jr", None,
+            )
+            assert _resolve_patient("patient-1") == ("Robert Lopez Jr", "")
 
     def test_row_without_dob_uses_empty_string(self):
         with patch(f"{MODULE}.Patient") as mock_patient:
@@ -208,12 +220,14 @@ class TestResolvePatient:
                 "Jane",
                 "Doe",
                 None,
+                None,
             )
             assert _resolve_patient("patient-1") == ("Jane Doe", "")
 
     def test_row_missing_name_uses_fallback(self):
         with patch(f"{MODULE}.Patient") as mock_patient:
             mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
+                "",
                 "",
                 "",
                 None,
@@ -260,7 +274,11 @@ def _defn(**over):
     d.method_options = over.get("method_options", [])
     d.satisfied_by = over.get("satisfied_by", [])
     d.required = over.get("required", False)
+    d.allow_device_signature = over.get("allow_device_signature", False)
     return d
+
+
+DEFAULT_STATEMENT_SHA256 = statement_fingerprint(["Line one."])[1]
 
 
 def _make_api(body, staff_id="staff-9", secrets=None):
@@ -272,6 +290,9 @@ def _make_api(body, staff_id="staff-9", secrets=None):
     # Capacity-specific tests pass it explicitly (including False) and are respected.
     if isinstance(body, dict):
         body.setdefault("capacity_confirmed", True)
+        # The picker sends back the fingerprint of the text it showed; default it to
+        # the text of _defn() so tests that don't change verbiage record normally.
+        body.setdefault("statement_sha256", DEFAULT_STATEMENT_SHA256)
     api.request.json.return_value = body
     api.request.headers.get.return_value = staff_id
     api.secrets = secrets if secrets is not None else {
@@ -631,7 +652,7 @@ class TestCollectQuestions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ) as mock_pdf, patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -689,7 +710,7 @@ class TestCollectCapacity:
             patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"),
             patch(f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"),
             patch(f"{MODULE}.build_consent_payload", return_value={}),
-            patch(f"{MODULE}.parse_statement", return_value=[]),
+            patch(f"{MODULE}.parse_statement", return_value=["Line one."]),
         )
         with patch(f"{MODULE}.definition_by_code", return_value=defn), p1, p2, p3 as mock_pdf, p4, p5, patch(
             f"{MODULE}.CanvasFhir"
@@ -711,7 +732,7 @@ class TestCollectCapacity:
             patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"),
             patch(f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"),
             patch(f"{MODULE}.build_consent_payload", return_value={}),
-            patch(f"{MODULE}.parse_statement", return_value=[]),
+            patch(f"{MODULE}.parse_statement", return_value=["Line one."]),
         )
         with patch(f"{MODULE}.definition_by_code", return_value=defn), p1, p2, p3 as mock_pdf, p4, p5, patch(
             f"{MODULE}.CanvasFhir"
@@ -742,7 +763,7 @@ class TestCollectMethodOptions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ) as mock_pdf, patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -758,7 +779,7 @@ class TestCollectMethodOptions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ), patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -777,7 +798,7 @@ class TestCollectMethodOptions:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="GEN"
         ) as mock_pdf, patch(f"{MODULE}.build_consent_payload", return_value={}) as mock_payload, patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir:
             mock_fhir.return_value.create.return_value = {}
             result = api.collect()
@@ -800,7 +821,7 @@ class TestCollectMethodOptions:
             f"{MODULE}._resolve_patient", return_value=("Jane Doe", "")
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.build_consent_payload", return_value={}
-        ) as mock_payload, patch(f"{MODULE}.parse_statement", return_value=[]), patch(
+        ) as mock_payload, patch(f"{MODULE}.parse_statement", return_value=["Line one."]), patch(
             f"{MODULE}.CanvasFhir"
         ) as mock_fhir, patch(f"{MODULE}.log"):
             mock_fhir.return_value.create.return_value = {}
@@ -820,7 +841,7 @@ class TestCollectMethodOptions:
             f"{MODULE}._resolve_patient", return_value=("Jane Doe", "")
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.build_consent_payload", return_value={}
-        ), patch(f"{MODULE}.parse_statement", return_value=[]), patch(
+        ), patch(f"{MODULE}.parse_statement", return_value=["Line one."]), patch(
             f"{MODULE}.CanvasFhir"
         ) as mock_fhir, patch(f"{MODULE}.log"):
             mock_fhir.return_value.create.return_value = {}
@@ -1017,7 +1038,10 @@ class TestConsentDocument:
             res = api.document()
             assert mpc.objects.filter.mock_calls[0] == call(
                 id="cid-9", patient__id="p1",
-                state__in=("accepted", "accepted_via_patient_portal"),
+                state__in=(
+                    "accepted", "accepted_via_patient_portal",
+                    "rejected", "rejected_via_patient_portal",
+                ),
             )
             mfhir.return_value.read.assert_called_once_with("Consent", "cid-9")
         assert res[0].content["ok"] is True
@@ -1054,7 +1078,7 @@ class TestCollectFhirErrorHandling:
         ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value="PDF"
         ), patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
-            f"{MODULE}.parse_statement", return_value=[]
+            f"{MODULE}.parse_statement", return_value=["Line one."]
         ), patch(f"{MODULE}.CanvasFhir") as mock_fhir, patch(f"{MODULE}.log"):
             mock_fhir.return_value.create.side_effect = exc
             return api.collect()
@@ -1122,6 +1146,7 @@ def test_serialize_definition_shape():
         "obtained_by_enabled", "capacity_enabled", "method_options",
         "capacity_patient_template", "capacity_representative_template",
         "questions", "satisfied_by", "required", "active", "sort_order",
+        "allow_device_signature",
     }
 
 
@@ -1363,6 +1388,52 @@ class TestAdminUpsert:
             assert update_kwargs["display"] == "Universal Consent"
         assert result[0].content["ok"] is True
 
+    def test_unprintable_consent_text_refused(self):
+        api = _admin({"code": "universal", "system": "INTERNAL", "verbiage": "Tôi đồng ý."})
+        with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(
+            f"{MODULE}.ConsentDefinition"
+        ) as mock_cd:
+            mock_pcc.objects.filter.return_value.first.return_value = _coding()
+            result = api.upsert_consent()
+            assert mock_cd.objects.create.mock_calls == []
+            assert mock_cd.objects.filter.return_value.update.mock_calls == []
+        assert result[0].content == {
+            "ok": False,
+            "error": "The consent text has characters the PDF can't print: đ ồ. Replace them, then save again.",
+        }
+
+    def test_unprintable_question_refused(self):
+        api = _admin(
+            {
+                "code": "universal",
+                "system": "INTERNAL",
+                "verbiage": "Plain.",
+                "questions": [{"id": "a", "prompt": "Age ≥ 18?", "type": "yes_no"}],
+            }
+        )
+        with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(f"{MODULE}.ConsentDefinition"):
+            mock_pcc.objects.filter.return_value.first.return_value = _coding()
+            result = api.upsert_consent()
+        assert result[0].content["error"] == (
+            "A question has characters the PDF can't print: ≥. Replace them, then save again."
+        )
+
+    def test_unprintable_capacity_statement_refused(self):
+        api = _admin(
+            {
+                "code": "universal",
+                "system": "INTERNAL",
+                "verbiage": "Plain.",
+                "capacity_representative_template": "Đã xác nhận",
+            }
+        )
+        with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(f"{MODULE}.ConsentDefinition"):
+            mock_pcc.objects.filter.return_value.first.return_value = _coding()
+            result = api.upsert_consent()
+        assert result[0].content["error"].startswith(
+            "The representative capacity statement has characters the PDF can't print: Đ ậ."
+        )
+
     def test_update_unknown_dbid(self):
         api = _admin({"dbid": 99, "code": "universal", "system": "INTERNAL"})
         with patch(f"{MODULE}.PatientConsentCoding") as mock_pcc, patch(
@@ -1525,3 +1596,449 @@ class TestBannerBackfill:
         effects = res[1:]
         assert all(e["type"] == "RemoveBannerAlert" for e in effects)
         assert sorted(e["patient_id"] for e in effects) == ["p2", "p4"]
+
+
+# --------------------------------------------------------------------------- #
+# Sign on this device
+# --------------------------------------------------------------------------- #
+import os as _os
+
+_SIG_JPEG = open(
+    _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "assets", "signature.jpg"),
+    "rb",
+).read()
+_SIG_URL = "data:image/jpeg;base64," + base64.b64encode(_SIG_JPEG).decode()
+
+_SETTINGS = {
+    "reuse_signature": False,
+    "accept_finger": True,
+    "accept_mouse": True,
+    "accept_typed": False,
+    "ask_printed_name": False,
+}
+
+
+def _sig_body(signature=None, **over):
+    body = {
+        "patient_id": "patient-1",
+        "consent_code": "universal",
+        "method": "Written",
+        "local_date": "2026-10-22",
+        "local_time": "10:43 AM",
+        "signature": dict({"image": _SIG_URL, "signed_with": "finger", "signed_time": "10:42 AM", "signed_tz": "PDT"}, **(signature or {})),
+    }
+    body.update(over)
+    return body
+
+
+class TestDeviceSignature:
+    def _run(self, body, settings=None, defn=None):
+        api = _make_api(body)
+        with patch(f"{MODULE}.definition_by_code", return_value=defn or _defn(allow_device_signature=True)), patch(
+            f"{MODULE}._resolve_patient", return_value=("Maria Lopez", "1951-06-14")
+        ), patch(f"{MODULE}._resolve_staff", return_value="Sam Rivera"), patch(
+            f"{MODULE}.practice_settings", return_value=dict(_SETTINGS, **(settings or {}))
+        ), patch(f"{MODULE}.generate_consent_pdf_base64", return_value=base64.b64encode(b"%PDF-1.4").decode()) as mock_pdf, patch(
+            f"{MODULE}.build_consent_payload", return_value={"resourceType": "Consent"}
+        ) as mock_payload, patch(f"{MODULE}.CanvasFhir") as mock_fhir, patch(
+            f"{MODULE}.ConsentCaptureDetail"
+        ) as mock_ccd:
+            mock_fhir.return_value.create.return_value = {}
+            mock_ccd.objects.filter.return_value.update.return_value = 0
+            result = api.collect()
+        return result, mock_pdf, mock_payload, mock_ccd
+
+    def test_finger_signature_generates_pdf_with_signature(self):
+        result, mock_pdf, mock_payload, mock_ccd = self._run(_sig_body())
+        assert result[0].content["ok"] is True
+        kwargs = mock_pdf.mock_calls[0].kwargs
+        assert kwargs["method"] == "Written, signed on this device"
+        sig = kwargs["signature"]
+        assert sig["jpeg"] == _SIG_JPEG
+        assert (sig["width"], sig["height"], sig["components"]) == (60, 20, 3)
+        assert sig["heading"] == "Signature of patient"
+        assert sig["signer"] == "Maria Lopez (Patient)"
+        assert sig["entered"] == ""        # printed name not asked
+        assert sig["signed_at"] == "2026-10-22 10:42 AM PDT"
+        assert sig["notes"] == ["Signed in person on staff device."]
+        # The generated PDF is attached to the FHIR Consent (not an uploaded document).
+        assert mock_payload.mock_calls[0].kwargs["pdf_base64"] == base64.b64encode(b"%PDF-1.4").decode()
+        assert "status" not in mock_payload.mock_calls[0].kwargs  # active
+        stored = mock_ccd.objects.create.mock_calls[0].kwargs
+        assert stored["method"] == "Written"   # the method stays Written
+        assert stored["status"] == "accepted"
+        assert stored["signed_on_device"] is True
+        assert stored["signed_with"] == "finger"
+        assert stored["reused_signature"] is False
+        assert stored["printed_name"] == ""
+        assert stored["statement_text"] == "Line one."
+        assert len(stored["statement_sha256"]) == 64
+        assert result[0].content["preview"]["signature"] == "Signed on this device (finger or stylus)"
+
+    def test_representative_signature_heading_and_role(self):
+        body = _sig_body(consent_by="representative", representative_name="Ana Lopez", representative_relationship="Daughter")
+        result, mock_pdf, _, _ = self._run(body)
+        assert result[0].content["ok"] is True
+        sig = mock_pdf.mock_calls[0].kwargs["signature"]
+        assert sig["heading"] == "Signature of representative"
+        assert sig["signer"] == "Ana Lopez (Daughter of Maria Lopez)"
+
+    def test_turned_off_for_this_consent(self):
+        result, mock_pdf, _, _ = self._run(_sig_body(), defn=_defn(allow_device_signature=False))
+        assert result[0].content == {"ok": False, "error": "Signing on this device is turned off for this consent."}
+        assert mock_pdf.mock_calls == []
+
+    def test_only_for_written(self):
+        result, _, _, _ = self._run(_sig_body(method="Verbal"))
+        assert result[0].content["error"] == "Signing on this device is available for Written consents."
+
+    def test_signature_not_a_dict(self):
+        result, _, _, _ = self._run(dict(_sig_body(), signature="x"))
+        assert result[0].content["error"] == "The signature couldn't be read. Please sign again."
+
+    def test_unknown_signed_with(self):
+        result, _, _, _ = self._run(_sig_body({"signed_with": "stylus"}))
+        assert result[0].content["error"] == "The signature couldn't be read. Please sign again."
+
+    def test_stroke_type_not_accepted(self):
+        result, _, _, _ = self._run(_sig_body({"signed_with": "mouse"}), settings={"accept_mouse": False})
+        assert result[0].content["error"] == "This kind of signature isn't accepted. Please sign again."
+
+    def test_typed_not_accepted_by_default(self):
+        result, _, _, _ = self._run(_sig_body({"signed_with": "typed", "entered_name": "Maria Lopez"}))
+        assert result[0].content["error"] == "This kind of signature isn't accepted. Please sign again."
+
+    def test_bad_image(self):
+        result, _, _, _ = self._run(_sig_body({"image": "data:image/jpeg;base64,AAAA"}))
+        assert result[0].content["error"] == "The signature couldn't be read. Please sign again."
+
+    def test_typed_requires_name(self):
+        result, _, _, _ = self._run(_sig_body({"signed_with": "typed"}), settings={"accept_typed": True})
+        assert result[0].content["error"] == "Type the signer's full name before recording."
+
+    def test_typed_signature_records_typed_name(self):
+        result, mock_pdf, _, mock_ccd = self._run(
+            _sig_body({"signed_with": "typed", "entered_name": "Maria L. Lopez"}), settings={"accept_typed": True}
+        )
+        assert result[0].content["ok"] is True
+        sig = mock_pdf.mock_calls[0].kwargs["signature"]
+        assert sig["entered_label"] == "Typed as"
+        assert sig["entered"] == "Maria L. Lopez"   # differs in text, same person
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["signed_with"] == "typed"
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["printed_name"] == "Maria L. Lopez"
+
+    def test_printed_name_required_when_asked(self):
+        result, _, _, _ = self._run(_sig_body(), settings={"ask_printed_name": True})
+        assert result[0].content["error"] == "Enter the printed name before recording."
+
+    def test_printed_name_ignored_when_not_asked(self):
+        result, mock_pdf, _, mock_ccd = self._run(_sig_body({"entered_name": "julie"}))
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["entered"] == ""
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["printed_name"] == ""
+
+    def test_matching_printed_name_prints_only_when_different_text(self):
+        result, mock_pdf, _, _ = self._run(_sig_body({"entered_name": "maria lopez"}), settings={"ask_printed_name": True})
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["entered"] == ""
+
+    def test_mismatched_name_blocks_until_staff_choose(self):
+        result, mock_pdf, _, _ = self._run(_sig_body({"entered_name": "julie"}), settings={"ask_printed_name": True})
+        assert result[0].content == {
+            "ok": False,
+            "error": "Choose an option for the name that doesn't match before recording.",
+        }
+        assert mock_pdf.mock_calls == []
+
+    def test_mismatched_name_kept_as_is_records_both_names(self):
+        result, mock_pdf, _, mock_ccd = self._run(
+            _sig_body({"entered_name": "julie", "name_kept": True}), settings={"ask_printed_name": True}
+        )
+        assert result[0].content["ok"] is True
+        sig = mock_pdf.mock_calls[0].kwargs["signature"]
+        assert sig["signer"] == "Maria Lopez (Patient)"
+        assert sig["entered"] == "julie"
+        assert 'Printed name "julie" kept as is by staff.' in sig["notes"]
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["name_kept"] is True
+
+    def test_reconfirmed_under_corrected_name(self):
+        body = _sig_body(
+            {"entered_name": "Julie Park", "reconfirmed": True},
+            consent_by="representative", representative_name="Julie Park", representative_relationship="Caregiver",
+        )
+        result, mock_pdf, _, mock_ccd = self._run(body, settings={"ask_printed_name": True})
+        assert result[0].content["ok"] is True
+        assert "Confirmed under the corrected name." in mock_pdf.mock_calls[0].kwargs["signature"]["notes"]
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["reconfirmed"] is True
+
+    def test_reuse_blocked_when_setting_off(self):
+        result, _, _, _ = self._run(_sig_body({"reused": True}))
+        assert result[0].content["error"] == "Reusing a signature is turned off. Please sign again."
+
+    def test_reuse_allowed_when_setting_on(self):
+        result, mock_pdf, _, mock_ccd = self._run(_sig_body({"reused": True}), settings={"reuse_signature": True})
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["notes"] == [
+            "Signed in person on staff device.",
+            "Signer applied the signature from an earlier consent in this session "
+            "and accepted this consent separately.",
+        ]
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["reused_signature"] is True
+
+    def test_questions_required_when_signed_on_device(self):
+        defn = _defn(allow_device_signature=True, questions=[AFFIRM_Q])
+        result, mock_pdf, _, _ = self._run(_sig_body(), defn=defn)
+        assert result[0].content["ok"] is False
+        assert mock_pdf.mock_calls == []
+
+    def test_answers_printed_when_signed_on_device(self):
+        defn = _defn(allow_device_signature=True, questions=[AFFIRM_Q])
+        result, mock_pdf, _, _ = self._run(_sig_body(answers={"a": "yes"}), defn=defn)
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["responses"]
+
+    def test_text_changed_while_open_is_refused(self):
+        body = _sig_body(statement_sha256=statement_fingerprint(["Old wording."])[1])
+        result, mock_pdf, mock_payload, mock_ccd = self._run(body)
+        assert result[0].content == {
+            "ok": False,
+            "error": "This consent was changed while it was open. Close Consents, reopen it, "
+            "and have the signer review it again.",
+        }
+        assert mock_pdf.mock_calls == []
+        assert mock_payload.mock_calls == []
+        assert mock_ccd.objects.create.mock_calls == []
+
+    def test_missing_fingerprint_is_refused(self):
+        body = _sig_body()
+        body["statement_sha256"] = ""
+        result, mock_pdf, _, _ = self._run(body)
+        assert result[0].content["ok"] is False
+        assert mock_pdf.mock_calls == []
+
+    def test_written_without_signature_still_needs_a_document(self):
+        body = _sig_body()
+        del body["signature"]
+        result, mock_pdf, _, _ = self._run(body)
+        assert result[0].content["error"] == "Add the signed consent document before recording."
+        assert mock_pdf.mock_calls == []
+
+
+# --------------------------------------------------------------------------- #
+# Decline
+# --------------------------------------------------------------------------- #
+class TestDecline:
+    def _run(self, body, fhir_exc=None):
+        api = _make_api(body)
+        with patch(f"{MODULE}.definition_by_code", return_value=_defn()), patch(
+            f"{MODULE}._resolve_patient", return_value=("Maria Lopez", "1951-06-14")
+        ), patch(f"{MODULE}._resolve_staff", return_value="Sam Rivera"), patch(
+            f"{MODULE}.generate_consent_pdf_base64", return_value=base64.b64encode(b"%PDF-1.4 /Type /Page ").decode()
+        ) as mock_pdf, patch(
+            f"{MODULE}.build_consent_payload", return_value={"resourceType": "Consent"}
+        ) as mock_payload, patch(f"{MODULE}.CanvasFhir") as mock_fhir, patch(
+            f"{MODULE}.ConsentCaptureDetail"
+        ) as mock_ccd, patch(f"{MODULE}.ReloadPatientActionButtonsEffect") as mock_reload, patch(f"{MODULE}.log"):
+            if fhir_exc:
+                mock_fhir.return_value.create.side_effect = fhir_exc
+            mock_ccd.objects.filter.return_value.update.return_value = 0
+            mock_reload.return_value.apply.return_value = "RELOAD"
+            result = api.decline()
+        return result, mock_pdf, mock_payload, mock_ccd
+
+    def test_records_rejected_consent_with_declined_pdf(self):
+        result, mock_pdf, mock_payload, mock_ccd = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written", "local_date": "2026-10-22"}
+        )
+        assert result[0].content["ok"] is True
+        assert result[0].content["preview"]["declined"] is True
+        assert result[1] == "RELOAD"
+        assert mock_pdf.mock_calls[0].kwargs["outcome"] == "Declined"
+        assert mock_payload.mock_calls[0].kwargs["status"] == "rejected"
+        stored = mock_ccd.objects.create.mock_calls[0].kwargs
+        assert stored["status"] == "declined"
+        # Nothing was signed, so no method on the PDF or the record.
+        assert stored["method"] == ""
+        assert mock_pdf.mock_calls[0].kwargs["method"] == ""
+        assert result[0].content["preview"]["method"] == ""
+        assert stored["pages"] == 1
+
+    def test_decline_refused_when_text_changed(self):
+        result, mock_pdf, mock_payload, _ = self._run(
+            {
+                "patient_id": "patient-1",
+                "consent_code": "universal",
+                "method": "Written",
+                "statement_sha256": statement_fingerprint(["Old wording."])[1],
+            }
+        )
+        assert "changed while it was open" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
+        assert mock_payload.mock_calls == []
+
+    def test_validation_shared_with_collect(self):
+        result, mock_pdf, _, _ = self._run({"patient_id": "", "consent_code": "universal"})
+        assert result[0].content["error"] == "No patient was identified for this consent."
+        assert mock_pdf.mock_calls == []
+
+    def test_fhir_failure_reported(self):
+        exc = Exception("boom")
+        exc.response = MagicMock(status_code=500, text="err")
+        result, _, _, mock_ccd = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written"}, fhir_exc=exc
+        )
+        assert result[0].content["ok"] is False
+        assert "couldn't save the consent" in result[0].content["error"]
+        assert mock_ccd.objects.create.mock_calls == []
+
+
+# --------------------------------------------------------------------------- #
+# Practice settings endpoints
+# --------------------------------------------------------------------------- #
+class TestPracticeSettingsApi:
+    def test_get_requires_admin(self):
+        api = _admin()
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=False):
+            result = api.get_practice_settings()
+        assert result[0].content["ok"] is False
+
+    def test_get_returns_settings(self):
+        api = _admin()
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.practice_settings", return_value=_SETTINGS
+        ):
+            result = api.get_practice_settings()
+        assert result[0].content == {"ok": True, "settings": _SETTINGS}
+
+    def test_post_requires_admin(self):
+        api = _admin({"accept_typed": True})
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=False), patch(
+            f"{MODULE}.save_practice_settings"
+        ) as mock_save:
+            result = api.update_practice_settings()
+        assert result[0].content["ok"] is False
+        assert mock_save.mock_calls == []
+
+    def test_post_rejects_no_accepted_signature(self):
+        api = _admin({"accept_finger": False, "accept_mouse": False, "accept_typed": False})
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.save_practice_settings"
+        ) as mock_save:
+            result = api.update_practice_settings()
+        assert result[0].content == {"ok": False, "error": "Select at least one accepted signature."}
+        assert mock_save.mock_calls == []
+
+    def test_post_saves(self):
+        api = _admin({"accept_typed": True, "reuse_signature": True})
+        saved = dict(_SETTINGS, accept_typed=True, reuse_signature=True)
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.save_practice_settings", return_value=saved
+        ) as mock_save:
+            result = api.update_practice_settings()
+        assert mock_save.mock_calls == [call(saved)]
+        assert result[0].content == {"ok": True, "settings": saved}
+
+    def test_upsert_accepts_allow_device_signature(self):
+        api = _admin({"code": "universal", "system": "INTERNAL", "allow_device_signature": True})
+        coding = MagicMock(display="Universal")
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.PatientConsentCoding"
+        ) as mock_pcc, patch(f"{MODULE}.ConsentDefinition") as mock_cd, patch(
+            f"{MODULE}._validated_satisfied_by", return_value=[]
+        ), patch(f"{MODULE}.serialize_definition", return_value={}):
+            mock_pcc.objects.filter.return_value.first.return_value = coding
+            mock_cd.objects.filter.return_value.first.return_value = None
+            api.upsert_consent()
+            assert mock_cd.objects.create.mock_calls[0].kwargs["allow_device_signature"] is True
+
+
+class TestSettingsIcon:
+    def test_serves_svg(self):
+        api = _admin()
+        with patch(f"{MODULE}.render_to_string", return_value="<svg/>") as mock_render:
+            result = api.settings_icon()
+        mock_render.assert_called_once_with("assets/settings-icon.svg")
+        assert result[0].content == b"<svg/>"
+        assert result[0].content_type == "image/svg+xml"
+        assert result[0].status_code == HTTPStatus.OK
+
+
+class TestSecurityLogging:
+    def test_fhir_failure_log_omits_response_body(self):
+        api = _make_api({"patient_id": "patient-1", "consent_code": "universal", "method": "Verbal", "local_date": "2026-10-22"})
+        exc = Exception("boom")
+        exc.response = MagicMock(status_code=400, text="Patient Jane Doe DOB 1990-01-01 rejected")
+        with patch(f"{MODULE}.definition_by_code", return_value=_defn()), patch(
+            f"{MODULE}._resolve_patient", return_value=("Jane Doe", "1990-01-01")
+        ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
+            f"{MODULE}.generate_consent_pdf_base64", return_value="PDF64"
+        ), patch(f"{MODULE}.build_consent_payload", return_value={}), patch(
+            f"{MODULE}.CanvasFhir"
+        ) as mock_fhir, patch(f"{MODULE}.log") as mock_log:
+            mock_fhir.return_value.create.side_effect = exc
+            result = api.collect()
+        assert result[0].content["ok"] is False
+        message = mock_log.error.mock_calls[0].args[0]
+        assert "HTTP 400" in message and "Exception" in message and "40-character" in message
+        assert "Jane Doe" not in message and "1990-01-01" not in message
+
+    def test_practice_settings_save_logs_who_changed_them(self):
+        api = _admin({"accept_typed": True})
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.save_practice_settings", return_value={"accept_typed": True}
+        ), patch(f"{MODULE}.log") as mock_log:
+            api.update_practice_settings()
+        assert mock_log.info.mock_calls[0].args[0].startswith("ConsentAdminApi: practice settings saved by staff root:")
+
+
+
+# --------------------------------------------------------------------------- #
+# Code-review fixes
+# --------------------------------------------------------------------------- #
+class TestReviewFixes:
+    def test_decline_clears_same_day_signature_detail(self):
+        result, _, _, mock_ccd = TestDecline()._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written", "local_date": "2026-10-22"}
+        )
+        assert result[0].content["ok"] is True
+        stored = mock_ccd.objects.create.mock_calls[0].kwargs
+        assert stored["signed_on_device"] is False
+        assert stored["signed_with"] == ""
+        assert stored["reused_signature"] is False
+        assert stored["printed_name"] == ""
+        assert stored["name_kept"] is False
+        assert stored["reconfirmed"] is False
+
+    def test_signed_at_uses_when_the_signer_accepted(self):
+        body = _sig_body({"signed_date": "2026-10-21", "signed_time": "4:05 PM", "signed_tz": "PDT"}, local_date="2026-10-22")
+        result, mock_pdf, _, _ = TestDeviceSignature()._run(body)
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["signed_at"] == "2026-10-21 4:05 PM PDT"
+
+    def test_signed_date_falls_back_to_effective_date(self):
+        body = _sig_body({"signed_date": "yesterday"}, local_date="2026-10-22")
+        _, mock_pdf, _, _ = TestDeviceSignature()._run(body)
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["signed_at"].startswith("2026-10-22 ")
+
+    def test_suffixed_printed_name_matches_suffixed_patient(self):
+        body = _sig_body({"entered_name": "Robert Lopez Jr."})
+        api = _make_api(body)
+        with patch(f"{MODULE}.definition_by_code", return_value=_defn(allow_device_signature=True)), patch(
+            f"{MODULE}._resolve_patient", return_value=("Robert Lopez Jr", "1951-06-14")
+        ), patch(f"{MODULE}._resolve_staff", return_value="Sam"), patch(
+            f"{MODULE}.practice_settings", return_value=dict(_SETTINGS, ask_printed_name=True)
+        ), patch(f"{MODULE}.generate_consent_pdf_base64", return_value=base64.b64encode(b"%PDF-1.4").decode()), patch(
+            f"{MODULE}.build_consent_payload", return_value={}
+        ), patch(f"{MODULE}.CanvasFhir"), patch(f"{MODULE}.ConsentCaptureDetail") as mock_ccd:
+            mock_ccd.objects.filter.return_value.update.return_value = 0
+            result = api.collect()
+        assert result[0].content["ok"] is True
+
+    def test_document_fallback_breaks_same_day_ties_by_created(self):
+        api = _make_doc_api({"patient_id": "p1", "code": "c"})
+        with patch(f"{MODULE}.PatientConsent") as mpc, patch(f"{MODULE}.CanvasFhir") as mfhir:
+            q = mpc.objects.filter.return_value
+            q.order_by.return_value.values_list.return_value.first.return_value = "cid-2"
+            mfhir.return_value.read.return_value = {"sourceAttachment": {"data": "B64"}}
+            api.document()
+            q.order_by.assert_called_once_with("-effective_date", "-created")

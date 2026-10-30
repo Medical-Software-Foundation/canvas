@@ -17,21 +17,18 @@ paper ("Written") consent, viewing a consent already on file, and renewing an ex
 
 ## 1. Opening the Consents window
 
-Open the patient's chart. There are two ways to open Consents, plus one reminder:
+Open the patient's chart. There's one way to open Consents, plus one reminder:
 
 - **"Consents" button** at the top of the chart. It's **always there**; it's **red when the
   patient still needs a required consent** and a neutral **gray** once everything required is
   on file. Click it either way to open Consents.
-- **"Consents" in the chart app drawer.** This is **always** there, even when nothing is
-  outstanding, so you can record an optional consent or look up what's on file any time.
 - **Red banner reading "Required consent not on file."** This is a *reminder*, not a button.
-  It tells you the patient owes a required consent. Use the red button or the app drawer to
-  open Consents. The banner clears on its own once the required consent is recorded.
+  It tells you the patient owes a required consent. Use the red button to open Consents. The banner clears on its own once the required consent is recorded.
 
 ![The patient chart showing the red Consents button and the required-consent banner](screenshots/01-chart-full.png)
 
 > If the patient is inactive or deceased, the button stays gray (never red) and the
-> banner won't show. You can still open Consents from the button or the app drawer.
+> banner won't show. You can still open Consents from the button.
 
 ---
 
@@ -126,7 +123,8 @@ If you chose **Written** as the method, no on-screen questions are asked (the si
 the record). Clicking **Continue** takes you to a **Document** step so you can attach the
 signed form. You can use the device camera or upload a file.
 
-At the top you'll see two tabs: **Camera** and **Upload**.
+At the top you'll see two tabs, **Camera** and **Upload**, and a third, **Sign on this device**,
+when your practice turned on device signing for this consent.
 
 ### Option A — Camera
 
@@ -166,6 +164,49 @@ On the **Pages** screen you'll see every page you added:
 
 When the pages look right, tap **Record Consent**. The plugin assembles them into one
 document, files it, and shows the **Consent Recorded** screen.
+
+### Option C — Sign on this device
+
+The patient or representative signs on your device instead of on paper. The Document step
+opens on this tab when it's available.
+
+1. Tap **Continue**. The screen says **Hand the device to the signer** and shows who is
+   signing. Hand the device over.
+2. The signer reads the consent, signs in the box, and taps **Accept and Sign**. Depending on
+   your practice's settings they can sign with a finger or stylus, a mouse or trackpad, or
+   type their name, and may be asked for a printed name.
+3. A **Thank you** screen asks them to hand the device back. Tap **Continue**.
+4. On **Review consent**, check the signature and tap **Record Consent**.
+
+If the printed or typed name doesn't match the person giving consent, a notice appears on
+**Review consent**. Choose **Same person, keep as is**, or **Use "[name]" as representative**,
+which updates **Who is giving consent?** and asks the signer to confirm their signature again.
+**Record Consent** stays unavailable until you choose.
+
+The consent is saved as **Written**. The PDF shows the signature, the signer, and the time,
+and On File shows how it was signed.
+
+---
+
+## 4a. Recording several consents at once
+
+1. On the Consents window, check the consents to record, or use **Select all**. Selecting a
+   consent's name still opens it on its own.
+2. Tap **Start**. Choose how each consent is being obtained, then answer **Who is giving
+   consent?**, capacity, and the effective date once for all of them.
+3. Tap **Continue**, hand the device to the signer, and tap **Start Signing**. The signer
+   goes through each consent ("Consent 1 of 3"), answers its questions, and taps **Accept
+   and Sign** or **Skip**.
+4. On **Review consents**, each consent shows its status. Use **Sign now** for one that wasn't
+   signed, or **Decline** when the patient declines it.
+5. Tap **Record Consents**. Only finished consents are recorded; the rest stay Needed.
+
+A declined consent shows as **Declined** under On File and no longer turns the **Consents**
+button red. It stays in the list with a gray **Declined** tag, so it can be recorded later if
+the patient changes their mind.
+
+When a consent is a HIPAA authorization, select **Print a copy** after recording and give the
+copy to the signer.
 
 ---
 

@@ -1,8 +1,9 @@
 """Minimal, dependency-free PDF generation.
 
 The Canvas plugin sandbox has no PDF library (reportlab, fpdf, ...) and no
-``zlib``/``io``. This module hand-writes a valid, uncompressed, single-page PDF
-using only the standard library.
+``zlib``/``io``. This module hand-writes a valid, uncompressed PDF using only the
+standard library. A device signature is embedded as a JPEG image (``/DCTDecode``),
+which needs no decompression, so no ``zlib`` either.
 
 Design goal: clean, neutral, professional (Apple/Figma/Google-ish) — grayscale
 ink, generous margins, a light rule under the title and before the statement, and
@@ -62,6 +63,37 @@ _HELV_WIDTHS = {
     "t": 278, "u": 556, "v": 500, "w": 722, "x": 500, "y": 500, "z": 500,
     "{": 334, "|": 260, "}": 334, "~": 584,
 }
+
+
+# Letters the PDF's Windows-1252 fonts can't draw, mapped to the plain letter
+# (Vietnamese and other Latin letters: "ễ" -> "e", "ł" -> "l"). Applied to every
+# string drawn on the PDF, so a signer's name such as "Nguyễn" prints as "Nguyen"
+# instead of "Nguy?n". The real characters are kept on the plugin's own record.
+# Consent text is never folded: Consent Settings refuses text the PDF can't print.
+# Generated from Unicode decomposition (the sandbox has no ``unicodedata``).
+_FOLD_PAIRS = (
+    "ĀAāaĂAăaĄAąaĆCćcĈCĉcĊCċcČCčcĎDďdĐDđdĒEēeĔEĕeĖEėeĘEęeĚEěeĜGĝgĞGğgĠGġgĢGģgĤHĥhĦHħhĨIĩiĪIīiĬIĭiĮIįiİIıiĴJĵjĶKķkĸkĹLĺlĻLļlĽLľlĿLŀlŁLłlŃNńnŅNņnŇNňnŉnŌOōoŎOŏoŐOőoŔRŕrŖRŗrŘRřrŚSśsŜSŝsŞSşsŢTţtŤTťtŦTŧtŨUũuŪUūuŬUŭuŮUůuŰUűuŲUųuŴWŵwŶYŷyŹZźzŻZżzſsƀbƗIƚlƠOơoƯUưuǍAǎaǏIǐiǑOǒoǓUǔuǕUǖuǗUǘuǙUǚuǛUǜuǞAǟaǠAǡaǢÆǣæǦGǧgǨKǩkǪOǫoǬOǭoǰjǴGǵgǸNǹnǺAǻaǼÆǽæǾØǿøȀAȁaȂAȃaȄEȅeȆEȇeȈIȉiȊIȋiȌOȍoȎOȏoȐRȑrȒRȓrȔUȕuȖUȗuȘSșsȚTțtȞHȟhȦAȧaȨEȩeȪOȫoȬOȭoȮOȯoȰOȱoȲYȳyḀAḁaḂBḃbḄBḅbḆBḇbḈCḉcḊDḋdḌDḍdḎDḏdḐDḑdḒDḓdḔEḕeḖEḗeḘEḙeḚEḛeḜEḝeḞFḟfḠGḡgḢHḣhḤHḥhḦHḧhḨHḩhḪHḫhḬIḭiḮIḯiḰKḱkḲKḳkḴKḵkḶLḷlḸLḹlḺLḻlḼLḽlḾMḿmṀMṁmṂMṃmṄNṅnṆNṇnṈNṉnṊNṋnṌOṍoṎOṏoṐOṑoṒOṓoṔPṕpṖPṗpṘRṙrṚRṛrṜRṝrṞRṟrṠSṡsṢSṣsṤSṥsṦSṧsṨSṩsṪTṫtṬTṭtṮTṯtṰTṱtṲUṳuṴUṵuṶUṷuṸUṹuṺUṻuṼVṽvṾVṿvẀWẁwẂWẃwẄWẅwẆWẇwẈWẉwẊXẋxẌXẍxẎYẏyẐZẑzẒZẓzẔZẕzẖhẗtẘwẙyẛsẠAạaẢAảaẤAấaẦAầaẨAẩaẪAẫaẬAậaẮAắaẰAằaẲAẳaẴAẵaẶAặaẸEẹeẺEẻeẼEẽeẾEếeỀEềeỂEểeỄEễeỆEệeỈIỉiỊIịiỌOọoỎOỏoỐOốoỒOồoỔOổoỖOỗoỘOộoỚOớoỜOờoỞOởoỠOỡoỢOợoỤUụuỦUủuỨUứuỪUừuỬUửuỮUữuỰUựuỲYỳyỴYỵyỶYỷyỸYỹy"
+)
+_FOLD_TABLE = {ord(_FOLD_PAIRS[i]): _FOLD_PAIRS[i + 1] for i in range(0, len(_FOLD_PAIRS), 2)}
+
+
+def fold_for_pdf(text):
+    """``text`` with letters the PDF can't draw replaced by their plain letter."""
+    return (text or "").translate(_FOLD_TABLE)
+
+
+def unprintable_chars(text):
+    """Characters in ``text`` the PDF can't print as-is (outside Windows-1252), in
+    order of first appearance. Used to refuse consent text that would print as "?"."""
+    out = []
+    for ch in text or "":
+        if ch in out:
+            continue
+        try:
+            ch.encode("cp1252")
+        except UnicodeEncodeError:
+            out.append(ch)
+    return out
 
 
 def _escape(text):
@@ -130,6 +162,17 @@ def _right(ops, x_right, y, font, size, color, text):
     _text(ops, x_right - _text_width(text, size), y, font, size, color, text)
 
 
+def _image(ops, name, x, y, w, h):
+    """Place the image XObject ``name`` with its bottom-left corner at ``(x, y)``."""
+    ops.append(("image", name, x, y, w, h))
+
+
+# The signature image area on the PDF (points). The image is scaled to fit, keeping
+# its aspect ratio, and sits on a signature line.
+SIG_MAX_W = 240
+SIG_MAX_H = 54
+
+
 def _build_pages(
     title,
     patient_name,
@@ -142,6 +185,8 @@ def _build_pages(
     method="",
     capacity_statement="",
     responses=None,
+    outcome="",
+    signature=None,
 ):
     """Build per-page drawing ops for the consent-record form.
 
@@ -149,6 +194,14 @@ def _build_pages(
     at the top of every page and a footer with "Page X of Y" is stamped on each.
     Returns a list of pages, each a list of ops. Helvetica throughout (``F1``
     regular, ``F2`` bold); grayscale; thin borders, no shading.
+
+    ``outcome`` adds an "Outcome" row (e.g. "Declined"). ``signature`` adds a
+    Signature section for a consent signed on the device: a dict with ``width`` /
+    ``height`` (the JPEG's pixel size), ``heading`` ("Signature of patient"),
+    ``signer``, optional ``entered_label`` / ``entered`` (a printed or typed name
+    that differs from the signer), ``signed_at``, and ``notes`` (short lines such as
+    "Signed in person on staff device"). The image itself is passed to
+    ``_assemble_pdf`` as ``/Sig``.
     """
     CONTENT_TOP = 702   # first content position below the masthead rule
     BOTTOM = 78         # content must stay above the footer band
@@ -179,6 +232,8 @@ def _build_pages(
         ("Date of birth", patient_dob or "-"),
         ("Consenting Party", consented_by or "Patient"),
     ]
+    if outcome:
+        rows.append(("Outcome", outcome))
     if method:
         rows.append(("Method obtained", method))
     rows += [
@@ -254,6 +309,10 @@ def _build_pages(
             _rule(st["ops"], st["y"])
         st["y"] = st["y"] - 22
 
+    # --- Signature (kept together on one page) ---
+    if signature:
+        _signature_section(st, need, signature)
+
     # --- Footer, stamped on every page with the correct page count ---
     recorded = "Recorded %s at %s" % (date, time) if time else "Recorded %s" % date
     total = len(pages)
@@ -263,6 +322,67 @@ def _build_pages(
         _right(ops, RIGHT, 46, "F1", FOOTER_SIZE, FAINT,
                "Confidential · Patient Health Information · Page %d of %d" % (index + 1, total))
     return pages
+
+
+def _signature_section(st, need, sig):
+    """Draw the Signature box: heading, the signature image on a line, then the
+    signer / name / time columns and any notes. Kept together on one page."""
+    pad = 13
+    inner_w = RIGHT - LEFT - 2 * pad
+    columns = [("Signer", sig.get("signer") or "")]
+    if sig.get("entered"):
+        columns.append((sig.get("entered_label") or "Printed name", sig["entered"]))
+    columns.append(("Signed", sig.get("signed_at") or ""))
+    col_w = inner_w / len(columns)
+    wrapped = [_wrap(value, VALUE_SIZE - 1, col_w - 12)[:2] for _, value in columns]
+    value_lines = max(len(lines) for lines in wrapped)
+    notes = [n for n in (sig.get("notes") or []) if n]
+    note_lines = []
+    for note in notes:
+        note_lines += _wrap(note, BODY_SIZE - 1, inner_w)
+
+    box_h = (
+        pad + 11            # heading
+        + SIG_MAX_H + 6     # image area + signature line
+        + 14 + value_lines * 13
+        + (len(note_lines) * 13 + 6 if note_lines else 0)
+        + pad - 2
+    )
+    need(14 + box_h)
+    ops = st["ops"]
+    _text(ops, LEFT, st["y"], "F2", LABEL_SIZE, MUTED, "SIGNATURE")
+    st["y"] = st["y"] - 14
+    box_top = st["y"]
+    box_bottom = box_top - box_h
+    _rect(ops, LEFT, box_bottom, RIGHT - LEFT, box_h)
+
+    y = box_top - pad - 4
+    _text(ops, LEFT + pad, y, "F2", 7.5, MUTED, (sig.get("heading") or "Signature").upper())
+
+    # Image, scaled to fit SIG_MAX_W x SIG_MAX_H, resting on the signature line.
+    line_y = y - 8 - SIG_MAX_H
+    px_w = float(sig.get("width") or 1)
+    px_h = float(sig.get("height") or 1)
+    scale = min(SIG_MAX_W / px_w, SIG_MAX_H / px_h)
+    img_w, img_h = px_w * scale, px_h * scale
+    _image(ops, "Sig", LEFT + pad, line_y + 2, img_w, img_h)
+    _rule(ops, line_y, color=INK, width=0.8, x1=LEFT + pad, x2=LEFT + pad + SIG_MAX_W + 40)
+
+    # Columns: label over value.
+    y = line_y - 14
+    for index, (label, _value) in enumerate(columns):
+        x = LEFT + pad + index * col_w
+        _text(ops, x, y, "F2", 7, MUTED, label.upper())
+        vy = y - 12
+        for line in wrapped[index]:
+            _text(ops, x, vy, "F1", VALUE_SIZE - 1, INK, line)
+            vy -= 13
+    y = y - 12 - value_lines * 13 - 4
+
+    for line in note_lines:
+        _text(ops, LEFT + pad, y, "F1", BODY_SIZE - 1, MUTED, line)
+        y -= 13
+    st["y"] = box_bottom - 30
 
 
 def _build_ops(*args, **kwargs):
@@ -298,6 +418,11 @@ def _content_stream(ops):
                 "%s w %s %s m %s %s l S"
                 % (_num(width), _num(x1), _num(y1), _num(x2), _num(y2))
             )
+        elif op[0] == "image":
+            _, name, x, y, w, h = op
+            parts.append(
+                "q %s 0 0 %s %s %s cm /%s Do Q" % (_num(w), _num(h), _num(x), _num(y), name)
+            )
         elif op[0] == "rect":
             _, x, y, w, h, stroke, fill, width = op
             if fill is not None:
@@ -313,15 +438,20 @@ def _content_stream(ops):
     return "\n".join(parts)
 
 
-def _assemble_pdf(content_streams):
+def _assemble_pdf(content_streams, signature=None):
     """Assemble a multi-page PDF from one content stream per page.
 
     Each stream is encoded as CP1252 (WinAnsi) so smart punctuation renders; the
     fonts declare /WinAnsiEncoding to match. Object layout: 1 Catalog, 2 Pages,
-    3/4 fonts, then a Page + Contents object per page.
+    3/4 fonts, then a Page + Contents object per page, then the signature image
+    XObject (``/Sig``) when ``signature`` carries one (``jpeg`` bytes, ``width``,
+    ``height``, ``components``).
     """
-    page_bytes = [s.encode("cp1252", "replace") for s in content_streams]
+    page_bytes = [fold_for_pdf(s).encode("cp1252", "replace") for s in content_streams]
     n = len(page_bytes)
+    image_num = 5 + 2 * n
+    has_image = bool(signature and signature.get("jpeg"))
+    xobjects = (" /XObject << /Sig %d 0 R >>" % image_num) if has_image else ""
 
     objects = []
     objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
@@ -338,12 +468,24 @@ def _assemble_pdf(content_streams):
         objects.append(
             (
                 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] "
-                "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> "
-                "/Contents %d 0 R >>" % (PAGE_WIDTH, PAGE_HEIGHT, content_num)
+                "/Resources << /Font << /F1 3 0 R /F2 4 0 R >>%s >> "
+                "/Contents %d 0 R >>" % (PAGE_WIDTH, PAGE_HEIGHT, xobjects, content_num)
             ).encode("latin-1")
         )
         objects.append(
             b"<< /Length " + str(len(cb)).encode("latin-1") + b" >>\nstream\n" + cb + b"\nendstream"
+        )
+    if has_image:
+        jpeg = signature["jpeg"]
+        space = "/DeviceGray" if signature.get("components") == 1 else "/DeviceRGB"
+        objects.append(
+            (
+                "<< /Type /XObject /Subtype /Image /Width %d /Height %d "
+                "/ColorSpace %s /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n"
+                % (int(signature["width"]), int(signature["height"]), space, len(jpeg))
+            ).encode("latin-1")
+            + jpeg
+            + b"\nendstream"
         )
 
     pdf = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
@@ -378,8 +520,13 @@ def generate_consent_pdf(
     method="",
     capacity_statement="",
     responses=None,
+    outcome="",
+    signature=None,
 ):
-    """Return the consent documentation as raw PDF bytes (one or more pages)."""
+    """Return the consent documentation as raw PDF bytes (one or more pages).
+
+    ``signature`` (see ``_build_pages``) also carries the JPEG: ``jpeg`` bytes and
+    ``components`` (1 grayscale, 3 color)."""
     pages = _build_pages(
         title,
         patient_name,
@@ -392,8 +539,10 @@ def generate_consent_pdf(
         method,
         capacity_statement,
         responses,
+        outcome,
+        signature,
     )
-    return _assemble_pdf([_content_stream(page) for page in pages])
+    return _assemble_pdf([_content_stream(page) for page in pages], signature)
 
 
 def pdf_page_count(data):
@@ -423,6 +572,8 @@ def generate_consent_pdf_base64(
     method="",
     capacity_statement="",
     responses=None,
+    outcome="",
+    signature=None,
 ):
     """Return the consent documentation PDF as a base64-encoded string."""
     pdf_bytes = generate_consent_pdf(
@@ -437,5 +588,7 @@ def generate_consent_pdf_base64(
         method,
         capacity_statement,
         responses,
+        outcome,
+        signature,
     )
     return base64.b64encode(pdf_bytes).decode("ascii")
