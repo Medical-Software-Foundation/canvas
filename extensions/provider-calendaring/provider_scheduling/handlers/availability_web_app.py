@@ -96,8 +96,8 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
                         if event.calendar.title and ":" in event.calendar.title
                         else ""
                     ),
-                    "startTime": event.starts_at.strftime("%Y-%m-%dT%H:%M"),
-                    "endTime": event.ends_at.strftime("%Y-%m-%dT%H:%M"),
+                    "startTime": event.starts_at.isoformat(),
+                    "endTime": event.ends_at.isoformat(),
                     "daysOfWeek": (
                         event.recurrence
                         and "BYDAY=" in event.recurrence

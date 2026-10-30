@@ -1,5 +1,6 @@
 """Comprehensive tests for provider_scheduling availability_web_app."""
 
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import Mock, patch
@@ -461,3 +462,53 @@ def test_index_handles_empty_events() -> None:
         context = call_args[0][1]
 
         assert context["events"] == []
+
+
+def test_index_serializes_event_times_as_utc_instants() -> None:
+    """Test index endpoint serializes event times with their UTC offset.
+
+    JavaScript's Date() parses a date-time string with no offset as local
+    time, so a naive "2026-07-29T17:00" is read by the browser as 5pm local
+    rather than 5pm UTC. The offset has to survive serialization.
+    """
+    # Create web app instance
+    dummy_context = {"method": "GET", "path": "/app/availability-app"}
+    app = AvailabilityWebApp(event=DummyEvent(context=dummy_context))  # type: ignore[arg-type]
+    app.request = DummyRequest()
+
+    # A non-recurring event, so only the time serialization is under test
+    mock_event = Mock()
+    mock_event.id = "event-1"
+    mock_event.title = "Regular Weekday Schedule"
+    mock_event.calendar.title = "Dr. John Smith: Clinic: Main Clinic"
+    mock_event.starts_at = datetime(2026, 7, 29, 17, 0, tzinfo=timezone.utc)
+    mock_event.ends_at = datetime(2026, 7, 29, 18, 30, tzinfo=timezone.utc)
+    mock_event.recurrence = None
+    mock_event.recurrence_ends_at = None
+    mock_event.allowed_note_types.all.return_value = []
+
+    with (
+        patch("provider_scheduling.handlers.availability_web_app.Staff") as mock_staff_class,
+        patch("provider_scheduling.handlers.availability_web_app.PracticeLocation") as mock_location_class,
+        patch("provider_scheduling.handlers.availability_web_app.NoteType") as mock_note_type_class,
+        patch("provider_scheduling.handlers.availability_web_app.Event") as mock_event_class,
+        patch("provider_scheduling.handlers.availability_web_app.render_to_string") as mock_render,
+    ):
+        mock_filter_result = Mock()
+        mock_filter_result.distinct.return_value = []
+        mock_staff_class.objects.filter.return_value = mock_filter_result
+        mock_location_class.objects.filter.return_value = []
+        mock_note_type_class.objects.filter.return_value = []
+        mock_event_class.objects.all.return_value = [mock_event]
+
+        mock_render.return_value = "<html>Test</html>"
+
+        app.index()
+
+        # Verify times carry their UTC offset
+        call_args = mock_render.call_args
+        context = call_args[0][1]
+        serialized = context["events"][0]
+
+        assert serialized["startTime"] == "2026-07-29T17:00:00+00:00"
+        assert serialized["endTime"] == "2026-07-29T18:30:00+00:00"
