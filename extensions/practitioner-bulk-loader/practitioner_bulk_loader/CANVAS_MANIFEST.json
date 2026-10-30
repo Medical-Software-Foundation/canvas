@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.135.0",
-    "plugin_version": "0.1.90",
+    "plugin_version": "0.1.91",
     "name": "practitioner_bulk_loader",
     "description": "Bulk-load practitioners from a CSV file: validates records, detects duplicates, and creates or additively merges FHIR Practitioner resources with staff keys returned on completion.",
     "components": {
