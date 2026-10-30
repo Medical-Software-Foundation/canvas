@@ -7,12 +7,16 @@ LabValue, ReferralReport, ImagingReport queries) is exercised by integration
 tests in the Canvas runtime, not here.
 """
 
+import json
 from datetime import date
 from unittest.mock import patch
 
 import arrow
 import pytest
 
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_generated.messages.events_pb2 import EventType as EventTypeEnum
+from canvas_sdk.events import Event as SdkEvent
 from protocols.cms130v6_colorectal_cancer_screening import (
     SCREENING_INTERVALS,
     CMS130v6CtColonography,
@@ -268,3 +272,21 @@ def test_compute_returns_satisfied_card_when_recent_exam_present() -> None:
 def test_each_exam_type_has_expected_window(exam_type: str, expected_days: int) -> None:
     """Every screening exam type should have its specification-defined window."""
     assert SCREENING_INTERVALS[exam_type] == expected_days
+
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    event = SdkEvent(
+        EventRequest(
+            type=EventTypeEnum.LAB_REPORT_CREATED,
+            target="record-1",
+            context=json.dumps({"patient": {"id": "patient-1"}}),
+        )
+    )
+    assert ClinicalQualityMeasure130v6(event=event).patient_id_from_target() == "patient-1"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    event = SdkEvent(EventRequest(type=EventTypeEnum.PATIENT_UPDATED, target="patient-2"))
+    assert ClinicalQualityMeasure130v6(event=event).patient_id_from_target() == "patient-2"

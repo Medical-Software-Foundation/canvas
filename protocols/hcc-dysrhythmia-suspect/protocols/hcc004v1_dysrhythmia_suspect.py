@@ -6,6 +6,8 @@ on their Conditions List. The card recommends adding a dysrhythmia-related
 diagnosis as clinically appropriate.
 """
 
+from typing import Any
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -43,6 +45,16 @@ class Hcc004v1(ClinicalQualityMeasure):
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
         EventType.Name(EventType.MEDICATION_LIST_ITEM_UPDATED),
     ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Seed _patient_id from the event context so patient_id_from_target() never runs its
+        # target lookup, which raises on every non-patient event until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Remove this override
+        # once the plugin's SDK version includes that fix. Patient events carry no context
+        # patient and resolve from the target, which works today.
+        if patient := self.event.context.get("patient"):
+            self._patient_id = patient["id"]
 
     def _has_active(self, model: type, value_set: type) -> bool:
         """Return True if the patient has an active ``model`` row matching ``value_set``."""

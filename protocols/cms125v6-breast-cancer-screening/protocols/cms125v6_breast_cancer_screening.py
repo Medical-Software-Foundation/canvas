@@ -166,6 +166,10 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         self._injected_conditions = conditions
         self._injected_imaging_reports = imaging_reports
         self._on_date: arrow.Arrow | None = None
+        # Resolve the patient here rather than through patient_id_from_target(), whose
+        # target lookup raises on every non-patient event until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Revisit once the
+        # plugin's SDK version includes that fix.
         if "patient" in self.event.context:
           self._patient_id: int = self.event.context["patient"]["id"]
         else:

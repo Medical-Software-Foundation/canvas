@@ -1,11 +1,15 @@
 """Tests for the CCP003v1 Diagnosis Of Hypertension protocol."""
 
+import json
 from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_generated.messages.events_pb2 import EventType as EventTypeEnum
+from canvas_sdk.events import Event as SdkEvent
 from protocols.ccp003v1_hypertension import Ccp003v1
 
 
@@ -205,3 +209,21 @@ def test_compute_returns_empty_list_when_not_in_denominator(protocol: Ccp003v1) 
     """When not in the denominator, compute returns no effects."""
     with patch.object(type(protocol), "in_denominator", return_value=False):
         assert protocol.compute() == []
+
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    event = SdkEvent(
+        EventRequest(
+            type=EventTypeEnum.CONDITION_CREATED,
+            target="record-1",
+            context=json.dumps({"patient": {"id": "patient-1"}}),
+        )
+    )
+    assert Ccp003v1(event=event).patient_id_from_target() == "patient-1"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    event = SdkEvent(EventRequest(type=EventTypeEnum.PATIENT_UPDATED, target="patient-2"))
+    assert Ccp003v1(event=event).patient_id_from_target() == "patient-2"

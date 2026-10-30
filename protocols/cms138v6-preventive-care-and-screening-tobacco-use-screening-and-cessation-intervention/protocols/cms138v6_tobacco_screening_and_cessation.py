@@ -176,6 +176,13 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
             self.POPULATION_2: Population(),
             self.POPULATION_3: Population(),
         }
+        # Seed _patient_id from the event context so patient_id_from_target() never runs its
+        # target lookup, which raises on every non-patient event until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Remove this once the
+        # plugin's SDK version includes that fix. Patient events carry no context patient and
+        # resolve from the target, which works today.
+        if patient := self.event.context.get("patient"):
+            self._patient_id = patient["id"]
 
     _patient: Patient | None = None
 
@@ -183,27 +190,8 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
     def patient(self) -> Patient:
         """The Patient row for the event target, fetched once per instance."""
         if self._patient is None:
-            self._patient = Patient.objects.get(id=self._resolve_patient_id())
+            self._patient = Patient.objects.get(id=self.patient_id_from_target())
         return self._patient
-
-    def _resolve_patient_id(self) -> str:
-        """Patient id for the current event.
-
-        Falls back to ``event.context['patient']['id']`` for event types
-        (e.g. INTERVIEW_CREATED) that
-        ``ClinicalQualityMeasure.patient_id_from_target`` does not handle.
-        """
-        if self._patient_id:
-            return self._patient_id
-
-        try:
-            return self.patient_id_from_target()
-        except ValueError:
-            patient_id = ((self.event.context or {}).get("patient") or {}).get("id")
-            if not patient_id:
-                raise
-            self._patient_id = patient_id
-            return patient_id
 
     @property
     def screening_timeframe(self) -> Timeframe:

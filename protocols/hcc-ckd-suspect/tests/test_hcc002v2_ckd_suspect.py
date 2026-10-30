@@ -1,5 +1,6 @@
 """Tests for the HCC002v2 CKD Suspect protocol plugin."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -9,6 +10,9 @@ import pytest
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
 from canvas_sdk.value_set.custom import LabReportCreatinine
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_generated.messages.events_pb2 import EventType as EventTypeEnum
+from canvas_sdk.events import Event as SdkEvent
 from protocols.hcc002v2_ckd_suspect import Hcc002v2
 
 
@@ -286,3 +290,21 @@ def test_compute_due_when_no_active_condition() -> None:
     assert "There is no associated condition on the Conditions List." in payload
     assert "Diagnose" in payload
     assert "diagnose" in payload
+
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    event = SdkEvent(
+        EventRequest(
+            type=EventTypeEnum.LAB_REPORT_CREATED,
+            target="record-1",
+            context=json.dumps({"patient": {"id": "patient-1"}}),
+        )
+    )
+    assert Hcc002v2(event=event).patient_id_from_target() == "patient-1"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    event = SdkEvent(EventRequest(type=EventTypeEnum.PATIENT_UPDATED, target="patient-2"))
+    assert Hcc002v2(event=event).patient_id_from_target() == "patient-2"

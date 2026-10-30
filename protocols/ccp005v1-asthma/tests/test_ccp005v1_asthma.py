@@ -9,6 +9,9 @@ import pytest
 
 from canvas_sdk.value_set.v2022.condition import Asthma
 
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_generated.messages.events_pb2 import EventType as EventTypeEnum
+from canvas_sdk.events import Event as SdkEvent
 from protocols.ccp005v1_asthma import Ccp005v1
 
 
@@ -199,3 +202,21 @@ def test_active_asthma_conditions_calls_for_patient_find_active(
     for_patient.find.assert_called_once_with(Asthma)
     found.active.assert_called_once_with()
     active.order_by.assert_called_once_with("onset_date")
+
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    event = SdkEvent(
+        EventRequest(
+            type=EventTypeEnum.CONDITION_CREATED,
+            target="record-1",
+            context=json.dumps({"patient": {"id": "patient-1"}}),
+        )
+    )
+    assert Ccp005v1(event=event).patient_id_from_target() == "patient-1"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    event = SdkEvent(EventRequest(type=EventTypeEnum.PATIENT_UPDATED, target="patient-2"))
+    assert Ccp005v1(event=event).patient_id_from_target() == "patient-2"

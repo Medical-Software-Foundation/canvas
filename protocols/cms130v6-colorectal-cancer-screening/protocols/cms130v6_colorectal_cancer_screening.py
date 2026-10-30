@@ -106,6 +106,16 @@ class ClinicalQualityMeasure130v6(ClinicalQualityMeasure):
 
     _patient: Patient | None = None
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Seed _patient_id from the event context so patient_id_from_target() never runs its
+        # target lookup, which raises on every non-patient event until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Remove this override
+        # once the plugin's SDK version includes that fix. Patient events carry no context
+        # patient and resolve from the target, which works today.
+        if patient := self.event.context.get("patient"):
+            self._patient_id = patient["id"]
+
     @property
     def patient(self) -> Patient:
         """Return the Patient this protocol is being computed for, fetched once per instance."""

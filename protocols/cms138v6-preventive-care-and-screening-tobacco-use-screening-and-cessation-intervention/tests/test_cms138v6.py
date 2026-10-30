@@ -1,12 +1,14 @@
 """Tests for the CMS138v6 - Tobacco Screening and Cessation Intervention plugin."""
 
+import json
 from datetime import date, datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import arrow
 
 from canvas_sdk.effects.protocol_card import ProtocolCard
-from canvas_sdk.events import EventType
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_sdk.events import Event, EventType
 from canvas_sdk.value_set.v2026.no_qdm_category_assigned import TobaccoNonUser, TobaccoUser
 from protocols.cms138v6_tobacco_screening_and_cessation import (
     ClinicalQualityMeasure138v6,
@@ -141,27 +143,28 @@ def test_health_behavioral_assessment_value_sets_carry_expected_cpt_codes() -> N
 
 
 # ---------------------------------------------------------------------------
-# _resolve_patient_id
+# Patient resolution
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_patient_id_uses_event_context_for_unsupported_events() -> None:
-    """When patient_id_from_target raises, fall back to event.context['patient']['id'],
-    the shape home-app sends for model events.
-    """
-    event = MagicMock()
-    event.type = EventType.INTERVIEW_CREATED
-    event.target = MagicMock()
-    event.target.id = "interview-id"
-    event.context = {"patient": {"id": "ctx-patient"}}
-    protocol = ClinicalQualityMeasure138v6(event=event)
+def _real_event_protocol(event_type: int, target: str, context: dict) -> ClinicalQualityMeasure138v6:
+    return ClinicalQualityMeasure138v6(
+        event=Event(EventRequest(type=event_type, target=target, context=json.dumps(context)))
+    )
 
-    with patch.object(
-        ClinicalQualityMeasure138v6,
-        "patient_id_from_target",
-        side_effect=ValueError("unsupported"),
-    ):
-        assert protocol._resolve_patient_id() == "ctx-patient"
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Interview and other record events resolve the patient from the context."""
+    protocol = _real_event_protocol(
+        EventType.INTERVIEW_CREATED, "interview-id", {"patient": {"id": "ctx-patient"}}
+    )
+    assert protocol.patient_id_from_target() == "ctx-patient"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    protocol = _real_event_protocol(EventType.PATIENT_UPDATED, "patient-2", {})
+    assert protocol.patient_id_from_target() == "patient-2"
 
 
 # ---------------------------------------------------------------------------

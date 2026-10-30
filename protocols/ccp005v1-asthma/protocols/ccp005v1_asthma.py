@@ -5,6 +5,8 @@ on file, recommending that the patient be contacted. Patients without an active
 asthma condition receive a satisfied card.
 """
 
+from typing import Any
+
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -37,6 +39,16 @@ class Ccp005v1(ClinicalQualityMeasure):
         EventType.Name(EventType.CONDITION_ASSESSED),
         EventType.Name(EventType.CONDITION_RESOLVED),
     ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Seed _patient_id from the event context so patient_id_from_target() never runs its
+        # target lookup, which raises on every non-patient event until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Remove this override
+        # once the plugin's SDK version includes that fix. Patient events carry no context
+        # patient and resolve from the target, which works today.
+        if patient := self.event.context.get("patient"):
+            self._patient_id = patient["id"]
 
     @property
     def active_asthma_conditions(self) -> list[Condition]:

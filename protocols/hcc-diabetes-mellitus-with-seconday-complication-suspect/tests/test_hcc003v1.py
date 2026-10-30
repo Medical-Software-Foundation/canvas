@@ -6,6 +6,9 @@ from unittest.mock import MagicMock, PropertyMock, patch
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
 
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_generated.messages.events_pb2 import EventType as EventTypeEnum
+from canvas_sdk.events import Event as SdkEvent
 from protocols.hcc003v1_diabetes_secondary_complication import Hcc003v1
 
 PROTOCOL_MODULE = "protocols.hcc003v1_diabetes_secondary_complication"
@@ -259,3 +262,21 @@ def test_compute_due_for_eye_and_renal_combines_narratives_and_recommendations(
             "to Diabetes with secondary renal disease as clinically appropriate."
         ),
     ]
+
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    event = SdkEvent(
+        EventRequest(
+            type=EventTypeEnum.CONDITION_CREATED,
+            target="record-1",
+            context=json.dumps({"patient": {"id": "patient-1"}}),
+        )
+    )
+    assert Hcc003v1(event=event).patient_id_from_target() == "patient-1"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    event = SdkEvent(EventRequest(type=EventTypeEnum.PATIENT_UPDATED, target="patient-2"))
+    assert Hcc003v1(event=event).patient_id_from_target() == "patient-2"

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import json
+from unittest.mock import patch
 
 import pytest
 
-from canvas_sdk.events import EventType
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_sdk.events import Event, EventType
 from protocols.cms123v6_diabetes_foot_exam import ClinicalQualityMeasure123v6
 from protocols.cms131v6_diabetes_eye_exam import ClinicalQualityMeasure131v6
 from protocols.cms134v6_diabetes_medical_attention_for_nephropathy import (
@@ -14,48 +16,25 @@ from protocols.cms134v6_diabetes_medical_attention_for_nephropathy import (
 )
 
 
-def _protocol(context: dict) -> ClinicalQualityMeasure123v6:
-    """A foot-exam protocol for an event the SDK can't map to a patient."""
-    event = MagicMock()
-    event.type = EventType.INTERVIEW_UPDATED
-    event.target.id = "interview-1"
-    event.context = context
-    return ClinicalQualityMeasure123v6(event=event)
+def _protocol(event_type: int, target: str, context: dict) -> ClinicalQualityMeasure123v6:
+    """A foot-exam protocol for a real SDK event."""
+    return ClinicalQualityMeasure123v6(
+        event=Event(EventRequest(type=event_type, target=target, context=json.dumps(context)))
+    )
 
 
-def test_resolve_patient_id_falls_back_to_event_context() -> None:
-    """Interview/instruction/referral-report events carry the patient in the context."""
-    protocol = _protocol({"patient": {"id": "patient-1"}})
-    with patch.object(
-        ClinicalQualityMeasure123v6,
-        "patient_id_from_target",
-        side_effect=ValueError("unsupported"),
-    ):
-        assert protocol.resolve_patient_id() == "patient-1"
-    assert protocol._patient_id == "patient-1"
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    protocol = _protocol(
+        EventType.CONDITION_CREATED, "condition-1", {"patient": {"id": "patient-1"}}
+    )
+    assert protocol.patient_id_from_target() == "patient-1"
 
 
-def test_resolve_patient_id_reraises_without_context_patient() -> None:
-    """No patient in the context means the event is genuinely unsupported."""
-    protocol = _protocol({})
-    with (
-        patch.object(
-            ClinicalQualityMeasure123v6,
-            "patient_id_from_target",
-            side_effect=ValueError("unsupported"),
-        ),
-        pytest.raises(ValueError, match="unsupported"),
-    ):
-        protocol.resolve_patient_id()
-
-
-def test_resolve_patient_id_prefers_target_lookup() -> None:
-    """Supported events resolve through the SDK lookup."""
-    protocol = _protocol({"patient": {"id": "from-context"}})
-    with patch.object(
-        ClinicalQualityMeasure123v6, "patient_id_from_target", return_value="from-target"
-    ):
-        assert protocol.resolve_patient_id() == "from-target"
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    protocol = _protocol(EventType.PATIENT_UPDATED, "patient-2", {})
+    assert protocol.patient_id_from_target() == "patient-2"
 
 
 @pytest.mark.parametrize(
@@ -74,10 +53,7 @@ def test_responds_to_events_that_satisfy_the_measure(protocol_class, event_types
 
 def test_patient_is_fetched_once_per_instance() -> None:
     """Repeated ``self.patient`` reads share one query."""
-    protocol = _protocol({})
-    with (
-        patch.object(ClinicalQualityMeasure123v6, "resolve_patient_id", return_value="p-1"),
-        patch("protocols.diabetes_quality_measure.Patient") as patient_cls,
-    ):
+    protocol = _protocol(EventType.PATIENT_UPDATED, "p-1", {})
+    with patch("protocols.diabetes_quality_measure.Patient") as patient_cls:
         assert protocol.patient is protocol.patient
     patient_cls.objects.get.assert_called_once_with(id="p-1")

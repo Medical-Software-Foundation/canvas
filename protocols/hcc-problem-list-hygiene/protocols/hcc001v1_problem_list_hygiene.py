@@ -4,6 +4,8 @@ Flags active HCC conditions on a patient's problem list that have not been
 assessed within the last year (or the per-patient override cycle).
 """
 
+from typing import Any
+
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -47,6 +49,16 @@ class Hcc001v1(ClinicalQualityMeasure):
         EventType.Name(EventType.PROTOCOL_OVERRIDE_UPDATED),
         EventType.Name(EventType.PROTOCOL_OVERRIDE_DELETED),
     ]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Seed _patient_id from the event context so patient_id_from_target() never runs its
+        # target lookup, which raises on every non-patient event until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Remove this override
+        # once the plugin's SDK version includes that fix. Patient events carry no context
+        # patient and resolve from the target, which works today.
+        if patient := self.event.context.get("patient"):
+            self._patient_id = patient["id"]
 
     @property
     def patient_id(self) -> str:
