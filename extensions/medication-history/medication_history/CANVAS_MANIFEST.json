@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "medication_history",
+    "description": "Adds a Med Hx button to the chart Medications section that opens the patient's medication history (active and historical medications) in a chart-pane modal.",
+    "components": {
+        "protocols": [
+            {
+                "class": "medication_history.protocols.medication_history_button:MedicationHistoryButton",
+                "description": "Action button in the chart Medications section that renders the patient's medication history in a modal.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Medication"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
