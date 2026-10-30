@@ -1,0 +1,161 @@
+{
+    "sdk_version": "0.99.1",
+    "plugin_version": "0.14.14",
+    "name": "guided_awv",
+    "description": "Guided Annual Wellness Visit - Multi-step clinical workflow for AWV Initial (G0438) and Subsequent (G0439) visits",
+    "components": {
+        "applications": [
+            {
+                "class": "guided_awv.applications.guided_awv_app:GuidedAWVApp",
+                "name": "Annual Wellness Visit",
+                "description": "Guided Annual Wellness Visit workflow - visible only on the AWV note type (SNOMED 401131001)",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "guided_awv.api.awv_api:SaveVitalsHandler",
+                "description": "Save vitals to note",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveDepressionScreeningHandler",
+                "description": "Save depression screening results",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveCognitiveAssessmentHandler",
+                "description": "Save cognitive assessment results",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveFallRiskHandler",
+                "description": "Save fall risk assessment",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:AddDiagnosisHandler",
+                "description": "Add diagnosis to note",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SavePlanHandler",
+                "description": "Save assessment and plan narrative",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:ScheduleFollowupHandler",
+                "description": "Schedule follow-up visit",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveHRAHandler",
+                "description": "Save health risk assessment",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveFamilyHistoryHandler",
+                "description": "Save family history narrative",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveFunctionalAbilityHandler",
+                "description": "Save functional ability assessment",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveAdvanceCarePlanningHandler",
+                "description": "Save advance care planning",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SavePreventiveServicesHandler",
+                "description": "Save preventive services checklist",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveCurrentProvidersHandler",
+                "description": "Save current providers list",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveHearingVisionHandler",
+                "description": "Save hearing and vision screening",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveAlcoholScreeningHandler",
+                "description": "Save alcohol screening results",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveMedicationReconciliationHandler",
+                "description": "Save medication reconciliation",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveSDOHScreeningHandler",
+                "description": "Save SDOH screening results",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveMedicalHistoryHandler",
+                "description": "Save medical history attestation",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:GetFormStateHandler",
+                "description": "Retrieve saved AWV form state",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SaveAWVTypeHandler",
+                "description": "Persist Initial vs Subsequent AWV selection",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SearchConditionsHandler",
+                "description": "Search ICD-10 conditions via ontologies",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:SearchPharmaciesHandler",
+                "description": "Search Canvas pharmacy directory",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:GetScreeningDatesHandler",
+                "description": "Retrieve last-done screening dates from patient chart",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.api.awv_api:GeneratePreventionPlanHandler",
+                "description": "Generate personalized prevention plan",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "guided_awv.protocols.prevention_plan_button:PreventionPlanButton",
+                "description": "Note header button to view personalized prevention plan",
+                "data_access": { "event": "SHOW_NOTE_HEADER_BUTTON", "read": [], "write": [] }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            { "template": "questionnaires/mini_cog.yaml" },
+            { "template": "questionnaires/steadi_fall_risk.yaml" },
+            { "template": "questionnaires/sdoh_screening.yaml" },
+            { "template": "questionnaires/hearing_vision.yaml" },
+            { "template": "questionnaires/functional_ability.yaml" }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
