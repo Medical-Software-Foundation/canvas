@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- A calendar carrying a missed visit. Blue is the Canvas secondary and
+       orange is the Canvas warning, so the icon reads in the product palette. -->
+  <rect x="28" y="8" width="8" height="16" rx="4" fill="#2185D0"/>
+  <rect x="64" y="8" width="8" height="16" rx="4" fill="#2185D0"/>
+  <rect x="10" y="18" width="80" height="72" rx="8" fill="#FFFFFF"/>
+  <path d="M10 26a8 8 0 0 1 8-8h64a8 8 0 0 1 8 8v10H10z" fill="#2185D0"/>
+  <g stroke="#ED4A0B" stroke-width="9" stroke-linecap="round">
+    <line x1="34" y1="47" x2="66" y2="79"/>
+    <line x1="66" y1="47" x2="34" y2="79"/>
+  </g>
+  <rect x="10" y="18" width="80" height="72" rx="8" fill="none" stroke="#2185D0" stroke-width="6"/>
+</svg>
