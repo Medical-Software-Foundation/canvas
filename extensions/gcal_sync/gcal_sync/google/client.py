@@ -16,6 +16,12 @@ from canvas_sdk.utils.http import Http
 
 API_BASE = "https://www.googleapis.com/calendar/v3"
 
+# The ``events.list`` response names the calendar's time zone once, at the top level, not on each
+# event. :meth:`GoogleCalendarClient.list_event_deltas` copies it onto every event under this key so
+# it travels with the event (all-day events carry no zone of their own). The inbound content hash
+# reads a fixed set of fields, so the extra key never registers as a change.
+CALENDAR_TIME_ZONE_KEY = "_calendarTimeZone"
+
 
 class GoogleApiError(RuntimeError):
     """A non-success response from the Google Calendar API."""
@@ -185,7 +191,11 @@ class GoogleCalendarClient:
                 raise _error_for(resp.status_code, resp.text)
 
             payload = resp.json()
-            events.extend(payload.get("items", []))
+            calendar_time_zone = payload.get("timeZone")
+            for item in payload.get("items", []):
+                if calendar_time_zone:
+                    item[CALENDAR_TIME_ZONE_KEY] = calendar_time_zone
+                events.append(item)
             page_token = payload.get("nextPageToken", "")
             if not page_token:
                 next_sync_token = payload.get("nextSyncToken", "")
