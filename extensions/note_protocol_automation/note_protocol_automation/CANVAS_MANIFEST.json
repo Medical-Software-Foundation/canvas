@@ -1,0 +1,61 @@
+{
+    "sdk_version": "0.123.1",
+    "plugin_version": "0.0.1",
+    "name": "note_protocol_automation",
+    "description": "Auto-inserts a configured set of commands into a note based on its note type and patient parameters, with a global admin UI for defining the rules.",
+    "url_permissions": [],
+    "secrets": ["ADMIN_STAFF_IDS"],
+    "custom_data": {
+        "namespace": "custom_data__note_protocol_automation",
+        "access": "read_write"
+    },
+    "components": {
+        "handlers": [
+            {
+                "class": "note_protocol_automation.handlers.executor:ProtocolExecutor",
+                "description": "On a note's initial NEW state-change event, match configured rules and bulk-insert their commands.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.patient.Patient",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.lab.LabValue",
+                        "canvas_sdk.v1.data.care_team.CareTeamMembership"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "note_protocol_automation.handlers.config_api:ConfigAPI",
+                "description": "Serves the rule-config UI and CRUD endpoints.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.note.NoteType"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "note_protocol_automation.applications.config_app:NoteProtocolsConfigApp",
+                "name": "Note Protocols",
+                "description": "Configure note-type protocols that auto-insert commands.",
+                "scope": "global",
+                "icon": "assets/note-protocol-automation-icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
