@@ -155,7 +155,6 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         now: arrow.Arrow | None = None,
         conditions: list[Any] | None = None,
         imaging_reports: list[Any] | None = None,
-        event: Any = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -169,11 +168,12 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         # Resolve the patient here rather than through patient_id_from_target(), whose
         # target lookup raises on every non-patient event until
         # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Revisit once the
-        # plugin's SDK version includes that fix.
-        if "patient" in self.event.context:
-          self._patient_id: int = self.event.context["patient"]["id"]
+        # plugin's SDK version includes that fix. Patient events carry no context patient;
+        # their target is the patient.
+        if patient_context := self.event.context.get("patient"):
+            self._patient_id = patient_context["id"]
         else:
-          self._patient_id: int = self.target.id
+            self._patient_id = self.event.target.id
 
     @property
     def timeframe(self) -> Timeframe:

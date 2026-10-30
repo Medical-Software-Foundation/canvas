@@ -84,13 +84,14 @@ def test_meta_version() -> None:
     assert Ccp004v1.Meta.version == "2020-04-02v1"
 
 
-def test_manifest_shows_card_in_chart() -> None:
-    """Chart visibility is on, matching the legacy built-in's fleet behavior.
+def test_manifest_hides_card_from_chart() -> None:
+    """Chart visibility is off, matching the legacy built-in's fleet behavior
+    (show_in_chart is False on nearly every production instance).
 
     The installer reads show_in_chart from CANVAS_MANIFEST.json, not from the
-    Meta class, so the manifest is the value that has to be True.
+    Meta class, so the manifest is the value that has to be False.
     """
-    assert _manifest_protocol_meta()["show_in_chart"] is True
+    assert _manifest_protocol_meta()["show_in_chart"] is False
 
 
 def test_manifest_meta_matches_protocol_meta() -> None:

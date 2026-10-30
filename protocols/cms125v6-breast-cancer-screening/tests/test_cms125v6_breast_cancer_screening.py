@@ -8,6 +8,7 @@ runs inside the plugin runner.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -15,6 +16,8 @@ from typing import Any
 import arrow
 import pytest
 
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_sdk.events import Event, EventType
 from canvas_sdk.protocols.timeframe import Timeframe
 from canvas_sdk.v1.data.patient import SexAtBirth
 
@@ -81,6 +84,11 @@ def make_imaging_report(system: str, code: str, original_date: str) -> dict[str,
     }
 
 
+def _event(event_type: int, target: str, context: dict[str, Any] | None = None) -> Event:
+    """A real SDK event, as plugin_runner delivers it."""
+    return Event(EventRequest(type=event_type, target=target, context=json.dumps(context or {})))
+
+
 def build_protocol(
     *,
     patient: FakePatient | None = None,
@@ -98,6 +106,7 @@ def build_protocol(
             end=arrow.get("2018-08-23 13:24:56"),
         )
     return ClinicalQualityMeasure125v6(
+        event=_event(EventType.PATIENT_UPDATED, patient.id),
         patient=patient,
         timeframe=timeframe,
         now=now,
@@ -404,3 +413,20 @@ def test_unilateral_mastectomy_value_set_contains_legacy_codes() -> None:
 def test_cms125v6_tomography_value_set() -> None:
     """The inlined CMS125v6Tomography value set carries LOINC 72142-3."""
     assert CMS125v6Tomography.LOINC == {"72142-3"}
+
+
+# --- patient resolution --------------------------------------------------------
+
+
+def test_patient_id_comes_from_event_context_on_record_events() -> None:
+    """Record events resolve the patient from the context, not the SDK's target lookup."""
+    protocol = ClinicalQualityMeasure125v6(
+        event=_event(EventType.CONDITION_CREATED, "condition-1", {"patient": {"id": "patient-9"}})
+    )
+    assert protocol.patient_id_from_target() == "patient-9"
+
+
+def test_patient_events_resolve_from_the_target() -> None:
+    """Patient events carry no context patient; the target is the patient."""
+    protocol = ClinicalQualityMeasure125v6(event=_event(EventType.PATIENT_UPDATED, "patient-2"))
+    assert protocol.patient_id_from_target() == "patient-2"
