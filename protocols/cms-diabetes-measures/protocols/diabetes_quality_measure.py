@@ -9,8 +9,6 @@ This mirrors the legacy ``DiabetesQualityMeasure`` from
 
 from __future__ import annotations
 
-from functools import cached_property
-
 import arrow
 
 from canvas_sdk.protocols import ClinicalQualityMeasure
@@ -40,10 +38,30 @@ class DiabetesQualityMeasure(ClinicalQualityMeasure):
         """Always enabled; kept for parity with the legacy interface."""
         return True
 
-    @cached_property
+    _patient: Patient | None = None
+
+    @property
     def patient(self) -> Patient:
-        """The patient this protocol is computing for."""
-        return Patient.objects.get(id=self.patient_id_from_target())
+        """The patient this protocol is computing for, fetched once per instance."""
+        if self._patient is None:
+            self._patient = Patient.objects.get(id=self.resolve_patient_id())
+        return self._patient
+
+    def resolve_patient_id(self) -> str:
+        """Patient id for the current event.
+
+        Falls back to ``event.context['patient']['id']`` for event types
+        (interview, instruction, referral report) that
+        ``ClinicalQualityMeasure.patient_id_from_target`` does not map.
+        """
+        try:
+            return self.patient_id_from_target()
+        except ValueError:
+            patient_id = (self.event.context.get("patient") or {}).get("id")
+            if not patient_id:
+                raise
+            self._patient_id = patient_id
+            return patient_id
 
     def has_diabetes_in_period(self) -> bool:
         """True if the patient has an active Diabetes condition during the timeframe."""

@@ -55,6 +55,8 @@ class ClinicalQualityMeasure131v6(DiabetesQualityMeasure):
         EventType.Name(EventType.CONDITION_CREATED),
         EventType.Name(EventType.CONDITION_UPDATED),
         EventType.Name(EventType.PATIENT_UPDATED),
+        EventType.Name(EventType.REFERRAL_REPORT_CREATED),
+        EventType.Name(EventType.REFERRAL_REPORT_UPDATED),
     ]
 
     _on_date: arrow.Arrow | None = None

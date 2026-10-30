@@ -52,8 +52,8 @@ def _stub_patient(
         return (time.datetime - birth.datetime).days / 365.25
 
     patient.age_at = age_at
-    # cached_property stores in instance __dict__; writing there pre-seeds the cache.
-    protocol.__dict__["patient"] = patient
+    # Pre-seed the memoized patient so accessing self.patient doesn't hit the ORM.
+    protocol._patient = patient
     return patient
 
 

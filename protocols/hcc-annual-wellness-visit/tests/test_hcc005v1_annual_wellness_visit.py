@@ -99,6 +99,17 @@ def test_in_initial_population_true_for_old_enough_patient(patient_cls: MagicMoc
 
 
 @patch(f"{PROTOCOL_MODULE}.Patient")
+def test_in_initial_population_true_on_65th_birthday(patient_cls: MagicMock) -> None:
+    """A patient who turns 65 on the timeframe end date is in the initial population."""
+    patient = _patient(date(1953, 8, 23))
+    patient.age_at.side_effect = lambda time: 65.0
+    patient_cls.objects.get.return_value = patient
+    protocol = _make_protocol()
+    protocol.now = arrow.get("2018-08-23 13:24:56")
+    assert protocol.in_initial_population() is True
+
+
+@patch(f"{PROTOCOL_MODULE}.Patient")
 def test_in_initial_population_false_for_young_patient(patient_cls: MagicMock) -> None:
     """Patients not yet 65 at the timeframe end are not in the initial population."""
     patient_cls.objects.get.return_value = _patient(date(1990, 1, 1))

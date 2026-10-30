@@ -6,8 +6,6 @@ on their Conditions List. The card recommends adding a dysrhythmia-related
 diagnosis as clinically appropriate.
 """
 
-from functools import cached_property
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -55,12 +53,12 @@ class Hcc004v1(ClinicalQualityMeasure):
             .exists()
         )
 
-    @cached_property
+    @property
     def has_active_antiarrhythmic_medication(self) -> bool:
         """Patient has an active medication in the Antiarrhythmics drug class."""
         return self._has_active(Medication, Antiarrhythmics)
 
-    @cached_property
+    @property
     def has_active_dysrhythmia_condition(self) -> bool:
         """Patient has an active condition in the Dysrhythmia class."""
         return self._has_active(Condition, DysrhythmiaClassConditionSuspect)

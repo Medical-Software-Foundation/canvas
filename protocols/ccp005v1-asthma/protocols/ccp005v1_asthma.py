@@ -5,8 +5,6 @@ on file, recommending that the patient be contacted. Patients without an active
 asthma condition receive a satisfied card.
 """
 
-from functools import cached_property
-
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -40,7 +38,7 @@ class Ccp005v1(ClinicalQualityMeasure):
         EventType.Name(EventType.CONDITION_RESOLVED),
     ]
 
-    @cached_property
+    @property
     def active_asthma_conditions(self) -> list[Condition]:
         """Active asthma conditions for the patient, oldest first by onset."""
         return list(
@@ -50,7 +48,7 @@ class Ccp005v1(ClinicalQualityMeasure):
             .order_by("onset_date")
         )
 
-    @cached_property
+    @property
     def date_of_diagnosis(self) -> str:
         """The earliest onset date among the patient's active asthma conditions, or ''."""
         for condition in self.active_asthma_conditions:

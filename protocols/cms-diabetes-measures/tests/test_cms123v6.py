@@ -38,7 +38,7 @@ def protocol(patient) -> ClinicalQualityMeasure123v6:
     proto.environment = {}
     proto._patient_id = patient.id
     proto.now = arrow.get("2018-08-23T00:00:00Z")
-    proto.__dict__["patient"] = patient
+    proto._patient = patient
     return proto
 
 

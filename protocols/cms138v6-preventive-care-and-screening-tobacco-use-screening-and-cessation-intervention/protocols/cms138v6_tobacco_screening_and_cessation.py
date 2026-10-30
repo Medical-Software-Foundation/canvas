@@ -18,7 +18,7 @@ Measure source:
     https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS138v6.html
 """
 
-from functools import cached_property
+from __future__ import annotations
 
 import arrow
 
@@ -157,6 +157,7 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
         EventType.Name(EventType.BILLING_LINE_ITEM_CREATED),
         EventType.Name(EventType.INTERVIEW_CREATED),
+        EventType.Name(EventType.INTERVIEW_UPDATED),
         EventType.Name(EventType.INSTRUCTION_CREATED),
         EventType.Name(EventType.INSTRUCTION_UPDATED),
     ]
@@ -176,15 +177,19 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
             self.POPULATION_3: Population(),
         }
 
-    @cached_property
+    _patient: Patient | None = None
+
+    @property
     def patient(self) -> Patient:
-        """The Patient row for the event target."""
-        return Patient.objects.get(id=self._resolve_patient_id())
+        """The Patient row for the event target, fetched once per instance."""
+        if self._patient is None:
+            self._patient = Patient.objects.get(id=self._resolve_patient_id())
+        return self._patient
 
     def _resolve_patient_id(self) -> str:
         """Patient id for the current event.
 
-        Falls back to ``event.context['patient_id']`` for event types
+        Falls back to ``event.context['patient']['id']`` for event types
         (e.g. INTERVIEW_CREATED) that
         ``ClinicalQualityMeasure.patient_id_from_target`` does not handle.
         """
@@ -194,66 +199,72 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
         try:
             return self.patient_id_from_target()
         except ValueError:
-            patient_id = self.event.context.get("patient_id") if self.event.context else None
+            patient_id = ((self.event.context or {}).get("patient") or {}).get("id")
             if not patient_id:
                 raise
             self._patient_id = patient_id
             return patient_id
 
-    @cached_property
+    @property
     def screening_timeframe(self) -> Timeframe:
         """Timeframe used to find tobacco screening interviews (24 months ending now)."""
         return Timeframe(start=self.now.shift(months=-self.SCREENING_LOOKBACK_MONTHS), end=self.now)
 
-    @cached_property
-    def _screening_interviews(self) -> list[Interview]:
-        """Committed tobacco screening interviews for the patient within the lookback.
+    # Zero or one Interview, fetched once per instance (a list so "none found" is cacheable).
+    _latest_screenings: list[Interview] | None = None
+
+    @property
+    def latest_screening(self) -> Interview | None:
+        """Most recent committed tobacco screening interview within the lookback.
 
         Note: filters on ``Interview.created`` since the SDK ``Interview`` model
         exposes ``note_id`` as a plain integer field, not a relation, so we
         cannot ``__range`` filter on the note's ``datetime_of_service``.
         """
-        return list(
-            Interview.objects.for_patient(self.patient.id)
-            .committed()
-            .filter(
-                questionnaires__code_system=LOINC_URL,
-                questionnaires__code__in=TobaccoUseScreening.values.get("LOINC", set()),
-                created__range=(
-                    self.screening_timeframe.start.datetime,
-                    self.screening_timeframe.end.datetime,
-                ),
+        if self._latest_screenings is None:
+            self._latest_screenings = list(
+                Interview.objects.for_patient(self.patient.id)
+                .committed()
+                .filter(
+                    questionnaires__code_system=LOINC_URL,
+                    questionnaires__code__in=TobaccoUseScreening.values.get("LOINC", set()),
+                    created__range=(
+                        self.screening_timeframe.start.datetime,
+                        self.screening_timeframe.end.datetime,
+                    ),
+                )
+                .order_by("-created")
+                .distinct()[:1]
             )
-            .order_by("-created")
-            .distinct()
-        )
+        return self._latest_screenings[0] if self._latest_screenings else None
 
-    def _latest_screening_with_response(
-        self, response_codes: set[str]
-    ) -> arrow.Arrow | None:
-        for interview in self._screening_interviews:
-            matching = interview.interview_responses.filter(
-                response_option__code__in=response_codes,
-            ).exists()
-            if matching:
-                return arrow.get(interview.created)
-        return None
+    def _latest_screening_if_response(self, response_codes: set[str]) -> arrow.Arrow | None:
+        """Date of the most recent screening, when that screening recorded one of
+        ``response_codes``. Older screenings are ignored: only the latest status counts.
+        """
+        latest = self.latest_screening
+        if latest is None:
+            return None
+        matching = latest.interview_responses.filter(
+            response_option__code__in=response_codes,
+        ).exists()
+        return arrow.get(latest.created) if matching else None
 
-    @cached_property
+    @property
     def tobacco_use_screening_user(self) -> arrow.Arrow | None:
-        """Most recent screening where the patient was identified as a tobacco user."""
-        return self._latest_screening_with_response(
+        """Date of the most recent screening, when it identified a tobacco user."""
+        return self._latest_screening_if_response(
             TobaccoUser.values.get("SNOMEDCT", set())
         )
 
-    @cached_property
+    @property
     def tobacco_use_screening_non_user(self) -> arrow.Arrow | None:
-        """Most recent screening where the patient was identified as a non-user."""
-        return self._latest_screening_with_response(
+        """Date of the most recent screening, when it identified a non-user."""
+        return self._latest_screening_if_response(
             TobaccoNonUser.values.get("SNOMEDCT", set())
         )
 
-    @cached_property
+    @property
     def tobacco_cessation_intervention_counseling(self) -> arrow.Arrow | None:
         """Cessation counseling instruction recorded after a positive screening."""
         screening_at = self.tobacco_use_screening_user
@@ -275,7 +286,7 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
             return None
         return arrow.get(instruction.note.datetime_of_service)
 
-    @cached_property
+    @property
     def tobacco_cessation_intervention_medication(self) -> arrow.Arrow | None:
         """Active cessation pharmacotherapy started after a positive screening."""
         screening_at = self.tobacco_use_screening_user
@@ -299,7 +310,7 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
                 return start
         return None
 
-    @cached_property
+    @property
     def tobacco_cessation_intervention(self) -> bool:
         """True when either counseling or pharmacotherapy followed a positive screening."""
         return bool(

@@ -6,8 +6,6 @@ qualifying AWV CPT code has been billed within the protocol timeframe (one
 year by default).
 """
 
-from functools import cached_property
-
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -47,21 +45,30 @@ class Hcc005v1(ClinicalQualityMeasure):
 
     MINIMUM_AGE = 65
 
-    @cached_property
+    _patient: Patient | None = None
+    _qualifying_visits: list[BillingLineItem] | None = None
+
+    @property
     def patient(self) -> Patient:
-        """The Patient model for the event target."""
-        return Patient.objects.get(id=self.patient_id_from_target())
+        """The Patient model for the event target, fetched once per instance."""
+        if self._patient is None:
+            self._patient = Patient.objects.get(id=self.patient_id_from_target())
+        return self._patient
 
-    @cached_property
+    @property
     def qualifying_visits(self) -> list[BillingLineItem]:
-        """All qualifying AWV billing line items for the patient, oldest first."""
-        return list(
-            BillingLineItem.objects.filter(patient__id=self.patient_id_from_target())
-            .find(Hcc005v1AnnualWellnessVisit)
-            .order_by("created")
-        )
+        """All qualifying AWV billing line items for the patient, oldest first, fetched once
+        per instance.
+        """
+        if self._qualifying_visits is None:
+            self._qualifying_visits = list(
+                BillingLineItem.objects.filter(patient__id=self.patient_id_from_target())
+                .find(Hcc005v1AnnualWellnessVisit)
+                .order_by("created")
+            )
+        return self._qualifying_visits
 
-    @cached_property
+    @property
     def last_qualifying_visit_in_timeframe(self) -> BillingLineItem | None:
         """The most recent qualifying AWV billing line item inside the protocol timeframe."""
         start = self.timeframe.start.datetime
@@ -71,7 +78,7 @@ class Hcc005v1(ClinicalQualityMeasure):
 
     def in_initial_population(self) -> bool:
         """Initial population: Patients 65+ years of age."""
-        return bool(self.patient.age_at(self.timeframe.end) > self.MINIMUM_AGE)
+        return bool(self.patient.age_at(self.timeframe.end) >= self.MINIMUM_AGE)
 
     def in_denominator(self) -> bool:
         """Patients in the initial population."""

@@ -52,8 +52,8 @@ def _make_protocol(
     protocol = ClinicalQualityMeasure130v6.__new__(ClinicalQualityMeasure130v6)
     protocol.now = now
     patient = _StubPatient(birth_date=birth_date)
-    # cached_property write goes straight into the instance dict.
-    protocol.__dict__["patient"] = patient
+    # Pre-seed the memoized patient so accessing self.patient doesn't hit the ORM.
+    protocol._patient = patient
     protocol.had_colon_exclusion = lambda: has_exclusion  # type: ignore[method-assign]
     return protocol
 

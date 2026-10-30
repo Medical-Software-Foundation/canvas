@@ -6,7 +6,8 @@ for patients who have had a qualifying exam within the relevant look-back
 window.
 """
 
-from functools import cached_property
+from __future__ import annotations
+
 from typing import Any
 
 import arrow
@@ -103,10 +104,14 @@ class ClinicalQualityMeasure130v6(ClinicalQualityMeasure):
     CT_COLONOGRAPHY_VALUE_SET = CtColonography | CMS130v6CtColonography
     COLON_EXCLUSION_VALUE_SET = TotalColectomy | MalignantNeoplasmOfColon
 
-    @cached_property
+    _patient: Patient | None = None
+
+    @property
     def patient(self) -> Patient:
-        """Return the Patient this protocol is being computed for."""
-        return Patient.objects.get(id=self.patient_id_from_target())
+        """Return the Patient this protocol is being computed for, fetched once per instance."""
+        if self._patient is None:
+            self._patient = Patient.objects.get(id=self.patient_id_from_target())
+        return self._patient
 
     def in_age_range(self) -> bool:
         """Return True if the patient is between AGE_RANGE_START and AGE_RANGE_END (inclusive)."""
@@ -176,7 +181,7 @@ class ClinicalQualityMeasure130v6(ClinicalQualityMeasure):
         present = [d for d in candidates if d is not None]
         return max(present) if present else None
 
-    @cached_property
+    @property
     def _last_exam(self) -> dict | None:
         """Return a dict describing the most recent qualifying screening exam, or None.
 
@@ -329,6 +334,3 @@ class ClinicalQualityMeasure130v6(ClinicalQualityMeasure):
             return [self._satisfied_card(exam).apply()]
 
         return [self._due_card().apply()]
-
-
-__exports__ = ("CMS130v6CtColonography", "ClinicalQualityMeasure130v6")

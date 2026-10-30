@@ -7,8 +7,6 @@ complication category, a "Diagnose" recommendation is added that suggests
 updating the diagnosis to the more specific code.
 """
 
-from functools import cached_property
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -61,34 +59,34 @@ class Hcc003v1(ClinicalQualityMeasure):
             .exists()
         )
 
-    @cached_property
+    @property
     def has_diabetes_with_unspecified_condition(self) -> bool:
         """Patient has an active "Diabetes without complication" (E11.9) diagnosis."""
         return self._has_active_condition(DiabetesWithoutComplication)
 
-    @cached_property
+    @property
     def has_suspect_eye_condition(self) -> bool:
         """Patient has an active suspect eye condition."""
         return self._has_active_condition(
             DiabetesEyeConditionSuspect
         ) or self._has_active_condition(DiabetesEyeClassConditionSuspect)
 
-    @cached_property
+    @property
     def has_suspect_neurologic_condition(self) -> bool:
         """Patient has an active suspect neurologic condition."""
         return self._has_active_condition(DiabetesNeurologicConditionSuspect)
 
-    @cached_property
+    @property
     def has_suspect_renal_condition(self) -> bool:
         """Patient has an active suspect renal condition."""
         return self._has_active_condition(DiabetesRenalConditionSuspect)
 
-    @cached_property
+    @property
     def has_suspect_circulatory_condition(self) -> bool:
         """Patient has an active suspect circulatory condition."""
         return self._has_active_condition(DiabetesCirculatoryClassConditionSuspect)
 
-    @cached_property
+    @property
     def has_suspect_other_condition(self) -> bool:
         """Patient has another active condition often associated with diabetes."""
         return self._has_active_condition(DiabetesOtherClassConditionSuspect)

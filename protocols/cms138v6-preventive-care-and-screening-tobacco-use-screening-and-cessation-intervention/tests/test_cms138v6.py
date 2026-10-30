@@ -7,6 +7,7 @@ import arrow
 
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
+from canvas_sdk.value_set.v2026.no_qdm_category_assigned import TobaccoNonUser, TobaccoUser
 from protocols.cms138v6_tobacco_screening_and_cessation import (
     ClinicalQualityMeasure138v6,
     HealthAndBehavioralAssessmentInitial,
@@ -113,6 +114,7 @@ def test_responds_to_expected_events() -> None:
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
         EventType.Name(EventType.BILLING_LINE_ITEM_CREATED),
         EventType.Name(EventType.INTERVIEW_CREATED),
+        EventType.Name(EventType.INTERVIEW_UPDATED),
         EventType.Name(EventType.INSTRUCTION_CREATED),
         EventType.Name(EventType.INSTRUCTION_UPDATED),
     ):
@@ -144,12 +146,14 @@ def test_health_behavioral_assessment_value_sets_carry_expected_cpt_codes() -> N
 
 
 def test_resolve_patient_id_uses_event_context_for_unsupported_events() -> None:
-    """When patient_id_from_target raises, fall back to event.context['patient_id']."""
+    """When patient_id_from_target raises, fall back to event.context['patient']['id'],
+    the shape home-app sends for model events.
+    """
     event = MagicMock()
     event.type = EventType.INTERVIEW_CREATED
     event.target = MagicMock()
     event.target.id = "interview-id"
-    event.context = {"patient_id": "ctx-patient"}
+    event.context = {"patient": {"id": "ctx-patient"}}
     protocol = ClinicalQualityMeasure138v6(event=event)
 
     with patch.object(
@@ -158,6 +162,72 @@ def test_resolve_patient_id_uses_event_context_for_unsupported_events() -> None:
         side_effect=ValueError("unsupported"),
     ):
         assert protocol._resolve_patient_id() == "ctx-patient"
+
+
+# ---------------------------------------------------------------------------
+# tobacco_use_screening_user / tobacco_use_screening_non_user
+# ---------------------------------------------------------------------------
+
+
+USER_CODE = next(iter(TobaccoUser.values["SNOMEDCT"]))
+NON_USER_CODE = next(iter(TobaccoNonUser.values["SNOMEDCT"]))
+
+
+def _fake_screening(created: str, response_code: str) -> MagicMock:
+    """Interview mock whose responses filter matches only ``response_code``."""
+    interview = MagicMock()
+    interview.created = arrow.get(created).datetime
+
+    def filter_responses(response_option__code__in: set[str]) -> MagicMock:
+        result = MagicMock()
+        result.exists.return_value = response_code in response_option__code__in
+        return result
+
+    interview.interview_responses.filter.side_effect = filter_responses
+    return interview
+
+
+def test_latest_screening_fetches_only_the_newest_interview() -> None:
+    """Only the newest screening is read, so an older positive one can't count."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    protocol._patient = _fake_patient()
+    newest = _fake_screening("2019-03-25", NON_USER_CODE)
+    with patch(f"{PROTOCOL_MODULE}.Interview") as interview_cls:
+        ordered = (
+            interview_cls.objects.for_patient.return_value.committed.return_value
+            .filter.return_value.order_by.return_value.distinct.return_value
+        )
+        ordered.__getitem__.return_value = [newest]
+        assert protocol.latest_screening is newest
+        assert protocol.latest_screening is newest
+    ordered.__getitem__.assert_called_once_with(slice(None, 1))
+    interview_cls.objects.for_patient.return_value.committed.return_value.filter.return_value.order_by.assert_called_once_with(
+        "-created"
+    )
+
+
+def test_screening_non_user_when_latest_screening_is_negative() -> None:
+    """A negative latest screening means non-user, regardless of older screenings."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    protocol._latest_screenings = [_fake_screening("2019-03-25", NON_USER_CODE)]
+    assert protocol.tobacco_use_screening_user is None
+    assert protocol.tobacco_use_screening_non_user == arrow.get("2019-03-25")
+
+
+def test_screening_user_when_latest_screening_is_positive() -> None:
+    """A positive latest screening means current tobacco user."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    protocol._latest_screenings = [_fake_screening("2019-03-25", USER_CODE)]
+    assert protocol.tobacco_use_screening_user == arrow.get("2019-03-25")
+    assert protocol.tobacco_use_screening_non_user is None
+
+
+def test_screening_status_none_without_screenings() -> None:
+    """No screenings in the lookback means neither status."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    protocol._latest_screenings = []
+    assert protocol.tobacco_use_screening_user is None
+    assert protocol.tobacco_use_screening_non_user is None
 
 
 # ---------------------------------------------------------------------------

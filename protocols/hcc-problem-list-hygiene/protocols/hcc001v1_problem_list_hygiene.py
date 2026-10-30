@@ -4,8 +4,6 @@ Flags active HCC conditions on a patient's problem list that have not been
 assessed within the last year (or the per-patient override cycle).
 """
 
-from functools import cached_property
-
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -50,12 +48,12 @@ class Hcc001v1(ClinicalQualityMeasure):
         EventType.Name(EventType.PROTOCOL_OVERRIDE_DELETED),
     ]
 
-    @cached_property
+    @property
     def patient_id(self) -> str:
         """Resolve the patient id from the triggering event."""
         return self.patient_id_from_target()
 
-    @cached_property
+    @property
     def protocol_override(self) -> ProtocolOverride | None:
         """Return the active adjustment override for this protocol, if any."""
         return (
@@ -77,7 +75,7 @@ class Hcc001v1(ClinicalQualityMeasure):
             start = end.shift(years=-1)
         return Timeframe(start=start, end=end)
 
-    @cached_property
+    @property
     def active_hcc_conditions(self) -> list[Condition]:
         """All active HCC conditions on the patient's problem list."""
         return list(
@@ -98,7 +96,7 @@ class Hcc001v1(ClinicalQualityMeasure):
         coding = condition.codings.filter(system="ICD-10").first()
         return coding.code if coding else None
 
-    @cached_property
+    @property
     def hcc_assessments(self) -> list[dict]:
         """Per-condition ICD-10 + last-assessed pairs for every active HCC condition."""
         items: list[dict] = []
@@ -109,7 +107,7 @@ class Hcc001v1(ClinicalQualityMeasure):
             items.append({"ICD10": code, "date": self._last_assessed(condition)})
         return items
 
-    @cached_property
+    @property
     def overdue_assessments(self) -> list[dict]:
         """HCC conditions whose last assessment falls before the timeframe start."""
         start = self.timeframe.start
@@ -189,6 +187,3 @@ class Hcc001v1(ClinicalQualityMeasure):
             return [self._build_due_card().apply()]
 
         return [self._build_satisfied_card().apply()]
-
-
-__exports__ = ("Hcc001v1",)

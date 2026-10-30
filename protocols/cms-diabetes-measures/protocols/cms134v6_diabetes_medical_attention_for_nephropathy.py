@@ -100,6 +100,8 @@ class ClinicalQualityMeasure134v6(DiabetesQualityMeasure):
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
         EventType.Name(EventType.MEDICATION_LIST_ITEM_UPDATED),
         EventType.Name(EventType.PATIENT_UPDATED),
+        EventType.Name(EventType.REFERRAL_REPORT_CREATED),
+        EventType.Name(EventType.REFERRAL_REPORT_UPDATED),
     ]
 
     DISMISSING_CONDITIONS: list[tuple[type[ValueSet], str]] = [

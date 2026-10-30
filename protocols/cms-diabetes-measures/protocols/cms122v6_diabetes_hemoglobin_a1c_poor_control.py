@@ -11,8 +11,6 @@ https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS122v6.html
 
 from __future__ import annotations
 
-from functools import cached_property
-
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -49,21 +47,25 @@ class ClinicalQualityMeasure122v6(DiabetesQualityMeasure):
 
     MINIMUM_HBA1C = 9.0
 
-    @cached_property
+    # Zero or one LabValue, fetched once per instance (a list so "none found" is cacheable).
+    _hba1c_lab_values: list[LabValue] | None = None
+
+    @property
     def last_hba1c_lab_value(self) -> LabValue | None:
         """Most-recent committed HbA1c LabValue inside the measurement period, if any."""
-        return (
-            LabValue.objects.filter(
-                report__patient__id=self.patient.id,
-                report__original_date__gte=self.timeframe.start.datetime,
-                report__original_date__lte=self.timeframe.end.datetime,
+        if self._hba1c_lab_values is None:
+            self._hba1c_lab_values = list(
+                LabValue.objects.filter(
+                    report__patient__id=self.patient.id,
+                    report__original_date__gte=self.timeframe.start.datetime,
+                    report__original_date__lte=self.timeframe.end.datetime,
+                )
+                .find(Hba1CLaboratoryTest)
+                .order_by("-report__original_date")[:1]
             )
-            .find(Hba1CLaboratoryTest)
-            .order_by("-report__original_date")
-            .first()
-        )
+        return self._hba1c_lab_values[0] if self._hba1c_lab_values else None
 
-    @cached_property
+    @property
     def last_hba1c_report(self) -> LabReport | None:
         """The LabReport corresponding to ``last_hba1c_lab_value``."""
         value = self.last_hba1c_lab_value
@@ -71,14 +73,20 @@ class ClinicalQualityMeasure122v6(DiabetesQualityMeasure):
 
     @property
     def last_hba1c_value(self) -> float | None:
-        """Numeric HbA1c reading. Returns ``0`` if the stored value won't parse."""
+        """Numeric HbA1c reading, or ``None`` when there's no result or it has no numeric
+        value (e.g. "see comment").
+        """
         value = self.last_hba1c_lab_value
         if value is None:
             return None
         raw = value.value
-        if isinstance(raw, str):
-            return self.relative_float(raw)
-        return float(raw)
+        if not isinstance(raw, str):
+            return float(raw)
+        try:
+            float(raw.strip().strip("<≤=≥>"))
+        except ValueError:
+            return None
+        return self.relative_float(raw.strip())
 
     @property
     def last_hba1c_arrow(self) -> arrow.Arrow | None:
@@ -93,8 +101,8 @@ class ClinicalQualityMeasure122v6(DiabetesQualityMeasure):
         return self.display_date(when) if when else None
 
     def in_denominator(self) -> bool:
-        """In the initial population; hospice exclusion isn't checked because there's no SDK
-        hospice flag on Patient. Subclassers can override if a customer needs that gate.
+        """Equals the initial population. The legacy hospice exclusion is a no-op
+        (``hospice_within`` returns ``False``), so there's nothing to port.
         """
         return self.in_initial_population()
 
@@ -115,7 +123,15 @@ class ClinicalQualityMeasure122v6(DiabetesQualityMeasure):
             status=ProtocolCard.Status.DUE,
             due_in=-1,
         )
-        if self.last_hba1c_value is None:
+        if self.last_hba1c_lab_value is not None and self.last_hba1c_value is None:
+            card.narrative = (
+                f"{first_name}'s last HbA1c done {self.last_hba1c_date} has no numeric result."
+            )
+            card.add_recommendation(
+                title="Order HbA1c",
+                button="Order",
+            )
+        elif self.last_hba1c_value is None:
             humanized = (
                 self.now.shift(days=-1 * self.timeframe.duration, months=-1)
                 .humanize(other=self.now, granularity="month", only_distance=True)

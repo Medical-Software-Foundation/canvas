@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
+from canvas_sdk.effects.protocol_card import ProtocolCard
 from protocols.cms122v6_diabetes_hemoglobin_a1c_poor_control import (
     ClinicalQualityMeasure122v6,
 )
@@ -43,8 +44,8 @@ def protocol(patient) -> ClinicalQualityMeasure122v6:
     proto.environment = {}
     proto._patient_id = patient.id
     proto.now = arrow.get("2018-08-23T00:00:00Z")
-    # Pre-seed the cached_property so accessing self.patient doesn't hit the ORM.
-    proto.__dict__["patient"] = patient
+    # Pre-seed the memoized patient so accessing self.patient doesn't hit the ORM.
+    proto._patient = patient
     return proto
 
 
@@ -74,26 +75,70 @@ def test_responds_to_includes_lab_report() -> None:
 
 def test_in_numerator_missing_lab_is_true(protocol) -> None:
     """Missing HbA1c is treated as poor control."""
-    protocol.__dict__["last_hba1c_lab_value"] = None
+    protocol._hba1c_lab_values = []
     assert protocol.in_numerator() is True
 
 
 def test_in_numerator_high_value_is_true(protocol) -> None:
     """HbA1c above 9.0 is poor control."""
-    protocol.__dict__["last_hba1c_lab_value"] = SimpleNamespace(
-        value=11.2,
-        report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
-    )
+    protocol._hba1c_lab_values = [
+        SimpleNamespace(
+            value=11.2,
+            report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
+        )
+    ]
     assert protocol.in_numerator() is True
 
 
 def test_in_numerator_normal_value_is_false(protocol) -> None:
     """HbA1c at or below 9.0 is *not* poor control."""
-    protocol.__dict__["last_hba1c_lab_value"] = SimpleNamespace(
-        value=7.0,
-        report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
-    )
+    protocol._hba1c_lab_values = [
+        SimpleNamespace(
+            value=7.0,
+            report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
+        )
+    ]
     assert protocol.in_numerator() is False
+
+
+@pytest.mark.parametrize("raw", ["see comment", "", "  "])
+def test_in_numerator_text_result_is_poor_control(protocol, raw) -> None:
+    """A result without a numeric value counts as poor control."""
+    protocol._hba1c_lab_values = [
+        SimpleNamespace(
+            value=raw,
+            report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
+        )
+    ]
+    assert protocol.last_hba1c_value is None
+    assert protocol.in_numerator() is True
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("7.2", 7.2), (" 9.5 ", 9.5), (">14", 14.000001)])
+def test_last_hba1c_value_parses_string_results(protocol, raw, expected) -> None:
+    """String results with optional comparators parse to floats."""
+    protocol._hba1c_lab_values = [
+        SimpleNamespace(
+            value=raw,
+            report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
+        )
+    ]
+    assert protocol.last_hba1c_value == pytest.approx(expected)
+
+
+def test_compute_due_for_text_result(protocol) -> None:
+    """A text-only result gets a DUE card that names the missing value."""
+    protocol._hba1c_lab_values = [
+        SimpleNamespace(
+            value="see comment",
+            report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
+        )
+    ]
+    with patch.object(protocol, "in_denominator", return_value=True):
+        effects = protocol.compute()
+    assert len(effects) == 1
+    assert ProtocolCard.Status.DUE.value in effects[0].payload
+    assert "has no numeric result" in effects[0].payload
 
 
 def test_in_denominator_age_gating(protocol) -> None:
@@ -128,7 +173,7 @@ def test_compute_returns_not_applicable_when_not_in_denominator(protocol) -> Non
 
 def test_compute_due_when_no_hba1c(protocol) -> None:
     """No HbA1c on file -> DUE with an Order recommendation."""
-    protocol.__dict__["last_hba1c_lab_value"] = None
+    protocol._hba1c_lab_values = []
     with patch.object(protocol, "in_denominator", return_value=True):
         effects = protocol.compute()
     assert len(effects) == 1
@@ -136,10 +181,12 @@ def test_compute_due_when_no_hba1c(protocol) -> None:
 
 def test_compute_satisfied_when_recent_normal(protocol) -> None:
     """Recent in-range HbA1c -> SATISFIED."""
-    protocol.__dict__["last_hba1c_lab_value"] = SimpleNamespace(
-        value=7.0,
-        report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
-    )
+    protocol._hba1c_lab_values = [
+        SimpleNamespace(
+            value=7.0,
+            report=SimpleNamespace(original_date=arrow.get("2018-08-02").datetime),
+        )
+    ]
     with patch.object(protocol, "in_denominator", return_value=True):
         effects = protocol.compute()
     assert len(effects) == 1

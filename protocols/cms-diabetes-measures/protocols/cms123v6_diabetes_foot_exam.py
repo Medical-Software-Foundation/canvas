@@ -123,6 +123,8 @@ class ClinicalQualityMeasure123v6(DiabetesQualityMeasure):
     RESPONDS_TO = [
         EventType.Name(EventType.CONDITION_CREATED),
         EventType.Name(EventType.CONDITION_UPDATED),
+        EventType.Name(EventType.INTERVIEW_CREATED),
+        EventType.Name(EventType.INTERVIEW_UPDATED),
         EventType.Name(EventType.PATIENT_UPDATED),
     ]
 

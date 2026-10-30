@@ -7,8 +7,6 @@ diagnosis. Patients who already have an active kidney-failure or
 hypertensive-CKD condition receive a satisfied card.
 """
 
-from functools import cached_property
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -63,12 +61,16 @@ class Hcc002v2(ClinicalQualityMeasure):
     LOOKBACK_YEARS = 2
     EGFR_THRESHOLD = 60
 
-    @cached_property
-    def patient(self) -> Patient:
-        """The Patient row for the event target."""
-        return Patient.objects.get(id=self.patient_id_from_target())
+    _patient: Patient | None = None
 
-    @cached_property
+    @property
+    def patient(self) -> Patient:
+        """The Patient row for the event target, fetched once per instance."""
+        if self._patient is None:
+            self._patient = Patient.objects.get(id=self.patient_id_from_target())
+        return self._patient
+
+    @property
     def patient_age(self) -> int:
         """The patient's age (in whole years) at the protocol's reference time."""
         return int(self.patient.age_at(self.now))
@@ -91,12 +93,12 @@ class Hcc002v2(ClinicalQualityMeasure):
             * race
         )
 
-    @cached_property
+    @property
     def lookback_timeframe(self) -> Timeframe:
         """Two years ending at ``self.now``."""
         return Timeframe(start=self.now.shift(years=-self.LOOKBACK_YEARS), end=self.now)
 
-    @cached_property
+    @property
     def high_creatinine_values(self) -> list[LabValue]:
         """Creatinine lab values in the lookback window whose eGFR is below 60."""
         # eGFR can't be computed for age 0 (ZeroDivisionError in pow(0, -0.203));
@@ -119,7 +121,7 @@ class Hcc002v2(ClinicalQualityMeasure):
             )
         ]
 
-    @cached_property
+    @property
     def has_active_kidney_condition(self) -> bool:
         """True when the patient has an active CKD-related condition."""
         return (
