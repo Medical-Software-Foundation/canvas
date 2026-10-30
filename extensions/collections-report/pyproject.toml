@@ -5,12 +5,12 @@ authors = [
 dependencies = [
   "canvas[test-utils]"
 ]
-description = "Daily collections reporting — view payments collected by date, method, and patient."
+description = "Financial reporting: payments collected by date, method, and patient, plus patients with outstanding balances."
 license = "MIT"
 name = "collections-report"
 readme = "collections_report/README.md"
 requires-python = ">=3.11"
-version = "0.1.0"
+version = "0.2.0"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
