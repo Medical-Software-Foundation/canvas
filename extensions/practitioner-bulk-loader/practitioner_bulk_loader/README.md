@@ -38,7 +38,7 @@ License merge behaviour is shared across all four merge variants: an incoming li
 
 ## Trigger
 
-Launched manually by staff admins from the Canvas app drawer. No patient context required.
+Launched manually by staff admins from the Canvas app drawer. No patient context required. Only staff named in `BULK_LOADER_ALLOWED_STAFF_KEYS` or holding a role in `BULK_LOADER_ALLOWED_ROLES` see the app or can call its API; with both empty, nobody can. Each import logs the staff key of the person who ran it.
 
 ## Secrets (Required)
 
@@ -123,6 +123,8 @@ After installation, open the plugin configuration page in Canvas and set the two
 |---|---|---|
 | `fumage-client-id` | Yes | OAuth2 client ID for a Canvas plugin with read+write access to `Practitioner` and read access to `Location`. Generated in Canvas admin → API → Client Applications. |
 | `fumage-client-secret` | Yes | Paired secret for the client above. |
+| `BULK_LOADER_ALLOWED_STAFF_KEYS` | One of these two | Staff keys, separated by commas, of the people who may use the loader. |
+| `BULK_LOADER_ALLOWED_ROLES` | One of these two | Role codes, abbreviations or names, separated by commas, whose holders may use the loader. With both variables empty the loader is closed to everyone. |
 
 The Canvas instance host is derived automatically from the `CUSTOMER_IDENTIFIER` environment variable Canvas provides to every plugin, so no per-environment host configuration is needed.
 
