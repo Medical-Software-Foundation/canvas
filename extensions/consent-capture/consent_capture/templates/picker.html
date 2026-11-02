@@ -1299,6 +1299,7 @@
       if ($('scCam').classList.contains('on')) capFooter('camera');
     }
     // The shutter is disabled until the camera stream is actually producing frames.
+    var CAMERA_WARMUP_MS = 1000;
     function setShutterReady(ready) { var b = $('shutter'); if (b) b.disabled = !ready; }
     function startCamera() {
       var vid = $('camVideo');
@@ -1312,7 +1313,15 @@
           if (CAP.tab !== 'camera') { s.getTracks().forEach(function (t) { t.stop(); }); return; }
           CAP.stream = s; vid.srcObject = s;
           $('camMsg').classList.add('hidden'); vid.style.visibility = 'visible';
-          var ready = function () { if (vid.videoWidth) setShutterReady(true); };
+          // The first frames come before the camera has adjusted to the light, and in
+          // a dim room they're nearly black. Turn the shutter on once the camera has
+          // been delivering frames for about a second.
+          var waiting = false;
+          var ready = function () {
+            if (waiting || !vid.videoWidth) return;
+            waiting = true;
+            setTimeout(function () { if (CAP.stream === s) setShutterReady(true); }, CAMERA_WARMUP_MS);
+          };
           vid.onloadedmetadata = ready; vid.oncanplay = ready; vid.onplaying = ready; ready();
         })
         .catch(function () { showCamMsg('Camera access was blocked. Use the Upload tab instead.'); });
