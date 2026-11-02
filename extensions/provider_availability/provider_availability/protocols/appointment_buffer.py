@@ -143,14 +143,16 @@ def _covering_rules(
     permitted. Times are compared in the provider's timezone, since a rule's
     windows are written in local time while an appointment is stored in UTC.
 
-    Visit type is deliberately not matched. A rule stores visit types as UUID
-    strings while an appointment carries an integer ``note_type_id``, so
-    comparing the two would match nothing rather than narrowing correctly.
+    A rule limited to visit types covers only appointments of those types. A
+    rule stores visit types as NoteType UUID strings, so they are compared with
+    the appointment's ``note_type.id`` (the UUID), not its integer
+    ``note_type_id``.
     """
     local_start = to_provider_naive(appt.start_time, provider_id)
     local_date = local_start.date()
     local_time = local_start.time()
     appt_location = str(appt.location.id) if appt.location else ""
+    appt_visit_type = str(appt.note_type.id) if appt.note_type else ""
 
     covering: list[ProviderAvailabilityRule] = []
     for rule in get_rules_for_provider(provider_id):
@@ -179,6 +181,8 @@ def _covering_rules(
         else:
             continue
         if rule.location_ids and appt_location not in rule.location_ids:
+            continue
+        if rule.visit_types and appt_visit_type not in rule.visit_types:
             continue
         if not any(w.start <= local_time < w.end for w in windows):
             continue
