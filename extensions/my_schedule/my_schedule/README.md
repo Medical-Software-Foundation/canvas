@@ -11,8 +11,11 @@ roles (the ones you list, for example MD, NP and PA) a **My Schedule** page inst
 - At login, restricted staff land on My Schedule: a full-page calendar of **their own**
   visits that looks like Canvas's Schedule. Day and week views are a time grid (white
   where they're available, gray where they're not, a line for the current time); month
-  view lists each day's visits. Clicking a visit opens a card with the patient (links to
-  the chart), **Open visit note** (where check-in and the video button live), **Join
+  view is a calendar grid that lists each day's visits; tap a day to open it in day view.
+  The **Day / Week / Month** buttons switch views; the page opens in day view, then
+  remembers the last view picked in that browser. On a phone-width screen the month
+  grid shows a count per day with the visits listed by day underneath. Clicking a
+  visit opens a card with the patient (links to the chart), **Open visit note** (where check-in and the video button live), **Join
   video** when the visit has a meeting link, status, reason, location and labels.
 - For restricted staff, the built-in **Schedule** menu item and the
   **Appointments** filter in the global panel are hidden.
@@ -56,6 +59,9 @@ All settings are optional. Blank means the default.
 Actions only ever work on the logged-in staff member's own appointments. A
 request for anyone else's appointment gets the same 404 as one that doesn't exist.
 
+The appointments API accepts at most 43 days per request: enough for the month
+view's six-week grid, plus an hour when daylight saving time changes inside it.
+
 ## Components
 
 | Component | Purpose |
@@ -79,3 +85,11 @@ an instance. Check for `GET_HOMEPAGE_CONFIGURATION`,
 If another plugin also sets the provider menu, Canvas uses only one plugin's
 list. Set `HIDE_MENU_ITEMS` so this plugin's list matches the other one (for
 example, if it hides Settings for non-admins, set `HIDE_MENU_ITEMS=SETTINGS`), then check the menu as a restricted user.
+
+## Changes
+
+- **0.2.2**: Day / Week / Month remembers the last view per browser; month view on
+  phone-width screens shows a count per day and a by-day list of visits; buttons are
+  at least 44px tall; a slow earlier load can no longer draw over the view you switched to.
+- **0.2.1**: `HIDE_MENU_ITEMS` setting.
+- **0.2.0**: Canvas-style calendar grid with the clinician's own availability.

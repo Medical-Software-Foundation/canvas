@@ -16,7 +16,10 @@
     };
     const STAFF_NAME = document.body.dataset.staffName || "";
 
-    const state = { view: "day", cursor: startOfDay(new Date()), miniMonth: null, data: null, openId: null };
+    const VIEWS = ["day", "week", "month"];
+    const VIEW_KEY = "my_schedule.view";
+
+    const state = { view: "day", cursor: startOfDay(new Date()), miniMonth: null, data: null, openId: null, seq: 0 };
     const $ = (id) => document.getElementById(id);
 
     document.addEventListener("DOMContentLoaded", init);
@@ -28,13 +31,28 @@
         $("card-close").addEventListener("click", closeCard);
         document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCard(); });
         document.querySelectorAll(".view-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
-        render();
+        setView(savedView(), false);
+    }
+
+    // The last view picked is remembered in this browser only. Day is the default.
+    function savedView() {
+        try {
+            const v = window.localStorage.getItem(VIEW_KEY);
+            return VIEWS.indexOf(v) === -1 ? "day" : v;
+        } catch (e) {
+            return "day"; // storage blocked (private mode or a sandboxed frame)
+        }
+    }
+    function saveView(view) {
+        try { window.localStorage.setItem(VIEW_KEY, view); } catch (e) { /* not remembered; still works */ }
     }
 
     // ── Navigation ───────────────────────────────────────
     function go(day) { state.cursor = startOfDay(day); state.miniMonth = null; render(); }
-    function setView(view) {
+    function setView(view, remember) {
+        if (VIEWS.indexOf(view) === -1) view = "day";
         state.view = view;
+        if (remember !== false) saveView(view);
         document.querySelectorAll(".view-btn").forEach((b) => {
             const on = b.dataset.view === view;
             b.classList.toggle("active", on);
@@ -42,6 +60,8 @@
         });
         render();
     }
+    // Drilling into a day from week or month doesn't change the remembered view.
+    function openDay(d) { state.cursor = startOfDay(d); state.miniMonth = null; setView("day", false); }
     function step(delta) {
         const d = new Date(state.cursor);
         if (state.view === "day") d.setDate(d.getDate() + delta);
@@ -69,9 +89,12 @@
         content.innerHTML = '<div class="state">Loading your schedule…</div>';
         const url = API + "/appointments?start=" + encodeURIComponent(r.start.toISOString()) +
             "&end=" + encodeURIComponent(r.end.toISOString());
+        // Switching views quickly can leave an older request in flight; only the latest one draws.
+        const seq = ++state.seq;
         fetch(url, { credentials: "same-origin" })
             .then((res) => res.json().then((body) => ({ ok: res.ok, body: body })))
             .then(({ ok, body }) => {
+                if (seq !== state.seq) return;
                 if (!ok) throw new Error(body.error || "Couldn't load your schedule.");
                 state.data = body;
                 if (state.view === "month") renderMonth(content, r, body.appointments);
@@ -83,6 +106,7 @@
                 }
             })
             .catch((err) => {
+                if (seq !== state.seq) return;
                 content.innerHTML = "";
                 content.appendChild(el("div", "state", String(err.message || err) + " Reload the page to try again."));
             });
@@ -172,7 +196,7 @@
                 const b = el("button", "", DOW[d.getDay()] + " " + d.getDate());
                 b.type = "button";
                 b.setAttribute("aria-label", "Open " + d.toDateString());
-                b.addEventListener("click", () => { state.cursor = startOfDay(d); setView("day"); });
+                b.addEventListener("click", () => openDay(d));
                 head.appendChild(b);
             }
             grid.appendChild(head);
@@ -324,11 +348,46 @@
                 cell.appendChild(item);
             });
             if (mine.length > 3) cell.appendChild(el("span", "m-more", (mine.length - 3) + " more"));
-            cell.addEventListener("click", () => { state.cursor = startOfDay(d); setView("day"); });
+            // Narrow screens show a count in the cell and the visits in the list below.
+            if (mine.length) cell.appendChild(el("span", "m-count", String(mine.length)));
+            cell.addEventListener("click", () => openDay(d));
             grid.appendChild(cell);
         });
         container.innerHTML = "";
         container.appendChild(grid);
+        container.appendChild(monthAgenda(r, appts));
+    }
+
+    function monthAgenda(r, appts) {
+        const list = el("div", "agenda");
+        list.setAttribute("aria-label", "Visits this month, by day");
+        const days = r.days.filter((d) => d.getMonth() === state.cursor.getMonth());
+        let any = false;
+        days.forEach((d) => {
+            const mine = appts.filter((a) => isSameDay(new Date(a.start_time), d));
+            if (!mine.length) return;
+            any = true;
+            const day = el("section", "agenda-day");
+            const head = el("button", "agenda-head", d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }));
+            head.type = "button";
+            if (isSameDay(d, new Date())) head.classList.add("is-today");
+            head.setAttribute("aria-label", "Open " + d.toDateString());
+            head.addEventListener("click", () => openDay(d));
+            day.appendChild(head);
+            mine.forEach((a) => {
+                const item = el("button", "agenda-item status-" + (a.status || "unconfirmed"));
+                item.type = "button";
+                if (a.status === "noshowed") item.classList.add("noshowed");
+                item.appendChild(el("span", "a-time", fmtTime(a.start_time)));
+                item.appendChild(el("span", "a-name", a.patient_name || "No patient"));
+                if (a.appointment_type) item.appendChild(el("span", "a-type", a.appointment_type));
+                item.addEventListener("click", () => openCard(a));
+                day.appendChild(item);
+            });
+            list.appendChild(day);
+        });
+        if (!any) list.appendChild(el("p", "agenda-empty", "No visits this month."));
+        return list;
     }
 
     // ── Visit card ───────────────────────────────────────

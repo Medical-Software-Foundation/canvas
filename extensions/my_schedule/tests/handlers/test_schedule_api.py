@@ -203,6 +203,62 @@ class TestAppointments:
         model.objects.filter.assert_not_called()
 
 
+class TestViewRanges:
+    """The ranges the Day, Week and Month buttons ask for, and the cap around them."""
+
+    def _status(self, start: str, end: str) -> HTTPStatus:
+        with (
+            patch.object(schedule_api, "Appointment") as model,
+            patch.object(schedule_api, "Staff") as staff_model,
+        ):
+            qs = model.objects.filter.return_value
+            qs.exclude.return_value.exclude.return_value.select_related.return_value.prefetch_related.return_value.order_by.return_value = []
+            staff_model.objects.filter.return_value.first.return_value = None
+            response = _api(query={"start": start, "end": end}).appointments()[0]
+        if response.status_code == HTTPStatus.OK:
+            kwargs = model.objects.filter.call_args.kwargs
+            assert kwargs["provider__id"] == ME
+            assert kwargs["start_time__gte"] == _parse_iso(start)
+            assert kwargs["start_time__lt"] == _parse_iso(end)
+        return response.status_code
+
+    @pytest.mark.parametrize(
+        ("start", "end"),
+        [
+            # Day, a normal one and the 25-hour day when US clocks fall back.
+            ("2026-10-27T04:00:00Z", "2026-10-28T04:00:00Z"),
+            ("2026-11-01T04:00:00Z", "2026-11-02T05:00:00Z"),
+            # Week, Sunday to Sunday.
+            ("2026-10-25T04:00:00Z", "2026-11-01T05:00:00Z"),
+            # Month: November 2026's grid runs Sun Nov 1 to Sun Dec 13 (42 days),
+            # with the fall-back hour inside it.
+            ("2026-11-01T04:00:00Z", "2026-12-13T05:00:00Z"),
+            # A grid in a time zone far from UTC.
+            ("2026-01-31T10:00:00-14:00", "2026-03-14T10:00:00-14:00"),
+        ],
+    )
+    def test_each_view_range_is_accepted(self, start, end) -> None:
+        assert self._status(start, end) == HTTPStatus.OK
+
+    def test_cap_allows_exactly_43_days(self) -> None:
+        assert (
+            self._status("2026-11-01T00:00:00Z", "2026-12-14T00:00:00Z")
+            == HTTPStatus.OK
+        )
+
+    def test_cap_refuses_one_second_more(self) -> None:
+        assert (
+            self._status("2026-11-01T00:00:00Z", "2026-12-14T00:00:01Z")
+            == HTTPStatus.BAD_REQUEST
+        )
+
+    def test_zero_length_range_refused(self) -> None:
+        assert (
+            self._status("2026-11-01T00:00:00Z", "2026-11-01T00:00:00Z")
+            == HTTPStatus.BAD_REQUEST
+        )
+
+
 class TestActions:
     @pytest.mark.parametrize("action", ["update_status", "cancel", "noshow"])
     def test_off_by_default(self, action) -> None:

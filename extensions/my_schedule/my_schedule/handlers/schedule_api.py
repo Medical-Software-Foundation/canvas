@@ -26,7 +26,8 @@ from my_schedule.handlers.availability import own_blocks
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
-# The month view asks for a 6-week grid; anything wider is refused.
+# Day asks for 1 day, week for 7, month for its 6-week grid (42 days, plus an
+# hour when daylight saving changes inside it). Anything wider is refused.
 MAX_RANGE = timedelta(days=43)
 
 # Statuses staff can set from the page. No-show and cancel have their own actions.

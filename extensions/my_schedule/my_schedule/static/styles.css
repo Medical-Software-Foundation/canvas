@@ -28,13 +28,13 @@ button { font: inherit; color: inherit; }
 /* ── Left rail ─────────────────────────────────────────── */
 .rail { padding: 16px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .today-btn {
-    height: 42px; border: 0; border-radius: 4px; background: var(--green); color: #fff;
+    height: 44px; border: 0; border-radius: 4px; background: var(--green); color: #fff;
     font-size: 16px; font-weight: 700; cursor: pointer;
 }
 .today-btn:hover { filter: brightness(0.95); }
 .stepper {
     display: grid; grid-template-columns: 54px 1fr 54px; align-items: center;
-    background: var(--blue); color: #fff; border-radius: 4px; height: 38px;
+    background: var(--blue); color: #fff; border-radius: 4px; height: 44px;
 }
 .stepper-btn { height: 100%; border: 0; background: transparent; color: #fff; font-size: 22px; cursor: pointer; }
 .stepper-btn:hover { background: rgba(255, 255, 255, 0.12); }
@@ -56,7 +56,7 @@ button { font: inherit; color: inherit; }
 .mini-day.picked:not(.today) { box-shadow: inset 0 0 0 2px var(--blue); font-weight: 700; }
 
 .views { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: #fff; }
-.view-btn { height: 34px; border: 0; background: #fff; cursor: pointer; }
+.view-btn { height: 44px; border: 0; background: #fff; cursor: pointer; }
 .view-btn + .view-btn { border-left: 1px solid var(--line); }
 .view-btn.active { background: var(--blue); color: #fff; font-weight: 700; }
 .summary { margin: 0; padding: 0 4px; color: var(--muted); line-height: 1.5; }
@@ -75,9 +75,10 @@ button { font: inherit; color: inherit; }
     border-left: 1px solid var(--line); padding: 10px 8px; text-align: center; font-weight: 700; color: #555;
 }
 .col-head.corner { border-left: 0; }
+.col-head:has(button) { padding: 2px 4px; }
 .col-head.is-today { color: var(--green); }
 .col-head .sub { display: block; font-weight: 400; font-size: 12px; color: var(--muted); margin-top: 2px; }
-.col-head button { border: 0; background: transparent; cursor: pointer; font-weight: 700; color: inherit; }
+.col-head button { border: 0; background: transparent; cursor: pointer; font-weight: 700; color: inherit; min-height: 44px; min-width: 44px; padding: 0 8px; }
 .gutter { position: relative; }
 .gutter-label { position: absolute; right: 8px; transform: translateY(-50%); font-size: 12px; color: var(--muted); white-space: nowrap; }
 .day-col { position: relative; border-left: 1px solid var(--line); background: var(--open); }
@@ -139,6 +140,26 @@ button { font: inherit; color: inherit; }
 .month-cell.is-today .m-date { color: #fff; background: var(--green); border-radius: 50%; width: 24px; text-align: center; }
 .m-item { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid var(--status, var(--blue)); padding-left: 5px; }
 .m-more { font-size: 12px; color: var(--blue); }
+.m-count { display: none; }
+
+/* Month list: shown under the grid on narrow screens, where cells are too small for names. */
+.agenda { display: none; padding: 8px 12px 24px; }
+.agenda-day + .agenda-day { margin-top: 12px; }
+.agenda-head {
+    display: block; width: 100%; min-height: 44px; border: 0; border-bottom: 1px solid var(--line);
+    background: transparent; text-align: left; font-weight: 700; color: #555; cursor: pointer; padding: 0 4px;
+}
+.agenda-head.is-today { color: var(--green); }
+.agenda-item {
+    display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 8px; align-items: center; width: 100%;
+    min-height: 44px; margin-top: 6px; padding: 6px 10px; border: 0; border-left: 4px solid var(--status, var(--blue));
+    border-radius: 3px; background: var(--blue-tint); text-align: left; cursor: pointer;
+}
+.agenda-item.noshowed { background: #fbeaea; text-decoration: line-through; color: #8a3b3b; }
+.agenda-item .a-time { font-size: 13px; color: #5a6b7d; white-space: nowrap; }
+.agenda-item .a-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-item .a-type { grid-column: 2; font-size: 12px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agenda-empty { color: var(--muted); text-align: center; padding: 16px 0; margin: 0; }
 
 /* ── Visit card ────────────────────────────────────────── */
 .card {
@@ -147,7 +168,7 @@ button { font: inherit; color: inherit; }
     transform: translateX(0); transition: transform 160ms ease-out;
 }
 .card[hidden] { display: block; transform: translateX(105%); visibility: hidden; }
-.card-close { position: absolute; top: 10px; right: 12px; width: 36px; height: 36px; border: 0; background: transparent; font-size: 24px; color: var(--muted); cursor: pointer; }
+.card-close { position: absolute; top: 6px; right: 8px; width: 44px; height: 44px; border: 0; background: transparent; font-size: 24px; color: var(--muted); cursor: pointer; }
 .c-time { color: var(--muted); margin: 0 0 4px; }
 .c-name { margin: 0 0 4px; font-size: 20px; }
 .c-name a { color: var(--blue); text-decoration: none; }
@@ -155,7 +176,7 @@ button { font: inherit; color: inherit; }
 .c-type { margin: 0 0 14px; font-weight: 700; }
 .c-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .c-link {
-    display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 4px;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 4px;
     border: 1px solid var(--line); color: var(--blue); text-decoration: none; font-weight: 700;
 }
 .c-link.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -169,8 +190,8 @@ button { font: inherit; color: inherit; }
 .label-red { background: #fde2e1; } .label-orange { background: #fdebd3; } .label-yellow { background: #fbf3c4; }
 .label-green { background: #dff3df; } .label-blue { background: #dfeaf7; } .label-purple { background: #ece3f6; }
 .c-actions { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.c-actions select { min-height: 36px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
-.c-btn { min-height: 36px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+.c-actions select { min-height: 44px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+.c-btn { min-height: 44px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
 .c-btn.warn { color: #9a5b00; border-color: #f0c27a; }
 .c-btn.danger { color: #b52b27; border-color: #eba5a3; }
 .c-btn:disabled, .c-actions select:disabled { opacity: 0.5; cursor: default; }
@@ -181,5 +202,20 @@ button { font: inherit; color: inherit; }
     .rail { flex-direction: row; flex-wrap: wrap; }
     .mini { display: none; }
     .stage { min-height: 80vh; }
+    .today-btn { flex: 1 1 100px; }
+    .stepper { flex: 3 1 220px; }
+    .views { flex: 1 1 100%; }
+    .summary { flex: 1 1 100%; }
+}
+@media (max-width: 640px) {
+    .month-cell { min-height: 52px; padding: 4px; align-items: center; }
+    .month-cell .m-item, .month-cell .m-more { display: none; }
+    .month-cell .m-count {
+        display: inline-block; min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--blue);
+        color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+    }
+    .month-cell.off .m-count { background: #b5b5b5; }
+    .month-dow { padding: 6px 0; font-size: 12px; }
+    .agenda { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
