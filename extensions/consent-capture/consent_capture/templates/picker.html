@@ -1328,21 +1328,21 @@
       var track = CAP.stream && CAP.stream.getVideoTracks()[0];
       if (window.ImageCapture && track) {
         new ImageCapture(track).takePhoto()
-          .then(shrinkImage)
-          .then(function (blob) { CAP.current = photoPage(blob); openReview(); })
+          .then(function (blob) { CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }; openReview(); })
           .catch(function () { captureVideoFrame(v); });
         return;
       }
       captureVideoFrame(v);
     }
     function captureVideoFrame(v) {
-      var shot = drawToPage(v, v.videoWidth, v.videoHeight);
+      var cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight;
+      cv.getContext('2d').drawImage(v, 0, 0);
       setTimeout(function () {
-        shot.then(function (blob) {
+        cv.toBlob(function (blob) {
           if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); return; }
-          CAP.current = photoPage(blob);
+          CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: cv.toDataURL('image/jpeg', 0.9) };
           openReview();
-        });
+        }, 'image/jpeg', 0.9);
       }, 150);
     }
     function handleFiles(list) {
@@ -1356,44 +1356,12 @@
         } else if (/^image\//.test(f.type)) { queueImage(f); }
       });
     }
-    // Every photo page is scaled so its longest side is at most 2000 pixels (about
-    // 180 dpi on a letter page) and saved as JPEG. Full-resolution camera photos run
-    // several MB each, and the server takes documents up to 10 MB.
-    var PAGE_MAX_EDGE = 2000, PAGE_JPEG_QUALITY = 0.85;
-    function drawToPage(src, w, h) {
-      var k = Math.min(1, PAGE_MAX_EDGE / Math.max(w, h));
-      var cv = document.createElement('canvas'); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
-      cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
-      return new Promise(function (resolve) { cv.toBlob(resolve, 'image/jpeg', PAGE_JPEG_QUALITY); });
-    }
-    function shrinkImage(blob) {
-      if (window.createImageBitmap) {
-        return createImageBitmap(blob, { imageOrientation: 'from-image' })
-          .then(function (b) { return drawToPage(b, b.width, b.height); });
-      }
-      return new Promise(function (resolve, reject) {
-        var img = new Image(), url = URL.createObjectURL(blob);
-        img.onload = function () { URL.revokeObjectURL(url); drawToPage(img, img.naturalWidth, img.naturalHeight).then(resolve); };
-        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('unreadable')); };
-        img.src = url;
-      });
-    }
-    function photoPage(blob) { return { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }; }
-    // Uploaded images keep their order: each takes its place in the queue now and
-    // is filled in once it has been resized.
-    function queueImage(blob) {
-      var slot = { pending: true };
-      CAP.queue.push(slot);
-      shrinkImage(blob)
-        .then(function (small) { Object.assign(slot, photoPage(small || blob), { pending: false }); })
-        .catch(function () { CAP.queue.splice(CAP.queue.indexOf(slot), 1); capSetMsg('Couldn’t read that image.', true); })
-        .then(maybeStartReview);
-    }
-    function maybeStartReview() { if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); openReview(); } }
+    function queueImage(blob) { CAP.queue.push({ blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }); }
+    function maybeStartReview() { if (!CAP.current && CAP.queue.length) { CAP.current = CAP.queue.shift(); openReview(); } }
     function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); }
     function reviewNext(committed) {
       CAP.current = null;
-      if (CAP.queue.length) { maybeStartReview(); }  // a page still resizing opens when ready
+      if (CAP.queue.length) { CAP.current = CAP.queue.shift(); openReview(); }
       else if (committed || CAP.pages.length) { capStep('pages'); }
       else { selectTab('camera'); capStep('camera'); }
     }
