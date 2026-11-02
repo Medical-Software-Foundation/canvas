@@ -713,6 +713,45 @@ class TestBufferMinutesFollowsTheCoveringRule:
         with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
             assert _buffer_minutes(appt, "p1") == (5, 15)
 
+    def test_a_rule_for_this_visit_type_covers_the_appointment(self):
+        appt = _appt_on("friday")
+        appt.note_type.id = "nt-office"
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.visit_types = ["nt-office"]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (5, 15)
+
+    def test_a_rule_for_another_visit_type_is_ignored(self):
+        appt = _appt_on("friday")
+        appt.note_type.id = "nt-telehealth"
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.visit_types = ["nt-office"]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
+    def test_the_visit_type_rule_wins_over_an_unrestricted_one(self):
+        appt = _appt_on("friday")
+        appt.note_type.id = "nt-office"
+        office = _rule_on(["friday"], pre=10, post=20, rule_id="office")
+        office.visit_types = ["nt-office"]
+        tele = _rule_on(["friday"], pre=0, post=5, rule_id="tele")
+        tele.visit_types = ["nt-telehealth"]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[tele, office]):
+            assert [r.id for r in _covering_rules(appt, "p1")] == ["office"]
+            assert _buffer_minutes(appt, "p1") == (10, 20)
+
+    def test_an_appointment_without_a_note_type_skips_visit_type_rules(self):
+        appt = _appt_on("friday")
+        appt.note_type = None
+        rule = _rule_on(["friday"], pre=5, post=15)
+        rule.visit_types = ["nt-office"]
+
+        with patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=[rule]):
+            assert _buffer_minutes(appt, "p1") == (0, 0)
+
     def test_an_appointment_outside_the_rules_hours_gets_no_padding(self):
         appt = _appt_on("friday", hour=20)  # rule covers 8am to 6pm
         rule = _rule_on(["friday"], pre=5, post=15)
