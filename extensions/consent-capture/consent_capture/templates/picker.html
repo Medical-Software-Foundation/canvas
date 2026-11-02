@@ -1304,7 +1304,10 @@
       var vid = $('camVideo');
       setShutterReady(false);
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showCamMsg('Camera isn’t available here. Use the Upload tab.'); return; }
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      // Ask for the camera's full resolution. With no size requested, browsers open
+      // a small video stream (often 640x480), and a document photographed from it
+      // looks sharp in the viewfinder but blurry on the page.
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 4096 } }, audio: false })
         .then(function (s) {
           if (CAP.tab !== 'camera') { s.getTracks().forEach(function (t) { t.stop(); }); return; }
           CAP.stream = s; vid.srcObject = s;
@@ -1319,9 +1322,21 @@
     function captureFrame() {
       var v = $('camVideo');
       if (!v.videoWidth) { capSetMsg('The camera isn’t ready yet.', true); return; }
+      var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
+      // Where the browser can take a real photo (Chrome and Android), use it: it's
+      // full resolution and focused. Elsewhere, save a frame of the video.
+      var track = CAP.stream && CAP.stream.getVideoTracks()[0];
+      if (window.ImageCapture && track) {
+        new ImageCapture(track).takePhoto()
+          .then(function (blob) { CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }; openReview(); })
+          .catch(function () { captureVideoFrame(v); });
+        return;
+      }
+      captureVideoFrame(v);
+    }
+    function captureVideoFrame(v) {
       var cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight;
       cv.getContext('2d').drawImage(v, 0, 0);
-      var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
       setTimeout(function () {
         cv.toBlob(function (blob) {
           if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); return; }
