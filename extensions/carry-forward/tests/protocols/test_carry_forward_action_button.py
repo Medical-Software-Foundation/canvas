@@ -1611,6 +1611,27 @@ class TestCarryForwardMethods:
 
                     assert result.fdb_code == "fdb-code-123"
 
+    def test_carry_forward_prescribe_does_not_copy_supervising_provider(self):
+        """PLUGIN-449: supervising provider must not be carried forward, but the prescriber still is."""
+        from types import SimpleNamespace
+
+        handler = CarryForwardActionButton()
+        effect = SimpleNamespace()
+        data = {
+            "prescribe": {"value": "12345"},
+            "indications": [],
+            "prescriber": {"value": "provider-123"},
+            "supervising_provider": {"value": "supervisor-123"},
+        }
+
+        with patch("carry_forward.protocols.carry_forward_action_button.Staff.objects") as mock_staff:
+            mock_staff.filter.return_value.first.return_value = MagicMock(id="provider-uuid-123")
+            result = handler._carry_forward_prescribe(effect, data)
+
+        assert not hasattr(result, "supervising_provider_id")
+        assert result.prescriber_id == "provider-uuid-123"
+        mock_staff.filter.assert_called_once_with(dbid="provider-123")
+
     def test_carry_forward_prescribe_as_refill(self):
         """Test _carry_forward_prescribe_as_refill method directly."""
         handler = CarryForwardActionButton()

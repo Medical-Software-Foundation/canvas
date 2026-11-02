@@ -420,7 +420,8 @@ class CarryForwardActionButton(ActionButton):
         effect.substitutions = PrescribeCommand.Substitutions.ALLOWED if data.get('substitutions') == 'allowed' else PrescribeCommand.Substitutions.NOT_ALLOWED
         effect.pharmacy = data['pharmacy']['value'] if data.get('pharmacy') else None
         effect.prescriber_id = str(Staff.objects.filter(dbid=data['prescriber']['value']).first().id) if data.get('prescriber') else None
-        effect.supervising_provider_id = str(Staff.objects.filter(dbid=data['supervising_provider']['value']).first().id) if data.get('supervising_provider') else None
+        # supervising_provider is intentionally NOT carried forward: it is prescriber/context specific
+        # and would otherwise persist forever through the signed-note chain (PLUGIN-449).
         effect.note_to_pharmacist = data.get('note_to_pharmacist')
         return effect
 
