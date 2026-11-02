@@ -146,12 +146,16 @@ class Protocol(BaseProtocol):
         abnormal = score >= self.MADRS_ABNORMAL_THRESHOLD
 
         # Create a questionnaire result in the Social Determinants section
-        # Note: Removed code_system and code parameters to avoid auto-provisioning external questionnaires
+        # code_system and code are required by the effect (they become the result's Observation
+        # coding); omitting them sends None and violates NOT NULL columns. INTERNAL avoids
+        # auto-provisioning external questionnaires.
         result = CreateQuestionnaireResult(
             interview_id=str(interview.id),
             score=float(score),
             abnormal=abnormal,
-            narrative=narrative
+            narrative=narrative,
+            code_system="INTERNAL",
+            code="MADRS",
         )
 
         return [result.apply()]

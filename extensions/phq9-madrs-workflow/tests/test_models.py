@@ -2,6 +2,7 @@
 # Each test is wrapped inside a transaction that is rolled back at the end of the test.
 # If you want to modify which files are used for testing, check the [tool.pytest.ini_options] section in pyproject.toml.
 
+import json
 import uuid
 from unittest.mock import MagicMock, Mock, patch
 
@@ -134,6 +135,9 @@ def test_madrs_commit_adds_comment_with_normal_interpretation():
         # Assert
         assert len(effects) == 1
         assert effects[0].type == EffectType.CREATE_QUESTIONNAIRE_RESULT
+        payload = json.loads(effects[0].payload)["data"]
+        assert payload["code_system"] == "INTERNAL"
+        assert payload["code"] == "MADRS"
 
 
 def test_madrs_commit_adds_comment_with_mild_interpretation():
