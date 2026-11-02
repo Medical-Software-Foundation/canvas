@@ -1,3 +1,4 @@
+import time
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
@@ -11,6 +12,16 @@ CACHE_KEY_PREFIX = "candid_bearer_token:"
 # Candid tokens expire after 5 hours (18000s). Cache for 4.5 hours to
 # refresh before expiry.
 CACHE_TTL_SECONDS = 16200
+
+# Candid answers 429 when the sync reads too fast. Read-only GETs are retried
+# a few times, waiting what Retry-After asks (else a short backoff), with every
+# wait capped so one rate-limited claim can't eat the cron's hourly budget.
+RATE_LIMITED = 429
+MAX_RATE_LIMIT_RETRIES = 2
+RATE_LIMIT_BACKOFF_SECONDS = (2, 5)
+MAX_RATE_LIMIT_WAIT_SECONDS = 10
+# Total waiting allowed per client; the sync builds one client per claim.
+RATE_LIMIT_WAIT_BUDGET_SECONDS = 20
 
 
 class CandidUnconfirmedError(Exception):
@@ -30,6 +41,7 @@ class CandidClient:
         self.client_secret = client_secret
         self._instance_token: str | None = None
         self.http = Http(base_url=self.base_url)
+        self._rate_limit_waited = 0.0
 
     @classmethod
     def from_secrets(cls, secrets: dict) -> "CandidClient":
@@ -225,9 +237,8 @@ class CandidClient:
         adjudication sync (insurance payments, adjustments, patient
         responsibility).
         """
-        response = self.http.get(
-            f"{self.base_url}/api/encounters/v4/{encounter_id}",
-            headers=self._auth_headers(),
+        response = self._get_with_rate_limit_retry(
+            f"{self.base_url}/api/encounters/v4/{encounter_id}"
         )
         response.raise_for_status()
         return response.json()
@@ -249,9 +260,8 @@ class CandidClient:
                 "sort_direction": "desc",
             }
         )
-        response = self.http.get(
-            f"{self.base_url}/api/patient-payments/v4?{query}",
-            headers=self._auth_headers(),
+        response = self._get_with_rate_limit_retry(
+            f"{self.base_url}/api/patient-payments/v4?{query}"
         )
         response.raise_for_status()
         data = response.json()
@@ -262,6 +272,40 @@ class CandidClient:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _get_with_rate_limit_retry(self, url: str) -> "Response":
+        """GET ``url``, retrying a 429 up to ``MAX_RATE_LIMIT_RETRIES`` times.
+
+        Returns the last response, so a 429 that outlasts the retries (or the
+        wait budget) still reaches the caller's ``raise_for_status``.
+        """
+        attempt = 0
+        while True:
+            response = self.http.get(url, headers=self._auth_headers())
+            if (
+                response.status_code != RATE_LIMITED
+                or attempt >= MAX_RATE_LIMIT_RETRIES
+            ):
+                return response
+            wait = self._rate_limit_wait(response, attempt)
+            if self._rate_limit_waited + wait > RATE_LIMIT_WAIT_BUDGET_SECONDS:
+                log.warning("Candid: rate limited, wait budget spent; not retrying")
+                return response
+            log.info(f"Candid: rate limited, retrying in {wait:g}s")
+            time.sleep(wait)
+            self._rate_limit_waited = self._rate_limit_waited + wait
+            attempt = attempt + 1
+
+    @staticmethod
+    def _rate_limit_wait(response: "Response", attempt: int) -> float:
+        """Seconds to wait: Retry-After (whole seconds), else the backoff; capped."""
+        default = RATE_LIMIT_BACKOFF_SECONDS[
+            min(attempt, len(RATE_LIMIT_BACKOFF_SECONDS) - 1)
+        ]
+        raw = (response.headers.get("Retry-After") or "").strip()
+        # An HTTP-date Retry-After isn't parsed; the backoff stands in for it.
+        wait = float(raw) if raw.isascii() and raw.isdigit() else default
+        return min(max(wait, 1.0), MAX_RATE_LIMIT_WAIT_SECONDS)
 
     def _auth_headers(self, json_body: bool = False) -> dict[str, str]:
         headers = {"Authorization": f"Bearer {self._token()}"}

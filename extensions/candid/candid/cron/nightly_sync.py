@@ -57,6 +57,11 @@ LOCK_TTL_SECONDS = 90 * 60
 # The local date the last cycle started on, so one day never starts two cycles.
 LAST_START_CACHE_KEY = "candid_nightly_sync_last_start_date"
 LAST_START_TTL_SECONDS = 26 * 60 * 60
+# Running totals for the cycle under way, logged when it completes. A claim
+# that fails is logged and skipped; the cursor moves past it, so it is tried
+# once per cycle (once a night), never again in the same cycle.
+STATS_KEY = "candid_nightly_sync_stats"
+STATS_TTL_SECONDS = CURSOR_TTL_SECONDS
 
 
 def start_hour(secrets: dict) -> int:
@@ -107,6 +112,7 @@ class NightlyCandidSync(CronTask):
             state.set(
                 LAST_START_CACHE_KEY, today, timeout_seconds=LAST_START_TTL_SECONDS
             )
+            state.delete(STATS_KEY)
 
         cache.set(LOCK_CACHE_KEY, started.isoformat(), timeout_seconds=LOCK_TTL_SECONDS)
         try:
@@ -137,9 +143,14 @@ class NightlyCandidSync(CronTask):
                 state.set(
                     CURSOR_CACHE_KEY, last_claim_id, timeout_seconds=CURSOR_TTL_SECONDS
                 )
+                state.set(
+                    STATS_KEY,
+                    _cycle_totals(state, processed, synced),
+                    timeout_seconds=STATS_TTL_SECONDS,
+                )
                 log.info(
-                    f"Candid nightly sync: synced {synced}/{processed} claims, "
-                    "continuing next hour"
+                    f"Candid nightly sync: synced {synced}/{processed} claims "
+                    f"({processed - synced} failed), continuing next hour"
                 )
                 return effects
 
@@ -152,7 +163,25 @@ class NightlyCandidSync(CronTask):
                 log.warning(f"Candid nightly sync: failed for claim {claim.id}: {e}")
 
         state.delete(CURSOR_CACHE_KEY)
+        totals = _cycle_totals(state, processed, synced)
+        state.delete(STATS_KEY)
         log.info(
-            f"Candid nightly sync: synced {synced}/{processed} claims, cycle complete"
+            f"Candid nightly sync: synced {synced}/{processed} claims "
+            f"({processed - synced} failed), cycle complete: "
+            f"{totals['synced']}/{totals['processed']} claims synced, "
+            f"{totals['failed']} failed, over {totals['batches']} batches"
         )
         return effects
+
+
+def _cycle_totals(state: SyncState, processed: int, synced: int) -> dict[str, int]:
+    """The cycle's running totals with this batch added."""
+    totals = state.get(STATS_KEY)
+    if not isinstance(totals, dict):
+        totals = {}
+    return {
+        "processed": int(totals.get("processed") or 0) + processed,
+        "synced": int(totals.get("synced") or 0) + synced,
+        "failed": int(totals.get("failed") or 0) + processed - synced,
+        "batches": int(totals.get("batches") or 0) + 1,
+    }

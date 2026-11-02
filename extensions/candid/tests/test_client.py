@@ -444,3 +444,110 @@ def test_authenticate_fetches_the_token_up_front() -> None:
         client.authenticate()
     assert client._instance_token == "tok-up-front"
     assert client.http.post.call_args.args[0].endswith("/api/auth/v2/token")
+
+
+# ---------------------------------------------------------------------------
+# 429 retry on read-only GETs
+# ---------------------------------------------------------------------------
+
+
+def _rate_limited(retry_after: str | None = None) -> MagicMock:
+    r = MagicMock()
+    r.ok = False
+    r.status_code = 429
+    r.headers = {"Retry-After": retry_after} if retry_after is not None else {}
+    r.raise_for_status.side_effect = RuntimeError("429 Client Error")
+    return r
+
+
+def _client_with_gets(*responses: MagicMock) -> CandidClient:
+    client = _client()
+    client._instance_token = "tok"
+    client.http = MagicMock()
+    client.http.get.side_effect = list(responses)
+    return client
+
+
+def test_get_encounter_retries_429_honoring_retry_after() -> None:
+    client = _client_with_gets(_rate_limited("3"), _ok_response({"claims": []}))
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        assert client.get_encounter("enc-1") == {"claims": []}
+
+    sleep.assert_called_once_with(3.0)
+    assert client.http.get.call_count == 2
+
+
+def test_get_patient_payments_retries_429_with_backoff() -> None:
+    client = _client_with_gets(
+        _rate_limited(), _rate_limited("soon"), _ok_response({"items": [{"id": 1}]})
+    )
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        assert client.get_patient_payments("c-1") == [{"id": 1}]
+
+    assert [c.args[0] for c in sleep.call_args_list] == [2, 5]
+
+
+def test_retry_after_is_capped() -> None:
+    client = _client_with_gets(_rate_limited("120"), _ok_response({"claims": []}))
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        client.get_encounter("enc-1")
+
+    sleep.assert_called_once_with(10)
+
+
+def test_429_that_outlasts_the_retries_raises() -> None:
+    client = _client_with_gets(
+        _rate_limited("1"), _rate_limited("1"), _rate_limited("1")
+    )
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected the 429 to raise")
+
+    assert sleep.call_count == 2
+    assert client.http.get.call_count == 3
+
+
+def test_wait_budget_stops_retries_across_calls() -> None:
+    """One client (one claim) waits at most the budget in total."""
+    client = _client_with_gets(
+        _rate_limited("10"),
+        _ok_response({"claims": []}),
+        _rate_limited("10"),
+        _ok_response({"claims": []}),
+        _rate_limited("10"),
+    )
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        client.get_encounter("enc-1")
+        client.get_encounter("enc-2")
+        try:
+            client.get_encounter("enc-3")
+        except RuntimeError:
+            pass
+
+    assert sleep.call_count == 2
+    assert client.http.get.call_count == 5
+
+
+def test_other_errors_are_not_retried() -> None:
+    r = MagicMock()
+    r.status_code = 500
+    r.raise_for_status.side_effect = RuntimeError("500 Server Error")
+    client = _client_with_gets(r)
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError:
+            pass
+
+    sleep.assert_not_called()
+    assert client.http.get.call_count == 1
