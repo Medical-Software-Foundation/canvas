@@ -60,7 +60,7 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Triggers:**
 - **Event-driven:** When a claim enters the **Patient Balance** queue, the plugin asynchronously POSTs to its own `/sync-patient-payments` SimpleAPI route to pull just the patient payments for that claim (full ERA/adjudication sync is left to the nightly cron)
 - **Manual:** The "Sync Now" button on the claim timeline application POSTs to `/claim-detail`, which runs a full adjudication sync inline
-- **Nightly cron (starts 2 AM by default; set `CANDID_SYNC_START_HOUR` to change it):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position is kept in the plugin cache (`candid_nightly_sync_cursor`), and a cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
+- **Nightly cron (starts 2 AM by default; set `CANDID_SYNC_START_HOUR` to change it):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position (`candid_nightly_sync_cursor`) and the date the last cycle started are kept in an AttributeHub (`candid_sync_state` / `nightly_sync`) in the plugin's `canvas__candid` custom data namespace, not the plugin cache: the shared cache deletes keys alphabetically once it passes 300 entries, which used to drop the cursor between ticks and stop the cycle after one batch. If that store can't be read or written, the tick fails with an error and the next hourly tick retries from the last saved position. A cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
 
 A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candid_sync_history` metadata — see [Sync history backfill](#sync-history-backfill).
 
@@ -220,6 +220,8 @@ Sync history lives on each claim's `candid_sync_history` metadata — a JSON lis
 > **History:** activity originally lived in a `SyncLog` custom data model (one row per event per claim), which required a nightly pruning job to bound its growth. It was migrated into `candid_sync_history` metadata by a one-time midnight cron (`CandidSyncHistoryBackfill`) that merged legacy rows under any existing entries, then deleted them. Once that backfill had run in every environment, the cron, the `SyncLog` model, and its table were removed.
 
 ## Rollout
+
+From 0.0.7 the plugin owns the `canvas__candid` custom data namespace. Update it in place; don't uninstall it, because uninstalling a namespace-owning plugin leaves the namespace behind and a reinstall needs its access key.
 
 The home-app `candid_integration/signals.py` module checks whether this plugin is active before dispatching built-in Celery tasks. This acts as a kill-switch: disabling the plugin in the Canvas admin immediately re-enables the built-in integration with no code deploy needed.
 

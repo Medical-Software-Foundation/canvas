@@ -9,6 +9,7 @@ from candid.cron.nightly_sync import (
     BATCH_TIME_BUDGET,
     CURSOR_CACHE_KEY,
     DEFAULT_START_HOUR,
+    LAST_START_CACHE_KEY,
     LOCK_CACHE_KEY,
     START_HOUR_VARIABLE,
     NightlyCandidSync,
@@ -58,6 +59,9 @@ def mocks():
     cache = FakeCache()
     with (
         patch("candid.cron.nightly_sync.get_cache", return_value=cache),
+        # Most tests keep durable state and the lock in one dict; the PLUGIN-501
+        # tests below split them to model the cache losing keys.
+        patch("candid.cron.nightly_sync.SyncState", return_value=cache),
         patch("candid.cron.nightly_sync.datetime") as mock_dt,
         patch("candid.cron.nightly_sync.Claim") as mock_claim,
         patch("candid.cron.nightly_sync.sync_claim_adjudications") as mock_sync,
@@ -147,6 +151,8 @@ def test_execute_skips_while_previous_batch_holds_lock(mocks):
     assert _build_task().execute() == []
     mocks["sync"].assert_not_called()
     assert mocks["cache"].data[LOCK_CACHE_KEY] == AT_TARGET_HOUR.isoformat()
+    # A skipped start hour must not use up today's start (it would block the day).
+    assert LAST_START_CACHE_KEY not in mocks["cache"].data
 
 
 def test_execute_releases_lock_when_sync_raises(mocks):
@@ -237,7 +243,6 @@ def test_start_hour_rejects_non_ascii_digits_without_crashing(raw):
 
 
 def test_only_one_cycle_starts_per_local_day(mocks):
-    from candid.cron.nightly_sync import LAST_START_CACHE_KEY
 
     mocks["qs"].iterator.return_value = [_claim("c1")]
     mocks["sync"].return_value = []
@@ -251,7 +256,6 @@ def test_only_one_cycle_starts_per_local_day(mocks):
 
 
 def test_a_new_day_starts_a_new_cycle(mocks):
-    from candid.cron.nightly_sync import LAST_START_CACHE_KEY
 
     mocks["cache"].data[LAST_START_CACHE_KEY] = "2026-06-02"
     mocks["qs"].iterator.return_value = [_claim("c1")]
@@ -260,3 +264,41 @@ def test_a_new_day_starts_a_new_cycle(mocks):
     _build_task().execute()
 
     mocks["sync"].assert_called_once()
+
+
+# --- PLUGIN-501: the cursor survives the plugin cache losing keys ------------
+
+
+def test_cursor_survives_the_cache_being_culled_between_ticks(mocks):
+    """The shared cache can drop candid's keys between ticks; the cycle must go on."""
+    durable = FakeCache()
+    mocks["sync"].side_effect = lambda claim, secrets: [f"effect-{claim.id}"]
+    with patch("candid.cron.nightly_sync.SyncState", return_value=durable):
+        mocks["qs"].iterator.return_value = [_claim("a"), _claim("b"), _claim("c")]
+        with patch("candid.cron.nightly_sync.MAX_CLAIMS_PER_BATCH", 2):
+            assert _build_task().execute() == ["effect-a", "effect-b"]
+        assert durable.data[CURSOR_CACHE_KEY] == "b"
+        assert CURSOR_CACHE_KEY not in mocks["cache"].data
+
+        mocks["cache"].data.clear()  # the platform culls the shared cache
+        mocks["dt"].now.return_value = OFF_TARGET_HOUR  # next hourly tick
+        mocks["qs"].iterator.return_value = [_claim("c")]
+
+        assert _build_task().execute() == ["effect-c"]
+
+    mocks["qs"].filter.assert_called_with(id__gt="b")
+    assert CURSOR_CACHE_KEY not in durable.data
+
+
+def test_last_start_date_is_kept_in_durable_state(mocks):
+
+    durable = FakeCache()
+    mocks["qs"].iterator.return_value = [_claim("c1")]
+    mocks["sync"].return_value = []
+    with patch("candid.cron.nightly_sync.SyncState", return_value=durable):
+        _build_task().execute()
+        mocks["cache"].data.clear()
+        _build_task().execute()  # same local day and hour, cache emptied
+
+    assert durable.data[LAST_START_CACHE_KEY] == "2026-06-03"
+    assert mocks["sync"].call_count == 1

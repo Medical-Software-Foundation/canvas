@@ -13,6 +13,13 @@ back (its responses are capped at 64 MB). A cycle already under way keeps going
 until it finishes, whatever the hour, and at most one cycle starts per local
 day (so the fall-back hour, or an hour changed after today's cycle, never starts
 a second full sync the same day).
+
+The cursor and the last start date live in ``SyncState`` (an AttributeHub in the
+plugin's custom data namespace), not the plugin cache: the platform culls the
+shared cache alphabetically once it passes 300 entries, which deleted the cursor
+between ticks and stopped every cycle after its first batch (PLUGIN-501). Only
+the short-lived lock stays in the cache; losing it early is harmless because a
+batch ends well before the next tick.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -26,6 +33,7 @@ from logger import log
 
 from candid.adjudication_sync import sync_claim_adjudications
 from candid.effect_helpers import META_ENCOUNTERS
+from candid.sync_state import SyncState
 
 SYNC_QUEUES = (
     ClaimQueues.FILED_AWAITING_RESPONSE,
@@ -82,28 +90,33 @@ class NightlyCandidSync(CronTask):
         tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("US/Central")
         started = datetime.now(UTC)
         cache = get_cache()
-
-        cursor = cache.get(CURSOR_CACHE_KEY)
-        if not cursor:
-            local = started.astimezone(tz)
-            if local.hour != start_hour(self.secrets):
-                return []
-            today = local.date().isoformat()
-            if cache.get(LAST_START_CACHE_KEY) == today:
-                return []
-            cache.set(LAST_START_CACHE_KEY, today, timeout_seconds=LAST_START_TTL_SECONDS)
+        state = SyncState()
 
         if cache.get(LOCK_CACHE_KEY):
             log.info("Candid nightly sync: previous batch still running, skipping")
             return []
 
+        cursor = state.get(CURSOR_CACHE_KEY)
+        if not cursor:
+            local = started.astimezone(tz)
+            if local.hour != start_hour(self.secrets):
+                return []
+            today = local.date().isoformat()
+            if state.get(LAST_START_CACHE_KEY) == today:
+                return []
+            state.set(
+                LAST_START_CACHE_KEY, today, timeout_seconds=LAST_START_TTL_SECONDS
+            )
+
         cache.set(LOCK_CACHE_KEY, started.isoformat(), timeout_seconds=LOCK_TTL_SECONDS)
         try:
-            return self._sync_batch(cache, cursor, started)
+            return self._sync_batch(state, cursor, started)
         finally:
             cache.delete(LOCK_CACHE_KEY)
 
-    def _sync_batch(self, cache, cursor: str | None, started: datetime) -> list[Effect]:
+    def _sync_batch(
+        self, state: SyncState, cursor: str | None, started: datetime
+    ) -> list[Effect]:
         queue_values = [q.value for q in SYNC_QUEUES]
         claims = Claim.objects.filter(
             current_queue__queue_sort_ordering__in=queue_values,
@@ -121,7 +134,7 @@ class NightlyCandidSync(CronTask):
                 processed >= MAX_CLAIMS_PER_BATCH
                 or datetime.now(UTC) - started > BATCH_TIME_BUDGET
             ):
-                cache.set(
+                state.set(
                     CURSOR_CACHE_KEY, last_claim_id, timeout_seconds=CURSOR_TTL_SECONDS
                 )
                 log.info(
@@ -138,7 +151,7 @@ class NightlyCandidSync(CronTask):
             except Exception as e:
                 log.warning(f"Candid nightly sync: failed for claim {claim.id}: {e}")
 
-        cache.delete(CURSOR_CACHE_KEY)
+        state.delete(CURSOR_CACHE_KEY)
         log.info(
             f"Candid nightly sync: synced {synced}/{processed} claims, cycle complete"
         )
