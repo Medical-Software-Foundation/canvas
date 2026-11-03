@@ -40,6 +40,13 @@ Install the plugin. There is nothing to configure: the button shows on every not
 still be edited (it is hidden on locked and signed notes), and the picker lists every active
 questionnaire with "can originate in charting" turned on.
 
+## Access
+
+Every endpoint needs a signed-in staff session; patients and outside callers get nothing.
+Any signed-in staff member can open the form on a note they can see and save a questionnaire
+to it. The plugin reads questionnaires and notes and writes only the Questionnaire command.
+It logs ids and counts, never answers.
+
 ## Limitations
 
 - **Integer and decimal questions can't be saved through the form yet.** This is a limit of

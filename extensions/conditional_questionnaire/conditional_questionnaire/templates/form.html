@@ -67,6 +67,7 @@
   var current = null;      // the loaded form
   var commandUuid = null;  // one per filled-in form, so a retried save can't add a second command
   var port = null;
+  var saveFailed = false;  // true while the banner shows a failed save
 
   window.addEventListener("message", function (event) {
     if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
@@ -233,6 +234,7 @@
   function drawForm(data) {
     current = data;
     commandUuid = newUuid();
+    saveFailed = false;
     list.textContent = "";
     data.questions.forEach(function (question) { list.appendChild(drawQuestion(question)); });
     form.hidden = false;
@@ -250,8 +252,17 @@
     });
   }
 
-  list.addEventListener("input", applyRules);
-  list.addEventListener("change", applyRules);
+  // A failed save's banner clears once the answers change, so it never describes stale input.
+  function onAnswersChanged() {
+    if (saveFailed) {
+      saveFailed = false;
+      show("");
+    }
+    applyRules();
+  }
+
+  list.addEventListener("input", onAnswersChanged);
+  list.addEventListener("change", onAnswersChanged);
 
   picker.addEventListener("change", function () {
     form.hidden = true;
@@ -290,6 +301,7 @@
       current = null;
     }).catch(function (error) {
       saveButton.disabled = false;
+      saveFailed = true;
       show(error.message, "bad");
     });
   });
