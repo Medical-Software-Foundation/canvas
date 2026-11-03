@@ -7,8 +7,10 @@ from http import HTTPStatus
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+from canvas_sdk.effects.calendar import CalendarType
 
 from provider_availability.api.provision_api import ProvisionAPI
+from provider_availability.engine.admin_calendar import deterministic_calendar_id
 
 PROV_MODULE = "provider_availability.api.provision_api"
 
@@ -142,6 +144,27 @@ class TestRunProvisioning:
         mock_cal_model.objects.filter.assert_called_once_with(
             description__in=["staff-uuid-md"]
         )
+
+    @patch(f"{PROV_MODULE}.EventEffect")
+    @patch(f"{PROV_MODULE}.CalendarEffect")
+    @patch(f"{PROV_MODULE}.EventModel")
+    @patch(f"{PROV_MODULE}.CalendarModel")
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_new_calendar_uses_the_deterministic_id(
+        self, mock_sched, mock_cal_model, mock_event_model, mock_cal_effect, mock_event_effect
+    ):
+        """Two provision runs that race pick the same calendar id, so they can't make two calendars."""
+        mock_sched.return_value = [_make_staff("staff-uuid-md", "Jane", "Doe")]
+        _setup_provision(mock_cal_model, mock_event_model, calendars=[], active_keys=[])
+
+        _make_provision_handler().run_provisioning()
+        _make_provision_handler().run_provisioning()
+
+        expected = deterministic_calendar_id("staff-uuid-md", CalendarType.Clinic, None)
+        cal_ids = [c.kwargs["id"] for c in mock_cal_effect.call_args_list]
+        event_cal_ids = [c.kwargs["calendar_id"] for c in mock_event_effect.call_args_list]
+        assert cal_ids == [expected, expected]
+        assert event_cal_ids == [expected, expected]
 
     @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")

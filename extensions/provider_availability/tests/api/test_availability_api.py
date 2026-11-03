@@ -981,7 +981,10 @@ class TestUpdateRuleGroup:
     @patch(f"{MODULE}.get_rules_by_group")
     @patch(f"{MODULE}.check_rule_overlap", return_value=None)
     @patch(f"{MODULE}.get_rule_by_id", return_value=None)
-    def test_apply_to_group(self, mock_get_rule, mock_overlap, mock_group, mock_save, mock_get_rules, mock_sync, mock_access):
+    def test_apply_to_group(
+        self, mock_get_rule, mock_overlap, mock_group, mock_save, mock_get_rules, mock_sync, mock_access,
+        stub_buffer_reconcile,
+    ):
         """When apply_to_group is True, updates all rules in the group."""
         group_rule = ProviderAvailabilityRule(
             id="r2", provider_id=PROVIDER_ID_2, group_id="g1"
@@ -1007,6 +1010,8 @@ class TestUpdateRuleGroup:
         assert mock_group.mock_calls == [call("g1")]
         # Should sync both providers
         assert mock_sync.call_count == 2
+        # A buffer edit reaches every group member's Buffer events (PLUGIN-458).
+        assert sorted(c.args[0] for c in stub_buffer_reconcile.mock_calls) == sorted([PROVIDER_ID, PROVIDER_ID_2])
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
@@ -1070,6 +1075,23 @@ class TestDeleteRule:
         assert data["rule_id"] == "r1"
         assert mock_delete.mock_calls == [call(PROVIDER_ID, "r1")]
         assert mock_sync.mock_calls == [call(PROVIDER_ID)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
+    @patch(f"{MODULE}.delete_rule_by_id")
+    def test_reconciles_buffers_after_the_delete(
+        self, mock_delete, mock_get_rules, mock_sync, mock_access, stub_buffer_reconcile
+    ):
+        """PLUGIN-458: a deleted rule's Buffer events go with it."""
+        stale = MagicMock(name="delete-buffer-effect")
+        stub_buffer_reconcile.return_value = [stale]
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID, "rule_id": "r1"})
+
+        result = handler.delete_rule()
+
+        assert stub_buffer_reconcile.mock_calls == [call(PROVIDER_ID)]
+        assert stale in result
 
     @patch(f"{MODULE}._check_write_access")
     def test_write_access_denied(self, mock_access):
@@ -1584,6 +1606,215 @@ class TestUpdateBlock:
         assert len(mock_save.mock_calls) == 2
         assert mock_group.mock_calls == [call("g1")]
 
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
+    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.get_block_by_id")
+    @patch(f"{MODULE}.get_blocks_by_group")
+    def test_apply_to_group_only_touches_the_same_date(
+        self, mock_group, mock_get, mock_del_effects, mock_save, mock_create_effects, mock_access
+    ):
+        """In a multi-date group, a time edit on one date leaves the group's other dates alone.
+
+        Only the other provider's block on the edited block's original date follows the edit.
+        """
+        mock_get.return_value = AdminBlock(
+            id="b1",
+            provider_id=PROVIDER_ID,
+            start=datetime(2026, 9, 29, 8, 0),
+            end=datetime(2026, 9, 29, 14, 0),
+            group_id="g1",
+        )
+        own_other_date = AdminBlock(
+            id="b0",
+            provider_id=PROVIDER_ID,
+            start=datetime(2026, 9, 18, 8, 0),
+            end=datetime(2026, 9, 18, 14, 0),
+            group_id="g1",
+        )
+        sibling_same_date = AdminBlock(
+            id="b2",
+            provider_id=PROVIDER_ID_2,
+            start=datetime(2026, 9, 29, 8, 0),
+            end=datetime(2026, 9, 29, 14, 0),
+            group_id="g1",
+        )
+        sibling_other_date = AdminBlock(
+            id="b3",
+            provider_id=PROVIDER_ID_2,
+            start=datetime(2026, 9, 18, 8, 0),
+            end=datetime(2026, 9, 18, 14, 0),
+            group_id="g1",
+        )
+        mock_group.return_value = [own_other_date, sibling_same_date, sibling_other_date]
+        body = {
+            "id": "b1",
+            "provider_id": PROVIDER_ID,
+            "start": "2026-09-29T08:00:00",
+            "end": "2026-09-29T13:00:00",
+            "group_id": "g1",
+            "apply_to_group": True,
+        }
+        result = _make_handler(json_body=body).update_block()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert "Updated 2 block(s)" in data["message"]
+        saved_ids = [c.args[0].id for c in mock_save.mock_calls]
+        assert saved_ids == ["b1", "b2"]
+        assert sibling_same_date.end == datetime(2026, 9, 29, 13, 0)
+        assert own_other_date.end == datetime(2026, 9, 18, 14, 0)
+        assert sibling_other_date.end == datetime(2026, 9, 18, 14, 0)
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
+    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.get_block_by_id")
+    @patch(f"{MODULE}.get_blocks_by_group")
+    def test_single_block_edit_in_a_group_leaves_siblings_alone(
+        self, mock_group, mock_get, mock_del_effects, mock_save, mock_create_effects, mock_access
+    ):
+        """Without apply_to_group, editing one member of a group saves only that member."""
+        mock_get.return_value = AdminBlock(
+            id="b1",
+            provider_id=PROVIDER_ID,
+            start=datetime(2026, 9, 29, 8, 0),
+            end=datetime(2026, 9, 29, 14, 0),
+            group_id="g1",
+        )
+        body = {
+            "id": "b1",
+            "provider_id": PROVIDER_ID,
+            "start": "2026-09-29T08:00:00",
+            "end": "2026-09-29T13:00:00",
+            "group_id": "g1",
+            "apply_to_group": False,
+        }
+        result = _make_handler(json_body=body).update_block()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert "Updated 1 block(s)" in data["message"]
+        assert [c.args[0].id for c in mock_save.mock_calls] == ["b1"]
+        assert mock_save.mock_calls[0].args[0].group_id == "g1"
+        assert mock_group.mock_calls == []
+
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
+    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.get_block_by_id")
+    @patch(f"{MODULE}.get_blocks_by_group")
+    def test_moving_onto_a_date_the_provider_already_has_in_the_group_is_refused(
+        self, mock_group, mock_get, mock_del_effects, mock_save, mock_create_effects, mock_access
+    ):
+        """PLUGIN-462: a date in a group holds one block per provider."""
+        mock_get.return_value = AdminBlock(
+            id="b1", provider_id=PROVIDER_ID, group_id="g1",
+            start=datetime(2026, 12, 7, 8, 0), end=datetime(2026, 12, 7, 14, 0),
+        )
+        mock_group.return_value = [
+            mock_get.return_value,
+            AdminBlock(
+                id="b0", provider_id=PROVIDER_ID, group_id="g1",
+                start=datetime(2026, 12, 9, 8, 0), end=datetime(2026, 12, 9, 14, 0),
+            ),
+        ]
+        body = {
+            "id": "b1",
+            "provider_id": PROVIDER_ID,
+            "start": "2026-12-09T08:00:00",
+            "end": "2026-12-09T13:00:00",
+            "group_id": "g1",
+            "apply_to_group": False,
+        }
+        result = _make_handler(json_body=body).update_block()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.CONFLICT
+        assert "already has a block on 2026-12-09" in data["error"]
+        assert mock_save.mock_calls == []
+        assert len(result) == 1
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
+    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.get_block_by_id")
+    @patch(f"{MODULE}.get_blocks_by_group")
+    def test_moving_onto_a_date_only_another_provider_has_is_allowed(
+        self, mock_group, mock_get, mock_del_effects, mock_save, mock_create_effects, mock_access
+    ):
+        """Without Apply to all, another provider's dates never block or change."""
+        mock_get.return_value = AdminBlock(
+            id="b1", provider_id=PROVIDER_ID, group_id="g1",
+            start=datetime(2026, 12, 7, 8, 0), end=datetime(2026, 12, 7, 14, 0),
+        )
+        other = AdminBlock(
+            id="b2", provider_id=PROVIDER_ID_2, group_id="g1",
+            start=datetime(2026, 12, 9, 8, 0), end=datetime(2026, 12, 9, 14, 0),
+        )
+        mock_group.return_value = [mock_get.return_value, other]
+        body = {
+            "id": "b1",
+            "provider_id": PROVIDER_ID,
+            "start": "2026-12-09T08:00:00",
+            "end": "2026-12-09T13:00:00",
+            "group_id": "g1",
+            "apply_to_group": False,
+        }
+        result = _make_handler(json_body=body).update_block()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert data["message"] == "Updated 1 block(s)"
+        assert [c.args[0].id for c in mock_save.mock_calls] == ["b1"]
+        assert other.end == datetime(2026, 12, 9, 14, 0)
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
+    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.get_block_by_id")
+    @patch(f"{MODULE}.get_blocks_by_group")
+    def test_apply_to_group_date_move_skips_a_provider_who_already_has_the_new_date(
+        self, mock_group, mock_get, mock_del_effects, mock_save, mock_create_effects, mock_access
+    ):
+        """Apply to all moves other providers' blocks on the edited date, unless that would
+        give them two blocks on the new date. Their other dates are never touched."""
+        mock_get.return_value = AdminBlock(
+            id="b1", provider_id=PROVIDER_ID, group_id="g1",
+            start=datetime(2026, 12, 7, 8, 0), end=datetime(2026, 12, 7, 14, 0),
+        )
+        b_dec7 = AdminBlock(
+            id="b2", provider_id=PROVIDER_ID_2, group_id="g1",
+            start=datetime(2026, 12, 7, 8, 0), end=datetime(2026, 12, 7, 14, 0),
+        )
+        b_dec8 = AdminBlock(
+            id="b3", provider_id=PROVIDER_ID_2, group_id="g1",
+            start=datetime(2026, 12, 8, 8, 0), end=datetime(2026, 12, 8, 14, 0),
+        )
+        c_dec7 = AdminBlock(
+            id="c1", provider_id="prov-3", group_id="g1",
+            start=datetime(2026, 12, 7, 8, 0), end=datetime(2026, 12, 7, 14, 0),
+        )
+        mock_group.return_value = [mock_get.return_value, b_dec7, b_dec8, c_dec7]
+        body = {
+            "id": "b1",
+            "provider_id": PROVIDER_ID,
+            "start": "2026-12-08T09:00:00",
+            "end": "2026-12-08T12:00:00",
+            "group_id": "g1",
+            "apply_to_group": True,
+        }
+        result = _make_handler(json_body=body).update_block()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert data["message"].startswith("Updated 2 block(s); 1 other provider(s) already had a block on 2026-12-08")
+        assert [c.args[0].id for c in mock_save.mock_calls] == ["b1", "c1"]
+        assert c_dec7.start == datetime(2026, 12, 8, 9, 0)
+        assert b_dec7.start == datetime(2026, 12, 7, 8, 0)
+        assert b_dec8.start == datetime(2026, 12, 8, 8, 0)
+        assert b_dec8.end == datetime(2026, 12, 8, 14, 0)
 
 class TestDeleteBlockEndpoint:
     @patch(f"{MODULE}._check_write_access", return_value=None)

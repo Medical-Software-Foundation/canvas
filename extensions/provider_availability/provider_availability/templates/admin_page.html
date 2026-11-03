@@ -83,8 +83,12 @@
         <input type="hidden" id="editing_type" value="available">
 
         <div id="group-banner" class="group-banner" style="display:none;">
-          <canvas-checkbox id="apply_to_group" checked></canvas-checkbox>
+          <canvas-checkbox id="apply_to_group"></canvas-checkbox>
           <span id="group-banner-text">This was created for N providers. Apply changes to all?</span>
+        </div>
+
+        <div id="multidate-notice" class="group-banner" style="display:none;" role="note">
+          <span>This block is one of several dates saved together. Changes to the time, reason or location apply to this date only. The other dates keep their own times. Adding a date creates it with the times shown here; removing a date deletes just that date.</span>
         </div>
 
         <!-- Type selector -->

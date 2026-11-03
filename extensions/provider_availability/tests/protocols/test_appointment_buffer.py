@@ -16,6 +16,7 @@ from provider_availability.engine.models import (
 from provider_availability.protocols.appointment_buffer import (
     BUFFER_TITLE,
     DEFAULT_HORIZON_YEARS,
+    MAX_BUFFER_DELETES_PER_RECONCILE,
     OnAppointmentCanceled,
     OnAppointmentCreated,
     OnAppointmentRescheduled,
@@ -29,6 +30,7 @@ from provider_availability.protocols.appointment_buffer import (
     _on_appointment_created,
     _on_appointment_rescheduled,
     _on_appointment_restored,
+    reconcile_buffers_for_provider,
 )
 
 
@@ -825,3 +827,221 @@ class TestOtherEventsNeverGetBuffers:
             start = appt.start_time
             _neighbor_buffer_spans(appt, "p1", start, start + timedelta(minutes=30))
         assert chain.exclude.mock_calls[0] == call(note_type__category=NoteTypeCategories.SCHEDULE_EVENT)
+
+
+# ── Rule changes reconcile buffers ──────────────────────────────────────────
+
+
+def _visit(start, minutes=30, dbid=1, rescheduled_from=None):
+    """An upcoming patient visit, in the shape the reconcile reads."""
+    appt = _future_appt(minutes=minutes)
+    appt.start_time = start
+    appt.dbid = dbid
+    appt.appointment_rescheduled_from_id = rescheduled_from
+    appt.note_type = None
+    return appt
+
+
+class _Reconcile:
+    """Run reconcile_buffers_for_provider against stubbed calendars, events and visits."""
+
+    def __init__(self, rules, existing, visits, calendars=("cal-1",)):
+        self.rules = rules
+        self.existing = existing  # (event id, starts_at, ends_at)
+        self.visits = visits
+        self.calendars = calendars
+
+    def run(self):
+        cals = []
+        for cid in self.calendars:
+            cal = MagicMock()
+            cal.id = cid
+            cals.append(cal)
+        with patch(f"{BUFFER_MODULE}.resolve_provider_name", return_value="Dr X"), \
+             patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=cals), \
+             patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=self.rules), \
+             patch(f"{BUFFER_MODULE}.get_admin_calendar_id", return_value=("cal-1", [])), \
+             patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events, \
+             patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts, \
+             patch(f"{BUFFER_MODULE}.EventEffect") as mock_effect:
+            mock_events.filter.return_value.values_list.return_value = list(self.existing)
+            (mock_appts.filter.return_value.exclude.return_value.exclude.return_value
+             .select_related.return_value) = list(self.visits)
+            result = reconcile_buffers_for_provider("p1")
+            self.events_query = mock_events.filter.call_args
+            self.appts_queried = mock_appts.filter.called
+        self.deleted = [c.kwargs["event_id"] for c in mock_effect.call_args_list if "event_id" in c.kwargs]
+        self.created = [
+            (c.kwargs["starts_at"], c.kwargs["ends_at"])
+            for c in mock_effect.call_args_list
+            if "calendar_id" in c.kwargs
+        ]
+        self.result = result
+        return self
+
+
+def _start():
+    day = (datetime.now(UTC) + timedelta(days=30)).date()
+    return datetime(day.year, day.month, day.day, 10, 0, tzinfo=UTC)
+
+
+class TestReconcileBuffersForProvider:
+    def test_removing_the_buffer_deletes_upcoming_buffer_events(self):
+        """The reported bug: a rule's buffer goes to zero and its holds stay."""
+        start = _start()
+        existing = [
+            ("e-pre", start - timedelta(minutes=15), start),
+            ("e-post", start + timedelta(minutes=30), start + timedelta(minutes=45)),
+        ]
+        run = _Reconcile([_rule(0, 0)], existing, [_visit(start)]).run()
+
+        assert sorted(run.deleted) == ["e-post", "e-pre"]
+        assert run.created == []
+        # No buffered rule left, so the visits are never read.
+        assert run.appts_queried is False
+
+    def test_deleting_every_rule_deletes_upcoming_buffer_events(self):
+        start = _start()
+        run = _Reconcile([], [("e1", start - timedelta(minutes=15), start)], [_visit(start)]).run()
+
+        assert run.deleted == ["e1"]
+
+    def test_unchanged_buffers_emit_nothing(self):
+        """A rule save that does not change buffers leaves every event alone."""
+        start = _start()
+        existing = [
+            ("e-pre", start - timedelta(minutes=15), start),
+            ("e-post", start + timedelta(minutes=30), start + timedelta(minutes=45)),
+        ]
+        run = _Reconcile([_rule(15, 15)], existing, [_visit(start)]).run()
+
+        assert run.result == []
+
+    def test_shrinking_the_buffer_replaces_only_what_changed(self):
+        start = _start()
+        existing = [
+            ("e-pre", start - timedelta(minutes=15), start),
+            ("e-post", start + timedelta(minutes=30), start + timedelta(minutes=45)),
+        ]
+        run = _Reconcile([_rule(15, 5)], existing, [_visit(start)]).run()
+
+        assert run.deleted == ["e-post"]
+        assert run.created == [(start + timedelta(minutes=30), start + timedelta(minutes=35))]
+
+    def test_adding_a_buffer_draws_it_for_upcoming_visits(self):
+        start = _start()
+        run = _Reconcile([_rule(0, 10)], [], [_visit(start)]).run()
+
+        assert run.deleted == []
+        assert run.created == [(start + timedelta(minutes=30), start + timedelta(minutes=40))]
+
+    def test_two_visits_sharing_a_span_keep_two_events(self):
+        """Back-to-back visits each draw the gap between them, as booking does."""
+        first = _start()
+        second = first + timedelta(minutes=45)
+        gap = (first + timedelta(minutes=30), second)
+        existing = [("a", *gap), ("b", *gap)]
+        run = _Reconcile([_rule(15, 15)], existing, [_visit(first, dbid=1), _visit(second, dbid=2)]).run()
+
+        assert "a" not in run.deleted and "b" not in run.deleted
+
+    def test_stray_buffer_with_no_visit_is_deleted(self):
+        start = _start()
+        stray = ("stray", start + timedelta(days=2), start + timedelta(days=2, minutes=15))
+        run = _Reconcile([_rule(15, 15)], [stray], []).run()
+
+        assert run.deleted == ["stray"]
+
+    def test_visit_under_way_keeps_its_post_buffer_but_nothing_is_redrawn(self):
+        now = datetime.now(UTC)
+        started = (now - timedelta(minutes=10)).replace(second=0, microsecond=0)
+        post = (started + timedelta(minutes=30), started + timedelta(minutes=45))
+        run = _Reconcile([_rule(15, 15)], [("post", *post)], [_visit(started)]).run()
+
+        assert run.deleted == []
+        assert run.created == []
+
+    def test_rescheduled_original_gets_no_buffers(self):
+        """The original of a reschedule stays on the books; its replacement owns the buffers."""
+        original = _start()
+        moved = original + timedelta(days=1)
+        run = _Reconcile(
+            [_rule(0, 10)], [], [_visit(original, dbid=7), _visit(moved, dbid=8, rescheduled_from=7)]
+        ).run()
+
+        assert run.created == [(moved + timedelta(minutes=30), moved + timedelta(minutes=40))]
+
+    def test_only_plugin_buffer_titles_and_upcoming_events_are_read(self):
+        run = _Reconcile([], [], []).run()
+
+        args, kwargs = run.events_query
+        assert kwargs["calendar__id__in"] == ["cal-1"]
+        assert kwargs["is_cancelled"] is False
+        assert "ends_at__gt" in kwargs
+        # Exact "Buffer" or legacy "Buffer:<id>", not any title that starts with the word.
+        assert "Buffer:" in str(args[0]) and "title__startswith', 'Buffer')" not in str(args[0])
+
+    def test_no_admin_calendars_reads_no_events(self):
+        run = _Reconcile([], [], [], calendars=()).run()
+
+        assert run.result == []
+
+    def test_deletes_are_capped_per_run(self):
+        start = _start()
+        existing = [
+            (f"e{i}", start + timedelta(hours=i), start + timedelta(hours=i, minutes=15))
+            for i in range(MAX_BUFFER_DELETES_PER_RECONCILE + 3)
+        ]
+        run = _Reconcile([], existing, []).run()
+
+        assert len(run.deleted) == MAX_BUFFER_DELETES_PER_RECONCILE
+
+
+# ── Neighbouring-day buffers (ported from the include-nonproviders fix) ─────
+
+
+def _midnight():
+    day = (datetime.now(UTC) + timedelta(days=30)).date()
+    return datetime(day.year, day.month, day.day, 0, 0, tzinfo=UTC)
+
+
+class TestNeighbouringDayBuffers:
+    """A buffer can sit on a different calendar day from its visit: a 00:10 visit
+    tomorrow has its pre-buffer at 23:40 today, and a late visit's post-buffer
+    can start after midnight. The day-bounded reconcile in the include-nonproviders
+    fork deleted such holds and never rebuilt them. These pin that this plugin,
+    which matches buffers to visits by span rather than by day, keeps them."""
+
+    def test_reconcile_keeps_a_pre_buffer_that_starts_the_day_before(self):
+        visit_start = _midnight() + timedelta(minutes=10)
+        pre = ("e-pre", visit_start - timedelta(minutes=30), visit_start)
+        run = _Reconcile([_rule(30, 0)], [pre], [_visit(visit_start)]).run()
+
+        assert run.result == []
+
+    def test_reconcile_redraws_a_missing_pre_buffer_on_the_day_before(self):
+        visit_start = _midnight() + timedelta(minutes=10)
+        run = _Reconcile([_rule(30, 0)], [], [_visit(visit_start)]).run()
+
+        assert run.deleted == []
+        assert run.created == [(visit_start - timedelta(minutes=30), visit_start)]
+        assert run.created[0][0].date() < visit_start.date()
+
+    def test_reconcile_keeps_a_post_buffer_that_runs_past_midnight(self):
+        visit_start = _midnight() - timedelta(minutes=40)  # 23:20, ends 23:50
+        post = ("e-post", visit_start + timedelta(minutes=30), visit_start + timedelta(minutes=50))
+        run = _Reconcile([_rule(0, 20)], [post], [_visit(visit_start)]).run()
+
+        assert run.result == []
+
+    def test_cancelling_the_last_visit_of_the_day_keeps_tomorrows_pre_buffer(self):
+        """The 23:10-23:40 visit is cancelled; the 00:10 visit's 23:40 pre-buffer stays."""
+        appt = _future_appt(minutes=30)
+        appt.start_time = _midnight() - timedelta(minutes=50)
+        end = appt.start_time + timedelta(minutes=30)
+        tomorrow = _neighbor(_midnight() + timedelta(minutes=10), minutes=30)
+        theirs = _buffer_evt("evt-tomorrow-pre", end, end + timedelta(minutes=30))
+
+        result = TestDeleteKeepsANeighborsBuffer()._run(appt, [], [theirs], [tomorrow], _rule(30, 0))
+
+        assert result == []
