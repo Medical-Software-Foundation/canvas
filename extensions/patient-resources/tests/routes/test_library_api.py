@@ -355,6 +355,25 @@ def test_restoring_sets_the_active_status(mock_staff, make_request):
     assert set_status.call_args.args[1] == STATUS_ACTIVE
 
 
+def test_restoring_a_row_whose_title_was_reused_is_a_409(mock_staff, make_request):
+    """A restore that would duplicate a live resource is refused, not a 500."""
+    from patient_resources.services.catalog import DuplicateResourceError
+
+    with (
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
+        patch(
+            "patient_resources.routes.library_api.set_status",
+            side_effect=DuplicateResourceError("taken"),
+        ),
+    ):
+        responses = _call("restore_resource", mock_staff, True, make_request)
+    assert responses[0].status_code == 409
+    assert responses[0].data["error"] == "taken"
+
+
 def test_retracting_withdraws_from_patients_and_archives(mock_staff, make_request):
     with (
         patch(

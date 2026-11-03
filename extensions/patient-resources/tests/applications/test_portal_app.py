@@ -83,3 +83,21 @@ def test_badge_is_none_without_a_patient():
 def test_badge_is_none_when_the_patient_cannot_be_resolved():
     Patient.objects.filter.return_value.only.return_value.first.return_value = None
     assert _app({"user": {"id": "nobody"}}).compute_notification_badge() is None
+
+
+def test_badge_resolves_the_patient_by_every_form_of_the_key(mock_patient):
+    """The portal context may carry the key dashed or undashed.
+
+    An exact ``id=`` match on the other form returns nothing, so the badge would
+    silently never show. Matches the portal API's resolution in identity.py.
+    """
+    Patient.objects.filter.reset_mock()
+    Patient.objects.filter.return_value.only.return_value.first.return_value = (
+        mock_patient
+    )
+    PatientResourceShare.objects.filter.return_value.count.return_value = 1
+    dashed = "12345678-1234-5678-1234-567812345678"
+    _app({"user": {"id": dashed}}).compute_notification_badge()
+    kwargs = Patient.objects.filter.call_args.kwargs
+    assert "id" not in kwargs
+    assert set(kwargs["id__in"]) == {dashed, dashed.replace("-", "")}

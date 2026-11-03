@@ -94,7 +94,7 @@ def test_staff_id_allowlist_preserves_case():
 def test_config_is_frozen():
     config = PatientResourcesConfig.from_secrets({})
     with pytest.raises(dataclasses.FrozenInstanceError):
-        config.admin_staff_ids = ("x",)  # type: ignore[misc]
+        config.admin_staff_ids = ("x",)
 
 
 def test_from_secrets_never_raises_on_odd_values():

@@ -31,7 +31,8 @@ def _allowed_modules() -> dict[str, list[str]]:
     )
     # The real SDK is a dev dependency, so a failure here is a broken env, not a skip.
     assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout)
+    parsed: dict[str, list[str]] = json.loads(result.stdout)
+    return parsed
 
 
 @pytest.fixture(scope="module")
@@ -49,6 +50,7 @@ def test_there_are_source_files_to_check():
 def test_all_imports_are_sandbox_allowed(path, allowed):
     tree = ast.parse(path.read_text(), filename=str(path))
     for node in ast.walk(tree):
+        pairs: list[tuple[str, list[str] | None]]
         if isinstance(node, ast.Import):
             pairs = [(alias.name, None) for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:

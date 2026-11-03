@@ -241,11 +241,11 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         resource, missing = self._resource_for_write()
         if missing is not None:
             return missing
-        return [
-            JSONResponse(
-                serialize_resource(set_status(resource, status, staff_dbid=staff.dbid))
-            )
-        ]
+        try:
+            updated = set_status(resource, status, staff_dbid=staff.dbid)
+        except DuplicateResourceError as exc:
+            return self._conflict(str(exc))
+        return [JSONResponse(serialize_resource(updated))]
 
     @api.delete("/resources/<resource_id>")
     def delete_resource_route(self) -> list[Response | Effect]:

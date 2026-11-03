@@ -232,6 +232,22 @@ def set_status(resource: Any, status: str, *, staff_dbid: Any) -> Any:
     """
     if status not in (STATUS_ACTIVE, STATUS_ARCHIVED):
         raise ValueError(f"unknown status {status!r}")
+    # Archiving frees a title+label for reuse, so by the time an archived row
+    # is restored a live resource may hold the same pair. Without this check the
+    # save hits the partial unique constraint and the route 500s (or, for a
+    # case-only difference the constraint misses, two live rows look the same
+    # in the picker).
+    if (
+        status == STATUS_ACTIVE
+        and resource.status != STATUS_ACTIVE
+        and _live_title_label_conflict(
+            resource.title or "", resource.label or "", exclude_dbid=resource.dbid
+        )
+    ):
+        raise DuplicateResourceError(
+            f"A resource called {resource.title!r} already exists with that label. "
+            "Archive or rename it before restoring this one."
+        )
     resource.status = status
     resource.updated_by_id = staff_dbid
     resource.save()

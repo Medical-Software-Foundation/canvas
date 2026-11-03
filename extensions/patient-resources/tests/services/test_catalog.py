@@ -317,10 +317,41 @@ def test_archiving_flips_status_without_deleting():
 
 
 def test_restoring_flips_it_back():
+    _no_conflict()
     resource = _resource()
     resource.status = STATUS_ARCHIVED
     catalog.set_status(resource, STATUS_ACTIVE, staff_dbid=9)
     assert resource.status == STATUS_ACTIVE
+
+
+def test_restoring_is_refused_when_a_live_resource_took_its_title_and_label():
+    """Archiving frees the pair for reuse, so restore must re-check it.
+
+    Without the check the save hits the partial unique constraint (a 500), or,
+    for a case-only difference, leaves two live rows that read the same.
+    """
+    PatientResource.objects.filter.return_value.exclude.return_value.exists.return_value = True
+    resource = _resource()
+    resource.status = STATUS_ARCHIVED
+    with pytest.raises(catalog.DuplicateResourceError):
+        catalog.set_status(resource, STATUS_ACTIVE, staff_dbid=9)
+    assert resource.status == STATUS_ARCHIVED
+    resource.save.assert_not_called()
+    kwargs = PatientResource.objects.filter.call_args.kwargs
+    assert kwargs["status"] == STATUS_ACTIVE
+    assert kwargs["title__iexact"] == resource.title
+    assert PatientResource.objects.filter.return_value.exclude.call_args.kwargs == {
+        "dbid": resource.dbid
+    }
+
+
+def test_archiving_skips_the_duplicate_check():
+    """Only a row becoming live can collide with another live row."""
+    PatientResource.objects.filter.return_value.exclude.return_value.exists.return_value = True
+    resource = _resource()
+    catalog.set_status(resource, STATUS_ARCHIVED, staff_dbid=9)
+    assert resource.status == STATUS_ARCHIVED
+    PatientResource.objects.filter.assert_not_called()
 
 
 def test_unknown_status_is_refused():

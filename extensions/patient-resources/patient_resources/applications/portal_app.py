@@ -8,6 +8,7 @@ from canvas_sdk.handlers.application import Application
 from logger import log
 
 from patient_resources.constants import PORTAL_URL
+from patient_resources.services.identity import id_candidates
 from patient_resources.services.shares import unviewed_count
 
 
@@ -50,7 +51,14 @@ class MyResourcesPortalApp(Application):
 
         from canvas_sdk.v1.data import Patient
 
-        patient = Patient.objects.filter(id=patient_id).only("id", "dbid").first()
+        # Every stored form of the key, as the portal API resolves it. An exact
+        # match on the wrong (dashed vs undashed) form misses silently, and the
+        # badge would then never show.
+        patient = (
+            Patient.objects.filter(id__in=list(id_candidates(patient_id)))
+            .only("id", "dbid")
+            .first()
+        )
         if patient is None:
             return None
         return unviewed_count(patient.dbid)
