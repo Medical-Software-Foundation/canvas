@@ -225,6 +225,27 @@ class TestMetricsEndpoint:
 
 class TestClaimsEndpoints:
 
+    @pytest.fixture(autouse=True)
+    def viewer_tz(self):
+        with patch(
+            "billing_dashboard.handlers.billing_api.staff_timezone",
+            return_value="America/New_York",
+        ) as tz:
+            yield tz
+
+    def test_claims_and_csv_use_signed_in_staff_timezone(self, viewer_tz) -> None:
+        with (
+            patch("billing_dashboard.handlers.billing_api.build_claims") as mock_build,
+            patch("billing_dashboard.handlers.billing_api.build_claims_csv") as mock_csv,
+        ):
+            mock_build.return_value = {"claims": []}
+            mock_csv.return_value = ("", False)
+            self._handler("/api/claims").claims()
+            self._handler("/api/claims.csv").claims_csv()
+        viewer_tz.assert_called_with("staff-abc-123")
+        assert mock_build.call_args.kwargs["tz"] == "America/New_York"
+        assert mock_csv.call_args.kwargs["tz"] == "America/New_York"
+
     def _handler(self, path: str, qs: str = "", secrets: dict | None = None) -> BillingDashboardAPI:
         return BillingDashboardAPI(event=_make_event(path, qs), secrets=secrets or {})
 

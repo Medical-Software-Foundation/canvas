@@ -310,6 +310,27 @@ class TestBuildClaims:
             "balance": 100.5,
         }
 
+    def test_date_of_service_shown_in_viewer_timezone(
+        self, mock_models, fixed_now
+    ) -> None:
+        # 01:30 UTC on Apr 2 is still Apr 1 in New York; a UTC date would be a day late.
+        claim, _, _ = mock_models
+        late = dt.datetime(2026, 4, 2, 1, 30, tzinfo=dt.UTC)
+        _wire(claim, [_db_row(7, note__datetime_of_service=late)])
+        ny = build_claims(
+            ClaimsQuery(),
+            business_line_enabled=False,
+            now=fixed_now,
+            tz="America/New_York",
+        )["claims"][0]
+        assert ny["date_of_service"] == "2026-04-01"
+        _wire(claim, [_db_row(7, note__datetime_of_service=late)])
+        text, _ = build_claims_csv(ClaimsQuery(), now=fixed_now, tz="America/New_York")
+        assert '"2026-04-01"' in text
+        _wire(claim, [_db_row(7, note__datetime_of_service=late)])
+        utc = build_claims(ClaimsQuery(), business_line_enabled=False, now=fixed_now)
+        assert utc["claims"][0]["date_of_service"] == "2026-04-02"
+
     def test_row_mapping_handles_missing_values(self, mock_models, fixed_now) -> None:
         claim, _, _ = mock_models
         _wire(
@@ -454,3 +475,22 @@ class TestBuildClaimsCsv:
         assert truncated is False
         assert text.count("\r\n") == 6  # header + 5 rows
         assert '"Pat Test4"' in text
+
+
+class TestStaffTimezone:
+    def test_uses_staff_last_known_timezone(self) -> None:
+        with patch.object(claims, "Staff") as staff:
+            staff.objects.filter.return_value.values_list.return_value.first.return_value = "America/Chicago"
+            assert claims.staff_timezone("s1") == "America/Chicago"
+            staff.objects.filter.assert_called_once_with(id="s1")
+
+    def test_falls_back_to_utc(self) -> None:
+        with patch.object(claims, "Staff") as staff:
+            staff.objects.filter.return_value.values_list.return_value.first.return_value = None
+            assert claims.staff_timezone("s1") == "UTC"
+        assert claims.staff_timezone(None) == "UTC"
+
+    def test_unknown_zone_name_falls_back_to_utc(self) -> None:
+        with patch.object(claims, "Staff") as staff:
+            staff.objects.filter.return_value.values_list.return_value.first.return_value = "Not/AZone"
+            assert claims.staff_timezone("s1") == "UTC"

@@ -148,6 +148,10 @@ If the practice's `ChargeDescriptionMaster` table has entries for their CPT code
 - **Balances** are the stored `patient_balance` and `aggregate_coverage_balance`
   on each claim (kept in sync by Canvas); the list does not aggregate postings.
 - One SQL query per request; every column is a forward or one-to-one join.
+- **Dates of service** are shown in the signed-in staff member's time zone
+  (their last known time zone in Canvas), or UTC if Canvas has none for them.
+- **Who can see it:** any signed-in staff member who can open the dashboard can
+  see the list and download the CSV, which includes patient names.
 
 ## Architecture
 

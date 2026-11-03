@@ -26,6 +26,7 @@ from typing import Any
 import arrow
 from canvas_sdk.v1.data.business_line import BusinessLine
 from canvas_sdk.v1.data.claim import Claim, ClaimQueue
+from canvas_sdk.v1.data.staff import Staff
 from django.db.models import F
 
 from billing_dashboard.data.claim_queue import ClaimQueueState
@@ -183,12 +184,36 @@ def _money(value: Decimal | None) -> float:
     return float(value or 0)
 
 
-def _row(r: dict[str, Any]) -> dict[str, Any]:
+def staff_timezone(staff_id: str | None) -> str:
+    """Time zone name for date display: the viewing staff member's last known
+    time zone, or "UTC" when there is none.
+
+    Dates of service are stored in UTC; formatting them in UTC would show an
+    evening visit in a US time zone on the next day.
+    """
+    if not staff_id:
+        return "UTC"
+    tz = (
+        Staff.objects.filter(id=staff_id)
+        .values_list("last_known_timezone", flat=True)
+        .first()
+    )
+    if not tz:
+        return "UTC"
+    name = str(tz)
+    try:
+        arrow.now(name)
+    except ValueError:  # arrow's ParserError: unknown or legacy zone name
+        return "UTC"
+    return name
+
+
+def _row(r: dict[str, Any], tz: str) -> dict[str, Any]:
     dos = r["note__datetime_of_service"]
     return {
         "id": str(r["id"]),
         "claim_number": r["dbid"],
-        "date_of_service": arrow.get(dos).format("YYYY-MM-DD") if dos else "",
+        "date_of_service": arrow.get(dos).to(tz).format("YYYY-MM-DD") if dos else "",
         "patient": _full_name(r["patient__first_name"], r["patient__last_name"]),
         "provider": _full_name(
             r["provider__provider_first_name"], r["provider__provider_last_name"]
@@ -203,7 +228,7 @@ def _row(r: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_claim_rows(
-    query: ClaimsQuery, limit: int, now: arrow.Arrow | None = None
+    query: ClaimsQuery, limit: int, now: arrow.Arrow | None = None, tz: str = "UTC"
 ) -> tuple[list[dict[str, Any]], bool]:
     """Run the single claim-list query. Returns (rows, truncated).
 
@@ -243,14 +268,17 @@ def fetch_claim_rows(
         .values(*_VALUE_FIELDS)[: limit + 1]
     )
     truncated = len(raw) > limit
-    return [_row(r) for r in raw[:limit]], truncated
+    return [_row(r, tz) for r in raw[:limit]], truncated
 
 
 def build_claims(
-    query: ClaimsQuery, business_line_enabled: bool, now: arrow.Arrow | None = None
+    query: ClaimsQuery,
+    business_line_enabled: bool,
+    now: arrow.Arrow | None = None,
+    tz: str = "UTC",
 ) -> dict[str, Any]:
-    """JSON payload for the Claims tab."""
-    rows, truncated = fetch_claim_rows(query, MAX_JSON_ROWS, now)
+    """JSON payload for the Claims tab. Dates are shown in time zone ``tz``."""
+    rows, truncated = fetch_claim_rows(query, MAX_JSON_ROWS, now, tz)
     return {
         "claims": rows,
         "truncated": truncated,
@@ -311,8 +339,8 @@ def rows_to_csv(rows: list[dict[str, Any]]) -> str:
 
 
 def build_claims_csv(
-    query: ClaimsQuery, now: arrow.Arrow | None = None
+    query: ClaimsQuery, now: arrow.Arrow | None = None, tz: str = "UTC"
 ) -> tuple[str, bool]:
     """CSV text for the export, plus whether it hit the row cap."""
-    rows, truncated = fetch_claim_rows(query, MAX_CSV_ROWS, now)
+    rows, truncated = fetch_claim_rows(query, MAX_CSV_ROWS, now, tz)
     return rows_to_csv(rows), truncated

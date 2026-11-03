@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.8.0",
+    "plugin_version": "0.8.1",
     "name": "billing_dashboard",
     "description": "Billing Dashboard — full-page financial analytics application for practice managers and billing staff. Shows financial overview, payer analysis, reimbursement trends with CMS benchmark comparisons, and a sortable claims list with CSV export.",
     "components": {

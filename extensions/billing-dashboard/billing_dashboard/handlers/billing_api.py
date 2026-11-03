@@ -17,6 +17,7 @@ from billing_dashboard.data.claims import (
     build_claims_csv,
     business_line_filter_enabled,
     parse_query,
+    staff_timezone,
 )
 from billing_dashboard.data.overview import build_overview
 from billing_dashboard.data.payer import build_payer
@@ -67,13 +68,17 @@ class BillingDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         log.warning("[BillingDashboardAPI] Unknown tab: %s", tab)
         return [JSONResponse({"error": "Unknown tab"}, status_code=HTTPStatus.BAD_REQUEST)]
 
+    def _viewer_timezone(self) -> str:
+        """Dates of service are shown in the signed-in staff member's time zone."""
+        return staff_timezone(self.request.headers.get("canvas-logged-in-user-id"))
+
     @api.get("/api/claims")
     def claims(self) -> list[Response | Effect]:
         """Sortable, filterable claim list for the Claims tab (PLUGIN-213/223)."""
         bl_enabled = business_line_filter_enabled(self.secrets)
         try:
             query = parse_query(self.request.query_params, bl_enabled)
-            payload = build_claims(query, bl_enabled)
+            payload = build_claims(query, bl_enabled, tz=self._viewer_timezone())
         except ClaimsQueryError as exc:
             return [JSONResponse({"error": str(exc)}, status_code=HTTPStatus.BAD_REQUEST)]
         return [JSONResponse(payload, status_code=HTTPStatus.OK)]
@@ -84,7 +89,7 @@ class BillingDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         bl_enabled = business_line_filter_enabled(self.secrets)
         try:
             query = parse_query(self.request.query_params, bl_enabled)
-            text, truncated = build_claims_csv(query)
+            text, truncated = build_claims_csv(query, tz=self._viewer_timezone())
         except ClaimsQueryError as exc:
             return [JSONResponse({"error": str(exc)}, status_code=HTTPStatus.BAD_REQUEST)]
         log.info("[BillingDashboardAPI] Claims CSV export (truncated=%s)", truncated)
