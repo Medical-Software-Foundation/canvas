@@ -1,0 +1,38 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+name = "auto-fax"
+version = "0.1.0"
+license = "MIT"
+description = "Auto-fax a note to rule-selected recipients when it is locked or signed."
+readme = "auto_fax/README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "canvas[test-utils]>=0.258.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+source = ["auto_fax"]
+branch = true
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+filterwarnings = [
+  "ignore:`json_encoders` is deprecated:DeprecationWarning",
+]

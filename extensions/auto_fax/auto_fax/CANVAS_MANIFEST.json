@@ -1,0 +1,46 @@
+{
+    "sdk_version": "0.258.0",
+    "plugin_version": "0.1.0",
+    "name": "auto_fax",
+    "description": "Auto-fax on note lock: when a note is locked or signed, faxes it to the recipients a practice's rules name (an external care team member such as the PCP or referring provider, the patient's facility, or a fixed number). Rules, a dry-run mode and a test fax number are set in the plugin's settings. For practice admins and care coordinators who fax visit notes by hand today.",
+    "components": {
+        "protocols": [
+            {
+                "class": "auto_fax.handlers.note_locked:AutoFaxOnNoteLock",
+                "description": "On a note state change to locked, signed or relocked, faxes the note to each recipient the matching rules name.",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": [
+                        "Note",
+                        "NoteType",
+                        "NoteActionEvent",
+                        "CareTeamMembership",
+                        "ServiceProvider",
+                        "PatientFacilityAddress",
+                        "Facility"
+                    ],
+                    "write": [
+                        "Note"
+                    ]
+                }
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "AUTO_FAX_MODE",
+            "sensitive": false
+        },
+        {
+            "name": "AUTO_FAX_RULES",
+            "sensitive": false
+        },
+        {
+            "name": "AUTO_FAX_TEST_FAX_NUMBER",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "license": "MIT",
+    "readme": "./README.md"
+}
