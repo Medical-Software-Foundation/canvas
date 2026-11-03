@@ -1,0 +1,28 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+name = "future-lab-orders"
+version = "0.1.0"
+license = "MIT"
+description = "Record a future lab order (lab, tests, due date) on the patient profile; a daily job creates a staff task on the due date."
+requires-python = ">=3.12"
+dependencies = [
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-django>=4.7.0",
+]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+DJANGO_SETTINGS_MODULE = "canvas_sdk.tests.settings"
+filterwarnings = [
+  "ignore:`json_encoders` is deprecated:DeprecationWarning",
+]
