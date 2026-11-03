@@ -30,6 +30,31 @@ cooldown window, an optional clinician preference, and an optional score write-b
    the same note, unless the patient already has that follow-up on this note or
    from the last `cooldown_days` days (default 14). Uncommitted copies count too.
 
+## Who it is for
+
+Practices that screen with PHQ-2 or GAD-2 (or any coded screener) and want the
+full instrument queued on the same note whenever the screen is positive.
+
+## Install
+
+From the `extensions/screening_cascade` folder:
+
+```
+canvas install screening_cascade --host <your-instance>
+```
+
+## What access it has
+
+- It runs only on the `QUESTIONNAIRE_COMMAND__POST_COMMIT` event. It has no API
+  routes, no UI and makes no outside calls.
+- It reads the committed command, its interview and answers, questionnaire
+  definitions, the note's provider id, and earlier interviews for the same patient
+  (for the cooldown check).
+- It writes only two things: a questionnaire command on the same note, and (when
+  configured) a questionnaire result for the screener. It never edits or deletes
+  existing records.
+- Logs carry questionnaire codes, rule names and scores, never patient details.
+
 ## Turning it on
 
 The plugin is off until you set:
