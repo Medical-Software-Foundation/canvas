@@ -18,8 +18,9 @@ On a patient's companion page, a **Vitals** launcher opens the same modal. No ac
 
 ### Inside the modal
 
-- A slim header row with a **Metric #1** selector and a **Compare Metrics** button.
-- A single time-series line chart below, rendered with Chart.js, showing the selected metric across every vitals-panel observation on file.
+- A slim header row with a **Metric #1** selector, a **Compare Metrics** button and a **Show History** toggle.
+- A single time-series line chart below, rendered with Chart.js, showing the selected metric across every vitals-panel observation on file. Readings with no value for the selected metric are left off the chart (and their dates off the x-axis); a metric with a single reading is drawn as one centred point.
+- A collapsible **Recent Vitals History** table, hidden by default.
 - Hover over a data point to see the exact value and date.
 
 Metrics exposed (with units):
@@ -43,10 +44,15 @@ Narrative observations like `note` and non-numeric fields like `pulse_rhythm` ar
 
 Tap **Compare Metrics** to add a second chart. The second selector lists every metric except the one already picked for the first chart; switching the first metric reconstructs the second selector so they can't duplicate. Tap the × to remove the second chart.
 
+### Recent vitals history
+
+Tap **Show History** to open a table of the 10 most recent vitals panels, newest first, one row per date and one column per metric. Only metrics recorded at least once in those 10 readings get a column; a missing value shows as "—". The table scrolls sideways when the columns don't fit. Tap **Hide History** to collapse it. The table is built in the browser from the same data the charts use, so it adds no server work.
+
 ### Responsive layout
 
 - On wide viewports (≥720px) the two charts display side-by-side.
 - On narrow/modal viewports (<720px) the layout stacks: Metric #1 selector and Metric #2 selector each take their own row, and the two charts stack vertically. The modal body scrolls when both charts are visible.
+- When the history table is open it takes the bottom 40% of the modal on wide viewports, and stacks below the charts on narrow ones.
 
 ## Installation
 
@@ -137,6 +143,10 @@ The modal body uses a `@media (max-width: 720px)` breakpoint:
 
 - **≥720px**: `.chart-container` uses `position: absolute; top: 48px` with `flex-direction: row` (charts side-by-side) and a fixed 48px header.
 - **<720px**: body becomes a flex column, header grows to auto height with `flex-wrap: wrap` on `.controls` (so Metric #1 and Metric #2 selectors each take their own row), and `.chart-container` switches to `flex-direction: column` with vertical scrolling.
+
+### Changelog
+
+- **0.36.0**: collapsible Recent Vitals History table (last 10 readings); chart skips missing values per metric and centres single readings; refreshed point and tooltip styling. The chart data is now escaped for the inline script block, so a free-text vitals value cannot break the page.
 
 ### Known considerations
 
