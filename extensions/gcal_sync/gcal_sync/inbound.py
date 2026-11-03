@@ -28,6 +28,7 @@ Effects (hold create/update/delete) are returned to the caller (the webhook / cr
 import datetime
 
 import arrow
+from django.db import IntegrityError
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.note.appointment import ScheduleEvent
@@ -162,8 +163,14 @@ class InboundSync:
         force_rebuild: bool = False,
         dry_run: bool = False,
         verbose: bool = False,
+        full_pull: bool = False,
     ) -> tuple[dict, list[Effect]]:
         """Pull and apply the delta for ``calendar_id``. Returns ``(stats, effects)``.
+
+        ``full_pull`` pulls the whole import window even when a valid sync token is stored, without
+        bypassing the convergence guard. The periodic full pull uses it to catch events a delta
+        never delivered (a recurring series moved or extended, a missed webhook) without reviving
+        holds staff cancelled.
 
         ``force_rebuild`` is the deliberate admin "Re-import" path: it bypasses the convergence guard
         so events whose only hold is cancelled are re-created. Every other caller (webhook, reconcile)
@@ -183,7 +190,12 @@ class InboundSync:
 
         # A dry run always does a full-window pull (never a delta) so its preview matches a real
         # re-import; the real re-import gets the full pull by clearing the token, which dry_run won't do.
-        use_token = state.sync_token and not state.needs_full_resync and not dry_run
+        use_token = (
+            state.sync_token
+            and not state.needs_full_resync
+            and not dry_run
+            and not full_pull
+        )
         stats: dict = {
             "processed": 0,
             "echoes": 0,
@@ -239,6 +251,8 @@ class InboundSync:
             if next_token:
                 state.sync_token = next_token
             state.needs_full_resync = False
+            if not use_token:
+                state.last_full_pull_at = arrow.utcnow().datetime
             state.save()
         log.info(
             "gcal inbound %s%s: processed=%s created=%s updated=%s unchanged=%s removed=%s ignored=%s",
@@ -452,7 +466,17 @@ class InboundSync:
         # second one. Keyed on the external id (Canvas's own record), so this holds even if the
         # ``InboundEventMapping`` row was lost — a mapping-less live hold used to fall through to
         # create and duplicate.
-        if self._canvas_id_for_google_event(google_event_id, provider_id) is not None:
+        canvas_id = self._canvas_id_for_google_event(google_event_id, provider_id)
+        if canvas_id is not None:
+            # Two concurrent pulls that both raced past the old check-then-write marker could each
+            # mint a hold, leaving this provider with two live holds for one event. Keep the one we
+            # update and cancel the rest, so a delta or full pull converges an existing duplicate.
+            extra_deletes = [
+                ScheduleEvent(instance_id=extra_id).delete()
+                for extra_id in self._all_live_hold_ids(google_event_id, provider_id)
+                if extra_id != str(canvas_id)
+            ]
+            stats["holds_removed"] = stats["holds_removed"] + len(extra_deletes)
             # No-op guard: a delta routinely re-delivers unchanged events, and a webhook that times
             # out before advancing the sync token makes the SAME delta re-pull on every ping. Re-issuing
             # an UPDATE for a hold whose content hasn't moved re-saves its appointment row for nothing —
@@ -474,11 +498,11 @@ class InboundSync:
                     google_event_id,
                 )
                 stats["holds_unchanged"] = stats["holds_unchanged"] + 1
-                return []
+                return extra_deletes
             effect = self._hold_update_effect(google_event_id, event, provider_id)
             if effect is None:
                 stats["ignored"] = stats["ignored"] + 1
-                return []
+                return extra_deletes
             # Record the applied hash so an unchanged re-delivery is recognized next time. Upsert (not
             # filter().update()) so a mapping-less live hold gets its row (re)created and the no-op
             # guard self-heals.
@@ -495,7 +519,7 @@ class InboundSync:
                 verbose, "update hold", calendar_id, provider_id, google_event_id
             )
             stats["holds_updated"] = stats["holds_updated"] + 1
-            return [effect]
+            return [effect, *extra_deletes]
 
         # Convergence guard: a hold was already created for this event but is no longer live — it was
         # cancelled, either because Google deleted the event (handled above on a later delta) or
@@ -579,17 +603,23 @@ class InboundSync:
             )
             stats["ignored"] = stats["ignored"] + 1
             return []
-        # Record synchronously so a re-delivered webhook doesn't import it twice. The per-(calendar,
-        # event) PendingHoldCreate marker is the dedup that must not be clobbered by a co-attendee's
-        # calendar; its created_at is refreshed each attempt so a past-grace re-create gets a fresh
-        # window. InboundEventMapping stores the content hash for the no-op guard (event id unique;
+        # Claim the create before returning it. The per-(calendar, event) PendingHoldCreate marker is
+        # the dedup that must not be clobbered by a co-attendee's calendar, and the claim is atomic:
+        # two runs for the same calendar (overlapping webhook deltas, or a webhook racing the
+        # reconcile) can both reach this line, and only the one that wins the marker returns a
+        # create. InboundEventMapping stores the content hash for the no-op guard (event id unique;
         # the hash is identical across a shared event's attendees, so a shared row is fine).
         if not dry_run:
-            PendingHoldCreate.objects.update_or_create(
-                google_event_id=google_event_id,
-                google_calendar_id=calendar_id,
-                defaults={"created_at": arrow.utcnow().datetime},
-            )
+            if not self._claim_create(calendar_id, google_event_id, pending):
+                _event_log(
+                    verbose,
+                    "skip (create claimed by a concurrent run)",
+                    calendar_id,
+                    provider_id,
+                    google_event_id,
+                )
+                stats["ignored"] = stats["ignored"] + 1
+                return []
             InboundEventMapping.objects.update_or_create(
                 google_event_id=google_event_id,
                 defaults={
@@ -639,6 +669,15 @@ class InboundSync:
             stats["ignored"] = stats["ignored"] + 1
             return []
         live = self._live_holds_for_event(google_event_id, provider_id)
+        # ``live`` keeps one hold per external-id value, so a second live hold under the SAME value
+        # (two concurrent runs both created the day) never shows up in it. Collect those here and
+        # remove them with the other stale holds below.
+        kept = set(live.values())
+        duplicates = [
+            hold_id
+            for hold_id in self._all_live_hold_ids(google_event_id, provider_id)
+            if hold_id not in kept
+        ]
 
         # Map each live hold onto the day it covers. A hold that lands on no covered day (the event
         # shrank or moved), or on a day already covered (a pre-expansion hold plus its per-day
@@ -667,7 +706,13 @@ class InboundSync:
         last_applied = (existing.last_applied_hash if existing is not None else "") or ""
         content_changed = new_hash != last_applied
         missing = [date for date in dates if date not in live_by_date]
-        if not content_changed and not missing and not stale and not adopted:
+        if (
+            not content_changed
+            and not missing
+            and not stale
+            and not adopted
+            and not duplicates
+        ):
             _dry_trace(stats, "already current (no change)", event)
             _event_log(
                 verbose,
@@ -759,10 +804,17 @@ class InboundSync:
                 if effect is None:
                     stats["ignored"] = stats["ignored"] + 1
                     continue
+                # Same atomic claim as the single-hold path, per day, so two concurrent runs can't
+                # both create the same day's hold.
+                if not dry_run and not self._claim_day_create(
+                    calendar_id, hold_external_id(google_event_id, date)
+                ):
+                    stats["ignored"] = stats["ignored"] + 1
+                    continue
                 effects.append(effect)
                 created.append(date)
                 stats["holds_created"] = stats["holds_created"] + 1
-        for canvas_id in stale:
+        for canvas_id in [*stale, *duplicates]:
             effects.append(ScheduleEvent(instance_id=str(canvas_id)).delete())
             stats["holds_removed"] = stats["holds_removed"] + 1
 
@@ -837,18 +889,11 @@ class InboundSync:
     ) -> None:
         """Persist this pass's per-day creates and removals for the in-flight and convergence guards.
 
-        A created day gets a fresh in-flight marker and loses any removed-day record (it is held
-        again). A day removed because the event no longer covers it gets a removed-day record, so it
+        A created day loses any removed-day record (it is held again); its fresh in-flight marker was
+        already written by ``_claim_day_create`` before the create was returned. A day removed because the event no longer covers it gets a removed-day record, so it
         can be held again if the event comes back over it, and its in-flight marker is dropped, since
         the hold that marker waited on has applied and is now being cancelled.
         """
-        now = arrow.utcnow().datetime
-        for date in created:
-            PendingHoldCreate.objects.update_or_create(
-                google_event_id=hold_external_id(google_event_id, date),
-                google_calendar_id=calendar_id,
-                defaults={"created_at": now},
-            )
         if created:
             RemovedDayHold.objects.filter(
                 google_calendar_id=calendar_id,
@@ -948,6 +993,69 @@ class InboundSync:
         }
 
     @staticmethod
+    def _all_live_hold_ids(google_event_id: str, provider_id: str | None) -> list[str]:
+        """Every live Canvas hold id for this (provider, Google event), duplicates included.
+
+        Same rows as :meth:`_live_holds_for_event`, but not collapsed to one hold per external-id
+        value: two holds stamped with the same value both come back, which is how a duplicate made
+        by two concurrent runs is found and removed.
+        """
+        rows = (
+            AppointmentExternalIdentifier.objects.filter(
+                system=GOOGLE_ORIGIN_SYSTEM,
+                value__startswith=google_event_id,
+                appointment__provider__id=provider_id,
+            )
+            .exclude(appointment__status="cancelled")
+            .values_list("value", "appointment__id")
+        )
+        prefix = f"{google_event_id}:"
+        return sorted(
+            {
+                str(appointment_id)
+                for value, appointment_id in rows
+                if str(value) == google_event_id or str(value).startswith(prefix)
+            }
+        )
+
+    def _claim_create(
+        self, calendar_id: str, value: str, pending: PendingHoldCreate | None
+    ) -> bool:
+        """Atomically claim the right to create the hold keyed ``value`` on this calendar.
+
+        No marker: insert one; the (event, calendar) unique constraint makes a concurrent insert fail,
+        and the loser treats the create as in flight. A fresh marker means a create is already in
+        flight. A marker past the grace window is a genuine orphan: refresh it with a conditional
+        update on the ``created_at`` we read, so only one of several racing runs wins the re-create.
+        """
+        now = arrow.utcnow().datetime
+        if pending is None:
+            try:
+                PendingHoldCreate.objects.create(
+                    google_event_id=value,
+                    google_calendar_id=calendar_id,
+                    created_at=now,
+                )
+            except IntegrityError:
+                return False
+            return True
+        if self._create_in_flight(pending):
+            return False
+        updated = PendingHoldCreate.objects.filter(
+            google_event_id=value,
+            google_calendar_id=calendar_id,
+            created_at=pending.created_at,
+        ).update(created_at=now)
+        return updated == 1
+
+    def _claim_day_create(self, calendar_id: str, value: str) -> bool:
+        """:meth:`_claim_create` for one day of a per-day event, reading that day's marker first."""
+        pending = PendingHoldCreate.objects.filter(
+            google_event_id=value, google_calendar_id=calendar_id
+        ).first()
+        return self._claim_create(calendar_id, value, pending)
+
+    @staticmethod
     def _external_value_exists(value: str, provider_id: str | None) -> bool:
         """Has a hold ever existed FOR THIS PROVIDER under this exact external id (any status)?
 
@@ -994,10 +1102,8 @@ class InboundSync:
         ids is the only way to remove the whole set.
         """
         return [
-            ScheduleEvent(instance_id=str(canvas_id)).delete()
-            for canvas_id in sorted(
-                self._live_holds_for_event(google_event_id, provider_id).values()
-            )
+            ScheduleEvent(instance_id=canvas_id).delete()
+            for canvas_id in self._all_live_hold_ids(google_event_id, provider_id)
         ]
 
     def _hold_update_effect(

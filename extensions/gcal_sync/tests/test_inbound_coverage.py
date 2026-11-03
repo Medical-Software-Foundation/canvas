@@ -21,6 +21,8 @@ def _inbound(mocker):
     mocker.patch.object(inbound._sync, "remove")
     # Removed-day records for per-day holds; no DB in these tests.
     mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    # No duplicate live holds unless a test says so.
+    mocker.patch.object(inbound, "_all_live_hold_ids", return_value=[])
     return inbound
 
 
@@ -191,15 +193,12 @@ def test_external_hold_exists_false(mocker):
 
 def test_hold_delete_effects_empty_when_no_live_hold(mocker):
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     assert inbound._hold_delete_effects("g1", "p1") == []
 
 
 def test_hold_delete_effects_returns_effect_when_found(mocker):
     inbound = _inbound(mocker)
-    mocker.patch.object(
-        inbound, "_live_holds_for_event", return_value={"g1": "appt-1"}
-    )
+    mocker.patch.object(inbound, "_all_live_hold_ids", return_value=["appt-1"])
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
     result = inbound._hold_delete_effects("g1", "p1")
     se.assert_called_once_with(instance_id="appt-1")
@@ -210,13 +209,7 @@ def test_hold_delete_effects_removes_every_per_day_hold(mocker):
     # A cancelled multi-day all-day event has one hold per covered day; all of them must go.
     inbound = _inbound(mocker)
     mocker.patch.object(
-        inbound,
-        "_live_holds_for_event",
-        return_value={
-            "g1:2026-08-31": "appt-1",
-            "g1:2026-09-01": "appt-2",
-            "g1:2026-09-02": "appt-3",
-        },
+        inbound, "_all_live_hold_ids", return_value=["appt-1", "appt-2", "appt-3"]
     )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
     result = inbound._hold_delete_effects("g1", "p1")

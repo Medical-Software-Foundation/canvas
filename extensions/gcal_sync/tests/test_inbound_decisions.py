@@ -21,6 +21,8 @@ def _inbound(mocker):
     mocker.patch.object(inbound._sync, "remove")
     # Removed-day records for per-day holds; no DB in these tests.
     mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    # No duplicate live holds unless a test says so.
+    mocker.patch.object(inbound, "_all_live_hold_ids", return_value=[])
     return inbound
 
 
@@ -103,7 +105,7 @@ def test_unmarked_new_event_creates_hold(mocker):
     effects = inbound._apply("cal", {"id": "g-new", "status": "confirmed", "summary": "Hold"}, stats)
     assert effects == ["HOLD_EFFECT"]
     assert stats["holds_created"] == 1
-    phc.objects.update_or_create.assert_called_once()
+    phc.objects.create.assert_called_once()
 
 
 def test_unmarked_unresolvable_hold_is_ignored(mocker):
@@ -153,6 +155,8 @@ def test_unmarked_orphaned_mapping_recreates_hold(mocker):
     phc.objects.filter.return_value.first.return_value = SimpleNamespace(
         google_event_id="g-1", created_at=datetime.now(timezone.utc) - timedelta(hours=1)
     )
+    # This run wins the stale marker.
+    phc.objects.filter.return_value.update.return_value = 1
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
@@ -165,7 +169,8 @@ def test_unmarked_orphaned_mapping_recreates_hold(mocker):
     assert effects == ["HOLD_EFFECT"]
     assert stats["holds_created"] == 1
     update_spy.assert_not_called()
-    phc.objects.update_or_create.assert_called_once()
+    # The stale marker is re-claimed with a conditional update, not a blind overwrite.
+    phc.objects.filter.return_value.update.assert_called_once()
 
 
 def test_unmarked_pending_create_is_not_duplicated(mocker):

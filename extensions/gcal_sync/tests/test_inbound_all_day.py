@@ -295,6 +295,12 @@ def _inbound(
         inbound, "_days_removed_by_sync", return_value=set(removed_by_sync or ())
     )
     mocker.patch.object(inbound, "_record_day_changes")
+    # Every live hold is in ``live`` (no same-value duplicates) and every per-day claim wins, unless
+    # a test overrides these.
+    mocker.patch.object(
+        inbound, "_all_live_hold_ids", return_value=sorted((live or {}).values())
+    )
+    mocker.patch.object(inbound, "_claim_day_create", return_value=True)
     mocker.patch(
         "gcal_sync.inbound.build_hold_effect",
         side_effect=lambda event, nt, prov, loc, day=None: f"CREATE:{day.date if day else 'single'}",
@@ -617,6 +623,41 @@ def test_duplicate_hold_on_a_covered_day_is_not_recorded_as_uncovered(mocker):
     assert inbound._record_day_changes.call_args.args[3] == []
 
 
+def test_same_day_duplicate_from_concurrent_runs_is_removed(mocker):
+    # Two runs both created day one under the same external id. ``live`` holds one per id, so the
+    # second only shows up in the full list; it is cancelled even though nothing else changed.
+    event, dates = _all_day_event(2)
+    live = {f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates)}
+    mapping = SimpleNamespace(google_event_id="g-pto", last_applied_hash="")
+    inbound = _inbound(mocker, live=live, mapping=mapping)
+    mocker.patch("gcal_sync.inbound.google_event_content_hash", return_value="")
+    mocker.patch.object(
+        inbound, "_all_live_hold_ids", return_value=["appt-0", "appt-1", "appt-dup"]
+    )
+    se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
+    stats = _stats()
+    inbound._apply("cal", event, stats)
+    se.assert_called_once_with(instance_id="appt-dup")
+    assert stats["holds_removed"] == 1
+    assert stats["holds_created"] == 0
+
+
+def test_lost_day_claim_skips_only_that_day(mocker):
+    event, dates = _all_day_event(3)
+    inbound = _inbound(mocker)
+    mocker.patch.object(
+        inbound,
+        "_claim_day_create",
+        side_effect=lambda cal, value: not value.endswith(dates[1]),
+    )
+    stats = _stats()
+    assert inbound._apply("cal", event, stats) == [
+        f"CREATE:{dates[0]}",
+        f"CREATE:{dates[2]}",
+    ]
+    assert stats["holds_created"] == 2
+
+
 def test_dry_run_records_nothing(mocker):
     event, _dates = _all_day_event(3)
     inbound = _inbound(mocker)
@@ -737,9 +778,8 @@ def test_record_day_changes_marks_created_and_removed_days(mocker):
     phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
     rdh = mocker.patch("gcal_sync.inbound.RemovedDayHold")
     InboundSync._record_day_changes("cal", "g1", ["2026-09-01"], ["2026-09-05"])
-    # The created day gets its own in-flight marker and loses any removed-day record.
-    assert phc.objects.update_or_create.call_args.kwargs["google_event_id"] == "g1:2026-09-01"
-    assert phc.objects.update_or_create.call_args.kwargs["google_calendar_id"] == "cal"
+    # The created day loses any removed-day record; its marker was claimed before the create.
+    phc.objects.update_or_create.assert_not_called()
     assert rdh.objects.filter.call_args.kwargs["google_event_id__in"] == ["g1:2026-09-01"]
     rdh.objects.filter.return_value.delete.assert_called_once()
     # The uncovered day is recorded as removed by the sync and its in-flight marker dropped.

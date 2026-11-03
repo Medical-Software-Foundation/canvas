@@ -27,6 +27,7 @@ reflected in Canvas scheduling (and vice versa) without manual double-entry.
 | Reconciliation | `gcal_sync.handlers.reconciliation:ReconciliationCron` | Daily catch-up; sync-token recovery. |
 | Block sweep | `gcal_sync.handlers.block_sweep:BlockSweepCron` | Every 15 min, push admin blocks (Calendar events). |
 | Reimport drain | `gcal_sync.handlers.reimport_drain:ReimportDrainCron` | Drains the "Re-import all" queue, rebuilding a few providers per tick. |
+| Periodic full pull | `gcal_sync.handlers.periodic_full_pull:PeriodicFullPullCron` | Every 10 minutes, full-pulls up to 2 calendars whose last full pull is over 24 hours old, so events a delta pull missed still import. Does not revive holds staff cancelled. |
 | Outbound backfill | `gcal_sync.handlers.outbound_backfill:OutboundBackfillDrainCron` | Paced drain of Canvas→Google backfill for new/missed providers. |
 | Admin | `gcal_sync.applications.google_calendar_admin:GoogleCalendarAdmin` | Map staff→calendar; sync health; per-provider reconcile / re-import / purge / dry-run. Fleet-level re-import all and cancel controls. |
 

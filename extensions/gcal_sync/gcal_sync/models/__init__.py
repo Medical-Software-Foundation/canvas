@@ -89,6 +89,10 @@ class CalendarSyncState(CustomModel):
     sync_token = TextField(default="")
     needs_full_resync = BooleanField(default=False)
     updated_at = DateTimeField(auto_now=True)
+    # When the last full-window pull completed. A delta only returns what Google reports as changed,
+    # so the periodic full pull uses this to re-check each calendar's whole window about once a day.
+    # Nullable so existing rows migrate cleanly; null reads as "never fully pulled".
+    last_full_pull_at = DateTimeField(null=True)
 
     class Meta:
         constraints = [
