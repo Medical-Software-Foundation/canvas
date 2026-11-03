@@ -821,7 +821,9 @@ def _post_era_payments(
     matches = _match_service_lines(
         service_lines, state.line_items, state.canvas_claim_id
     )
-    if comment := _unposted_lines_comment(service_lines, matches):
+    if comment := _unposted_lines_comment(
+        service_lines, matches, [str(era["era_id"]) for era in new_eras]
+    ):
         state.effects.append(state.claim_effect.add_comment(comment))
 
     # Primary insurance (ERA index 0)
@@ -893,12 +895,14 @@ _UNPOSTED_AMOUNT_FIELDS = (
 
 
 def _unposted_lines_comment(
-    service_lines: list[dict], matches: list[str | None]
+    service_lines: list[dict], matches: list[str | None], era_ids: list[str]
 ) -> str | None:
     """A claim comment naming Candid lines with money that matched no Canvas line.
 
     The sync marks the ERA as synced either way, so without this a biller would
-    never learn that part of the remittance wasn't posted.
+    never learn that part of the remittance wasn't posted. Candid's line amounts
+    are running totals, so a later ERA repeats the earlier money: the comment
+    names its ERAs and says the amounts are totals, so nobody posts them twice.
     """
     unposted = []
     for sl, line_item_id in zip(service_lines, matches, strict=True):
@@ -917,8 +921,10 @@ def _unposted_lines_comment(
     if not unposted:
         return None
     return (
-        "Candid sync: these Candid lines match no line on this claim and were not "
-        f"posted; post them by hand: {'; '.join(unposted)}"
+        f"Candid sync (ERA {', '.join(era_ids) or '?'}): these Candid lines match "
+        "no line on this claim and were not posted. Amounts are Candid's totals to "
+        "date, so subtract anything already posted by hand for an earlier ERA: "
+        f"{'; '.join(unposted)}"
     )
 
 

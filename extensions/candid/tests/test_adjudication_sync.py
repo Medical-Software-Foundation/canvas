@@ -2133,10 +2133,57 @@ def test_unposted_comment_skips_lines_without_money_and_placeholders() -> None:
         _candid_service_line("99499", 1, primary_paid_amount_cents=1),
         {"charge_amount_cents": 100, "copay_cents": 2500},
     ]
-    assert _unposted_lines_comment(lines[:2], [None, None]) is None
-    assert _unposted_lines_comment(lines, [None, None, None]).endswith(
+    assert _unposted_lines_comment(lines[:2], [None, None], ["era-1"]) is None
+    assert _unposted_lines_comment(lines, [None, None, None], ["era-1"]).endswith(
         "? on ? (copay $25.00)"
     )
+
+
+def test_unposted_comment_on_a_later_era_says_amounts_are_totals() -> None:
+    """A secondary ERA arriving a night later repeats the line's primary money.
+
+    The second comment names its own ERA and says the amounts are running
+    totals, so a biller doesn't post the primary money by hand a second time.
+    """
+    li = _fake_line_item("90833", Decimal("150.00"), "2026-01-15", "li-90833")
+    claim = _fake_claim(
+        [li],
+        coverages=[
+            _fake_coverage("cov-primary", "Primary"),
+            _fake_coverage("cov-secondary", "Secondary"),
+        ],
+        metadata={
+            "candid_encounters": [{"candid_encounter_id": "enc-abc"}],
+            "candid_synced_adjudication_ids": ["era-1"],
+        },
+    )
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                "99214",
+                15000,
+                primary_paid_amount_cents=9000,
+                secondary_paid_amount_cents=1000,
+            ),
+            _candid_service_line("90833", 15000, primary_paid_amount_cents=6000),
+        ],
+        eras=[{"era_id": "era-1"}, {"era_id": "era-2"}],
+    )
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+        patch("candid.adjudication_sync._coverage_balance_by_line", return_value={}),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+    comment = MCE.return_value.add_comment.call_args.args[0]
+    assert "ERA era-2" in comment
+    assert "era-1" not in comment
+    assert "totals to date" in comment
+    assert "primary paid $90.00" in comment
 
 
 # ---------------------------------------------------------------------------
