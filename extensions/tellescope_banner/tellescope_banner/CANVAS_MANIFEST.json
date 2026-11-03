@@ -1,0 +1,36 @@
+{
+    "sdk_version": "0.262.0",
+    "plugin_version": "0.1.0",
+    "name": "tellescope_banner",
+    "description": "Shows a banner on the patient chart that links to the patient's profile in Tellescope. The link comes from a URL-template setting; with no valid template, no banner is shown.",
+    "components": {
+        "handlers": [
+            {
+                "class": "tellescope_banner.handlers.banner:TellescopeProfileBanner",
+                "description": "Adds, refreshes or removes the Tellescope profile banner when a patient or their external identifier changes.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.patient.PatientExternalIdentifier"
+                    ],
+                    "write": []
+                }
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "TELLESCOPE_PROFILE_URL_TEMPLATE",
+            "sensitive": false
+        },
+        {
+            "name": "TELLESCOPE_IDENTIFIER_SYSTEM",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
