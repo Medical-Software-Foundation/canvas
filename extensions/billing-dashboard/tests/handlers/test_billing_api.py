@@ -216,3 +216,75 @@ class TestMetricsEndpoint:
             assert result[0].status_code == HTTPStatus.OK
 
 
+
+
+# ---------------------------------------------------------------------------
+# BillingDashboardAPI.claims / claims_csv (PLUGIN-213 / PLUGIN-223)
+# ---------------------------------------------------------------------------
+
+
+class TestClaimsEndpoints:
+
+    def _handler(self, path: str, qs: str = "", secrets: dict | None = None) -> BillingDashboardAPI:
+        return BillingDashboardAPI(event=_make_event(path, qs), secrets=secrets or {})
+
+    def test_claims_passes_parsed_query_and_setting(self) -> None:
+        with patch("billing_dashboard.handlers.billing_api.build_claims") as mock_build:
+            mock_build.return_value = {"claims": []}
+            handler = self._handler(
+                "/api/claims",
+                "sort=payer&dir=asc&window=30&queue=CashPay",
+                secrets={"CLAIMS_BUSINESS_LINE_FILTER": "true"},
+            )
+            result = handler.claims()
+        assert result[0].status_code == HTTPStatus.OK
+        query, enabled = mock_build.call_args.args
+        assert (query.sort, query.direction, query.window_days, query.queue) == (
+            "payer", "asc", 30, "CashPay"
+        )
+        assert enabled is True
+
+    def test_claims_setting_defaults_off(self) -> None:
+        with patch("billing_dashboard.handlers.billing_api.build_claims") as mock_build:
+            mock_build.return_value = {"claims": []}
+            self._handler(
+                "/api/claims", "business_line=6f1c2e0a-5b7d-4c1e-9a3b-2d4e6f8a0b1c"
+            ).claims()
+        query, enabled = mock_build.call_args.args
+        assert enabled is False
+        assert query.business_line is None
+
+    def test_claims_bad_sort_is_400_without_query(self) -> None:
+        with patch("billing_dashboard.handlers.billing_api.build_claims") as mock_build:
+            result = self._handler("/api/claims", "sort=note__patient__id").claims()
+        assert result[0].status_code == HTTPStatus.BAD_REQUEST
+        assert "Unknown sort" in json.loads(result[0].content)["error"]
+        mock_build.assert_not_called()
+
+    def test_claims_unknown_queue_is_400(self) -> None:
+        from billing_dashboard.data.claims import ClaimsQueryError
+
+        with patch("billing_dashboard.handlers.billing_api.build_claims") as mock_build:
+            mock_build.side_effect = ClaimsQueryError("Unknown claim queue 'X'.")
+            result = self._handler("/api/claims", "queue=X").claims()
+        assert result[0].status_code == HTTPStatus.BAD_REQUEST
+        assert json.loads(result[0].content) == {"error": "Unknown claim queue 'X'."}
+
+    def test_csv_response_headers_and_body(self) -> None:
+        with patch("billing_dashboard.handlers.billing_api.build_claims_csv") as mock_csv:
+            mock_csv.return_value = ('"Claim #"\r\n', True)
+            result = self._handler("/api/claims.csv", "sort=balance").claims_csv()
+        resp = result[0]
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.content == b'"Claim #"\r\n'
+        assert resp.headers["Content-Type"] == "text/csv; charset=utf-8"
+        assert resp.headers["Content-Disposition"].startswith('attachment; filename="claims-')
+        assert resp.headers["Cache-Control"] == "no-store"
+        assert resp.headers["X-Claims-Truncated"] == "true"
+        assert mock_csv.call_args.args[0].sort == "balance"
+
+    def test_csv_bad_params_is_400(self) -> None:
+        with patch("billing_dashboard.handlers.billing_api.build_claims_csv") as mock_csv:
+            result = self._handler("/api/claims.csv", "window=7").claims_csv()
+        assert result[0].status_code == HTTPStatus.BAD_REQUEST
+        mock_csv.assert_not_called()
