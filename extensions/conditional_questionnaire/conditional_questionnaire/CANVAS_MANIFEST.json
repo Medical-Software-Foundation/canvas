@@ -1,0 +1,55 @@
+{
+    "sdk_version": "0.262.0",
+    "plugin_version": "0.1.0",
+    "name": "conditional_questionnaire",
+    "description": "Conditional questionnaires in notes: a note header button opens a form beside the note where a provider fills in any Questionnaire Builder questionnaire with its Field Rules applied live, the same way the builder's Preview tab shows them. Saving adds a committed Questionnaire command to the note with only the answers to questions that show. For practices whose questionnaires use Field Rules to branch.",
+    "components": {
+        "handlers": [
+            {
+                "class": "conditional_questionnaire.handlers.note_button:ConditionalQuestionnaireButton",
+                "description": "Note header button, shown only on notes that can still be edited, that opens the conditional questionnaire form in the right chart pane.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Note",
+                        "CurrentNoteStateEvent"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "conditional_questionnaire.handlers.reload_on_state_change:ReloadButtonOnNoteStateChange",
+                "description": "When a note is locked, signed or reopened, reloads its header buttons so the Conditional Questionnaire button hides or shows without a page reload.",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "conditional_questionnaire.handlers.api:ConditionalQuestionnaireAPI",
+                "description": "Serves the form, the questionnaires with their Field Rules, and the save endpoint that adds the Questionnaire command to the note.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Note",
+                        "CurrentNoteStateEvent",
+                        "Command",
+                        "Questionnaire",
+                        "QuestionnaireQuestionMap",
+                        "Question",
+                        "ResponseOptionSet",
+                        "ResponseOption",
+                        "QuestionEnablementCondition"
+                    ],
+                    "write": [
+                        "Command"
+                    ]
+                }
+            }
+        ]
+    },
+    "tags": {},
+    "license": "MIT",
+    "readme": "./README.md"
+}
