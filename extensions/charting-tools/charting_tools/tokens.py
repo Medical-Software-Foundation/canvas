@@ -40,8 +40,14 @@ def sign_token(
     return "%s.%s" % (payload, signature)
 
 
-def verify_token(token: str, signing_key: str, now: float | None = None) -> tuple[str, str] | None:
-    """Return (note_uuid, origin_command_uuid) if valid and unexpired, else None."""
+def verify_token(
+    token: str, signing_key: str, now: float | None = None, allow_expired: bool = False
+) -> tuple[str, str] | None:
+    """Return (note_uuid, origin_command_uuid) if validly signed and unexpired, else None.
+
+    With ``allow_expired``, a validly signed token is accepted after its expiry;
+    the caller then has to bound its use some other way.
+    """
     current = int(now if now is not None else time())
     try:
         payload, signature = token.rsplit(".", 1)
@@ -57,6 +63,6 @@ def verify_token(token: str, signing_key: str, now: float | None = None) -> tupl
         expiry = int(expiry_text)
     except ValueError:
         return None
-    if not note_uuid or current > expiry:
+    if not note_uuid or (current > expiry and not allow_expired):
         return None
     return note_uuid, origin_command_uuid

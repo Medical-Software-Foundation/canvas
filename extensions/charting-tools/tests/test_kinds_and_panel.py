@@ -580,6 +580,50 @@ def test_token_keeps_working_after_commit_but_not_once_entered_in_error(mocker: 
     assert "state" not in kwargs  # committed is fine; the note being open is what counts
 
 
+def test_expired_token_keeps_working_on_a_live_command(mocker: MagicMock) -> None:
+    # Signed 5 hours ago with the 4-hour lifetime, and its Assess never edited since.
+    import time
+
+    expired = sign_token(NOTE_ID, COMMAND_ID, "secret", 4 * 3600, now=time.time() - 5 * 3600)
+    assert verify_token(expired, "secret") is None
+    api = _panel_api(mocker, expired, {"command": "plan"})
+    _patch_panel_note(mocker, _note_with_body())
+    effect, response = api.quick_add()
+    assert response.status_code == 200
+    assert effect.type == EffectType.ORIGINATE_PLAN_COMMAND
+
+
+def test_expired_token_is_refused_once_its_command_is_entered_in_error(mocker: MagicMock) -> None:
+    import time
+
+    expired = sign_token(NOTE_ID, COMMAND_ID, "secret", 4 * 3600, now=time.time() - 5 * 3600)
+    api = _panel_api(mocker, expired, {"command": "plan"})
+    mocker.patch(
+        "charting_tools.api.panel_api.Command.objects.filter"
+    ).return_value.exclude.return_value.exists.return_value = False
+    [response] = api.quick_add()
+    assert response.status_code == 401
+
+
+def test_expired_token_is_refused_on_a_closed_note(mocker: MagicMock) -> None:
+    import time
+
+    expired = sign_token(NOTE_ID, COMMAND_ID, "secret", 4 * 3600, now=time.time() - 5 * 3600)
+    api = _panel_api(mocker, expired, {"command": "plan"})
+    _patch_panel_note(mocker, _note_with_body())
+    mocker.patch("charting_tools.api.panel_api.note_is_open", return_value=False)
+    [response] = api.quick_add()
+    assert response.status_code == 409
+
+
+def test_expired_token_with_a_bad_signature_is_refused(mocker: MagicMock) -> None:
+    import time
+
+    expired = sign_token(NOTE_ID, COMMAND_ID, "other-key", 4 * 3600, now=time.time() - 5 * 3600)
+    [response] = _panel_api(mocker, expired, {"command": "plan"}).quick_add()
+    assert response.status_code == 401
+
+
 def test_catalog_refuses_a_closed_note(mocker: MagicMock) -> None:
     token = sign_token(NOTE_ID, COMMAND_ID, "secret", 600)
     api = _panel_api(mocker, token)

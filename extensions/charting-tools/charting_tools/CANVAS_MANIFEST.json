@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.254.0",
-    "plugin_version": "0.17.2",
+    "plugin_version": "0.17.3",
     "name": "charting_tools",
     "description": "Admins build note templates, quickpicks, and order sets from pre-filled commands. Templates appear in the note body \"/\" menu and insert automatically for chosen note types; quickpicks and order sets appear in the \"/\" menu and in a panel on Assess and Diagnose commands, matched to the charted ICD-10.",
     "components": {

@@ -3,7 +3,7 @@
 
 [project]
 name = "charting-tools"
-version = "0.17.2"
+version = "0.17.3"
 description = "Admin-built note templates that insert command sets from the note body slash menu."
 readme = "README.md"
 requires-python = ">=3.12"
