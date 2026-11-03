@@ -11,6 +11,34 @@ A practice-curated list of preferred referral providers on top of the native **R
   - how many still have no consult report back
   - a per-provider count
 
+![Preferred referrals app: report, CSV import and directory (test data)](../docs/screenshots/01-directory-app.png)
+
+## Who it is for
+
+Practices that send most referrals to a known set of specialists and want those
+listed first in Refer, with a count of how often staff actually pick them.
+
+## Install
+
+From the `extensions/preferred-referrals` folder:
+
+```
+canvas install preferred_referrals --host <your-instance>
+```
+
+Then set `ADMIN_STAFF_IDS` (below). Until it is set, nobody can change the directory.
+
+## What access it grants
+
+- **Any signed-in staff member** can open the app and read the directory and the
+  referral report. The report shows counts and provider names only, never patients.
+- **Staff in `ADMIN_STAFF_IDS`** can import, deactivate and reactivate providers.
+  Deactivate and reactivate only touch providers this instance created
+  (`is_customer_managed`), never the shared directory's rows.
+- The Refer search handler reads preferred providers only. It writes nothing.
+- Routes use Canvas staff-session auth. There are no public routes and no
+  outside calls. Logs carry row counts only.
+
 ## How it works
 
 Preferred providers are native `ServiceProvider` records. The plugin creates them with the ServiceProvider effect, and Canvas flags them `is_customer_managed`.
