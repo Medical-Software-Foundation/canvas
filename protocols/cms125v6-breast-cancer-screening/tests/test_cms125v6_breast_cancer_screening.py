@@ -416,17 +416,3 @@ def test_cms125v6_tomography_value_set() -> None:
 
 
 # --- patient resolution --------------------------------------------------------
-
-
-def test_patient_id_comes_from_event_context_on_record_events() -> None:
-    """Record events resolve the patient from the context, not the SDK's target lookup."""
-    protocol = ClinicalQualityMeasure125v6(
-        event=_event(EventType.CONDITION_CREATED, "condition-1", {"patient": {"id": "patient-9"}})
-    )
-    assert protocol.patient_id_from_target() == "patient-9"
-
-
-def test_patient_events_resolve_from_the_target() -> None:
-    """Patient events carry no context patient; the target is the patient."""
-    protocol = ClinicalQualityMeasure125v6(event=_event(EventType.PATIENT_UPDATED, "patient-2"))
-    assert protocol.patient_id_from_target() == "patient-2"

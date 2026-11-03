@@ -18,25 +18,17 @@ PROTOCOL_MODULE = "protocols.ccp004v1_diabetes"
 MANIFEST_PATH = Path(__file__).resolve().parents[1] / "CANVAS_MANIFEST.json"
 
 
-def _event(
-    patient_id: str | None = "patient-123",
-    target_id: str = "condition-id",
-) -> SimpleNamespace:
-    """Build a minimal event stub, optionally carrying a patient in its context."""
-    context: dict[str, Any] = {}
-    if patient_id is not None:
-        context["patient"] = {"id": patient_id}
-    return SimpleNamespace(
-        type=EventType.CONDITION_UPDATED,
-        target=SimpleNamespace(id=target_id),
-        context=context,
-    )
-
-
 @pytest.fixture
 def protocol() -> Ccp004v1:
-    """Return a Ccp004v1 built from a CONDITION_UPDATED event for ``patient-123``."""
-    return Ccp004v1(event=_event())
+    """Return a Ccp004v1 for a CONDITION_UPDATED event whose patient is ``patient-123``."""
+    event = SimpleNamespace(
+        type=EventType.CONDITION_UPDATED,
+        target=SimpleNamespace(id="condition-id"),
+        context={},
+    )
+    instance = Ccp004v1(event=event)
+    instance._patient_id = "patient-123"
+    return instance
 
 
 def _condition(onset: date | None) -> SimpleNamespace:
@@ -121,25 +113,7 @@ def test_responds_to_condition_events() -> None:
     }
 
 
-def test_init_takes_patient_id_from_event_context() -> None:
-    """A patient in the event context is used directly, avoiding the target lookup."""
-    instance = Ccp004v1(event=_event(patient_id="patient-abc"))
-
-    assert instance._patient_id == "patient-abc"
-    assert instance.patient_id_from_target() == "patient-abc"
-
-
-def test_init_defers_to_target_lookup_without_patient_context() -> None:
-    """Without a patient in context, _patient_id is left unset for the base class to resolve.
-
-    The condition id from the event target must never be used as the patient id.
-    """
-    instance = Ccp004v1(event=_event(patient_id=None, target_id="condition-id"))
-
-    assert instance._patient_id is None
-
-
-def test_active_diabetes_conditions_queries_for_context_patient(protocol: Ccp004v1) -> None:
+def test_active_diabetes_conditions_queries_for_the_patient(protocol: Ccp004v1) -> None:
     """The queryset chains for_patient().find().active().order_by('onset_date')."""
     objects, for_patient, order_by = _stub_condition_objects(["c1", "c2"])
 

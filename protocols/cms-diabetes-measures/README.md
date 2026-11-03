@@ -60,9 +60,11 @@ act on directly from the card.
 
 `tests/test_cms122v6.py` through `tests/test_cms134v6.py` exercise each protocol with
 unit-level mocking of the SDK ORM querysets (`Condition.objects`, `Medication.objects`,
-`LabReport.objects`, `ReferralReport.objects`). Run with:
+`LabReport.objects`, `ReferralReport.objects`). `tests/test_patient_resolution.py` resolves
+patients from real rows in the SDK's SQLite test database through `pytest-canvas`, which
+ships in the SDK's `test-utils` extra. Run with:
 
 ```bash
-PYTHONPATH="/Users/beau/p/canvas-plugins:$PYTHONPATH" \
-  uv run --project /Users/beau/p/canvas-plugins pytest tests/ -v
+PYTHONPATH=/path/to/canvas-plugins \
+  uv run --project /path/to/canvas-plugins --extra test-utils pytest tests/ -v
 ```

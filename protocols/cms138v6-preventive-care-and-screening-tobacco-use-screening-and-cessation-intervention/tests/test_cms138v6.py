@@ -153,20 +153,6 @@ def _real_event_protocol(event_type: int, target: str, context: dict) -> Clinica
     )
 
 
-def test_patient_id_comes_from_event_context_on_record_events() -> None:
-    """Interview and other record events resolve the patient from the context."""
-    protocol = _real_event_protocol(
-        EventType.INTERVIEW_CREATED, "interview-id", {"patient": {"id": "ctx-patient"}}
-    )
-    assert protocol.patient_id_from_target() == "ctx-patient"
-
-
-def test_patient_events_resolve_from_the_target() -> None:
-    """Patient events carry no context patient; the target is the patient."""
-    protocol = _real_event_protocol(EventType.PATIENT_UPDATED, "patient-2", {})
-    assert protocol.patient_id_from_target() == "patient-2"
-
-
 # ---------------------------------------------------------------------------
 # tobacco_use_screening_user / tobacco_use_screening_non_user
 # ---------------------------------------------------------------------------

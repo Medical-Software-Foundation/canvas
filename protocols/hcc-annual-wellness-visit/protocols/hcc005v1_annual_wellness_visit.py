@@ -52,12 +52,14 @@ class Hcc005v1(ClinicalQualityMeasure):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        # Seed _patient_id from the event context so patient_id_from_target() never runs its
-        # target lookup, which raises on every non-patient event until
-        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Remove this override
-        # once the plugin's SDK version includes that fix. Patient events carry no context
-        # patient and resolve from the target, which works today.
-        if patient := self.event.context.get("patient"):
+        # patient_id_from_target() rejects billing line item events until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1975 ships, so those take the
+        # patient from the event context. Remove this override once the plugin's SDK version
+        # includes that fix.
+        if self.event.type in (
+            EventType.BILLING_LINE_ITEM_CREATED,
+            EventType.BILLING_LINE_ITEM_UPDATED,
+        ) and (patient := self.event.context.get("patient")):
             self._patient_id = patient["id"]
 
     @property

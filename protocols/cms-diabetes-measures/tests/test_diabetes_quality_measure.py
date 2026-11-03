@@ -23,20 +23,6 @@ def _protocol(event_type: int, target: str, context: dict) -> ClinicalQualityMea
     )
 
 
-def test_patient_id_comes_from_event_context_on_record_events() -> None:
-    """Record events resolve the patient from the context, not the SDK's target lookup."""
-    protocol = _protocol(
-        EventType.CONDITION_CREATED, "condition-1", {"patient": {"id": "patient-1"}}
-    )
-    assert protocol.patient_id_from_target() == "patient-1"
-
-
-def test_patient_events_resolve_from_the_target() -> None:
-    """Patient events carry no context patient; the target is the patient."""
-    protocol = _protocol(EventType.PATIENT_UPDATED, "patient-2", {})
-    assert protocol.patient_id_from_target() == "patient-2"
-
-
 @pytest.mark.parametrize(
     ("protocol_class", "event_types"),
     [

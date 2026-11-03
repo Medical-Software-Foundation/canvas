@@ -30,8 +30,9 @@ This plugin depends on the SDK value sets `BilateralMastectomy`, `StatusPostLeft
 
 ## Tests
 
-Unit tests live in `tests/`. They exercise the protocol logic by injecting fake `patient`, `conditions`, and `imaging_reports` collections without requiring a Django database.
+Unit tests live in `tests/`. They exercise the protocol logic by injecting fake `patient`, `conditions`, and `imaging_reports` collections. `tests/test_patient_resolution.py` resolves patients from real rows in the SDK's SQLite test database through `pytest-canvas`, which ships in the SDK's `test-utils` extra.
 
 ```bash
-PYTHONPATH=/path/to/canvas-plugins pytest tests/ -v
+PYTHONPATH=/path/to/canvas-plugins \
+  uv run --project /path/to/canvas-plugins --extra test-utils pytest tests/ -v
 ```

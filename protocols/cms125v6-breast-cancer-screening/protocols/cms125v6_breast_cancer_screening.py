@@ -165,15 +165,17 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         self._injected_conditions = conditions
         self._injected_imaging_reports = imaging_reports
         self._on_date: arrow.Arrow | None = None
-        # Resolve the patient here rather than through patient_id_from_target(), whose
-        # target lookup raises on every non-patient event until
-        # https://github.com/canvas-medical/canvas-plugins/pull/1962 ships. Revisit once the
-        # plugin's SDK version includes that fix. Patient events carry no context patient;
-        # their target is the patient.
-        if patient_context := self.event.context.get("patient"):
+        # patient_id_from_target() rejects billing line item and imaging report events until
+        # https://github.com/canvas-medical/canvas-plugins/pull/1975 ships, so those take the
+        # patient from the event context. Remove this once the plugin's SDK version includes
+        # that fix.
+        if self.event.type in (
+            EventType.BILLING_LINE_ITEM_CREATED,
+            EventType.BILLING_LINE_ITEM_UPDATED,
+            EventType.IMAGING_REPORT_CREATED,
+            EventType.IMAGING_REPORT_UPDATED,
+        ) and (patient_context := self.event.context.get("patient")):
             self._patient_id = patient_context["id"]
-        else:
-            self._patient_id = self.event.target.id
 
     @property
     def timeframe(self) -> Timeframe:
