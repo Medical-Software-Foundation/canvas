@@ -1,0 +1,42 @@
+{
+    "sdk_version": "0.260.0",
+    "plugin_version": "0.1.0",
+    "name": "screening_cascade",
+    "description": "Config-driven screening cascade: when a short screener (PHQ-2, GAD-2, or any coded questionnaire) crosses a threshold, originate the follow-up questionnaire on the same note and write the screener score with CreateQuestionnaireResult. Off until SCREENING_CASCADE_ENABLED is set.",
+    "components": {
+        "handlers": [
+            {
+                "class": "screening_cascade.handlers.cascade:ScreeningCascade",
+                "description": "On a committed questionnaire, scores matching screeners and originates the configured follow-up questionnaire.",
+                "data_access": {
+                    "event": "QUESTIONNAIRE_COMMAND__POST_COMMIT",
+                    "read": [
+                        "Command",
+                        "Interview",
+                        "Questionnaire",
+                        "Note"
+                    ],
+                    "write": [
+                        "QuestionnaireCommand",
+                        "CreateQuestionnaireResult"
+                    ]
+                }
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "SCREENING_CASCADE_ENABLED",
+            "sensitive": false
+        },
+        {
+            "name": "SCREENING_CASCADE_RULES",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
