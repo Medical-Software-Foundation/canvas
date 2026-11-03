@@ -18,7 +18,11 @@ from patient_resources.constants import (
 from patient_resources.models import PatientResource
 from patient_resources.routes.library_api import LibraryAPI
 
-VALID = {"title": "Managing diabetes", "url": "https://example.org/d", "label": "Diabetes"}
+VALID = {
+    "title": "Managing diabetes",
+    "url": "https://example.org/d",
+    "label": "Diabetes",
+}
 
 
 def _api(make_request, *, secrets=None, **kwargs):
@@ -49,8 +53,12 @@ def _reset():
 def _as(staff, *, admin):
     """Patch the two things every route consults: who is calling, and may they curate."""
     return (
-        patch("patient_resources.routes.support.staff_from_session", return_value=staff),
-        patch("patient_resources.routes.library_api.is_library_admin", return_value=admin),
+        patch(
+            "patient_resources.routes.support.staff_from_session", return_value=staff
+        ),
+        patch(
+            "patient_resources.routes.library_api.is_library_admin", return_value=admin
+        ),
     )
 
 
@@ -104,7 +112,9 @@ def test_listing_reports_whether_the_caller_may_edit(mock_staff, make_request):
             assert responses[0].data["can_edit"] is admin
 
 
-def test_a_non_admin_cannot_reveal_archived_rows_with_a_query_param(mock_staff, make_request):
+def test_a_non_admin_cannot_reveal_archived_rows_with_a_query_param(
+    mock_staff, make_request
+):
     with patch(
         "patient_resources.routes.library_api.list_resources", return_value=([], 0)
     ) as listing:
@@ -249,11 +259,16 @@ def test_an_over_long_default_note_is_a_400_against_its_own_field(
 
 
 def test_editing_a_resource_carries_the_default_note(mock_staff, make_request):
-    with patch(
-        "patient_resources.routes.library_api.get_resource", return_value=_resource()
-    ), patch(
-        "patient_resources.routes.library_api.update_resource", return_value=_resource()
-    ) as update:
+    with (
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
+        patch(
+            "patient_resources.routes.library_api.update_resource",
+            return_value=_resource(),
+        ) as update,
+    ):
         _call(
             "put_resource",
             mock_staff,
@@ -294,7 +309,10 @@ def test_changing_a_shared_resources_link_is_a_409(mock_staff, make_request):
     from patient_resources.services.catalog import ResourceInUseError
 
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
         patch(
             "patient_resources.routes.library_api.update_resource",
             side_effect=ResourceInUseError("already shared"),
@@ -311,7 +329,10 @@ def test_changing_a_shared_resources_link_is_a_409(mock_staff, make_request):
 
 def test_archiving_sets_the_archived_status(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
         patch(
             "patient_resources.routes.library_api.set_status", return_value=_resource()
         ) as set_status,
@@ -322,7 +343,10 @@ def test_archiving_sets_the_archived_status(mock_staff, make_request):
 
 def test_restoring_sets_the_active_status(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
         patch(
             "patient_resources.routes.library_api.set_status", return_value=_resource()
         ) as set_status,
@@ -333,11 +357,19 @@ def test_restoring_sets_the_active_status(mock_staff, make_request):
 
 def test_retracting_withdraws_from_patients_and_archives(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
-        patch("patient_resources.routes.library_api.set_status", return_value=_resource()),
-        patch("patient_resources.routes.library_api.has_live_shares", return_value=True),
         patch(
-            "patient_resources.routes.library_api.revoke_resource_shares", return_value=7
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
+        patch(
+            "patient_resources.routes.library_api.set_status", return_value=_resource()
+        ),
+        patch(
+            "patient_resources.routes.library_api.has_live_shares", return_value=True
+        ),
+        patch(
+            "patient_resources.routes.library_api.revoke_resource_shares",
+            return_value=7,
         ) as revoke,
     ):
         responses = _call(
@@ -353,12 +385,24 @@ def test_retracting_withdraws_from_patients_and_archives(mock_staff, make_reques
 
 def test_retracting_without_a_body_still_works(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
-        patch("patient_resources.routes.library_api.set_status", return_value=_resource()),
-        patch("patient_resources.routes.library_api.has_live_shares", return_value=True),
-        patch("patient_resources.routes.library_api.revoke_resource_shares", return_value=0),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
+        patch(
+            "patient_resources.routes.library_api.set_status", return_value=_resource()
+        ),
+        patch(
+            "patient_resources.routes.library_api.has_live_shares", return_value=True
+        ),
+        patch(
+            "patient_resources.routes.library_api.revoke_resource_shares",
+            return_value=0,
+        ),
     ):
-        responses = _call("retract_resource", mock_staff, True, make_request, json_body=None)
+        responses = _call(
+            "retract_resource", mock_staff, True, make_request, json_body=None
+        )
     assert responses[0].status_code == 200
 
 
@@ -370,7 +414,9 @@ def test_disabled_role_config_denies_curation_end_to_end(mock_staff, make_reques
     from canvas_sdk.v1.data.staff import StaffRole
 
     StaffRole.objects.filter.return_value.exists.return_value = True
-    with patch("patient_resources.routes.support.staff_from_session", return_value=mock_staff):
+    with patch(
+        "patient_resources.routes.support.staff_from_session", return_value=mock_staff
+    ):
         api = _api(
             make_request,
             secrets={SECRET_ADMIN_ROLE_DOMAINS: "NONE"},
@@ -386,9 +432,13 @@ def test_disabled_role_config_denies_curation_end_to_end(mock_staff, make_reques
 
 def test_a_valid_edit_returns_the_updated_resource(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
         patch(
-            "patient_resources.routes.library_api.update_resource", return_value=_resource()
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
+        patch(
+            "patient_resources.routes.library_api.update_resource",
+            return_value=_resource(),
         ) as update,
     ):
         responses = _call(
@@ -401,13 +451,19 @@ def test_a_valid_edit_returns_the_updated_resource(mock_staff, make_request):
 
 @pytest.mark.parametrize("body", [[], "text", 7])
 def test_editing_with_a_non_object_body_is_a_400(body, mock_staff, make_request):
-    with patch("patient_resources.routes.library_api.get_resource", return_value=_resource()):
-        responses = _call("put_resource", mock_staff, True, make_request, json_body=body)
+    with patch(
+        "patient_resources.routes.library_api.get_resource", return_value=_resource()
+    ):
+        responses = _call(
+            "put_resource", mock_staff, True, make_request, json_body=body
+        )
     assert responses[0].status_code == 400
 
 
 def test_editing_with_invalid_fields_reports_them(mock_staff, make_request):
-    with patch("patient_resources.routes.library_api.get_resource", return_value=_resource()):
+    with patch(
+        "patient_resources.routes.library_api.get_resource", return_value=_resource()
+    ):
         responses = _call(
             "put_resource",
             mock_staff,
@@ -419,7 +475,9 @@ def test_editing_with_invalid_fields_reports_them(mock_staff, make_request):
     assert set(responses[0].data["field_errors"]) == {"title", "url"}
 
 
-@pytest.mark.parametrize("route", ["archive_resource", "restore_resource", "retract_resource"])
+@pytest.mark.parametrize(
+    "route", ["archive_resource", "restore_resource", "retract_resource"]
+)
 def test_lifecycle_routes_404_on_a_missing_resource(route, mock_staff, make_request):
     with patch("patient_resources.routes.library_api.get_resource", return_value=None):
         responses = _call(route, mock_staff, True, make_request)
@@ -431,7 +489,10 @@ def test_lifecycle_routes_404_on_a_missing_resource(route, mock_staff, make_requ
 
 def test_delete_403s_for_a_non_admin_and_removes_nothing(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
         patch("patient_resources.routes.library_api.delete_resource") as remove,
     ):
         responses = _call("delete_resource_route", mock_staff, False, make_request)
@@ -447,7 +508,10 @@ def test_delete_404s_on_a_missing_resource(mock_staff, make_request):
 
 def test_a_never_shared_resource_is_deleted(mock_staff, make_request):
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
         patch("patient_resources.routes.library_api.delete_resource") as remove,
     ):
         responses = _call("delete_resource_route", mock_staff, True, make_request)
@@ -461,7 +525,10 @@ def test_deleting_a_shared_resource_is_a_409(mock_staff, make_request):
     from patient_resources.services.catalog import ResourceInUseError
 
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
+        patch(
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
         patch(
             "patient_resources.routes.library_api.delete_resource",
             side_effect=ResourceInUseError("shared with patients"),
@@ -474,14 +541,17 @@ def test_deleting_a_shared_resource_is_a_409(mock_staff, make_request):
 # --- the flag that chooses the control ------------------------------------
 
 
-def test_the_listing_tells_a_curator_which_rows_a_patient_still_holds(mock_staff, make_request):
+def test_the_listing_tells_a_curator_which_rows_a_patient_still_holds(
+    mock_staff, make_request
+):
     with (
         patch(
             "patient_resources.routes.library_api.list_resources",
             return_value=([_resource(12), _resource(15)], 2),
         ),
         patch(
-            "patient_resources.routes.library_api.resources_with_live_shares", return_value={12}
+            "patient_resources.routes.library_api.resources_with_live_shares",
+            return_value={12},
         ) as lookup,
         patch(
             "patient_resources.routes.library_api.resources_with_withdrawn_shares",
@@ -503,7 +573,9 @@ def test_a_non_curator_gets_no_flag_and_costs_no_query(mock_staff, make_request)
             "patient_resources.routes.library_api.list_resources",
             return_value=([_resource(12)], 1),
         ),
-        patch("patient_resources.routes.library_api.resources_with_live_shares") as lookup,
+        patch(
+            "patient_resources.routes.library_api.resources_with_live_shares"
+        ) as lookup,
         patch(
             "patient_resources.routes.library_api.resources_with_withdrawn_shares"
         ) as withdrawn_lookup,
@@ -548,7 +620,8 @@ def test_both_share_lookups_run_once_for_the_page(mock_staff, make_request):
             return_value=([_resource(12), _resource(15)], 2),
         ),
         patch(
-            "patient_resources.routes.library_api.resources_with_live_shares", return_value=set()
+            "patient_resources.routes.library_api.resources_with_live_shares",
+            return_value=set(),
         ) as ever,
         patch(
             "patient_resources.routes.library_api.resources_with_withdrawn_shares",
@@ -570,11 +643,14 @@ def test_withdrawing_with_nothing_left_to_withdraw_is_a_409(mock_staff, make_req
     resource, and reports success.
     """
     with (
-        patch("patient_resources.routes.library_api.get_resource", return_value=_resource()),
-        patch("patient_resources.routes.library_api.has_live_shares", return_value=False),
         patch(
-            "patient_resources.routes.library_api.revoke_resource_shares"
-        ) as revoke,
+            "patient_resources.routes.library_api.get_resource",
+            return_value=_resource(),
+        ),
+        patch(
+            "patient_resources.routes.library_api.has_live_shares", return_value=False
+        ),
+        patch("patient_resources.routes.library_api.revoke_resource_shares") as revoke,
         patch("patient_resources.routes.library_api.set_status") as status,
     ):
         responses = _call("retract_resource", mock_staff, True, make_request)

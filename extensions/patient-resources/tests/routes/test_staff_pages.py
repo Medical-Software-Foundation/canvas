@@ -29,10 +29,15 @@ def test_pages_are_served_no_cache(make_request):
         assert responses[0].headers["Cache-Control"] == "no-cache"
 
 
-def test_library_config_carries_the_api_base_and_no_patient_data(make_request, rendered_context):
+def test_library_config_carries_the_api_base_and_no_patient_data(
+    make_request, rendered_context
+):
     _api(make_request).get_library_page()
     config = json.loads(rendered_context()["config_json"])
-    assert config == {"apiBase": "/plugin-io/api/patient_resources", "cacheBust": CACHE_BUST}
+    assert config == {
+        "apiBase": "/plugin-io/api/patient_resources",
+        "cacheBust": CACHE_BUST,
+    }
 
 
 def test_picker_config_carries_the_patient_key(make_request, rendered_context):
@@ -54,7 +59,7 @@ def test_picker_without_a_patient_renders_an_empty_key(make_request, rendered_co
 def test_a_patient_key_containing_markup_is_escaped(make_request, rendered_context):
     """The whole reason the config goes through safe_json before ``|safe``."""
     _api(
-        make_request, query_params={"patient": '</script><img src=x onerror=alert(1)>'}
+        make_request, query_params={"patient": "</script><img src=x onerror=alert(1)>"}
     ).get_picker_page()
     rendered = rendered_context()["config_json"]
     assert "</script>" not in rendered

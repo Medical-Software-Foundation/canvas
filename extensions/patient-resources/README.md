@@ -55,7 +55,6 @@ All optional. The plugin works unconfigured.
 |---|---|---|
 | `PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS` | `ADM` | Comma-separated `StaffRole` domains allowed to curate the library. Valid values: `ADM` (administrative), `CLI` (clinical), `HYB` (hybrid), or `NONE` to allow nobody. |
 | `PATIENT_RESOURCES_ADMIN_STAFF_IDS` | empty | Comma-separated staff keys. When set, **replaces** the role rule — only these people may curate. |
-| `namespace_read_write_access_key` | supplied by the platform | Required for the plugin to write to its own Custom Data tables. |
 
 Leaving `PATIENT_RESOURCES_ADMIN_ROLE_DOMAINS` empty means "not configured" and
 falls back to `ADM`. That is not a quirk worth working around: a variable

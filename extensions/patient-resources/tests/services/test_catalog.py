@@ -21,7 +21,9 @@ def _reset_managers():
     yield
 
 
-def _resource(dbid=1, title="Managing diabetes", url="https://example.org/d", label="Diabetes"):
+def _resource(
+    dbid=1, title="Managing diabetes", url="https://example.org/d", label="Diabetes"
+):
     resource = MagicMock()
     resource.dbid = dbid
     resource.title = title
@@ -56,7 +58,9 @@ def test_limit_accepts_a_numeric_string():
     assert catalog.normalize_limit("10") == 10
 
 
-@pytest.mark.parametrize("raw,expected", [(None, 0), ("x", 0), (-3, 0), ("7", 7), (7, 7)])
+@pytest.mark.parametrize(
+    "raw,expected", [(None, 0), ("x", 0), (-3, 0), ("7", 7), (7, 7)]
+)
 def test_offset_is_clamped(raw, expected):
     assert catalog.normalize_offset(raw) == expected
 
@@ -132,7 +136,9 @@ def test_distinct_labels_on_an_empty_library_returns_empty():
 def test_create_stores_trimmed_values_and_attributes_the_curator():
     _no_conflict()
     catalog.create_resource(
-        title="  Managing diabetes  ", url="  https://example.org/d  ", label="  Diabetes  ",
+        title="  Managing diabetes  ",
+        url="  https://example.org/d  ",
+        label="  Diabetes  ",
         staff_dbid=101,
     )
     kwargs = PatientResource.objects.create.call_args.kwargs
@@ -158,7 +164,9 @@ def test_create_stores_the_default_note():
 
 def test_a_resource_can_be_created_without_a_default_note():
     _no_conflict()
-    catalog.create_resource(title="T", url="https://example.org/d", label="L", staff_dbid=1)
+    catalog.create_resource(
+        title="T", url="https://example.org/d", label="L", staff_dbid=1
+    )
     assert PatientResource.objects.create.call_args.kwargs["default_note"] == ""
 
 
@@ -167,7 +175,9 @@ def test_create_refuses_a_case_insensitive_duplicate():
     PatientResource.objects.filter.return_value.exists.return_value = True
     with pytest.raises(catalog.DuplicateResourceError):
         catalog.create_resource(
-            title="managing diabetes", url="https://example.org/d", label="diabetes",
+            title="managing diabetes",
+            url="https://example.org/d",
+            label="diabetes",
             staff_dbid=101,
         )
     PatientResource.objects.create.assert_not_called()
@@ -176,7 +186,9 @@ def test_create_refuses_a_case_insensitive_duplicate():
 def test_duplicate_check_is_scoped_to_live_rows():
     """An archived resource must not block the corrected version."""
     _no_conflict()
-    catalog.create_resource(title="T", url="https://example.org/d", label="L", staff_dbid=1)
+    catalog.create_resource(
+        title="T", url="https://example.org/d", label="L", staff_dbid=1
+    )
     assert PatientResource.objects.filter.call_args.kwargs["status"] == STATUS_ACTIVE
 
 
@@ -188,7 +200,11 @@ def test_update_assigns_exactly_the_editable_fields():
     _no_shares()
     resource = _resource()
     catalog.update_resource(
-        resource, title="New title", url="https://example.org/d", label="Cardiac", staff_dbid=7
+        resource,
+        title="New title",
+        url="https://example.org/d",
+        label="Cardiac",
+        staff_dbid=7,
     )
     assert resource.title == "New title"
     assert resource.label == "Cardiac"

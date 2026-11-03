@@ -13,7 +13,6 @@ here is the set of behaviors a future edit to conftest must not quietly relax.
 """
 
 import pytest
-
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.action_button import ActionButton
@@ -102,8 +101,12 @@ def test_json_response_keeps_its_data_and_status():
 
 def test_responses_accept_headers():
     """Omitting headers from the stub let a route that passes them fail only here."""
-    assert Response(b"x", headers={"Cache-Control": "no-cache"}).headers["Cache-Control"]
-    assert HTMLResponse("x", headers={"Cache-Control": "no-cache"}).headers["Cache-Control"]
+    assert Response(b"x", headers={"Cache-Control": "no-cache"}).headers[
+        "Cache-Control"
+    ]
+    assert HTMLResponse("x", headers={"Cache-Control": "no-cache"}).headers[
+        "Cache-Control"
+    ]
 
 
 def test_simple_api_carries_secrets_and_event():

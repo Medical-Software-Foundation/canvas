@@ -165,7 +165,9 @@ def test_no_setattr_or_delattr_in_the_plugin():
         tree = ast.parse(_module_source(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                assert node.func.id not in {"setattr", "delattr"}, f"{path}:{node.lineno}"
+                assert node.func.id not in {"setattr", "delattr"}, (
+                    f"{path}:{node.lineno}"
+                )
 
 
 def test_no_augmented_assignment_to_an_attribute_or_subscript():
@@ -174,9 +176,9 @@ def test_no_augmented_assignment_to_an_attribute_or_subscript():
         tree = ast.parse(_module_source(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.AugAssign):
-                assert not isinstance(
-                    node.target, (ast.Attribute, ast.Subscript)
-                ), f"{path}:{node.lineno}"
+                assert not isinstance(node.target, (ast.Attribute, ast.Subscript)), (
+                    f"{path}:{node.lineno}"
+                )
 
 
 def test_no_field_declares_unique_true():
@@ -228,7 +230,9 @@ def test_every_outbound_link_is_opened_safely():
 def test_every_fetch_sends_the_session_cookie():
     for path in JS_FILES:
         source = _js_code(path)
-        assert source.count(".fetch(") == source.count('credentials: "same-origin"'), path
+        assert source.count(".fetch(") == source.count('credentials: "same-origin"'), (
+            path
+        )
 
 
 # --- assets -----------------------------------------------------------------
@@ -247,7 +251,9 @@ def test_every_served_asset_exists_on_disk():
     """render_to_string resolves against the plugin directory at request time."""
     referenced = set()
     for path in sorted((PACKAGE / "routes").glob("*.py")):
-        referenced.update(re.findall(r'render_to_string\(\s*"([^"]+)"', path.read_text()))
+        referenced.update(
+            re.findall(r'render_to_string\(\s*"([^"]+)"', path.read_text())
+        )
     assert referenced
     for name in referenced:
         assert (PACKAGE / name).exists(), name
@@ -294,10 +300,17 @@ def test_every_declared_variable_is_read_somewhere():
     sources = "\n".join(_module_source(path) for path in PY_FILES)
     for variable in MANIFEST["variables"]:
         name = variable["name"]
-        if name == "namespace_read_write_access_key":
-            # Supplied to the platform, not read by plugin code.
-            continue
         assert name in sources, name
+
+
+def test_reserved_namespace_keys_are_not_declared():
+    """This plugin owns its namespace, so it needs no access key.
+
+    Canvas generates the keys when the first read_write plugin creates the
+    namespace, and Canvas Platform refuses a manifest that declares them.
+    """
+    names = {variable["name"] for variable in MANIFEST["variables"]}
+    assert not names & {"namespace_read_access_key", "namespace_read_write_access_key"}
 
 
 # --- the hidden attribute ---------------------------------------------------
@@ -412,7 +425,9 @@ def test_no_module_reaches_a_function_through_an_imported_submodule():
                 continue
             for alias in node.names:
                 if alias.name in package_submodules:
-                    offenders.append(f"{path.name}: from {node.module} import {alias.name}")
+                    offenders.append(
+                        f"{path.name}: from {node.module} import {alias.name}"
+                    )
     assert not offenders, offenders
 
 
@@ -594,7 +609,7 @@ def test_text_controls_are_styled_by_element_not_by_container():
     """
     source = _css_code(PACKAGE / "static" / "css" / "library.css")
     assert 'input[type="search"],' in source
-    assert ".pr-controls input[type=\"search\"] {\n  font: inherit" not in source
+    assert '.pr-controls input[type="search"] {\n  font: inherit' not in source
     # Every text control the templates use has to be covered by that rule.
     block = source[source.index('input[type="search"],') :]
     block = block[: block.index("{")]
@@ -638,7 +653,9 @@ def test_the_destructive_control_follows_what_is_actually_possible():
     assert "confirmDelete" in source
     assert '"DELETE"' in source
 
-    branch = source[source.index("if (resource.has_live_shares || resource.has_withdrawn_shares)") :]
+    branch = source[
+        source.index("if (resource.has_live_shares || resource.has_withdrawn_shares)") :
+    ]
     branch = branch[: branch.index("td.appendChild(group)")]
     # A click handler only on the enabled path, and disabled on the other.
     assert "retract.disabled = true" in branch
@@ -847,7 +864,7 @@ def test_the_library_lets_the_reader_choose_the_page_size():
     assert "state.limit" in source
     # Changing the size changes which rows a given offset names, so it has to
     # start again from the top.
-    block = source[source.index('els.pageSize.addEventListener') :]
+    block = source[source.index("els.pageSize.addEventListener") :]
     block = block[: block.index("});") + 3]
     assert "reload()" in block
 
@@ -932,9 +949,7 @@ def test_the_close_control_is_revealed_only_by_a_modal_host():
     whose only possible action is a window.close() the browser ignores.
     """
     template = (PACKAGE / "templates" / "library.html").read_text()
-    close_line = next(
-        line for line in template.splitlines() if 'id="pr-close"' in line
-    )
+    close_line = next(line for line in template.splitlines() if 'id="pr-close"' in line)
     assert "hidden" in close_line
 
     source = _js_code(PACKAGE / "static" / "js" / "library.js")
@@ -991,7 +1006,7 @@ def test_a_clean_send_is_confirmed_before_the_window_goes():
 
 
 def test_the_confirmation_reuses_the_summary_wording():
-    """"Shared 2 resources." is already the tested phrasing for this outcome."""
+    """ "Shared 2 resources." is already the tested phrasing for this outcome."""
     source = _js_code(PACKAGE / "static" / "js" / "picker.js")
     block = source[source.index("function send()") :]
     block = block[: block.index("function summarize")]

@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.200.2",
-    "plugin_version": "0.5.2",
+    "plugin_version": "0.5.4",
     "name": "patient_resources",
     "description": "Admin-curated library of patient-facing resource links that staff can share to a patient's portal",
     "url_permissions": [],
@@ -99,10 +99,6 @@
         },
         {
             "name": "PATIENT_RESOURCES_ADMIN_STAFF_IDS",
-            "sensitive": false
-        },
-        {
-            "name": "namespace_read_write_access_key",
             "sensitive": false
         }
     ],

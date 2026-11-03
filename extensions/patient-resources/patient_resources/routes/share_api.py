@@ -17,9 +17,9 @@ from django.db import IntegrityError
 
 from patient_resources.constants import MAX_SHARE_BATCH
 from patient_resources.routes.support import StaffRouteMixin
-from patient_resources.services.shares import live_shares_for_patient, share_resources
 from patient_resources.services.identity import id_candidates
 from patient_resources.services.serializers import serialize_share_for_staff
+from patient_resources.services.shares import live_shares_for_patient, share_resources
 from patient_resources.services.validation import note_length_error
 
 
@@ -135,7 +135,9 @@ class ShareAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
                     "already_shared": result.already_shared,
                     "skipped_unavailable": result.skipped_unavailable,
                     "shared_resource_ids": [row.resource_id for row in result.created],
-                    "shares": [serialize_share_for_staff(row) for row in result.created],
+                    "shares": [
+                        serialize_share_for_staff(row) for row in result.created
+                    ],
                 }
             )
         ]

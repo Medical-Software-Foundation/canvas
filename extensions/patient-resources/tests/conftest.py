@@ -237,7 +237,9 @@ class LaunchModalEffect:
         PAGE = "page"
         NOTE = "note"
 
-    def __init__(self, url=None, content=None, target=TargetType.DEFAULT_MODAL, title="Untitled"):
+    def __init__(
+        self, url=None, content=None, target=TargetType.DEFAULT_MODAL, title="Untitled"
+    ):
         if url is not None and content is not None:
             raise ValueError("'url' and 'content' are mutually exclusive")
         self.url = url
@@ -250,7 +252,9 @@ class LaunchModalEffect:
 
 
 class Response:
-    def __init__(self, body=b"", status_code=200, content_type="text/plain", headers=None):
+    def __init__(
+        self, body=b"", status_code=200, content_type="text/plain", headers=None
+    ):
         self.body = body
         self.status_code = status_code
         self.content_type = content_type
@@ -262,7 +266,10 @@ class HTMLResponse(Response):
     # passes headers -- which the SDK accepts -- fail only in the test suite.
     def __init__(self, body, status_code=200, headers=None):
         super().__init__(
-            body=body, status_code=status_code, content_type="text/html", headers=headers
+            body=body,
+            status_code=status_code,
+            content_type="text/html",
+            headers=headers,
         )
 
 

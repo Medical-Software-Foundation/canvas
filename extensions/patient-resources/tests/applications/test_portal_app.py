@@ -60,14 +60,18 @@ def test_the_warning_does_not_dump_the_event_context():
 
 
 def test_badge_counts_unviewed_shares(mock_patient):
-    Patient.objects.filter.return_value.only.return_value.first.return_value = mock_patient
+    Patient.objects.filter.return_value.only.return_value.first.return_value = (
+        mock_patient
+    )
     PatientResourceShare.objects.filter.return_value.count.return_value = 2
     assert _app({"user": {"id": mock_patient.id}}).compute_notification_badge() == 2
 
 
 def test_badge_is_zero_once_the_list_has_been_opened(mock_patient):
     """Zero clears an existing badge; None would leave it showing."""
-    Patient.objects.filter.return_value.only.return_value.first.return_value = mock_patient
+    Patient.objects.filter.return_value.only.return_value.first.return_value = (
+        mock_patient
+    )
     PatientResourceShare.objects.filter.return_value.count.return_value = 0
     assert _app({"user": {"id": mock_patient.id}}).compute_notification_badge() == 0
 

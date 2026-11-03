@@ -21,9 +21,9 @@ from patient_resources.constants import STATUS_ACTIVE, STATUS_ARCHIVED
 from patient_resources.routes.support import StaffRouteMixin
 from patient_resources.services.catalog import (
     DuplicateResourceError,
-    delete_resource,
     ResourceInUseError,
     create_resource,
+    delete_resource,
     distinct_labels,
     get_resource,
     list_resources,
@@ -33,13 +33,13 @@ from patient_resources.services.catalog import (
     update_resource,
 )
 from patient_resources.services.permissions import is_library_admin
+from patient_resources.services.serializers import serialize_resource
 from patient_resources.services.shares import (
     has_live_shares,
     resources_with_live_shares,
     resources_with_withdrawn_shares,
     revoke_resource_shares,
 )
-from patient_resources.services.serializers import serialize_resource
 from patient_resources.services.validation import validate_resource
 
 
@@ -83,7 +83,9 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             return self._unauthenticated()
 
         can_edit = is_library_admin(staff, self._config())
-        include_archived = can_edit and self._param("include_archived").lower() == "true"
+        include_archived = (
+            can_edit and self._param("include_archived").lower() == "true"
+        )
 
         limit = normalize_limit(self._param("limit"))
         offset = normalize_offset(self._param("offset"))
@@ -169,7 +171,9 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         except DuplicateResourceError as exc:
             return self._conflict(str(exc))
 
-        return [JSONResponse(serialize_resource(resource), status_code=HTTPStatus.CREATED)]
+        return [
+            JSONResponse(serialize_resource(resource), status_code=HTTPStatus.CREATED)
+        ]
 
     @api.put("/resources/<resource_id>")
     def put_resource(self) -> list[Response | Effect]:
@@ -255,7 +259,7 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
         Anything a patient ever received is refused with a 409 and keeps Archive
         and Withdraw instead.
         """
-        staff, refusal = self._curator()
+        _staff, refusal = self._curator()
         if refusal is not None:
             return refusal
         resource, missing = self._resource_for_write()
@@ -299,4 +303,8 @@ class LibraryAPI(StaffRouteMixin, StaffSessionAuthMixin, SimpleAPI):
             reason=str(body.get("reason", "") or "").strip(),
         )
         set_status(resource, STATUS_ARCHIVED, staff_dbid=staff.dbid)
-        return [JSONResponse({"withdrawn": withdrawn, "resource": serialize_resource(resource)})]
+        return [
+            JSONResponse(
+                {"withdrawn": withdrawn, "resource": serialize_resource(resource)}
+            )
+        ]

@@ -4,13 +4,13 @@ Every column can be None on a row this plugin did not write, because the DDL
 emits no NOT NULL and no defaults. These tests are mostly about that.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from patient_resources.constants import STATUS_ACTIVE, STATUS_ARCHIVED
 from patient_resources.services import serializers
 
-WHEN = datetime(2026, 8, 20, 14, 3, 11, tzinfo=timezone.utc)
+WHEN = datetime(2026, 8, 20, 14, 3, 11, tzinfo=UTC)
 
 
 def _resource(**overrides):
@@ -74,7 +74,14 @@ def test_shared_flag_is_omitted_unless_asked_for():
 
 def test_every_null_column_serializes_without_raising():
     data = serializers.serialize_resource(
-        _resource(title=None, url=None, label=None, status=None, created_at=None, updated_at=None)
+        _resource(
+            title=None,
+            url=None,
+            label=None,
+            status=None,
+            created_at=None,
+            updated_at=None,
+        )
     )
     assert data["title"] == ""
     assert data["url"] == ""
@@ -83,7 +90,10 @@ def test_every_null_column_serializes_without_raising():
 
 def test_a_stored_unsafe_url_is_dropped_at_serialize_time():
     """Storage is not a trust boundary: a row may predate a validator fix."""
-    assert serializers.serialize_resource(_resource(url="javascript:alert(1)"))["url"] == ""
+    assert (
+        serializers.serialize_resource(_resource(url="javascript:alert(1)"))["url"]
+        == ""
+    )
 
 
 # --- shares ---------------------------------------------------------------
@@ -97,7 +107,10 @@ def test_patient_view_shows_a_corrected_title():
     """
     share = _share()
     share.resource = _resource(title="Managing type 2 diabetes")
-    assert serializers.serialize_share_for_patient(share)["title"] == "Managing type 2 diabetes"
+    assert (
+        serializers.serialize_share_for_patient(share)["title"]
+        == "Managing type 2 diabetes"
+    )
 
 
 def test_the_patient_never_sees_the_label():
@@ -123,12 +136,17 @@ def test_the_patient_keeps_the_link_they_were_given():
     """
     share = _share()
     share.resource = _resource(url="https://example.org/other")
-    assert serializers.serialize_share_for_patient(share)["url"] == "https://example.org/d"
+    assert (
+        serializers.serialize_share_for_patient(share)["url"] == "https://example.org/d"
+    )
 
 
 def test_a_share_whose_resource_is_gone_falls_back_to_the_snapshot():
     """That foreign key is nullable, so the payload cannot assume a row."""
-    assert serializers.serialize_share_for_patient(_share())["title"] == "Managing diabetes"
+    assert (
+        serializers.serialize_share_for_patient(_share())["title"]
+        == "Managing diabetes"
+    )
 
 
 # --- the patient-facing note ----------------------------------------------
@@ -183,12 +201,17 @@ def test_patient_view_emits_utc_iso_for_client_side_formatting():
 
 
 def test_null_timestamp_stays_null_rather_than_the_string_none():
-    """"None oz" in a patient's portal is the failure this prevents."""
-    assert serializers.serialize_share_for_patient(_share(shared_at=None))["shared_at"] is None
+    """ "None oz" in a patient's portal is the failure this prevents."""
+    assert (
+        serializers.serialize_share_for_patient(_share(shared_at=None))["shared_at"]
+        is None
+    )
 
 
 def test_share_with_an_unsafe_snapshot_url_renders_no_link():
-    data = serializers.serialize_share_for_patient(_share(url_at_share="javascript:alert(1)"))
+    data = serializers.serialize_share_for_patient(
+        _share(url_at_share="javascript:alert(1)")
+    )
     assert data["url"] == ""
 
 
@@ -217,6 +240,9 @@ def test_withdrawn_share_is_named_and_dated_but_not_linkable():
 
 
 def test_non_datetime_timestamp_degrades_to_text():
-    assert serializers.serialize_share_for_patient(_share(shared_at="2026-08-20"))[
-        "shared_at"
-    ] == "2026-08-20"
+    assert (
+        serializers.serialize_share_for_patient(_share(shared_at="2026-08-20"))[
+            "shared_at"
+        ]
+        == "2026-08-20"
+    )

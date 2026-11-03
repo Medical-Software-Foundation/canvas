@@ -5,7 +5,10 @@ The point of every test here is that no branch grants access by accident.
 
 from canvas_sdk.v1.data.staff import StaffRole
 
-from patient_resources.constants import SECRET_ADMIN_ROLE_DOMAINS, SECRET_ADMIN_STAFF_IDS
+from patient_resources.constants import (
+    SECRET_ADMIN_ROLE_DOMAINS,
+    SECRET_ADMIN_STAFF_IDS,
+)
 from patient_resources.services.config import PatientResourcesConfig
 from patient_resources.services.permissions import is_library_admin
 
@@ -42,16 +45,24 @@ def test_staff_without_a_matching_role_is_denied(mock_staff):
 def test_disabled_domain_config_denies_without_querying(mock_staff):
     """Blank now means unconfigured, so switching off uses the NONE sentinel."""
     _roles_exist(True)
-    assert is_library_admin(mock_staff, _config(**{SECRET_ADMIN_ROLE_DOMAINS: "NONE"})) is False
+    assert (
+        is_library_admin(mock_staff, _config(**{SECRET_ADMIN_ROLE_DOMAINS: "NONE"}))
+        is False
+    )
     StaffRole.objects.filter.assert_not_called()
 
 
 def test_unconfigured_domains_still_require_an_administrative_role(mock_staff):
     """The out-of-the-box path: blank config, but a real ADM role is still needed."""
     _roles_exist(False)
-    assert is_library_admin(mock_staff, _config(**{SECRET_ADMIN_ROLE_DOMAINS: ""})) is False
+    assert (
+        is_library_admin(mock_staff, _config(**{SECRET_ADMIN_ROLE_DOMAINS: ""}))
+        is False
+    )
     _roles_exist(True)
-    assert is_library_admin(mock_staff, _config(**{SECRET_ADMIN_ROLE_DOMAINS: ""})) is True
+    assert (
+        is_library_admin(mock_staff, _config(**{SECRET_ADMIN_ROLE_DOMAINS: ""})) is True
+    )
 
 
 def test_configured_domains_are_passed_through(mock_staff):

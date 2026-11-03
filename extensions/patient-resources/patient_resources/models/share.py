@@ -110,7 +110,9 @@ class PatientResourceShare(CustomModel):
             # single-field index on a foreign key raises, but a composite one
             # that merely starts with it is fine.
             Index(fields=["patient", "-shared_at"], name="pr_share_patient_recent"),
-            Index(fields=["patient", "first_viewed_at"], name="pr_share_patient_unviewed"),
+            Index(
+                fields=["patient", "first_viewed_at"], name="pr_share_patient_unviewed"
+            ),
         ]
         constraints = [
             # Re-sharing a live resource is structurally impossible, so a double

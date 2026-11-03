@@ -147,7 +147,9 @@ def test_share_unique_constraint_is_scoped_to_live_shares():
     Scoped to live shares so that a deliberate re-send after a retraction is
     still possible.
     """
-    constraint = _constraint(PatientResourceShare, "pr_share_unique_live_patient_resource")
+    constraint = _constraint(
+        PatientResourceShare, "pr_share_unique_live_patient_resource"
+    )
     assert constraint.kwargs["fields"] == ["patient", "resource"]
     condition = constraint.kwargs["condition"]
     assert isinstance(condition, Q)
@@ -162,7 +164,10 @@ def test_share_indexes_are_composite_and_lead_with_patient():
     either of these to ``["patient"]`` would stop the plugin loading -- which the
     test suite would not otherwise notice.
     """
-    by_name = {index.kwargs["name"]: index.kwargs["fields"] for index in PatientResourceShare.Meta.indexes}
+    by_name = {
+        index.kwargs["name"]: index.kwargs["fields"]
+        for index in PatientResourceShare.Meta.indexes
+    }
     assert by_name == {
         "pr_share_patient_recent": ["patient", "-shared_at"],
         "pr_share_patient_unviewed": ["patient", "first_viewed_at"],
@@ -212,10 +217,18 @@ def test_foreign_keys_key_on_dbid():
         (PatientResourceShare, "shared_by"),
         (PatientResourceShare, "resource"),
     ):
-        assert _field(model, name).kwargs["to_field"] == "dbid", f"{model.__name__}.{name}"
+        assert _field(model, name).kwargs["to_field"] == "dbid", (
+            f"{model.__name__}.{name}"
+        )
 
 
 def test_related_names_are_namespaced_per_model():
     """Two foreign keys from one model to one target need distinct related_names."""
-    assert _field(PatientResource, "created_by").kwargs["related_name"] == "patient_resources_created"
-    assert _field(PatientResource, "updated_by").kwargs["related_name"] == "patient_resources_updated"
+    assert (
+        _field(PatientResource, "created_by").kwargs["related_name"]
+        == "patient_resources_created"
+    )
+    assert (
+        _field(PatientResource, "updated_by").kwargs["related_name"]
+        == "patient_resources_updated"
+    )

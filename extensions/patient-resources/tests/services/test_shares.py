@@ -4,7 +4,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from patient_resources.constants import MAX_SHARE_BATCH, PORTAL_MAX_RESOURCES, STATUS_ACTIVE
+from patient_resources.constants import (
+    MAX_SHARE_BATCH,
+    PORTAL_MAX_RESOURCES,
+    STATUS_ACTIVE,
+)
 from patient_resources.models import PatientResource, PatientResourceShare
 from patient_resources.services import shares
 
@@ -39,15 +43,21 @@ def _catalog(*resources):
 
 
 def _already_shared(*resource_dbids):
-    PatientResourceShare.objects.filter.return_value.values_list.return_value = list(resource_dbids)
+    PatientResourceShare.objects.filter.return_value.values_list.return_value = list(
+        resource_dbids
+    )
 
 
 # --- share_resources ------------------------------------------------------
 
 
 def test_empty_request_writes_nothing():
-    result = shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=[], staff_dbid=1)
-    assert result == shares.ShareResult(created=[], already_shared=0, skipped_unavailable=0)
+    result = shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[], staff_dbid=1
+    )
+    assert result == shares.ShareResult(
+        created=[], already_shared=0, skipped_unavailable=0
+    )
     PatientResourceShare.objects.bulk_create.assert_not_called()
 
 
@@ -55,7 +65,9 @@ def test_snapshot_is_taken_at_share_time():
     """This is what the patient sees from now on, whatever the catalog does later."""
     _catalog(_resource(12))
     _already_shared()
-    shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=101)
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=101
+    )
 
     row = PatientResourceShare.objects.bulk_create.call_args.args[0][0]
     assert row.title_at_share == "Managing diabetes"
@@ -70,7 +82,9 @@ def test_shared_at_is_set_explicitly_and_is_timezone_aware():
     """bulk_create cannot report an auto_now_add value back, and the response needs it."""
     _catalog(_resource(12))
     _already_shared()
-    shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1)
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1
+    )
 
     row = PatientResourceShare.objects.bulk_create.call_args.args[0][0]
     assert row.shared_at is not None
@@ -123,7 +137,9 @@ def test_curator_is_never_a_placeholder():
     """A share attributed to "unknown" looks like an audit trail and is not one."""
     _catalog(_resource(12))
     _already_shared()
-    shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=None)
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=None
+    )
     row = PatientResourceShare.objects.bulk_create.call_args.args[0][0]
     assert row.shared_by_id is None
 
@@ -136,13 +152,17 @@ def test_already_shared_resources_are_counted_not_recreated():
     )
     assert result.already_shared == 1
     assert len(result.created) == 1
-    assert PatientResourceShare.objects.bulk_create.call_args.args[0][0].resource_id == 15
+    assert (
+        PatientResourceShare.objects.bulk_create.call_args.args[0][0].resource_id == 15
+    )
 
 
 def test_a_fully_repeated_send_writes_nothing():
     _catalog(_resource(12))
     _already_shared(12)
-    result = shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1)
+    result = shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1
+    )
     assert result.already_shared == 1
     assert result.created == []
     PatientResourceShare.objects.bulk_create.assert_not_called()
@@ -161,7 +181,9 @@ def test_unknown_and_archived_ids_are_reported_as_unavailable():
 
 def test_only_active_resources_are_fetched():
     _catalog()
-    shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1)
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=[12], staff_dbid=1
+    )
     assert PatientResource.objects.filter.call_args.kwargs["status"] == STATUS_ACTIVE
 
 
@@ -170,7 +192,9 @@ def test_batch_is_capped_in_the_service_not_only_the_ui():
     over_cap = list(range(MAX_SHARE_BATCH + 10))
     _catalog(*[_resource(dbid) for dbid in over_cap])
     _already_shared()
-    shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=over_cap, staff_dbid=1)
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=over_cap, staff_dbid=1
+    )
     requested = PatientResource.objects.filter.call_args.kwargs["dbid__in"]
     assert len(requested) == MAX_SHARE_BATCH
 
@@ -184,7 +208,9 @@ def test_one_send_is_three_reads_and_one_write():
     batch = list(range(MAX_SHARE_BATCH))
     _catalog(*[_resource(dbid) for dbid in batch])
     _already_shared()
-    shares.share_resources(patient=MagicMock(dbid=55), resource_dbids=batch, staff_dbid=1)
+    shares.share_resources(
+        patient=MagicMock(dbid=55), resource_dbids=batch, staff_dbid=1
+    )
 
     assert PatientResource.objects.filter.call_count == 1
     assert PatientResourceShare.objects.filter.call_count == 1
@@ -207,9 +233,7 @@ def test_patient_list_is_scoped_filtered_and_ordered():
 
 def test_patient_list_is_capped():
     shares.live_shares_for_patient(55)
-    sliced = (
-        PatientResourceShare.objects.filter.return_value.select_related.return_value.order_by.return_value
-    )
+    sliced = PatientResourceShare.objects.filter.return_value.select_related.return_value.order_by.return_value
     assert sliced.__getitem__.call_args.args[0] == slice(None, PORTAL_MAX_RESOURCES)
 
 
@@ -250,20 +274,36 @@ def test_revoking_stamps_every_live_share_of_that_resource():
 def test_revoking_without_a_reason_stores_empty_not_none():
     PatientResourceShare.objects.filter.return_value.update.return_value = 1
     shares.revoke_resource_shares(resource_dbid=12)
-    assert PatientResourceShare.objects.filter.return_value.update.call_args.kwargs[
-        "revoked_reason"
-    ] == ""
+    assert (
+        PatientResourceShare.objects.filter.return_value.update.call_args.kwargs[
+            "revoked_reason"
+        ]
+        == ""
+    )
 
 
-def test_mark_viewed_takes_a_patient_and_never_a_share_id():
-    """An endpoint accepting a share id is the shape of a cross-patient leak."""
+def test_mark_viewed_stamps_only_the_shown_rows_for_this_patient():
+    """Shares past the cap or on an archived resource must not read as viewed."""
     PatientResourceShare.objects.filter.return_value.update.return_value = 2
-    assert shares.mark_viewed(55) == 2
+    assert shares.mark_viewed(55, [7, 8]) == 2
     assert PatientResourceShare.objects.filter.call_args.kwargs == {
         "patient__dbid": 55,
+        "dbid__in": [7, 8],
         "first_viewed_at__isnull": True,
         "revoked_at__isnull": True,
     }
+
+
+def test_mark_viewed_with_nothing_shown_writes_nothing():
+    PatientResourceShare.objects.filter.reset_mock()
+    assert shares.mark_viewed(55, []) == 0
+    PatientResourceShare.objects.filter.assert_not_called()
+
+
+def test_patient_list_limit_can_be_raised_by_the_caller():
+    shares.live_shares_for_patient(55, PORTAL_MAX_RESOURCES + 1)
+    sliced = PatientResourceShare.objects.filter.return_value.select_related.return_value.order_by.return_value
+    assert sliced.__getitem__.call_args.args[0] == slice(None, PORTAL_MAX_RESOURCES + 1)
 
 
 def test_unviewed_count_ignores_revoked_and_archived():
@@ -298,13 +338,20 @@ def test_the_live_lookup_excludes_withdrawn_shares():
     Including withdrawn shares here is what made the library offer Withdraw on a
     resource with nothing left to withdraw.
     """
-    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [12]
+    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [
+        12
+    ]
     shares.resources_with_live_shares([12])
-    assert PatientResourceShare.objects.filter.call_args.kwargs["revoked_at__isnull"] is True
+    assert (
+        PatientResourceShare.objects.filter.call_args.kwargs["revoked_at__isnull"]
+        is True
+    )
 
 
 def test_withdrawn_lookup_finds_only_revoked_shares():
-    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [12]
+    PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = [
+        12
+    ]
     assert shares.resources_with_withdrawn_shares([12, 15]) == {12}
     assert PatientResourceShare.objects.filter.call_args.kwargs == {
         "resource__dbid__in": [12, 15],
@@ -323,7 +370,10 @@ def test_both_share_lookups_ask_for_distinct_rows():
     Without it a resource given to five hundred patients drags five hundred rows
     back to build a set of one.
     """
-    for call in (shares.resources_with_live_shares, shares.resources_with_withdrawn_shares):
+    for call in (
+        shares.resources_with_live_shares,
+        shares.resources_with_withdrawn_shares,
+    ):
         PatientResourceShare.objects.reset_mock(side_effect=True, return_value=True)
         PatientResourceShare.objects.filter.return_value.values_list.return_value.distinct.return_value = []
         call([12])

@@ -1,6 +1,6 @@
 """Giving resources to a patient, and reading back what they were given."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
 from patient_resources.constants import (
@@ -28,7 +28,9 @@ class ShareResult(NamedTuple):
     skipped_unavailable: int
 
 
-def live_shares_for_patient(patient_dbid: Any) -> Any:
+def live_shares_for_patient(
+    patient_dbid: Any, limit: int = PORTAL_MAX_RESOURCES
+) -> Any:
     """The resources a patient can currently see, newest first.
 
     ``select_related`` because the payload now reads the live title and label
@@ -39,6 +41,9 @@ def live_shares_for_patient(patient_dbid: Any) -> Any:
     Ordered by ``-dbid`` as a tiebreak because ``shared_at`` is nullable and rows
     written in one batch share a timestamp -- without it the order of a
     multi-select send is arbitrary between requests.
+
+    ``limit`` lets the portal ask for one row past the cap, which is how it can
+    tell "exactly the cap" from "more than the cap" without a second count query.
     """
     return (
         PatientResourceShare.objects.filter(
@@ -47,7 +52,7 @@ def live_shares_for_patient(patient_dbid: Any) -> Any:
             resource__status=STATUS_ACTIVE,
         )
         .select_related("resource")
-        .order_by("-shared_at", "-dbid")[:PORTAL_MAX_RESOURCES]
+        .order_by("-shared_at", "-dbid")[:limit]
     )
 
 
@@ -118,7 +123,7 @@ def has_live_shares(resource: Any) -> bool:
 def resources_with_withdrawn_shares(resource_dbids: list[Any]) -> set[Any]:
     """Which of these resources were actively pulled back from patients.
 
-    Separate from ``resources_with_shares`` because the two answer different
+    Separate from ``resources_with_live_shares`` because the two answer different
     questions about the same rows: whether a patient ever received it, and
     whether it was taken back off them. An archived resource and a withdrawn one
     look identical in the library otherwise, though only one of them changed what
@@ -185,7 +190,7 @@ def share_resources(
         )
 
     supplied = notes or {}
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = [
         PatientResourceShare(
             patient_id=patient.dbid,
@@ -225,26 +230,30 @@ def _note_for(resource_dbid: Any, supplied: dict[Any, str], resource: Any) -> st
 
 def revoke_resource_shares(*, resource_dbid: Any, reason: str = "") -> int:
     """Withdraw a resource from every patient who has it. Returns the count."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return PatientResourceShare.objects.filter(
         resource__dbid=resource_dbid,
         revoked_at__isnull=True,
     ).update(revoked_at=now, revoked_reason=reason or "")
 
 
-def mark_viewed(patient_dbid: Any) -> int:
-    """Stamp every unviewed live share for this patient. Returns the count.
+def mark_viewed(patient_dbid: Any, share_dbids: list[Any]) -> int:
+    """Stamp the unviewed live shares this patient was just shown. Returns the count.
 
-    Takes a patient, never a share id. An endpoint that accepted a share id would
-    be the one place in the portal surface where a patient could name a row, and
-    naming a row is the whole shape of a cross-patient leak. "Opened the list" is
-    also the honest semantic for what we actually observed.
+    ``share_dbids`` is the list the portal endpoint built and returned, never
+    anything the patient sent: there is still no endpoint where a patient names a
+    row. The ``patient__dbid`` filter stays as a second guard so a bad caller can
+    never stamp another patient's share. Limiting to what was shown keeps shares
+    past the cap, or on an archived resource, from reading as viewed to staff.
     """
+    if not share_dbids:
+        return 0
     return PatientResourceShare.objects.filter(
         patient__dbid=patient_dbid,
+        dbid__in=list(share_dbids),
         first_viewed_at__isnull=True,
         revoked_at__isnull=True,
-    ).update(first_viewed_at=datetime.now(timezone.utc))
+    ).update(first_viewed_at=datetime.now(UTC))
 
 
 def unviewed_count(patient_dbid: Any) -> int:

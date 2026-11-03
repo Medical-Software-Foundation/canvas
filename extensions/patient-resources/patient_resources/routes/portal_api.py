@@ -52,20 +52,24 @@ class PortalAPI(PatientSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        live = list(live_shares_for_patient(patient.dbid))
+        # One row past the cap tells "exactly the cap" apart from "more than it".
+        live = list(live_shares_for_patient(patient.dbid, PORTAL_MAX_RESOURCES + 1))
+        truncated = len(live) > PORTAL_MAX_RESOURCES
+        live = live[:PORTAL_MAX_RESOURCES]
         withdrawn = list(revoked_shares_for_patient(patient.dbid))
 
-        # Stamped after the list is built, and by patient rather than by row.
-        # "Opened their list" is what we actually observed, and it avoids the
-        # id-accepting endpoint that marking one row would require.
-        mark_viewed(patient.dbid)
+        # Stamped after the list is built, and only for the rows in it. The ids
+        # come from the query above, never from the request.
+        mark_viewed(patient.dbid, [share.dbid for share in live])
 
         return [
             JSONResponse(
                 {
                     "resources": [serialize_share_for_patient(share) for share in live],
-                    "withdrawn": [serialize_withdrawn_share(share) for share in withdrawn],
-                    "truncated": len(live) >= PORTAL_MAX_RESOURCES,
+                    "withdrawn": [
+                        serialize_withdrawn_share(share) for share in withdrawn
+                    ],
+                    "truncated": truncated,
                 }
             )
         ]

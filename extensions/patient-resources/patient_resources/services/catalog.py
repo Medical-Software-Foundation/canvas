@@ -46,7 +46,9 @@ def normalize_offset(raw: Any) -> int:
     return max(offset, 0)
 
 
-def build_queryset(*, search: str = "", label: str = "", include_archived: bool = False) -> Any:
+def build_queryset(
+    *, search: str = "", label: str = "", include_archived: bool = False
+) -> Any:
     """The library listing, filtered.
 
     ``include_archived`` is honored only for callers that have already checked
@@ -80,7 +82,9 @@ def list_resources(
     offset: int = 0,
 ) -> tuple[list[Any], int]:
     """One page of the library, plus the total matching count."""
-    queryset = build_queryset(search=search, label=label, include_archived=include_archived)
+    queryset = build_queryset(
+        search=search, label=label, include_archived=include_archived
+    )
     return list(queryset[offset : offset + limit]), queryset.count()
 
 
@@ -94,11 +98,15 @@ def distinct_labels() -> list[str]:
     Derived rather than configured, so an empty library yields an empty filter
     instead of a stale hardcoded vocabulary.
     """
-    values = PatientResource.objects.filter(status=STATUS_ACTIVE).values_list("label", flat=True)
+    values = PatientResource.objects.filter(status=STATUS_ACTIVE).values_list(
+        "label", flat=True
+    )
     return sorted({(value or "").strip() for value in values if (value or "").strip()})
 
 
-def _live_title_label_conflict(title: str, label: str, *, exclude_dbid: Any = None) -> bool:
+def _live_title_label_conflict(
+    title: str, label: str, *, exclude_dbid: Any = None
+) -> bool:
     """Case-insensitive duplicate check.
 
     The database constraint is case-sensitive, as Postgres text comparison is, so
@@ -169,7 +177,9 @@ def update_resource(
             "be changed. Add a replacement resource and archive this one."
         )
 
-    if _live_title_label_conflict(fields["title"], fields["label"], exclude_dbid=resource.dbid):
+    if _live_title_label_conflict(
+        fields["title"], fields["label"], exclude_dbid=resource.dbid
+    ):
         raise DuplicateResourceError(
             f"A resource called {fields['title']!r} already exists with that label."
         )

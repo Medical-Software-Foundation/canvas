@@ -34,7 +34,11 @@ def is_library_admin(staff: Any, config: PatientResourcesConfig) -> bool:
         # An explicit allowlist replaces the role rule rather than adding to it.
         # A practice that names three people means those three, not those three
         # plus everyone holding an administrative role.
-        allowed = {candidate for value in config.admin_staff_ids for candidate in id_candidates(value)}
+        allowed = {
+            candidate
+            for value in config.admin_staff_ids
+            for candidate in id_candidates(value)
+        }
         return bool(id_candidates(str(getattr(staff, "id", "") or "")) & allowed)
 
     if not config.admin_role_domains:

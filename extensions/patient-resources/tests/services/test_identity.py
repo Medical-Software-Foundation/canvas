@@ -40,7 +40,11 @@ def test_blank_input_yields_nothing():
 
 
 def test_uuid_forms_all_collapse_to_the_same_candidate_set():
-    assert id_candidates(DASHED) == id_candidates(UNDASHED) == id_candidates(str(uuid.UUID(DASHED)))
+    assert (
+        id_candidates(DASHED)
+        == id_candidates(UNDASHED)
+        == id_candidates(str(uuid.UUID(DASHED)))
+    )
 
 
 def _request(headers=None):
@@ -76,7 +80,9 @@ def test_patient_resolution_queries_patient_not_staff(mock_patient):
     """
     Patient.objects.reset_mock()
     Staff.objects.reset_mock()
-    Patient.objects.filter.return_value.only.return_value.first.return_value = mock_patient
+    Patient.objects.filter.return_value.only.return_value.first.return_value = (
+        mock_patient
+    )
 
     assert patient_from_session(_request({SESSION_ID_HEADER: DASHED})) is mock_patient
     Patient.objects.filter.assert_called_once()

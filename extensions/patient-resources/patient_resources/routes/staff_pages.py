@@ -44,7 +44,9 @@ class StaffPagesAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/")
     def get_library_page(self) -> list[Response | Effect]:
         """The admin library."""
-        return self._page("templates/library.html", {"apiBase": API_BASE, "cacheBust": CACHE_BUST})
+        return self._page(
+            "templates/library.html", {"apiBase": API_BASE, "cacheBust": CACHE_BUST}
+        )
 
     @api.get("/picker")
     def get_picker_page(self) -> list[Response | Effect]:

@@ -19,7 +19,10 @@ def _button(target_id):
 
 
 def test_button_is_declared_on_the_chart_patient_header():
-    assert ShareResourcesButton.BUTTON_LOCATION == ActionButton.ButtonLocation.CHART_PATIENT_HEADER
+    assert (
+        ShareResourcesButton.BUTTON_LOCATION
+        == ActionButton.ButtonLocation.CHART_PATIENT_HEADER
+    )
 
 
 def test_the_button_title_fits_its_slot():
@@ -44,7 +47,9 @@ def test_button_is_always_visible_without_a_query():
 def test_click_opens_the_picker_for_that_patient():
     effects = _button("abc123").handle()
     assert len(effects) == 1
-    assert effects[0].url.startswith("/plugin-io/api/patient_resources/app/picker?patient=abc123")
+    assert effects[0].url.startswith(
+        "/plugin-io/api/patient_resources/app/picker?patient=abc123"
+    )
     assert effects[0].target == LaunchModalEffect.TargetType.DEFAULT_MODAL
     assert effects[0].content is None
 

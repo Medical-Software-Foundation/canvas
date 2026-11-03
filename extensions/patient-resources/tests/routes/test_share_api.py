@@ -1,10 +1,9 @@
 """Patient lookup and sending, over HTTP."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from canvas_sdk.v1.data import Patient
 from django.db import IntegrityError
 
@@ -13,7 +12,7 @@ from patient_resources.routes.share_api import ShareAPI
 from patient_resources.services.identity import id_candidates
 from patient_resources.services.shares import ShareResult
 
-WHEN = datetime(2026, 8, 20, 14, 3, 11, tzinfo=timezone.utc)
+WHEN = datetime(2026, 8, 20, 14, 3, 11, tzinfo=UTC)
 DASHED = "3f040d58-0000-4000-8000-000000000001"
 
 
@@ -40,7 +39,9 @@ def _created_row(resource_id=12):
 
 
 def _call(method, staff, make_request, **kwargs):
-    with patch("patient_resources.routes.support.staff_from_session", return_value=staff):
+    with patch(
+        "patient_resources.routes.support.staff_from_session", return_value=staff
+    ):
         return getattr(_api(make_request, **kwargs), method)()
 
 
@@ -68,7 +69,9 @@ def test_lookup_tries_every_key_form(mock_staff, mock_patient, make_request):
         _call(
             "get_patient", mock_staff, make_request, path_params={"patient_id": DASHED}
         )
-    assert set(Patient.objects.filter.call_args.kwargs["id__in"]) == id_candidates(DASHED)
+    assert set(Patient.objects.filter.call_args.kwargs["id__in"]) == id_candidates(
+        DASHED
+    )
 
 
 def test_lookup_returns_the_name_and_what_they_already_have(
@@ -113,21 +116,29 @@ def test_lookup_handles_a_patient_with_no_recorded_name(
 
 def test_send_401s_without_a_resolvable_staff_member(make_request):
     responses = _call(
-        "post_shares", None, make_request, json_body={"patient": "x", "resource_ids": [1]}
+        "post_shares",
+        None,
+        make_request,
+        json_body={"patient": "x", "resource_ids": [1]},
     )
     assert responses[0].status_code == 401
 
 
 @pytest.mark.parametrize("body", [[], "text", 7])
 def test_a_non_object_body_is_a_400(body, mock_staff, make_request):
-    assert _call("post_shares", mock_staff, make_request, json_body=body)[0].status_code == 400
+    assert (
+        _call("post_shares", mock_staff, make_request, json_body=body)[0].status_code
+        == 400
+    )
 
 
 def test_a_json_null_body_is_a_400(mock_staff, make_request):
     """Set on the request directly: the fixture reads json_body=None as "no body"."""
     request = make_request()
     request.json.return_value = None
-    with patch("patient_resources.routes.support.staff_from_session", return_value=mock_staff):
+    with patch(
+        "patient_resources.routes.support.staff_from_session", return_value=mock_staff
+    ):
         api = ShareAPI.__new__(ShareAPI)
         api.secrets = {}
         api.request = request
@@ -149,7 +160,9 @@ def test_send_404s_for_an_unknown_patient(mock_staff, make_request):
     "resource_ids",
     [None, [], "12", {"a": 1}, [12, "15"], [12, None], [12, 1.5]],
 )
-def test_bad_resource_ids_are_a_400(resource_ids, mock_staff, mock_patient, make_request):
+def test_bad_resource_ids_are_a_400(
+    resource_ids, mock_staff, mock_patient, make_request
+):
     _found(mock_patient)
     responses = _call(
         "post_shares",
@@ -160,7 +173,9 @@ def test_bad_resource_ids_are_a_400(resource_ids, mock_staff, mock_patient, make
     assert responses[0].status_code == 400
 
 
-def test_booleans_are_refused_rather_than_read_as_ids(mock_staff, mock_patient, make_request):
+def test_booleans_are_refused_rather_than_read_as_ids(
+    mock_staff, mock_patient, make_request
+):
     """True is an int in Python and would otherwise share resource 1."""
     _found(mock_patient)
     responses = _call(
@@ -172,7 +187,9 @@ def test_booleans_are_refused_rather_than_read_as_ids(mock_staff, mock_patient, 
     assert responses[0].status_code == 400
 
 
-def test_an_over_cap_batch_is_refused_by_the_api(mock_staff, mock_patient, make_request):
+def test_an_over_cap_batch_is_refused_by_the_api(
+    mock_staff, mock_patient, make_request
+):
     """A direct API client bypasses the picker's own limit."""
     _found(mock_patient)
     responses = _call(
@@ -188,7 +205,9 @@ def test_an_over_cap_batch_is_refused_by_the_api(mock_staff, mock_patient, make_
     assert str(MAX_SHARE_BATCH) in responses[0].data["error"]
 
 
-def test_a_successful_send_reports_all_three_counts(mock_staff, mock_patient, make_request):
+def test_a_successful_send_reports_all_three_counts(
+    mock_staff, mock_patient, make_request
+):
     _found(mock_patient)
     with patch(
         "patient_resources.routes.share_api.share_resources",
@@ -237,7 +256,8 @@ def test_a_concurrent_duplicate_send_is_reported_not_a_500(
     """The pre-check races with a second provider; the constraint is the real guard."""
     _found(mock_patient)
     with patch(
-        "patient_resources.routes.share_api.share_resources", side_effect=IntegrityError()
+        "patient_resources.routes.share_api.share_resources",
+        side_effect=IntegrityError(),
     ):
         response = _call(
             "post_shares",
@@ -380,7 +400,9 @@ def test_a_non_text_note_is_a_400(mock_staff, mock_patient, make_request):
     assert responses[0].status_code == 400
 
 
-def test_an_over_long_note_is_refused_by_the_api(mock_staff, mock_patient, make_request):
+def test_an_over_long_note_is_refused_by_the_api(
+    mock_staff, mock_patient, make_request
+):
     """The textarea caps it too; a direct client bypasses the picker."""
     responses, _ = _send(
         mock_staff,
@@ -447,7 +469,9 @@ def test_a_missing_mrn_is_empty(mock_staff, mock_patient, make_request):
     assert _lookup(mock_staff, mock_patient, make_request)["mrn"] == ""
 
 
-def test_identifiers_are_fetched_in_the_same_query(mock_staff, mock_patient, make_request):
+def test_identifiers_are_fetched_in_the_same_query(
+    mock_staff, mock_patient, make_request
+):
     """No extra round trip to populate the card."""
     _lookup(mock_staff, mock_patient, make_request)
     only_fields = Patient.objects.filter.return_value.only.call_args.args

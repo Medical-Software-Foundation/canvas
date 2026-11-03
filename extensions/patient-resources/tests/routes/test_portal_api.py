@@ -4,16 +4,20 @@ This is the endpoint any signed-in patient can reach, so most of these tests are
 about what it refuses.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from canvas_sdk.v1.data import Patient
 
-from patient_resources.constants import SESSION_ID_HEADER, STATUS_ACTIVE
+from patient_resources.constants import (
+    PORTAL_MAX_RESOURCES,
+    SESSION_ID_HEADER,
+    STATUS_ACTIVE,
+)
 from patient_resources.models import PatientResourceShare
 from patient_resources.routes.portal_api import PortalAPI
 
-WHEN = datetime(2026, 8, 20, 14, 3, 11, tzinfo=timezone.utc)
+WHEN = datetime(2026, 8, 20, 14, 3, 11, tzinfo=UTC)
 
 
 def _api(make_request, **kwargs):
@@ -69,7 +73,9 @@ def _rows(live=(), revoked=()):
 def test_unresolvable_patient_is_a_401_not_an_empty_list(make_request):
     """An empty list would tell a patient their care team shared nothing."""
     _signed_in(None)
-    responses = _api(make_request, headers={SESSION_ID_HEADER: "nobody"}).get_my_resources()
+    responses = _api(
+        make_request, headers={SESSION_ID_HEADER: "nobody"}
+    ).get_my_resources()
     assert responses[0].status_code == 401
     assert "resources" not in getattr(responses[0], "data", {})
 
@@ -112,16 +118,22 @@ def test_a_corrected_title_reaches_the_patient(mock_patient, make_request):
     """
     _signed_in(mock_patient)
     _rows(live=[_share(title="Managing diabtes", live_title="Managing diabetes")])
-    data = _api(
-        make_request, headers={SESSION_ID_HEADER: mock_patient.id}
-    ).get_my_resources()[0].data
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
     assert data["resources"][0]["title"] == "Managing diabetes"
 
 
 def test_the_list_projects_the_share(mock_patient, make_request):
     _signed_in(mock_patient)
     _rows(live=[_share()])
-    data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
     assert data["resources"] == [
         {
             "title": "Managing diabetes",
@@ -143,7 +155,11 @@ def test_the_patient_payload_carries_no_label(mock_patient, make_request):
     withdrawn.revoked_at = WHEN
     _rows(live=[_share()], revoked=[withdrawn])
 
-    data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
     for row in data["resources"] + data["withdrawn"]:
         assert "label" not in row
 
@@ -152,7 +168,11 @@ def test_the_note_the_patient_sees_is_the_one_sent_to_them(mock_patient, make_re
     """Not the library default, which may since have been rewritten."""
     _signed_in(mock_patient)
     _rows(live=[_share(note="Read section 3 before Thursday.")])
-    data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
     assert data["resources"][0]["note"] == "Read section 3 before Thursday."
 
 
@@ -163,7 +183,11 @@ def test_withdrawn_resources_are_reported_separately(mock_patient, make_request)
     withdrawn.revoked_at = WHEN
     _rows(live=[], revoked=[withdrawn])
 
-    data = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0].data
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
     assert data["resources"] == []
     assert data["withdrawn"][0]["title"] == "Old handout"
     assert "url" not in data["withdrawn"][0]
@@ -172,7 +196,9 @@ def test_withdrawn_resources_are_reported_separately(mock_patient, make_request)
 def test_an_empty_list_is_a_200(mock_patient, make_request):
     _signed_in(mock_patient)
     _rows()
-    response = _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()[0]
+    response = _api(
+        make_request, headers={SESSION_ID_HEADER: mock_patient.id}
+    ).get_my_resources()[0]
     assert response.status_code == 200
     assert response.data["resources"] == []
     assert response.data["truncated"] is False
@@ -191,6 +217,44 @@ def test_opening_the_list_marks_it_viewed(mock_patient, make_request):
     ]
     assert update_calls
     assert update_calls[0].kwargs["patient__dbid"] == mock_patient.dbid
+
+
+def test_only_shown_rows_are_marked_viewed(mock_patient, make_request):
+    _signed_in(mock_patient)
+    first, second = _share(), _share()
+    first.dbid, second.dbid = 11, 12
+    _rows(live=[first, second])
+    _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id}).get_my_resources()
+    update_call = next(
+        call
+        for call in PatientResourceShare.objects.filter.call_args_list
+        if call.kwargs.get("first_viewed_at__isnull") is True
+    )
+    assert update_call.kwargs["dbid__in"] == [11, 12]
+
+
+def test_exactly_the_cap_is_not_truncated(mock_patient, make_request):
+    _signed_in(mock_patient)
+    _rows(live=[_share() for _ in range(PORTAL_MAX_RESOURCES)])
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
+    assert data["truncated"] is False
+    assert len(data["resources"]) == PORTAL_MAX_RESOURCES
+
+
+def test_one_past_the_cap_is_truncated_and_trimmed(mock_patient, make_request):
+    _signed_in(mock_patient)
+    _rows(live=[_share() for _ in range(PORTAL_MAX_RESOURCES + 1)])
+    data = (
+        _api(make_request, headers={SESSION_ID_HEADER: mock_patient.id})
+        .get_my_resources()[0]
+        .data
+    )
+    assert data["truncated"] is True
+    assert len(data["resources"]) == PORTAL_MAX_RESOURCES
 
 
 def test_nothing_is_marked_viewed_for_an_unauthenticated_request(make_request):

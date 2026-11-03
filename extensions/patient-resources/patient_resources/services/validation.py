@@ -71,9 +71,7 @@ def is_safe_href(value: Any) -> bool:
     if not authority:
         return False
     # Credentials in the authority let a link display one host and reach another.
-    if "@" in authority:
-        return False
-    return True
+    return "@" not in authority
 
 
 def validate_resource(
@@ -99,7 +97,9 @@ def validate_resource(
     elif len(clean_url) > URL_MAX_CHARS:
         errors["url"] = f"Keep the link to {URL_MAX_CHARS} characters or fewer."
     elif not is_safe_href(clean_url):
-        errors["url"] = "Enter a full public web address starting with http:// or https://."
+        errors["url"] = (
+            "Enter a full public web address starting with http:// or https://."
+        )
 
     clean_label = str(label or "").strip()
     if len(clean_label) > LABEL_MAX_CHARS:

@@ -83,7 +83,10 @@ def test_overlong_url_is_rejected():
 
 
 def test_valid_resource_has_no_errors():
-    assert validate_resource("Managing diabetes", "https://example.org/d", "Diabetes") == {}
+    assert (
+        validate_resource("Managing diabetes", "https://example.org/d", "Diabetes")
+        == {}
+    )
 
 
 def test_label_is_optional():
@@ -117,7 +120,10 @@ def test_each_length_cap_reports_against_its_own_field():
 
 
 def test_a_note_within_the_cap_passes():
-    assert validate_resource("Title", "https://example.org/d", "", "n" * NOTE_MAX_CHARS) == {}
+    assert (
+        validate_resource("Title", "https://example.org/d", "", "n" * NOTE_MAX_CHARS)
+        == {}
+    )
 
 
 def test_the_note_is_optional():

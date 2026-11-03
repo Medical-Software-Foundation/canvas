@@ -35,7 +35,9 @@ def picker_url(patient_id: str) -> str:
     else identifiable in the document -- and it is percent-encoded rather than
     interpolated raw.
     """
-    return f"{STAFF_ASSET_BASE}/picker?patient={quote(patient_id, safe='')}&v={CACHE_BUST}"
+    return (
+        f"{STAFF_ASSET_BASE}/picker?patient={quote(patient_id, safe='')}&v={CACHE_BUST}"
+    )
 
 
 # --- Resource lifecycle -----------------------------------------------------
