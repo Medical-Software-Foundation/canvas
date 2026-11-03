@@ -37,9 +37,24 @@ This changes what restricted staff see by default. **It is not access control.**
 - Staff names still appear elsewhere in Canvas (task assignees, note providers).
 - Other plugins' own schedule views (for example a scribe app's day list) are
   not hidden.
+- Availability shading finds calendars by the clinician's name. Two staff members
+  with exactly the same first and last name would see each other's open and
+  blocked time (never appointments or patients).
+- Shading reads daily and weekly repeats only. A monthly or yearly repeating block,
+  or an all-day block longer than one day, is not shaded (or only its first day is).
+  Visits always show; only the white/gray background is affected.
 
 Uninstalling returns everyone to the normal Schedule, because Canvas works out
 the homepage, menu and panel on each page load.
+
+## Install
+
+```bash
+canvas install my_schedule --host <your-instance>
+```
+
+Then set `RESTRICTED_ROLES` in **Settings → Plugins → my_schedule**. Until it is
+set, nobody is restricted.
 
 ## Settings
 

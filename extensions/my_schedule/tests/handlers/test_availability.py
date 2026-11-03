@@ -195,3 +195,32 @@ class TestOwnBlocks:
         )
         result, _ = self._run(calendars=[clinic], events=[ev])
         assert result and result[0]["start"].endswith("+00:00")
+
+
+class TestDateBoundaries:
+    """Checklist item 28: daylight saving and UTC date boundaries."""
+
+    def test_weekly_block_keeps_wall_clock_time_across_dst(self) -> None:
+        # First occurrence in EDT (26 Oct); clocks fall back on 1 Nov 2026.
+        ev = _event(MON_9, MON_17, "RRULE:FREQ=WEEKLY;BYDAY=MO")
+        start, end = window_on(ev, date(2026, 11, 2), NY)
+        assert (start.hour, end.hour) == (9, 17)
+        assert start.utcoffset() == timedelta(hours=-5)
+
+    def test_evening_block_counts_on_its_local_day_not_utc_day(self) -> None:
+        # 20:00 NY on Monday is 00:00 UTC on Tuesday.
+        mon_20 = datetime(2026, 10, 26, 20, tzinfo=NY)
+        ev = _event(mon_20, mon_20 + timedelta(hours=2))
+        assert occurs_on(ev, date(2026, 10, 26), NY)
+        assert not occurs_on(ev, date(2026, 10, 27), NY)
+
+    def test_recurrence_end_is_read_in_calendar_time(self) -> None:
+        # Ends 23:30 NY on Wed 28 Oct (03:30 Thursday in UTC).
+        ev = _event(
+            MON_9,
+            MON_17,
+            "FREQ=DAILY",
+            recurrence_ends_at=datetime(2026, 10, 28, 23, 30, tzinfo=NY),
+        )
+        assert occurs_on(ev, date(2026, 10, 28), NY)
+        assert not occurs_on(ev, date(2026, 10, 29), NY)
