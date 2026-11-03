@@ -1,0 +1,45 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "mark_note_as_cash_pay",
+    "description": "Adds 'Mark as cash pay' / 'Unmark as cash pay' to the note header dropdown on billable notes. Marking labels the note's claim Cash Pay and moves it to a configured Cash Pay claim queue. Off until CASH_PAY_ENABLED is true; the queue must already exist.",
+    "components": {
+        "protocols": [
+            {
+                "class": "mark_note_as_cash_pay.handlers.buttons:MarkAsCashPayButton",
+                "description": "Note header dropdown item that labels the claim Cash Pay and moves it to the Cash Pay queue"
+            },
+            {
+                "class": "mark_note_as_cash_pay.handlers.buttons:UnmarkCashPayButton",
+                "description": "Note header dropdown item that removes the Cash Pay label and returns the claim to coding"
+            },
+            {
+                "class": "mark_note_as_cash_pay.handlers.route_claims:RouteLabeledClaims",
+                "description": "Moves a Cash Pay-labeled claim to the Cash Pay queue when it enters NeedsCodingReview"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "CASH_PAY_ENABLED",
+            "default": "false"
+        },
+        {
+            "name": "CASH_PAY_QUEUE_NAME",
+            "default": ""
+        },
+        {
+            "name": "CASH_PAY_LABEL_NAME",
+            "default": "Cash Pay"
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
