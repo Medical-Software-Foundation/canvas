@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.258.0",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "auto_fax",
     "description": "Auto-fax on note lock: when a note is locked or signed, faxes it to the recipients a practice's rules name (an external care team member such as the PCP or referring provider, the patient's facility, or a fixed number). Rules, a dry-run mode and a test fax number are set in the plugin's settings. For practice admins and care coordinators who fax visit notes by hand today.",
     "components": {

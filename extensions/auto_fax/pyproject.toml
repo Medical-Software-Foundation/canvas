@@ -6,7 +6,7 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 name = "auto-fax"
-version = "0.1.0"
+version = "0.1.1"
 license = "MIT"
 description = "Auto-fax a note to rule-selected recipients when it is locked or signed."
 readme = "auto_fax/README.md"

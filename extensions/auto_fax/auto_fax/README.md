@@ -116,8 +116,21 @@ Other rules still run.
 Role codes and note type codes differ between instances. Check them in the instance's
 settings before you write a rule.
 
+## Access and data
+
+- No routes or UI. The only trigger is a note state change inside the instance.
+- It reads the note, the patient's care team and directory records, and the patient's
+  facility address. It writes nothing except the faxes (`FaxNoteEffect`), which Canvas
+  records on the note's fax history under Canvas Bot.
+- Whoever can edit this plugin's settings decides where notes are faxed. Treat that
+  permission like access to the charts: limit it to practice admins.
+- Logs carry note ids, rule names, the recipient type and the fax number masked to its
+  last four digits. They never carry patient, provider or facility names.
+
 ## Notes
 
 - Only US fax numbers (10 digits, with or without a leading 1) are supported.
+- A facility address counts as current through its end date in the note provider's last
+  known time zone (UTC if the provider has none).
 - Fax delivery status shows on the note's fax history in Canvas. This plugin doesn't retry failed faxes.
 - Screenshot: this plugin has no UI of its own. A screenshot of a sent fax in the note's history still needs to be added.

@@ -1,7 +1,8 @@
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -48,9 +49,10 @@ def _handler(state="LKD", note_id="note-1", mode="live", rules=None, test_number
     return handler
 
 
-def _note(code="office_visit", location_id="loc-1", patient=True):
+def _note(code="office_visit", location_id="loc-1", patient=True, provider=None):
     return SimpleNamespace(
         id="note-1",
+        provider=provider,
         note_type_version=SimpleNamespace(code=code) if code else None,
         patient=SimpleNamespace(id="patient-1") if patient else None,
         location=SimpleNamespace(id=location_id) if location_id else None,
@@ -64,10 +66,10 @@ def env():
         patch(f"{MODULE}.NoteActionEvent") as action_event,
         patch(f"{MODULE}.FaxNoteEffect") as fax_effect,
         patch(f"{MODULE}.resolve_recipients") as resolve,
-        patch(f"{MODULE}.date") as fake_date,
+        patch(f"{MODULE}.datetime") as fake_datetime,
         patch(f"{MODULE}.log") as log,
     ):
-        fake_date.today.return_value = date(2026, 11, 2)
+        fake_datetime.now.return_value.date.return_value = date(2026, 11, 2)
         note_first = (
             note_model.objects.select_related.return_value.filter.return_value.first
         )
@@ -135,7 +137,7 @@ def test_note_loaded_in_one_query(env):
     env.resolve.return_value = []
     _handler().compute()
     env.note_model.objects.select_related.assert_called_once_with(
-        "note_type_version", "patient", "location"
+        "note_type_version", "patient", "location", "provider"
     )
     env.note_model.objects.select_related.return_value.filter.assert_called_once_with(
         id="note-1"
@@ -155,7 +157,7 @@ def test_no_sendable_recipients(env):
     ]
     assert _handler().compute() == []
     env.log.warning.assert_called_once_with(
-        "[auto_fax] note note-1 rule 'pcp': skipped facility 'Oak House': facility has no valid fax number"
+        "[auto_fax] note note-1 rule 'pcp': skipped facility: facility has no valid fax number"
     )
     env.action_event.objects.filter.assert_not_called()
 
@@ -172,7 +174,7 @@ def test_live_sends_one_fax_per_recipient(env):
         note_id="note-1", recipient_name="Oak House", recipient_fax_number="15552340111"
     )
     env.log.info.assert_called_once_with(
-        "[auto_fax] faxing note note-1 rule 'pcp' -> facility 'Oak House' at ***-***-0111"
+        "[auto_fax] faxing note note-1 rule 'pcp' -> facility at ***-***-0111"
     )
     env.action_event.objects.filter.assert_called_once_with(
         note__id="note-1", event_type="FAXED", originator__staff__id=CANVAS_BOT_STAFF_ID
@@ -193,7 +195,7 @@ def test_dry_run_logs_and_sends_nothing(env):
     assert _handler(mode="dry_run").compute() == []
     env.fax_effect.assert_not_called()
     env.log.info.assert_called_once_with(
-        "[auto_fax] dry run, would fax note note-1 rule 'pcp' -> facility 'Oak House' at ***-***-0111"
+        "[auto_fax] dry run, would fax note note-1 rule 'pcp' -> facility at ***-***-0111"
     )
 
 
@@ -212,7 +214,7 @@ def test_test_number_replaces_every_destination(env):
     }
     assert numbers == {"15552340199"}
     env.log.info.assert_any_call(
-        "[auto_fax] faxing note note-1 rule 'pcp' -> facility 'Oak House' at ***-***-0199 (test number)"
+        "[auto_fax] faxing note note-1 rule 'pcp' -> facility at ***-***-0199 (test number)"
     )
 
 
@@ -301,3 +303,45 @@ def test_fax_effect_helper_with_cover():
         AutoFaxOnNoteLock._fax_effect("note-1", _recipient(rule), "5552340111", "loc-9")
     assert fax_effect.call_args.kwargs["location_id"] == "loc-9"
     fax_effect.return_value.apply.assert_called_once_with()
+
+
+def test_logs_never_name_the_recipient(env):
+    # A facility or provider name next to a note id says where a patient lives
+    # or who treats them, so logs carry the kind and masked number only.
+    env.resolve.side_effect = lambda patient_id, rules, today: [
+        _recipient(rules[0]),
+        _recipient(rules[0], digits=None, name="Elm Court", problem="no fax"),
+    ]
+    _handler().compute()
+    _handler(mode="dry_run").compute()
+    logged = " ".join(
+        str(call.args)
+        for call in env.log.info.call_args_list + env.log.warning.call_args_list
+    )
+    assert "Oak House" not in logged
+    assert "Elm Court" not in logged
+
+
+class _FrozenDatetime(datetime):
+    """01:00 UTC on 4 Nov 2026, which is still the evening of 3 Nov in the US."""
+
+    @classmethod
+    def now(cls, tz=None):
+        moment = datetime(2026, 11, 4, 1, 0, tzinfo=UTC)
+        return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected"),
+    [
+        (
+            SimpleNamespace(last_known_timezone=ZoneInfo("America/New_York")),
+            date(2026, 11, 3),
+        ),
+        (SimpleNamespace(last_known_timezone=None), date(2026, 11, 4)),
+        (None, date(2026, 11, 4)),
+    ],
+)
+def test_today_is_the_providers_date_not_utc(provider, expected):
+    with patch(f"{MODULE}.datetime", _FrozenDatetime):
+        assert AutoFaxOnNoteLock._today(_note(provider=provider)) == expected

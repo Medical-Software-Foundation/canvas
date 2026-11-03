@@ -7,7 +7,7 @@ note: the note itself, the recipients (see ``services/recipients.py``), and the
 note's earlier faxes.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.fax import FaxNoteEffect
@@ -52,7 +52,9 @@ class AutoFaxOnNoteLock(BaseHandler):
             return []
 
         note = (
-            Note.objects.select_related("note_type_version", "patient", "location")
+            Note.objects.select_related(
+                "note_type_version", "patient", "location", "provider"
+            )
             .filter(id=note_id)
             .first()
         )
@@ -66,7 +68,7 @@ class AutoFaxOnNoteLock(BaseHandler):
         if not rules:
             return []
 
-        recipients = resolve_recipients(str(note.patient.id), rules, date.today())
+        recipients = resolve_recipients(str(note.patient.id), rules, self._today(note))
         sendable = self._sendable(recipients, note_id)
         if not sendable:
             return []
@@ -88,7 +90,7 @@ class AutoFaxOnNoteLock(BaseHandler):
             digits = self._destination(recipient, config.test_fax_digits)
             label = (
                 f"note {note_id} rule {recipient.rule.name!r} -> {recipient.kind} "
-                f"{recipient.name!r} at {masked(digits)}"
+                f"at {masked(digits)}"
                 + (" (test number)" if config.test_fax_digits else "")
             )
             if config.mode == MODE_DRY_RUN:
@@ -101,6 +103,17 @@ class AutoFaxOnNoteLock(BaseHandler):
         return effects
 
     @staticmethod
+    def _today(note: Note) -> date:
+        """Today in the note provider's last known time zone, or UTC without one.
+
+        Facility addresses end on a calendar date, so "today" must be the
+        practice's date, not the server's UTC date (which runs a day ahead
+        every US evening).
+        """
+        tz = note.provider.last_known_timezone if note.provider else None
+        return datetime.now(tz or UTC).date()
+
+    @staticmethod
     def _sendable(recipients: list[Recipient], note_id: str) -> list[Recipient]:
         """Recipients with a fax number, one per number. Logs the rest."""
         seen: set[str] = set()
@@ -109,7 +122,7 @@ class AutoFaxOnNoteLock(BaseHandler):
             if recipient.problem or not recipient.fax_digits:
                 log.warning(
                     f"[auto_fax] note {note_id} rule {recipient.rule.name!r}: skipped "
-                    f"{recipient.kind} {recipient.name!r}: {recipient.problem}"
+                    f"{recipient.kind}: {recipient.problem}"
                 )
                 continue
             if recipient.fax_digits in seen:
