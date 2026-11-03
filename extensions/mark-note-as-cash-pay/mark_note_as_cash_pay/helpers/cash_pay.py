@@ -114,8 +114,12 @@ def current_queue_name(claim: Claim) -> str | None:
     return queue.name if queue else None
 
 
-def actor_name(context: dict[str, Any]) -> str:
-    """Name of the staff member who clicked, for the claim comment."""
+def actor_name(context: dict[str, Any]) -> str | None:
+    """Name of the staff member who clicked, for the claim comment.
+
+    None when the click carries no resolvable staff member. The caller refuses
+    the click rather than writing a placeholder name into the claim comment.
+    """
     user = (context or {}).get("user") or {}
     staff_id = user.get("staff") or user.get("id")
     if staff_id:
@@ -128,7 +132,7 @@ def actor_name(context: dict[str, Any]) -> str:
             ).strip()
             if name:
                 return name
-    return "a staff member"
+    return None
 
 
 def _now() -> str:

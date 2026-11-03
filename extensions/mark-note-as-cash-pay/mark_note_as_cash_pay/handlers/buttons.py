@@ -57,7 +57,14 @@ class _CashPayButton(ActionButton):
             message = "This note has no claim yet, so there is nothing to mark."
             log.warning("[cash_pay] %s", message)
             return [error_modal(message)]
-        return self.build(claim, cfg, actor_name(self.event.context))
+        who = actor_name(self.event.context)
+        if who is None:
+            message = (
+                "Could not tell which staff member clicked, so nothing was recorded."
+            )
+            log.warning("[cash_pay] click refused: no staff member on the event")
+            return [error_modal(message)]
+        return self.build(claim, cfg, who)
 
     def build(self, claim, cfg, who) -> list[Effect]:  # type: ignore[no-untyped-def]
         raise NotImplementedError

@@ -118,8 +118,16 @@ class TestActorName:
             assert actor_name({"user": {"id": "s1"}}) == "Sam Lee"
             staff.objects.filter.assert_called_once_with(id="s1")
 
-    def test_falls_back_when_no_user(self) -> None:
-        assert actor_name({}) == "a staff member"
+    def test_none_when_no_user(self) -> None:
+        # No placeholder name may reach a claim comment.
+        assert actor_name({}) is None
+
+    def test_none_when_staff_not_found(self) -> None:
+        with patch(f"{HELPERS}.Staff") as staff:
+            staff.objects.filter.return_value.values.return_value.first.return_value = (
+                None
+            )
+            assert actor_name({"user": {"id": "s1"}}) is None
 
 
 class TestMark:

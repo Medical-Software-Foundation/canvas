@@ -120,6 +120,20 @@ class TestClick:
         assert effects[0].type == EffectType.LAUNCH_MODAL
         assert claim_effect.calls == []
 
+    @pytest.mark.parametrize("cls", [MarkAsCashPayButton, UnmarkCashPayButton])
+    def test_unknown_clicker_shows_modal_and_changes_nothing(
+        self, cls, note_and_claim, claim_effect, queue_exists
+    ) -> None:
+        # No placeholder like "a staff member" may be written into the claim comment.
+        note_and_claim["claim"] = make_claim(
+            CODING_QUEUE, labeled=cls is UnmarkCashPayButton
+        )
+        with patch(f"{BUTTONS}.actor_name", return_value=None):
+            effects = self._click(cls, ENABLED)
+        assert len(effects) == 1 and effects[0].type == EffectType.LAUNCH_MODAL
+        assert "nothing was recorded" in effects[0].payload
+        assert claim_effect.calls == []
+
     def test_mark_click_labels_and_moves(
         self, note_and_claim, claim_effect, queue_exists
     ) -> None:

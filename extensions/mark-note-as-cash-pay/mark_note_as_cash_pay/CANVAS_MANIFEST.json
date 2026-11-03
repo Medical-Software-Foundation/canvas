@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "mark_note_as_cash_pay",
     "description": "Adds 'Mark as cash pay' / 'Unmark as cash pay' to the note header dropdown on billable notes. Marking labels the note's claim Cash Pay and moves it to a configured Cash Pay claim queue. Off until CASH_PAY_ENABLED is true; the queue must already exist.",
     "components": {
