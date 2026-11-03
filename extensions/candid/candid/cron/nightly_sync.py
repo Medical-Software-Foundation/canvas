@@ -57,7 +57,10 @@ LOCK_TTL_SECONDS = 90 * 60
 # The local date the last cycle started on, so one day never starts two cycles.
 LAST_START_CACHE_KEY = "candid_nightly_sync_last_start_date"
 LAST_START_TTL_SECONDS = 26 * 60 * 60
-# Running totals for the cycle under way, logged when it completes. A claim
+# Running totals for the cycle under way, logged when it completes. "Failed"
+# (logged as "not synced") counts claims whose sync raised, which includes a
+# claim none of whose encounters could be fetched from Candid (429s included).
+# Postings Canvas rejects after the cron returns can't be seen here. A claim
 # that fails is logged and skipped; the cursor moves past it, so it is tried
 # once per cycle (once a night), never again in the same cycle.
 STATS_KEY = "candid_nightly_sync_stats"
@@ -140,17 +143,18 @@ class NightlyCandidSync(CronTask):
                 processed >= MAX_CLAIMS_PER_BATCH
                 or datetime.now(UTC) - started > BATCH_TIME_BUDGET
             ):
+                # Stats first and never fatal: they only feed a log line. The
+                # cursor goes last, so a failed write before it leaves the
+                # cursor where it was and the next tick redoes this batch. A
+                # redone batch is counted twice in the totals log line; that
+                # beats the reverse order, which could lose a batch's effects.
+                _save_cycle_totals(state, processed, synced)
                 state.set(
                     CURSOR_CACHE_KEY, last_claim_id, timeout_seconds=CURSOR_TTL_SECONDS
                 )
-                state.set(
-                    STATS_KEY,
-                    _cycle_totals(state, processed, synced),
-                    timeout_seconds=STATS_TTL_SECONDS,
-                )
                 log.info(
                     f"Candid nightly sync: synced {synced}/{processed} claims "
-                    f"({processed - synced} failed), continuing next hour"
+                    f"({processed - synced} not synced), continuing next hour"
                 )
                 return effects
 
@@ -162,16 +166,36 @@ class NightlyCandidSync(CronTask):
             except Exception as e:
                 log.warning(f"Candid nightly sync: failed for claim {claim.id}: {e}")
 
+        try:
+            totals = _cycle_totals(state, processed, synced)
+            state.delete(STATS_KEY)
+        except Exception as e:  # noqa: BLE001 - stats only feed a log line
+            log.warning(f"Candid nightly sync: couldn't read or clear cycle stats: {e}")
+            totals = None
         state.delete(CURSOR_CACHE_KEY)
-        totals = _cycle_totals(state, processed, synced)
-        state.delete(STATS_KEY)
+        cycle = (
+            f"{totals['synced']}/{totals['processed']} claims synced, "
+            f"{totals['failed']} not synced, over {totals['batches']} batches"
+            if totals
+            else "cycle totals unavailable"
+        )
         log.info(
             f"Candid nightly sync: synced {synced}/{processed} claims "
-            f"({processed - synced} failed), cycle complete: "
-            f"{totals['synced']}/{totals['processed']} claims synced, "
-            f"{totals['failed']} failed, over {totals['batches']} batches"
+            f"({processed - synced} not synced), cycle complete: {cycle}"
         )
         return effects
+
+
+def _save_cycle_totals(state: SyncState, processed: int, synced: int) -> None:
+    """Store the cycle's running totals; a failure only loses a log line."""
+    try:
+        state.set(
+            STATS_KEY,
+            _cycle_totals(state, processed, synced),
+            timeout_seconds=STATS_TTL_SECONDS,
+        )
+    except Exception as e:  # noqa: BLE001 - stats only feed a log line
+        log.warning(f"Candid nightly sync: couldn't save cycle stats: {e}")
 
 
 def _cycle_totals(state: SyncState, processed: int, synced: int) -> dict[str, int]:

@@ -227,3 +227,25 @@ def test_post_returns_404_when_claim_missing():
     assert effects[0].status_code == 404
     assert json.loads(effects[0].content) == {"error": "claim not found"}
     mock_sync.assert_not_called()
+
+
+def test_post_returns_502_and_writes_nothing_when_candid_could_not_be_read():
+    from candid.adjudication_sync import CandidFetchError
+
+    handler = CandidClaimDetailAPI.__new__(CandidClaimDetailAPI)
+    handler.secrets = MOCK_SECRETS
+    handler.request = MagicMock()
+    handler.request.json.return_value = {"claim_id": "claim-1"}
+
+    with (
+        patch("candid.api.claim_detail.Claim") as MockClaim,
+        patch("candid.api.claim_detail.sync_claim_adjudications") as mock_sync,
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = _fake_claim()
+        mock_sync.side_effect = CandidFetchError("could not fetch any encounter")
+
+        effects = handler.post()
+
+    assert len(effects) == 1
+    assert effects[0].status_code == 502
+    assert "Candid" in json.loads(effects[0].content)["error"]

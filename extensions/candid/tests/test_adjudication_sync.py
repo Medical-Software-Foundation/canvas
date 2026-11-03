@@ -242,22 +242,41 @@ def test_match_same_code_lines_pair_off_one_to_one() -> None:
     assert _match_service_lines(lines, [li1, li2], CANVAS_CLAIM_ID) == ["li-2", "li-1"]
 
 
-def test_match_charge_date_fallback_for_a_remapped_code() -> None:
-    """99487 remapped to G0023 by the payer: charge + date finds the line."""
+def test_match_known_remap_g0023_to_99487() -> None:
+    """99487 remapped to G0023 by the payer: the known remap finds the line."""
     li = _fake_line_item("99487", Decimal("120.00"), li_id="li-1")
     other = _fake_line_item("99213", Decimal("100.00"), li_id="li-2")
     line = _candid_service_line("G0023", 12000)
     with patch("candid.adjudication_sync.log") as mock_log:
         assert _match_service_lines([line], [other, li], CANVAS_CLAIM_ID) == ["li-1"]
-    assert "charge+date fallback" in mock_log.warning.call_args.args[0]
+    assert "known payer remap" in mock_log.info.call_args.args[0]
 
 
-def test_match_index_fallback_takes_a_free_line() -> None:
-    li = _fake_line_item("99487", Decimal("120.00"), li_id="li-1")
-    line = _candid_service_line("G0023", 9900)
-    with patch("candid.adjudication_sync.log") as mock_log:
-        assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == ["li-1"]
-    assert "index fallback" in mock_log.warning.call_args.args[0]
+def test_match_known_remap_works_the_other_way() -> None:
+    li = _fake_line_item("G0023", Decimal("120.00"), li_id="li-1")
+    line = _candid_service_line("99487", 9900)
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == ["li-1"]
+
+
+def test_known_remap_needs_the_same_date() -> None:
+    li = _fake_line_item("99487", Decimal("120.00"), "2026-01-15", "li-1")
+    line = _candid_service_line("G0023", 12000, date_of_service="2026-01-16")
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == [None]
+
+
+def test_no_charge_date_fallback_for_an_unknown_remap() -> None:
+    """Prod: charge+date paired 99214 with 90833. Same charge and date is no
+    longer enough; the line stays unmatched for a biller."""
+    li = _fake_line_item("90833", Decimal("150.00"), li_id="li-90833")
+    line = _candid_service_line("99214", 15000)
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == [None]
+
+
+def test_no_index_fallback() -> None:
+    """Prod: index paired 99490 with 99454. Position alone never matches."""
+    li = _fake_line_item("99454", Decimal("80.00"), li_id="li-1")
+    line = _candid_service_line("99490", 9900)
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == [None]
 
 
 def test_fallback_never_takes_a_line_another_candid_line_matched() -> None:
@@ -597,7 +616,7 @@ def test_sync_extracts_status_from_claim() -> None:
 
     with (
         patch("candid.adjudication_sync.CandidClient") as MC,
-        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.ClaimEffect"),
         patch("candid.adjudication_sync.sync_banner") as mock_banner,
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
@@ -1337,6 +1356,42 @@ def test_sync_skips_encounter_on_fetch_failure_and_continues() -> None:
             ce.post_payment.call_args.kwargs["claim_description"]
             == f"{ERA_DESC_PREFIX}era-ok"
         )
+
+
+def test_sync_raises_when_no_encounter_could_be_fetched() -> None:
+    """Nothing read from Candid: no status, banner or history is written."""
+    from candid.adjudication_sync import CandidFetchError
+
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim(
+        [li],
+        metadata={
+            "candid_encounters": [
+                {"candid_encounter_id": "enc-1"},
+                {"candid_encounter_id": "enc-2", "split": 2},
+            ]
+        },
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner") as banner,
+        patch("candid.adjudication_sync._finalize_effects") as finalize,
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = RuntimeError(
+            "429 Client Error"
+        )
+        try:
+            sync_claim_adjudications(claim, MOCK_SECRETS)
+        except CandidFetchError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected CandidFetchError")
+
+    finalize.assert_not_called()
+    banner.assert_not_called()
+    MCE.return_value.post_payment.assert_not_called()
 
 
 def test_sync_continues_when_patient_payments_fetch_fails() -> None:
@@ -2137,6 +2192,44 @@ def test_unposted_comment_skips_lines_without_money_and_placeholders() -> None:
     assert _unposted_lines_comment(lines, [None, None, None], ["era-1"]).endswith(
         "? on ? (copay $25.00)"
     )
+
+
+def test_unposted_comment_lists_an_adjustment_only_denial() -> None:
+    """A $0-paid denial with only CO adjustments must still reach a biller."""
+    from candid.adjudication_sync import _unposted_lines_comment
+
+    line = _candid_service_line(
+        "99214",
+        15000,
+        era_adjustments=[
+            {
+                "adjustment_group_code": "CO",
+                "adjustment_reason_code": "97",
+                "adjustment_amount_cents": 15000,
+            }
+        ],
+        manual_adjustments=[{"adjustment_amount_cents": 500}],
+    )
+    comment = _unposted_lines_comment([line], [None], ["era-1"])
+    assert comment is not None
+    assert "99214 on 2026-01-15 (CO-97 $150.00, adjustment $5.00)" in comment
+
+
+def test_unposted_comment_skips_zero_adjustments() -> None:
+    from candid.adjudication_sync import _unposted_lines_comment
+
+    line = _candid_service_line(
+        "99214",
+        15000,
+        era_adjustments=[
+            {
+                "adjustment_group_code": "CO",
+                "adjustment_reason_code": "45",
+                "adjustment_amount_cents": 0,
+            }
+        ],
+    )
+    assert _unposted_lines_comment([line], [None], ["era-1"]) is None
 
 
 def test_unposted_comment_on_a_later_era_says_amounts_are_totals() -> None:

@@ -90,6 +90,15 @@ def _same_date(line_item: Any, candid_date: str | None) -> bool:
     return not candid_date or str(line_item.from_date) == str(candid_date)
 
 
+# Payer code remaps seen in prod: the code on the Candid (payer) line, mapped
+# to the Canvas line codes it may stand for. Add a pair only once it's seen in
+# real remittances; anything else unmatched goes to a biller via a comment.
+KNOWN_PAYER_REMAPS: dict[str, frozenset[str]] = {
+    "99487": frozenset({"G0023"}),
+    "G0023": frozenset({"99487"}),
+}
+
+
 def _match_service_lines(
     service_lines: list[dict], line_items: list, canvas_claim_id: str
 ) -> list[str | None]:
@@ -102,12 +111,13 @@ def _match_service_lines(
 
     1. ``external_id`` (the Canvas line item ID, set at submission)
     2. ``procedure_code``, narrowed by date and charge when ambiguous
-    3. Fallback: ``charge_amount`` + ``date_of_service`` (payer code remaps)
-    4. Fallback: positional index (same order as submitted)
+    3. A known payer remap (``KNOWN_PAYER_REMAPS``), same date of service
 
-    The fallbacks only apply to a Candid line whose procedure code is on no
-    Canvas line at all (a remap), never to one whose code's lines are taken or
-    ambiguous: those would move money onto another procedure's line.
+    Pass 3 only applies to a Candid line whose procedure code is on no Canvas
+    line at all. There is no charge+date or positional fallback: in prod they
+    mostly paired unrelated procedures (99214 with 90833, 96127 with 90837),
+    putting one procedure's money on another's line. A line left unmatched
+    gets a claim comment instead, so a biller posts it by hand.
 
     One to one matters for posting: two Candid lines on one Canvas line put two
     payment rows on that line in one posting, which Canvas rejects ("Specify an
@@ -163,31 +173,22 @@ def _match_service_lines(
             )
 
     for idx, sl in enumerate(service_lines):
-        charge = _cents_to_dollars(sl.get("charge_amount_cents"))
-        if matches[idx] or idx in no_fallback or charge is None:
+        proc = sl.get("procedure_code") or ""
+        remap_to = KNOWN_PAYER_REMAPS.get(proc)
+        if matches[idx] or idx in no_fallback or not remap_to:
             continue
         candidates = [
             li
             for li in line_items
-            if free(li) and li.charge == charge and _same_date(li, _service_date(sl))
+            if free(li)
+            and li.proc_code in remap_to
+            and _same_date(li, _service_date(sl))
         ]
         if len(candidates) == 1:
             take(idx, str(candidates[0].id))
-            log.warning(
-                f"Candid sync: matched {sl.get('procedure_code')} to "
-                f"{candidates[0].proc_code} via charge+date fallback on claim "
-                f"{canvas_claim_id}"
-            )
-
-    for idx, sl in enumerate(service_lines):
-        if matches[idx] or idx in no_fallback or idx >= len(line_items):
-            continue
-        li = line_items[idx]
-        if free(li):
-            take(idx, str(li.id))
-            log.warning(
-                f"Candid sync: matched {sl.get('procedure_code')} to {li.proc_code} "
-                f"via index fallback (position {idx}) on claim {canvas_claim_id}"
+            log.info(
+                f"Candid sync: matched {proc} to {candidates[0].proc_code} "
+                f"(known payer remap) on claim {canvas_claim_id}"
             )
 
     for idx, sl in enumerate(service_lines):
@@ -894,6 +895,33 @@ _UNPOSTED_AMOUNT_FIELDS = (
 )
 
 
+def _adjustment_labels(sl: dict) -> list[str]:
+    """ERA and manual adjustments on a Candid line, as "CO-45 $12.00" labels.
+
+    A denial can pay $0 and carry only adjustments; without these the line
+    would be left out of the unposted-lines comment and its write-offs and
+    transfers would go unposted silently.
+    """
+    adjustments = (sl.get("service_line_era_data") or {}).get(
+        "service_line_adjustments"
+    ) or []
+    adjustments = adjustments + (sl.get("service_line_manual_adjustments") or [])
+    labels = []
+    for adj in adjustments:
+        amount = _cents_to_dollars(adj.get("adjustment_amount_cents"))
+        if not amount:
+            continue
+        group_code = adj.get("adjustment_group_code") or ""
+        reason_code = adj.get("adjustment_reason_code") or ""
+        code = (
+            f"{group_code}-{reason_code}"
+            if group_code and reason_code
+            else "adjustment"
+        )
+        labels.append(f"{code} ${amount}")
+    return labels
+
+
 def _unposted_lines_comment(
     service_lines: list[dict], matches: list[str | None], era_ids: list[str]
 ) -> str | None:
@@ -912,7 +940,7 @@ def _unposted_lines_comment(
             f"{label} ${amount}"
             for cents_field, label in _UNPOSTED_AMOUNT_FIELDS
             if (amount := _cents_to_dollars(sl.get(cents_field)))
-        ]
+        ] + _adjustment_labels(sl)
         if amounts:
             unposted.append(
                 f"{sl.get('procedure_code') or '?'} on {_service_date(sl) or '?'} "
@@ -1119,6 +1147,10 @@ def _finalize_effects(state: _SyncState, claim: Claim) -> None:
     )
 
 
+class CandidFetchError(Exception):
+    """No encounter of a claim could be read from Candid, so nothing was synced."""
+
+
 def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     """Pull adjudication and patient payment data from Candid for a single claim.
 
@@ -1134,6 +1166,10 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     3. ``GET /patient-payments/v4?claim_id={candid_claim_id}`` → patient payments
 
     Dedup IDs are appended to claim metadata in the same effect batch.
+
+    Raises ``CandidFetchError`` when none of the claim's encounters could be
+    fetched, so nothing is written over the claim's status. If only some
+    splits fail, the fetched ones are synced and the failure is logged.
     """
     encounters_meta = get_claim_metadata(claim, META_ENCOUNTERS)
     if not encounters_meta:
@@ -1145,6 +1181,8 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     client = CandidClient.from_secrets(secrets)
     state = _init_sync_state(claim, secrets)
 
+    fetched = 0
+    last_error: Exception | None = None
     for encounter_record in encounters_meta:
         candid_encounter_id = encounter_record.get("candid_encounter_id")
         if not candid_encounter_id:
@@ -1156,13 +1194,25 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
                 f"Candid sync: failed to fetch encounter {candid_encounter_id} "
                 f"for claim {state.canvas_claim_id}: {e}"
             )
+            last_error = e
             continue
+        fetched = fetched + 1
         _process_encounter(
             state,
             encounter_data,
             client,
             overflow=(encounter_record.get("split") or 1) > 1,
         )
+
+    if last_error is not None and not fetched:
+        # Nothing was read from Candid, so writing the status, banner and a
+        # sync-history row would overwrite the claim's real Candid status with
+        # "synced". Fail the claim instead; the cron counts it and retries it
+        # next cycle.
+        raise CandidFetchError(
+            f"Candid sync: could not fetch any encounter for claim "
+            f"{state.canvas_claim_id}: {last_error}"
+        ) from last_error
 
     _post_collected_patient_payments(state)
     _finalize_effects(state, claim)

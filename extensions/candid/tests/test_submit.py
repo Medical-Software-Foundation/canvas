@@ -490,6 +490,8 @@ def test_rejection_comment_adds_a_next_step_for_an_unknown_payer() -> None:
 
     assert unknown.startswith("Candid submission rejected (claim): <422 Unknown Error>")
     assert unknown.endswith(UNKNOWN_PAYER_HINT)
+    # Prod returns this for subscriber_secondary too, not only the patient's coverage
+    assert "the coverage named in the error" in unknown
     assert (
         other
         == "Candid submission rejected (claim): <400 ValidationError> patient.zip missing"

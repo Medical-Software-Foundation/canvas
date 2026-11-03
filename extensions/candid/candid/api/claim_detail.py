@@ -6,7 +6,7 @@ from canvas_sdk.handlers.simple_api import SimpleAPIRoute, StaffSessionAuthMixin
 from canvas_sdk.v1.data.claim import Claim
 from logger import log
 
-from candid.adjudication_sync import sync_claim_adjudications
+from candid.adjudication_sync import CandidFetchError, sync_claim_adjudications
 from candid.effect_helpers import (
     BANNER_KEY,
     ERA_DESC_PREFIX,
@@ -139,7 +139,16 @@ class CandidClaimDetailAPI(StaffSessionAuthMixin, SimpleAPIRoute):
             return [JSONResponse({"error": "claim not found"}, status_code=404)]
 
         log.info(f"Candid app: manual sync triggered for claim {canvas_claim_id}")
-        effects = sync_claim_adjudications(claim, self.secrets)
+        try:
+            effects = sync_claim_adjudications(claim, self.secrets)
+        except CandidFetchError as exc:
+            log.warning(str(exc))
+            return [
+                JSONResponse(
+                    {"error": "Couldn't reach Candid for this claim; try again later"},
+                    status_code=502,
+                )
+            ]
 
         return effects + [
             JSONResponse({"status": "synced", "effects_count": len(effects)})

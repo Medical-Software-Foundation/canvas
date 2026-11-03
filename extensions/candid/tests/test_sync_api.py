@@ -92,3 +92,18 @@ def test_each_route_is_bound_to_its_own_sync_function(cls, sync_name):
     assert getattr(adjudication_sync, sync_name) in bound
     other = ({name for _, name in ROUTES} - {sync_name}).pop()
     assert getattr(adjudication_sync, other) not in bound
+
+
+def test_post_returns_502_when_candid_could_not_be_read():
+    sync_fn = MagicMock(
+        side_effect=adjudication_sync.CandidFetchError("could not fetch any encounter")
+    )
+    route = type("Route", (CandidSyncAPI,), {"post": _sync_handler(sync_fn, "test")})
+    handler = _handler(route, {"claim_id": "claim-1"})
+    with patch("candid.api.sync.Claim") as MockClaim:
+        MockClaim.objects.filter.return_value.first.return_value = MagicMock()
+        effects = handler.post()
+
+    assert len(effects) == 1
+    assert effects[0].status_code == 502
+    assert json.loads(effects[0].content)["error"]

@@ -37,9 +37,9 @@ DIAGNOSIS_ID_KEYS = (
 # Candid's answer when a coverage's payer ID isn't in its Canvas payer crosswalk
 UNKNOWN_PAYER_ERROR = "Unable to find payer"
 UNKNOWN_PAYER_HINT = (
-    " Candid doesn't know this payer ID. Check the payer on the patient's "
-    "coverage; if it's right, ask Candid to add the payer ID to the practice's "
-    "Canvas payer mapping, then resubmit."
+    " Candid doesn't know this payer ID. Check the payer on the coverage "
+    "named in the error; if it's right, ask Candid to add the payer ID to "
+    "the practice's Canvas payer mapping, then resubmit."
 )
 
 
