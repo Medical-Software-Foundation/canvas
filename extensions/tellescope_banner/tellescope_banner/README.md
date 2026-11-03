@@ -5,6 +5,19 @@ patient's profile in [Tellescope](https://tellescope.com). It replaces the old
 "Tellescope banner" protocol that was loaded by hand for practices with a
 Tellescope integration.
 
+![Tellescope banner on a test patient's profile](../docs/screenshots/01-profile-banner.png)
+
+Who it is for: practices that run patient engagement in Tellescope and want staff
+one click away from the patient's Tellescope record.
+
+## What access it grants
+
+- Anyone who can open the chart sees the banner and its link. The link only opens
+  Tellescope; the user still needs their own Tellescope login.
+- The plugin reads patient external identifiers in one configured system. It writes
+  only the banner (add or remove). No API routes, no outside calls.
+- Logs name the setting that is missing or invalid, never a patient value.
+
 ## How it works
 
 The plugin builds the link from a URL template you set in the plugin settings.
