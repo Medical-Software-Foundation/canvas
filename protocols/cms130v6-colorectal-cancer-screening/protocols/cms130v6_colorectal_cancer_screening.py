@@ -106,18 +106,6 @@ class ClinicalQualityMeasure130v6(ClinicalQualityMeasure):
 
     _patient: Patient | None = None
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        # patient_id_from_target() rejects imaging report events until
-        # https://github.com/canvas-medical/canvas-plugins/pull/1975 ships, so those take the
-        # patient from the event context. Remove this override once the plugin's SDK version
-        # includes that fix.
-        if self.event.type in (
-            EventType.IMAGING_REPORT_CREATED,
-            EventType.IMAGING_REPORT_UPDATED,
-        ) and (patient := self.event.context.get("patient")):
-            self._patient_id = patient["id"]
-
     @property
     def patient(self) -> Patient:
         """Return the Patient this protocol is being computed for, fetched once per instance."""

@@ -14,9 +14,6 @@ from protocols.cms138v6_tobacco_screening_and_cessation import ClinicalQualityMe
 MISSING_ID = "00000000000000000000000000000000"
 PROTOCOLS = (ClinicalQualityMeasure138v6,)
 
-# Events the SDK lookup does not map yet; the protocol takes their patient from the context.
-CONTEXT_PATIENT_EVENTS = ("BILLING_LINE_ITEM_CREATED",)
-
 
 def _protocol(
     protocol_class: type,
@@ -53,7 +50,7 @@ def test_record_events_resolve_the_targets_patient() -> None:
         (protocol_class, name)
         for protocol_class in PROTOCOLS
         for name in protocol_class.RESPONDS_TO
-        if not name.startswith("PATIENT_") and name not in CONTEXT_PATIENT_EVENTS
+        if not name.startswith("PATIENT_")
     ],
 )
 def test_sdk_maps_every_record_event_the_protocol_responds_to(
@@ -70,30 +67,3 @@ def test_patient_events_resolve_from_the_target() -> None:
     patient = PatientFactory.create()
     protocol = _protocol(ClinicalQualityMeasure138v6, EventType.PATIENT_UPDATED, str(patient.id))
     assert protocol.patient_id_from_target() == str(patient.id)
-
-
-@pytest.mark.parametrize("event_name", CONTEXT_PATIENT_EVENTS)
-def test_billing_line_item_events_take_the_patient_from_the_context(
-    event_name: str,
-) -> None:
-    """Billing line item events resolve the patient from the event context."""
-    protocol = _protocol(
-        ClinicalQualityMeasure138v6,
-        EventType.Value(event_name),
-        "record-1",
-        {"patient": {"id": "patient-1"}},
-    )
-    assert protocol.patient_id_from_target() == "patient-1"
-
-
-@pytest.mark.parametrize("event_name", CONTEXT_PATIENT_EVENTS)
-def test_sdk_lookup_rejects_billing_line_item_events(event_name: str) -> None:
-    """Tripwire for the context override in ``__init__``.
-
-    When this fails, the plugin's SDK resolves these events
-    (https://github.com/canvas-medical/canvas-plugins/pull/1975): delete the override,
-    CONTEXT_PATIENT_EVENTS, and the two tests that use it.
-    """
-    protocol = _protocol(ClinicalQualityMeasure138v6, EventType.Value(event_name), MISSING_ID)
-    with pytest.raises(ValueError, match="not supported"):
-        protocol.patient_id_from_target()

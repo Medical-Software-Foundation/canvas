@@ -176,14 +176,6 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
             self.POPULATION_2: Population(),
             self.POPULATION_3: Population(),
         }
-        # patient_id_from_target() rejects billing line item events until
-        # https://github.com/canvas-medical/canvas-plugins/pull/1975 ships, so those take the
-        # patient from the event context. Remove this once the plugin's SDK version includes
-        # that fix.
-        if self.event.type == EventType.BILLING_LINE_ITEM_CREATED and (
-            patient := self.event.context.get("patient")
-        ):
-            self._patient_id = patient["id"]
 
     _patient: Patient | None = None
 

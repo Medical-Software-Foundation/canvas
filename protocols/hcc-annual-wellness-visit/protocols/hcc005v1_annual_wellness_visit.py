@@ -6,8 +6,6 @@ qualifying AWV CPT code has been billed within the protocol timeframe (one
 year by default).
 """
 
-from typing import Any
-
 import arrow
 
 from canvas_sdk.effects import Effect
@@ -49,18 +47,6 @@ class Hcc005v1(ClinicalQualityMeasure):
 
     _patient: Patient | None = None
     _qualifying_visits: list[BillingLineItem] | None = None
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        # patient_id_from_target() rejects billing line item events until
-        # https://github.com/canvas-medical/canvas-plugins/pull/1975 ships, so those take the
-        # patient from the event context. Remove this override once the plugin's SDK version
-        # includes that fix.
-        if self.event.type in (
-            EventType.BILLING_LINE_ITEM_CREATED,
-            EventType.BILLING_LINE_ITEM_UPDATED,
-        ) and (patient := self.event.context.get("patient")):
-            self._patient_id = patient["id"]
 
     @property
     def patient(self) -> Patient:
