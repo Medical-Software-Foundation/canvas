@@ -136,7 +136,23 @@ class TestBuildEffectFields:
 
     def test_bad_date_returns_error(self) -> None:
         _, err = _build_effect_fields({"coverage_start_date": "soon"})
-        assert err is not None and "date" in err
+        assert err is not None
+        assert "coverage_start_date" in err
+
+    def test_bad_date_error_is_plain_words(self) -> None:
+        """No raw Python parse text ("Invalid isoformat string") reaches the user."""
+        _, err = _build_effect_fields({"coverage_end_date": "not-a-date"})
+        assert err == {
+            "coverage_end_date": "Enter the date as YYYY-MM-DD, for example 2026-12-31."
+        }
+
+    def test_non_string_date_is_a_field_error_not_a_crash(self) -> None:
+        _, err = _build_effect_fields({"coverage_start_date": 20260101})
+        assert err is not None and "YYYY-MM-DD" in err["coverage_start_date"]
+
+    def test_bad_rank_is_a_field_error(self) -> None:
+        _, err = _build_effect_fields({"coverage_rank": "high"})
+        assert err == {"coverage_rank": "Rank must be a whole number."}
 
     def test_keeps_valid_stack(self) -> None:
         out, err = _build_effect_fields({"stack": "OTHER"})
@@ -184,8 +200,11 @@ class TestData:
         ):
             patient_cls.objects.get.return_value = SimpleNamespace(id=PATIENT_UUID)
             chain = coverage_cls.objects.filter.return_value.exclude.return_value
-            chain.select_related.return_value.order_by.return_value = [coverage]
+            selected = chain.select_related.return_value
+            selected.prefetch_related.return_value.order_by.return_value = [coverage]
             (response,) = api.data()
+        # Card images are read per coverage, so they must be prefetched (no N+1).
+        selected.prefetch_related.assert_called_once_with("snapshot__images")
         body = json.loads(response.content)
         assert body["patient_id"] == PATIENT_UUID
         assert body["coverages"] == [{"id": "c1"}]
@@ -395,6 +414,17 @@ class TestUpdateCoverage:
         api = _make_api(body={"stack": "MAYBE"}, path_params={"coverage_id": "cov-1"})
         (response,) = api.update_coverage()
         assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_bad_date_shows_inline_plain_error(self) -> None:
+        api = _make_api(
+            body={"coverage_start_date": "not-a-date"},
+            path_params={"coverage_id": "cov-1"},
+        )
+        (response,) = api.update_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert "isoformat" not in body["error"]
+        assert "YYYY-MM-DD" in body["field_errors"]["coverage_start_date"]
 
     def test_sdk_validation_error_returns_400(self) -> None:
         api = _make_api(body={"id_number": "M"}, path_params={"coverage_id": "cov-1"})

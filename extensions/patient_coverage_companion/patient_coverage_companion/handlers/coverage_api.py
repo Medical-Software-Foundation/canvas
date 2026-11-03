@@ -80,6 +80,7 @@ _FIELD_IN_MESSAGE = re.compile(r"Field '(\w+)'")
 # start-before-end date check.
 _RANK_CONFLICT_MESSAGE = re.compile(r"already has an active \w+ coverage with rank")
 _DATE_ORDER_MESSAGE = re.compile(r"start date must be on or before its end date")
+_DATE_FORMAT_MESSAGE = "Enter the date as YYYY-MM-DD, for example 2026-12-31."
 
 
 def _field_errors_from_pydantic(exc: PydanticValidationError) -> dict[str, str]:
@@ -191,11 +192,14 @@ def _parse_date(raw: Any) -> date | None:
     return date.fromisoformat(raw)
 
 
-def _build_effect_fields(body: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+def _build_effect_fields(
+    body: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str] | None]:
     """Translate a request body into kwargs for ``CoverageEffect(...)``.
 
-    Returns (kwargs, error_message). Empty / null fields are dropped so the
-    update path doesn't clobber unset fields.
+    Returns (kwargs, field_errors). ``field_errors`` maps a field name to a
+    plain-language message the form shows inline. Empty / null fields are
+    dropped so the update path doesn't clobber unset fields.
     """
     out: dict[str, Any] = {}
     str_fields = (
@@ -220,27 +224,40 @@ def _build_effect_fields(body: dict[str, Any]) -> tuple[dict[str, Any], str | No
         val = body.get(f)
         if val not in (None, ""):
             out[f] = val
-    rank = body.get("coverage_rank")
+    errors: dict[str, str] = {}
+    rank: Any = body.get("coverage_rank")
     if rank not in (None, ""):
         try:
             out["coverage_rank"] = int(rank)
         except (TypeError, ValueError):
-            return {}, f"coverage_rank must be an integer, got {rank!r}"
+            errors["coverage_rank"] = "Rank must be a whole number."
     stack = body.get("stack")
     if stack:
         if stack not in {s.value for s in CoverageStack}:
-            return {}, f"stack must be one of {sorted(s.value for s in CoverageStack)}"
-        out["stack"] = stack
-    try:
-        start = _parse_date(body.get("coverage_start_date"))
-        end = _parse_date(body.get("coverage_end_date"))
-    except ValueError as exc:
-        return {}, f"date parse error: {exc}"
-    if start is not None:
-        out["coverage_start_date"] = start
-    if end is not None:
-        out["coverage_end_date"] = end
+            allowed = ", ".join(sorted(s.value for s in CoverageStack))
+            errors["stack"] = f"Stack must be one of {allowed}."
+        else:
+            out["stack"] = stack
+    for field in ("coverage_start_date", "coverage_end_date"):
+        try:
+            parsed = _parse_date(body.get(field))
+        except (TypeError, ValueError):
+            # Don't echo Python's parse error ("Invalid isoformat string").
+            errors[field] = _DATE_FORMAT_MESSAGE
+            continue
+        if parsed is not None:
+            out[field] = parsed
+    if errors:
+        return {}, errors
     return out, None
+
+
+def _field_errors_response(field_errors: dict[str, str]) -> JSONResponse:
+    """A 400 whose summary is the first field's message, shown in the banner."""
+    return JSONResponse(
+        {"error": next(iter(field_errors.values())), "field_errors": field_errors},
+        status_code=HTTPStatus.BAD_REQUEST,
+    )
 
 
 class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -305,6 +322,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
             Coverage.objects.filter(patient=patient)
             .exclude(stack="REMOVED")
             .select_related("issuer", "subscriber", "snapshot")
+            # _serialize_coverage reads snapshot.images per coverage.
+            .prefetch_related("snapshot__images")
             .order_by("stack", "coverage_rank")
         )
         return [
@@ -408,7 +427,7 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
             ]
         fields, err = _build_effect_fields(body)
         if err:
-            return [JSONResponse({"error": err}, status_code=HTTPStatus.BAD_REQUEST)]
+            return [_field_errors_response(err)]
 
         missing = {
             name: f"{label} is required."
@@ -442,7 +461,7 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         body = self.request.json() or {}
         fields, err = _build_effect_fields(body)
         if err:
-            return [JSONResponse({"error": err}, status_code=HTTPStatus.BAD_REQUEST)]
+            return [_field_errors_response(err)]
         try:
             effect = CoverageEffect(coverage_id=coverage_id, **fields).update()
         except PydanticValidationError as exc:
@@ -465,11 +484,7 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             end = _parse_date(body.get("coverage_end_date"))
         except (TypeError, ValueError):
-            return [
-                _end_date_error(
-                    "Enter the end date as YYYY-MM-DD, for example 2026-12-31."
-                )
-            ]
+            return [_end_date_error(_DATE_FORMAT_MESSAGE)]
         if end is None:
             return [_end_date_error("End date is required.")]
         try:

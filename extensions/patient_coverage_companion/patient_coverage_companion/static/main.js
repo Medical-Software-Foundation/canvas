@@ -264,7 +264,7 @@
       const errors = validateCreateFields(fields);
       if (Object.keys(errors).length) {
         state.fieldErrors = errors;
-        state.banner = { type: "error", text: "Please fix the highlighted fields." };
+        state.banner = { type: "error", text: "Please fix the highlighted fields.", fieldBound: true };
         render();
         return;
       }
@@ -299,14 +299,16 @@
     if (!r.ok) {
       // Server returned per-field errors -> show them inline. Otherwise
       // fall back to the top-level error message or a generic notice.
-      if (r.body && r.body.field_errors) {
-        state.fieldErrors = r.body.field_errors;
-      }
+      const fieldErrors = (r.body && r.body.field_errors) || null;
+      if (fieldErrors) state.fieldErrors = fieldErrors;
       state.banner = {
         type: "error",
         text:
           (r.body && r.body.error) ||
           (r.status === 0 ? "Network error — please retry." : "Save failed."),
+        // A banner that only summarizes inline field errors can clear once
+        // they are all fixed; a form-level reason ("__form__") stays.
+        fieldBound: !!fieldErrors && !fieldErrors.__form__,
       };
       render();
       return;
@@ -333,8 +335,7 @@
   }
 
   async function expire(coverage) {
-    const today = new Date().toISOString().slice(0, 10);
-    const date = prompt("Expire coverage on (YYYY-MM-DD):", today);
+    const date = prompt("Expire coverage on (YYYY-MM-DD):", localToday());
     if (!date) return;
     const r = await http("POST", "/coverage/" + encodeURIComponent(coverage.id) + "/expire", {
       body: { coverage_end_date: date },
@@ -481,7 +482,7 @@
     } else {
       input = makeElement("input", { id, type: opts.type || "text", value: opts.value || "" });
     }
-    return makeElement(
+    const wrapper = makeElement(
       "div",
       { className: errorMsg ? "field field-has-error" : "field" },
       [
@@ -490,6 +491,36 @@
         errorMsg ? makeElement("div", { className: "field-error" }, errorMsg) : null,
       ]
     );
+    // Editing a field clears its stale error, so a fixed field stops
+    // saying it is wrong before the next save.
+    const clearOwnError = () => clearFieldError(fieldName, wrapper);
+    input.addEventListener("input", clearOwnError);
+    input.addEventListener("change", clearOwnError);
+    return wrapper;
+  }
+
+  function clearFieldError(fieldName, wrapper) {
+    if (!state.fieldErrors[fieldName]) return;
+    delete state.fieldErrors[fieldName];
+    wrapper.classList.remove("field-has-error");
+    const errEl = wrapper.querySelector(".field-error");
+    if (errEl) errEl.remove();
+    // Once every highlighted field is fixed, drop the banner if it only
+    // summarized those field errors.
+    const remaining = Object.values(state.fieldErrors).some(Boolean);
+    if (!remaining && state.banner && state.banner.fieldBound) {
+      state.banner = null;
+      const bannerEl = document.querySelector(".banner.error");
+      if (bannerEl) bannerEl.remove();
+    }
+  }
+
+  function localToday() {
+    // The practice's local date, not UTC: toISOString() rolls over to
+    // tomorrow in the evening in US time zones.
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
   }
 
   function renderPayerSearch(editing) {

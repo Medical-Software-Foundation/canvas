@@ -7,6 +7,22 @@ Patient-scope provider companion app for managing the patient's cards on file:
 
 The launch screen is a mode selector with two tiles; pick a mode to enter its flow. The two modes are independent — no shared list view.
 
+**Who it's for:** front-desk and clinical staff who capture or fix a patient's insurance and ID cards from the provider companion app, without going back to the desktop chart.
+
+![Coverage list after adding a coverage with front and back card photos](assets/screenshot-coverage-list.png)
+
+## Install
+
+```bash
+canvas install extensions/patient_coverage_companion/patient_coverage_companion --host <your-instance>
+```
+
+No secrets or settings to configure. Requires Canvas 1.372 or later (SDK 0.264.0).
+
+## Access it grants
+
+Any signed-in staff member who can open the companion app can, for the patient in view, read coverages and ID cards, search payers, upload card photos, and create, edit, expire, remove and reorder coverages and ID cards. The Canvas effect interpreters still apply that staff member's own model and patient permissions to every write. Patients and unauthenticated callers get 401. The plugin logs nothing.
+
 All photo capture uses the rear camera natively on mobile (via `<input type="file" capture="environment">`) and a file picker on desktop.
 
 ## Surface
