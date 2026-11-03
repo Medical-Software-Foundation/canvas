@@ -48,6 +48,17 @@ _DEFAULT_TZ = "America/New_York"
 _DEFAULT_SEND_HOUR = 9
 _DEFAULT_SEND_MINUTE = 0
 
+# Statuses for a visit that is still upcoming. Every campaign considers these.
+_BOOKED_STATUSES = ("unconfirmed", "attempted", "confirmed")
+
+# Statuses staff set when the patient has checked in. Staff do this early for
+# video visits, from the schedule's status dropdown, without touching the note
+# (PLUGIN-526: a video visit marked Arrived hours before its start got no join
+# link and the patient was marked a no-show). A checked-in patient still
+# needs the join link, so the telehealth campaign keeps them; a "your visit is
+# coming up" reminder no longer makes sense, so the reminder campaign skips them.
+_CHECKED_IN_STATUSES = ("arrived", "roomed")
+
 
 def scan_queryset(now: datetime, end_window: datetime):
     """The appointments a scan considers, bounded to the window.
@@ -57,8 +68,10 @@ def scan_queryset(now: datetime, end_window: datetime):
     and not the other, and then guards nothing — which is exactly the failure it
     would be there to prevent.
 
-    Only booked statuses: canceled and no-showed appointments are excluded here
-    rather than skipped in the loop.
+    Booked and checked-in statuses only: canceled, no-showed and exited
+    appointments are excluded here rather than skipped in the loop. Checked-in
+    (arrived / roomed) rows are kept for the telehealth join campaign; the loop
+    keeps them out of the reminder campaign.
 
     Every prefetch below is read per appointment inside the loop and filtered in
     Python, so a dropped lookup does not fail, it silently becomes one query per
@@ -68,7 +81,7 @@ def scan_queryset(now: datetime, end_window: datetime):
         Appointment.objects.filter(
             start_time__gte=now,
             start_time__lte=end_window,
-            status__in=["unconfirmed", "attempted", "confirmed"],
+            status__in=[*_BOOKED_STATUSES, *_CHECKED_IN_STATUSES],
         )
         .select_related(
             "patient", "patient__business_line", "provider", "location", "note_type"
@@ -267,8 +280,10 @@ class ReminderScheduler(CronTask):
 
                 # Reminder campaign — telehealth is configured independently below
                 # and must run regardless of whether reminders are enabled for this
-                # appointment's note type.
-                if enabled:
+                # appointment's note type. A checked-in patient gets no reminder,
+                # only the join link below.
+                checked_in = appointment.status in _CHECKED_IN_STATUSES
+                if enabled and not checked_in:
                     for interval_minutes in intervals:
                         if interval_minutes >= DAY_OUT_THRESHOLD:
                             # Day-out: date-relative with configured send time
@@ -410,7 +425,9 @@ class ReminderScheduler(CronTask):
 
                     log.info(
                         f"Sending telehealth join for appointment {appointment.id} "
-                        f"({interval_minutes}-min interval)"
+                        f"({interval_minutes}-min interval"
+                        + (f", status {appointment.status}" if checked_in else "")
+                        + ")"
                     )
 
                     th_effects, th_results = deliver_to_patient(

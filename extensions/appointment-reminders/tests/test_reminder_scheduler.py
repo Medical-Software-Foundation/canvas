@@ -1237,3 +1237,54 @@ def test_gate_opens_for_a_tick_that_is_the_send_time_only_in_another_zone() -> N
     now = datetime(2026, 6, 7, 9, 0, tzinfo=_PT).astimezone(timezone.utc)
     mock_appt = _run_gate(config, now)
     mock_appt.objects.filter.assert_called_once()
+
+
+# ---- checked-in (arrived / roomed) visits — PLUGIN-526 ----
+
+def _run_checked_in_scan(status: str, minutes_until: int):
+    """One scan with both campaigns on, for a telehealth visit in ``status``."""
+    config = CampaignConfig(
+        reminders_enabled=True,
+        reminder_intervals=[15],
+        reminder_channels=["sms"],
+        reminder_sms_template="r",
+        telehealth_enabled=True,
+        telehealth_intervals=[15],
+        telehealth_channels=["sms"],
+        telehealth_sms_template="join now",
+    )
+    appt = _appointment(minutes_until=minutes_until, is_telehealth=True)
+    appt.status = status
+    with patch(
+        "appointment_reminders.handlers.reminder_scheduler.load_config",
+        return_value=config,
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.claim_store",
+        return_value=_FakeClaims(),
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.Appointment"
+    ) as mock_appt_cls, patch(
+        "appointment_reminders.handlers.reminder_scheduler.get_template_variables",
+        return_value={"telehealth_link": "https://meet.example.com/x"},
+    ), patch(
+        "appointment_reminders.handlers.reminder_scheduler.deliver_to_patient",
+        return_value=_SENT,
+    ) as mock_deliver, patch(
+        "appointment_reminders.handlers.reminder_scheduler.log_delivery"
+    ):
+        chain = mock_appt_cls.objects.filter.return_value.select_related.return_value.prefetch_related
+        chain.return_value.iterator.return_value = [appt]
+        _scheduler().execute()
+    return [c.args[4] for c in mock_deliver.call_args_list]
+
+
+def test_an_arrived_video_visit_still_gets_its_join_link_but_no_reminder() -> None:
+    assert _run_checked_in_scan("arrived", 15) == ["telehealth"]
+
+
+def test_a_roomed_video_visit_still_gets_its_join_link_but_no_reminder() -> None:
+    assert _run_checked_in_scan("roomed", 15) == ["telehealth"]
+
+
+def test_a_booked_video_visit_still_gets_both_campaigns() -> None:
+    assert sorted(_run_checked_in_scan("confirmed", 15)) == ["reminder", "telehealth"]
