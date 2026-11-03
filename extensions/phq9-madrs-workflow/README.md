@@ -34,6 +34,8 @@ When the MADRS questionnaire is committed, the plugin calculates the total score
 
 Results are marked abnormal when the score is 7 or higher.
 
+The result is coded `INTERNAL` / `MADRS`. Canvas requires a code on every questionnaire result because it also creates an Observation, and the code is what tells one result's observations from another's.
+
 ## Prerequisites
 
 - A PHQ-9 questionnaire must be configured in your Canvas instance

@@ -42,8 +42,8 @@ class Protocol(BaseProtocol):
         command = Command.objects.get(id=self.event.target.id)
         interview = command.anchor_object
 
-        # Skip if interview is not committed
-        if not interview.committer:
+        # Skip if interview is not committed, or was entered in error
+        if not interview.committer or interview.entered_in_error:
             return []
 
         note_uuid = self.event.context["note"]["uuid"]
