@@ -1,0 +1,54 @@
+{
+    "sdk_version": "0.240.0",
+    "plugin_version": "0.1.0",
+    "name": "preferred_referrals",
+    "description": "A practice-curated directory of preferred referral providers. Preferred providers show first in the Refer command's search, a CSV import keeps the list current, and a report shows how many referrals went to them.",
+    "components": {
+        "applications": [
+            {
+                "class": "preferred_referrals.applications.directory_app:PreferredReferralsApp",
+                "name": "Preferred referrals",
+                "description": "Manage preferred referral providers and see where referrals go.",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "menu_position": "bottom",
+                "menu_order": 80
+            }
+        ],
+        "handlers": [
+            {
+                "class": "preferred_referrals.handlers.refer_search:PreferredFirstReferSearch",
+                "description": "Puts matching preferred providers first in the Refer command's 'Refer to' search.",
+                "data_access": {
+                    "event": "REFER__REFER_TO__POST_SEARCH",
+                    "read": ["ServiceProvider"],
+                    "write": []
+                }
+            },
+            {
+                "class": "preferred_referrals.routes.directory_api:DirectoryAPI",
+                "description": "Directory page, CSV import, activation and the referral report.",
+                "data_access": {
+                    "event": "",
+                    "read": ["ServiceProvider", "Referral"],
+                    "write": ["ServiceProvider"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "ADMIN_STAFF_IDS",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
