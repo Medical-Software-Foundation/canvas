@@ -199,8 +199,16 @@ def test_client_key_uses_last_forwarded_hop() -> None:
     assert guards.client_key({"X-Forwarded-For": "203.0.113.5, 10.0.0.1"}) == "10.0.0.1"
     # A caller-chosen first hop can't pick a new bucket.
     assert guards.client_key({"X-Forwarded-For": "1.1.1.1, 10.0.0.1"}) == "10.0.0.1"
-    assert guards.client_key({"X-Real-Ip": "198.51.100.7"}) == "198.51.100.7"
+    assert guards.client_key({"X-Forwarded-For": "2001:DB8::1"}) == "2001:db8::1"
     assert guards.client_key({}) == "unknown"
+
+
+def test_client_key_non_ip_values_share_one_bucket() -> None:
+    # Live, the platform passes a caller-chosen X-Forwarded-For (and X-Real-Ip)
+    # straight through, so junk strings must not mint fresh rate-limit buckets.
+    for junk in ("garbage", "a" * 40, "1.2.3.999", "<script>", "1.1.1.1 x"):
+        assert guards.client_key({"X-Forwarded-For": junk}) == "unknown"
+    assert guards.client_key({"X-Real-Ip": "198.51.100.7"}) == "unknown"
 
 
 def test_rate_limit_allows_up_to_limit_then_blocks(cache) -> None:

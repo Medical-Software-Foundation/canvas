@@ -250,21 +250,35 @@ BOOK_LIMIT_PER_EMAIL = (3, 86400)  # 3 booking attempts per email per day
 BOOK_LIMIT_GLOBAL = (200, 3600)  # 200 booking attempts per instance per hour
 
 
-def client_key(headers: Any) -> str:
-    """Best-effort client identifier for rate limiting.
+IPV4_PATTERN = re.compile(
+    r"^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$"
+)
+IPV6_PATTERN = re.compile(r"^[0-9A-Fa-f:]{2,39}$")
+SHARED_CLIENT_KEY = "unknown"
 
-    Uses the LAST X-Forwarded-For hop: that is the address our own load balancer
-    appended, so the caller can't choose it. Earlier hops are caller-supplied and
-    would let a script pick a fresh rate-limit bucket per request. Falls back to
-    X-Real-Ip, then a shared "unknown" bucket (fail closed: limited together).
+
+def client_key(headers: Any) -> str:
+    """Best-effort client identifier for rate limiting. NOT a trusted identity.
+
+    Measured on a Canvas instance (2026-11-03): the platform hands the plugin a
+    single X-Forwarded-For value. With no caller header it is the real client IP;
+    when the caller sends its own X-Forwarded-For, the caller's FIRST value is
+    passed through and the real IP is dropped. X-Real-Ip and Forwarded are passed
+    through from the caller unchanged. So no header the plugin sees is trusted,
+    and per-client limits can be dodged by a caller who sets X-Forwarded-For.
+    The per-email and instance-wide limits are the real backstop.
+
+    What this function does: takes the last X-Forwarded-For hop (the hop a proxy
+    appends, if a deployment ever appends one) and accepts it only if it is an IP
+    literal. Anything else, including caller-chosen X-Real-Ip, goes into one
+    shared bucket, so junk strings can't mint fresh buckets.
     """
     forwarded = str(headers.get("X-Forwarded-For") or "").split(",")[-1].strip()
-    if forwarded and len(forwarded) <= 64:
-        return forwarded
-    real_ip = str(headers.get("X-Real-Ip") or "").strip()
-    if real_ip and len(real_ip) <= 64:
-        return real_ip
-    return "unknown"
+    if IPV4_PATTERN.match(forwarded) or (
+        ":" in forwarded and IPV6_PATTERN.match(forwarded)
+    ):
+        return forwarded.lower()
+    return SHARED_CLIENT_KEY
 
 
 def hit_rate_limit(cache: Any, key: str, limit: tuple[int, int]) -> bool:

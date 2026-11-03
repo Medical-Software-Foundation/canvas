@@ -138,7 +138,7 @@ class PublicBookingAPI(SimpleAPI):
         cache = get_cache()
         client = guards.client_key(self.request.headers)
         if guards.hit_rate_limit(cache, f"slots:{client}", guards.SLOTS_LIMIT):
-            log.info(f"public booking: slots limit hit for {client}")
+            log.info("public booking: per-client slots limit hit")
             return [_error(*RATE_LIMITED)]
 
         note_type, name = self._note_type()
@@ -170,7 +170,7 @@ class PublicBookingAPI(SimpleAPI):
         cache = get_cache()
         client = guards.client_key(headers)
         if guards.hit_rate_limit(cache, f"book:{client}", guards.BOOK_LIMIT_PER_CLIENT):
-            log.info(f"public booking: per-client limit hit for {client}")
+            log.info("public booking: per-client booking limit hit")
             return [_error(*RATE_LIMITED)]
 
         try:

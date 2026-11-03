@@ -360,3 +360,19 @@ def test_task_assigned_to_team_when_configured(wired: dict) -> None:
     result = _api(secrets=secrets, headers=SAME_ORIGIN, body=_body()).book()
     task = json.loads(result[0].payload)["data"]
     assert task["team"]["id"] == "team-9"
+
+
+def test_rate_limit_logs_do_not_carry_client_ip(
+    wired: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    messages: list[str] = []
+    monkeypatch.setattr(
+        public_api.log, "info", lambda msg, *a, **k: messages.append(str(msg))
+    )
+    headers = {"X-Forwarded-For": "1.2.3.4"}
+    for _ in range(61):
+        _api(headers=headers).slots()
+    for i in range(6):
+        _api(headers=SAME_ORIGIN, body=_body(email=f"l{i}@example.org")).book()
+    assert messages, "expected a rate-limit log line"
+    assert not any("1.2.3.4" in m or "203.0.113.9" in m for m in messages)

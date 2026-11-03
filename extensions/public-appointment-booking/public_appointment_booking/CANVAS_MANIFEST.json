@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.140.1",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "public_appointment_booking",
     "description": "Reference plugin for unauthenticated (public) appointment booking. A public page lists open slots and accepts booking requests, with rate limits, an origin check, strict input validation and no patient data in any response. Off until PUBLIC_BOOKING_ENABLED is set to true.",
     "components": {
