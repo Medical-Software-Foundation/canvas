@@ -18,7 +18,7 @@ All photo capture uses the rear camera natively on mobile (via `<input type="fil
 ## What it does
 
 - Lists the patient's active coverages, grouped by stack and rank.
-- Add a coverage: payer, member ID, rank, plan type, subscriber relationship, dates, optional front/back card photos.
+- Add a coverage: payer, member ID, rank, subscriber relationship, dates, optional front/back card photos. Plan type is not editable here: it follows the payer.
 - Edit any existing coverage with a partial update (only fields you change are sent).
 - Expire a coverage with an end date (audit-logged).
 - Remove a coverage (soft-remove via stack flip; audit-logged).
@@ -26,16 +26,21 @@ All photo capture uses the rear camera natively on mobile (via `<input type="fil
 
 ## Card photos
 
-Card photos use the platform's `upload_files=True` SimpleAPI primitive. The browser POSTs `multipart/form-data` to `/cards/upload`; the platform uploads each file part to S3 under `plugin-uploads/patient_coverage_companion/...` and hands the resulting keys back to the plugin. The next coverage save call carries those keys on `card_image_front_upload_key` / `card_image_back_upload_key`, and the platform-side interpreter performs a **server-side S3 copy** into the coverage's image storage — no bytes ever pass through the plugin.
+Card photos use the SimpleAPI `file_uploads="stored"` route option. The browser POSTs `multipart/form-data` to `/cards/upload`; Canvas stores each file part before the plugin runs and hands the plugin a `StoredFilePart` per file, carrying either an upload key (`plugin-uploads/...`) or an error code. If any part fails, the endpoint returns 502 and no keys, so a coverage is never saved with one side silently missing. The next coverage save call carries those keys on `card_image_front_upload_key` / `card_image_back_upload_key`, and the platform-side interpreter performs a **server-side S3 copy** into the coverage's image storage — no bytes ever pass through the plugin.
 
 On mobile, the `<input type="file" accept="image/*" capture="environment">` field opens the rear camera natively. On desktop it falls back to a file picker.
 
 ## Dependencies
 
-- Canvas SDK ≥ 0.1.4
+- Canvas SDK ≥ 0.264.0 (Canvas release 1.372 or later)
 - `canvas_sdk.effects.coverage` (Coverage create / update / expire / remove / remove_photo + CoverageReorder)
-- `canvas_sdk.effects.patient_identification_card` (PatientIdentificationCard create / update / delete)
-- Both shipped under [KOALA-5549](https://canvasmedical.atlassian.net/browse/KOALA-5549).
+- `canvas_sdk.effects.patient` (PatientIdentificationCard create / update / delete)
+- SimpleAPI `file_uploads="stored"` routes
+- Shipped in canvas-plugins #1931.
+
+The Coverage effect validates when the endpoint calls it (payer exists, rank is free among active coverages, subscriber rules, upload key prefix). The endpoints turn those errors into field-level 400s, so the form shows them inline instead of reporting a save that later fails.
+
+Known limit: the form has no subscriber picker, so only "Self" works as the relationship. Other relationships need a subscriber patient, which the SDK requires.
 
 ## Endpoints
 
@@ -47,7 +52,7 @@ All under `/plugin-io/api/patient_coverage_companion/app/`:
 | GET    | `/main.js`, `/styles.css`                   | Static assets                    |
 | GET    | `/data.json?patient_id=X`                   | Coverages + dropdown options     |
 | GET    | `/payers/search?q=Y`                        | Payer (Transactor) type-ahead    |
-| POST   | `/cards/upload` (`upload_files=True`)       | File upload → S3 keys (any field name) |
+| POST   | `/cards/upload` (`file_uploads="stored"`) | File upload → upload keys (any field name) |
 | POST   | `/coverage`                                 | Create coverage                  |
 | POST   | `/coverage/<id>`                            | Update coverage (partial)        |
 | POST   | `/coverage/<id>/remove`                     | Remove coverage                  |

@@ -10,7 +10,7 @@ license = "MIT"
 name = "patient_coverage_companion"
 readme = "patient_coverage_companion/README.md"
 requires-python = ">=3.11"
-version = "0.0.2"
+version = "0.0.3"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]

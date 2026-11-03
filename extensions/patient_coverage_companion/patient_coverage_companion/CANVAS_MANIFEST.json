@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.1.4",
-    "plugin_version": "0.0.2",
+    "sdk_version": "0.264.0",
+    "plugin_version": "0.0.3",
     "name": "patient_coverage_companion",
     "description": "Provider companion app (patient scope) for managing patient cards — insurance coverages and identification cards — with front/back photo capture.",
     "url_permissions": [],

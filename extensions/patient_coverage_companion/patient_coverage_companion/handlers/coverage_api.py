@@ -7,9 +7,9 @@ Endpoints (all under /plugin-io/api/patient_coverage_companion/app/):
 | GET  /styles.css                          | CSS                              |
 | GET  /data.json?patient_id=X              | Coverages list + dropdowns       |
 | GET  /payers/search?q=Y                   | Transactor type-ahead            |
-| POST /cards/upload  (upload_files=True)   | Card photo uploads -> S3 keys    |
-| POST /coverage                            | Create — CoverageCreateEffect    |
-| POST /coverage/<id>                       | Update — CoverageUpdateEffect    |
+| POST /cards/upload  (file_uploads=stored) | Card photo uploads -> upload keys|
+| POST /coverage                            | Create — Coverage(...).create()  |
+| POST /coverage/<id>                       | Update — Coverage(...).update()  |
 | POST /coverage/<id>/remove                | Remove                            |
 | POST /coverage/<id>/expire                | Expire                            |
 | POST /coverage/<id>/photo/<side>/remove   | Remove a single card photo       |
@@ -23,91 +23,116 @@ defense.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+import re
+from datetime import UTC, date, datetime
 from http import HTTPStatus
 from typing import Any
 
-from pydantic import ValidationError as PydanticValidationError
-
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.coverage import Coverage as CoverageEffect, CoverageReorder
-from canvas_sdk.effects.patient_identification_card import (
+from canvas_sdk.effects.coverage import Coverage as CoverageEffect
+from canvas_sdk.effects.coverage import CoverageReorder, PhotoSide
+from canvas_sdk.effects.patient import (
     PatientIdentificationCard as PatientIdentificationCardEffect,
 )
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
-from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.handlers.simple_api import (
+    SimpleAPI,
+    StaffSessionAuthMixin,
+    StoredFilePart,
+    api,
+)
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.coverage import (
     Coverage,
     CoverageRank,
     CoverageRelationshipCode,
     CoverageStack,
-    CoverageType as CoverageTypeChoice,
     Transactor,
 )
 from canvas_sdk.v1.data.patient import Patient, PatientIdentificationCard
+from pydantic import ValidationError as PydanticValidationError
 
-_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
+_CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 
 _RELATIONSHIP_CHOICES = [
     {"value": value, "label": label}
     for value, label in CoverageRelationshipCode.choices
 ]
-_PLAN_TYPE_CHOICES = [
-    {"value": value, "label": label}
-    for value, label in CoverageTypeChoice.choices
-]
 _RANK_CHOICES = [
-    {"value": int(value), "label": label}
-    for value, label in CoverageRank.choices
+    {"value": int(value), "label": label} for value, label in CoverageRank.choices
 ]
 
 # Fields the user must supply to create a new coverage. Mirrors the SDK's
-# Coverage._validate_create checks; surfacing them here lets us return a
-# structured field-level 400 before invoking the SDK (which would otherwise
-# raise a hard-to-parse pydantic ValidationError).
+# Coverage create checks; surfacing them here lets us return a structured
+# field-level 400 with friendly labels before invoking the SDK. Plan type is
+# not here: it follows the payer and is not writable through the effect.
 _CREATE_REQUIRED_FIELDS = {
     "issuer_id": "Payer",
     "id_number": "Member ID",
     "coverage_rank": "Rank",
-    "plan_type": "Plan type",
     "patient_relationship_to_subscriber": "Relationship to subscriber",
 }
 
-
-def _has_rank_conflict(
-    *, patient_id: str, coverage_rank: int, stack: str
-) -> bool:
-    """Return True if an active coverage already occupies (rank, stack) for
-    the patient. Mirrors the interpreter's rank-uniqueness check so we can
-    surface the conflict as an inline field error before the async effect
-    fires (otherwise the user sees a misleading 'Saved.' banner)."""
-    return (
-        Coverage.objects.filter(
-            patient__id=patient_id,
-            coverage_rank=coverage_rank,
-            stack=stack,
-        )
-        .exclude(stack="REMOVED")
-        .exists()
-    )
+# The SDK's effect validators raise errors without a pydantic ``loc``; they
+# name the field in the message instead ("Field 'coverage_rank' ...").
+_FIELD_IN_MESSAGE = re.compile(r"Field '(\w+)'")
+# SDK messages that name no field: the create-time rank check and the
+# start-before-end date check.
+_RANK_CONFLICT_MESSAGE = re.compile(r"already has an active \w+ coverage with rank")
+_DATE_ORDER_MESSAGE = re.compile(r"start date must be on or before its end date")
 
 
 def _field_errors_from_pydantic(exc: PydanticValidationError) -> dict[str, str]:
     """Map a pydantic ValidationError into a {field_name: message} dict.
 
-    Pydantic surfaces each error with a ``loc`` tuple — for our flat models
-    the first element is the field name. For multi-field rules (which use a
-    synthetic ``loc``) we fall back to a generic ``__form__`` key.
+    Plain pydantic errors carry the field in ``loc``. The SDK's own write
+    checks carry no ``loc`` and name the field in the message, so we parse
+    that. Anything else falls back to the generic ``__form__`` key.
     """
     field_errors: dict[str, str] = {}
     for err in exc.errors():
         loc = err.get("loc") or ()
         msg = err.get("msg") or "invalid"
-        key = str(loc[0]) if loc else "__form__"
+        if loc:
+            key = str(loc[0])
+        elif match := _FIELD_IN_MESSAGE.search(msg):
+            key = match.group(1)
+        elif _RANK_CONFLICT_MESSAGE.search(msg):
+            key = "coverage_rank"
+        elif _DATE_ORDER_MESSAGE.search(msg):
+            key = "coverage_end_date"
+        else:
+            key = "__form__"
         # First error wins per field; collapse duplicates from nested rules.
         field_errors.setdefault(key, msg)
     return field_errors
+
+
+def _validation_error_response(
+    message: str, exc: PydanticValidationError
+) -> JSONResponse:
+    """A 400 carrying a summary and per-field errors from an effect's validation."""
+    return JSONResponse(
+        {"error": message, "field_errors": _field_errors_from_pydantic(exc)},
+        status_code=HTTPStatus.BAD_REQUEST,
+    )
+
+
+def _first_message(exc: PydanticValidationError, fallback: str) -> str:
+    """The first human-readable reason in an effect's validation error."""
+    errors = exc.errors()
+    return (errors[0].get("msg") if errors else None) or fallback
+
+
+def _end_date_error(message: str) -> JSONResponse:
+    return JSONResponse(
+        {"error": message, "field_errors": {"coverage_end_date": message}},
+        status_code=HTTPStatus.BAD_REQUEST,
+    )
+
+
+def _submitted() -> JSONResponse:
+    return JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)
 
 
 def _serialize_coverage(coverage: Coverage) -> dict[str, Any]:
@@ -126,7 +151,9 @@ def _serialize_coverage(coverage: Coverage) -> dict[str, Any]:
                 back_url = image.image_url
     return {
         "id": str(coverage.id),
-        "issuer_id": str(coverage.issuer_id) if coverage.issuer_id else None,
+        # The effect takes the payer's UUID ``id``; ``issuer_id`` is the
+        # numeric FK column, so read through the relation.
+        "issuer_id": str(coverage.issuer.id) if coverage.issuer_id else None,
         "issuer_name": coverage.issuer.name if coverage.issuer_id else "",
         "subscriber_id": str(coverage.subscriber.id)
         if coverage.subscriber_id and coverage.subscriber
@@ -179,7 +206,6 @@ def _build_effect_fields(body: dict[str, Any]) -> tuple[dict[str, Any], str | No
         "subscriber_identifier",
         "patient_relationship_to_subscriber",
         "coverage_type",
-        "plan_type",
         "id_number",
         "plan",
         "sub_plan",
@@ -269,7 +295,11 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             patient = Patient.objects.get(id=patient_id)
         except Patient.DoesNotExist:
-            return [JSONResponse({"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
+            return [
+                JSONResponse(
+                    {"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND
+                )
+            ]
 
         coverages = (
             Coverage.objects.filter(patient=patient)
@@ -284,7 +314,6 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
                     "coverages": [_serialize_coverage(c) for c in coverages],
                     "options": {
                         "relationship": _RELATIONSHIP_CHOICES,
-                        "plan_type": _PLAN_TYPE_CHOICES,
                         "rank": _RANK_CHOICES,
                     },
                 }
@@ -297,15 +326,12 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         if len(q) < 2:
             return [JSONResponse({"results": []})]
         results = Transactor.objects.filter(name__icontains=q).order_by("name")[:20]
-        # The SDK Transactor's PK is `dbid` (BigAutoField), not `id` — there's
-        # no UUID externally-exposable identifier on Transactor at the SDK
-        # surface, so we ship the numeric PK back to the browser and the
-        # interpreter resolves it by Transactor.id lookup.
+        # Coverage(issuer_id=...) takes the Transactor's UUID ``id``, not dbid.
         return [
             JSONResponse(
                 {
                     "results": [
-                        {"id": str(t.dbid), "name": t.name, "payer_id": t.payer_id or ""}
+                        {"id": str(t.id), "name": t.name, "payer_id": t.payer_id or ""}
                         for t in results
                     ]
                 }
@@ -314,20 +340,34 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
 
     # ---- card image upload ----
 
-    @api.post("/cards/upload", upload_files=True)
+    @api.post("/cards/upload", file_uploads="stored")
     def upload_cards(self) -> list[Response | Effect]:
-        """Accept any named file parts; return the S3 keys to the browser so
-        the next save call can attach them via an effect. Used by both the
+        """Accept any named file parts; return the upload keys to the browser
+        so the next save call can attach them via an effect. Used by both the
         Coverage flow (``front`` / ``back``) and the ID card flow (``image``).
+
+        Canvas stores the files before this runs; each file part is a
+        ``StoredFilePart`` carrying either ``key`` or ``error``.
         """
         form = self.request.form_data()
         keys: dict[str, str] = {}
-        for name in form:
-            part = form[name]
-            key = getattr(part, "key", None)
-            if key:
-                keys[name] = key
-        failures = self.request.upload_failures()
+        failures: dict[str, str] = {}
+        for name, part in form.multi_items():
+            if not isinstance(part, StoredFilePart):
+                continue
+            if part.error:
+                failures[name] = part.error
+            elif part.key:
+                keys[name] = part.key
+        if failures:
+            # Don't hand back a partial set: the browser would save a coverage
+            # with only one side attached and no hint the other side failed.
+            return [
+                JSONResponse(
+                    {"error": "Card photo upload failed.", "failures": failures},
+                    status_code=HTTPStatus.BAD_GATEWAY,
+                )
+            ]
         if not keys:
             return [
                 JSONResponse(
@@ -362,7 +402,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         if not patient_id:
             return [
                 JSONResponse(
-                    {"error": "patient_id is required"}, status_code=HTTPStatus.BAD_REQUEST
+                    {"error": "patient_id is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
         fields, err = _build_effect_fields(body)
@@ -385,45 +426,15 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        # Pre-validate the rank/stack collision the interpreter will check.
-        # Without this the effect interpreter rejects async, the browser
-        # has already gotten a 202, and the user sees a success banner
-        # for a write that silently never happened.
-        rank_conflict = _has_rank_conflict(
-            patient_id=patient_id,
-            coverage_rank=fields["coverage_rank"],
-            stack=fields.get("stack") or "IN_USE",
-        )
-        if rank_conflict:
-            return [
-                JSONResponse(
-                    {
-                        "error": "Rank already taken.",
-                        "field_errors": {
-                            "coverage_rank": (
-                                f"Patient already has a rank-{fields['coverage_rank']} "
-                                f"coverage in stack {fields.get('stack') or 'IN_USE'}. "
-                                f"Pick a different rank, or remove the existing one first."
-                            ),
-                        },
-                    },
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-
+        # The SDK validates synchronously on .create(): payer exists, rank is
+        # free among active coverages, subscriber rules, upload keys. Its
+        # errors come back here as field-level 400s instead of an async
+        # interpreter rejection after the browser already saw "Saved."
         try:
             effect = CoverageEffect(patient_id=patient_id, **fields).create()
         except PydanticValidationError as exc:
-            return [
-                JSONResponse(
-                    {
-                        "error": "Coverage could not be created.",
-                        "field_errors": _field_errors_from_pydantic(exc),
-                    },
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
+            return [_validation_error_response("Coverage could not be created.", exc)]
+        return [effect, _submitted()]
 
     @api.post("/coverage/<coverage_id>")
     def update_coverage(self) -> list[Response | Effect]:
@@ -435,24 +446,17 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             effect = CoverageEffect(coverage_id=coverage_id, **fields).update()
         except PydanticValidationError as exc:
-            return [
-                JSONResponse(
-                    {
-                        "error": "Coverage could not be updated.",
-                        "field_errors": _field_errors_from_pydantic(exc),
-                    },
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
+            return [_validation_error_response("Coverage could not be updated.", exc)]
+        return [effect, _submitted()]
 
     @api.post("/coverage/<coverage_id>/remove")
     def remove_coverage(self) -> list[Response | Effect]:
         coverage_id = self.request.path_params.get("coverage_id") or ""
-        return [
-            CoverageEffect(coverage_id=coverage_id).remove(),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+        try:
+            effect = CoverageEffect(coverage_id=coverage_id).remove()
+        except PydanticValidationError as exc:
+            return [_validation_error_response("Coverage could not be removed.", exc)]
+        return [effect, _submitted()]
 
     @api.post("/coverage/<coverage_id>/expire")
     def expire_coverage(self) -> list[Response | Effect]:
@@ -460,39 +464,43 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         body = self.request.json() or {}
         try:
             end = _parse_date(body.get("coverage_end_date"))
-        except ValueError as exc:
+        except (TypeError, ValueError):
             return [
-                JSONResponse(
-                    {"error": f"coverage_end_date: {exc}"}, status_code=HTTPStatus.BAD_REQUEST
+                _end_date_error(
+                    "Enter the end date as YYYY-MM-DD, for example 2026-12-31."
                 )
             ]
         if end is None:
-            return [
-                JSONResponse(
-                    {"error": "coverage_end_date is required"}, status_code=HTTPStatus.BAD_REQUEST
-                )
-            ]
-        return [
-            CoverageEffect(coverage_id=coverage_id).expire(coverage_end_date=end),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+            return [_end_date_error("End date is required.")]
+        try:
+            effect = CoverageEffect(coverage_id=coverage_id).expire(
+                coverage_end_date=end
+            )
+        except PydanticValidationError as exc:
+            # Expire has a single input, so the SDK's own reason (e.g. the
+            # end date falls before the start date) is the useful message.
+            message = _first_message(exc, "Coverage could not be expired.")
+            return [_validation_error_response(message, exc)]
+        return [effect, _submitted()]
 
     @api.post("/coverage/<coverage_id>/photo/<side>/remove")
     def remove_photo(self) -> list[Response | Effect]:
         coverage_id = self.request.path_params.get("coverage_id") or ""
-        side = self.request.path_params.get("side") or ""
-        side_upper = side.upper()
-        if side_upper not in {"FRONT", "BACK"}:
+        side = (self.request.path_params.get("side") or "").upper()
+        if side not in {s.value for s in PhotoSide}:
             return [
                 JSONResponse(
                     {"error": "side must be 'front' or 'back'"},
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
-        return [
-            CoverageEffect(coverage_id=coverage_id).remove_photo(side_upper),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+        try:
+            effect = CoverageEffect(coverage_id=coverage_id).remove_photo(
+                PhotoSide(side)
+            )
+        except PydanticValidationError as exc:
+            return [_validation_error_response("Card photo could not be removed.", exc)]
+        return [effect, _submitted()]
 
     @api.post("/coverages/reorder")
     def reorder(self) -> list[Response | Effect]:
@@ -506,10 +514,13 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
-        return [
-            CoverageReorder(patient_id=patient_id, ordering=ordering).apply(),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+        try:
+            effect = CoverageReorder(patient_id=patient_id, ordering=ordering).apply()
+        except PydanticValidationError as exc:
+            return [
+                _validation_error_response("Coverages could not be reordered.", exc)
+            ]
+        return [effect, _submitted()]
 
     # ---- ID cards ----
 
@@ -526,10 +537,13 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             patient = Patient.objects.get(id=patient_id)
         except Patient.DoesNotExist:
-            return [JSONResponse({"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        cards = (
-            PatientIdentificationCard.objects.filter(patient=patient)
-            .order_by("-created")
+            return [
+                JSONResponse(
+                    {"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND
+                )
+            ]
+        cards = PatientIdentificationCard.objects.filter(patient=patient).order_by(
+            "-created"
         )
         return [
             JSONResponse(
@@ -556,7 +570,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         if not patient_id:
             return [
                 JSONResponse(
-                    {"error": "patient_id is required"}, status_code=HTTPStatus.BAD_REQUEST
+                    {"error": "patient_id is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
         if not image_upload_key:
@@ -577,16 +592,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
                 active=body.get("active", True),
             ).create()
         except PydanticValidationError as exc:
-            return [
-                JSONResponse(
-                    {
-                        "error": "ID card could not be created.",
-                        "field_errors": _field_errors_from_pydantic(exc),
-                    },
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
+            return [_validation_error_response("ID card could not be created.", exc)]
+        return [effect, _submitted()]
 
     @api.post("/id-card/<card_id>")
     def update_id_card(self) -> list[Response | Effect]:
@@ -602,7 +609,7 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
         kwargs: dict[str, Any] = {"card_id": card_id_int}
-        if "image_upload_key" in body and body["image_upload_key"]:
+        if body.get("image_upload_key"):
             kwargs["image_upload_key"] = body["image_upload_key"]
         if "title" in body and body["title"] is not None:
             kwargs["title"] = body["title"]
@@ -611,16 +618,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             effect = PatientIdentificationCardEffect(**kwargs).update()
         except PydanticValidationError as exc:
-            return [
-                JSONResponse(
-                    {
-                        "error": "ID card could not be updated.",
-                        "field_errors": _field_errors_from_pydantic(exc),
-                    },
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
+            return [_validation_error_response("ID card could not be updated.", exc)]
+        return [effect, _submitted()]
 
     @api.post("/id-card/<card_id>/delete")
     def delete_id_card(self) -> list[Response | Effect]:
@@ -634,7 +633,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
-        return [
-            PatientIdentificationCardEffect(card_id=card_id_int).delete(),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+        try:
+            effect = PatientIdentificationCardEffect(card_id=card_id_int).delete()
+        except PydanticValidationError as exc:
+            return [_validation_error_response("ID card could not be deleted.", exc)]
+        return [effect, _submitted()]

@@ -15,7 +15,7 @@
 
     // Coverage mode state
     coverages: [],
-    options: { relationship: [], plan_type: [], rank: [] },
+    options: { relationship: [], rank: [] },
     view: "list", // "list" | "edit" (only meaningful when mode != "selector")
     editing: null, // coverage being edited, or null for "new"
 
@@ -211,7 +211,6 @@
     const fields = {
       issuer_id: state.payer.id, // from the payer search component
       coverage_rank: v("f-rank"),
-      plan_type: v("f-plan-type"),
       id_number: v("f-id-number"),
       plan: v("f-plan"),
       group: v("f-group"),
@@ -577,14 +576,6 @@
         type: "select",
         options: state.options.rank,
         value: editing.coverage_rank || 1,
-      }),
-      renderField({
-        id: "plan-type",
-        fieldName: "plan_type",
-        label: "Plan type",
-        type: "select",
-        options: state.options.plan_type,
-        value: editing.plan_type || "commercial",
       }),
       renderField({
         id: "id-number",

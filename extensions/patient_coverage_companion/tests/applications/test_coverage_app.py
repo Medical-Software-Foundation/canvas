@@ -1,7 +1,6 @@
 """Tests for the CoverageCompanionApp Application class."""
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from canvas_generated.messages.effects_pb2 import EffectType
 
