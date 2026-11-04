@@ -23,7 +23,7 @@ from consent_capture.handlers.consent_api import (
     serialize_coding,
     serialize_definition,
 )
-from consent_capture.signing import statement_fingerprint
+from consent_capture.signing import questions_fingerprint, statement_fingerprint
 
 MODULE = "consent_capture.handlers.consent_api"
 
@@ -138,6 +138,20 @@ class TestRepresentativeName:
 
 
 class TestConsentedBy:
+    def test_accented_representative_name_is_accepted(self):
+        label, error = _consented_by(
+            {"consent_by": "representative", "representative_name": "Nguyễn Văn An", "representative_relationship": "Son"}
+        )
+        assert (label, error) == ("Nguyễn Văn An (Son)", None)
+
+    def test_non_latin_representative_name_is_refused(self):
+        label, error = _consented_by(
+            {"consent_by": "representative", "representative_name": "Иван Петров", "representative_relationship": "Son"}
+        )
+        assert label is None
+        assert error.startswith("The representative's name or relationship has characters the PDF can't print (И")
+        assert error.endswith("Enter them in Latin letters.")
+
     def test_defaults_to_patient(self):
         assert _consented_by({}) == ("Patient", None)
 
@@ -293,6 +307,7 @@ def _make_api(body, staff_id="staff-9", secrets=None):
         # The picker sends back the fingerprint of the text it showed; default it to
         # the text of _defn() so tests that don't change verbiage record normally.
         body.setdefault("statement_sha256", DEFAULT_STATEMENT_SHA256)
+        body.setdefault("questions_sha256", questions_fingerprint([]))
     api.request.json.return_value = body
     api.request.headers.get.return_value = staff_id
     api.secrets = secrets if secrets is not None else {
@@ -598,6 +613,7 @@ class TestCollectSuccess:
 
 
 AFFIRM_Q = {"id": "a", "prompt": "Agree?", "type": "yes_no", "required": True, "affirm": True}
+AFFIRM_Q_SHA256 = questions_fingerprint([AFFIRM_Q])
 
 
 class TestCollectQuestions:
@@ -607,6 +623,7 @@ class TestCollectQuestions:
                 "patient_id": "patient-1",
                 "consent_code": "universal",
                 "method": "Verbal",
+                "questions_sha256": AFFIRM_Q_SHA256,
                 "answers": {"a": "No"},
                 "local_date": "2026-07-07",
             }
@@ -626,7 +643,7 @@ class TestCollectQuestions:
 
     def test_required_missing_blocks(self):
         api = _make_api(
-            {"patient_id": "patient-1", "consent_code": "universal", "method": "Verbal", "answers": {}}
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Verbal", "answers": {}, "questions_sha256": AFFIRM_Q_SHA256}
         )
         defn = _defn(questions=[AFFIRM_Q], capacity_enabled=False)
         with patch(f"{MODULE}.definition_by_code", return_value=defn), patch(
@@ -642,6 +659,7 @@ class TestCollectQuestions:
                 "patient_id": "patient-1",
                 "consent_code": "universal",
                 "method": "Verbal",
+                "questions_sha256": AFFIRM_Q_SHA256,
                 "answers": {"a": "Yes"},
                 "local_date": "2026-07-07",
             }
@@ -1118,14 +1136,18 @@ class TestErrorHelper:
 # Admin CRUD.
 # --------------------------------------------------------------------------- #
 
+ADMIN_STAFF_ID = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+
+
 def _admin(body=None, secrets=None):
     api = ConsentAdminApi()
     api.request = MagicMock()
     api.request.json.return_value = body or {}
-    # Authorize the caller as the root user (always an admin, regardless of the
-    # CONSENT_ADMIN_USERS allow-list, which now fails closed when unset).
-    api.request.headers.get.return_value = "root"
-    api.secrets = secrets if secrets is not None else {"CONSENT_SYSTEM": "http://loinc.org"}
+    # Authorize the caller by staff id: CONSENT_ADMIN_USERS lists the admins' ids and
+    # fails closed when unset.
+    api.request.headers.get.return_value = ADMIN_STAFF_ID
+    api.secrets = dict(secrets) if secrets is not None else {"CONSENT_SYSTEM": "http://loinc.org"}
+    api.secrets.setdefault("CONSENT_ADMIN_USERS", ADMIN_STAFF_ID)
     return api
 
 
@@ -1523,6 +1545,14 @@ class TestBannerBackfill:
             res = _admin().banners_page()
         assert res[0].status_code == HTTPStatus.FORBIDDEN
 
+    def test_no_access_page_shows_the_staff_id(self):
+        api = _admin(secrets={"CONSENT_ADMIN_USERS": "someone-else"})
+        res = api.banners_page()
+        assert res[0].status_code == HTTPStatus.FORBIDDEN
+        page = res[0].content.decode() if isinstance(res[0].content, bytes) else res[0].content
+        assert "Your staff ID: <code" in page
+        assert ADMIN_STAFF_ID in page
+
     def test_page_served_for_admin(self):
         with patch(f"{MODULE}.render_to_string", return_value="<html>b</html>"):
             res = _admin().banners_page()
@@ -1793,9 +1823,38 @@ class TestDeviceSignature:
 
     def test_answers_printed_when_signed_on_device(self):
         defn = _defn(allow_device_signature=True, questions=[AFFIRM_Q])
-        result, mock_pdf, _, _ = self._run(_sig_body(answers={"a": "yes"}), defn=defn)
+        result, mock_pdf, _, _ = self._run(_sig_body(answers={"a": "yes"}, questions_sha256=AFFIRM_Q_SHA256), defn=defn)
         assert result[0].content["ok"] is True
         assert mock_pdf.mock_calls[0].kwargs["responses"]
+
+    def test_question_edited_while_open_is_refused(self):
+        shown_q = {"id": "a", "prompt": "May we share your records with your insurer?", "type": "yes_no", "required": True, "affirm": True}
+        edited_q = dict(shown_q, prompt="May we share your records with anyone?")
+        defn = _defn(allow_device_signature=True, questions=[edited_q])
+        body = _sig_body(answers={"a": "yes"}, questions_sha256=questions_fingerprint([shown_q]))
+        result, mock_pdf, _, _ = self._run(body, defn=defn)
+        assert "changed while it was open" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
+
+    def test_older_text_the_pdf_cant_print_is_refused(self):
+        defn = _defn(allow_device_signature=True, verbiage="Copay ≥ $20.")
+        body = _sig_body(statement_sha256=statement_fingerprint(["Copay ≥ $20."])[1])
+        result, mock_pdf, mock_payload, _ = self._run(body, defn=defn)
+        assert result[0].content == {
+            "ok": False,
+            "error": "This consent's text has characters the PDF can't print (≥). An admin "
+            "needs to fix it in Consent Settings.",
+        }
+        assert mock_pdf.mock_calls == []
+        assert mock_payload.mock_calls == []
+
+    def test_older_question_the_pdf_cant_print_is_refused(self):
+        q = {"id": "a", "prompt": "Age ≥ 18?", "type": "yes_no", "required": True}
+        defn = _defn(allow_device_signature=True, questions=[q])
+        body = _sig_body(answers={"a": "Yes"}, questions_sha256=questions_fingerprint([q]))
+        result, mock_pdf, _, _ = self._run(body, defn=defn)
+        assert "characters the PDF can't print (≥)" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
 
     def test_text_changed_while_open_is_refused(self):
         body = _sig_body(statement_sha256=statement_fingerprint(["Old wording."])[1])
@@ -1862,6 +1921,24 @@ class TestDecline:
         assert mock_pdf.mock_calls[0].kwargs["method"] == ""
         assert result[0].content["preview"]["method"] == ""
         assert stored["pages"] == 1
+
+    def test_decline_refused_when_text_cant_print(self):
+        api = _make_api(
+            {
+                "patient_id": "patient-1",
+                "consent_code": "universal",
+                "method": "Written",
+                "statement_sha256": statement_fingerprint(["Copay ≥ $20."])[1],
+            }
+        )
+        with patch(f"{MODULE}.definition_by_code", return_value=_defn(verbiage="Copay ≥ $20.")), patch(
+            f"{MODULE}._resolve_patient", return_value=("Maria Lopez", "1951-06-14")
+        ), patch(f"{MODULE}._resolve_staff", return_value="Sam Rivera"), patch(
+            f"{MODULE}.generate_consent_pdf_base64"
+        ) as mock_pdf:
+            result = api.decline()
+        assert "characters the PDF can't print (≥)" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
 
     def test_decline_refused_when_text_changed(self):
         result, mock_pdf, mock_payload, _ = self._run(
@@ -1988,7 +2065,7 @@ class TestSecurityLogging:
             f"{MODULE}.save_practice_settings", return_value={"accept_typed": True}
         ), patch(f"{MODULE}.log") as mock_log:
             api.update_practice_settings()
-        assert mock_log.info.mock_calls[0].args[0].startswith("ConsentAdminApi: practice settings saved by staff root:")
+        assert mock_log.info.mock_calls[0].args[0].startswith("ConsentAdminApi: practice settings saved by staff %s:" % ADMIN_STAFF_ID)
 
 
 

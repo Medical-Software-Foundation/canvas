@@ -115,14 +115,13 @@ Open the plugin's **variables / configuration** screen and set the values below.
 |---|---|---|
 | `CANVAS_FHIR_CLIENT_ID` | **Yes** | The **client ID** from Step 2. |
 | `CANVAS_FHIR_CLIENT_SECRET` | **Yes** | The **client secret** from Step 2. (Stored as sensitive.) |
-| `CONSENT_ADMIN_USERS` | Recommended | Who is allowed into the admin pages (Consent Settings and the banner page). A list of Staff **IDs** or full **names**, separated by commas, semicolons, or new lines. If you **leave it empty, only the root user / "Canvas Support" can open the admin pages** (everyone else is denied). Add the staff who should manage consents. |
+| `CONSENT_ADMIN_USERS` | **Yes** | Who is allowed into the admin pages (Consent Settings and the banner page). A list of **staff IDs**, separated by commas, semicolons, or new lines. Names aren't accepted. If you **leave it empty, nobody can open the admin pages**, Canvas Support included. Step 4 shows how to find your staff ID. |
 | `CONSENT_BANNERS_ENABLED` | No | Turns the **"Required consent not on file." banner** on or off. Leave it as `true` (the default) to keep banners. Set it to `false` to turn banners off everywhere — then run the banner refresh (Step 6) once to clear existing banners immediately. This only affects the banner; the chart button is unaffected. |
 | `CONSENT_SYSTEM` | No | Leave it as `INTERNAL`. This is a legacy default and is rarely needed. |
 
-> ✅ **Set `CONSENT_ADMIN_USERS` before go-live.** Until you do, only the root /
-> "Canvas Support" user can reach Consent Settings and the banner tools. List the names or
-> IDs of the people who should manage consents. For example:
-> `Jane Admin, Dr. Alex Lee` or `staff-id-1, staff-id-2`.
+> ✅ **Set `CONSENT_ADMIN_USERS` before go-live.** Until you do, nobody can reach Consent
+> Settings or the banner tools. List the staff IDs of the people who should manage
+> consents, for example: `0f1e2d3c4b5a69788796a5b4c3d2e1f0, 1a2b3c4d5e6f70819203a4b5c6d7e8f9`.
 
 ---
 
@@ -137,8 +136,8 @@ Let's make sure the plugin is installed and you have admin access.
    - **The Consent Settings page** → 🎉 you're set. The plugin is installed and you have
      admin access. Continue to Step 5.
    - **A "You don't have access" message** → the plugin is installed, but you're not on the
-     admin list. Add your Staff ID or full name to `CONSENT_ADMIN_USERS` (Step 3) and
-     reload.
+     admin list. The message shows **Your staff ID**. Add it to `CONSENT_ADMIN_USERS`
+     (Step 3) and reload.
    - **A page-not-found / error** → the plugin isn't installed or enabled yet. Revisit
      Step 3.
 
@@ -287,7 +286,7 @@ Once you're set up, here's the day-to-day experience for clinical and front-desk
 
 | What you see | What to do |
 |---|---|
-| **"You don't have access"** on an admin page | Add your Staff ID or full name to `CONSENT_ADMIN_USERS` (Step 3), then reload. |
+| **"You don't have access"** on an admin page | Add the **Your staff ID** value from that page to `CONSENT_ADMIN_USERS` (Step 3), then reload. |
 | A consent **won't record**, or a "credentials are missing" message | Recheck `CANVAS_FHIR_CLIENT_ID` and `CANVAS_FHIR_CLIENT_SECRET` (Steps 2–3). Confirm the API application can create `Consent`. |
 | A consent **isn't in the picker** for staff to record | In Consent Settings, turn on **Show in the consent modal** for that consent (Step 5). |
 | The **banner isn't showing** on a patient who should have it | Run **Refresh Consent Banners** (Step 6). The banner shows only for **active, non-deceased** patients who still owe a **required** consent — confirm the patient is eligible and that the consent is marked **Prompt as due now** (Step 5). |
@@ -310,7 +309,7 @@ Once you're set up, here's the day-to-day experience for clinical and front-desk
 |---|---|---|
 | `CANVAS_FHIR_CLIENT_ID` | Yes | FHIR API client ID |
 | `CANVAS_FHIR_CLIENT_SECRET` | Yes | FHIR API client secret (sensitive) |
-| `CONSENT_ADMIN_USERS` | Recommended | Staff IDs/names allowed into the admin pages; empty = root / "Canvas Support" only |
+| `CONSENT_ADMIN_USERS` | Yes | Staff IDs allowed into the admin pages; empty = nobody |
 | `CONSENT_SYSTEM` | No | Leave as `INTERNAL` |
 
 For a technical/developer reference (components, security model, data access, tests), see

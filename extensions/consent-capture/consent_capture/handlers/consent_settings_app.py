@@ -1,7 +1,7 @@
 """Consent Settings — the app drawer entry for consent admins.
 
 Opens the Consent Settings page without a patient chart open. Only staff on the
-``CONSENT_ADMIN_USERS`` allow-list (and the instance root user) see it; the page and
+``CONSENT_ADMIN_USERS`` allow-list (matched on staff id) see it; the page and
 every admin endpoint check access themselves too. The gear in the Consents window
 stays as a second way in.
 
