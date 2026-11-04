@@ -340,7 +340,7 @@
     .sigpad .hint.warn { color: var(--amber); }
     .typed-preview { margin-top: 10px; height: 96px; border: 1.5px solid var(--border); border-radius: 10px; background: #fff; display: flex; align-items: center; padding: 0 22px; font-family: "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive; font-size: 40px; color: #111827; overflow: hidden; white-space: nowrap; }
     .typed-preview:empty::before { content: "Your signature appears here"; font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: var(--faint); }
-    .pt-field { margin-top: 14px; }
+    .pt-field { margin: 0 0 14px; }
     .pt-field .lab { margin-bottom: 8px; }
     .pt-attest { margin: 8px 0 0; font-size: 12px; color: var(--secondary); }
     .pt-attest b { color: var(--navy); font-weight: 600; }
@@ -649,6 +649,10 @@
       <div class="pt-doc" id="bText"></div>
       <div id="bQs"></div>
       <div class="card sigcard">
+        <!-- Name before the signature: drawing closes the keyboard, so it's gone before
+             Accept and Sign. Typing right above the button made the first taps land
+             while the keyboard was closing and the screen shifted. -->
+        <div class="pt-field" id="pnField"><label class="lab" for="pnInput">Printed name</label><input type="text" class="txt" id="pnInput" autocomplete="off" enterkeyhint="done"></div>
         <div id="sigSlot"></div>
         <div class="reuse-panel hidden" id="bReusePanel">
           <div class="rp-lbl" id="bReuseLbl"></div>
@@ -657,7 +661,6 @@
           <button type="button" class="linkbtn" id="bReuseFresh">Use a new signature</button>
         </div>
         <p class="reuse-note hidden" id="bReuseNote"></p>
-        <div class="pt-field" id="pnField"><label class="lab" for="pnInput">Printed name</label><input type="text" class="txt" id="pnInput" autocomplete="off"></div>
         <p class="pt-attest" id="bAttest"></p>
       </div>
     </div></div>
@@ -1758,7 +1761,7 @@
         '<span class="sigmode"><button type="button" data-sm="draw" class="on">Draw</button><button type="button" data-sm="type">Type</button></span>' +
         '<button type="button" class="clearbtn" disabled>Clear</button></span></div>' +
       '<div class="drawarea"><div class="sigpad"><span class="x">×</span><span class="base"></span><span class="hint"></span><canvas></canvas></div></div>' +
-      '<div class="typearea hidden"><input type="text" class="txt typed" placeholder="Type your full name" autocomplete="off" aria-label="Type your full name"><div class="typed-preview"></div></div>';
+      '<div class="typearea hidden"><input type="text" class="txt typed" placeholder="Type your full name" autocomplete="off" enterkeyhint="done" aria-label="Type your full name"><div class="typed-preview"></div></div>';
     var cv = pad.querySelector('canvas'), sigpad = pad.querySelector('.sigpad'), hintEl = pad.querySelector('.hint');
     var typedInput = pad.querySelector('.typed'), typedPreview = pad.querySelector('.typed-preview');
     var ctx = null, strokes = [], live = null, inkPoints = { finger: 0, mouse: 0 };
@@ -1891,6 +1894,10 @@
       $('bNext').disabled = !(hasSig() && pnOk && qOk);
     }
     $('pnInput').addEventListener('input', validateSign);
+    // Done on the on-screen keyboard puts the keyboard away.
+    function blurOnEnter(e) { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }
+    $('pnInput').addEventListener('keydown', blurOnEnter);
+    typedInput.addEventListener('keydown', blurOnEnter);
 
     // The signature as a JPEG with a white background, cropped to the ink. The PDF
     // embeds JPEG directly (the plugin sandbox can't decompress PNG).
