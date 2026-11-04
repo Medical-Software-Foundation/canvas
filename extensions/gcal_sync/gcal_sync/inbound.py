@@ -59,6 +59,7 @@ from gcal_sync.models import (
     AdoptedBareHold,
     AppointmentEventMapping,
     CalendarSyncState,
+    ExpandedEvent,
     InboundEventMapping,
     PendingHoldCreate,
     RemovedDayHold,
@@ -352,10 +353,11 @@ class InboundSync:
         # provider's shared meetings never imported. (Note type / location come from the same cached
         # resolve and are reused by the create path.)
         note_type_id, provider_id, location_id = self._import_context(calendar_id)
-        # This provider's live holds for the event (bare id and per-day ids), read ONCE and shared by
-        # the delete, branch, reconcile and single-hold paths below. The lookup is a prefix match, so
-        # it is the expensive one; an unmapped calendar has no provider and nothing to look up.
-        live = self._live_holds_for_event(google_event_id, provider_id) if provider_id else {}
+        # This provider's live holds for the event are read ONCE per path below. The per-day form is
+        # a prefix match that no index can serve under the production collation, so it runs only for
+        # an event that has or gets per-day holds (all-day, multi-day, or marked ``ExpandedEvent``);
+        # every other event takes an exact bare-id lookup. An unmapped calendar has no provider and
+        # nothing to look up.
 
         # InboundEventMapping holds the last-applied content hash for the no-op guard. It is unique per
         # google_event_id (shared across a shared event's attendees), which is fine for a content hash
@@ -377,7 +379,17 @@ class InboundSync:
             # Remove only THIS provider's holds for the event (scoped); another attendee's hold for
             # the same shared event id is left untouched. Plural because an all-day event expands
             # into one hold per covered day — a cancellation delta carries no start/end, so we can't
-            # recompute the dates and instead remove every hold stamped with this event id.
+            # recompute the dates and instead remove every hold stamped with this event id. Only an
+            # expanded event can have per-day holds, so only it pays for the prefix lookup.
+            live = (
+                self._live_holds_for_event(
+                    google_event_id,
+                    provider_id,
+                    per_day=self._is_expanded(calendar_id, google_event_id),
+                )
+                if provider_id
+                else {}
+            )
             effects = self._hold_delete_effects(live)
             if not dry_run:
                 if existing is not None:
@@ -396,6 +408,9 @@ class InboundSync:
                     google_calendar_id=calendar_id, google_event_id__startswith=day_prefix
                 ).delete()
                 RemovedDayHold.objects.filter(
+                    google_calendar_id=calendar_id, google_event_id=google_event_id
+                ).delete()
+                ExpandedEvent.objects.filter(
                     google_calendar_id=calendar_id, google_event_id=google_event_id
                 ).delete()
             if not effects:
@@ -436,13 +451,16 @@ class InboundSync:
         # ``start.date``: Google stores out-of-office PTO as a timed span from local midnight to local
         # midnight. Every all-day event also takes this path so its day is cut in local time rather
         # than at UTC midnight. And an event that already has per-day holds stays on it even after it
-        # shrinks to one timed day, so those holds are reconciled away instead of left behind.
+        # shrinks to one timed day (``ExpandedEvent``), so those holds are reconciled away instead of
+        # left behind.
         spans = event_day_spans(event, self._default_zone)
-        if spans and (
-            is_all_day(event)
-            or len(spans) > 1
-            or self._has_day_holds(live, google_event_id)
-        ):
+        expanded = self._is_expanded(calendar_id, google_event_id) if provider_id else False
+        if spans and (is_all_day(event) or len(spans) > 1 or expanded):
+            live = (
+                self._live_holds_for_event(google_event_id, provider_id, per_day=True)
+                if provider_id
+                else {}
+            )
             return self._reconcile_day_holds(
                 calendar_id,
                 event,
@@ -457,12 +475,19 @@ class InboundSync:
                 force_rebuild,
                 dry_run,
                 verbose,
+                expanded=expanded,
             )
 
         # A live Canvas hold already exists for this event -> update it in place, never create a
         # second one. Keyed on the external id (Canvas's own record), so this holds even if the
         # ``InboundEventMapping`` row was lost — a mapping-less live hold used to fall through to
-        # create and duplicate.
+        # create and duplicate. A single-day timed event never expanded has no per-day holds, so the
+        # exact bare-id lookup is all it needs.
+        live = (
+            self._live_holds_for_event(google_event_id, provider_id, per_day=False)
+            if provider_id
+            else {}
+        )
         canvas_id = live.get(google_event_id)
         if canvas_id is not None:
             # No-op guard: a delta routinely re-delivers unchanged events, and a webhook that times
@@ -629,6 +654,7 @@ class InboundSync:
         force_rebuild: bool = False,
         dry_run: bool = False,
         verbose: bool = False,
+        expanded: bool = False,
     ) -> list[Effect]:
         """Make this provider's holds for a multi-day event match exactly the days it covers.
 
@@ -642,6 +668,10 @@ class InboundSync:
         what keeps an already-imported event from gaining a second hold. An adopted hold is always
         reshaped to its day, even when the Google event hasn't changed, because it still carries the
         whole multi-day duration (or a UTC-midnight start) it was created with.
+
+        ``expanded`` says whether the event is already marked ``ExpandedEvent`` for this calendar.
+        An unmarked event that has or gets per-day holds is marked here, which also back-fills the
+        mark for events expanded before it existed the first time a pass reaches them.
         """
         google_event_id = event["id"]
         dates = [span.date for span in spans]
@@ -651,6 +681,9 @@ class InboundSync:
             # nothing to resolve, update, or create.
             stats["ignored"] = stats["ignored"] + 1
             return []
+        if not expanded and not dry_run and self._has_day_holds(live, google_event_id):
+            self._mark_expanded(calendar_id, google_event_id)
+            expanded = True
 
         # Map each live hold onto the day it covers. A hold that lands on no covered day (the event
         # shrank or moved), or on a day already covered, is stale and gets removed.
@@ -835,6 +868,8 @@ class InboundSync:
             return []
 
         if not dry_run:
+            if created and not expanded:
+                self._mark_expanded(calendar_id, google_event_id)
             self._record_day_changes(
                 calendar_id,
                 google_event_id,
@@ -1013,20 +1048,26 @@ class InboundSync:
 
     @staticmethod
     def _live_holds_for_event(
-        google_event_id: str, provider_id: str | None
+        google_event_id: str, provider_id: str | None, *, per_day: bool
     ) -> dict[str, str]:
         """Map external-id value -> live Canvas hold id for this (provider, Google event).
 
-        Covers the bare event id (timed events, and all-day holds created before per-day expansion)
-        and every ``{event_id}:{date}`` an all-day event expands into. The DB filter is a prefix
-        match, which can also catch a *different* event whose id merely starts with this one, so the
-        exact separator check in Python is what makes the result precise.
+        Always covers the bare event id (timed events, and all-day holds created before per-day
+        expansion). With ``per_day`` it also covers every ``{event_id}:{date}`` a multi-day event
+        expands into. That form is a prefix match (``LIKE 'id%'``), which the ``(value, system)``
+        index cannot serve under the production collation, so callers ask for it only for events
+        that have or get per-day holds; everything else is an exact match. The prefix can also catch
+        a *different* event whose id merely starts with this one, so the exact separator check in
+        Python is what makes the result precise.
         """
+        value_filter = (
+            {"value__startswith": google_event_id} if per_day else {"value": google_event_id}
+        )
         rows = (
             AppointmentExternalIdentifier.objects.filter(
                 system=GOOGLE_ORIGIN_SYSTEM,
-                value__startswith=google_event_id,
                 appointment__provider__id=provider_id,
+                **value_filter,
             )
             .exclude(appointment__status="cancelled")
             .values_list("value", "appointment__id")
@@ -1055,12 +1096,29 @@ class InboundSync:
 
     @staticmethod
     def _has_day_holds(live: dict[str, str], google_event_id: str) -> bool:
-        """Do the event's live holds include per-day (``{event_id}:{date}``) ones?
+        """Do the event's live holds include per-day (``{event_id}:{date}``) ones?"""
+        return any(value != google_event_id for value in live)
+
+    @staticmethod
+    def _is_expanded(calendar_id: str, google_event_id: str) -> bool:
+        """Has this calendar's provider had per-day holds for the event (``ExpandedEvent``)?
 
         True once an event has been expanded, so a later edit that shrinks it to a single timed day
-        still goes through the per-day reconcile and clears the days it no longer covers.
+        still goes through the per-day reconcile and clears the days it no longer covers, and a
+        cancellation still finds every per-day hold.
         """
-        return any(value != google_event_id for value in live)
+        return bool(
+            ExpandedEvent.objects.filter(
+                google_calendar_id=calendar_id, google_event_id=google_event_id
+            ).exists()
+        )
+
+    @staticmethod
+    def _mark_expanded(calendar_id: str, google_event_id: str) -> None:
+        """Record that this calendar's provider has per-day holds for the event."""
+        ExpandedEvent.objects.get_or_create(
+            google_event_id=google_event_id, google_calendar_id=calendar_id
+        )
 
     @staticmethod
     def _hold_matches_span(canvas_id: str, day: DaySpan) -> bool:

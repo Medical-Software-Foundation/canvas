@@ -206,6 +206,29 @@ class AdoptedBareHold(CustomModel):
         ]
 
 
+class ExpandedEvent(CustomModel):
+    """A Google event this calendar's provider has per-day (``{event_id}:{date}``) holds for.
+
+    Only an expanded event needs the prefix lookup on hold external ids, which no index can serve
+    under the production collation. Every other single-day timed event uses the exact bare-id
+    lookup, so this row is what tells an expanded event that later shrank to one timed day, or a
+    cancellation (which carries no dates), to look for per-day holds. Deleted when the event is
+    cancelled.
+    """
+
+    google_calendar_id = TextField()
+    google_event_id = TextField()
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["google_event_id", "google_calendar_id"],
+                name="uq_expanded_event_cal_event",
+            ),
+        ]
+
+
 class CalendarEventMapping(CustomModel):
     """Links a Canvas Calendar ``Event`` (admin block) to the Google event we created for it.
 

@@ -309,6 +309,7 @@ def _inbound(
     bare_retired=False,
     adopted_matches=False,
     bare_adopted_on=None,
+    expanded=False,
 ):
     """An InboundSync with the DB-backed lookups mocked out.
 
@@ -326,6 +327,9 @@ def _inbound(
     mocker.patch("gcal_sync.inbound.InboundEventMapping").objects.filter.return_value.first.return_value = mapping
     mocker.patch("gcal_sync.inbound.PendingHoldCreate").objects.filter.return_value.first.return_value = pending
     mocker.patch.object(inbound, "_live_holds_for_event", return_value=live or {})
+    mocker.patch.object(inbound, "_is_expanded", return_value=expanded)
+    mocker.patch.object(inbound, "_mark_expanded")
+    mocker.patch("gcal_sync.inbound.ExpandedEvent")
     mocker.patch.object(
         inbound,
         "_external_value_exists",
@@ -412,6 +416,7 @@ def test_event_shrunk_to_one_timed_day_clears_its_other_day_holds(mocker):
         mocker,
         live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates)},
         mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
+        expanded=True,
     )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
     stats = _stats()
@@ -908,8 +913,143 @@ def test_live_holds_for_event_keeps_only_this_event(mocker):
         ("g1extra", "appt-3"),
         ("g1extra:2026-09-01", "appt-4"),
     ]
-    result = InboundSync._live_holds_for_event("g1", "p1")
+    result = InboundSync._live_holds_for_event("g1", "p1", per_day=True)
     assert result == {"g1": "appt-1", "g1:2026-09-01": "appt-2"}
+    assert aei.objects.filter.call_args.kwargs["value__startswith"] == "g1"
+
+
+def test_live_holds_for_event_without_per_day_is_an_exact_lookup(mocker):
+    # Review (perf): the prefix form can't use the (value, system) index under the production
+    # collation, so the bare-id lookup must not issue it.
+    aei = mocker.patch("gcal_sync.inbound.AppointmentExternalIdentifier")
+    aei.objects.filter.return_value.exclude.return_value.values_list.return_value = [("g1", "appt-1")]
+    assert InboundSync._live_holds_for_event("g1", "p1", per_day=False) == {"g1": "appt-1"}
+    kwargs = aei.objects.filter.call_args.kwargs
+    assert kwargs["value"] == "g1"
+    assert "value__startswith" not in kwargs
+
+
+def _single_timed_event(event_id="g-mtg"):
+    start = arrow.now("America/New_York").shift(days=7).replace(hour=9, minute=0, second=0, microsecond=0)
+    return {
+        "id": event_id,
+        "status": "confirmed",
+        "summary": "Meeting",
+        "start": {"dateTime": start.isoformat()},
+        "end": {"dateTime": start.shift(hours=1).isoformat()},
+    }
+
+
+def test_single_day_timed_event_uses_the_exact_lookup(mocker):
+    inbound = _inbound(mocker)
+    mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
+    inbound._apply("cal", _single_timed_event(), _stats())
+    inbound._live_holds_for_event.assert_called_once_with("g-mtg", "14", per_day=False)
+
+
+def test_multi_day_event_uses_the_per_day_lookup(mocker):
+    event, _dates = _all_day_event(3)
+    inbound = _inbound(mocker)
+    inbound._apply("cal", event, _stats())
+    inbound._live_holds_for_event.assert_called_once_with("g-pto", "14", per_day=True)
+
+
+def test_expanded_event_shrunk_to_one_timed_day_uses_the_per_day_lookup(mocker):
+    inbound = _inbound(mocker, expanded=True)
+    reconcile = mocker.patch.object(inbound, "_reconcile_day_holds", return_value=[])
+    inbound._apply("cal", _single_timed_event(), _stats())
+    inbound._live_holds_for_event.assert_called_once_with("g-mtg", "14", per_day=True)
+    reconcile.assert_called_once()
+
+
+def test_event_outside_the_window_reads_no_holds(mocker):
+    # Review (perf): the window check runs before any hold lookup.
+    inbound = _inbound(mocker)
+    start = arrow.utcnow().shift(years=2)
+    event = {
+        "id": "g-far",
+        "status": "confirmed",
+        "start": {"dateTime": start.isoformat()},
+        "end": {"dateTime": start.shift(hours=1).isoformat()},
+    }
+    stats = _stats()
+    assert inbound._apply("cal", event, stats) == []
+    inbound._live_holds_for_event.assert_not_called()
+    inbound._is_expanded.assert_not_called()
+
+
+def test_cancelling_an_unexpanded_event_uses_the_exact_lookup(mocker):
+    inbound = _inbound(mocker, live={"g-mtg": "appt-1"})
+    mocker.patch("gcal_sync.inbound.ScheduleEvent")
+    mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    inbound._apply("cal", {"id": "g-mtg", "status": "cancelled"}, _stats())
+    inbound._live_holds_for_event.assert_called_once_with("g-mtg", "14", per_day=False)
+
+
+def test_cancelling_an_expanded_event_uses_the_per_day_lookup_and_clears_the_mark(mocker):
+    inbound = _inbound(mocker, live={"g-pto:2026-09-01": "appt-1"}, expanded=True)
+    mocker.patch("gcal_sync.inbound.ScheduleEvent")
+    mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    expanded_model = mocker.patch("gcal_sync.inbound.ExpandedEvent")
+    stats = _stats()
+    inbound._apply("cal", {"id": "g-pto", "status": "cancelled"}, stats)
+    inbound._live_holds_for_event.assert_called_once_with("g-pto", "14", per_day=True)
+    assert stats["holds_removed"] == 1
+    expanded_model.objects.filter.assert_called_once_with(
+        google_calendar_id="cal", google_event_id="g-pto"
+    )
+    expanded_model.objects.filter.return_value.delete.assert_called_once()
+
+
+def test_creating_day_holds_marks_the_event_expanded(mocker):
+    event, _dates = _all_day_event(3)
+    inbound = _inbound(mocker)
+    inbound._apply("cal", event, _stats())
+    inbound._mark_expanded.assert_called_once_with("cal", "g-pto")
+
+
+def test_already_marked_event_is_not_marked_again(mocker):
+    event, _dates = _all_day_event(3)
+    inbound = _inbound(mocker, expanded=True)
+    inbound._apply("cal", event, _stats())
+    inbound._mark_expanded.assert_not_called()
+
+
+def test_day_holds_from_before_the_mark_are_marked_on_an_unchanged_pass(mocker):
+    # Events expanded under 0.6.3-0.6.5 have per-day holds and no mark. The first pass that reaches
+    # one marks it, even when nothing about the event changed.
+    event, dates = _all_day_event(2)
+    from gcal_sync.google.event_builder import google_event_content_hash
+
+    inbound = _inbound(
+        mocker,
+        live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates)},
+        mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=google_event_content_hash(event)),
+    )
+    stats = _stats()
+    assert inbound._apply("cal", event, stats) == []
+    assert stats["holds_unchanged"] == 1
+    inbound._mark_expanded.assert_called_once_with("cal", "g-pto")
+
+
+def test_dry_run_does_not_mark_the_event(mocker):
+    event, _dates = _all_day_event(3)
+    inbound = _inbound(mocker)
+    inbound._apply("cal", event, _stats(), dry_run=True)
+    inbound._mark_expanded.assert_not_called()
+
+
+def test_is_expanded_reads_this_calendars_row(mocker):
+    model = mocker.patch("gcal_sync.inbound.ExpandedEvent")
+    model.objects.filter.return_value.exists.return_value = True
+    assert InboundSync._is_expanded("cal", "g1") is True
+    model.objects.filter.assert_called_once_with(google_calendar_id="cal", google_event_id="g1")
+
+
+def test_mark_expanded_upserts_this_calendars_row(mocker):
+    model = mocker.patch("gcal_sync.inbound.ExpandedEvent")
+    InboundSync._mark_expanded("cal", "g1")
+    model.objects.get_or_create.assert_called_once_with(google_event_id="g1", google_calendar_id="cal")
 
 
 def test_hold_matches_span_compares_start_and_duration(mocker):

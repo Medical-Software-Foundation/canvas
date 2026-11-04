@@ -21,6 +21,10 @@ def _inbound(mocker):
     mocker.patch.object(inbound._sync, "remove")
     # Removed-day records for per-day holds; no DB in these tests.
     mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    # No event here has per-day holds unless a test says so.
+    mocker.patch.object(inbound, "_is_expanded", return_value=False)
+    mocker.patch.object(inbound, "_mark_expanded")
+    mocker.patch("gcal_sync.inbound.ExpandedEvent")
     return inbound
 
 
