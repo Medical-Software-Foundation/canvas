@@ -6,7 +6,7 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 name = "tellescope-banner"
-version = "0.1.0"
+version = "0.1.1"
 license = "MIT"
 description = "Chart banner that links to the patient's profile in Tellescope, built from a URL-template setting."
 requires-python = ">=3.12"

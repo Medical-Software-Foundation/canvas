@@ -13,7 +13,7 @@ the plugin shows no banner and removes one it showed before (fail closed).
 """
 
 import re
-from typing import ClassVar
+from typing import Any, ClassVar
 from urllib.parse import quote
 
 from canvas_sdk.effects import Effect
@@ -67,6 +67,53 @@ def build_profile_url(template: str, values: dict[str, str]) -> str:
     )
 
 
+def template_profile_url(secrets: dict[str, Any], patient_id: str) -> str | None:
+    """Build the profile link from the template setting, or None (fail closed)."""
+    template = (secrets.get(TEMPLATE_SETTING) or "").strip()
+    if not template:
+        log.warning(f"{TEMPLATE_SETTING} is not set; no Tellescope profile link")
+        return None
+
+    placeholders = template_placeholders(template)
+    if placeholders is None:
+        log.warning(
+            f"{TEMPLATE_SETTING} must be an https URL that uses only "
+            "{patient_id} and/or {external_id}; no Tellescope profile link"
+        )
+        return None
+
+    values = {PATIENT_ID: patient_id}
+    if EXTERNAL_ID in placeholders:
+        external_id = _external_id(secrets, patient_id)
+        if not external_id:
+            return None
+        values[EXTERNAL_ID] = external_id
+
+    return build_profile_url(template, values)
+
+
+def _external_id(secrets: dict[str, Any], patient_id: str) -> str | None:
+    system = (secrets.get(SYSTEM_SETTING) or "").strip()
+    if not system:
+        log.warning(
+            f"{TEMPLATE_SETTING} uses {{external_id}} but {SYSTEM_SETTING} is not set; "
+            "no Tellescope profile link"
+        )
+        return None
+
+    # A patient has only a handful of identifiers, so skip blank or
+    # whitespace-only values in Python and keep the newest real one.
+    values = (
+        PatientExternalIdentifier.objects.filter(patient__id=patient_id, system=system)
+        .order_by("-modified")
+        .values_list("value", flat=True)
+    )
+    for value in values:
+        if value and value.strip():
+            return value.strip()
+    return None
+
+
 class TellescopeProfileBanner(BaseHandler):
     """Adds, refreshes or removes the Tellescope banner when a patient changes."""
 
@@ -90,7 +137,7 @@ class TellescopeProfileBanner(BaseHandler):
         if not patient_id:
             return []
 
-        url = self._profile_url(patient_id)
+        url = template_profile_url(self.secrets, patient_id)
         if url is None:
             return [RemoveBannerAlert(patient_id=patient_id, key=BANNER_KEY).apply()]
 
@@ -107,49 +154,3 @@ class TellescopeProfileBanner(BaseHandler):
                 href=url,
             ).apply()
         ]
-
-    def _profile_url(self, patient_id: str) -> str | None:
-        template = (self.secrets.get(TEMPLATE_SETTING) or "").strip()
-        if not template:
-            log.warning(f"{TEMPLATE_SETTING} is not set; showing no Tellescope banner")
-            return None
-
-        placeholders = template_placeholders(template)
-        if placeholders is None:
-            log.warning(
-                f"{TEMPLATE_SETTING} must be an https URL that uses only "
-                "{patient_id} and/or {external_id}; showing no Tellescope banner"
-            )
-            return None
-
-        values = {PATIENT_ID: patient_id}
-        if EXTERNAL_ID in placeholders:
-            external_id = self._external_id(patient_id)
-            if not external_id:
-                return None
-            values[EXTERNAL_ID] = external_id
-
-        return build_profile_url(template, values)
-
-    def _external_id(self, patient_id: str) -> str | None:
-        system = (self.secrets.get(SYSTEM_SETTING) or "").strip()
-        if not system:
-            log.warning(
-                f"{TEMPLATE_SETTING} uses {{external_id}} but {SYSTEM_SETTING} is not set; "
-                "showing no Tellescope banner"
-            )
-            return None
-
-        # A patient has only a handful of identifiers, so skip blank or
-        # whitespace-only values in Python and keep the newest real one.
-        values = (
-            PatientExternalIdentifier.objects.filter(
-                patient__id=patient_id, system=system
-            )
-            .order_by("-modified")
-            .values_list("value", flat=True)
-        )
-        for value in values:
-            if value and value.strip():
-                return value.strip()
-        return None

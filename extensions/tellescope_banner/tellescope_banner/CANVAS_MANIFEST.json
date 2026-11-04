@@ -1,8 +1,8 @@
 {
     "sdk_version": "0.262.0",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "tellescope_banner",
-    "description": "Shows a banner on the patient chart that links to the patient's profile in Tellescope. The link comes from a URL-template setting; with no valid template, no banner is shown.",
+    "description": "Links the patient chart to the patient's profile in Tellescope: a chart banner built from a URL-template setting, and a chart app that opens the profile in the right pane (found through the Tellescope API, or the same template). With no valid setting, no banner or link is shown.",
     "components": {
         "handlers": [
             {
@@ -16,6 +16,15 @@
                     "write": []
                 }
             }
+        ],
+        "applications": [
+            {
+                "class": "tellescope_banner.applications.profile_app:TellescopeProfileApp",
+                "name": "Tellescope Profile",
+                "description": "Open the patient's linked Tellescope profile in the chart pane.",
+                "scope": "patient_specific",
+                "icon": "assets/tellescope-icon.png"
+            }
         ]
     },
     "variables": [
@@ -25,6 +34,14 @@
         },
         {
             "name": "TELLESCOPE_IDENTIFIER_SYSTEM",
+            "sensitive": false
+        },
+        {
+            "name": "TELLESCOPE_API_KEY",
+            "sensitive": true
+        },
+        {
+            "name": "TELLESCOPE_API_URL",
             "sensitive": false
         }
     ],
