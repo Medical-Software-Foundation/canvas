@@ -1827,6 +1827,18 @@ class TestDeviceSignature:
         assert result[0].content["ok"] is True
         assert mock_pdf.mock_calls[0].kwargs["responses"]
 
+    def test_non_latin_typed_name_is_refused(self):
+        body = _sig_body(signature={"signed_with": "typed", "entered_name": "Мария Лопес", "name_kept": True})
+        result, mock_pdf, _, _ = self._run(body, settings={"accept_typed": True})
+        assert result[0].content["ok"] is False
+        assert "Enter it in Latin letters" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
+
+    def test_accented_typed_name_is_accepted(self):
+        body = _sig_body(signature={"signed_with": "typed", "entered_name": "María López", "name_kept": True})
+        result, _, _, _ = self._run(body, settings={"accept_typed": True})
+        assert result[0].content["ok"] is True
+
     def test_question_edited_while_open_is_refused(self):
         shown_q = {"id": "a", "prompt": "May we share your records with your insurer?", "type": "yes_no", "required": True, "affirm": True}
         edited_q = dict(shown_q, prompt="May we share your records with anyone?")
