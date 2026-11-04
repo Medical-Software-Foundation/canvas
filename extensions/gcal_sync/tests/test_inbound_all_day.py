@@ -308,6 +308,7 @@ def _inbound(
     bare_ever_existed=False,
     bare_retired=False,
     adopted_matches=False,
+    bare_adopted_on=None,
 ):
     """An InboundSync with the DB-backed lookups mocked out.
 
@@ -331,6 +332,7 @@ def _inbound(
         side_effect=lambda value, provider_id: ever_existed if ":" in value else bare_ever_existed,
     )
     mocker.patch.object(inbound, "_bare_retired_by_sync", return_value=bare_retired)
+    mocker.patch.object(inbound, "_bare_adopted_date", return_value=bare_adopted_on)
     mocker.patch.object(inbound, "_hold_matches_span", return_value=adopted_matches)
     mocker.patch.object(inbound, "_days_in_flight", return_value=set(in_flight or ()))
     mocker.patch.object(
@@ -681,7 +683,7 @@ def test_pass_records_its_created_and_uncovered_days(mocker):
     mocker.patch("gcal_sync.inbound.ScheduleEvent")
     inbound._apply("cal", event, _stats())
     inbound._record_day_changes.assert_called_once_with(
-        "cal", "g-pto", dates[1:], [stale_day], bare_retired=False
+        "cal", "g-pto", dates[1:], [stale_day], bare_retired=False, adopted_date=None
     )
 
 
@@ -746,11 +748,74 @@ def test_staff_cancelled_adopted_day_one_is_not_recreated(mocker):
         live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates[1:], start=1)},
         mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
         bare_ever_existed=True,
+        bare_adopted_on=dates[0],
     )
     stats = _stats()
     effects = inbound._apply("cal", event, stats)
     assert effects == [f"UPDATE:appt-1:{dates[1]}", f"UPDATE:appt-2:{dates[2]}"]
     assert stats["holds_created"] == 0
+
+
+def test_cancelled_adopted_day_one_blocks_only_that_day_when_the_event_grows(mocker):
+    # Review (5771465733): Mon-Fri, the bare hold was adopted as Mon, staff cancelled it, then the
+    # event was extended through Sunday. Only Mon stays unheld; Sat and Sun get holds.
+    event, dates = _all_day_event(7)
+    mon = dates[0]
+    inbound = _inbound(
+        mocker,
+        live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates[1:5], start=1)},
+        mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
+        bare_ever_existed=True,
+        bare_adopted_on=mon,
+    )
+    stats = _stats()
+    effects = inbound._apply("cal", event, stats)
+    assert f"CREATE:{mon}" not in effects
+    assert [e for e in effects if e.startswith("CREATE:")] == [
+        f"CREATE:{dates[5]}",
+        f"CREATE:{dates[6]}",
+    ]
+    assert stats["holds_created"] == 2
+
+
+def test_adopting_the_bare_hold_records_the_day_it_was_adopted_onto(mocker):
+    event, dates = _all_day_event(3)
+    inbound = _inbound(
+        mocker,
+        live={"g-pto": "appt-old"},
+        mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
+    )
+    inbound._apply("cal", event, _stats())
+    assert inbound._record_day_changes.call_args.kwargs["adopted_date"] == dates[0]
+
+
+def test_record_day_changes_stores_the_adopted_day(mocker):
+    mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    abh = mocker.patch("gcal_sync.inbound.AdoptedBareHold")
+    InboundSync._record_day_changes("cal", "g1", [], [], adopted_date="2026-09-01")
+    abh.objects.update_or_create.assert_called_once_with(
+        google_event_id="g1",
+        google_calendar_id="cal",
+        defaults={"adopted_date": "2026-09-01"},
+    )
+
+
+def test_record_day_changes_without_adoption_writes_no_adopted_row(mocker):
+    mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    abh = mocker.patch("gcal_sync.inbound.AdoptedBareHold")
+    InboundSync._record_day_changes("cal", "g1", ["2026-09-02"], [])
+    abh.objects.update_or_create.assert_not_called()
+
+
+def test_bare_adopted_date_reads_this_calendars_row(mocker):
+    abh = mocker.patch("gcal_sync.inbound.AdoptedBareHold")
+    abh.objects.filter.return_value.values_list.return_value.first.return_value = "2026-09-01"
+    assert InboundSync._bare_adopted_date("cal", "g1") == "2026-09-01"
+    abh.objects.filter.assert_called_once_with(google_calendar_id="cal", google_event_id="g1")
+    abh.objects.filter.return_value.values_list.return_value.first.return_value = None
+    assert InboundSync._bare_adopted_date("cal", "g1") is None
 
 
 def test_day_freed_when_the_sync_retired_the_bare_hold_is_held_again(mocker):
@@ -789,7 +854,10 @@ def test_start_moved_later_keeps_the_day_hold_and_retires_the_bare_one(mocker):
     assert effects[0] == f"UPDATE:appt-{tue}:{tue}"
     se.assert_called_once_with(instance_id="appt-old")
     assert stats["holds_removed"] == 1
-    assert inbound._record_day_changes.call_args.kwargs == {"bare_retired": True}
+    assert inbound._record_day_changes.call_args.kwargs == {
+        "bare_retired": True,
+        "adopted_date": None,
+    }
 
 
 def test_days_before_the_import_window_are_not_created(mocker):

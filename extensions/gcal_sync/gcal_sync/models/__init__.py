@@ -182,6 +182,30 @@ class RemovedDayHold(CustomModel):
         ]
 
 
+class AdoptedBareHold(CustomModel):
+    """The day a pre-expansion (bare event id) hold was adopted onto, per calendar.
+
+    A hold imported before per-day expansion carries the bare event id and is adopted as the first
+    covered day's hold. If staff later cancel it, only that day should stay unheld: days a later
+    edit adds still get holds. Without this record the convergence guard could not tell which day
+    the cancelled bare hold stood for, and blocked every missing day of the event. A bare hold that
+    was cancelled before it was ever adopted has no row, and still blocks the whole event.
+    """
+
+    google_calendar_id = TextField()
+    google_event_id = TextField()
+    adopted_date = TextField()
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["google_event_id", "google_calendar_id"],
+                name="uq_adopted_bare_cal_event",
+            ),
+        ]
+
+
 class CalendarEventMapping(CustomModel):
     """Links a Canvas Calendar ``Event`` (admin block) to the Google event we created for it.
 

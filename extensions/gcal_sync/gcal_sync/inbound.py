@@ -56,6 +56,7 @@ from gcal_sync.google.event_builder import (
     google_event_content_hash,
 )
 from gcal_sync.models import (
+    AdoptedBareHold,
     AppointmentEventMapping,
     CalendarSyncState,
     InboundEventMapping,
@@ -675,10 +676,12 @@ class InboundSync:
         # with no record, and extending the event back over it later would leave it bookable.
         bare_hold = live.get(google_event_id)
         bare_retired = False
+        adopted_date: str | None = None
         if bare_hold is not None:
             if dates[0] not in live_by_date:
                 live_by_date[dates[0]] = bare_hold
                 adopted.add(dates[0])
+                adopted_date = dates[0]
             else:
                 stale.append(bare_hold)
                 bare_retired = True
@@ -772,23 +775,28 @@ class InboundSync:
         # The exception is a day this sync removed itself because the event stopped covering it
         # (``RemovedDayHold``): PTO shortened and then extended back over that day is held again.
         #
-        # The bare event id counts too. A pre-expansion hold blocked the whole span (or, once
-        # adopted, day one), so if it was cancelled out-of-band (Purge, or staff in Canvas) the
-        # days it stood for stay unheld, the way the single-hold path's ``_external_hold_exists``
-        # keeps a cancelled hold cancelled. A bare hold this sync retired itself does not count.
+        # The bare event id counts too. If a pre-expansion hold was cancelled out-of-band (Purge, or
+        # staff in Canvas), the day it stood for stays unheld, the way the single-hold path's
+        # ``_external_hold_exists`` keeps a cancelled hold cancelled. Once adopted it stood for one
+        # day only (``AdoptedBareHold``), so only that day is blocked and days a later edit adds are
+        # still held. A bare hold cancelled before it was ever adopted blocked the whole span, so the
+        # whole event stays unheld. A bare hold this sync retired itself does not count.
         if not force_rebuild and missing:
             removed_by_sync = self._days_removed_by_sync(calendar_id, google_event_id, missing)
-            bare_cancelled = (
+            blocked_by_bare: set[str] = set()
+            if (
                 google_event_id not in live
                 and self._external_value_exists(google_event_id, provider_id)
                 and not self._bare_retired_by_sync(calendar_id, google_event_id)
-            )
+            ):
+                adopted_on = self._bare_adopted_date(calendar_id, google_event_id)
+                blocked_by_bare = {adopted_on} if adopted_on else set(missing)
             missing = [
                 date
                 for date in missing
                 if date in removed_by_sync
                 or not (
-                    bare_cancelled
+                    date in blocked_by_bare
                     or self._external_value_exists(
                         hold_external_id(google_event_id, date), provider_id
                     )
@@ -828,7 +836,12 @@ class InboundSync:
 
         if not dry_run:
             self._record_day_changes(
-                calendar_id, google_event_id, created, uncovered, bare_retired=bare_retired
+                calendar_id,
+                google_event_id,
+                created,
+                uncovered,
+                bare_retired=bare_retired,
+                adopted_date=adopted_date,
             )
             InboundEventMapping.objects.update_or_create(
                 google_event_id=google_event_id,
@@ -899,12 +912,25 @@ class InboundSync:
         )
 
     @staticmethod
+    def _bare_adopted_date(calendar_id: str, google_event_id: str) -> str | None:
+        """The day this calendar's pre-expansion (bare id) hold was last adopted onto, if ever."""
+        value = (
+            AdoptedBareHold.objects.filter(
+                google_calendar_id=calendar_id, google_event_id=google_event_id
+            )
+            .values_list("adopted_date", flat=True)
+            .first()
+        )
+        return str(value) if value else None
+
+    @staticmethod
     def _record_day_changes(
         calendar_id: str,
         google_event_id: str,
         created: list[str],
         uncovered: list[str],
         bare_retired: bool = False,
+        adopted_date: str | None = None,
     ) -> None:
         """Persist this pass's per-day creates and removals for the in-flight and convergence guards.
 
@@ -913,11 +939,18 @@ class InboundSync:
         can be held again if the event comes back over it, and its in-flight marker is dropped, since
         the hold that marker waited on has applied and is now being cancelled. A retired bare hold is
         recorded under the bare event id, so the convergence guard can tell it from an out-of-band
-        cancel.
+        cancel. An adopted bare hold records the day it was adopted onto (``AdoptedBareHold``), so if
+        it is later cancelled only that day stays unheld.
         """
         if bare_retired:
             RemovedDayHold.objects.get_or_create(
                 google_event_id=google_event_id, google_calendar_id=calendar_id
+            )
+        if adopted_date:
+            AdoptedBareHold.objects.update_or_create(
+                google_event_id=google_event_id,
+                google_calendar_id=calendar_id,
+                defaults={"adopted_date": adopted_date},
             )
         now = arrow.utcnow().datetime
         for date in created:
