@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conditional Questionnaire</title>
+<style>
+  :root {
+    --ink: #1f2933; --muted: #5f6b7a; --line: #d9dee5; --soft: #f5f7fa;
+    --accent: #2457c5; --accent-ink: #ffffff; --bad: #b42318; --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; color: var(--ink); background: #fff;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  label.picker { display: block; font-weight: 600; margin-bottom: 6px; }
+  select, input[type="text"], input[type="date"], input[type="number"], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    font: inherit; color: inherit; background: #fff;
+  }
+  textarea { min-height: 64px; resize: vertical; }
+  .question { padding: 12px 0; border-top: 1px solid var(--line); }
+  .question:first-child { border-top: 0; }
+  .question[hidden] { display: none; }
+  .question-name { font-weight: 600; margin-bottom: 6px; display: block; }
+  .choice { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; }
+  .choice input { margin-top: 3px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .notice { padding: 10px 12px; border-radius: 6px; background: var(--soft); margin: 12px 0; }
+  .notice.bad { color: var(--bad); background: #fdecea; }
+  .notice.good { color: var(--good); background: #e8f5ec; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; position: sticky; bottom: 0; background: #fff; padding: 12px 0; }
+  button {
+    font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink); cursor: pointer; min-height: 36px;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  #form { margin-top: 12px; }
+</style>
+</head>
+<body data-note-id="{{ note_id }}" data-base-path="{{ base_path }}">
+  <label class="picker" for="questionnaire">Questionnaire</label>
+  <select id="questionnaire"><option value="">Loading…</option></select>
+  <div id="message" class="notice" hidden></div>
+  <form id="form" hidden novalidate>
+    <div id="questions"></div>
+    <div class="actions">
+      <button type="submit" class="primary" id="save">Save to note</button>
+      <button type="button" id="close">Close</button>
+    </div>
+  </form>
+
+<script>
+(function () {
+  "use strict";
+  var NOTE_ID = document.body.dataset.noteId;
+  var BASE = document.body.dataset.basePath;
+  var ANSWERABLE = { TXT: true, DATE: true, SING: true, MULT: true };
+
+  var picker = document.getElementById("questionnaire");
+  var form = document.getElementById("form");
+  var list = document.getElementById("questions");
+  var message = document.getElementById("message");
+  var saveButton = document.getElementById("save");
+  var current = null;      // the loaded form
+  var commandUuid = null;  // one per filled-in form, so a retried save can't add a second command
+  var port = null;
+  var saveFailed = false;  // true while the banner shows a failed save
+  var draftTimer = null;
+
+  window.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+      port = event.ports[0];
+    }
+  });
+  document.getElementById("close").addEventListener("click", function () {
+    if (port) { port.postMessage({ type: "CLOSE_MODAL" }); }
+  });
+
+  function show(text, kind) {
+    message.textContent = text;
+    message.className = "notice" + (kind ? " " + kind : "");
+    message.hidden = !text;
+  }
+
+  function newUuid() {
+    if (window.crypto && window.crypto.randomUUID) { return window.crypto.randomUUID(); }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      var r = (window.crypto.getRandomValues(new Uint8Array(1))[0] & 15);
+      return (c === "x" ? r : (r & 3) | 8).toString(16);
+    });
+  }
+
+  // ---- Field Rules: mirrors services/rules.py --------------------------------------
+  function hasAnswer(answer) {
+    if (answer === undefined || answer === null) { return false; }
+    if (typeof answer === "string") { return answer.trim() !== ""; }
+    if (Array.isArray(answer)) { return answer.length > 0; }
+    return true;
+  }
+  function fold(text) { return String(text == null ? "" : text).trim().toLowerCase(); }
+  function optionTexts(question, optionId) {
+    var options = (question && question.options) || [];
+    for (var i = 0; i < options.length; i++) {
+      if (String(options[i].id) === String(optionId)) {
+        return [options[i].name, options[i].code, options[i].value].map(fold).filter(Boolean);
+      }
+    }
+    return [];
+  }
+  function conditionMet(condition, answers, byId) {
+    var answer = answers[String(condition.on)];
+    var present = hasAnswer(answer);
+    if (condition.op === "exists") { return present; }
+    if (condition.op === "not_exists") { return !present; }
+    if (!present) { return false; }
+    var picks = Array.isArray(answer) ? answer : [answer];
+    var equal;
+    if (condition.option !== null && condition.option !== undefined) {
+      equal = picks.some(function (pick) { return String(pick) === String(condition.option); });
+    } else {
+      var wanted = fold(condition.value);
+      equal = picks.some(function (pick) {
+        var texts = optionTexts(byId[String(condition.on)], pick);
+        if (!texts.length) { texts = [fold(pick)]; }
+        return texts.indexOf(wanted) !== -1;
+      });
+    }
+    return condition.op === "=" ? equal : !equal;
+  }
+  function isShown(question, answers, byId) {
+    var rule = question.rule;
+    if (!rule || !rule.conditions || !rule.conditions.length) { return true; }
+    var results = rule.conditions.map(function (c) { return conditionMet(c, answers, byId); });
+    return rule.behavior === "all"
+      ? results.every(Boolean)
+      : results.some(Boolean);
+  }
+  function visibleAnswers(questions, answers, byId) {
+    var kept = {};
+    Object.keys(answers).forEach(function (key) {
+      if (hasAnswer(answers[key])) { kept[key] = answers[key]; }
+    });
+    for (var pass = 0; pass <= questions.length; pass++) {
+      var dropped = questions.filter(function (q) {
+        return kept.hasOwnProperty(String(q.id)) && !isShown(q, kept, byId);
+      });
+      if (!dropped.length) { break; }
+      dropped.forEach(function (q) { delete kept[String(q.id)]; });
+    }
+    return kept;
+  }
+  // ---- end Field Rules (tests/test_rules_parity.py runs the block above in node) -----
+
+  function rawAnswers() {
+    var answers = {};
+    current.questions.forEach(function (question) {
+      if (!ANSWERABLE[question.type]) { return; }
+      var key = String(question.id);
+      var block = list.querySelector('[data-question="' + key + '"]');
+      if (question.type === "MULT") {
+        answers[key] = Array.prototype.map.call(
+          block.querySelectorAll("input:checked"), function (input) { return input.value; });
+      } else if (question.type === "SING") {
+        var picked = block.querySelector("input:checked");
+        answers[key] = picked ? picked.value : "";
+      } else {
+        answers[key] = block.querySelector("input, textarea").value;
+      }
+    });
+    return answers;
+  }
+
+  function applyRules() {
+    var byId = {};
+    current.questions.forEach(function (q) { byId[String(q.id)] = q; });
+    var kept = visibleAnswers(current.questions, rawAnswers(), byId);
+    current.questions.forEach(function (question) {
+      var block = list.querySelector('[data-question="' + question.id + '"]');
+      block.hidden = !isShown(question, kept, byId);
+    });
+  }
+
+  // ---- Draft: unsaved answers survive closing and reopening the pane -------------
+  // Kept in sessionStorage (this browser tab only, gone when the tab closes, never
+  // sent anywhere) with the form's command UUID, so a save retried after reopening
+  // still can't add a second command. Cleared once the save succeeds.
+  function draftKey() {
+    return current ? "conditional_questionnaire:" + NOTE_ID + ":" + current.id : null;
+  }
+  function draftHasAnswers(answers) {
+    return Object.keys(answers).some(function (key) {
+      var value = answers[key];
+      return Array.isArray(value) ? value.length > 0 : String(value || "").trim() !== "";
+    });
+  }
+  function storeDraft() {
+    var key = draftKey();
+    if (!key) { return; }
+    var answers = rawAnswers();
+    try {
+      // An untouched (or emptied) form leaves no draft, so reopening never says
+      // "restored" with nothing restored.
+      if (!draftHasAnswers(answers)) { window.sessionStorage.removeItem(key); return; }
+      window.sessionStorage.setItem(key, JSON.stringify({ uuid: commandUuid, answers: answers }));
+    } catch (error) { /* storage blocked or full: the form still works without drafts */ }
+  }
+  function queueDraft() {
+    window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(storeDraft, 400);
+  }
+  function clearDraft(key) {
+    window.clearTimeout(draftTimer);
+    if (!key) { return; }
+    try { window.sessionStorage.removeItem(key); } catch (error) { /* nothing stored */ }
+  }
+  function restoreDraft() {
+    var saved = null;
+    try { saved = JSON.parse(window.sessionStorage.getItem(draftKey()) || "null"); } catch (error) { saved = null; }
+    if (!saved || typeof saved.answers !== "object" || saved.answers === null || !draftHasAnswers(saved.answers)) {
+      return false;
+    }
+    if (typeof saved.uuid === "string" && saved.uuid) { commandUuid = saved.uuid; }
+    current.questions.forEach(function (question) {
+      var key = String(question.id);
+      if (!ANSWERABLE[question.type] || !saved.answers.hasOwnProperty(key)) { return; }
+      var block = list.querySelector('[data-question="' + key + '"]');
+      var value = saved.answers[key];
+      if (question.type === "SING" || question.type === "MULT") {
+        var picks = (Array.isArray(value) ? value : [value]).map(String);
+        Array.prototype.forEach.call(block.querySelectorAll("input"), function (input) {
+          input.checked = picks.indexOf(input.value) !== -1;
+        });
+      } else {
+        block.querySelector("input, textarea").value = typeof value === "string" ? value : "";
+      }
+    });
+    return true;
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") { storeDraft(); }
+  });
+  // -----------------------------------------------------------------------------------
+
+  function choice(type, name, option) {
+    var label = document.createElement("label");
+    label.className = "choice";
+    var input = document.createElement("input");
+    input.type = type;
+    input.name = name;
+    input.value = String(option.id);
+    var text = document.createElement("span");
+    text.textContent = option.name;
+    label.appendChild(input);
+    label.appendChild(text);
+    return label;
+  }
+
+  function drawQuestion(question) {
+    var block = document.createElement("div");
+    block.className = "question";
+    block.dataset.question = String(question.id);
+    var title = document.createElement("span");
+    title.className = "question-name";
+    title.textContent = question.name;
+    block.appendChild(title);
+    var name = "q-" + question.id;
+    if (question.type === "SING" || question.type === "MULT") {
+      question.options.forEach(function (option) {
+        block.appendChild(choice(question.type === "SING" ? "radio" : "checkbox", name, option));
+      });
+    } else if (question.type === "DATE") {
+      var date = document.createElement("input");
+      date.type = "date";
+      date.name = name;
+      block.appendChild(date);
+    } else if (question.type === "TXT") {
+      var area = document.createElement("textarea");
+      area.name = name;
+      block.appendChild(area);
+    } else {
+      var other = document.createElement("input");
+      other.type = question.type === "INT" ? "number" : "text";
+      other.disabled = true;
+      block.appendChild(other);
+      var hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "This question type can't be answered from here. Answer it in the note after saving.";
+      block.appendChild(hint);
+    }
+    return block;
+  }
+
+  function drawForm(data) {
+    current = data;
+    commandUuid = newUuid();
+    saveFailed = false;
+    list.textContent = "";
+    data.questions.forEach(function (question) { list.appendChild(drawQuestion(question)); });
+    form.hidden = false;
+    saveButton.disabled = !data.saveable;
+    var restored = restoreDraft();
+    if (!data.saveable) {
+      show(data.reason, "bad");
+    } else {
+      show(restored ? "Restored the answers you hadn't saved yet." : "");
+    }
+    applyRules();
+  }
+
+  function getJson(url) {
+    return fetch(url, { credentials: "same-origin" }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok) { throw new Error(body.error || "Request failed"); }
+        return body;
+      });
+    });
+  }
+
+  // A failed save's banner clears once the answers change, so it never describes stale input.
+  function onAnswersChanged() {
+    if (saveFailed) {
+      saveFailed = false;
+      show("");
+    }
+    applyRules();
+    queueDraft();
+  }
+
+  list.addEventListener("input", onAnswersChanged);
+  list.addEventListener("change", onAnswersChanged);
+
+  picker.addEventListener("change", function () {
+    window.clearTimeout(draftTimer);
+    storeDraft();  // keep the last edits of the questionnaire being left
+    form.hidden = true;
+    current = null;
+    show("");
+    if (!picker.value) { return; }
+    getJson(BASE + "/questionnaires/" + encodeURIComponent(picker.value))
+      .then(drawForm)
+      .catch(function (error) { show(error.message, "bad"); });
+  });
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    if (!current || !current.saveable) { return; }
+    saveButton.disabled = true;
+    var savingKey = draftKey();  // fixed now: the picker may change while the save runs
+    show("Saving…");
+    fetch(BASE + "/save", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        note_id: NOTE_ID,
+        questionnaire_id: current.id,
+        command_uuid: commandUuid,
+        answers: rawAnswers()
+      })
+    }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok) { throw new Error(body.error || "Save failed"); }
+        return body;
+      });
+    }).then(function () {
+      clearDraft(savingKey);
+      show("Saved to the note. Pick a questionnaire to fill in another.", "good");
+      form.hidden = true;
+      picker.value = "";
+      current = null;
+    }).catch(function (error) {
+      saveButton.disabled = false;
+      saveFailed = true;
+      show(error.message, "bad");
+    });
+  });
+
+  getJson(BASE + "/questionnaires").then(function (data) {
+    picker.textContent = "";
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = data.questionnaires.length ? "Pick a questionnaire" : "No questionnaires available";
+    picker.appendChild(blank);
+    data.questionnaires.forEach(function (questionnaire) {
+      var option = document.createElement("option");
+      option.value = questionnaire.id;
+      option.textContent = questionnaire.name;
+      picker.appendChild(option);
+    });
+  }).catch(function (error) { show(error.message, "bad"); });
+})();
+</script>
+</body>
+</html>
