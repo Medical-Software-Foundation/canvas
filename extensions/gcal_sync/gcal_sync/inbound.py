@@ -31,7 +31,7 @@ import arrow
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.note.appointment import ScheduleEvent
-from canvas_sdk.v1.data.appointment import AppointmentExternalIdentifier
+from canvas_sdk.v1.data.appointment import Appointment, AppointmentExternalIdentifier
 from logger import log
 
 from gcal_sync.appointment_snapshot import GOOGLE_ORIGIN_SYSTEM, build_snapshot
@@ -39,6 +39,7 @@ from gcal_sync.google.client import GoogleApiError
 from gcal_sync.inbound_holds import (
     DaySpan,
     build_hold_effect,
+    default_time_zone,
     event_day_spans,
     hold_external_id,
     hold_title,
@@ -139,6 +140,7 @@ class InboundSync:
         self._client_factory = self._sync._client_factory
         self._ingest_private = ingest_private_events(self._secrets)
         self._ingest_all_day = ingest_all_day_events(self._secrets)
+        self._default_zone = default_time_zone(self._secrets)
         # Cache of (calendar_id, note_type_id, provider_id, location_id). The note type and the
         # provider/location are identical for every event in a calendar's pull, so we resolve them
         # ONCE per calendar instead of re-querying per imported event. Re-resolved when the calendar
@@ -349,6 +351,10 @@ class InboundSync:
         # provider's shared meetings never imported. (Note type / location come from the same cached
         # resolve and are reused by the create path.)
         note_type_id, provider_id, location_id = self._import_context(calendar_id)
+        # This provider's live holds for the event (bare id and per-day ids), read ONCE and shared by
+        # the delete, branch, reconcile and single-hold paths below. The lookup is a prefix match, so
+        # it is the expensive one; an unmapped calendar has no provider and nothing to look up.
+        live = self._live_holds_for_event(google_event_id, provider_id) if provider_id else {}
 
         # InboundEventMapping holds the last-applied content hash for the no-op guard. It is unique per
         # google_event_id (shared across a shared event's attendees), which is fine for a content hash
@@ -371,7 +377,7 @@ class InboundSync:
             # the same shared event id is left untouched. Plural because an all-day event expands
             # into one hold per covered day — a cancellation delta carries no start/end, so we can't
             # recompute the dates and instead remove every hold stamped with this event id.
-            effects = self._hold_delete_effects(google_event_id, provider_id)
+            effects = self._hold_delete_effects(live)
             if not dry_run:
                 if existing is not None:
                     existing.delete()
@@ -387,6 +393,9 @@ class InboundSync:
                 ).delete()
                 RemovedDayHold.objects.filter(
                     google_calendar_id=calendar_id, google_event_id__startswith=day_prefix
+                ).delete()
+                RemovedDayHold.objects.filter(
+                    google_calendar_id=calendar_id, google_event_id=google_event_id
                 ).delete()
             if not effects:
                 stats["ignored"] = stats["ignored"] + 1
@@ -427,16 +436,17 @@ class InboundSync:
         # midnight. Every all-day event also takes this path so its day is cut in local time rather
         # than at UTC midnight. And an event that already has per-day holds stays on it even after it
         # shrinks to one timed day, so those holds are reconciled away instead of left behind.
-        spans = event_day_spans(event)
+        spans = event_day_spans(event, self._default_zone)
         if spans and (
             is_all_day(event)
             or len(spans) > 1
-            or self._has_day_holds(google_event_id, provider_id)
+            or self._has_day_holds(live, google_event_id)
         ):
             return self._reconcile_day_holds(
                 calendar_id,
                 event,
                 spans,
+                live,
                 existing,
                 pending,
                 note_type_id,
@@ -452,7 +462,8 @@ class InboundSync:
         # second one. Keyed on the external id (Canvas's own record), so this holds even if the
         # ``InboundEventMapping`` row was lost — a mapping-less live hold used to fall through to
         # create and duplicate.
-        if self._canvas_id_for_google_event(google_event_id, provider_id) is not None:
+        canvas_id = live.get(google_event_id)
+        if canvas_id is not None:
             # No-op guard: a delta routinely re-delivers unchanged events, and a webhook that times
             # out before advancing the sync token makes the SAME delta re-pull on every ping. Re-issuing
             # an UPDATE for a hold whose content hasn't moved re-saves its appointment row for nothing —
@@ -475,7 +486,7 @@ class InboundSync:
                 )
                 stats["holds_unchanged"] = stats["holds_unchanged"] + 1
                 return []
-            effect = self._hold_update_effect(google_event_id, event, provider_id)
+            effect = self._hold_update_effect(canvas_id, event)
             if effect is None:
                 stats["ignored"] = stats["ignored"] + 1
                 return []
@@ -607,6 +618,7 @@ class InboundSync:
         calendar_id: str,
         event: dict,
         spans: list[DaySpan],
+        live: dict[str, str],
         existing: InboundEventMapping | None,
         pending: PendingHoldCreate | None,
         note_type_id: str | None,
@@ -638,11 +650,9 @@ class InboundSync:
             # nothing to resolve, update, or create.
             stats["ignored"] = stats["ignored"] + 1
             return []
-        live = self._live_holds_for_event(google_event_id, provider_id)
 
         # Map each live hold onto the day it covers. A hold that lands on no covered day (the event
-        # shrank or moved), or on a day already covered (a pre-expansion hold plus its per-day
-        # replacement), is stale and gets removed.
+        # shrank or moved), or on a day already covered, is stale and gets removed.
         live_by_date: dict[str, str] = {}
         adopted: set[str] = set()
         stale: list[str] = []
@@ -650,24 +660,57 @@ class InboundSync:
         # duplicate hold on a day that stays covered.
         uncovered: list[str] = []
         for value, canvas_id in sorted(live.items()):
-            date = dates[0] if value == google_event_id else value.split(":", 1)[1]
+            if value == google_event_id:
+                continue
+            date = value.split(":", 1)[1]
             if date in dates and date not in live_by_date:
                 live_by_date[date] = canvas_id
-                if value == google_event_id:
-                    adopted.add(date)
             else:
                 stale.append(canvas_id)
                 if date not in dates:
                     uncovered.append(date)
+        # The pre-expansion (bare id) hold is adopted as the first covered day only when no per-day
+        # hold already covers that day. When one does, the per-day hold keeps its date and the bare
+        # hold is retired: moving the bare hold onto that day instead would cancel the per-day hold
+        # with no record, and extending the event back over it later would leave it bookable.
+        bare_hold = live.get(google_event_id)
+        bare_retired = False
+        if bare_hold is not None:
+            if dates[0] not in live_by_date:
+                live_by_date[dates[0]] = bare_hold
+                adopted.add(dates[0])
+            else:
+                stale.append(bare_hold)
+                bare_retired = True
 
         # No-op guard. Unlike the single-hold path, an unchanged content hash is not enough: the set
         # of days must also already be complete and every hold already per-day, or a hold left over
         # from before this fix (one hold, five days) would match on hash and never be split.
+        # An adopted bare hold needs reshaping only while it still carries its old multi-day duration
+        # (or UTC-midnight start). Its external id never changes, so without this check it would be
+        # re-saved on every full pull and every re-delivered delta for as long as it lives.
+        reshape = {
+            date
+            for date in adopted
+            if not self._hold_matches_span(live_by_date[date], span_by_date[date])
+        }
+
         new_hash = google_event_content_hash(event)
         last_applied = (existing.last_applied_hash if existing is not None else "") or ""
         content_changed = new_hash != last_applied
-        missing = [date for date in dates if date not in live_by_date]
-        if not content_changed and not missing and not stale and not adopted:
+        # Days that ended before the import window are not back-filled: a span that began before
+        # it (long leave) is still reconciled, but nobody can book against its earlier days.
+        window_lower = arrow.utcnow().shift(months=self._FULL_PULL_TIME_MIN_SHIFT_MONTHS)
+        missing = [
+            date
+            for date in dates
+            if date not in live_by_date
+            and arrow.get(span_by_date[date].start).shift(
+                minutes=span_by_date[date].duration_minutes
+            )
+            >= window_lower
+        ]
+        if not content_changed and not missing and not stale and not reshape:
             _dry_trace(stats, "already current (no change)", event)
             _event_log(
                 verbose,
@@ -728,14 +771,27 @@ class InboundSync:
         # deliberate admin rebuild, so the create -> cancel -> re-create loop can't restart per day.
         # The exception is a day this sync removed itself because the event stopped covering it
         # (``RemovedDayHold``): PTO shortened and then extended back over that day is held again.
+        #
+        # The bare event id counts too. A pre-expansion hold blocked the whole span (or, once
+        # adopted, day one), so if it was cancelled out-of-band (Purge, or staff in Canvas) the
+        # days it stood for stay unheld, the way the single-hold path's ``_external_hold_exists``
+        # keeps a cancelled hold cancelled. A bare hold this sync retired itself does not count.
         if not force_rebuild and missing:
             removed_by_sync = self._days_removed_by_sync(calendar_id, google_event_id, missing)
+            bare_cancelled = (
+                google_event_id not in live
+                and self._external_value_exists(google_event_id, provider_id)
+                and not self._bare_retired_by_sync(calendar_id, google_event_id)
+            )
             missing = [
                 date
                 for date in missing
                 if date in removed_by_sync
-                or not self._external_value_exists(
-                    hold_external_id(google_event_id, date), provider_id
+                or not (
+                    bare_cancelled
+                    or self._external_value_exists(
+                        hold_external_id(google_event_id, date), provider_id
+                    )
                 )
             ]
 
@@ -747,7 +803,7 @@ class InboundSync:
                 # Only re-issue an update when the Google event's content actually moved, or when the
                 # hold is an adopted pre-expansion hold that still needs cutting down to its day;
                 # re-saving an unchanged hold is pure write load (the single-hold path's guard).
-                if content_changed or date in adopted:
+                if content_changed or date in reshape:
                     effects.append(
                         self._day_hold_update_effect(hold_id, event, span_by_date[date])
                     )
@@ -771,7 +827,9 @@ class InboundSync:
             return []
 
         if not dry_run:
-            self._record_day_changes(calendar_id, google_event_id, created, uncovered)
+            self._record_day_changes(
+                calendar_id, google_event_id, created, uncovered, bare_retired=bare_retired
+            )
             InboundEventMapping.objects.update_or_create(
                 google_event_id=google_event_id,
                 defaults={
@@ -832,16 +890,35 @@ class InboundSync:
         return {by_value[str(value)] for value in rows if str(value) in by_value}
 
     @staticmethod
+    def _bare_retired_by_sync(calendar_id: str, google_event_id: str) -> bool:
+        """Did this sync retire the event's pre-expansion (bare id) hold itself?"""
+        return bool(
+            RemovedDayHold.objects.filter(
+                google_calendar_id=calendar_id, google_event_id=google_event_id
+            ).exists()
+        )
+
+    @staticmethod
     def _record_day_changes(
-        calendar_id: str, google_event_id: str, created: list[str], uncovered: list[str]
+        calendar_id: str,
+        google_event_id: str,
+        created: list[str],
+        uncovered: list[str],
+        bare_retired: bool = False,
     ) -> None:
         """Persist this pass's per-day creates and removals for the in-flight and convergence guards.
 
         A created day gets a fresh in-flight marker and loses any removed-day record (it is held
         again). A day removed because the event no longer covers it gets a removed-day record, so it
         can be held again if the event comes back over it, and its in-flight marker is dropped, since
-        the hold that marker waited on has applied and is now being cancelled.
+        the hold that marker waited on has applied and is now being cancelled. A retired bare hold is
+        recorded under the bare event id, so the convergence guard can tell it from an out-of-band
+        cancel.
         """
+        if bare_retired:
+            RemovedDayHold.objects.get_or_create(
+                google_event_id=google_event_id, google_calendar_id=calendar_id
+            )
         now = arrow.utcnow().datetime
         for date in created:
             PendingHoldCreate.objects.update_or_create(
@@ -866,43 +943,24 @@ class InboundSync:
             ).delete()
 
     def _within_import_window(self, event: dict) -> bool:
-        """Is this event's start within the same ``[now-1mo, now+6mo]`` window a full pull uses?
+        """Does this event overlap the same ``[now-1mo, now+6mo]`` window a full pull uses?
+
+        The start bounds the future side (the guard against a recurring series expanding without
+        bound on token-based delta pulls, which send no ``timeMax``). The END bounds the past side,
+        so a span that began more than a month ago but still runs into the window (long leave) is
+        still reconciled when it is edited, rather than leaving its future days held.
 
         Returns ``True`` when the start can't be parsed (let downstream ignore it), so this only ever
-        *excludes* an event whose start is legibly outside the window — the guard against a recurring
-        series expanding without bound on token-based delta pulls (which send no ``timeMax``).
+        *excludes* an event that is legibly outside the window.
         """
         window = parse_event_window(event)
         if window is None:
             return True
         start = arrow.get(window[0])
+        end = start.shift(minutes=window[1])
         lower = arrow.utcnow().shift(months=self._FULL_PULL_TIME_MIN_SHIFT_MONTHS)
         upper = arrow.utcnow().shift(months=self._FULL_PULL_TIME_MAX_SHIFT_MONTHS)
-        return lower <= start <= upper
-
-    @staticmethod
-    def _canvas_id_for_google_event(
-        google_event_id: str, provider_id: str | None
-    ) -> str | None:
-        """Resolve THIS provider's *live* Canvas hold id for a Google event via its external identifier.
-
-        Scoped to ``provider_id`` because a shared multi-attendee event carries the same id on every
-        attendee's calendar: an unscoped lookup would return another provider's hold and wrongly route
-        this provider's import into the update path. Excludes cancelled appointments, so this answers
-        "is there a live hold to UPDATE for this provider?" — not "was one ever created" (that is
-        :meth:`_external_hold_exists`).
-        """
-        canvas_id = (
-            AppointmentExternalIdentifier.objects.filter(
-                system=GOOGLE_ORIGIN_SYSTEM,
-                value=google_event_id,
-                appointment__provider__id=provider_id,
-            )
-            .exclude(appointment__status="cancelled")
-            .values_list("appointment__id", flat=True)
-            .first()
-        )
-        return str(canvas_id) if canvas_id else None
+        return start <= upper and end >= lower
 
     @staticmethod
     def _external_hold_exists(google_event_id: str, provider_id: str | None) -> bool:
@@ -962,18 +1020,26 @@ class InboundSync:
             ).exists()
         )
 
-    def _has_day_holds(self, google_event_id: str, provider_id: str | None) -> bool:
-        """Does this provider carry per-day (``{event_id}:{date}``) holds for the event?
+    @staticmethod
+    def _has_day_holds(live: dict[str, str], google_event_id: str) -> bool:
+        """Do the event's live holds include per-day (``{event_id}:{date}``) ones?
 
         True once an event has been expanded, so a later edit that shrinks it to a single timed day
         still goes through the per-day reconcile and clears the days it no longer covers.
         """
-        if not provider_id:
-            return False
-        return any(
-            value != google_event_id
-            for value in self._live_holds_for_event(google_event_id, provider_id)
+        return any(value != google_event_id for value in live)
+
+    @staticmethod
+    def _hold_matches_span(canvas_id: str, day: DaySpan) -> bool:
+        """Does this hold already start and last exactly as ``day`` says?"""
+        row = (
+            Appointment.objects.filter(id=canvas_id)
+            .values_list("start_time", "duration_minutes")
+            .first()
         )
+        if row is None or row[0] is None:
+            return False
+        return arrow.get(row[0]) == arrow.get(day.start) and int(row[1] or 0) == day.duration_minutes
 
     @staticmethod
     def _day_hold_update_effect(canvas_id: str, event: dict, day: DaySpan) -> Effect:
@@ -984,9 +1050,8 @@ class InboundSync:
         schedule_event.description = hold_title(event)
         return schedule_event.update()
 
-    def _hold_delete_effects(
-        self, google_event_id: str, provider_id: str | None
-    ) -> list[Effect]:
+    @staticmethod
+    def _hold_delete_effects(live: dict[str, str]) -> list[Effect]:
         """Delete effects for every live hold this provider carries for the Google event.
 
         A timed event has at most one; an all-day event has one per covered day. A cancellation
@@ -995,17 +1060,12 @@ class InboundSync:
         """
         return [
             ScheduleEvent(instance_id=str(canvas_id)).delete()
-            for canvas_id in sorted(
-                self._live_holds_for_event(google_event_id, provider_id).values()
-            )
+            for canvas_id in sorted(live.values())
         ]
 
-    def _hold_update_effect(
-        self, google_event_id: str, event: dict, provider_id: str | None
-    ) -> Effect | None:
-        canvas_id = self._canvas_id_for_google_event(google_event_id, provider_id)
-        if not canvas_id:
-            return None
+    @staticmethod
+    def _hold_update_effect(canvas_id: str, event: dict) -> Effect | None:
+        """Move this provider's live single hold (``canvas_id``) to the event's current window."""
         window = parse_event_window(event)
         if window is None:
             return None

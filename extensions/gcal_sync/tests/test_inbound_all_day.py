@@ -17,6 +17,7 @@ from gcal_sync.inbound_holds import (
     MAX_SPAN_DAYS,
     DaySpan,
     build_hold_effect,
+    default_time_zone,
     event_day_spans,
     event_time_zone,
     hold_external_id,
@@ -30,6 +31,11 @@ FULL_DAY_MINUTES = 1439  # 00:00 to 23:59 local, so the hold never crosses into 
 
 def _utc(value):
     return arrow.get(value).to("UTC").datetime
+
+
+def _ny_spans(event):
+    """Day spans for an install whose ``DEFAULT_TIME_ZONE`` setting is America/New_York."""
+    return event_day_spans(event, "America/New_York")
 
 
 # --- event_time_zone -----------------------------------------------------------------------------
@@ -46,8 +52,30 @@ def test_time_zone_falls_back_to_the_calendar_zone():
     assert event_time_zone(event).key == "America/Chicago"
 
 
-def test_time_zone_defaults_to_the_clinic_zone():
-    assert event_time_zone({"start": {"date": "2026-08-31"}}).key == "America/New_York"
+def test_time_zone_defaults_to_utc_without_a_setting():
+    # Review: the shared plugin must not assume one clinic's zone.
+    assert event_time_zone({"start": {"date": "2026-08-31"}}).key == "UTC"
+
+
+def test_time_zone_uses_the_install_setting_before_utc():
+    event = {"start": {"date": "2026-08-31"}}
+    assert event_time_zone(event, "America/Denver").key == "America/Denver"
+
+
+def test_calendar_zone_still_beats_the_install_setting():
+    event = {"start": {"date": "2026-08-31"}, CALENDAR_TIME_ZONE_KEY: "America/Chicago"}
+    assert event_time_zone(event, "America/Denver").key == "America/Chicago"
+
+
+def test_default_time_zone_setting_is_read_from_secrets():
+    assert default_time_zone({"DEFAULT_TIME_ZONE": " America/New_York "}) == "America/New_York"
+    assert default_time_zone({"DEFAULT_TIME_ZONE": ""}) is None
+    assert default_time_zone({}) is None
+
+
+def test_all_day_without_any_zone_is_cut_at_utc_midnight():
+    spans = event_day_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-01"}})
+    assert spans[0].start == _utc("2026-08-31T00:00:00Z")
 
 
 def test_unknown_time_zone_falls_through_to_the_next_candidate():
@@ -61,7 +89,7 @@ def test_unknown_time_zone_falls_through_to_the_next_candidate():
 def test_all_day_event_covers_every_day_local_midnight_to_2359():
     # Google stores end.date exclusively: PTO 8/31 through 9/4 arrives as end.date 9/5. Each day
     # starts at local midnight (04:00 UTC in EDT), not UTC midnight (8 PM the evening before).
-    spans = event_day_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-05"}})
+    spans = _ny_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-05"}})
     assert [s.date for s in spans] == [
         "2026-08-31",
         "2026-09-01",
@@ -74,21 +102,21 @@ def test_all_day_event_covers_every_day_local_midnight_to_2359():
 
 
 def test_all_day_single_day():
-    spans = event_day_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-01"}})
+    spans = _ny_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-01"}})
     assert spans == [DaySpan("2026-08-31", _utc("2026-08-31T04:00:00Z"), FULL_DAY_MINUTES)]
 
 
 def test_all_day_without_end_is_one_day():
-    assert [s.date for s in event_day_spans({"start": {"date": "2026-08-31"}})] == ["2026-08-31"]
+    assert [s.date for s in _ny_spans({"start": {"date": "2026-08-31"}})] == ["2026-08-31"]
 
 
 def test_all_day_non_advancing_end_is_one_day():
-    spans = event_day_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-08-31"}})
+    spans = _ny_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-08-31"}})
     assert [s.date for s in spans] == ["2026-08-31"]
 
 
 def test_all_day_uses_the_calendar_zone():
-    spans = event_day_spans(
+    spans = _ny_spans(
         {"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-01"}, CALENDAR_TIME_ZONE_KEY: "America/Chicago"}
     )
     assert spans[0].start == _utc("2026-08-31T05:00:00Z")
@@ -96,25 +124,25 @@ def test_all_day_uses_the_calendar_zone():
 
 def test_all_day_on_a_dst_change_still_ends_at_2359_local():
     # 11/1/2026 is a 25-hour day in New York; the hold still runs 00:00 EDT to 23:59 EST.
-    spans = event_day_spans({"start": {"date": "2026-11-01"}, "end": {"date": "2026-11-02"}})
+    spans = _ny_spans({"start": {"date": "2026-11-01"}, "end": {"date": "2026-11-02"}})
     assert spans[0].start == _utc("2026-11-01T04:00:00Z")
     assert spans[0].duration_minutes == FULL_DAY_MINUTES + 60
 
 
 def test_spring_forward_day_does_not_cross_into_the_next_date():
     # 3/8/2026 is a 23-hour day; a wall-clock duration would push the hold past midnight.
-    spans = event_day_spans({"start": {"date": "2026-03-08"}, "end": {"date": "2026-03-09"}})
+    spans = _ny_spans({"start": {"date": "2026-03-08"}, "end": {"date": "2026-03-09"}})
     end = arrow.get(spans[0].start).shift(minutes=spans[0].duration_minutes).to("America/New_York")
     assert end.format("YYYY-MM-DD HH:mm") == "2026-03-08 23:59"
 
 
 def test_unparseable_event_has_no_spans():
-    assert event_day_spans({"start": {"date": "not-a-date"}}) == []
-    assert event_day_spans({"start": {}}) == []
+    assert _ny_spans({"start": {"date": "not-a-date"}}) == []
+    assert _ny_spans({"start": {}}) == []
 
 
 def test_spans_are_capped():
-    spans = event_day_spans({"start": {"date": "2026-01-01"}, "end": {"date": "2027-01-01"}})
+    spans = _ny_spans({"start": {"date": "2026-01-01"}, "end": {"date": "2027-01-01"}})
     assert len(spans) == MAX_SPAN_DAYS
     assert spans[0].date == "2026-01-01"
 
@@ -125,18 +153,18 @@ def test_spans_are_capped():
 def test_timed_out_of_office_span_splits_like_an_all_day_event():
     # How Google stores out-of-office PTO: a dateTime span from local midnight to local midnight
     # (04:00 UTC), not a start.date event.
-    spans = event_day_spans(
+    spans = _ny_spans(
         {
             "start": {"dateTime": "2026-08-31T00:00:00-04:00", "timeZone": "America/New_York"},
             "end": {"dateTime": "2026-09-05T00:00:00-04:00", "timeZone": "America/New_York"},
         }
     )
     assert len(spans) == 5
-    assert spans == event_day_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-05"}})
+    assert spans == _ny_spans({"start": {"date": "2026-08-31"}, "end": {"date": "2026-09-05"}})
 
 
 def test_timed_span_given_in_utc_is_still_cut_in_the_event_zone():
-    spans = event_day_spans(
+    spans = _ny_spans(
         {
             "start": {"dateTime": "2026-08-31T04:00:00Z", "timeZone": "America/New_York"},
             "end": {"dateTime": "2026-09-02T04:00:00Z", "timeZone": "America/New_York"},
@@ -147,7 +175,7 @@ def test_timed_span_given_in_utc_is_still_cut_in_the_event_zone():
 
 def test_timed_span_keeps_partial_first_and_last_days():
     # Friday 5 PM to Monday 9 AM: Friday evening, all of Saturday and Sunday, Monday morning.
-    spans = event_day_spans(
+    spans = _ny_spans(
         {
             "start": {"dateTime": "2026-09-04T17:00:00-04:00", "timeZone": "America/New_York"},
             "end": {"dateTime": "2026-09-07T09:00:00-04:00", "timeZone": "America/New_York"},
@@ -164,14 +192,14 @@ def test_timed_span_keeps_partial_first_and_last_days():
 
 
 def test_timed_same_day_event_is_one_span():
-    spans = event_day_spans(
+    spans = _ny_spans(
         {"start": {"dateTime": "2026-09-01T09:00:00-04:00"}, "end": {"dateTime": "2026-09-01T10:00:00-04:00"}}
     )
     assert spans == [DaySpan("2026-09-01", _utc("2026-09-01T13:00:00Z"), 60)]
 
 
 def test_timed_event_ending_at_midnight_stays_on_its_own_date():
-    spans = event_day_spans(
+    spans = _ny_spans(
         {"start": {"dateTime": "2026-09-01T20:00:00-04:00"}, "end": {"dateTime": "2026-09-02T00:00:00-04:00"}}
     )
     assert [(s.date, s.duration_minutes) for s in spans] == [("2026-09-01", 3 * 60 + 59)]
@@ -179,7 +207,7 @@ def test_timed_event_ending_at_midnight_stays_on_its_own_date():
 
 def test_timed_event_without_zone_is_cut_in_the_clinic_zone():
     # 01:00 UTC on 9/2 is 9 PM on 9/1 in New York, so this is a one-day event there.
-    spans = event_day_spans(
+    spans = _ny_spans(
         {"start": {"dateTime": "2026-09-01T23:00:00Z"}, "end": {"dateTime": "2026-09-02T01:00:00Z"}}
     )
     assert [s.date for s in spans] == ["2026-09-01"]
@@ -277,8 +305,16 @@ def _inbound(
     pending=None,
     in_flight=None,
     removed_by_sync=None,
+    bare_ever_existed=False,
+    bare_retired=False,
+    adopted_matches=False,
 ):
-    """An InboundSync with the DB-backed lookups mocked out."""
+    """An InboundSync with the DB-backed lookups mocked out.
+
+    ``ever_existed`` answers the convergence check for per-day ids (``{event_id}:{date}``) and
+    ``bare_ever_existed`` for the bare event id, so a test can say "a day hold was cancelled" and
+    "the pre-expansion hold was cancelled" independently.
+    """
     merged = dict(SECRETS)
     merged.update(secrets or {"INGEST_ALL_DAY_EVENTS": "true"})
     inbound = InboundSync(merged, client_factory=lambda cal: object())
@@ -289,7 +325,13 @@ def _inbound(
     mocker.patch("gcal_sync.inbound.InboundEventMapping").objects.filter.return_value.first.return_value = mapping
     mocker.patch("gcal_sync.inbound.PendingHoldCreate").objects.filter.return_value.first.return_value = pending
     mocker.patch.object(inbound, "_live_holds_for_event", return_value=live or {})
-    mocker.patch.object(inbound, "_external_value_exists", return_value=ever_existed)
+    mocker.patch.object(
+        inbound,
+        "_external_value_exists",
+        side_effect=lambda value, provider_id: ever_existed if ":" in value else bare_ever_existed,
+    )
+    mocker.patch.object(inbound, "_bare_retired_by_sync", return_value=bare_retired)
+    mocker.patch.object(inbound, "_hold_matches_span", return_value=adopted_matches)
     mocker.patch.object(inbound, "_days_in_flight", return_value=set(in_flight or ()))
     mocker.patch.object(
         inbound, "_days_removed_by_sync", return_value=set(removed_by_sync or ())
@@ -339,7 +381,6 @@ def test_timed_multi_day_span_is_imported_even_with_all_day_ingest_off(mocker):
 def test_single_day_timed_event_without_day_holds_takes_the_single_hold_path(mocker):
     inbound = _inbound(mocker)
     reconcile = mocker.patch.object(inbound, "_reconcile_day_holds")
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     start = arrow.now("America/New_York").shift(days=7).replace(hour=9, minute=0, second=0, microsecond=0)
     event = {
@@ -370,7 +411,6 @@ def test_event_shrunk_to_one_timed_day_clears_its_other_day_holds(mocker):
         live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates)},
         mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
     )
-    mocker.patch.object(inbound, "_has_day_holds", return_value=True)
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
     stats = _stats()
     effects = inbound._apply("cal", event, stats)
@@ -380,13 +420,35 @@ def test_event_shrunk_to_one_timed_day_clears_its_other_day_holds(mocker):
     assert stats["holds_created"] == 0
 
 
-def test_has_day_holds_ignores_a_bare_id_hold(mocker):
-    inbound = _bare_inbound(mocker)
-    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g1": "appt-1"})
-    assert inbound._has_day_holds("g1", "p1") is False
-    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g1:2026-09-01": "appt-2"})
-    assert inbound._has_day_holds("g1", "p1") is True
-    assert inbound._has_day_holds("g1", None) is False
+def test_has_day_holds_ignores_a_bare_id_hold():
+    assert InboundSync._has_day_holds({"g1": "appt-1"}, "g1") is False
+    assert InboundSync._has_day_holds({"g1:2026-09-01": "appt-2"}, "g1") is True
+    assert InboundSync._has_day_holds({}, "g1") is False
+
+
+def test_live_holds_are_read_once_per_event(mocker):
+    # Review (perf): the prefix lookup ran once for the branch check and again in the reconcile or
+    # the single-hold lookup. One read now serves every path.
+    event, _dates = _all_day_event(3)
+    inbound = _inbound(mocker)
+    inbound._apply("cal", event, _stats())
+    assert inbound._live_holds_for_event.call_count == 1
+
+
+def test_unmapped_calendar_skips_the_live_hold_lookup(mocker):
+    event, _dates = _all_day_event(2)
+    inbound = _inbound(mocker)
+    mocker.patch("gcal_sync.inbound.provider_and_location", return_value=None)
+    inbound._apply("cal", event, _stats())
+    inbound._live_holds_for_event.assert_not_called()
+
+
+def test_install_zone_setting_reaches_the_day_split(mocker):
+    event, _dates = _all_day_event(2)
+    inbound = _inbound(mocker, secrets={"INGEST_ALL_DAY_EVENTS": "true", "DEFAULT_TIME_ZONE": "America/Denver"})
+    spans = mocker.patch("gcal_sync.inbound.event_day_spans", return_value=[])
+    inbound._apply("cal", event, _stats())
+    spans.assert_called_once_with(event, "America/Denver")
 
 
 def test_single_day_all_day_event_creates_one_hold(mocker):
@@ -413,6 +475,26 @@ def test_existing_pre_expansion_hold_is_adopted_not_duplicated(mocker):
     assert effects[1:] == [f"CREATE:{date}" for date in dates[1:]]
     assert stats["holds_created"] == 4
     assert stats["holds_updated"] == 1
+
+
+def test_adopted_hold_already_cut_to_its_day_is_not_resaved(mocker):
+    # Review (L670): the bare hold keeps its external id after it is reshaped, so it is "adopted" on
+    # every pass. Once it already starts and lasts as its day does, an unchanged event is a no-op.
+    event, dates = _all_day_event(1)
+    from gcal_sync.google.event_builder import google_event_content_hash
+
+    inbound = _inbound(
+        mocker,
+        live={"g-pto": "appt-old"},
+        mapping=SimpleNamespace(
+            google_event_id="g-pto", last_applied_hash=google_event_content_hash(event)
+        ),
+        adopted_matches=True,
+    )
+    stats = _stats()
+    assert inbound._apply("cal", event, stats) == []
+    assert stats["holds_unchanged"] == 1
+    inbound._hold_matches_span.assert_called_once()
 
 
 def test_shortened_event_removes_the_days_it_no_longer_covers(mocker):
@@ -599,7 +681,7 @@ def test_pass_records_its_created_and_uncovered_days(mocker):
     mocker.patch("gcal_sync.inbound.ScheduleEvent")
     inbound._apply("cal", event, _stats())
     inbound._record_day_changes.assert_called_once_with(
-        "cal", "g-pto", dates[1:], [stale_day]
+        "cal", "g-pto", dates[1:], [stale_day], bare_retired=False
     )
 
 
@@ -644,6 +726,92 @@ def test_day_whose_hold_was_cancelled_is_not_recreated(mocker):
     assert stats["holds_created"] == 0
 
 
+def test_cancelled_pre_expansion_hold_is_not_recreated_as_day_holds(mocker):
+    # Review (L731): a hold imported before per-day expansion carries the bare id and blocked the
+    # whole span. Once it is purged or cancelled by staff, an edit (or the full pull after a 410)
+    # must not re-create every day under per-day ids.
+    event, _dates = _all_day_event(3)
+    inbound = _inbound(mocker, bare_ever_existed=True)
+    stats = _stats()
+    assert inbound._apply("cal", event, stats) == []
+    assert stats["holds_created"] == 0
+
+
+def test_staff_cancelled_adopted_day_one_is_not_recreated(mocker):
+    # Review (L731): the bare hold adopted as day one is cancelled by staff. Day one must not come
+    # back as ``{id}:{date}``; the other days keep their holds.
+    event, dates = _all_day_event(3)
+    inbound = _inbound(
+        mocker,
+        live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates[1:], start=1)},
+        mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
+        bare_ever_existed=True,
+    )
+    stats = _stats()
+    effects = inbound._apply("cal", event, stats)
+    assert effects == [f"UPDATE:appt-1:{dates[1]}", f"UPDATE:appt-2:{dates[2]}"]
+    assert stats["holds_created"] == 0
+
+
+def test_day_freed_when_the_sync_retired_the_bare_hold_is_held_again(mocker):
+    # The bare hold went because this sync retired it (a per-day hold already covered its day), not
+    # out-of-band, so a day it was blocking can be held again when the event comes back over it.
+    event, dates = _all_day_event(3)
+    inbound = _inbound(
+        mocker,
+        live={f"g-pto:{date}": f"appt-{i}" for i, date in enumerate(dates[1:], start=1)},
+        mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
+        bare_ever_existed=True,
+        bare_retired=True,
+    )
+    effects = inbound._apply("cal", event, _stats())
+    assert f"CREATE:{dates[0]}" in effects
+
+
+def test_start_moved_later_keeps_the_day_hold_and_retires_the_bare_one(mocker):
+    # Review (L653): Mon-Fri with the bare hold adopted as Mon and per-day holds Tue-Fri. Moving the
+    # start to Tue used to move the bare hold onto Tue and cancel Tue's own hold with no record, so
+    # extending back to Mon-Fri left Tue bookable. The per-day hold keeps its day; the bare one goes.
+    _event, week = _all_day_event(5)
+    event, dates = _all_day_event(4)
+    tue = week[1]
+    event["start"] = {"date": tue}
+    event["end"] = {"date": arrow.get(week[-1]).shift(days=1).format("YYYY-MM-DD")}
+    dates = week[1:]
+    inbound = _inbound(
+        mocker,
+        live={"g-pto": "appt-old", **{f"g-pto:{d}": f"appt-{d}" for d in dates}},
+        mapping=SimpleNamespace(google_event_id="g-pto", last_applied_hash=""),
+    )
+    se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
+    stats = _stats()
+    effects = inbound._apply("cal", event, stats)
+    assert effects[0] == f"UPDATE:appt-{tue}:{tue}"
+    se.assert_called_once_with(instance_id="appt-old")
+    assert stats["holds_removed"] == 1
+    assert inbound._record_day_changes.call_args.kwargs == {"bare_retired": True}
+
+
+def test_days_before_the_import_window_are_not_created(mocker):
+    # A span that began before the window (now - 1 month) is reconciled, but its earlier days are
+    # not back-filled with holds nobody can book against.
+    start = arrow.utcnow().shift(months=-1, days=-3).floor("day")
+    event = {
+        "id": "g-leave",
+        "status": "confirmed",
+        "summary": "Leave",
+        "start": {"date": start.format("YYYY-MM-DD")},
+        "end": {"date": start.shift(days=10).format("YYYY-MM-DD")},
+    }
+    inbound = _inbound(mocker)
+    effects = inbound._apply("cal", event, _stats())
+    lower = arrow.utcnow().shift(months=-1)
+    created = [e.split(":", 1)[1] for e in effects]
+    assert created
+    assert all(arrow.get(d).shift(days=1) > lower for d in created)
+    assert start.format("YYYY-MM-DD") not in created
+
+
 def test_force_rebuild_ignores_the_per_day_convergence_guard(mocker):
     event, dates = _all_day_event(3)
     inbound = _inbound(mocker, ever_existed=True)
@@ -674,6 +842,19 @@ def test_live_holds_for_event_keeps_only_this_event(mocker):
     ]
     result = InboundSync._live_holds_for_event("g1", "p1")
     assert result == {"g1": "appt-1", "g1:2026-09-01": "appt-2"}
+
+
+def test_hold_matches_span_compares_start_and_duration(mocker):
+    appt = mocker.patch("gcal_sync.inbound.Appointment")
+    first = appt.objects.filter.return_value.values_list.return_value.first
+    first.return_value = (_DAY.start, _DAY.duration_minutes)
+    assert InboundSync._hold_matches_span("appt-1", _DAY) is True
+    first.return_value = (_DAY.start, _DAY.duration_minutes * 5)
+    assert InboundSync._hold_matches_span("appt-1", _DAY) is False
+    first.return_value = None
+    assert InboundSync._hold_matches_span("appt-1", _DAY) is False
+    first.return_value = (None, 0)
+    assert InboundSync._hold_matches_span("appt-1", _DAY) is False
 
 
 def test_external_value_exists(mocker):
@@ -750,6 +931,20 @@ def test_record_day_changes_marks_created_and_removed_days(mocker):
     phc.objects.filter.return_value.delete.assert_called_once()
 
 
+def test_record_day_changes_records_a_retired_bare_hold_under_the_bare_id(mocker):
+    mocker.patch("gcal_sync.inbound.PendingHoldCreate")
+    rdh = mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    InboundSync._record_day_changes("cal", "g1", [], [], bare_retired=True)
+    rdh.objects.get_or_create.assert_called_once_with(google_event_id="g1", google_calendar_id="cal")
+
+
+def test_bare_retired_by_sync_reads_the_bare_id_record_for_this_calendar(mocker):
+    rdh = mocker.patch("gcal_sync.inbound.RemovedDayHold")
+    rdh.objects.filter.return_value.exists.return_value = True
+    assert InboundSync._bare_retired_by_sync("cal", "g1") is True
+    rdh.objects.filter.assert_called_once_with(google_calendar_id="cal", google_event_id="g1")
+
+
 def test_record_day_changes_with_nothing_to_record_touches_nothing(mocker):
     phc = mocker.patch("gcal_sync.inbound.PendingHoldCreate")
     rdh = mocker.patch("gcal_sync.inbound.RemovedDayHold")
@@ -769,6 +964,8 @@ def test_cancelled_event_clears_its_per_day_markers_and_records(mocker):
         model.objects.filter.assert_any_call(
             google_calendar_id="cal", google_event_id__startswith="g-pto:"
         )
+    # The retired-bare-hold record goes too.
+    rdh.objects.filter.assert_any_call(google_calendar_id="cal", google_event_id="g-pto")
 
 
 def test_unbuildable_day_is_skipped_without_losing_the_rest(mocker):

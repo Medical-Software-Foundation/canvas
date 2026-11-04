@@ -55,8 +55,10 @@ _PRIVATE_VISIBILITIES = {"private", "confidential"}
 # is the failure this fix exists to prevent.
 MAX_SPAN_DAYS = 186
 
-# The zone a day is cut in when neither the event nor its calendar names one (the clinic's zone).
-DEFAULT_TIME_ZONE = "America/New_York"
+# The zone a day is cut in when neither the event, its calendar, nor the install's
+# ``DEFAULT_TIME_ZONE`` setting names one. Google's events list always carries the calendar's zone,
+# so in practice this is a last resort; UTC keeps the shared plugin free of any one clinic's zone.
+DEFAULT_TIME_ZONE = "UTC"
 
 
 class DaySpan(NamedTuple):
@@ -87,16 +89,23 @@ def is_all_day(event: dict) -> bool:
     return bool(start.get("date")) and not start.get("dateTime")
 
 
-def event_time_zone(event: dict) -> ZoneInfo:
+def default_time_zone(secrets: dict) -> str | None:
+    """Install setting: the zone to cut days in when neither the event nor its calendar names one."""
+    return (secrets.get("DEFAULT_TIME_ZONE") or "").strip() or None
+
+
+def event_time_zone(event: dict, default_zone: str | None = None) -> ZoneInfo:
     """The zone the provider's days are cut in for this event.
 
     The event's own ``start.timeZone`` first (Google sets it on timed events, including out-of-office
-    blocks), then the calendar's zone carried on the event (all-day events never name one), then
-    :data:`DEFAULT_TIME_ZONE`. An unknown zone name falls through to the next candidate.
+    blocks), then the calendar's zone carried on the event (all-day events never name one), then the
+    install's ``default_zone`` setting, then :data:`DEFAULT_TIME_ZONE`. An unknown zone name falls
+    through to the next candidate.
     """
     candidates = (
         (event.get("start") or {}).get("timeZone"),
         event.get(CALENDAR_TIME_ZONE_KEY),
+        default_zone,
         DEFAULT_TIME_ZONE,
     )
     for name in candidates:
@@ -115,10 +124,10 @@ def _local_time(day: datetime.date, hour: int, minute: int, zone: ZoneInfo) -> "
     return arrow.get(datetime.datetime(day.year, day.month, day.day, hour, minute, tzinfo=zone))
 
 
-def event_day_spans(event: dict) -> list[DaySpan]:
+def event_day_spans(event: dict, default_zone: str | None = None) -> list[DaySpan]:
     """Split an event into the part that falls on each local date it covers.
 
-    Days are cut in :func:`event_time_zone`. A fully covered day blocks 00:00 to 23:59 local, so the
+    Days are cut in :func:`event_time_zone` (``default_zone`` is the install's setting). A fully covered day blocks 00:00 to 23:59 local, so the
     hold stays inside its own date: a block that runs into the next date leaves the day bookable on
     the Canvas schedule. A partially covered first or last day keeps the event's real start or end.
 
@@ -130,7 +139,7 @@ def event_day_spans(event: dict) -> list[DaySpan]:
 
     Returns ``[]`` for an unparseable event. Capped at :data:`MAX_SPAN_DAYS` days.
     """
-    zone = event_time_zone(event)
+    zone = event_time_zone(event, default_zone)
     start_field = event.get("start") or {}
     end_field = event.get("end") or {}
     try:

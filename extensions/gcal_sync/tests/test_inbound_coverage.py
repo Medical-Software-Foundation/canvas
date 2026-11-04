@@ -149,26 +149,31 @@ def test_within_import_window_false_for_far_past(mocker):
     assert inbound._within_import_window(event) is False
 
 
+def test_within_import_window_true_for_a_span_that_started_before_it_and_runs_into_it(mocker):
+    # Review (L430): a 100-day leave shortened on day 40. Its start is more than a month back, but it
+    # still covers future days, so the edit must reach the per-day reconcile.
+    inbound = _inbound(mocker)
+    start = arrow.utcnow().shift(days=-40).floor("day")
+    event = {
+        "start": {"date": start.format("YYYY-MM-DD")},
+        "end": {"date": start.shift(days=100).format("YYYY-MM-DD")},
+    }
+    assert inbound._within_import_window(event) is True
+
+
+def test_within_import_window_false_for_a_span_that_ended_before_it(mocker):
+    inbound = _inbound(mocker)
+    start = arrow.utcnow().shift(months=-3).floor("day")
+    event = {
+        "start": {"date": start.format("YYYY-MM-DD")},
+        "end": {"date": start.shift(days=10).format("YYYY-MM-DD")},
+    }
+    assert inbound._within_import_window(event) is False
+
+
 def test_within_import_window_true_when_no_start(mocker):
     inbound = _inbound(mocker)
     assert inbound._within_import_window({}) is True
-
-
-# --- _canvas_id_for_google_event ------------------------------------------------------------------
-
-
-def test_canvas_id_for_google_event_returns_id(mocker):
-    aei = mocker.patch("gcal_sync.inbound.AppointmentExternalIdentifier")
-    aei.objects.filter.return_value.exclude.return_value.values_list.return_value.first.return_value = 42
-    result = InboundSync._canvas_id_for_google_event("g1", "p1")
-    assert result == "42"
-
-
-def test_canvas_id_for_google_event_returns_none(mocker):
-    aei = mocker.patch("gcal_sync.inbound.AppointmentExternalIdentifier")
-    aei.objects.filter.return_value.exclude.return_value.values_list.return_value.first.return_value = None
-    result = InboundSync._canvas_id_for_google_event("g1", "p1")
-    assert result is None
 
 
 # --- _external_hold_exists ------------------------------------------------------------------------
@@ -189,37 +194,27 @@ def test_external_hold_exists_false(mocker):
 # --- _hold_delete_effects -------------------------------------------------------------------------
 
 
-def test_hold_delete_effects_empty_when_no_live_hold(mocker):
-    inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
-    assert inbound._hold_delete_effects("g1", "p1") == []
+def test_hold_delete_effects_empty_when_no_live_hold():
+    assert InboundSync._hold_delete_effects({}) == []
 
 
 def test_hold_delete_effects_returns_effect_when_found(mocker):
-    inbound = _inbound(mocker)
-    mocker.patch.object(
-        inbound, "_live_holds_for_event", return_value={"g1": "appt-1"}
-    )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
-    result = inbound._hold_delete_effects("g1", "p1")
+    result = InboundSync._hold_delete_effects({"g1": "appt-1"})
     se.assert_called_once_with(instance_id="appt-1")
     assert len(result) == 1
 
 
 def test_hold_delete_effects_removes_every_per_day_hold(mocker):
     # A cancelled multi-day all-day event has one hold per covered day; all of them must go.
-    inbound = _inbound(mocker)
-    mocker.patch.object(
-        inbound,
-        "_live_holds_for_event",
-        return_value={
+    se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
+    result = InboundSync._hold_delete_effects(
+        {
             "g1:2026-08-31": "appt-1",
             "g1:2026-09-01": "appt-2",
             "g1:2026-09-02": "appt-3",
-        },
+        }
     )
-    se = mocker.patch("gcal_sync.inbound.ScheduleEvent")
-    result = inbound._hold_delete_effects("g1", "p1")
     assert len(result) == 3
     assert [c.kwargs["instance_id"] for c in se.call_args_list] == [
         "appt-1",
@@ -231,17 +226,9 @@ def test_hold_delete_effects_removes_every_per_day_hold(mocker):
 # --- _hold_update_effect --------------------------------------------------------------------------
 
 
-def test_hold_update_effect_returns_none_when_no_canvas_id(mocker):
-    inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
-    assert inbound._hold_update_effect("g1", {}, "p1") is None
-
-
 def test_hold_update_effect_returns_none_when_no_window(mocker):
-    inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
     mocker.patch("gcal_sync.inbound.parse_event_window", return_value=None)
-    assert inbound._hold_update_effect("g1", {}, "p1") is None
+    assert InboundSync._hold_update_effect("appt-1", {}) is None
 
 
 # --- process_calendar dry_run mode ----------------------------------------------------------------
@@ -285,7 +272,7 @@ def test_convergence_guard_blocks_recreate(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     mocker.patch.object(inbound, "_external_hold_exists", return_value=True)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g1", "status": "confirmed"}, stats)
@@ -302,7 +289,7 @@ def test_force_rebuild_bypasses_convergence_guard(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD")
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     mocker.patch.object(inbound, "_external_hold_exists", return_value=True)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g1", "status": "confirmed"}, stats, force_rebuild=True)
@@ -322,7 +309,7 @@ def test_all_day_event_skipped_when_not_ingesting(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
     inbound._ingest_all_day = False
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     event = {"id": "g1", "status": "confirmed", "start": {"date": "2026-06-10"}}
@@ -340,7 +327,7 @@ def test_private_event_skipped_when_not_ingesting(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
     inbound._ingest_private = False
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     event = {"id": "g1", "status": "confirmed", "visibility": "private"}
@@ -436,7 +423,7 @@ def test_unchanged_hash_skips_update(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g1": "appt-1"})
     stats = _stats()
     effects = inbound._apply("cal", event, stats)
     assert effects == []
@@ -535,7 +522,7 @@ def test_update_writes_mapping_on_non_dry(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g1": "appt-1"})
     mocker.patch.object(inbound, "_hold_update_effect", return_value="UPD")
     stats = _stats()
     event = {"id": "g1", "status": "confirmed", "summary": "New title"}
@@ -553,7 +540,7 @@ def test_update_skips_mapping_write_on_dry_run(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g1": "appt-1"})
     mocker.patch.object(inbound, "_hold_update_effect", return_value="UPD")
     stats = _stats(dry_run=True)
     event = {"id": "g1", "status": "confirmed", "summary": "New title"}
@@ -574,7 +561,7 @@ def test_update_returns_none_is_ignored(mocker):
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g1": "appt-1"})
     mocker.patch.object(inbound, "_hold_update_effect", return_value=None)
     stats = _stats()
     event = {"id": "g1", "status": "confirmed", "summary": "New"}

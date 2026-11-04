@@ -97,7 +97,7 @@ def test_unmarked_new_event_creates_hold(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-new", "status": "confirmed", "summary": "Hold"}, stats)
@@ -115,7 +115,7 @@ def test_unmarked_unresolvable_hold_is_ignored(mocker):
     # build_hold_effect returns None (e.g. event time unparseable) -> skip, no create.
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value=None)
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-new", "status": "confirmed"}, stats)
@@ -134,7 +134,7 @@ def test_unmarked_known_event_updates_hold(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     inbound = _inbound(mocker)
     # A live Canvas hold exists for this mapping -> take the update path.
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-99")
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={"g-1": "appt-99"})
     mocker.patch.object(inbound, "_hold_update_effect", return_value="UPDATE_EFFECT")
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "confirmed", "summary": "Edited"}, stats)
@@ -157,7 +157,7 @@ def test_unmarked_orphaned_mapping_recreates_hold(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)  # orphaned
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})  # orphaned
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     update_spy = mocker.patch.object(inbound, "_hold_update_effect")
     stats = _stats()
@@ -184,7 +184,7 @@ def test_unmarked_pending_create_is_not_duplicated(mocker):
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     build = mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
     inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)  # not applied yet
+    mocker.patch.object(inbound, "_live_holds_for_event", return_value={})  # not applied yet
     mocker.patch.object(inbound, "_external_hold_exists", return_value=False)
     stats = _stats()
     effects = inbound._apply("cal", {"id": "g-1", "status": "confirmed", "summary": "Hold"}, stats)
@@ -224,26 +224,22 @@ def test_unmarked_event_without_id_is_ignored(mocker):
 
 def test_update_masks_private_event_title(mocker):
     # Editing a private Google event must NOT leak its real title into Canvas — it stays "Busy".
-    inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
     mocker.patch(
         "gcal_sync.inbound.parse_event_window",
         return_value=(datetime(2026, 6, 10, 15, 0, tzinfo=timezone.utc), 30),
     )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent").return_value
-    inbound._hold_update_effect(
-        "g-1", {"id": "g-1", "visibility": "private", "summary": "Dad - Dr. Appt"}, "14"
+    InboundSync._hold_update_effect(
+        "appt-1", {"id": "g-1", "visibility": "private", "summary": "Dad - Dr. Appt"}
     )
     assert se.description == "Busy"
 
 
 def test_update_keeps_public_event_title(mocker):
-    inbound = _inbound(mocker)
-    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
     mocker.patch(
         "gcal_sync.inbound.parse_event_window",
         return_value=(datetime(2026, 6, 10, 15, 0, tzinfo=timezone.utc), 30),
     )
     se = mocker.patch("gcal_sync.inbound.ScheduleEvent").return_value
-    inbound._hold_update_effect("g-1", {"id": "g-1", "summary": "Standup"}, "14")
+    InboundSync._hold_update_effect("appt-1", {"id": "g-1", "summary": "Standup"})
     assert se.description == "Standup"
