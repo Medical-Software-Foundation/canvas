@@ -164,6 +164,12 @@ cd ~/src/canvas-plugins && uv run pytest \
 
 Target: 100% statement + branch coverage on the Python code.
 
+## Screenshots
+
+![Vitals chart with the Show History button](docs/screenshots/history-hidden.png)
+
+![Recent Vitals History table shown below the chart](docs/screenshots/history-table.png)
+
 ## License
 
 MIT. See [LICENSE](./LICENSE).
