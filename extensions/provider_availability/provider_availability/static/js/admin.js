@@ -1058,10 +1058,13 @@ function showMsg(msg, type) {
   const dismissBtn = '<button class="alert-dismiss" onclick="dismissMsg()">&times;</button>';
   // Messages carry server and form-path text, so they are always shown as text.
   const alertHtml = '<div class="alert alert-' + type + '"><span>' + _escHtml(msg) + '</span>' + dismissBtn + '</div>';
-  const elTop = document.getElementById('status-msg');
-  const elBot = document.getElementById('status-msg-bottom');
-  if (elTop) elTop.innerHTML = alertHtml;
-  if (elBot) elBot.innerHTML = alertHtml;
+  // One message, at the top of the page. A second fixed copy at the bottom of
+  // the viewport used to show the same text twice and cover form fields.
+  const el = document.getElementById('status-msg');
+  if (el) {
+    el.innerHTML = alertHtml;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   const timeout = type === 'error' ? 10000 : 4000;
   clearTimeout(showMsg._timer);
   showMsg._timer = setTimeout(dismissMsg, timeout);
@@ -1069,10 +1072,8 @@ function showMsg(msg, type) {
 showMsg._timer = null;
 function dismissMsg() {
   clearTimeout(showMsg._timer);
-  const elTop = document.getElementById('status-msg');
-  const elBot = document.getElementById('status-msg-bottom');
-  if (elTop) elTop.innerHTML = '';
-  if (elBot) elBot.innerHTML = '';
+  const el = document.getElementById('status-msg');
+  if (el) el.innerHTML = '';
 }
 
 /* ---------- Bulk CSV Import ---------- */
