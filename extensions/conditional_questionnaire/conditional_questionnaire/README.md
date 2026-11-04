@@ -25,14 +25,19 @@ form beside the note where the provider:
 | `!=` an option | the controlling question is answered with something else |
 | `exists` | the controlling question has any answer |
 | `not_exists` | the controlling question has no answer |
-| ALL | every condition holds |
-| ANY (or not set) | at least one condition holds |
+| ALL (or not set) | every condition holds |
+| ANY | at least one condition holds |
 
 A hidden question counts as unanswered, so hiding one question also hides every question
 that depends on it (chains collapse). A rule that compares to text instead of an option
 matches an option's name, code or value, ignoring case. A rule this plugin can't read
 (an unknown operator, or one that points at a question not on the questionnaire) is
 ignored, so the question shows rather than being hidden for good.
+
+A hidden question keeps what was typed, so switching the earlier answer back brings it
+back; it is only left out when saving. Answers not yet saved are kept in this browser tab
+(sessionStorage) and come back if the form is closed and reopened on the same note; they
+are cleared once saved and when the tab closes.
 
 ## Setup
 

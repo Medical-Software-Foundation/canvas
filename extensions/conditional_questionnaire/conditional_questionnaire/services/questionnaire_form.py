@@ -76,14 +76,27 @@ def load_form(questionnaire: Questionnaire) -> dict[str, Any]:
         .order_by("dbid")
     )
     questions = [row.question for row in maps if row.question is not None]
-    return build_form(questionnaire, questions)
+    # The Questionnaire command builds every linked question, inactive links included,
+    # and raises on a type it can't build, so saveable is judged on all of them.
+    command_types = {
+        kind or ""
+        for kind in questionnaire.questions.values_list("response_option_set__type", flat=True)
+    }
+    return build_form(questionnaire, questions, command_types)
 
 
-def build_form(questionnaire: Any, questions: list[Any]) -> dict[str, Any]:
-    """Turn loaded questions into the form the page draws and the save endpoint checks."""
+def build_form(
+    questionnaire: Any, questions: list[Any], command_types: set[str] | None = None
+) -> dict[str, Any]:
+    """Turn loaded questions into the form the page draws and the save endpoint checks.
+
+    ``command_types`` are the question types the Questionnaire command will build; the
+    form's own types are always included.
+    """
     on_form = {question.dbid for question in questions}
     fields = [_field(question, on_form) for question in questions]
-    unsupported = sorted({field["type"] for field in fields if field["type"] not in COMMAND_TYPES})
+    types = {field["type"] for field in fields} | (command_types or set())
+    unsupported = sorted(types - COMMAND_TYPES)
     reason = ""
     if unsupported:
         reason = (
@@ -126,7 +139,8 @@ def _rule(question: Any, on_form: set[int]) -> dict[str, Any] | None:
     A condition this plugin can't read (an unknown operator, or one that names a
     question not on this questionnaire) is left out instead of hiding the question
     for good: an extra question is a small cost, one that can never be answered isn't.
-    No ``enable_behavior`` reads as "any", which is the same thing with one condition.
+    Only an explicit "any" reads as any; a blank ``enable_behavior`` reads as "all". In
+    production data a blank only appears on one-condition rules, where the two agree.
     """
     conditions = []
     for condition in question.dependent_conditions.all():
@@ -146,6 +160,6 @@ def _rule(question: Any, on_form: set[int]) -> dict[str, Any] | None:
         return None
     behavior = str(question.enable_behavior or "").strip().lower()
     return {
-        "behavior": BEHAVIOR_ALL if behavior == BEHAVIOR_ALL else BEHAVIOR_ANY,
+        "behavior": BEHAVIOR_ANY if behavior == BEHAVIOR_ANY else BEHAVIOR_ALL,
         "conditions": conditions,
     }

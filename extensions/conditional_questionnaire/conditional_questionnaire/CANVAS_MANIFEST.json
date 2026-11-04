@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.262.0",
-    "plugin_version": "0.1.1",
+    "plugin_version": "0.1.2",
     "name": "conditional_questionnaire",
     "description": "Conditional questionnaires in notes: a note header button opens a form beside the note where a provider fills in any Questionnaire Builder questionnaire with its Field Rules applied live, the same way the builder's Preview tab shows them. Saving adds a committed Questionnaire command to the note with only the answers to questions that show. For practices whose questionnaires use Field Rules to branch.",
     "components": {

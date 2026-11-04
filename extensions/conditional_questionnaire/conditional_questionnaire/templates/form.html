@@ -68,6 +68,7 @@
   var commandUuid = null;  // one per filled-in form, so a retried save can't add a second command
   var port = null;
   var saveFailed = false;  // true while the banner shows a failed save
+  var draftTimer = null;
 
   window.addEventListener("message", function (event) {
     if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
@@ -151,7 +152,7 @@
     }
     return kept;
   }
-  // -----------------------------------------------------------------------------------
+  // ---- end Field Rules (tests/test_rules_parity.py runs the block above in node) -----
 
   function rawAnswers() {
     var answers = {};
@@ -181,6 +182,67 @@
       block.hidden = !isShown(question, kept, byId);
     });
   }
+
+  // ---- Draft: unsaved answers survive closing and reopening the pane -------------
+  // Kept in sessionStorage (this browser tab only, gone when the tab closes, never
+  // sent anywhere) with the form's command UUID, so a save retried after reopening
+  // still can't add a second command. Cleared once the save succeeds.
+  function draftKey() {
+    return current ? "conditional_questionnaire:" + NOTE_ID + ":" + current.id : null;
+  }
+  function draftHasAnswers(answers) {
+    return Object.keys(answers).some(function (key) {
+      var value = answers[key];
+      return Array.isArray(value) ? value.length > 0 : String(value || "").trim() !== "";
+    });
+  }
+  function storeDraft() {
+    var key = draftKey();
+    if (!key) { return; }
+    var answers = rawAnswers();
+    try {
+      // An untouched (or emptied) form leaves no draft, so reopening never says
+      // "restored" with nothing restored.
+      if (!draftHasAnswers(answers)) { window.sessionStorage.removeItem(key); return; }
+      window.sessionStorage.setItem(key, JSON.stringify({ uuid: commandUuid, answers: answers }));
+    } catch (error) { /* storage blocked or full: the form still works without drafts */ }
+  }
+  function queueDraft() {
+    window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(storeDraft, 400);
+  }
+  function clearDraft(key) {
+    window.clearTimeout(draftTimer);
+    if (!key) { return; }
+    try { window.sessionStorage.removeItem(key); } catch (error) { /* nothing stored */ }
+  }
+  function restoreDraft() {
+    var saved = null;
+    try { saved = JSON.parse(window.sessionStorage.getItem(draftKey()) || "null"); } catch (error) { saved = null; }
+    if (!saved || typeof saved.answers !== "object" || saved.answers === null || !draftHasAnswers(saved.answers)) {
+      return false;
+    }
+    if (typeof saved.uuid === "string" && saved.uuid) { commandUuid = saved.uuid; }
+    current.questions.forEach(function (question) {
+      var key = String(question.id);
+      if (!ANSWERABLE[question.type] || !saved.answers.hasOwnProperty(key)) { return; }
+      var block = list.querySelector('[data-question="' + key + '"]');
+      var value = saved.answers[key];
+      if (question.type === "SING" || question.type === "MULT") {
+        var picks = (Array.isArray(value) ? value : [value]).map(String);
+        Array.prototype.forEach.call(block.querySelectorAll("input"), function (input) {
+          input.checked = picks.indexOf(input.value) !== -1;
+        });
+      } else {
+        block.querySelector("input, textarea").value = typeof value === "string" ? value : "";
+      }
+    });
+    return true;
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") { storeDraft(); }
+  });
+  // -----------------------------------------------------------------------------------
 
   function choice(type, name, option) {
     var label = document.createElement("label");
@@ -239,7 +301,12 @@
     data.questions.forEach(function (question) { list.appendChild(drawQuestion(question)); });
     form.hidden = false;
     saveButton.disabled = !data.saveable;
-    show(data.saveable ? "" : data.reason, data.saveable ? "" : "bad");
+    var restored = restoreDraft();
+    if (!data.saveable) {
+      show(data.reason, "bad");
+    } else {
+      show(restored ? "Restored the answers you hadn't saved yet." : "");
+    }
     applyRules();
   }
 
@@ -259,12 +326,15 @@
       show("");
     }
     applyRules();
+    queueDraft();
   }
 
   list.addEventListener("input", onAnswersChanged);
   list.addEventListener("change", onAnswersChanged);
 
   picker.addEventListener("change", function () {
+    window.clearTimeout(draftTimer);
+    storeDraft();  // keep the last edits of the questionnaire being left
     form.hidden = true;
     current = null;
     show("");
@@ -278,6 +348,7 @@
     event.preventDefault();
     if (!current || !current.saveable) { return; }
     saveButton.disabled = true;
+    var savingKey = draftKey();  // fixed now: the picker may change while the save runs
     show("Saving…");
     fetch(BASE + "/save", {
       method: "POST",
@@ -295,6 +366,7 @@
         return body;
       });
     }).then(function () {
+      clearDraft(savingKey);
       show("Saved to the note. Pick a questionnaire to fill in another.", "good");
       form.hidden = true;
       picker.value = "";

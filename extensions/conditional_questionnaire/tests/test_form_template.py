@@ -28,3 +28,41 @@ def test_save_failure_sets_the_flag_and_a_new_form_resets_it() -> None:
     assert catch_block.lstrip().startswith("saveFailed = true;")
     draw = TEMPLATE.split("function drawForm(data) {")[1].split("\n  }")[0]
     assert "saveFailed = false;" in draw
+
+
+def test_draft_is_kept_per_note_and_questionnaire_in_session_storage() -> None:
+    """Unsaved answers survive closing the pane, only for this tab, and keep the UUID."""
+    assert "localStorage" not in TEMPLATE
+    key = TEMPLATE.split("function draftKey() {")[1].split("\n  }")[0]
+    assert "NOTE_ID" in key and "current.id" in key
+    store = _function_body("storeDraft")
+    assert "sessionStorage.setItem" in store
+    assert "uuid: commandUuid" in store and "answers: answers" in store
+    # An untouched form leaves no draft, and an empty draft is never "restored".
+    assert store.index("if (!draftHasAnswers(answers))") < store.index("setItem")
+    assert "removeItem(key)" in store
+    assert "!draftHasAnswers(saved.answers)" in _function_body("restoreDraft")
+    assert "queueDraft();" in _function_body("onAnswersChanged")
+    assert 'document.visibilityState === "hidden"' in TEMPLATE
+
+
+def test_draft_restores_before_rules_run_and_clears_after_save() -> None:
+    restore = _function_body("restoreDraft")
+    assert "commandUuid = saved.uuid" in restore
+    draw = TEMPLATE.split("function drawForm(data) {")[1].split("\n  }")[0]
+    assert draw.index("restoreDraft()") < draw.index("applyRules()")
+    saved = TEMPLATE.split("}).then(function () {")[-1]
+    assert saved.lstrip().startswith("clearDraft(savingKey);")
+    submit = TEMPLATE.split('form.addEventListener("submit"')[1]
+    assert submit.index("var savingKey = draftKey();") < submit.index("fetch(")
+    assert (
+        "if (!key) { return; }" in TEMPLATE.split("function clearDraft(key) {")[1].split("\n  }")[0]
+    )
+    picked = TEMPLATE.split('picker.addEventListener("change", function () {')[1]
+    assert picked.index("storeDraft();") < picked.index("current = null;")
+
+
+def test_no_function_name_is_declared_twice() -> None:
+    """One inline script: a second declaration silently replaces the first (hoisting)."""
+    names = re.findall(r"\bfunction (\w+)\s*\(", TEMPLATE)
+    assert len(names) == len(set(names)), sorted({n for n in names if names.count(n) > 1})

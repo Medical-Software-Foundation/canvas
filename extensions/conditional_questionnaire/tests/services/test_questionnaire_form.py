@@ -106,9 +106,17 @@ def test_rule_reads_conditions_and_behavior():
     }
 
 
-def test_missing_behavior_reads_as_any():
+def test_missing_behavior_reads_as_all():
     rule = build_form(
         QUESTIONNAIRE, [_question(1), _question(2, conditions=[_condition(1, "exists")])]
+    )["questions"][1]["rule"]
+    assert rule["behavior"] == "all"
+
+
+def test_explicit_any_behavior_is_kept():
+    rule = build_form(
+        QUESTIONNAIRE,
+        [_question(1), _question(2, conditions=[_condition(1, "exists")], behavior="ANY")],
     )["questions"][1]["rule"]
     assert rule["behavior"] == "any"
 
@@ -157,10 +165,23 @@ def test_load_form_reads_the_question_map_in_order():
         SimpleNamespace(question=None),
         SimpleNamespace(question=second),
     ]
+    questionnaire = MagicMock(id="qn-1")
+    questionnaire.name = "Intro"
+    questionnaire.questions.values_list.return_value = ["SING", "TXT"]
     with patch(f"{MODULE}.QuestionnaireQuestionMap") as model:
         queryset = MagicMock()
         model.objects.filter.return_value.select_related.return_value.prefetch_related.return_value.order_by.return_value = queryset
         queryset.__iter__.return_value = iter(rows)
-        form = questionnaire_form.load_form(QUESTIONNAIRE)
+        form = questionnaire_form.load_form(questionnaire)
     assert [q["id"] for q in form["questions"]] == [1, 2]
-    model.objects.filter.assert_called_once_with(questionnaire=QUESTIONNAIRE, status="AC")
+    assert form["saveable"] is True
+    model.objects.filter.assert_called_once_with(questionnaire=questionnaire, status="AC")
+    questionnaire.questions.values_list.assert_called_once_with(
+        "response_option_set__type", flat=True
+    )
+
+
+def test_inactive_linked_question_of_unsupported_type_blocks_save():
+    form = build_form(QUESTIONNAIRE, [_question(1)], command_types={"SING", "DEC", ""})
+    assert form["saveable"] is False
+    assert "DEC" in form["reason"]
