@@ -77,14 +77,16 @@
 
     /* Footer band */
     .footer, .startbar { flex: none; background: #fff; border-top: 1.5px solid var(--border); }
-    .footer .inner { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 32px calc(12px + env(safe-area-inset-bottom, 0px)); }
+    /* No extra room for the home bar: Canvas's own border around the window already
+       keeps the buttons clear of it, and the added space read as a heavy footer. */
+    .footer .inner { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 32px; }
     .footer .msg { font-size: 12px; color: var(--secondary); }
     .footer .msg.error { color: var(--red); }
     .footer .msg.warn { color: var(--amber); }
     .footer .msg:empty { display: none; }
     .btnrow { display: flex; gap: 8px; align-items: center; }
     .btnrow .spacer { flex: 1 1 auto; }
-    .startbar { padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); }
+    .startbar { padding: 10px 0; }
     .startbar .pad { display: flex; align-items: center; gap: 8px; }
     .startbar .count { flex: 1 1 auto; font-size: 12px; color: var(--secondary); }
 
