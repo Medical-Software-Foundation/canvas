@@ -1,0 +1,11 @@
+<!-- Patient Resources: an open document with a link glyph. Drawn as flat shapes
+     with no gradients or external references so it renders identically at 48px
+     and needs nothing the plugin does not ship. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Patient resources">
+  <rect width="48" height="48" rx="10" fill="#0b7285"/>
+  <path d="M14 11h14l7 7v19a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V13a2 2 0 0 1 2-2z" fill="#ffffff"/>
+  <path d="M28 11l7 7h-7z" fill="#9fd3dd"/>
+  <rect x="16" y="22" width="16" height="2.5" rx="1.25" fill="#0b7285"/>
+  <rect x="16" y="27" width="16" height="2.5" rx="1.25" fill="#0b7285"/>
+  <rect x="16" y="32" width="10" height="2.5" rx="1.25" fill="#0b7285"/>
+</svg>
