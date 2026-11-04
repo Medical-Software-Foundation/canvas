@@ -281,6 +281,10 @@ NOT EXISTS` is the only statement it produces — so a renamed or retyped column
 cannot be corrected after the first install. `tests/models/test_schema.py` is the
 guard on that.
 
+## Screenshots
+
+![Resource library: search, label filter, Add resource, and row actions](docs/screenshots/library.png)
+
 ## License
 
 MIT.
