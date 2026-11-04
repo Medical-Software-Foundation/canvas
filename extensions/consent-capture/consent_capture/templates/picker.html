@@ -434,6 +434,16 @@
     .vmsg { position: absolute; inset: 10px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--secondary); font-size: 14px; padding: 24px; }
     .vmsg:empty { display: none; }
     #viewerView .scroll .pad { height: 100%; }
+    /* Phones and upright tablets: Canvas sizes the window to the full screen height
+       there, so browser bars (Safari's tab bar, Chrome's bottom toolbar) cover its
+       bottom edge. The whole screen scrolls instead, and the buttons follow the
+       content, with room below them to scroll clear of the bars. */
+    @media (max-width: 899px) {
+      .view.active { overflow-y: auto; -webkit-overflow-scrolling: touch; box-sizing: border-box; padding-bottom: 120px; background: var(--tint); }
+      .view.active > .scroll, .view.active > .signscroll { flex: none; min-height: 0; overflow: visible; }
+      .view.active > .footer, .view.active > .startbar { background: transparent; border-top: 0; }
+      #viewerView.active > .scroll { height: 60vh; }
+    }
 
     @media (max-width: 600px) {
       .pad { padding: 0 20px; }
@@ -820,9 +830,10 @@
       try { window.parent.postMessage({ type: 'CLOSE_MODAL' }, '*'); } catch (e) {}
       try { window.close(); } catch (e) {}
     }
-    // Only the middle of each screen scrolls; reset it on every screen change.
+    // Only the middle of each screen scrolls (the whole screen on phones and upright
+    // tablets); reset it on every screen change.
     function scrollTop() {
-      var nodes = document.querySelectorAll('.scroll, .signscroll');
+      var nodes = document.querySelectorAll('.view, .scroll, .signscroll');
       for (var i = 0; i < nodes.length; i++) nodes[i].scrollTop = 0;
     }
     function localDateISO() { var d = new Date(); function p(n){return (n<10?'0':'')+n;} return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
