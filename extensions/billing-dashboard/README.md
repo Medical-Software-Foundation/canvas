@@ -71,6 +71,10 @@ If the practice's `ChargeDescriptionMaster` table has entries for their CPT code
 
 ![Reimbursement Trends — average-charge-vs-CMS line chart](billing_dashboard/assets/trends-tab2.png)
 
+### Claims
+
+![Claims tab: filters, sortable claims table, Download CSV](docs/screenshots/claims-tab.png)
+
 ## Frontend layout (reference)
 
 ### Tab 1: Financial Overview
