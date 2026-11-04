@@ -4,7 +4,7 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "carry-forward"
-version = "0.0.1"
+version = "0.0.2"
 source = { virtual = "." }
 
 [package.dev-dependencies]
