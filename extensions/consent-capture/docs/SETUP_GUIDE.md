@@ -115,14 +115,13 @@ Open the plugin's **variables / configuration** screen and set the values below.
 |---|---|---|
 | `CANVAS_FHIR_CLIENT_ID` | **Yes** | The **client ID** from Step 2. |
 | `CANVAS_FHIR_CLIENT_SECRET` | **Yes** | The **client secret** from Step 2. (Stored as sensitive.) |
-| `CONSENT_ADMIN_USERS` | Recommended | Who is allowed into the admin pages (Consent Settings and the banner page). A list of Staff **IDs** or full **names**, separated by commas, semicolons, or new lines. If you **leave it empty, only the root user / "Canvas Support" can open the admin pages** (everyone else is denied). Add the staff who should manage consents. |
+| `CONSENT_ADMIN_USERS` | **Yes** | Who is allowed into the admin pages (Consent Settings and the banner page). A list of **staff IDs**, separated by commas, semicolons, or new lines. Names aren't accepted. If you **leave it empty, nobody can open the admin pages**, Canvas Support included. Step 4 shows how to find your staff ID. |
 | `CONSENT_BANNERS_ENABLED` | No | Turns the **"Required consent not on file." banner** on or off. Leave it as `true` (the default) to keep banners. Set it to `false` to turn banners off everywhere — then run the banner refresh (Step 6) once to clear existing banners immediately. This only affects the banner; the chart button is unaffected. |
 | `CONSENT_SYSTEM` | No | Leave it as `INTERNAL`. This is a legacy default and is rarely needed. |
 
-> ✅ **Set `CONSENT_ADMIN_USERS` before go-live.** Until you do, only the root /
-> "Canvas Support" user can reach Consent Settings and the banner tools. List the names or
-> IDs of the people who should manage consents. For example:
-> `Jane Admin, Dr. Alex Lee` or `staff-id-1, staff-id-2`.
+> ✅ **Set `CONSENT_ADMIN_USERS` before go-live.** Until you do, nobody can reach Consent
+> Settings or the banner tools. List the staff IDs of the people who should manage
+> consents, for example: `0f1e2d3c4b5a69788796a5b4c3d2e1f0, 1a2b3c4d5e6f70819203a4b5c6d7e8f9`.
 
 ---
 
@@ -137,8 +136,8 @@ Let's make sure the plugin is installed and you have admin access.
    - **The Consent Settings page** → 🎉 you're set. The plugin is installed and you have
      admin access. Continue to Step 5.
    - **A "You don't have access" message** → the plugin is installed, but you're not on the
-     admin list. Add your Staff ID or full name to `CONSENT_ADMIN_USERS` (Step 3) and
-     reload.
+     admin list. The message shows **Your staff ID**. Add it to `CONSENT_ADMIN_USERS`
+     (Step 3) and reload.
    - **A page-not-found / error** → the plugin isn't installed or enabled yet. Revisit
      Step 3.
 
@@ -197,9 +196,11 @@ Work down the editor. Each part is described below.
 
 - **At capture** — the details staff confirm when recording:
   - **Methods offered** — any of **Verbal**, **Electronic**, **Written**, **Other**.
-    > 💡 **Written is special.** For a Written consent the plugin does *not* generate a PDF.
-    > Instead, staff upload or photograph the signed paper document, and that becomes the
-    > record.
+    > 💡 **Written is special.** Written consents attach the signed form. Staff photograph or
+    > upload the signed paper document, or, with **Allow signing on this device** on, the
+    > signer signs on the staff device and the plugin generates the PDF with the signature.
+  - **Allow signing on this device** — adds **Sign on this device** to **Written** consents.
+    Off by default.
   - **Who is giving consent** — patient or representative.
   - **Capacity statement** — uses `[Patient name]` and `[Name]` placeholders, which fill in
     automatically at capture.
@@ -215,6 +216,20 @@ Click **Save changes**. Repeat Step 5 for every consent you want staff to use.
 > already on a patient's chart still appears under **On File** in the picker even if this
 > toggle is off. The plugin never creates or edits codings, and expiration always lives on
 > the coding in Canvas admin.
+
+### Practice settings
+
+The **Practice settings** tab applies to every consent signed on the device:
+
+- **Signing several consents** — **Sign each consent** (default) or **Allow reusing a
+  signature**, which offers the signer's first signature on the rest of the consents in the
+  same session.
+- **Accepted signatures** — **Finger or stylus** and **Mouse or trackpad** (on by default),
+  and **Typed** (off by default). At least one stays selected.
+- **Ask for a printed name** — off by default. When off, the name from **Who is giving
+  consent?** prints under the signature.
+
+Click **Save changes** on that tab.
 
 ---
 
@@ -247,13 +262,11 @@ a new consent required):
 
 Once you're set up, here's the day-to-day experience for clinical and front-desk staff.
 
-**Three ways a consent shows up in the chart:**
+**Two ways a consent shows up in the chart:**
 1. A **Consents** button in the chart header — **always shown**. It turns **red** when the
    patient still owes a **required** consent, and is a neutral **gray** button once everything
    required is on file.
-2. A **Consents** launcher in the chart's **app drawer** — always available, so staff can
-   review what's on file or record an optional consent any time.
-3. A red **banner** reading **"Required consent not on file."** on the chart and profile —
+2. A red **banner** reading **"Required consent not on file."** on the chart and profile —
    clears automatically once every required consent is on file.
 
 **Recording a consent (4 steps):**
@@ -273,7 +286,7 @@ Once you're set up, here's the day-to-day experience for clinical and front-desk
 
 | What you see | What to do |
 |---|---|
-| **"You don't have access"** on an admin page | Add your Staff ID or full name to `CONSENT_ADMIN_USERS` (Step 3), then reload. |
+| **"You don't have access"** on an admin page | Add the **Your staff ID** value from that page to `CONSENT_ADMIN_USERS` (Step 3), then reload. |
 | A consent **won't record**, or a "credentials are missing" message | Recheck `CANVAS_FHIR_CLIENT_ID` and `CANVAS_FHIR_CLIENT_SECRET` (Steps 2–3). Confirm the API application can create `Consent`. |
 | A consent **isn't in the picker** for staff to record | In Consent Settings, turn on **Show in the consent modal** for that consent (Step 5). |
 | The **banner isn't showing** on a patient who should have it | Run **Refresh Consent Banners** (Step 6). The banner shows only for **active, non-deceased** patients who still owe a **required** consent — confirm the patient is eligible and that the consent is marked **Prompt as due now** (Step 5). |
@@ -296,7 +309,7 @@ Once you're set up, here's the day-to-day experience for clinical and front-desk
 |---|---|---|
 | `CANVAS_FHIR_CLIENT_ID` | Yes | FHIR API client ID |
 | `CANVAS_FHIR_CLIENT_SECRET` | Yes | FHIR API client secret (sensitive) |
-| `CONSENT_ADMIN_USERS` | Recommended | Staff IDs/names allowed into the admin pages; empty = root / "Canvas Support" only |
+| `CONSENT_ADMIN_USERS` | Yes | Staff IDs allowed into the admin pages; empty = nobody |
 | `CONSENT_SYSTEM` | No | Leave as `INTERNAL` |
 
 For a technical/developer reference (components, security model, data access, tests), see

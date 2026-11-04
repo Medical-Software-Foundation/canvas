@@ -6,8 +6,7 @@ it once none remain. Recomputed whenever the patient's consents change (recorded
 updated, or deleted) and when the patient record changes.
 
 Banners can only carry an ``href`` link, not launch the in-EHR modal, so this one
-is informational: staff open the consents from the red "Consents" chart button or
-the app drawer.
+is informational: staff open the consents from the "Consents" chart button.
 """
 
 from canvas_sdk.effects import Effect

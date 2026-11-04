@@ -167,7 +167,11 @@ _simple_api_effects = _module("canvas_sdk.effects.simple_api")
 
 
 class Response:
-    pass
+    def __init__(self, content=None, status_code=None, content_type=None, headers=None):
+        self.content = content
+        self.status_code = status_code
+        self.content_type = content_type
+        self.headers = headers
 
 
 class JSONResponse:
@@ -241,6 +245,13 @@ class Application:
 
 
 _application.Application = Application
+
+
+class PanelApplication(Application):
+    pass
+
+
+_application.PanelApplication = PanelApplication
 _handlers.application = _application
 
 _simple_api = _module("canvas_sdk.handlers.simple_api")
@@ -394,3 +405,19 @@ _django_models.Index = _Constraint
 _django_models.UniqueConstraint = _Constraint
 _django.db = _django_db
 _django_db.models = _django_models
+
+
+# --------------------------------------------------------------------------- #
+# 3. No practice settings row by default (the defaults apply). Tests that need a
+#    saved row patch ``ConsentPracticeSettings`` themselves.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def _no_saved_practice_settings(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from consent_capture import models
+
+    objects = MagicMock()
+    objects.filter.return_value.values.return_value.first.return_value = None
+    monkeypatch.setattr(models.ConsentPracticeSettings, "objects", objects)
+    return objects

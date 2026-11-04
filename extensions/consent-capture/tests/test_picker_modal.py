@@ -33,6 +33,7 @@ class TestBuildPickerModal:
             mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
                 "Jane",
                 "Doe",
+                "",
                 dob,
             )
             effect = build_picker_modal("patient-123", "staff-9", {"CONSENT_ADMIN_USERS": "jane"})

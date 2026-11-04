@@ -4,18 +4,23 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Consent Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
   <style>
+    /* Recent Patients style, the look shared by Dot Phrases and Order Favorites:
+       DM Sans, navy titles, teal accent, white cards on a tinted page. */
     :root {
-      --ink:#16181d; --secondary:#5a6270; --muted:#8b93a1; --disabled-dot:#c6ccd4;
-      --bg:#f4f6f8; --surface:#ffffff; --inset:#f7f8fa; --chip:#f0f2f5; --matte:#eef1f4; --seg:#f0f2f4;
-      --line:#e8eaef; --line-strong:#d9dce3;
-      --success:#0b7a3b; --success-bg:#e7f5ee; --warn:#f2c04d; --warn-ink:#8a6d1a; --danger:#b42318;
-      --r-lg:14px; --r-md:10px; --r-sm:8px;
-      --shadow-card:0 1px 2px rgba(16,24,40,.04),0 10px 26px rgba(16,24,40,.05);
+      --ink:#0d203c; --body:#2c4155; --secondary:#5e7a8a; --muted:#8ea8b5; --disabled-dot:#c3d3da;
+      --bg:#EFF5F7; --surface:#ffffff; --inset:#F4F8FA; --chip:#F4F8FA; --matte:#EFF5F7; --seg:#F4F8FA;
+      --line:#dce8ec; --line-strong:#dce8ec; --divider:#eef4f6;
+      --teal:#2c7f8c; --teal-light:#96D3DD; --teal-wash:rgba(150,211,221,.28); --teal-tint:#e0f3f6;
+      --success:#2c7f8c; --success-bg:#e0f3f6; --warn:#c62828; --warn-ink:#c62828; --danger:#c62828;
+      --r-lg:12px; --r-md:10px; --r-sm:9px;
+      --shadow-card:0 1px 4px rgba(13,32,60,.07);
     }
     * { box-sizing:border-box; }
     html, body { height:100%; margin:0; background:var(--bg); }
-    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); line-height:1.5; -webkit-font-smoothing:antialiased; }
+    body { font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:var(--body); line-height:1.5; -webkit-font-smoothing:antialiased; }
 
     .app { height:100%; display:flex; flex-direction:column; background:var(--bg); overflow:hidden; }
 
@@ -193,14 +198,90 @@
     .toast.show { opacity:1; }
     .toast.err { background:var(--danger); }
     .hidden { display:none !important; }
+
+    /* ---------- Recent Patients restyle ---------- */
+    .app { display:flex; flex-direction:column; }
+    .tabbar { flex:none; display:flex; align-items:flex-end; gap:26px; padding:0 28px; height:51px; background:var(--surface); border-bottom:1.5px solid var(--line); }
+    .tabbar .tbtitle { align-self:center; font-size:15px; font-weight:600; color:var(--ink); margin-right:8px; }
+    .tabbar button { font:inherit; font-size:13px; font-weight:550; color:var(--secondary); background:none; border:0; border-bottom:2px solid transparent; padding:0 2px 14px; cursor:pointer; }
+    .tabbar button.on { color:var(--teal); border-bottom-color:var(--teal); }
+    .tabpane { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+    .tabpane > .grid, .tabpane > .main { flex:1 1 auto; min-height:0; }
+    .side { border-right:1.5px solid var(--line); }
+    .shead .label { font-size:13px; font-weight:600; letter-spacing:0; text-transform:none; color:var(--secondary); }
+    .srow:hover { background:var(--inset); }
+    .srow.sel { background:rgba(150,211,221,.18); border-color:var(--teal-light); }
+    .srow .sname { color:var(--ink); }
+    .pill-tag.req { color:#c62828; background:#fdf1f1; }
+    .pill-tag.opt { color:var(--secondary); background:var(--inset); border:1px solid var(--line); }
+    .mhead { border-bottom:1.5px solid var(--line); }
+    .mhead h2 { font-size:18px; font-weight:600; color:var(--ink); }
+    .wrap { gap:12px; }
+    .card { border:1.5px solid var(--line); padding:18px 16px 16px; }
+    .card > .ch { background:none; border:0; border-radius:0; padding:0 0 14px; }
+    .card > .ch h3 { font-size:15px; font-weight:600; color:var(--ink); }
+    .card > .ch p { font-size:12px; color:var(--secondary); line-height:1.55; margin-top:4px; }
+    .metacard { padding:12px 16px; background:var(--inset); border:1.5px solid var(--line); border-radius:10px; }
+    .metacols .mk { font-size:11px; font-weight:500; letter-spacing:0; text-transform:none; color:var(--muted); }
+    .metacols .mv { font-size:13px; color:var(--ink); }
+    .gdivider { margin:16px 0 5px; }
+    .cb, .qbody, .eqbody { padding:0; }
+    .capgroup { padding:0; }
+    .capgroup > .trow { padding:12px 0; border-radius:0; border-bottom:1px solid var(--divider); }
+    .capgroup > .trow:last-child { border-bottom:0; }
+    .trow:hover { background:transparent; }
+    .trow .tt { font-size:13px; color:var(--ink); }
+    .trow .td { font-size:12px; color:var(--secondary); line-height:1.5; margin-top:3px; }
+    .switch { width:32px; height:18px; }
+    .switch .knob { width:14px; height:14px; }
+    .switch.on { background:var(--teal); }
+    .switch.on .knob { left:16px; }
+    .seg { background:var(--inset); border:1.5px solid var(--line); border-radius:8px; padding:2px; }
+    .seg button { font-size:12px; font-weight:500; padding:3px 10px; border-radius:6px; line-height:1.5; }
+    .seg button.on { background:var(--teal-wash); color:var(--teal); font-weight:600; box-shadow:none; }
+    .pill { border:1.5px solid var(--line); color:var(--secondary); }
+    .pill.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+    .inset { background:var(--inset); border:1.5px solid var(--line); margin:4px 0 12px; }
+    .hbtn { border-radius:9px; }
+    .hbtn.primary { background:var(--ink); }
+    .hbtn.primary:hover:not(:disabled) { background:#1b3354; }
+    .hbtn.ghost { border:1.5px solid var(--line); color:var(--ink); }
+    .hbtn.ghost:hover:not(:disabled) { border-color:var(--teal-light); }
+    textarea, .caplabel input, .qprompt, .eqsearch { background:var(--inset); border:1.5px solid var(--line); border-radius:9px; color:var(--body); }
+    textarea:focus, .caplabel input:focus, .qprompt:focus, .eqsearch:focus { background:#fff; border-color:#5ab5c4; box-shadow:0 0 0 3px rgba(150,211,221,.2); }
+    .eqitem, .qcard { border:1.5px solid var(--line); }
+    .eqaddbtn { background:#fff; border:1.5px solid var(--line); color:var(--ink); box-shadow:none; }
+    .eqaddbtn:hover { background:#fff; border-color:var(--teal-light); }
+    .sidetoggle { border:1.5px solid var(--line); color:var(--secondary); }
+    .sidetoggle:hover { border-color:var(--teal-light); }
+    .stepper { border:1.5px solid var(--line); }
+    .writtennote strong { color:var(--body); }
+    /* Practice settings */
+    .tctl { flex:none; margin-top:2px; }
+    .acc-opts { display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:10px; }
+    .acc-opts label { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--body); cursor:pointer; }
+    .acc-opts input { width:17px; height:17px; margin:0; accent-color:var(--teal); cursor:pointer; }
+    .acc-opts input:disabled { cursor:default; }
+    /* Signature block in the document preview */
+    .pv-sig { border:1px solid var(--line-strong); padding:10px 12px 12px; }
+    .pv-sig .l { font-size:7px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:4px; }
+    .pv-sig .img { height:44px; border-bottom:1px solid var(--ink); display:flex; align-items:flex-end; }
+    .pv-sig .rows { display:flex; gap:24px; margin-top:6px; font-size:10px; }
+    .pv-sig .rows .k { font-size:7px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700; display:block; }
   </style>
 </head>
 <body>
   <div class="app">
+    <div class="tabbar">
+      <span class="tbtitle">Consent Settings</span>
+      <button type="button" data-tab="consents" class="on">Consents</button>
+      <button type="button" data-tab="practice">Practice settings</button>
+    </div>
+    <div class="tabpane" data-pane="consents">
     <div class="grid" id="grid">
       <aside class="side">
         <div class="shead">
-          <span class="label" id="sideLabel">Consent settings</span>
+          <span class="label" id="sideLabel">Consents</span>
           <a class="sidetoggle" id="refreshBannersLink" href="/plugin-io/api/consent_capture/admin/banners" target="_blank" rel="noopener" title="Refresh consent banners"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg></a>
           <a class="sidetoggle" id="newCodingLink" target="_blank" rel="noopener" title="Add a consent coding in Canvas admin">+</a>
           <button type="button" class="sidetoggle" id="sideToggle" title="Show or hide the consent list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
@@ -234,7 +315,7 @@
 
             <!-- Equivalent consents -->
             <div class="card">
-              <div class="ch"><h3>Equivalent consents</h3><p>If the patient already has one of these on file, this consent won't be requested. Use for older or alternate versions that satisfy the same requirement.</p></div>
+              <div class="ch"><h3>Equivalent consents</h3><p>If the patient has one of these on file and not expired, this consent won't be requested.</p></div>
               <div class="eqbody">
                 <div class="eqsummary" id="eqSummary"></div>
                 <div class="eqchosen" id="eqChosen"></div>
@@ -274,8 +355,9 @@
                 <div class="inset" id="methodInset">
                   <div class="ititle">Methods the provider can choose from</div>
                   <div class="mpills" id="methodPills"></div>
-                  <div class="writtennote hidden" id="writtenNote"><strong>Written</strong> consents don't generate a PDF. The provider uploads the signed document to the chart.</div>
+                  <div class="writtennote hidden" id="writtenNote"><strong>Written</strong> consents attach the signed form. The provider captures or uploads it, or the signer signs on the device.</div>
                 </div>
+                <div class="trow"><div class="tmain" data-toggle="allowDevice"><div class="tt">Allow signing on this device</div><div class="td">Adds <b>Sign on this device</b> to <b>Written</b> consents. The signature, signer, and time print on the PDF.</div></div><button type="button" class="switch" data-toggle="allowDevice" aria-label="Allow signing on this device"><span class="knob"></span></button></div>
                 <div class="trow"><div class="tmain" style="cursor:default"><div class="tt">Ask who is giving consent</div><div class="td">The patient, or a representative with their name and relationship.</div></div></div>
                 <div class="trow"><div class="tmain" data-toggle="capacityEnabled"><div class="tt">Include a capacity statement</div><div class="td">Adds a capacity attestation to the PDF.</div></div><button type="button" class="switch" data-toggle="capacityEnabled"><span class="knob"></span></button></div>
                 <div class="inset" id="capInset">
@@ -294,6 +376,29 @@
         </div>
       </main>
     </div>
+    </div>
+
+    <div class="tabpane hidden" data-pane="practice"><div class="main">
+      <div class="mhead">
+        <div class="htitle"><h2>Practice settings</h2></div>
+        <span class="status" id="psStatus"><span class="sdot"></span><span class="stext"></span></span>
+        <button type="button" class="hbtn ghost hidden" id="psDiscard">Discard</button>
+        <button type="button" class="hbtn primary hidden" id="psSave">Save changes</button>
+      </div>
+      <div class="mbody"><div class="wrap">
+        <div class="card">
+          <div class="ch"><h3>Signing on this device</h3><p>Apply to every consent.</p></div>
+          <div class="capgroup">
+            <div class="trow" style="align-items:center"><div class="tmain" style="cursor:default"><div class="tt">Signing several consents</div><div class="td">Whether the signer signs each consent or can reuse their first signature.</div></div>
+              <div class="tctl"><div class="seg" id="psReuse"><button type="button" data-reuse="each">Sign each consent</button><button type="button" data-reuse="reuse">Allow reusing a signature</button></div></div>
+            </div>
+            <div class="trow"><div class="tmain" style="cursor:default"><div class="tt">Accepted signatures</div><div class="td">How the signer can sign. At least one is required.</div>
+              <div class="acc-opts"><label><input type="checkbox" data-acc="accept_finger"> Finger or stylus</label><label><input type="checkbox" data-acc="accept_mouse"> Mouse or trackpad</label><label><input type="checkbox" data-acc="accept_typed"> Typed</label></div></div></div>
+            <div class="trow"><div class="tmain" data-ps="ask_printed_name"><div class="tt">Ask for a printed name</div><div class="td">The signer enters their name under the signature. When off, the name from <b>Who is giving consent?</b> prints under the signature.</div></div><button type="button" class="switch" data-ps="ask_printed_name" aria-label="Ask for a printed name"><span class="knob"></span></button></div>
+          </div>
+        </div>
+      </div></div>
+    </div></div>
     <div class="toast" id="toast"></div>
   </div>
 
@@ -303,6 +408,7 @@
     var METHOD_OPTIONS = JSON.parse("{{ method_options_json|escapejs }}");
     var DEFAULT_CAP_PATIENT = "{{ default_capacity_patient|escapejs }}";
     var DEFAULT_CAP_REP = "{{ default_capacity_representative|escapejs }}";
+    var PRACTICE = JSON.parse("{{ practice_json|escapejs }}");
     var CODINGS = [];   // every consent coding in Canvas (sidebar + equivalents picker)
 
     var TYPE_LABELS = { yes_no: 'Yes / No', acknowledge: 'Acknowledge', text: 'Free text' };
@@ -327,7 +433,8 @@
         methodEnabled: true, obtainedEnabled: true, capacityEnabled: !!c.capacity_enabled,
         required: !!c.required, active: !!c.active, sort: c.sort_order,
         satisfiedBy: JSON.parse(JSON.stringify(c.satisfied_by || [])),
-        capPatient: c.capacity_patient_template || '', capRep: c.capacity_representative_template || ''
+        capPatient: c.capacity_patient_template || '', capRep: c.capacity_representative_template || '',
+        allowDevice: !!c.allow_device_signature
       };
     }
     function defaultForm() {
@@ -335,7 +442,7 @@
         verbiage: '', questions: [], methodOptions: METHOD_OPTIONS.slice(),
         methodEnabled: true, obtainedEnabled: true, capacityEnabled: true,
         required: false, active: true, sort: 100, satisfiedBy: [],
-        capPatient: DEFAULT_CAP_PATIENT, capRep: DEFAULT_CAP_REP
+        capPatient: DEFAULT_CAP_PATIENT, capRep: DEFAULT_CAP_REP, allowDevice: false
       };
     }
     function snap(f) { return JSON.stringify(f); }
@@ -463,7 +570,7 @@
     /* ---------- at capture ---------- */
     function renderCapture() {
       var f = state.form;
-      setSwitch('capacityEnabled');
+      setSwitch('capacityEnabled'); setSwitch('allowDevice');
       el('capInset').classList.toggle('hidden', !f.capacityEnabled);
       var pills = el('methodPills'); pills.innerHTML = '';
       METHOD_OPTIONS.forEach(function (m) {
@@ -555,9 +662,10 @@
       var host = el('preview'); host.innerHTML = ''; var f = state.form;
       var cd = codingByKey(state.selKey) || { display: 'Consent' };
       var onlyWritten = !!(f.methodEnabled && f.methodOptions.length && f.methodOptions.every(function (m) { return m === 'Written'; }));
-      if (onlyWritten) {
+      var signedPreview = onlyWritten && f.allowDevice;
+      if (onlyWritten && !signedPreview) {
         var nd = mk('div', 'pv-nodoc'); nd.appendChild(mk('div', 't', 'No document generated'));
-        nd.appendChild(mk('div', 'b', 'Written-only consents don\'t generate a PDF. The provider uploads the signed document.'));
+        nd.appendChild(mk('div', 'b', 'Written-only consents attach the signed form the provider captures or uploads.'));
         host.appendChild(nd); return;
       }
       var d = new Date(); function z(n) { return (n < 10 ? '0' : '') + n; }
@@ -568,7 +676,7 @@
       sheet.appendChild(mk('div', 'pv-rule'));
       var rows = [['PATIENT', 'Jane Doe'], ['DATE OF BIRTH', '1980-05-01']];
       if (f.obtainedEnabled) rows.push(['CONSENTING PARTY', 'Patient']);
-      if (f.methodEnabled) rows.push(['METHOD OBTAINED', f.methodOptions.filter(function (m) { return m !== 'Written'; })[0] || f.methodOptions[0] || 'Verbal']);
+      if (f.methodEnabled) rows.push(['METHOD OBTAINED', signedPreview ? 'Written, signed on this device' : (f.methodOptions.filter(function (m) { return m !== 'Written'; })[0] || f.methodOptions[0] || 'Verbal')]);
       rows.push(['EFFECTIVE DATE', date]); rows.push(['COLLECTING STAFF', 'Dr. Smith']);
       var tbl = mk('div', 'pv-table');
       rows.forEach(function (r) { var tr = mk('div', 'pv-trow'); tr.appendChild(mk('div', 'pv-tk', r[0])); tr.appendChild(mk('div', 'pv-tv', r[1])); tbl.appendChild(tr); });
@@ -584,6 +692,15 @@
       if (qs.length) {
         sheet.appendChild(mk('div', 'pv-sec', 'Questions & responses'));
         qs.forEach(function (q) { var row = mk('div', 'pv-qrow'); row.appendChild(mk('div', 'pv-q', q.prompt)); row.appendChild(mk('div', 'pv-a', q.type === 'text' ? 'Typed' : (q.type === 'acknowledge' ? 'Confirmed' : 'Yes'))); sheet.appendChild(row); });
+      }
+      if (signedPreview) {
+        sheet.appendChild(mk('div', 'pv-sec', 'Signature'));
+        var sig = mk('div', 'pv-sig'); sig.appendChild(mk('div', 'l', 'Signature of patient'));
+        var img = mk('div', 'img'); img.innerHTML = '<svg width="150" height="38" viewBox="0 0 180 44"><path d="M4 32 C 20 6, 30 40, 44 20 S 70 8, 78 30 S 100 40, 112 14 S 140 30, 176 18" fill="none" stroke="#0d203c" stroke-width="2"/></svg>';
+        sig.appendChild(img);
+        var srows = mk('div', 'rows');
+        [['Signer', 'Jane Doe (Patient)'], ['Signed', date + ' 10:42 AM']].forEach(function (r) { var c = mk('span'); c.appendChild(mk('span', 'k', r[0])); c.appendChild(document.createTextNode(r[1])); srows.appendChild(c); });
+        sig.appendChild(srows); sheet.appendChild(sig);
       }
       var foot = mk('div', 'pv-foot'); foot.appendChild(mk('span', null, 'Recorded ' + date)); foot.appendChild(mk('span', null, 'Confidential · Patient Health Information')); sheet.appendChild(foot);
       matte.appendChild(sheet); host.appendChild(matte);
@@ -653,7 +770,8 @@
         method_options: f.methodOptions.slice(),
         satisfied_by: f.satisfiedBy.slice(),
         required: f.required, active: f.active, sort_order: parseInt(f.sort, 10) || 100,
-        capacity_patient_template: f.capPatient, capacity_representative_template: f.capRep
+        capacity_patient_template: f.capPatient, capacity_representative_template: f.capRep,
+        allow_device_signature: !!f.allowDevice
       };
       state.saving = true; renderStatus();
       fetch(BASE + '/consents', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -684,8 +802,65 @@
 
     /* Warn before leaving (refresh / close / navigate away) with unsaved changes. */
     window.addEventListener('beforeunload', function (e) {
-      if (isDirty()) { e.preventDefault(); e.returnValue = ''; }
+      if (isDirty() || psDirty()) { e.preventDefault(); e.returnValue = ''; }
     });
+
+    /* ---------- tabs ---------- */
+    document.querySelectorAll('.tabbar [data-tab]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var t = b.getAttribute('data-tab');
+        document.querySelectorAll('.tabbar [data-tab]').forEach(function (x) { x.classList.toggle('on', x === b); });
+        document.querySelectorAll('[data-pane]').forEach(function (p) { p.classList.toggle('hidden', p.getAttribute('data-pane') !== t); });
+      });
+    });
+
+    /* ---------- practice settings ---------- */
+    var ps = { saved: JSON.stringify(PRACTICE), form: JSON.parse(JSON.stringify(PRACTICE)), saving: false };
+    function psDirty() { return JSON.stringify(ps.form) !== ps.saved; }
+    function renderPractice() {
+      var f = ps.form;
+      document.querySelectorAll('#psReuse [data-reuse]').forEach(function (b) { b.classList.toggle('on', (b.getAttribute('data-reuse') === 'reuse') === !!f.reuse_signature); });
+      var accs = document.querySelectorAll('[data-acc]'), on = 0;
+      accs.forEach(function (cb) { cb.checked = !!f[cb.getAttribute('data-acc')]; if (cb.checked) on++; });
+      // The last checked box can't be cleared.
+      accs.forEach(function (cb) { cb.disabled = cb.checked && on === 1; });
+      document.querySelectorAll('.switch[data-ps]').forEach(function (s) { s.classList.toggle('on', !!f[s.getAttribute('data-ps')]); });
+      var dirty = psDirty(), st = el('psStatus');
+      st.querySelector('.stext').textContent = ps.saving ? 'Saving…' : (dirty ? 'Unsaved changes' : 'All changes saved');
+      st.querySelector('.sdot').style.background = (dirty && !ps.saving) ? 'var(--warn)' : 'var(--disabled-dot)';
+      st.style.color = (dirty && !ps.saving) ? 'var(--warn-ink)' : 'var(--muted)';
+      el('psDiscard').classList.toggle('hidden', !(dirty || ps.saving));
+      el('psSave').classList.toggle('hidden', !(dirty || ps.saving));
+      el('psSave').disabled = ps.saving; el('psDiscard').disabled = ps.saving;
+      el('psSave').textContent = ps.saving ? 'Saving…' : 'Save changes';
+    }
+    document.querySelectorAll('#psReuse [data-reuse]').forEach(function (b) {
+      b.addEventListener('click', function () { ps.form.reuse_signature = b.getAttribute('data-reuse') === 'reuse'; renderPractice(); });
+    });
+    document.querySelectorAll('[data-acc]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var key = cb.getAttribute('data-acc');
+        var others = ['accept_finger', 'accept_mouse', 'accept_typed'].filter(function (k) { return k !== key && ps.form[k]; });
+        if (!cb.checked && !others.length) { cb.checked = true; return; }
+        ps.form[key] = cb.checked; renderPractice();
+      });
+    });
+    document.querySelectorAll('[data-ps]').forEach(function (n) {
+      n.addEventListener('click', function () { var k = n.getAttribute('data-ps'); ps.form[k] = !ps.form[k]; renderPractice(); });
+    });
+    el('psDiscard').addEventListener('click', function () { if (ps.saving) return; ps.form = JSON.parse(ps.saved); renderPractice(); });
+    el('psSave').addEventListener('click', function () {
+      if (ps.saving) return;
+      ps.saving = true; renderPractice();
+      fetch(BASE + '/practice-settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ps.form) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          ps.saving = false;
+          if (d && d.ok) { PRACTICE = d.settings; ps.form = JSON.parse(JSON.stringify(d.settings)); ps.saved = JSON.stringify(d.settings); }
+          else toast((d && d.error) || 'Could not save.', true);
+          renderPractice();
+        }).catch(function () { ps.saving = false; renderPractice(); toast('Could not reach the server.', true); });
+    });
+    renderPractice();
 
     /* ---------- boot ---------- */
     loadCodings().then(function () {

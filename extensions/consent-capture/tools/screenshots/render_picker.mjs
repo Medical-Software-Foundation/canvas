@@ -3,7 +3,8 @@
 // no PHI). We reuse picker.html VERBATIM and only substitute the Django template
 // variables it declares:
 //   {{ patient_id|escapejs }}  {{ patient_name|escapejs }}  {{ consents_json|escapejs }}
-//   {{ records_json|escapejs }} {{ method_options_json|escapejs }}  {{ settings_url }}
+//   {{ records_json|escapejs }} {{ method_options_json|escapejs }}  {{ practice_json|escapejs }}
+//   {{ settings_url }}
 //   {% if is_admin %} ... {% endif %}  (the Settings gear)
 //
 // The JSON shapes mirror service.py: picker_items() -> CONSENTS, consent_records() -> RECORDS.
@@ -17,6 +18,11 @@ const PICKER = resolve(REPO, 'consent_capture', 'templates', 'picker.html');
 
 // ---- Mock data (representative, no PHI) ---------------------------------------
 const METHOD_OPTIONS = ['Verbal', 'Electronic', 'Written', 'Other'];
+
+// PRACTICE mirrors service.practice_settings() (the Practice settings tab).
+const PRACTICE = {
+  reuse_signature: false, accept_finger: true, accept_mouse: true, accept_typed: false, ask_printed_name: false,
+};
 
 const QUESTIONS = [
   { id: 'q1', prompt: 'Do you consent to treatment as described above?', type: 'yes_no', required: true, affirm: true },
@@ -35,14 +41,14 @@ const CONSENTS = [
   {
     code: 'TREAT', system: 'INTERNAL', display: 'Treatment Consent',
     paragraphs: PARAGRAPHS, method_enabled: true, obtained_by_enabled: true, capacity_enabled: true,
-    method_options: METHOD_OPTIONS, questions: QUESTIONS,
+    method_options: METHOD_OPTIONS, questions: QUESTIONS, allow_device_signature: true,
     required: true, active: true, on_file: false, status: 'needed',
     effective_date: '', expiration_date: '',
   },
   {
     code: 'RPM', system: 'INTERNAL', display: 'Remote Patient Monitoring Consent',
     paragraphs: PARAGRAPHS.slice(0, 2), method_enabled: true, obtained_by_enabled: true, capacity_enabled: false,
-    method_options: METHOD_OPTIONS, questions: QUESTIONS.slice(0, 1),
+    method_options: METHOD_OPTIONS, questions: QUESTIONS.slice(0, 1), allow_device_signature: true,
     required: true, active: true, on_file: false, status: 'expired',
     effective_date: '2024-06-01', expiration_date: '2025-06-01',
   },
@@ -56,9 +62,16 @@ const CONSENTS = [
   {
     code: 'WRITTEN', system: 'INTERNAL', display: 'Financial Responsibility (Signed Form)',
     paragraphs: PARAGRAPHS.slice(0, 1), method_enabled: true, obtained_by_enabled: true, capacity_enabled: false,
-    method_options: ['Written'], questions: [],
+    method_options: ['Written'], questions: [], allow_device_signature: true,
     required: false, active: true, on_file: false, status: 'needed',
     effective_date: '', expiration_date: '',
+  },
+  {
+    code: 'RESEARCH', system: 'INTERNAL', display: 'Research Participation',
+    paragraphs: PARAGRAPHS.slice(0, 1), method_enabled: true, obtained_by_enabled: true, capacity_enabled: false,
+    method_options: METHOD_OPTIONS, questions: [], allow_device_signature: true,
+    required: false, active: true, on_file: false, status: 'declined',
+    effective_date: '2025-09-02', expiration_date: '',
   },
 ];
 
@@ -67,6 +80,13 @@ const RECORDS = [
   {
     id: '1001', code: 'HIPAA', system: 'INTERNAL', display: 'Notice of Privacy Practices',
     status: 'active', on_file: true, effective_date: '2025-03-12', expiration_date: '',
+    obtained_by: 'Sam Rivera, NP', method: 'Written', consented_by: 'Patient',
+    signature: 'Signed on this device (finger or stylus)', pages: 1,
+  },
+  {
+    id: '1003', code: 'RESEARCH', system: 'INTERNAL', display: 'Research Participation',
+    status: 'declined', on_file: false, effective_date: '2025-09-02', expiration_date: '',
+    obtained_by: 'Sam Rivera, NP', method: 'Verbal', consented_by: 'Patient', pages: 1,
   },
   {
     id: '1002', code: 'RPM', system: 'INTERNAL', display: 'Remote Patient Monitoring Consent',
@@ -85,7 +105,7 @@ function fill(html, vars) {
   return html;
 }
 
-export function renderPickerHtml(outPath) {
+export function renderPickerHtml(outPath, practice) {
   const raw = readFileSync(PICKER, 'utf8');
   const vars = {
     patient_id: 'demo-patient',
@@ -94,6 +114,7 @@ export function renderPickerHtml(outPath) {
     consents_json: jsEscape(JSON.stringify(CONSENTS)),
     records_json: jsEscape(JSON.stringify(RECORDS)),
     method_options_json: jsEscape(JSON.stringify(METHOD_OPTIONS)),
+    practice_json: jsEscape(JSON.stringify(Object.assign({}, PRACTICE, practice || {}))),
     settings_url: '#settings',
   };
   const html = fill(raw, vars);
@@ -114,4 +135,4 @@ function jsEscape(s) {
     .replace(/\r/g, '\\r');
 }
 
-export { CONSENTS, RECORDS, METHOD_OPTIONS };
+export { CONSENTS, RECORDS, METHOD_OPTIONS, PRACTICE };
