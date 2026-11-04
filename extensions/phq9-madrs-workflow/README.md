@@ -53,7 +53,12 @@ This plugin has no configurable secrets or settings.
 
 ## Screenshots
 
-_Screenshots or recordings of the workflow can be added here._
+Committing a MADRS scored 12 shows the "mild depression" interpretation in the note; a score of 3 shows "normal/no depression". Test patient, test questionnaire.
+
+![MADRS answered, total 12](screenshots/1-madrs-total12-answered.png)
+![Result for a total of 12](screenshots/2-madrs-total12-result.png)
+![MADRS answered, total 3](screenshots/1-madrs-total3-answered.png)
+![Result for a total of 3](screenshots/2-madrs-total3-result.png)
 
 ## Running tests
 
