@@ -91,6 +91,7 @@ The plugin provides one access point:
 
 5. **Note Type**:
    - Multi-select dropdown of note type names
+   - Lists only note types that have at least one open encounter (Message and Letter types are never listed)
    - Select one or many note types to narrow results
 
 6. **Claim Queue**:
