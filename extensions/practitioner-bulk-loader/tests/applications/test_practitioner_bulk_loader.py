@@ -1,6 +1,6 @@
 """Tests for practitioner_bulk_loader.applications.practitioner_bulk_loader."""
 
-from canvas_sdk.effects.launch_modal import LaunchModalEffect
+from unittest.mock import MagicMock
 
 from practitioner_bulk_loader.applications.practitioner_bulk_loader import (
     PractitionerBulkLoaderApp,
@@ -9,9 +9,27 @@ from practitioner_bulk_loader.applications.practitioner_bulk_loader import (
 
 
 class TestPractitionerBulkLoaderApp:
-    def _make_app(self):
+    def _make_app(self, staff_id="a" * 32, allowed="a" * 32):
         app = PractitionerBulkLoaderApp.__new__(PractitionerBulkLoaderApp)
+        app.event = MagicMock()
+        app.event.context = {"user": {"id": staff_id, "type": "Staff"}}
+        app.secrets = {"BULK_LOADER_ALLOWED_STAFF_KEYS": allowed}
         return app
+
+    def test_listed_staff_see_the_app(self):
+        assert self._make_app().visible() is True
+
+    def test_unlisted_staff_do_not_see_the_app(self):
+        assert self._make_app(staff_id="b" * 32).visible() is False
+
+    def test_nobody_sees_the_app_when_the_list_is_empty(self):
+        assert self._make_app(allowed="").visible() is False
+
+    def test_unlisted_staff_opening_directly_get_a_refusal(self):
+        result = str(self._make_app(staff_id="b" * 32).on_open())
+        assert "LAUNCH_MODAL" in result
+        assert "access list" in result
+        assert "drop-zone" not in result
 
     def test_on_open_returns_launch_modal_effect(self):
         app = self._make_app()

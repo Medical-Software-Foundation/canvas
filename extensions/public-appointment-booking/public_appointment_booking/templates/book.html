@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book an appointment</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1d2330; }
+    main { max-width: 34rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+    h2 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; }
+    label { display: block; font-size: .9rem; margin: .75rem 0 .25rem; }
+    input, textarea, select { width: 100%; box-sizing: border-box; font: inherit; padding: .6rem; border: 1px solid #c4c9d4; border-radius: 6px; background: #fff; }
+    button { margin-top: 1.25rem; width: 100%; min-height: 44px; font: inherit; font-weight: 600; border: 0; border-radius: 6px; background: #1f5fbf; color: #fff; cursor: pointer; }
+    button[disabled] { opacity: .6; cursor: default; }
+    .slots { display: grid; gap: .5rem; }
+    .slot { display: flex; gap: .6rem; align-items: center; padding: .6rem; border: 1px solid #c4c9d4; border-radius: 6px; background: #fff; }
+    .slot input { width: auto; }
+    .msg { margin-top: 1rem; padding: .75rem; border-radius: 6px; background: #e8eef9; }
+    .msg.error { background: #fbeaea; }
+    .hint { font-size: .85rem; color: #5a6275; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Book an appointment</h1>
+  <p class="hint">Pick a time, then tell us who the appointment is for. The practice will confirm by phone or email.</p>
+
+  <form id="book-form" novalidate>
+    <h2>1. Choose a time</h2>
+    <div id="slots" class="slots"><p class="hint">Loading open times...</p></div>
+
+    <h2>2. Your details</h2>
+    <label for="first_name">First name</label>
+    <input id="first_name" name="first_name" autocomplete="given-name" maxlength="60" required>
+    <label for="last_name">Last name</label>
+    <input id="last_name" name="last_name" autocomplete="family-name" maxlength="60" required>
+    <label for="birth_date">Date of birth</label>
+    <input id="birth_date" name="birth_date" type="date" autocomplete="bday" required>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+    <label for="phone">Mobile phone</label>
+    <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="20" required>
+    <label for="reason">Reason for visit (optional)</label>
+    <textarea id="reason" name="reason" rows="3" maxlength="300"></textarea>
+
+    <button id="submit" type="submit" disabled>Request appointment</button>
+    <div id="message" class="msg" role="status" hidden></div>
+  </form>
+</main>
+<script>
+(function () {
+  var slotsEl = document.getElementById("slots");
+  var form = document.getElementById("book-form");
+  var submit = document.getElementById("submit");
+  var message = document.getElementById("message");
+
+  function show(text, isError) {
+    message.textContent = text;
+    message.className = isError ? "msg error" : "msg";
+    message.hidden = false;
+  }
+
+  function formatTime(iso) {
+    var d = new Date(iso);
+    return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  function renderSlots(slots) {
+    slotsEl.textContent = "";
+    if (!slots.length) {
+      var p = document.createElement("p");
+      p.className = "hint";
+      p.textContent = "No open times right now. Please call the practice.";
+      slotsEl.appendChild(p);
+      return;
+    }
+    slots.forEach(function (slot, i) {
+      var label = document.createElement("label");
+      label.className = "slot";
+      var input = document.createElement("input");
+      input.type = "radio";
+      input.name = "slot";
+      input.value = String(i);
+      input.dataset.provider = slot.provider_id;
+      input.dataset.start = slot.start_iso;
+      input.addEventListener("change", function () { submit.disabled = false; });
+      var text = document.createElement("span");
+      var where = slot.location_name ? " (" + slot.location_name + ")" : "";
+      text.textContent = formatTime(slot.start_iso) + " with " + slot.provider_name + where;
+      label.appendChild(input);
+      label.appendChild(text);
+      slotsEl.appendChild(label);
+    });
+  }
+
+  function loadSlots() {
+    fetch("slots", { credentials: "omit" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (body) { renderSlots(body.slots || []); })
+      .catch(function () { slotsEl.textContent = "Open times could not be loaded. Please try again later."; });
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var chosen = form.querySelector("input[name=slot]:checked");
+    if (!chosen) { show("Please choose a time.", true); return; }
+    var body = {
+      provider_id: chosen.dataset.provider,
+      start_iso: chosen.dataset.start,
+      first_name: form.first_name.value,
+      last_name: form.last_name.value,
+      birth_date: form.birth_date.value,
+      email: form.email.value,
+      phone: form.phone.value,
+      reason: form.reason.value
+    };
+    submit.disabled = true;
+    fetch("book", {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (j) { return { status: r.status, body: j }; });
+    }).then(function (res) {
+      if (res.status === 202) {
+        form.querySelectorAll("input, textarea").forEach(function (el) { el.disabled = true; });
+        show(res.body.message, false);
+      } else if (res.status === 409) {
+        show("That time was just taken. Please pick another.", true);
+        submit.disabled = false;
+        loadSlots();
+      } else if (res.status === 429) {
+        show("Too many requests. Please try again later or call the practice.", true);
+      } else if (res.status === 400) {
+        show("Please check the field: " + String(res.body.field || "form").replace("_", " ") + ".", true);
+        submit.disabled = false;
+      } else {
+        show("Something went wrong. Please call the practice.", true);
+      }
+    }).catch(function () {
+      show("Something went wrong. Please call the practice.", true);
+      submit.disabled = false;
+    });
+  });
+
+  loadSlots();
+})();
+</script>
+</body>
+</html>

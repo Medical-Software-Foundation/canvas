@@ -1,0 +1,19 @@
+[project]
+dependencies = [
+  "canvas[test-utils]",
+  "pytest-cov>=7.0.0",
+]
+description = "Saved text that providers insert by typing a short code like .metf500 in a note, with a chart panel to browse, insert, and manage phrases and an admin app for practice phrases."
+license = "MIT"
+name = "dot-phrases"
+readme = "dot_phrases/README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["dot_phrases"]
+omit = ["tests/*"]

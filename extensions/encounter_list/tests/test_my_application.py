@@ -86,3 +86,37 @@ class TestGetEncountersClaimLookup:
             api.get_encounters()
 
         assert note.get_claim.call_count == 1
+
+
+class TestGetNoteTypes:
+    """The Note Type filter lists only note types that have open encounters."""
+
+    @patch("encounter_list.applications.my_application.JSONResponse")
+    @patch("encounter_list.applications.my_application.NoteType")
+    @patch("encounter_list.applications.my_application.Note")
+    def test_scoped_to_open_encounters(self, mock_note, mock_note_type, mock_json):
+        """NoteType rows are filtered by the open-encounter set, not returned wholesale."""
+        from encounter_list.applications import my_application as app
+
+        open_set = mock_note.objects.exclude.return_value.exclude.return_value.values.return_value
+        EncounterListApi().get_note_types()
+
+        # Open set drops closed states, then MESSAGE/LETTER categories.
+        mock_note.objects.exclude.assert_called_once_with(
+            current_state__state__in=app.CLOSED_NOTE_STATES
+        )
+        mock_note.objects.exclude.return_value.exclude.assert_called_once_with(
+            note_type_version__category__in=app.EXCLUDED_NOTE_TYPE_CATEGORIES
+        )
+        mock_note_type.objects.filter.assert_called_once_with(pk__in=open_set)
+        # Never falls back to an unfiltered NoteType query.
+        mock_note_type.objects.exclude.assert_not_called()
+        filtered = mock_note_type.objects.filter.return_value
+        filtered.exclude.assert_called_once_with(category__in=app.EXCLUDED_NOTE_TYPE_CATEGORIES)
+
+    def test_closed_states_match_worklist_exclusions(self):
+        """Terminal/non-worklist states stay out of the open set."""
+        from encounter_list.applications import my_application as app
+
+        assert len(app.CLOSED_NOTE_STATES) == 9
+        assert len(app.EXCLUDED_NOTE_TYPE_CATEGORIES) == 2

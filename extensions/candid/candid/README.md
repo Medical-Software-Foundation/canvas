@@ -60,7 +60,7 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Triggers:**
 - **Event-driven:** When a claim enters the **Patient Balance** queue, the plugin asynchronously POSTs to its own `/sync-patient-payments` SimpleAPI route to pull just the patient payments for that claim (full ERA/adjudication sync is left to the nightly cron)
 - **Manual:** The "Sync Now" button on the claim timeline application POSTs to `/claim-detail`, which runs a full adjudication sync inline
-- **Nightly cron (starts 2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position is kept in the plugin cache (`candid_nightly_sync_cursor`), and a cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
+- **Nightly cron (starts 2 AM by default; set `CANDID_SYNC_START_HOUR` to change it):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, **PatientBalance**, and **RejectedNeedsReview** queues that have Candid encounter metadata, then runs full adjudication sync on each. The claims are worked through one batch per hourly tick (at most 45 minutes and 4,000 claims per batch), because the plugin runner caps a handler's response at 64 MB and a single run over every claim outgrew it. The batch position (`candid_nightly_sync_cursor`) and the date the last cycle started are kept in an AttributeHub (`candid_sync_state` / `nightly_sync`) in the plugin's `canvas__candid` custom data namespace, not the plugin cache: the shared cache deletes keys alphabetically once it passes 300 entries, which used to drop the cursor between ticks and stop the cycle after one batch. If that store can't be read or written, the tick fails with an error and the next hourly tick retries from the last saved position. A cache lock (`candid_nightly_sync_lock`) stops two batches from overlapping
 
 A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candid_sync_history` metadata — see [Sync history backfill](#sync-history-backfill).
 
@@ -87,6 +87,8 @@ A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candi
 **Patient payment sync (Candid -> Canvas):**
 - For each Candid claim within the encounter, queries `GET /patient-payments/v4?claim_id={candid_claim_id}`
 - Skips payments already reported to Candid or synced on a previous run
+- Skips payments Canvas itself reported to Candid, even when their ID never reached the claim's metadata (the report timed out, two reports overlapped, or a sync read the metadata first). They're recognized by the `[sent from Canvas]` tag in their `payment_note`, or, for payments reported before the tag existed, by a payment collected in Canvas (a `PaymentCollection` from patient billing, the claim page, or another plugin's `post_payment`, but not this plugin's own Candid imports) for the same patient and total within 2 minutes of the Candid payment's timestamp. Payments skipped this way are saved to `candid_reported_payment_ids`, so later syncs skip them without a lookup
+- Posts only the share of each payment that Candid allocated to that Candid claim (from the payment's `allocations`, across all of the claim's Candid claims, overflow splits included), so a payment split across several claims isn't posted in full on each
 - New payments are posted via `ClaimEffect.post_payment(claim_coverage_id="patient")`
 
 **After sync:** updates the claim status banner with current Candid status and last sync date.
@@ -97,17 +99,20 @@ When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSE
 
 - Builds allocations mapping Canvas claim IDs to Candid encounter external IDs using `canvas:{claim_id}` (matching the `external_id` set at submission time)
 - Handles partial allocations (allocated amounts go to specific encounters, remainder goes as unattributed)
-- Submits the payment to Candid's `POST /api/patient-payments/v4`
+- Submits the payment to Candid's `POST /api/patient-payments/v4`, with `[sent from Canvas]` appended to its `payment_note` so the sync never imports it back
 - Stores the returned `patient_payment_id` on each allocated claim's metadata so the sync knows not to re-post it
 - Appends a `payment_reported` entry to each allocated claim's `candid_sync_history` metadata for the timeline UI
 - Skips reporting if the originating payment description matches `Candid patient payment ` — this prevents a feedback loop where a payment pulled from Candid is reported right back
-- On failure, creates a Canvas Task labeled "Candid Integration" with the error details to notify clinicians
+- Gets the Candid sign-in token before sending anything. If sign-in fails (bad credentials, an error or no answer from the token endpoint), the payment was never sent: it creates a "Payment Notification Failed — couldn't sign in to Candid" task labeled "Candid Integration"
+- If Candid refuses the payment (a 4xx), it creates a "Payment Notification Failed" task with the error details
+- If Candid doesn't confirm it (a timeout or dropped connection, or a 5xx such as 502/503/504), it creates a "Payment Notification Unconfirmed" task instead and doesn't retry: Candid may have recorded the payment anyway, and a retry could record it twice
+- Every one of these tasks says to put `[sent from Canvas]` in the note if a biller enters the payment in Candid by hand, so the sync doesn't import it back
 
 ### Claim Banners
 
 Claims processed through Candid display a status banner:
 - **After submission:** "Candid: Submitted 2026-04-24 (2 encounters) | Awaiting response"
-- **After sync:** "Candid: Era Received | Submitted 2026-04-24 | Last synced 2026-04-28"
+- **After sync:** "Candid status: Era Received | Submitted 2026-04-24 | Last synced 2026-04-28"
 - Denied/rejected claims show a **warning** banner instead of info
 
 ### Claim Timeline Application
@@ -158,7 +163,7 @@ candid/
     dashboard.html / .css / .js        # full-page Candid claims dashboard
     claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
-    nightly_sync.py           # starts 2 AM daily: syncs pending claims in hourly batches
+    nightly_sync.py           # starts daily at CANDID_SYNC_START_HOUR (default 2 AM): syncs pending claims in hourly batches
   adjudication_sync.py        # Core sync logic: pull ERA + patient payments, post to Canvas
   effect_helpers.py           # Shared: banners, metadata keys, success/failure handlers
 ```
@@ -172,6 +177,8 @@ Declared in `CANVAS_MANIFEST.json` under `"variables"`. Sensitive values are enc
 | `CANDID_CLIENT_ID` | Yes | Candid OAuth2 client ID |
 | `CANDID_CLIENT_SECRET` | Yes | Candid OAuth2 client secret — also used as the shared API key on the plugin's own `/submit`, `/sync`, `/sync-patient-payments`, and `/report-payment` SimpleAPI routes |
 | `CANDID_BASE_URL` | No | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
+| `CANDID_SYNC_START_HOUR` | No | The hour the nightly sync starts, as a whole number from `0` to `23`, in the instance's time zone (`INSTALLATION_TIME_ZONE`), not the user's. Blank means `2` (2 AM). A value that isn't a whole number from 0 to 23 also uses `2` and logs a warning. A cycle runs one batch per hour (each batch stops at 45 minutes or 4,000 claims, whichever comes first) until every pending claim is synced, so a cycle takes as many hours as it needs batches: on an instance with about 4,100 pending claims it took three batches, finishing about 2.5 hours after the start. Check how many batches your instance's cycle needs in its logs ("continuing next hour" / "cycle complete"), and pick an hour that leaves that much room before anything time-sensitive on the instance, such as scheduled patient texts. A cycle already running finishes even if the hour is changed, and at most one cycle starts per day. In a time zone with daylight saving time, an hour that doesn't exist on the spring-forward day (e.g. 2 AM in US time zones) starts no cycle that day. |
+| `CANDID_POST_MEDICARE_SEQUESTRATION` | No | Set to `true` to post Medicare's 2% sequestration as a `CO-253` write-off when a primary ERA is synced. Candid doesn't send the CO-253 adjustment codes, so the plugin works the amount out per line: 2/98 of what Medicare paid (Medicare pays 98% of its share). Only claims whose primary coverage has plan type `medicare` get it, so Medicare Advantage plans don't. It's skipped on a line where the payer reported a 253 itself, or where the amount would be more than what's left of the allowed amount after Medicare's payment and the deductible, coinsurance and copay Candid reports. Blank or anything other than `true`/`yes`/`1`/`on` means off. It applies to primary ERAs synced after it's turned on, not to claims already posted. |
 
 The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal machine-to-machine routes (`/submit`, `/sync`, `/sync-patient-payments`, `/report-payment`) use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`). The user-facing routes — `/claim-detail`, `/dashboard`, and the `/app/*` asset routes — require a logged-in **staff** session (`StaffSessionAuthMixin`), as does the `CandidTimelineWebSocket`.
 
@@ -213,6 +220,8 @@ Sync history lives on each claim's `candid_sync_history` metadata — a JSON lis
 > **History:** activity originally lived in a `SyncLog` custom data model (one row per event per claim), which required a nightly pruning job to bound its growth. It was migrated into `candid_sync_history` metadata by a one-time midnight cron (`CandidSyncHistoryBackfill`) that merged legacy rows under any existing entries, then deleted them. Once that backfill had run in every environment, the cron, the `SyncLog` model, and its table were removed.
 
 ## Rollout
+
+From 0.0.7 the plugin owns the `canvas__candid` custom data namespace. Update it in place; don't uninstall it, because uninstalling a namespace-owning plugin leaves the namespace behind and a reinstall needs its access key.
 
 The home-app `candid_integration/signals.py` module checks whether this plugin is active before dispatching built-in Celery tasks. This acts as a kill-switch: disabling the plugin in the Canvas admin immediately re-enables the built-in integration with no code deploy needed.
 

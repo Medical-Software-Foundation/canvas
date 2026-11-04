@@ -1,8 +1,8 @@
 """Tests for CandidClient: token caching, error formatting, secret-driven construction."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from candid.api.client import CandidClient
+from candid.api.client import CACHE_KEY_PREFIX, CACHE_TTL_SECONDS, CandidClient
 
 from tests.conftest import MOCK_SECRETS
 
@@ -258,3 +258,189 @@ def test_update_service_line_patches_v2_and_returns_id() -> None:
     assert message == "sl-1"
     url = client.http.patch.call_args.args[0]
     assert url.endswith("/api/service-lines/v2/sl-1")
+
+
+# ---------------------------------------------------------------------------
+# Plugin cache for bearer tokens
+# ---------------------------------------------------------------------------
+
+
+def test_token_read_from_plugin_cache_skips_fetch() -> None:
+    client = _client()
+    client.http = MagicMock()
+    cache = MagicMock()
+    cache.get.return_value = "cached-tok"
+    with patch("canvas_sdk.caching.plugins.get_cache", return_value=cache):
+        headers = client._auth_headers()
+
+    assert headers == {"Authorization": "Bearer cached-tok"}
+    cache.get.assert_called_once_with(f"{CACHE_KEY_PREFIX}{MOCK_SECRETS['CANDID_CLIENT_ID']}")
+    client.http.post.assert_not_called()
+
+
+def test_fetched_token_is_written_to_plugin_cache() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "fresh-tok"})
+    cache = MagicMock()
+    cache.get.return_value = None
+    with patch("canvas_sdk.caching.plugins.get_cache", return_value=cache):
+        assert client._token() == "fresh-tok"
+
+    cache.set.assert_called_once_with(
+        f"{CACHE_KEY_PREFIX}{MOCK_SECRETS['CANDID_CLIENT_ID']}",
+        "fresh-tok",
+        timeout_seconds=CACHE_TTL_SECONDS,
+    )
+
+
+def test_token_still_returned_when_cache_write_fails() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "fresh-tok"})
+    cache = MagicMock()
+    cache.get.return_value = None
+    cache.set.side_effect = RuntimeError("cache down")
+    with patch("canvas_sdk.caching.plugins.get_cache", return_value=cache):
+        assert client._token() == "fresh-tok"
+
+
+def test_token_fetched_when_plugin_cache_unavailable() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "fresh-tok"})
+    with patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError("no cache")):
+        assert client._token() == "fresh-tok"
+    client.http.post.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Endpoints not covered above
+# ---------------------------------------------------------------------------
+
+
+def _authed_client() -> CandidClient:
+    client = _client()
+    client._instance_token = "tok"
+    client.http = MagicMock()
+    return client
+
+
+def _error_response(status: int, body: dict) -> MagicMock:
+    r = MagicMock()
+    r.ok = False
+    r.status_code = status
+    r.json.return_value = body
+    return r
+
+
+def test_find_encounter_by_external_id_returns_first_item() -> None:
+    client = _authed_client()
+    client.http.get.return_value = _ok_response({"items": [{"encounter_id": "enc-1"}]})
+
+    assert client.find_encounter_by_external_id("canvas:claim-1") == "enc-1"
+    url = client.http.get.call_args.args[0]
+    assert url == (
+        f"{MOCK_SECRETS['CANDID_BASE_URL']}/api/encounters/v4"
+        "?external_id=canvas%3Aclaim-1&limit=1"
+    )
+    assert client.http.get.call_args.kwargs["headers"] == {"Authorization": "Bearer tok"}
+
+
+def test_find_encounter_by_external_id_accepts_single_object_response() -> None:
+    client = _authed_client()
+    client.http.get.return_value = _ok_response({"encounter_id": "enc-2"})
+    assert client.find_encounter_by_external_id("x") == "enc-2"
+
+
+def test_find_encounter_by_external_id_returns_none_when_empty_or_error() -> None:
+    client = _authed_client()
+    client.http.get.return_value = _ok_response({"items": []})
+    assert client.find_encounter_by_external_id("x") is None
+
+    client.http.get.return_value = _error_response(500, {})
+    assert client.find_encounter_by_external_id("x") is None
+
+
+def test_update_claim_patches_encounter() -> None:
+    client = _authed_client()
+    client.http.patch.return_value = _ok_response({})
+
+    ok, msg = client.update_claim("enc-1", {"a": 1})
+
+    assert (ok, msg) == (True, "enc-1")
+    assert client.http.patch.call_args.args[0].endswith("/api/encounters/v4/enc-1")
+    assert client.http.patch.call_args.kwargs["json"] == {"a": 1}
+    assert client.http.patch.call_args.kwargs["headers"]["Content-Type"] == "application/json"
+
+
+def test_update_claim_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.patch.return_value = _error_response(
+        422,
+        {
+            "errorName": "HttpRequestValidationError",
+            "content": {"fieldName": "patient", "humanReadableMessage": "required"},
+        },
+    )
+    assert client.update_claim("enc-1", {}) == (
+        False,
+        "<422 HttpRequestValidationError> patient: required",
+    )
+
+
+def test_update_service_line_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.patch.return_value = _error_response(404, {"errorName": "NotFound"})
+    assert client.update_service_line("sl-1", {}) == (False, "<404 NotFound>")
+
+
+def test_delete_service_line_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.delete.return_value = _error_response(
+        400, {"detail": [{"type": "missing", "msg": "bad", "loc": ["body"]}]}
+    )
+    assert client.delete_service_line("sl-1") == (
+        False,
+        "<400 Unknown Error> missing: bad. In: ['body']",
+    )
+
+
+def test_submit_payment_posts_and_returns_payment_id() -> None:
+    client = _authed_client()
+    client.http.post.return_value = _ok_response({"patient_payment_id": "pp-1"})
+
+    assert client.submit_payment({"amount_cents": 500}) == (True, "pp-1")
+    assert client.http.post.call_args.args[0].endswith("/api/patient-payments/v4")
+    assert client.http.post.call_args.kwargs["json"] == {"amount_cents": 500}
+
+
+def test_submit_payment_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.post.return_value = _error_response(409, {"errorName": "Conflict"})
+    assert client.submit_payment({}) == (False, "<409 Conflict>")
+
+
+def test_submit_payment_raises_unconfirmed_on_5xx() -> None:
+    """A gateway error or server failure may follow a created payment."""
+    import pytest
+
+    from candid.api.client import CandidUnconfirmedError
+
+    for status in (500, 502, 503, 504):
+        client = _authed_client()
+        client.http.post.return_value = _error_response(status, {"errorName": "BadGateway"})
+        with pytest.raises(CandidUnconfirmedError) as info:
+            client.submit_payment({})
+        assert info.value.status_code == status
+        assert str(info.value) == f"HTTP {status}: <{status} BadGateway>"
+
+
+def test_authenticate_fetches_the_token_up_front() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok-up-front"})
+    with patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError("no cache")):
+        client.authenticate()
+    assert client._instance_token == "tok-up-front"
+    assert client.http.post.call_args.args[0].endswith("/api/auth/v2/token")

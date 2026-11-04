@@ -102,6 +102,8 @@ Any medication-related command (prescribe, adjust prescription, change medicatio
 - Previous note: `Prescribe: Lisinopril 10mg, #30, 90 day supply`
 - Carried forward as: `Refill: Lisinopril 10mg, #30, 90 day supply`
 
+The prescriber is carried forward. The supervising provider is not: it belongs to the original visit, so the clinician picks it again on the new command if one is needed.
+
 #### Goal → Update Goal
 New goals from previous encounters are carried forward as goal updates with progress tracking.
 

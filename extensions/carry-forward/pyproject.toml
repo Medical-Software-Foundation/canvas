@@ -1,6 +1,6 @@
 [project]
 name = "carry_forward"
-version = "0.0.1"
+version = "0.0.2"
 description = "Canvas plugin to carry forward commands from previous notes"
 
 [tool.pytest.ini_options]

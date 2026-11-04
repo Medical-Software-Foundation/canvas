@@ -1,0 +1,163 @@
+<!--
+  The resource library, for staff.
+
+  config_json is marked |safe because Django autoescaping would turn the JSON
+  quotes into &quot; and break JSON.parse. It is pre-escaped by services/html.py
+  safe_json(), which escapes < > and & so the value cannot terminate this
+  element.
+
+  Asset hrefs are absolute and versioned: a relative href resolves against
+  whether the page URL happened to end in a slash, which is a silent 404.
+-->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patient Resources</title>
+<link rel="stylesheet" href="{{ asset_base }}/library.css?v={{ cache_bust }}" />
+
+<div id="pr-app">
+  <header class="pr-header">
+    <div class="pr-header-main">
+      <h1>Resource library</h1>
+      <label class="pr-visually-hidden" for="pr-search">Search resources</label>
+      <input
+        class="pr-header-search"
+        type="search"
+        id="pr-search"
+        placeholder="Search resources&hellip;"
+        autocomplete="off"
+      />
+    </div>
+    <div class="pr-header-actions">
+      <button type="button" id="pr-add" class="pr-primary" hidden>+ Add resource</button>
+      <!-- Hidden until a host offers the port to close through. Opened from the
+           provider menu this is a full page, where the only thing the button
+           could do is a window.close() the browser ignores. -->
+      <button type="button" id="pr-close" class="pr-close" aria-label="Close" hidden>&times;</button>
+    </div>
+  </header>
+
+  <p class="pr-readonly-notice" id="pr-readonly" hidden></p>
+
+  <div class="pr-controls">
+    <label class="pr-visually-hidden" for="pr-label-filter">Filter by label</label>
+    <select id="pr-label-filter">
+      <option value="">All labels</option>
+    </select>
+
+    <label class="pr-toggle" id="pr-archived-toggle" hidden>
+      <input type="checkbox" id="pr-show-archived" />
+      Show archived
+    </label>
+  </div>
+
+  <div class="pr-table-wrap">
+    <table class="pr-table">
+      <thead>
+        <tr>
+          <th scope="col">Title</th>
+          <th scope="col" class="pr-col-type">Type</th>
+          <th scope="col" class="pr-col-label">Label</th>
+          <th scope="col" class="pr-col-actions">
+            <span class="pr-visually-hidden">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="pr-rows"></tbody>
+    </table>
+    <div class="pr-empty" id="pr-empty" hidden></div>
+  </div>
+
+  <!-- The listing endpoint has always been paged; without these the page only
+       ever showed the server's default first 50 rows. The range is a live
+       region because Previous and Next change it without moving focus. -->
+  <nav class="pr-pager" id="pr-pager" aria-label="Library pages" hidden>
+    <span class="pr-range" id="pr-range" role="status" aria-live="polite"></span>
+    <div class="pr-pager-buttons">
+      <label class="pr-page-size" for="pr-page-size">
+        Per page
+        <select id="pr-page-size">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+      <button type="button" id="pr-prev">Previous</button>
+      <button type="button" id="pr-next">Next</button>
+    </div>
+  </nav>
+
+  <p class="pr-status" id="pr-status" role="status" aria-live="polite"></p>
+  <p class="pr-error" id="pr-error" role="alert"></p>
+</div>
+
+<dialog id="pr-edit-dialog">
+  <form id="pr-edit-form" method="dialog">
+    <div class="pr-dialog-body">
+      <h2 id="pr-edit-heading">Add resource</h2>
+
+      <p class="pr-dialog-note" id="pr-edit-shared-note" hidden>
+        This resource has already been shared with patients. A change to the title
+        will show in their portal; the link can no longer be changed, and the note
+        each patient was sent stays as it was written for them.
+      </p>
+
+      <label class="pr-field">
+        <span>Title</span>
+        <input type="text" id="pr-edit-title" maxlength="200" required />
+        <span class="pr-field-error" id="pr-edit-title-error"></span>
+      </label>
+
+      <label class="pr-field">
+        <span>Link</span>
+        <input type="url" id="pr-edit-url" maxlength="2000" placeholder="https://" required />
+        <span class="pr-field-error" id="pr-edit-url-error"></span>
+      </label>
+
+      <label class="pr-field">
+        <span>Label (internal, optional)</span>
+        <input type="text" id="pr-edit-label" maxlength="100" />
+        <span class="pr-field-hint">
+          Used to file and filter the library. Patients never see it.
+        </span>
+        <span class="pr-field-error" id="pr-edit-label-error"></span>
+      </label>
+
+      <label class="pr-field">
+        <span>Note for patients (optional)</span>
+        <textarea id="pr-edit-default-note" maxlength="1000" rows="3"></textarea>
+        <span class="pr-field-hint">
+          Shown to the patient with this resource. Whoever shares it can edit this
+          for one patient before sending.
+        </span>
+        <span class="pr-field-error" id="pr-edit-default_note-error"></span>
+      </label>
+
+      <p class="pr-error" id="pr-edit-error" role="alert"></p>
+    </div>
+    <div class="pr-dialog-actions">
+      <button type="button" id="pr-edit-cancel">Cancel</button>
+      <button type="submit" class="pr-primary" id="pr-edit-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pr-confirm-dialog">
+  <form id="pr-confirm-form" method="dialog">
+    <div class="pr-dialog-body">
+      <h2 id="pr-confirm-heading">Archive resource</h2>
+      <p id="pr-confirm-message"></p>
+      <label class="pr-field" id="pr-confirm-typed-field" hidden>
+        <span>Type <strong>WITHDRAW</strong> to confirm</span>
+        <input type="text" id="pr-confirm-typed" autocomplete="off" />
+      </label>
+      <p class="pr-error" id="pr-confirm-error" role="alert"></p>
+    </div>
+    <div class="pr-dialog-actions">
+      <button type="button" id="pr-confirm-cancel">Cancel</button>
+      <button type="submit" class="pr-primary" id="pr-confirm-ok">Confirm</button>
+    </div>
+  </form>
+</dialog>
+
+<script id="pr-config" type="application/json">{{ config_json|safe }}</script>
+<script src="{{ asset_base }}/library.js?v={{ cache_bust }}" defer></script>

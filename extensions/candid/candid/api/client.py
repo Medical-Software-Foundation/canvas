@@ -13,6 +13,14 @@ CACHE_KEY_PREFIX = "candid_bearer_token:"
 CACHE_TTL_SECONDS = 16200
 
 
+class CandidUnconfirmedError(Exception):
+    """Candid answered with a 5xx, so the request may or may not have taken effect."""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        super().__init__(f"HTTP {status_code}: {detail}")
+        self.status_code = status_code
+
+
 class CandidClient:
     """HTTP client for Candid Health's API."""
 
@@ -30,6 +38,11 @@ class CandidClient:
             client_id=secrets["CANDID_CLIENT_ID"],
             client_secret=secrets["CANDID_CLIENT_SECRET"],
         )
+
+    def authenticate(self) -> None:
+        """Get a bearer token now (cached or fetched), so a sign-in failure
+        surfaces before any write is sent. Raises what ``_fetch_token`` raises."""
+        self._token()
 
     def _token(self) -> str:
         # Instance-level cache (same CandidClient object reused within a handler)
@@ -184,8 +197,10 @@ class CandidClient:
         """Report a patient payment to Candid's /patient-payments/v4 endpoint.
 
         Returns ``(was_successful, message)``. On success, ``message`` is the
-        Candid ``patient_payment_id``. On failure, ``message`` is a
-        human-readable error.
+        Candid ``patient_payment_id``. On a 4xx, ``message`` is a
+        human-readable error and the payment wasn't created. Raises
+        ``CandidUnconfirmedError`` on a 5xx: a gateway error or server failure
+        can come after Candid created the payment.
         """
         response = self.http.post(
             f"{self.base_url}/api/patient-payments/v4",
@@ -194,6 +209,8 @@ class CandidClient:
         )
         if response.ok:
             return True, response.json().get("patient_payment_id", "")
+        if response.status_code >= 500:
+            raise CandidUnconfirmedError(response.status_code, self._format_error(response))
         return False, self._format_error(response)
 
     # ------------------------------------------------------------------
