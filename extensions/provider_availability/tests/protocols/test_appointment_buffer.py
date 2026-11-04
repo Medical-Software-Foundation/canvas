@@ -19,8 +19,10 @@ from provider_availability.protocols.appointment_buffer import (
     MAX_BUFFER_DELETES_PER_RECONCILE,
     OnAppointmentCanceled,
     OnAppointmentCreated,
+    OnAppointmentNoShowed,
     OnAppointmentRescheduled,
     OnAppointmentRestored,
+    OnAppointmentUpdated,
     _create_buffer_effects,
     _delete_buffer_effects,
     _buffer_minutes,
@@ -30,6 +32,7 @@ from provider_availability.protocols.appointment_buffer import (
     _on_appointment_created,
     _on_appointment_rescheduled,
     _on_appointment_restored,
+    _on_appointment_status_change,
     reconcile_buffers_for_provider,
 )
 
@@ -488,23 +491,56 @@ class TestOnAppointmentRestored:
 
 
 class TestOnAppointmentCanceled:
-    def test_removes_only_this_appointments_buffers(self):
-        appt = _future_appt()
+    def test_runs_a_delete_only_reconcile_for_the_provider(self):
+        appt = _future_appt(status="cancelled")
 
         with patch(f"{BUFFER_MODULE}._load_appointment", return_value=appt), \
-             patch(f"{BUFFER_MODULE}._delete_buffer_effects", side_effect=lambda a: ["gone"]) as mock_delete, \
+             patch(f"{BUFFER_MODULE}.reconcile_buffers_for_provider", return_value=["gone"]) as mock_rec, \
              patch(f"{BUFFER_MODULE}._create_buffer_effects") as mock_create:
             result = _on_appointment_canceled("appt-1")
 
-            assert mock_delete.mock_calls == [call(appt)]
+            assert mock_rec.mock_calls == [call("p1", draw=False, ignore_appointment_id="appt-1")]
             assert mock_create.mock_calls == []
             assert result == ["gone"]
 
+    def test_keeps_a_neighbours_buffer(self):
+        """The reconcile keeps the span a back-to-back neighbour still wants."""
+        first = _start()
+        second = first + timedelta(minutes=45)
+        gap = (first + timedelta(minutes=30), second)
+        existing = [("mine", *gap), ("theirs", *gap), ("my-pre", first - timedelta(minutes=15), first)]
+        cancelled = _future_appt(status="cancelled")
+        cancelled.start_time = first
+        neighbour = _visit(second, dbid=2)
+        neighbour.id = "appt-2"
+        run = _Reconcile([_rule(15, 15)], existing, [neighbour])
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=cancelled):
+            run.run_with(lambda: _on_appointment_canceled("appt-1"))
+
+        assert len(run.deleted) == 2 and "my-pre" in run.deleted
+        assert run.created == []
+
+    def test_status_not_yet_cancelled_still_clears_its_buffers(self):
+        """The cancel event can be read before the status shows as cancelled;
+        the appointment itself is still treated as wanting no buffers."""
+        start = _start()
+        existing = [
+            ("e-pre", start - timedelta(minutes=15), start),
+            ("e-post", start + timedelta(minutes=30), start + timedelta(minutes=45)),
+        ]
+        still_confirmed = _visit(start)  # id "appt-1", status "confirmed"
+        run = _Reconcile([_rule(15, 15)], existing, [still_confirmed])
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=still_confirmed):
+            run.run_with(lambda: _on_appointment_canceled("appt-1"))
+
+        assert sorted(run.deleted) == ["e-post", "e-pre"]
+        assert run.created == []
+
     def test_missing_appointment_does_nothing(self):
         with patch(f"{BUFFER_MODULE}._load_appointment", return_value=None), \
-             patch(f"{BUFFER_MODULE}._delete_buffer_effects") as mock_delete:
+             patch(f"{BUFFER_MODULE}.reconcile_buffers_for_provider") as mock_rec:
             assert _on_appointment_canceled("appt-1") == []
-            assert mock_delete.mock_calls == []
+            assert mock_rec.mock_calls == []
 
 
 class TestOnAppointmentRescheduled:
@@ -852,6 +888,9 @@ class _Reconcile:
         self.calendars = calendars
 
     def run(self):
+        return self.run_with(lambda: reconcile_buffers_for_provider("p1"))
+
+    def run_with(self, entry):
         cals = []
         for cid in self.calendars:
             cal = MagicMock()
@@ -867,8 +906,9 @@ class _Reconcile:
             mock_events.filter.return_value.values_list.return_value = list(self.existing)
             (mock_appts.filter.return_value.exclude.return_value.exclude.return_value
              .select_related.return_value) = list(self.visits)
-            result = reconcile_buffers_for_provider("p1")
+            result = entry()
             self.events_query = mock_events.filter.call_args
+            self.appts_query = mock_appts.filter
             self.appts_queried = mock_appts.filter.called
         self.deleted = [c.kwargs["event_id"] for c in mock_effect.call_args_list if "event_id" in c.kwargs]
         self.created = [
@@ -1045,3 +1085,102 @@ class TestNeighbouringDayBuffers:
         result = TestDeleteKeepsANeighborsBuffer()._run(appt, [], [theirs], [tomorrow], _rule(30, 0))
 
         assert result == []
+
+
+# ── Status-only cancel (GraphQL updateAppointment) ─────────────────────────
+
+
+class TestStatusOnlyCancel:
+    """A cancel or no-show that only changes the status must clear the visit's
+    buffers. Live on 0.23.33, cancelling through GraphQL ``updateAppointment``
+    left every Buffer event in place, so the reconcile runs on the status
+    change itself, whichever appointment event carries it."""
+
+    def test_cancelled_visits_buffers_are_deleted_on_update(self):
+        """The reported bug, end to end: APPOINTMENT_UPDATED carrying a
+        status-only cancel deletes the visit's pre and post buffer."""
+        start = _start()
+        existing = [
+            ("e-pre", start - timedelta(minutes=15), start),
+            ("e-post", start + timedelta(minutes=30), start + timedelta(minutes=45)),
+        ]
+        cancelled = _future_appt(status="cancelled")
+        mock_event = MagicMock()
+        mock_event.target.id = "appt-1"
+        # The cancelled visit is no longer among the active visits the reconcile reads.
+        run = _Reconcile([_rule(15, 15)], existing, [])
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=cancelled):
+            run.run_with(lambda: OnAppointmentUpdated(mock_event).compute())
+
+        assert sorted(run.deleted) == ["e-post", "e-pre"]
+        assert run.created == []
+
+    @pytest.mark.parametrize("status", ["cancelled", "noshowed"])
+    def test_inactive_status_reconciles_without_drawing(self, status):
+        appt = _future_appt(status=status)
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=appt), \
+             patch(f"{BUFFER_MODULE}.reconcile_buffers_for_provider", return_value=["gone"]) as mock_rec:
+            assert _on_appointment_status_change("appt-1") == ["gone"]
+            assert mock_rec.mock_calls == [call("p1", draw=False, ignore_appointment_id="appt-1")]
+
+    @pytest.mark.parametrize("status", ["confirmed", "unconfirmed", "arrived", "roomed", "exited"])
+    def test_active_status_update_does_nothing(self, status):
+        """An ordinary edit must not trigger a provider-wide reconcile."""
+        appt = _future_appt(status=status)
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=appt), \
+             patch(f"{BUFFER_MODULE}.reconcile_buffers_for_provider") as mock_rec:
+            assert _on_appointment_status_change("appt-1") == []
+            assert mock_rec.mock_calls == []
+
+    def test_missing_appointment_does_nothing(self):
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=None), \
+             patch(f"{BUFFER_MODULE}.reconcile_buffers_for_provider") as mock_rec:
+            assert _on_appointment_status_change("appt-1") == []
+            assert mock_rec.mock_calls == []
+
+    def test_appointment_without_provider_does_nothing(self):
+        appt = _future_appt(status="cancelled")
+        appt.provider = None
+        with patch(f"{BUFFER_MODULE}._load_appointment", return_value=appt), \
+             patch(f"{BUFFER_MODULE}.reconcile_buffers_for_provider") as mock_rec:
+            assert _on_appointment_status_change("appt-1") == []
+            assert mock_rec.mock_calls == []
+
+    def test_draw_false_never_draws_missing_buffers(self):
+        """Two events can carry one cancel; a delete-only sweep cannot double-draw."""
+        start = _start()
+        run = _Reconcile([_rule(0, 10)], [], [_visit(start)])
+        cals = [MagicMock(id="cal-1")]
+        with patch(f"{BUFFER_MODULE}.resolve_provider_name", return_value="Dr X"), \
+             patch(f"{BUFFER_MODULE}.get_admin_calendars", return_value=cals), \
+             patch(f"{BUFFER_MODULE}.get_rules_for_provider", return_value=run.rules), \
+             patch(f"{BUFFER_MODULE}.get_admin_calendar_id", return_value=("cal-1", [])) as mock_cal, \
+             patch(f"{BUFFER_MODULE}.EventModel.objects") as mock_events, \
+             patch(f"{BUFFER_MODULE}.Appointment.objects") as mock_appts, \
+             patch(f"{BUFFER_MODULE}.EventEffect") as mock_effect:
+            mock_events.filter.return_value.values_list.return_value = []
+            (mock_appts.filter.return_value.exclude.return_value.exclude.return_value
+             .select_related.return_value) = [_visit(start)]
+            assert reconcile_buffers_for_provider("p1", draw=False) == []
+            assert mock_effect.mock_calls == []
+            assert mock_cal.mock_calls == []
+
+    def test_cancelled_and_no_showed_visits_want_no_buffers(self):
+        """Both inactive statuses are left out of the visits that keep buffers."""
+        run = _Reconcile([_rule(15, 15)], [], []).run()
+        excluded = run.appts_query.return_value.exclude.call_args_list[0].kwargs
+        assert set(excluded["status__in"]) == {"cancelled", "noshowed"}
+
+    @pytest.mark.parametrize(
+        ("handler", "fn"),
+        [
+            (OnAppointmentUpdated, "_on_appointment_status_change"),
+            (OnAppointmentNoShowed, "_on_appointment_status_change"),
+        ],
+    )
+    def test_handlers_delegate(self, handler, fn):
+        mock_event = MagicMock()
+        mock_event.target.id = "appt-9"
+        with patch(f"{BUFFER_MODULE}.{fn}", return_value=[]) as mock_fn:
+            assert handler(mock_event).compute() == []
+            assert mock_fn.mock_calls == [call("appt-9")]
