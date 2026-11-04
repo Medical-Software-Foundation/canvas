@@ -580,48 +580,63 @@ def test_token_keeps_working_after_commit_but_not_once_entered_in_error(mocker: 
     assert "state" not in kwargs  # committed is fine; the note being open is what counts
 
 
-def test_expired_token_keeps_working_on_a_live_command(mocker: MagicMock) -> None:
-    # Signed 5 hours ago with the 4-hour lifetime, and its Assess never edited since.
+def test_expired_token_is_refused(mocker: MagicMock) -> None:
     import time
 
     expired = sign_token(NOTE_ID, COMMAND_ID, "secret", 4 * 3600, now=time.time() - 5 * 3600)
-    assert verify_token(expired, "secret") is None
-    api = _panel_api(mocker, expired, {"command": "plan"})
     _patch_panel_note(mocker, _note_with_body())
-    effect, response = api.quick_add()
-    assert response.status_code == 200
-    assert effect.type == EffectType.ORIGINATE_PLAN_COMMAND
-
-
-def test_expired_token_is_refused_once_its_command_is_entered_in_error(mocker: MagicMock) -> None:
-    import time
-
-    expired = sign_token(NOTE_ID, COMMAND_ID, "secret", 4 * 3600, now=time.time() - 5 * 3600)
-    api = _panel_api(mocker, expired, {"command": "plan"})
-    mocker.patch(
-        "charting_tools.api.panel_api.Command.objects.filter"
-    ).return_value.exclude.return_value.exists.return_value = False
-    [response] = api.quick_add()
-    assert response.status_code == 401
-
-
-def test_expired_token_is_refused_on_a_closed_note(mocker: MagicMock) -> None:
-    import time
-
-    expired = sign_token(NOTE_ID, COMMAND_ID, "secret", 4 * 3600, now=time.time() - 5 * 3600)
-    api = _panel_api(mocker, expired, {"command": "plan"})
-    _patch_panel_note(mocker, _note_with_body())
-    mocker.patch("charting_tools.api.panel_api.note_is_open", return_value=False)
-    [response] = api.quick_add()
-    assert response.status_code == 409
-
-
-def test_expired_token_with_a_bad_signature_is_refused(mocker: MagicMock) -> None:
-    import time
-
-    expired = sign_token(NOTE_ID, COMMAND_ID, "other-key", 4 * 3600, now=time.time() - 5 * 3600)
     [response] = _panel_api(mocker, expired, {"command": "plan"}).quick_add()
     assert response.status_code == 401
+
+
+class TestNoteOpenedPanels:
+    H = "charting_tools.handlers.command_panel"
+
+    def _run(self, mocker: MagicMock, cache: MagicMock, commands: list, *, open_note: bool = True,
+             secrets: dict | None = None) -> tuple[list, MagicMock]:
+        from charting_tools.handlers.command_panel import NoteOpenedPanels
+
+        mocker.patch(f"{self.H}.Note.objects.filter").return_value.values_list.return_value.first.return_value = 7
+        mocker.patch(f"{self.H}.note_is_open", return_value=open_note)
+        mocker.patch(f"{self.H}.panel_kinds", return_value=["quickpick"])
+        query = mocker.patch(f"{self.H}.Command.objects.filter")
+        query.return_value.order_by.return_value.values_list.return_value = commands
+        event = SimpleNamespace(type=EventType.NOTE_OPENED, name="NOTE_OPENED",
+                                context={"note": {"id": NOTE_ID}, "user": {"id": "staff1"}},
+                                target=SimpleNamespace(id="patient1"))
+        return NoteOpenedPanels(event=event, secrets=SECRETS if secrets is None else secrets).compute(), query
+
+    def test_each_staged_assess_and_diagnose_gets_a_fresh_token(self, mocker: MagicMock, cache: MagicMock) -> None:
+        other = "e" * 32
+        effects, query = self._run(mocker, cache, [(COMMAND_ID, "assess"), (other, "diagnose")])
+        assert [e.type for e in effects] == [EffectType.SET_COMMAND_CUSTOM_HTML] * 2
+        from uuid import UUID
+
+        assert [UUID(payload(e)["data"]["command_id"]).hex for e in effects] == [UUID(COMMAND_ID).hex, other]
+        for effect, command_id in zip(effects, [COMMAND_ID, other]):
+            token = payload(effect)["data"]["custom_html"].split("|", 1)[1]
+            assert verify_token(token, "secret") == (NOTE_ID, command_id)
+        assert query.call_args.kwargs == {
+            "note_id": 7,
+            "schema_key__in": ["assess", "diagnose"],
+            "state": "staged",
+            "committer__isnull": True,
+            "entered_in_error__isnull": True,
+        }
+        assert cache.store[f"charting_tools_panel:{COMMAND_ID}"] == "1"
+
+    def test_closed_note_is_left_alone(self, mocker: MagicMock, cache: MagicMock) -> None:
+        effects, query = self._run(mocker, cache, [(COMMAND_ID, "assess")], open_note=False)
+        assert effects == []
+        query.assert_not_called()
+
+    def test_needs_both_settings(self, mocker: MagicMock, cache: MagicMock) -> None:
+        effects, _ = self._run(mocker, cache, [(COMMAND_ID, "assess")], secrets={"PANEL_TOKEN_SIGNING_KEY": "secret"})
+        assert effects == []
+
+    def test_note_with_no_panel_commands(self, mocker: MagicMock, cache: MagicMock) -> None:
+        effects, _ = self._run(mocker, cache, [])
+        assert effects == []
 
 
 def test_catalog_refuses_a_closed_note(mocker: MagicMock) -> None:

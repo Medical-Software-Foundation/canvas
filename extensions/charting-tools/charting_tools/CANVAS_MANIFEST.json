@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.254.0",
-    "plugin_version": "0.17.3",
+    "plugin_version": "0.18.0",
     "name": "charting_tools",
     "description": "Admins build note templates, quickpicks, and order sets from pre-filled commands. Templates appear in the note body \"/\" menu and insert automatically for chosen note types; quickpicks and order sets appear in the \"/\" menu and in a panel on Assess and Diagnose commands, matched to the charted ICD-10.",
     "components": {
@@ -109,7 +109,7 @@
             },
             {
                 "class": "charting_tools.handlers.command_panel:AssessPanel",
-                "description": "Attaches the quickpick and order-set panel to Assess commands while they are charted, and clears it before commit.",
+                "description": "Attaches the quickpick and order-set panel to Assess commands, and re-signs it just before commit.",
                 "data_access": {
                     "event": "",
                     "read": [
@@ -120,10 +120,22 @@
             },
             {
                 "class": "charting_tools.handlers.command_panel:DiagnosePanel",
-                "description": "Attaches the quickpick and order-set panel to Diagnose commands while they are charted, and clears it before commit.",
+                "description": "Attaches the quickpick and order-set panel to Diagnose commands, and re-signs it just before commit.",
                 "data_access": {
                     "event": "",
                     "read": [
+                        "canvas_sdk.v1.data.command.Command"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.command_panel:NoteOpenedPanels",
+                "description": "Re-signs the panel on a note's staged Assess and Diagnose commands when the note is opened, so an untouched command's panel keeps working.",
+                "data_access": {
+                    "event": "NOTE_OPENED",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
                         "canvas_sdk.v1.data.command.Command"
                     ],
                     "write": []

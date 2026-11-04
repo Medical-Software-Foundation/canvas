@@ -118,18 +118,12 @@ class PanelAPI(SimpleAPI):
         """The token's note and command, while that command is still on the note.
 
         The command may be committed: its panel stays while the note is open.
-        The token's expiry isn't enforced here. The token is saved in the
-        command's panel and is only re-signed when the command is edited, so an
-        Assess or Diagnose left untouched for hours would otherwise keep an
-        expired token, even across page reloads. What bounds a token instead is
-        its signature, its command not being entered in error, and every route
-        refusing a note that isn't open.
         """
         token = str(self._params().get("token") or "")
         key = panel_signing_key(self.secrets)
         if not token or not key:
             return None
-        verified = verify_token(token, key, allow_expired=True)
+        verified = verify_token(token, key)
         if verified is None:
             return None
         note_uuid, origin_command_uuid = verified
