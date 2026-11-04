@@ -214,6 +214,8 @@
     .vf video { width: 100%; height: 100%; object-fit: contain; }
     .vfmsg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; font-size: 14px; line-height: 1.5; padding: 24px; }
     .camrow { margin-top: 9px; display: flex; justify-content: center; }
+    .nativecam { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 16px; border: 1.5px dashed var(--border); border-radius: 12px; background: #fff; text-align: center; }
+    .nativecam .sub { margin: 0; }
     .camrow .shutter { width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--navy); background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .05s; }
     .camrow .shutter span { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); display: block; }
     .camrow .shutter:active { transform: scale(.94); }
@@ -526,6 +528,11 @@
         <div class="cappanel hidden" id="panCamera">
           <div class="vf"><video id="camVideo" playsinline autoplay muted></video><div class="vfmsg hidden" id="camMsg"></div><div class="flash" id="camFlash"></div></div>
           <div class="camrow"><button type="button" class="shutter" id="shutter" aria-label="Capture page"><span></span></button></div>
+          <div class="nativecam hidden" id="nativeCam">
+            <button type="button" class="btn primary" id="nativeCamBtn">Take Photo</button>
+            <p class="sub">Take a photo of each page.</p>
+            <input type="file" id="nativeCamInput" accept="image/*" capture="environment" hidden />
+          </div>
         </div>
         <div class="cappanel hidden" id="panUpload">
           <label class="drop" id="dropZone">
@@ -794,7 +801,9 @@
       var p = window.__consentPort;
       if (p) {
         try { p.postMessage({ type: 'RESIZE', width: w, height: h }); } catch (e) {}
-        try { p.postMessage({ type: 'RESIZE', width: '100vw', height: '100vh' }); } catch (e) {}
+        // dvh is the height actually visible: on iPad Safari, 100vh includes the space
+        // under an open tab bar, which pushed the footer buttons off the bottom.
+        try { p.postMessage({ type: 'RESIZE', width: '100vw', height: '100dvh' }); } catch (e) {}
       }
     };
     function resizeModal(w, h) { window.__wantW = w; window.__wantH = h; window.__applyModalSize(); }
@@ -1305,10 +1314,27 @@
       if (which === 'camera') startCamera(); else stopCamera();
       if ($('scCam').classList.contains('on')) capFooter('camera');
     }
+    // Phones and tablets (iPad, iPhone, Android) take the photo with the device's own
+    // camera app: full resolution, focused and exposed, with flash where the device has
+    // one. A frame copied from the live video comes out dark on iPad. Computers keep
+    // the live viewfinder. iPadOS Safari reports itself as a Mac, so touch tells them apart.
+    var NATIVE_CAMERA = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent || '') ||
+      (/Macintosh/.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1);
+    if (NATIVE_CAMERA) {
+      document.querySelector('#panCamera .vf').classList.add('hidden');
+      document.querySelector('#panCamera .camrow').classList.add('hidden');
+      $('nativeCam').classList.remove('hidden');
+    }
+    $('nativeCamBtn').addEventListener('click', function () { $('nativeCamInput').click(); });
+    $('nativeCamInput').addEventListener('change', function () {
+      handleFiles(this.files); this.value = '';
+      maybeStartReview();
+    });
     // The shutter is disabled until the camera stream is actually producing frames.
     var CAMERA_WARMUP_MS = 1000;
     function setShutterReady(ready) { var b = $('shutter'); if (b) b.disabled = !ready; }
     function startCamera() {
+      if (NATIVE_CAMERA) return;  // the device's camera app opens from Take Photo
       var vid = $('camVideo');
       setShutterReady(false);
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showCamMsg('Camera isn’t available here. Use the Upload tab.'); return; }
