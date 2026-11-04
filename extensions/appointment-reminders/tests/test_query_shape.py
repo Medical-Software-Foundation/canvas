@@ -183,3 +183,22 @@ def test_the_scan_keeps_checked_in_visits_for_the_telehealth_join() -> None:
     in_list = sql.split('"status" IN (')[1].split(")")[0]
     statuses = {s.strip().strip("'\"") for s in in_list.split(",")}
     assert statuses == {"unconfirmed", "attempted", "confirmed", "arrived", "roomed"}
+
+
+def test_the_scan_skips_appointments_entered_in_error() -> None:
+    """An appointment marked entered in error was never a real visit. Widening
+    the scan to arrived/roomed (PLUGIN-526) must not start messaging those; the
+    filter has to require entered_in_error IS NULL."""
+    sql = str(_reminder_scan_qs().query)
+    assert '"entered_in_error_id" IS NULL' in sql
+
+
+def test_an_entered_in_error_arrived_row_is_excluded_by_the_scan_filter() -> None:
+    """Evaluate the scan's WHERE clause against an in-memory arrived row that
+    was entered in error, without a database: the row must not match."""
+    where = _reminder_scan_qs().query.where
+    lookups = {child.lhs.target.attname: child for child in where.children}
+    assert "entered_in_error_id" in lookups
+    assert lookups["entered_in_error_id"].lookup_name == "isnull"
+    assert lookups["entered_in_error_id"].rhs is True
+    assert "arrived" in lookups["status"].rhs
