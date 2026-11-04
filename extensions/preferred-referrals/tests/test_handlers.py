@@ -59,6 +59,35 @@ def test_matches_are_merged_ahead_of_directory_results():
     assert json.loads(effects[0].payload) == [{"text": "ours"}, {"text": "theirs"}]
 
 
+def test_non_preferred_directory_rows_for_the_same_specialty_stay_under_ours():
+    """The real merge keeps every directory row it was given, under the preferred one.
+
+    Guards the live question "did the plugin hide a non-preferred cardiology
+    practice?": whatever the directory search returns is passed through.
+    """
+    provider = MagicMock()
+    provider.as_search_result.return_value = {
+        "text": "Preferred Cardiology - Cardiology",
+        "value": 7,
+        "annotations": ["Preferred"],
+    }
+    directory_rows = [
+        {"text": "Bay Cardiology - Cardiology", "extra": {"contact": {"id": 1}}},
+        {"text": "Harbor Heart - Cardiology", "extra": {}},
+    ]
+    with patch(
+        "preferred_referrals.handlers.refer_search.matching_preferred",
+        return_value=[provider],
+    ):
+        effects = _search({"search_term": "Cardiology", "results": directory_rows})
+    texts = [row["text"] for row in json.loads(effects[0].payload)]
+    assert texts == [
+        "Preferred Cardiology - Cardiology",
+        "Bay Cardiology - Cardiology",
+        "Harbor Heart - Cardiology",
+    ]
+
+
 def test_missing_search_term_is_treated_as_empty():
     with patch(
         "preferred_referrals.handlers.refer_search.matching_preferred", return_value=[]
