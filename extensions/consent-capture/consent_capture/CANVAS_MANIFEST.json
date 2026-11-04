@@ -48,7 +48,7 @@
         "handlers": [
             {
                 "class": "consent_capture.handlers.consent_settings_app:ConsentSettingsApp",
-                "description": "App drawer icon that opens Consent Settings, shown only to consent admins (CONSENT_ADMIN_USERS and the instance root user)."
+                "description": "App drawer icon that opens Consent Settings, shown only to consent admins (staff ids in CONSENT_ADMIN_USERS)."
             }
         ],
         "commands": [],

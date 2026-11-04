@@ -8,7 +8,7 @@ so it is straightforward to unit-test.
 import re
 from datetime import datetime, timezone
 
-from canvas_sdk.v1.data import Patient, PatientConsent, Staff
+from canvas_sdk.v1.data import Patient, PatientConsent
 
 from logger import log
 
@@ -25,7 +25,7 @@ from consent_capture.models import (
     ConsentDefinition,
     ConsentPracticeSettings,
 )
-from consent_capture.signing import SIGNED_WITH_LABELS, statement_fingerprint
+from consent_capture.signing import SIGNED_WITH_LABELS, questions_fingerprint, statement_fingerprint
 
 
 def active_definitions():
@@ -345,6 +345,7 @@ def _picker_item(d, info, is_active):
         # Sent back when recording, so the server can refuse a consent whose text
         # changed after the signer was shown it.
         "statement_sha256": statement_fingerprint(paragraphs)[1],
+        "questions_sha256": questions_fingerprint(d.questions or []),
         "method_enabled": bool(d.method_enabled),
         "obtained_by_enabled": bool(d.obtained_by_enabled),
         "capacity_enabled": bool(d.capacity_enabled),
@@ -494,63 +495,42 @@ def patients_missing_required():
     return active_ids - (satisfied or set())
 
 
-def _admin_identifiers(raw):
-    """Parse the CONSENT_ADMIN_USERS plugin variable into a lower-cased set. Entries
+def normalize_staff_id(value):
+    """A staff id in the form the allow-list compares: lower case, no spaces or
+    dashes (Canvas staff keys are 32 hex characters; a dashed copy also matches)."""
+    return re.sub(r"[\s-]", "", str(value or "")).lower()
+
+
+def _admin_ids(raw):
+    """Parse the CONSENT_ADMIN_USERS plugin variable into a set of staff ids. Entries
     are separated by commas, semicolons, or newlines."""
     if not raw:
         return set()
-    return {part.strip().lower() for part in re.split(r"[,;\n]+", str(raw)) if part.strip()}
-
-
-# The instance root/superuser always has access, regardless of CONSENT_ADMIN_USERS.
-# Canvas provisions it as a Staff named "Canvas Support"; also accept the literal "root".
-ROOT_IDENTIFIERS = {"root", "canvas support"}
-
-
-def _user_identifiers(staff_id):
-    """Lower-cased identifiers for the logged-in staff: their id plus first/last/full
-    name (from the Staff record). Used to match against the admin allow-list."""
-    identifiers = {str(staff_id).strip().lower()}
-    row = (
-        Staff.objects.filter(id=staff_id)
-        .values_list("first_name", "last_name")
-        .first()
-    )
-    if row:
-        first = (row[0] or "").strip().lower()
-        last = (row[1] or "").strip().lower()
-        for value in (first, last, ("%s %s" % (first, last)).strip()):
-            if value:
-                identifiers.add(value)
-    return identifiers
+    ids = (normalize_staff_id(part) for part in re.split(r"[,;\n]+", str(raw)))
+    return {staff_id for staff_id in ids if staff_id}
 
 
 def is_consent_admin(staff_id, allowed_raw):
     """Whether the logged-in staff may open Consent Settings.
 
-    The instance root user (Staff named "Canvas Support", or the literal "root")
-    always has access, no matter what. Otherwise the allow-list (CONSENT_ADMIN_USERS
-    variable) holds Staff ids and/or full names ("First Last"), matched
-    case-insensitively.
+    Matched on the staff id only: CONSENT_ADMIN_USERS lists the staff ids of the
+    people who manage consents. Names aren't used, so a staff member who shares a
+    name with an admin, or whose name is "Root" or "Canvas Support", gets no access.
 
-    Fails closed: an empty/unset allow-list grants access to **root only** and denies
-    every other staff member (a missing config must never open the admin surface)."""
-    if not staff_id:
+    Fails closed: an empty/unset allow-list denies everyone (a missing config must
+    never open the admin surface). The "You don't have access" page shows the staff
+    member's id so they can send it to whoever sets the variable."""
+    staff_key = normalize_staff_id(staff_id)
+    if not staff_key:
         return False
-    # The literal root id is authorized without a Staff lookup.
-    if str(staff_id).strip().lower() in ROOT_IDENTIFIERS:
-        return True
-    identifiers = _user_identifiers(staff_id)
-    if identifiers & ROOT_IDENTIFIERS:  # root matched by name (e.g. "Canvas Support")
-        return True
-    allowed = _admin_identifiers(allowed_raw)
+    allowed = _admin_ids(allowed_raw)
     if not allowed:
         log.warning(
             "CONSENT_ADMIN_USERS is not configured; denying Consent Settings access "
-            "to non-root staff %s" % staff_id
+            "to staff %s" % staff_id
         )
         return False
-    return bool(identifiers & allowed)
+    return staff_key in allowed
 
 
 # --------------------------------------------------------------------------- #

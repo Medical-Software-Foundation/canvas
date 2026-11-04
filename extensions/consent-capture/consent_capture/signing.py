@@ -140,3 +140,14 @@ def statement_fingerprint(paragraphs):
     later edit to the consent in Consent Settings is detectable."""
     text = "\n".join(paragraphs or [])
     return text, hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def questions_fingerprint(questions):
+    """SHA-256 of the questions as shown (id, type and prompt, in order). Sent back
+    with a recording so a question reworded while the consent was open is refused,
+    like a change to the consent text."""
+    text = "\n".join(
+        "%s\t%s\t%s" % (q.get("id") or "", q.get("type") or "", q.get("prompt") or "")
+        for q in questions or []
+    )
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()

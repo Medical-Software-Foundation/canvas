@@ -936,8 +936,10 @@
         row.addEventListener('keydown', function (e) { if (e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startWizard(i); } });
         return row;
       }
-      if (due.length) { var b1 = group('req', 'Required', due.length, due); due.forEach(function (i) { b1.appendChild(actionRow(i, 'need', 'Needed')); }); }
-      if (available.length) { var b2 = group('opt', 'Optional', available.length, available); available.forEach(function (i) { b2.appendChild(actionRow(i, 'opt', 'Optional')); }); }
+      // Section counts are what's still outstanding; declined consents are listed but not counted.
+      function outstanding(list) { return list.filter(function (i) { return CONSENTS[i].status !== 'declined'; }).length; }
+      if (due.length) { var b1 = group('req', 'Required', outstanding(due), due); due.forEach(function (i) { b1.appendChild(actionRow(i, 'need', 'Needed')); }); }
+      if (available.length) { var b2 = group('opt', 'Optional', outstanding(available), available); available.forEach(function (i) { b2.appendChild(actionRow(i, 'opt', 'Optional')); }); }
       if (RECORDS.length) {
         var b3 = group('onf', 'On file', RECORDS.length, null);
         RECORDS.forEach(function (r) { b3.appendChild(onFileRow(r)); });
@@ -974,15 +976,19 @@
       btn.addEventListener('click', function () { item.classList.toggle('open'); });
       return item;
     }
+    // "Select all" picks outstanding consents only. A consent the patient declined
+    // can still be selected on its own, but a bulk pick doesn't put it back in front
+    // of them.
+    function bulkPickable(i) { return batchMethods(CONSENTS[i]).length && CONSENTS[i].status !== 'declined'; }
     function pickMany(idxs, on) {
-      idxs.forEach(function (i) { if (on && batchMethods(CONSENTS[i]).length) PICKED[i] = true; else delete PICKED[i]; });
+      idxs.forEach(function (i) { if (!on) delete PICKED[i]; else if (bulkPickable(i)) PICKED[i] = true; });
       var boxes = document.querySelectorAll('#hubList .pick');
       for (var k = 0; k < boxes.length; k++) boxes[k].checked = !!PICKED[boxes[k].getAttribute('data-idx')];
       syncPicks();
     }
     // A section's "Select all" shows a dash when only some of its consents are selected.
     function setTri(cb, idxs) {
-      var pickable = idxs.filter(function (i) { return batchMethods(CONSENTS[i]).length; });
+      var pickable = idxs.filter(bulkPickable);
       var n = pickable.filter(function (i) { return PICKED[i]; }).length;
       cb.checked = n > 0 && n === pickable.length;
       cb.indeterminate = n > 0 && n < pickable.length;
@@ -1203,6 +1209,7 @@
         method: method, answers: answers || {},
         // Fingerprint of the consent text shown; the server refuses if it has changed.
         statement_sha256: c.statement_sha256 || '',
+        questions_sha256: c.questions_sha256 || '',
         local_date: st.date || localDateISO(), local_time: localTimeStr(), local_tz: localTZ(),
         consent_by: c.obtained_by_enabled ? st.who : 'patient', representative_name: st.repName, representative_relationship: st.repRel,
         capacity_confirmed: st.capacity === 'yes'

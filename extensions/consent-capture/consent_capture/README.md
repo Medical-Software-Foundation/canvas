@@ -172,6 +172,12 @@ asked and answered: it clears the red button and the banner and shows as
 **Declined** tag, so it can be recorded later if the patient changes their mind.
 A declined consent has no method on its PDF or record, since nothing was signed.
 
+> **Upgrade note (1.38.0): admin access.** `CONSENT_ADMIN_USERS` now matches staff
+> ids only. Names in the list no longer grant access, and the "Canvas Support" /
+> root user is no longer let in automatically. Before upgrading, replace any names
+> with staff ids, and add the id of anyone who manages consents. A staff member
+> without access sees their staff id on the "You don't have access" page.
+
 > **Upgrade note (1.38.0).** Declines recorded in the patient portal (FHIR
 > `Consent` state `rejected_via_patient_portal`) now count as asked and answered
 > too, so a required consent the patient declined in the portal no longer turns
@@ -276,7 +282,7 @@ to every consent:
 |----------|----------|-----------|---------|-------------|
 | `CANVAS_FHIR_CLIENT_ID` | ✅ | 🔒 | — | OAuth client ID for the Canvas FHIR API. |
 | `CANVAS_FHIR_CLIENT_SECRET` | ✅ | 🔒 | — | OAuth client secret for the Canvas FHIR API. |
-| `CONSENT_ADMIN_USERS` | — | — | `""` | Comma/semicolon/newline-separated Staff ids or full names allowed into Consent Settings and the banner tools. Fails closed: **empty = root / "Canvas Support" only** (all other staff denied). Add staff here to grant them access. |
+| `CONSENT_ADMIN_USERS` | ✅ | — | `""` | Comma/semicolon/newline-separated **staff ids** allowed into Consent Settings and the banner tools. Matched on the id only (case and dashes ignored). Fails closed: **empty = nobody**, Canvas Support included. A staff member who opens Consent Settings without access sees their own staff id on the "You don't have access" page, ready to add here. |
 | `CONSENT_BANNERS_ENABLED` | — | — | `true` | Feature flag for the "Required consent not on file." chart/profile banner. **Opt-out:** any value except an explicit off (`false`/`0`/`no`/`off`/`disabled`) keeps banners on. When off, the event handler clears each banner as patients hit events, and the banner backfill removes them all at once. Does **not** affect the chart button. |
 | `CONSENT_SYSTEM` | — | — | `INTERNAL` | Legacy default coding system; identity now comes from the selected coding, so this is rarely used. |
 
@@ -312,8 +318,7 @@ Declared in `CANVAS_MANIFEST.json`:
 **App drawer**
 
 - **`consent_settings_app:ConsentSettingsApp`** — a **Consent Settings** icon in the
-  app drawer, shown only to consent admins (`CONSENT_ADMIN_USERS` and the instance root
-  user). It opens the Consent Settings page served by `consent_api:ConsentAdminApi` at
+  app drawer, shown only to consent admins (staff ids in `CONSENT_ADMIN_USERS`). It opens the Consent Settings page served by `consent_api:ConsentAdminApi` at
   `/admin/settings`, which also stays reachable by URL and from the picker's gear icon.
   Per-user app drawer entries need SDK 0.243.0 (Canvas release 1.364.0 or later).
 
@@ -324,8 +329,8 @@ The Written-consent capture flow loads client libraries from `cdn.jsdelivr.net`
 ### Security model
 
 - All endpoints use `StaffSessionAuthMixin` — **only logged-in staff** reach them.
-  Admin endpoints additionally require `_is_admin()` (root / "Canvas Support", or a
-  member of `CONSENT_ADMIN_USERS`).
+  Admin endpoints additionally require `_is_admin()`: the logged-in staff id is in
+  `CONSENT_ADMIN_USERS`. Names are never matched.
 - The collecting staff member's identity is read from the authenticated session,
   never from the browser.
 - The capture endpoint re-loads the selected consent's verbiage/templates from the

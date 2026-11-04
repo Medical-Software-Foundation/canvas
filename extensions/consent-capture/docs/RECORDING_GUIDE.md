@@ -205,9 +205,6 @@ A declined consent shows as **Declined** under On File and no longer turns the *
 button red. It stays in the list with a gray **Declined** tag, so it can be recorded later if
 the patient changes their mind.
 
-When a consent is a HIPAA authorization, select **Print a copy** after recording and give the
-copy to the signer.
-
 ---
 
 ## 5. Renewing an expired consent
@@ -244,6 +241,8 @@ The new consent replaces the expired one under **On File**.
   neutral gray entry point. You don't turn them off.
 - **The person recording is you.** The consent is filed under your signed-in Canvas account,
   so you don't enter your own name anywhere.
+- **HIPAA authorizations.** When a consent is a HIPAA authorization, select **Print a copy**
+  after recording and give the copy to the signer.
 
 ---
 

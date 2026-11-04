@@ -13,6 +13,7 @@ from consent_capture.signing import (
     clean_signature_jpeg,
     jpeg_info,
     name_key,
+    questions_fingerprint,
     same_name,
     statement_fingerprint,
 )
@@ -178,3 +179,17 @@ class TestStatementFingerprint:
     def test_empty(self):
         assert statement_fingerprint([]) == ("", hashlib.sha256(b"").hexdigest())
         assert statement_fingerprint(None)[0] == ""
+
+
+class TestQuestionsFingerprint:
+    def test_hashes_id_type_and_prompt_in_order(self):
+        qs = [{"id": "a", "type": "yes_no", "prompt": "One?"}, {"id": "b", "type": "text", "prompt": "Two?"}]
+        assert questions_fingerprint(qs) == hashlib.sha256(b"a\tyes_no\tOne?\nb\ttext\tTwo?").hexdigest()
+
+    def test_rewording_changes_the_hash(self):
+        q = {"id": "a", "type": "yes_no", "prompt": "Share with your insurer?"}
+        assert questions_fingerprint([q]) != questions_fingerprint([dict(q, prompt="Share with anyone?")])
+
+    def test_empty(self):
+        assert questions_fingerprint([]) == hashlib.sha256(b"").hexdigest()
+        assert questions_fingerprint(None) == hashlib.sha256(b"").hexdigest()

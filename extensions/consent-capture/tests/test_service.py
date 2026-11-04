@@ -221,6 +221,7 @@ class TestPickerItems:
         assert items[0]["paragraphs"] == ["Read."]
         # Fingerprint of the text shown, sent back when recording.
         assert items[0]["statement_sha256"] == hashlib.sha256(b"Read.").hexdigest()
+        assert items[0]["questions_sha256"] == hashlib.sha256(b"q1\t\tOK?").hexdigest()
         assert items[0]["questions"] == [{"id": "q1", "prompt": "OK?"}]
         assert items[0]["method_options"] == ["Verbal"]         # normalized subset
         assert items[0]["required"] is True
@@ -518,65 +519,39 @@ class TestConsentRecords:
 
 
 class TestIsConsentAdmin:
-    def _stub_staff(self, mock_staff, first, last):
-        (
-            mock_staff.objects.filter.return_value.values_list.return_value.first.return_value
-        ) = (first, last) if first is not None else None
+    ADMIN = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
 
-    def test_empty_list_denies_non_root(self):
+    def test_empty_list_denies_everyone(self):
         # Fails closed: an unset allow-list must not open the admin surface.
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Jane", "Doe")
-            assert is_consent_admin("s1", "") is False
-            assert is_consent_admin("s1", None) is False
+        assert is_consent_admin(self.ADMIN, "") is False
+        assert is_consent_admin(self.ADMIN, None) is False
 
-    def test_empty_list_still_allows_root(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Canvas", "Support")
-            assert is_consent_admin("s1", "") is True
-
-    def test_configured_but_no_staff_id_denied(self):
-        assert is_consent_admin("", "Jane Doe") is False
+    def test_no_staff_id_denied(self):
+        assert is_consent_admin("", self.ADMIN) is False
 
     def test_matches_by_staff_id(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Jane", "Doe")
-            assert is_consent_admin("staff-123", "staff-123, other-id") is True
+        assert is_consent_admin(self.ADMIN, "%s, other-id" % self.ADMIN) is True
 
-    def test_matches_by_full_name_case_insensitive(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Jane", "Doe")
-            assert is_consent_admin("s1", "JANE DOE; someone@x") is True
+    def test_id_match_ignores_case_dashes_and_separators(self):
+        dashed = "0F1E2D3C-4B5A-6978-8796-A5B4C3D2E1F0"
+        assert is_consent_admin(self.ADMIN, "someone; %s\nother" % dashed) is True
+        assert is_consent_admin(dashed, self.ADMIN) is True
 
     def test_non_match_denied(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Jane", "Doe")
-            assert is_consent_admin("s1", "someone else\nadmin@x") is False
+        assert is_consent_admin(self.ADMIN, "s2\ns3") is False
 
-    def test_no_staff_row_denied(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, None, None)
-            assert is_consent_admin("s1", "s2") is False
+    def test_staff_named_root_is_not_admin(self):
+        # Names play no part: a staff member named "Root" isn't treated as root.
+        assert is_consent_admin("s1", "") is False
+        assert is_consent_admin("s1", "root") is False
 
-    def test_row_without_name_matches_by_id_only(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "", "")  # nameless row -> match by id
-            assert is_consent_admin("staff-9", "staff-9") is True
+    def test_staff_sharing_an_admins_name_is_not_admin(self):
+        assert is_consent_admin("s2", "Jane Doe") is False
 
-    def test_root_canvas_support_always_allowed(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Canvas", "Support")  # root, not in the list
-            assert is_consent_admin("s1", "only-admin@example.com") is True
-
-    def test_root_literal_name_always_allowed(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "root", "")
-            assert is_consent_admin("s1", "only-admin@example.com") is True
-
-    def test_root_by_id_always_allowed(self):
-        with patch(f"{MODULE}.Staff") as mock_staff:
-            self._stub_staff(mock_staff, "Jane", "Doe")
-            assert is_consent_admin("root", "someone-else") is True
+    def test_canvas_support_needs_its_id_listed(self):
+        assert is_consent_admin(self.ADMIN, "") is False
+        assert is_consent_admin(self.ADMIN, "canvas support") is False
+        assert is_consent_admin(self.ADMIN, self.ADMIN) is True
 
 
 # --------------------------------------------------------------------------- #

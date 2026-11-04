@@ -56,12 +56,18 @@ from consent_capture.constants import (
 )
 from consent_capture.fhir import build_consent_payload
 from consent_capture.models import ConsentCaptureDetail, ConsentDefinition
-from consent_capture.pdf import generate_consent_pdf_base64, pdf_page_count, unprintable_chars
+from consent_capture.pdf import (
+    fold_for_pdf,
+    generate_consent_pdf_base64,
+    pdf_page_count,
+    unprintable_chars,
+)
 from consent_capture.questions import evaluate_answers, normalize_questions
 from consent_capture.service import (
     clean_practice_settings,
     definition_by_code,
     is_consent_admin,
+    normalize_staff_id,
     patients_missing_required,
     practice_settings,
     save_practice_settings,
@@ -71,6 +77,7 @@ from consent_capture.signing import (
     SIGNED_WITH,
     accepted_signed_with,
     clean_signature_jpeg,
+    questions_fingerprint,
     same_name,
     statement_fingerprint,
 )
@@ -119,6 +126,13 @@ def _consented_by(body):
     if not name:
         return None, "Please enter the representative's name."
     relationship = _clean_text(body.get("representative_relationship"), limit=60)
+    # Accented Latin letters print as their plain letter; other scripts can't print.
+    bad = unprintable_chars(fold_for_pdf("%s %s" % (name, relationship)))
+    if bad:
+        return None, (
+            "The representative's name or relationship has characters the PDF can't "
+            "print (%s). Enter them in Latin letters." % " ".join(bad)
+        )
     if relationship:
         return "%s (%s)" % (name, relationship), None
     return name, None
@@ -189,15 +203,22 @@ def _error(message):
     return JSONResponse({"ok": False, "error": message}, status_code=HTTPStatus.OK)
 
 
-def _stale_statement(body, statement_sha256, code, patient_id):
+def _stale_statement(body, statement_sha256, code, patient_id, questions=None):
     """Refuse a recording when the consent text changed after the picker showed it.
 
     The picker sends back the fingerprint of the text it displayed; the PDF and the
     stored fingerprint are built from the text now in Consent Settings. If an admin
     edited the consent while the signer was reading it, the two differ, and
     recording would put the new wording above a signature given to the old one.
-    Returns an error response list, or ``None`` when the text is unchanged."""
-    if body.get("statement_sha256") == statement_sha256:
+
+    ``questions`` is passed when the questions were shown and print on the PDF. A
+    reworded question keeps its id, so without this check the signer's answer would
+    print under the new wording. Returns an error response list, or ``None`` when
+    nothing changed."""
+    changed = body.get("statement_sha256") != statement_sha256
+    if questions is not None:
+        changed = changed or body.get("questions_sha256") != questions_fingerprint(questions)
+    if not changed:
         return None
     log.info(
         "ConsentApi: consent %s not recorded for patient %s (text changed while open)"
@@ -207,6 +228,25 @@ def _stale_statement(body, statement_sha256, code, patient_id):
         _error(
             "This consent was changed while it was open. Close Consents, reopen it, "
             "and have the signer review it again."
+        )
+    ]
+
+
+def _unprintable_record(statement_text, questions, capacity_statement):
+    """An error when text that prints on this consent's PDF has characters the PDF
+    can't print, or ``None``. Consent Settings refuses these on save; this catches
+    consents saved by an earlier version, so the PDF never shows "?" where the stored
+    text and its fingerprint have the real character."""
+    bad = unprintable_chars(statement_text)
+    for question in questions or []:
+        bad += [ch for ch in unprintable_chars(question.get("prompt") or "") if ch not in bad]
+    bad += [ch for ch in unprintable_chars(fold_for_pdf(capacity_statement)) if ch not in bad]
+    if not bad:
+        return None
+    return [
+        _error(
+            "This consent's text has characters the PDF can't print (%s). An admin "
+            "needs to fix it in Consent Settings." % " ".join(bad)
         )
     ]
 
@@ -607,6 +647,29 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             if sig_error:
                 return [_error(sig_error)]
 
+        # Refuse first if the consent changed while it was open, so a changed form
+        # reports "changed while it was open" rather than "Please answer".
+        asks_questions = bool(method_generates_pdf(method) or device)
+        title = definition.display or definition.code
+        paragraphs = parse_statement(definition.verbiage)
+        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
+        stale = _stale_statement(
+            body,
+            statement_sha256,
+            definition.code,
+            patient_id,
+            questions=(definition.questions or []) if asks_questions else None,
+        )
+        if stale:
+            return stale
+        unprintable = _unprintable_record(
+            statement_text,
+            (definition.questions or []) if asks_questions else [],
+            ctx["capacity_statement"],
+        )
+        if unprintable:
+            return unprintable
+
         # Evaluate the consent's questions — but only for methods that generate a PDF.
         # "Written" consents don't surface the questions in the modal (the signed
         # document is the record), so they aren't asked or evaluated here either. A
@@ -615,7 +678,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         responses: list = []
         # A consent signed on the device is a generated form, so its questions are
         # asked, checked, and printed like any other generated PDF.
-        if method_generates_pdf(method) or device:
+        if asks_questions:
             answers = body.get("answers") or {}
             answers_ok, answers_error, responses = evaluate_answers(
                 definition.questions or [], answers
@@ -626,13 +689,6 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                     % (definition.code, patient_id, answers_error)
                 )
                 return [_error(answers_error)]
-
-        title = definition.display or definition.code
-        paragraphs = parse_statement(definition.verbiage)
-        statement_text, statement_sha256 = statement_fingerprint(paragraphs)
-        stale = _stale_statement(body, statement_sha256, definition.code, patient_id)
-        if stale:
-            return stale
 
         # "Written" consents are signed on paper / an external document: the provider
         # uploads or camera-captures it in the picker, which assembles the pages into a
@@ -756,6 +812,9 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         stale = _stale_statement(body, statement_sha256, definition.code, patient_id)
         if stale:
             return stale
+        unprintable = _unprintable_record(statement_text, [], ctx["capacity_statement"])
+        if unprintable:
+            return unprintable
 
         # No method on a declined record: nothing was signed, and "Written" would
         # suggest a signed form exists.
@@ -1096,9 +1155,18 @@ _NOT_AUTHORIZED_HTML = (
     "<div style='text-align:center;max-width:420px;padding:24px;'>"
     "<h1 style='font-size:20px;margin:0 0 8px;'>You don&rsquo;t have access</h1>"
     "<p style='color:#6b7280;font-size:14px;margin:0;'>Consent Settings is limited to "
-    "authorized users. Ask your administrator to add you to the plugin&rsquo;s "
-    "CONSENT_ADMIN_USERS list.</p></div></body></html>"
+    "authorized users. Ask your administrator to add your staff ID to the plugin&rsquo;s "
+    "CONSENT_ADMIN_USERS list.</p>"
+    "<p style='color:#6b7280;font-size:14px;margin:12px 0 0;'>Your staff ID: "
+    "<code style='color:#1f2933;user-select:all;'>%s</code></p></div></body></html>"
 )
+
+
+def _not_authorized(staff_id):
+    """The "You don't have access" page, showing the staff member's own id."""
+    shown = normalize_staff_id(staff_id)
+    shown = re.sub(r"[^0-9a-z]", "", shown) or "unknown"
+    return HTMLResponse(_NOT_AUTHORIZED_HTML % shown, status_code=HTTPStatus.FORBIDDEN)
 
 
 class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
@@ -1121,7 +1189,7 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
         (``/plugin-io/api/consent_capture/admin/settings``) so authorized staff can
         open it from the chart wrench or the plugin's admin description."""
         if not self._is_admin():
-            return [HTMLResponse(_NOT_AUTHORIZED_HTML, status_code=HTTPStatus.FORBIDDEN)]
+            return [_not_authorized(self.request.headers.get("canvas-logged-in-user-id", ""))]
         html = render_admin_page(self.secrets.get("CONSENT_SYSTEM", ""))
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
 
@@ -1141,7 +1209,7 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
     def banners_page(self) -> list[Response | Effect]:
         """Serve the admin-only banner backfill page. Same access as Settings."""
         if not self._is_admin():
-            return [HTMLResponse(_NOT_AUTHORIZED_HTML, status_code=HTTPStatus.FORBIDDEN)]
+            return [_not_authorized(self.request.headers.get("canvas-logged-in-user-id", ""))]
         return [HTMLResponse(render_banners_page(), status_code=HTTPStatus.OK)]
 
     @api.post("/banners/preview")
