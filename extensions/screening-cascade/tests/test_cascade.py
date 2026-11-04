@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from canvas_sdk.effects import EffectType
 
-from screening_cascade.handlers.cascade import ScreeningCascade
+from canvas__screening_cascade.handlers.cascade import ScreeningCascade
 
-MODULE = "screening_cascade.handlers.cascade"
+MODULE = "canvas__screening_cascade.handlers.cascade"
 NOTE_UUID = "note-uuid-1"
 ON = {"SCREENING_CASCADE_ENABLED": "true"}
 

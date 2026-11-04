@@ -2,8 +2,8 @@
 
 import pytest
 
-from screening_cascade.config import load_rules, parse_rules
-from screening_cascade.scoring import narrative, passes, total_score
+from canvas__screening_cascade.config import load_rules, parse_rules
+from canvas__screening_cascade.scoring import narrative, passes, total_score
 
 
 def test_total_of_complete_questionnaire() -> None:

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable  # noqa: UP035 - install lint rejects collections.abc
 
 if TYPE_CHECKING:
-    # Type-only: the plugin sandbox does not allow importing collections.abc.
-    from collections.abc import Iterable
-
-    from screening_cascade.config import Rule
+    from canvas__screening_cascade.config import Rule
 
 # Lambdas, not the operator module: the plugin sandbox does not allow operator.
 _COMPARE = {

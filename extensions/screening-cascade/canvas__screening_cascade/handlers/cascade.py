@@ -16,8 +16,8 @@ from django.db.models import Q
 from django.utils import timezone
 from logger import log
 
-from screening_cascade.config import Coding, Rule, RulesError, is_enabled, load_rules
-from screening_cascade.scoring import narrative, passes, total_score
+from canvas__screening_cascade.config import Coding, Rule, RulesError, is_enabled, load_rules
+from canvas__screening_cascade.scoring import narrative, passes, total_score
 
 # Typed or dated answers carry no score.
 UNSCORED_TYPES = ("TXT", "DATE")
@@ -40,7 +40,7 @@ class ScreeningCascade(BaseHandler):
             rules = load_rules(self.secrets)
         except RulesError as exc:
             # Fail closed: a broken override must not fall back to the defaults.
-            log.error(f"screening_cascade: rules not loaded, doing nothing: {exc}")
+            log.error(f"canvas__screening_cascade: rules not loaded, doing nothing: {exc}")
             return []
 
         try:
@@ -63,7 +63,7 @@ class ScreeningCascade(BaseHandler):
         score = self._score(interview, questionnaire)
         if score is None:
             log.info(
-                f"screening_cascade: {questionnaire.code} not fully answered or not numeric; "
+                f"canvas__screening_cascade: {questionnaire.code} not fully answered or not numeric; "
                 "no score, no follow-up"
             )
             return []
@@ -85,7 +85,9 @@ class ScreeningCascade(BaseHandler):
             if not rule.has_follow_up or not passes(rule, score):
                 continue
             if not note_uuid:
-                log.warning(f"screening_cascade: {rule.name}: event has no note; cannot originate")
+                log.warning(
+                    f"canvas__screening_cascade: {rule.name}: event has no note; cannot originate"
+                )
                 continue
             if rule.follow_up_by_staff and not provider_loaded:
                 provider_id = self._note_provider_id(note_uuid)
@@ -106,19 +108,21 @@ class ScreeningCascade(BaseHandler):
             )
             if target is None:
                 log.warning(
-                    f"screening_cascade: {rule.name}: no active questionnaire "
+                    f"canvas__screening_cascade: {rule.name}: no active questionnaire "
                     f"{follow_up.code_system}|{follow_up.code} that can originate in charting"
                 )
                 continue
             if self._recently_given(interview, follow_up, rule.cooldown_days):
                 log.info(
-                    f"screening_cascade: {rule.name}: patient had {follow_up.code} on this note "
+                    f"canvas__screening_cascade: {rule.name}: patient had {follow_up.code} on this note "
                     f"or in the last {rule.cooldown_days} days; not originating"
                 )
                 continue
 
             originated.add(follow_up)
-            log.info(f"screening_cascade: {rule.name}: score {score}, originating {target.name}")
+            log.info(
+                f"canvas__screening_cascade: {rule.name}: score {score}, originating {target.name}"
+            )
             effects.append(
                 QuestionnaireCommand(
                     note_uuid=note_uuid, questionnaire_id=str(target.id)

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from screening_cascade.config import (
+from canvas__screening_cascade.config import (
     Coding,
     is_enabled,
     load_rules,
