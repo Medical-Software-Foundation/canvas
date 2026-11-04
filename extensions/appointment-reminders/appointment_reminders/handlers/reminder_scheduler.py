@@ -71,7 +71,8 @@ def scan_queryset(now: datetime, end_window: datetime):
     Booked and checked-in statuses only: canceled, no-showed and exited
     appointments are excluded here rather than skipped in the loop. Checked-in
     (arrived / roomed) rows are kept for the telehealth join campaign; the loop
-    keeps them out of the reminder campaign.
+    keeps them out of the reminder campaign. Appointments marked entered in
+    error are excluded too: they were never real visits.
 
     Every prefetch below is read per appointment inside the loop and filtered in
     Python, so a dropped lookup does not fail, it silently becomes one query per
@@ -82,6 +83,7 @@ def scan_queryset(now: datetime, end_window: datetime):
             start_time__gte=now,
             start_time__lte=end_window,
             status__in=[*_BOOKED_STATUSES, *_CHECKED_IN_STATUSES],
+            entered_in_error__isnull=True,
         )
         .select_related(
             "patient", "patient__business_line", "provider", "location", "note_type"
