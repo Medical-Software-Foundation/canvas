@@ -282,3 +282,91 @@ class TestRuleMatches:
         assert rule.matches("x", "loc-1")
         assert not rule.matches("x", "loc-2")
         assert not rule.matches("x", None)
+
+
+def _order_rule(**overrides):
+    return _rule(
+        **{
+            "trigger": "fax_orders_button",
+            "order_types": ["lab"],
+            "send_as": "order_documents",
+            **overrides,
+        }
+    )
+
+
+def test_note_rules_default_to_the_note_state_trigger():
+    (rule,) = load_config(_secrets([_rule()])).rules
+    assert rule.trigger == "note_state"
+    assert rule.order_types == frozenset()
+    assert rule.command_metadata == ()
+
+
+def test_order_rule_parses():
+    raw = _order_rule(
+        order_types=["referral", "medication", "dme"],
+        send_as="whole_note",
+        command_metadata={" alert_facility ": " Yes "},
+    )
+    config = load_config(_secrets([raw]))
+    assert config.errors == ()
+    (rule,) = config.rules
+    assert rule.trigger == "fax_orders_button"
+    assert rule.trigger_states == frozenset()
+    assert rule.order_types == {
+        "referral",
+        "dme",
+        "prescribe",
+        "adjust_prescription",
+        "refill",
+        "change_medication",
+        "stop_medication",
+        "medication_statement",
+    }
+    assert rule.send_as == "whole_note"
+    assert rule.command_metadata == (("alert_facility", "Yes"),)
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"alert_facility": "Yes"}, True),
+        ({"alert_facility": " yes "}, True),
+        ({"alert_facility": "No"}, False),
+        ({}, False),
+    ],
+)
+def test_metadata_match_is_case_insensitive(metadata, expected):
+    (rule,) = load_config(
+        _secrets([_order_rule(command_metadata={"alert_facility": "YES"})])
+    ).rules
+    assert rule.matches_metadata(metadata) is expected
+
+
+@pytest.mark.parametrize(
+    ("rule", "error"),
+    [
+        (_rule(trigger="on_save"), "trigger must be one of"),
+        (_order_rule(order_types=[]), "order_types must be from"),
+        (_order_rule(order_types=["vaccine"]), "order_types must be from"),
+        (_order_rule(order_types=["dme"]), "have no document of their own"),
+        (
+            _order_rule(order_types=["prescribe", "lab"]),
+            "have no document of their own",
+        ),
+        (_order_rule(send_as="pdf"), "send_as must be one of"),
+        (_order_rule(send_as=None), "send_as must be one of"),
+        (_order_rule(trigger_states=["LKD"]), "trigger_states only applies"),
+        (_order_rule(command_metadata=["alert_facility"]), "command_metadata must be"),
+        (
+            _order_rule(command_metadata={"alert_facility": ""}),
+            "command_metadata value must be non-empty",
+        ),
+        (_rule(order_types=["lab"]), 'need "trigger": "fax_orders_button"'),
+        (_rule(send_as="whole_note"), 'need "trigger": "fax_orders_button"'),
+    ],
+)
+def test_bad_order_rule_is_dropped_with_a_reason(rule, error):
+    config = load_config(_secrets([rule]))
+    assert config.rules == ()
+    assert any(error in message for message in config.errors), config.errors

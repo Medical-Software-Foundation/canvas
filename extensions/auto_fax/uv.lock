@@ -75,7 +75,7 @@ wheels = [
 
 [[package]]
 name = "auto-fax"
-version = "0.1.0"
+version = "0.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "canvas", extra = ["test-utils"] },
@@ -90,7 +90,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "canvas", extras = ["test-utils"], specifier = ">=0.258.0" }]
+requires-dist = [{ name = "canvas", extras = ["test-utils"], specifier = ">=0.260.0" }]
 
 [package.metadata.requires-dev]
 dev = [

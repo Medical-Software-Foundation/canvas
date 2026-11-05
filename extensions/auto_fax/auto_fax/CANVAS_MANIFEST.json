@@ -1,8 +1,8 @@
 {
-    "sdk_version": "0.258.0",
-    "plugin_version": "0.1.1",
+    "sdk_version": "0.260.0",
+    "plugin_version": "0.2.0",
     "name": "auto_fax",
-    "description": "Auto-fax on note lock: when a note is locked or signed, faxes it to the recipients a practice's rules name (an external care team member such as the PCP or referring provider, the patient's facility, or a fixed number). Rules, a dry-run mode and a test fax number are set in the plugin's settings. For practice admins and care coordinators who fax visit notes by hand today.",
+    "description": "Auto-fax on note lock, plus a Fax orders button: when a note is locked or signed, faxes it to the recipients a practice's rules name (an external care team member such as the PCP or referring provider, the patient's facility, or a fixed number). The optional Fax orders button lets staff fax a note's committed orders (medications, labs, DME, referrals, imaging) to the patient's facility before the note is signed, after a preview that shows what goes to whom and whether it was already sent. Rules, a dry-run mode and a test fax number are set in the plugin's settings. For practice admins and care coordinators who fax visit notes and orders by hand today.",
     "components": {
         "protocols": [
             {
@@ -13,6 +13,7 @@
                     "read": [
                         "Note",
                         "NoteType",
+                        "NoteStateChangeEvent",
                         "NoteActionEvent",
                         "CareTeamMembership",
                         "ServiceProvider",
@@ -21,6 +22,63 @@
                     ],
                     "write": [
                         "Note"
+                    ]
+                }
+            }
+        ],
+        "handlers": [
+            {
+                "class": "auto_fax.handlers.fax_orders_button:FaxOrdersButton",
+                "description": "Fax orders button in the note header, on notes a fax_orders_button rule covers. A click opens a preview of the orders fax; it sends nothing itself.",
+                "data_access": {
+                    "event": "SHOW_NOTE_HEADER_BUTTON, ACTION_BUTTON_CLICKED",
+                    "read": [
+                        "Note",
+                        "NoteType",
+                        "Command",
+                        "CommandMetadata",
+                        "Referral",
+                        "ReferralActionEvent",
+                        "ImagingOrder",
+                        "ImagingOrderActionEvent",
+                        "LabOrder",
+                        "LabOrderActionEvent",
+                        "NoteActionEvent",
+                        "CareTeamMembership",
+                        "ServiceProvider",
+                        "PatientFacilityAddress",
+                        "Facility"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "auto_fax.handlers.fax_orders_api:FaxOrdersAPI",
+                "description": "Staff-session endpoint the preview's Send button calls. Faxes the note's qualifying orders (whole note or each order's own document, per the rule) to each recipient, skipping what was already sent unless asked to resend.",
+                "data_access": {
+                    "event": "SIMPLE_API_REQUEST",
+                    "read": [
+                        "Note",
+                        "NoteType",
+                        "Command",
+                        "CommandMetadata",
+                        "Referral",
+                        "ReferralActionEvent",
+                        "ImagingOrder",
+                        "ImagingOrderActionEvent",
+                        "LabOrder",
+                        "LabOrderActionEvent",
+                        "NoteActionEvent",
+                        "CareTeamMembership",
+                        "ServiceProvider",
+                        "PatientFacilityAddress",
+                        "Facility"
+                    ],
+                    "write": [
+                        "Note",
+                        "Referral",
+                        "ImagingOrder",
+                        "LabOrder"
                     ]
                 }
             }

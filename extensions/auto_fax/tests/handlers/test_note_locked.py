@@ -1,16 +1,17 @@
 import json
-from datetime import UTC, date, datetime
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 import pytest
 
-from auto_fax.handlers.note_locked import CANVAS_BOT_STAFF_ID, AutoFaxOnNoteLock
+from auto_fax.handlers.note_locked import AutoFaxOnNoteLock
 from auto_fax.services.config import CoverSheet, RecipientSpec, Rule
+from auto_fax.services.delivery import CANVAS_BOT_STAFF_ID
 from auto_fax.services.recipients import Recipient
 
 MODULE = "auto_fax.handlers.note_locked"
+DELIVERY = "auto_fax.services.delivery"
 
 
 def _rule(name="pcp", states=("LKD",), cover=None, codes=("office_visit",)):
@@ -64,21 +65,27 @@ def env():
     with (
         patch(f"{MODULE}.Note") as note_model,
         patch(f"{MODULE}.NoteActionEvent") as action_event,
+        patch(f"{MODULE}.NoteStateChangeEvent") as state_event,
         patch(f"{MODULE}.FaxNoteEffect") as fax_effect,
         patch(f"{MODULE}.resolve_recipients") as resolve,
-        patch(f"{MODULE}.datetime") as fake_datetime,
+        patch(f"{DELIVERY}.datetime") as fake_datetime,
         patch(f"{MODULE}.log") as log,
+        patch(f"{DELIVERY}.log", log),
     ):
         fake_datetime.now.return_value.date.return_value = date(2026, 11, 2)
         note_first = (
             note_model.objects.select_related.return_value.filter.return_value.first
         )
         note_first.return_value = _note()
-        faxed = (
-            action_event.objects.filter.return_value.exclude.return_value.values_list
-        )
+        by_note = action_event.objects.filter.return_value
+        faxed = by_note.filter.return_value.exclude.return_value.values_list
         faxed.return_value = []
+        first_lock = state_event.objects.filter.return_value.order_by.return_value
+        first_lock = first_lock.values_list.return_value.first
+        first_lock.return_value = None
         yield SimpleNamespace(
+            state_event=state_event,
+            first_lock=first_lock,
             note_model=note_model,
             note_first=note_first,
             action_event=action_event,
@@ -176,12 +183,12 @@ def test_live_sends_one_fax_per_recipient(env):
     env.log.info.assert_called_once_with(
         "[auto_fax] faxing note note-1 rule 'pcp' -> facility at ***-***-0111"
     )
-    env.action_event.objects.filter.assert_called_once_with(
-        note__id="note-1", event_type="FAXED", originator__staff__id=CANVAS_BOT_STAFF_ID
+    env.action_event.objects.filter.assert_called_once_with(note__id="note-1")
+    by_note = env.action_event.objects.filter.return_value
+    by_note.filter.assert_called_once_with(
+        event_type="FAXED", originator__staff__id=CANVAS_BOT_STAFF_ID
     )
-    env.action_event.objects.filter.return_value.exclude.assert_called_once_with(
-        delivered_by_fax=False
-    )
+    by_note.filter.return_value.exclude.assert_called_once_with(delivered_by_fax=False)
     env.faxed.assert_called_once_with("fax__to_fax_number", flat=True)
 
 
@@ -322,26 +329,29 @@ def test_logs_never_name_the_recipient(env):
     assert "Elm Court" not in logged
 
 
-class _FrozenDatetime(datetime):
-    """01:00 UTC on 4 Nov 2026, which is still the evening of 3 Nov in the US."""
+def test_only_faxes_since_the_first_lock_count(env):
+    """A pre-sign "Fax orders" whole-note fax must not block the signed note."""
+    locked_at = date(2026, 11, 1)
+    env.first_lock.return_value = locked_at
+    by_note = env.action_event.objects.filter.return_value
+    since_lock = by_note.filter.return_value
+    since_lock.filter.return_value.exclude.return_value.values_list.return_value = []
+    # Before the lock the number was already faxed; that fax must be ignored.
+    env.faxed.return_value = ["+15552340111"]
+    env.resolve.side_effect = lambda patient_id, rules, today: [_recipient(rules[0])]
 
-    @classmethod
-    def now(cls, tz=None):
-        moment = datetime(2026, 11, 4, 1, 0, tzinfo=UTC)
-        return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+    assert len(_handler().compute()) == 1
+    env.state_event.objects.filter.assert_called_once_with(
+        note__id="note-1", state__in=["LKD", "SGN"]
+    )
+    by_note.filter.assert_any_call(created__gte=locked_at)
 
 
-@pytest.mark.parametrize(
-    ("provider", "expected"),
-    [
-        (
-            SimpleNamespace(last_known_timezone=ZoneInfo("America/New_York")),
-            date(2026, 11, 3),
-        ),
-        (SimpleNamespace(last_known_timezone=None), date(2026, 11, 4)),
-        (None, date(2026, 11, 4)),
-    ],
-)
-def test_today_is_the_providers_date_not_utc(provider, expected):
-    with patch(f"{MODULE}.datetime", _FrozenDatetime):
-        assert AutoFaxOnNoteLock._today(_note(provider=provider)) == expected
+def test_a_fax_after_the_first_lock_is_not_repeated(env):
+    env.first_lock.return_value = date(2026, 11, 1)
+    since_lock = env.action_event.objects.filter.return_value.filter.return_value
+    since_lock.filter.return_value.exclude.return_value.values_list.return_value = [
+        "+15552340111"
+    ]
+    env.resolve.side_effect = lambda patient_id, rules, today: [_recipient(rules[0])]
+    assert _handler().compute() == []

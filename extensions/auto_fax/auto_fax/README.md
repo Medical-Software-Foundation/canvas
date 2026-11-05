@@ -1,8 +1,9 @@
 # Auto Fax
 
 Faxes a note automatically when it is locked or signed, to recipients chosen by rules the
-practice sets in the plugin's settings. No code change is needed to add, change or turn off
-a rule.
+practice sets in the plugin's settings. An opt-in **Fax orders** button on the note faxes
+the note's orders to the patient's facility (or any other recipient) before the note is
+signed. No code change is needed to add, change or turn off a rule.
 
 ## Problem it solves
 
@@ -32,6 +33,45 @@ is final.
 | Handler | Event |
 | --- | --- |
 | `AutoFaxOnNoteLock` | `NOTE_STATE_CHANGE_EVENT_CREATED` |
+| `FaxOrdersButton` | `SHOW_NOTE_HEADER_BUTTON`, `ACTION_BUTTON_CLICKED` |
+| `FaxOrdersAPI` | `SIMPLE_API_REQUEST` (`POST /plugin-io/api/auto_fax/fax-orders/send`, staff session only) |
+
+### The Fax orders button
+
+Rules with `"trigger": "fax_orders_button"` add a **Fax orders** button to the header of
+every note they cover. The note does not need to be signed; only committed orders count.
+
+1. A click sends nothing. It opens a preview: who gets a fax, at which number, and which
+   orders are in it. It says plainly when there is nothing to send, for example when the
+   patient's facility has no fax number or the note has no committed orders of the rule's types.
+2. The staff member clicks **Send fax**. The server rebuilds the preview from the database
+   (it trusts nothing from the browser but the note id) and returns the fax effects.
+3. Double sends: the preview shows when each recipient was last faxed. If a recipient
+   already has everything, the server skips it, so a second click or a replayed request
+   sends nothing new. The preview then offers **Send again**, which resends on purpose.
+   The button also disables itself after one click.
+
+How the orders are sent is the rule's `send_as` setting. The SDK can't fax a document made
+of only some of a note's commands, so the choice is between:
+
+- `"whole_note"`: **one fax**, the whole note as it stands now (unsigned). It carries every
+  order, and also everything else in the note, including orders the rule doesn't list. Any
+  order type can be sent this way. A whole-note fax counts as sent again once a newer order
+  is committed.
+- `"order_documents"`: **one fax per order**, each order's own document, the same one its
+  **Fax** action sends in Canvas (a lab order sends its requisition). Nothing else from the
+  note goes out. Only referrals, imaging orders and lab orders have a document, so DME and
+  medication orders can't use this mode; the rule is rejected if it lists them.
+
+When two rules send to the same number, their orders go out together. If either rule is
+`whole_note`, the number gets one whole-note fax.
+
+A `command_metadata` setting, such as `{"alert_facility": "Yes"}`, limits a rule to orders
+marked that way. With `whole_note` it decides whether the fax is offered and what the
+preview lists. The note itself still shows every order.
+
+The note-lock rules only count faxes sent since the note was first locked or signed, so a
+whole-note fax from the button before signing doesn't stop the signed note from being faxed.
 
 ## Install
 
@@ -65,7 +105,11 @@ If the test number can't be read, the plugin turns itself off. It never falls ba
 | `name` | no | Shown in logs. Defaults to `rule N`. |
 | `enabled` | no | `false` turns the rule off without deleting it. |
 | `note_type_codes` | yes | Note type codes, or `["*"]` for every type. |
-| `trigger_states` | no | Any of `LKD` (locked), `SGN` (signed), `RLK` (relocked). Defaults to `["LKD"]`. |
+| `trigger` | no | `note_state` (default) or `fax_orders_button` (the button). |
+| `trigger_states` | no | Note rules only. Any of `LKD` (locked), `SGN` (signed), `RLK` (relocked). Defaults to `["LKD"]`. |
+| `order_types` | button rules | Any of `referral`, `imaging`, `lab`, `dme`, `prescribe`, `adjust_prescription`, `refill`, `change_medication`, `stop_medication`, `medication_statement`, or `medication` for all six medication types. |
+| `send_as` | button rules | `whole_note` (one fax, the whole note) or `order_documents` (one fax per referral, imaging or lab order). |
+| `command_metadata` | no | Button rules only. Metadata every order must carry, e.g. `{"alert_facility": "Yes"}`. Values match case-insensitively. |
 | `location_ids` | no | Only notes at these practice locations. Leave it out for every location. |
 | `recipients` | yes | One or more recipients (see below). |
 | `cover_sheet` | no | `{"subject": "...", "comment": "..."}`. Needs the note to have a practice location. Without one, the fax is sent with no coversheet. |
@@ -113,18 +157,54 @@ Other rules still run.
 ]
 ```
 
+### Example: one orders fax to the patient's facility, before signing
+
+Lab, DME, referral and imaging orders, plus medication orders marked
+**Alert facility: Yes** (stored as command metadata by another plugin). Both rules fax the same number, so one click sends one fax.
+
+```json
+[
+  {
+    "name": "Orders to facility",
+    "trigger": "fax_orders_button",
+    "send_as": "whole_note",
+    "note_type_codes": ["*"],
+    "order_types": ["lab", "dme", "referral", "imaging"],
+    "recipients": [{"type": "facility"}]
+  },
+  {
+    "name": "Facility-alert meds to facility",
+    "trigger": "fax_orders_button",
+    "send_as": "whole_note",
+    "note_type_codes": ["*"],
+    "order_types": ["medication"],
+    "command_metadata": {"alert_facility": "Yes"},
+    "recipients": [{"type": "facility"}]
+  }
+]
+```
+
+`command_metadata` applies to every order type in its rule, which is why the medication
+orders have their own rule here. To send only the order documents instead (no rest of the
+note), use one rule with `"send_as": "order_documents"` and `["referral", "imaging", "lab"]`.
+
 Role codes and note type codes differ between instances. Check them in the instance's
 settings before you write a rule.
 
 ## Access and data
 
-- No routes or UI. The only trigger is a note state change inside the instance.
-- It reads the note, the patient's care team and directory records, and the patient's
-  facility address. It writes nothing except the faxes (`FaxNoteEffect`), which Canvas
-  records on the note's fax history under Canvas Bot.
+- One route, `POST /plugin-io/api/auto_fax/fax-orders/send`, for logged-in staff only
+  (`StaffSessionAuthMixin`). It needs a note a button rule covers and sends only what the
+  rules allow for that note. The only UI is the note header button and its preview.
+- It reads the note, its committed order commands and their metadata, the order records, the patient's
+  care team and directory records, and the patient's facility address. It writes nothing
+  except the faxes (`FaxNoteEffect`, `FaxReferralEffect`, `FaxImagingOrderEffect`,
+  `FaxLabOrderEffect`), which Canvas records on the document's fax history under Canvas Bot.
+- A `whole_note` button rule faxes an unsigned note. The receiver gets the note as it
+  stands, before the provider has signed it.
 - Whoever can edit this plugin's settings decides where notes are faxed. Treat that
   permission like access to the charts: limit it to practice admins.
-- Logs carry note ids, rule names, the recipient type and the fax number masked to its
+- Logs carry note ids, the clicking staff member's id, rule names, the recipient type and the fax number masked to its
   last four digits. They never carry patient, provider or facility names.
 
 ## Notes
@@ -133,4 +213,5 @@ settings before you write a rule.
 - A facility address counts as current through its end date in the note provider's last
   known time zone (UTC if the provider has none).
 - Fax delivery status shows on the note's fax history in Canvas. This plugin doesn't retry failed faxes.
-- Screenshot: this plugin has no UI of its own. A screenshot of a sent fax in the note's history still needs to be added.
+- A very fast second send, before Canvas has recorded the first fax, can't be caught by
+  the "already sent" check. The disabled button covers the normal case.

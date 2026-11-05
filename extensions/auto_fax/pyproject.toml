@@ -6,13 +6,13 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 name = "auto-fax"
-version = "0.1.1"
+version = "0.2.0"
 license = "MIT"
-description = "Auto-fax a note to rule-selected recipients when it is locked or signed."
+description = "Auto-fax a note when it is locked or signed, and fax its orders from a note button."
 readme = "auto_fax/README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "canvas[test-utils]>=0.258.0",
+    "canvas[test-utils]>=0.260.0",
 ]
 
 [dependency-groups]

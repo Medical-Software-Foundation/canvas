@@ -7,28 +7,34 @@ note: the note itself, the recipients (see ``services/recipients.py``), and the
 note's earlier faxes.
 """
 
-from datetime import UTC, date, datetime
+from typing import Any
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.fax import FaxNoteEffect
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers.base import BaseHandler
-from canvas_sdk.v1.data import Note, NoteActionEvent
+from canvas_sdk.v1.data import Note, NoteActionEvent, NoteStateChangeEvent
 from logger import log
 
 from auto_fax.services.config import (
     MODE_DRY_RUN,
     MODE_OFF,
+    STATE_LOCKED,
     STATE_RELOCKED,
+    STATE_SIGNED,
     TRIGGER_STATES,
     load_config,
 )
-from auto_fax.services.fax_number import e164, for_fax_effect, masked
+from auto_fax.services.delivery import (
+    already_faxed,
+    cover_kwargs,
+    destination,
+    sendable,
+    skip_already_faxed,
+    today_for,
+)
+from auto_fax.services.fax_number import for_fax_effect, masked
 from auto_fax.services.recipients import Recipient, resolve_recipients
-
-# Every fax a plugin sends is recorded with Canvas Bot as its originator. The id
-# is the same on every instance (see the SDK's "Faxes sent by a plugin" docs).
-CANVAS_BOT_STAFF_ID = "5eede137ecfe4124b8b773040e33be14"
 
 
 class AutoFaxOnNoteLock(BaseHandler):
@@ -68,26 +74,27 @@ class AutoFaxOnNoteLock(BaseHandler):
         if not rules:
             return []
 
-        recipients = resolve_recipients(str(note.patient.id), rules, self._today(note))
-        sendable = self._sendable(recipients, note_id)
-        if not sendable:
+        recipients = resolve_recipients(
+            str(note.patient.id), rules, today_for(note.provider)
+        )
+        to_send = sendable(recipients, f"note {note_id}")
+        if not to_send:
             return []
 
-        # On a first lock or a signature, skip numbers this note was already
-        # faxed to (and not failed), so a second rule or a replayed lock/sign
-        # event can't double-send. A relock is an amended note, so it always
-        # goes again (a replayed relock event therefore re-sends too).
+        # On a first lock or a signature, skip numbers the locked note was
+        # already faxed to (and not failed), so a second rule or a replayed
+        # lock/sign event can't double-send. Only faxes from the note's first
+        # lock or signature on count: a **Fax orders** fax of the unsigned
+        # note must not stop the finished note from going out. A relock is an
+        # amended note, so it always goes again (a replayed relock event
+        # therefore re-sends too).
         if state != STATE_RELOCKED:
-            already = self._already_faxed(str(note.id))
-            sendable = [
-                r
-                for r in sendable
-                if e164(self._destination(r, config.test_fax_digits)) not in already
-            ]
+            already = already_faxed(self._faxes_since_first_lock(note_id))
+            to_send = skip_already_faxed(to_send, config.test_fax_digits, already)
 
         effects: list[Effect] = []
-        for recipient in sendable:
-            digits = self._destination(recipient, config.test_fax_digits)
+        for recipient in to_send:
+            digits = destination(recipient, config.test_fax_digits)
             label = (
                 f"note {note_id} rule {recipient.rule.name!r} -> {recipient.kind} "
                 f"at {masked(digits)}"
@@ -103,75 +110,30 @@ class AutoFaxOnNoteLock(BaseHandler):
         return effects
 
     @staticmethod
-    def _today(note: Note) -> date:
-        """Today in the note provider's last known time zone, or UTC without one.
+    def _faxes_since_first_lock(note_id: str) -> Any:
+        """The note's action events from its first lock or signature on.
 
-        Facility addresses end on a calendar date, so "today" must be the
-        practice's date, not the server's UTC date (which runs a day ahead
-        every US evening).
+        Without a recorded lock (not expected, since this runs on one), every
+        fax of the note counts, which errs toward not sending twice.
         """
-        tz = note.provider.last_known_timezone if note.provider else None
-        return datetime.now(tz or UTC).date()
-
-    @staticmethod
-    def _sendable(recipients: list[Recipient], note_id: str) -> list[Recipient]:
-        """Recipients with a fax number, one per number. Logs the rest."""
-        seen: set[str] = set()
-        sendable: list[Recipient] = []
-        for recipient in recipients:
-            if recipient.problem or not recipient.fax_digits:
-                log.warning(
-                    f"[auto_fax] note {note_id} rule {recipient.rule.name!r}: skipped "
-                    f"{recipient.kind}: {recipient.problem}"
-                )
-                continue
-            if recipient.fax_digits in seen:
-                continue
-            seen.add(recipient.fax_digits)
-            sendable.append(recipient)
-        return sendable
-
-    @staticmethod
-    def _destination(recipient: Recipient, test_digits: str | None) -> str:
-        return test_digits or recipient.fax_digits or ""
-
-    @staticmethod
-    def _already_faxed(note_id: str) -> set[str]:
-        """E.164 numbers this note was faxed to by a plugin, excluding failed faxes."""
-        numbers = (
-            NoteActionEvent.objects.filter(
-                note__id=note_id,
-                event_type="FAXED",
-                originator__staff__id=CANVAS_BOT_STAFF_ID,
+        events = NoteActionEvent.objects.filter(note__id=note_id)
+        first_lock = (
+            NoteStateChangeEvent.objects.filter(
+                note__id=note_id, state__in=[STATE_LOCKED, STATE_SIGNED]
             )
-            .exclude(delivered_by_fax=False)
-            .values_list("fax__to_fax_number", flat=True)
+            .order_by("created")
+            .values_list("created", flat=True)
+            .first()
         )
-        return {number for number in numbers if number}
+        return events.filter(created__gte=first_lock) if first_lock else events
 
     @staticmethod
     def _fax_effect(
         note_id: str, recipient: Recipient, digits: str, location_id: str | None
     ) -> Effect:
-        cover = recipient.rule.cover_sheet
-        if cover is not None and location_id is None:
-            log.warning(
-                f"[auto_fax] note {note_id} has no practice location; sending rule "
-                f"{recipient.rule.name!r} without its coversheet"
-            )
-            cover = None
-        if cover is None:
-            return FaxNoteEffect(
-                note_id=note_id,
-                recipient_name=recipient.name,
-                recipient_fax_number=for_fax_effect(digits),
-            ).apply()
         return FaxNoteEffect(
             note_id=note_id,
             recipient_name=recipient.name,
             recipient_fax_number=for_fax_effect(digits),
-            include_coversheet=True,
-            subject=cover.subject,
-            comment=cover.comment,
-            location_id=location_id,
+            **cover_kwargs(recipient.rule, location_id, f"note {note_id}"),
         ).apply()
