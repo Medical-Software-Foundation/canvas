@@ -83,8 +83,12 @@
         <input type="hidden" id="editing_type" value="available">
 
         <div id="group-banner" class="group-banner" style="display:none;">
-          <canvas-checkbox id="apply_to_group" checked></canvas-checkbox>
+          <canvas-checkbox id="apply_to_group"></canvas-checkbox>
           <span id="group-banner-text">This was created for N providers. Apply changes to all?</span>
+        </div>
+
+        <div id="multidate-notice" class="group-banner" style="display:none;" role="note">
+          <span>This block is one of several dates saved together. Changes to the time, reason or location apply to this date only. The other dates keep their own times. Adding a date creates it with the times shown here; removing a date deletes just that date.</span>
         </div>
 
         <!-- Type selector -->
@@ -358,7 +362,7 @@
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr auto;align-items:end;margin-top:6px;">
-              <div class="field" style="font-size:12.5px;color:var(--text-muted);">Add the date above and click <strong>Add date</strong> to queue more days. The block will be saved for each.</div>
+              <div class="field" style="font-size:12.5px;color:var(--text-muted);"><span>Add the date above and click <strong>Add date</strong> to queue more days. The block will be saved for each.</span></div>
               <button type="button" class="add-time-btn" onclick="addBlockDateChip()">+ Add date</button>
             </div>
             <div id="block-date-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
@@ -621,7 +625,6 @@
 
 </main>
 
-<div id="status-msg-bottom"></div>
 
 <canvas-modal id="confirm-modal" size="small">
   <canvas-modal-header dismissable>Confirm</canvas-modal-header>

@@ -267,31 +267,79 @@ class TestEveryOtherWeekKeepsItsWeeks:
         assert _first_in_pattern(dt.date(2026, 10, 5), 4, dt.date(2026, 10, 2), 1, schedule) == dt.date(2026, 10, 9)
 
 
-class TestSameTimeOneOffBlocks:
-    """One-off block events are found by time, so a same-time block loses its events too."""
+def _evt(evt_id, start_hm, end_hm):
+    """An event row (id, starts_at, ends_at) in UTC on 2026-10-19."""
+    utc = dt.UTC
+    return MagicMock(
+        id=evt_id,
+        starts_at=datetime(2026, 10, 19, *start_hm, tzinfo=utc),
+        ends_at=datetime(2026, 10, 19, *end_hm, tzinfo=utc),
+    )
 
-    def _block(self, block_id, reason):
+
+class TestSameTimeOneOffBlocks:
+    """One-off block events are found by title and time, so only a same-title, same-time block loses its event."""
+
+    def _block(self, block_id, reason, start=(11, 0), end=(11, 30)):
         from provider_availability.engine.models import AdminBlock
 
         return AdminBlock(id=block_id, provider_id=PROVIDER_ID, reason=reason,
-                          start=datetime(2026, 10, 19, 11, 0), end=datetime(2026, 10, 19, 11, 30))
+                          start=datetime(2026, 10, 19, *start), end=datetime(2026, 10, 19, *end))
 
     @patch(f"{MODULE}.build_block_event_effects", side_effect=lambda b: [f"draw-{b.id}"])
     @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
     @patch(f"{MODULE}.provider_tz", return_value=TZ)
     @patch(f"{MODULE}.get_event_ids", return_value=[])
-    def test_deleting_one_redraws_the_other(self, mock_ids, mock_tz, mock_cals, mock_draw):
+    def test_deleting_one_redraws_the_same_title_twin_only(self, mock_ids, mock_tz, mock_cals, mock_draw):
         from provider_availability.engine.event_sync import build_delete_block_effects
 
-        lunch, meeting = self._block("b1", "Lunch"), self._block("b2", "Meeting")
-        later = self._block("b3", "Later")
-        later.end = datetime(2026, 10, 19, 12, 0)
-        with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, meeting, later]), \
+        lunch, twin = self._block("b1", "Lunch"), self._block("b2", "Lunch")
+        meeting = self._block("b3", "Meeting")  # same time, other title: its event is never matched
+        later = self._block("b4", "Lunch", end=(12, 0))  # same title, other span
+        with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, twin, meeting, later]), \
              patch(f"{MODULE}.EventModel.objects") as mock_events:
-            mock_events.filter.return_value = QS([MagicMock(id="e1"), MagicMock(id="e2")])
+            # 11:00-11:30 US/Eastern is 15:00-15:30 UTC.
+            mock_events.filter.return_value = QS([_evt("e1", (15, 0), (15, 30)), _evt("e2", (15, 0), (15, 30))])
             result = build_delete_block_effects(PROVIDER_ID, lunch)
 
-        assert mock_draw.mock_calls == [call(meeting)]
+        assert mock_events.filter.call_args.kwargs["title"] == "Lunch"
+        assert mock_draw.mock_calls == [call(twin)]
+        assert result[-1] == "draw-b2"
+
+    @patch(f"{MODULE}.build_block_event_effects")
+    @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}.provider_tz", return_value=TZ)
+    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    def test_time_match_is_scoped_to_the_block_title(self, mock_ids, mock_tz, mock_cals, mock_draw):
+        """Buffer, Lead Time and other blocks at the same time are not in the match."""
+        from provider_availability.engine.event_sync import build_delete_block_effects
+
+        with patch(f"{MODULE}.get_blocks_for_provider", return_value=[]), \
+             patch(f"{MODULE}.EventModel.objects") as mock_events:
+            mock_events.filter.return_value = QS([_evt("e1", (15, 0), (15, 30))])
+            build_delete_block_effects(PROVIDER_ID, self._block("b1", ""))
+
+        first = mock_events.filter.call_args_list[0].kwargs
+        assert first["title"] == "Blocked"
+        assert first["starts_at"] == datetime(2026, 10, 19, 15, 0, tzinfo=dt.UTC)
+
+    @patch(f"{MODULE}.build_block_event_effects", side_effect=lambda b: [f"draw-{b.id}"])
+    @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
+    @patch(f"{MODULE}.provider_tz", return_value=TZ)
+    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    def test_title_fallback_redraws_a_same_day_block_it_removed(self, mock_ids, mock_tz, mock_cals, mock_draw):
+        """When the time match misses, the same-date title match can hit another block's event; that block is redrawn."""
+        from provider_availability.engine.event_sync import build_delete_block_effects
+
+        lunch = self._block("b1", "Lunch")
+        afternoon = self._block("b2", "Lunch", start=(14, 0), end=(14, 30))  # 18:00-18:30 UTC
+        untouched = self._block("b3", "Lunch", start=(16, 0), end=(16, 30))
+        with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, afternoon, untouched]), \
+             patch(f"{MODULE}.EventModel.objects") as mock_events:
+            mock_events.filter.side_effect = [QS([]), QS([_evt("e9", (18, 0), (18, 30))])]
+            result = build_delete_block_effects(PROVIDER_ID, lunch)
+
+        assert mock_draw.mock_calls == [call(afternoon)]
         assert result[-1] == "draw-b2"
 
     @patch(f"{MODULE}.build_block_event_effects")
