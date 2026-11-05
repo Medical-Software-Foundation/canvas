@@ -1,0 +1,202 @@
+"""Serves the roster page shell and its static assets.
+
+Split from the data API so the manifest can declare honest data access: this
+class reads nothing, it only renders files.
+"""
+
+from __future__ import annotations
+
+from http import HTTPStatus
+
+from canvas_sdk.effects import Effect
+from canvas_sdk.effects.simple_api import HTMLResponse, Response
+from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.templates import render_to_string
+
+from scheduling_waitlist import CACHE_BUST
+from scheduling_waitlist.constants import (
+    ADD_FOR_PATIENT_PARAM,
+    API_BASE,
+    EDIT_FOR_ENTRY_PARAM,
+    ROSTER_SEARCH_PARAM,
+    PREFILL_LOCATION_PARAM,
+    PREFILL_PROVIDER_PARAM,
+    PREFILL_SERVICE_PARAM,
+)
+from scheduling_waitlist.services.html import safe_json
+
+# Assets are addressed absolutely rather than relatively. A relative "roster.css"
+# resolves against whether the page URL happened to end in a slash, which is a
+# silent 404 waiting to happen.
+ASSET_BASE = f"{API_BASE}/app"
+
+
+class WaitlistAppAPI(StaffSessionAuthMixin, SimpleAPI):
+    """The roster page and the CSS/JS it pulls in."""
+
+    PREFIX = "/app"
+
+    @api.get("/")
+    def get_roster_page(self) -> list[Response | Effect]:
+        """Render the roster shell. Entries are fetched by the page itself."""
+        html = render_to_string(
+            "templates/roster.html",
+            {
+                "asset_base": ASSET_BASE,
+                "cache_bust": CACHE_BUST,
+                # Wiring, plus whatever was typed into the search: the roster
+                # fetches its rows over the authenticated API rather than having
+                # them baked into a document that may be cached or copied out of
+                # the browser.
+                #
+                # The search term is the one exception, and it is the caller's
+                # own text. When a chart button supplies it, it is a patient's
+                # display name -- so that name travels in a query string and
+                # lands in browser history, which a dbid would not. Judged
+                # acceptable because the page it opens lists that name and every
+                # other waiting patient's anyway, and the URL is same-origin and
+                # staff-authenticated. If that trade stops being acceptable, the
+                # fix is for the button to pass a key and this route to resolve
+                # the name -- which means this class starts reading patients, so
+                # its manifest data_access stops being empty.
+                "config_json": safe_json(
+                    {
+                        "apiBase": API_BASE,
+                        "cacheBust": CACHE_BUST,
+                        # A search term to start from, not a filter of its own:
+                        # it lands in the box the roster already has, shows in
+                        # it, and clears with Reset. Empty for the provider-menu
+                        # roster, which is the practice-wide list.
+                        "search": self._param(ROSTER_SEARCH_PARAM),
+                    }
+                ),
+            },
+        )
+        # no-cache like the assets below. The page carries the cache-bust token
+        # for roster.css/js, but nothing was busting the document that holds
+        # them -- so a redeploy could leave a browser rendering the previous
+        # shell against the new API.
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/add")
+    def get_add_form(self) -> list[Response | Effect]:
+        """The compact add form the chart button opens.
+
+        A page of its own rather than the roster with a parameter, because a
+        dialog and a full-width table want different sizes from the host modal.
+        It reads nothing itself: the patient's name and the dropdown choices are
+        fetched over the authenticated API, so this document holds only wiring.
+        """
+        html = render_to_string(
+            "templates/entry_form.html",
+            {
+                # The form wears the roster's stylesheet rather than a copy of it,
+                # so it needs the same asset wiring the roster page gets.
+                "asset_base": ASSET_BASE,
+                "cache_bust": CACHE_BUST,
+                "config_json": safe_json(
+                    {
+                        "apiBase": API_BASE,
+                        "cacheBust": CACHE_BUST,
+                        "mode": "add",
+                        "patientId": self._add_for_patient_id(),
+                        # Keys only, and only the ones supplied. The form matches
+                        # them against dropdowns it fetches itself, so an unknown
+                        # key simply fails to pre-select rather than inventing an
+                        # option nobody can book.
+                        "prefill": {
+                            "service": self._param(PREFILL_SERVICE_PARAM),
+                            "provider": self._param(PREFILL_PROVIDER_PARAM),
+                            "location": self._param(PREFILL_LOCATION_PARAM),
+                        },
+                    }
+                ),
+            },
+        )
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/edit")
+    def get_edit_form(self) -> list[Response | Effect]:
+        """The same compact form, opened on an entry that already exists.
+
+        Where the chart button's "On waitlist" goes: the quick add commits the
+        broadest possible entry, and this is how a scheduler narrows it without
+        going to the roster and finding the row. Reviewers asked for the clicks
+        back on the way in; this keeps them on the way back out.
+
+        Like the add form it reads nothing itself -- the entry, the patient's
+        name and the dropdown choices all arrive over the authenticated API, so
+        this document holds only the entry key. That key is also the whole of the
+        authorisation story here: whether the caller may see or change that entry
+        is decided by ``GET``/``PUT /waitlist/entries/<dbid>``, not by having been
+        handed this page.
+        """
+        html = render_to_string(
+            "templates/entry_form.html",
+            {
+                "asset_base": ASSET_BASE,
+                "cache_bust": CACHE_BUST,
+                "config_json": safe_json(
+                    {
+                        "apiBase": API_BASE,
+                        "cacheBust": CACHE_BUST,
+                        "mode": "edit",
+                        "entryId": self._param(EDIT_FOR_ENTRY_PARAM),
+                    }
+                ),
+            },
+        )
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    def _param(self, name: str) -> str:
+        """One trimmed query parameter, or an empty string."""
+        params = getattr(self.request, "query_params", None) or {}
+        return str(params.get(name) or "").strip()
+
+    def _add_for_patient_id(self) -> str:
+        """The patient the chart button asked to add, if any."""
+        return self._param(ADD_FOR_PATIENT_PARAM)
+
+    @api.get("/roster.css")
+    def get_css(self) -> list[Response | Effect]:
+        """Serve the roster stylesheet."""
+        css = render_to_string("static/css/roster.css")
+        return [
+            Response(
+                css.encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/css",
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/roster.js")
+    def get_js(self) -> list[Response | Effect]:
+        """Serve the roster script."""
+        js = render_to_string("static/js/roster.js")
+        return [
+            Response(
+                js.encode(),
+                status_code=HTTPStatus.OK,
+                content_type="application/javascript",
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
