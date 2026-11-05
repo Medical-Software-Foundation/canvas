@@ -1,0 +1,27 @@
+{
+    "sdk_version": "0.262.0",
+    "plugin_version": "0.1.1",
+    "name": "review_all_prescriptions_button",
+    "description": "Adds a note header button that puts every staged Prescribe command in the note into review. The prescriber still signs and sends each one.",
+    "components": {
+        "handlers": [
+            {
+                "class": "review_all_prescriptions_button.handlers.review_all_prescriptions:ReviewAllPrescriptionsButton",
+                "description": "Note header button that returns a review effect for each staged Prescribe command in the note.",
+                "data_access": {
+                    "event": "",
+                    "read": ["v1.Command", "v1.CurrentNoteStateEvent", "v1.CompoundMedication"],
+                    "write": []
+                }
+            }
+        ]
+    },
+    "variables": [
+        {"name": "REVIEW_ALL_PRESCRIPTIONS_ENABLED", "sensitive": false}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
