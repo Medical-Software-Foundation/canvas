@@ -1,0 +1,2211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fax queue inboxes</title>
+  <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+  <link rel="stylesheet" href="/plugin-io/api/fax_queue_inboxes/fax-queue-inboxes/canvas-plugin-ui.css?v={{ cache_bust }}">
+  <script src="/plugin-io/api/fax_queue_inboxes/fax-queue-inboxes/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+  <style>
+    /* Plugin specific layout only. Every value below is a design system token. */
+    /* --- Why the font is set here rather than inherited
+
+       canvas-plugin-ui.css defines --font-family as lato with its fallbacks on
+       :root, then applies it to h1 through h5 and to nothing else. Nothing in
+       the sheet puts a font on body. So the page heading came out in Lato while
+       every plain text element beside it, the standfirst under it and the count
+       line over each tab, fell back to whatever the browser defaults to. The
+       components are unaffected either way since each carries its own type
+       inside its shadow root, which is exactly why the mismatch was easy to
+       miss, the table looked right and the prose around it did not. Setting the
+       token on body is the one line that covers everything that inherits. */
+    body {
+      background: var(--palette-white);
+      font-family: var(--font-family, lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+    }
+    .page {
+      padding: var(--space-huge);
+    }
+    .page-header {
+      margin-bottom: var(--space-large);
+    }
+    /* The control lives on the h1 line rather than under it, so the row wraps
+       the heading and the button together and the subtitle stays a sibling
+       underneath, on its own line, exactly where it already was. */
+    .page-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-medium);
+    }
+    .page-header p {
+      color: var(--color-text-muted, #767676);
+    }
+    /* The field that adds a label sits above the table it grows, so it reads
+       as one small form rather than as a row belonging to the table below.
+       The two still have to compute to the same shape, since a reader scans
+       this row's input and the table's own label inputs as one continuous
+       column rather than as a form stacked over a table. canvas-table-cell
+       pads itself with --canvas-table-cell-padding, 0.5rem 1rem by default
+       here since this table carries no compact attribute, so every label
+       input below sits a rem in from the table's own left and right edges.
+       This row sits directly in canvas-modal-content with no cell of its
+       own to pad it, so a rem of padding on each side is given to it here
+       instead, bringing its own left and right edges to where the table
+       cell edges already sit. That outer rem is untouched by anything
+       below and is what keeps the add row lined up with the rows beneath
+       it.
+
+       The gap held open in the middle is a smaller number now than the
+       two rem it used to be, a rem from the name cell's own right edge
+       meeting a rem from the actions cell's own left edge. The actions
+       cell's left edge is narrowed further down to --space-tiny, so the
+       two edges now meet across --space-huge instead, and this row's own
+       --canvas-inline-row-gap is set to that same --space-huge so the add
+       row and the table row still read as one gap rather than two
+       different ones stacked over each other. */
+    .add-label-row {
+      margin-bottom: var(--space-medium);
+      padding: 0;
+      --canvas-inline-row-gap: var(--space-tiny, 8px);
+    }
+    /* Add label pairs with the input beside it rather than with any button
+       a label row shows, which is why their colours correctly stay apart,
+       yet a reader still reads every one of them as the same kind of
+       button doing a row's one action. A button with no size attribute is
+       naturally as wide as its own word, which leaves Add label wider than
+       a four letter Edit or Save purely because its own word is longer.
+       Nothing in the design system hands a button a minimum width of its
+       own, buttons stay sized to content by default, so this page supplies
+       one, long enough for the nine characters of Add label plus twice
+       whatever side padding these buttons carry, so no button a label row
+       shows in any of its three states reads narrower once every one of
+       them shares the rule.
+
+       The side padding itself is narrowed here too, from the base
+       button's own 1.5em down to 1.125em, the side number the skill
+       already documents for its own --canvas-button-padding-sm rather
+       than a guessed figure. The vertical number stays the base button's
+       own .67857143em, unchanged, since a plain canvas-input already runs
+       its own height at that same number and Cancel and Save still have
+       to line up with Add label as a box of that same height, which is
+       the whole reason these three states keep the base button rather
+       than the shorter size a table's own action buttons usually take.
+       Both the button's own padding and the min-width formula below
+       borrow the same 1.125em, so Add label still renders at exactly the
+       width the formula names rather than spilling past a floor that
+       stopped matching what the button itself carries, which is what
+       keeps every button the same box as the row changes state. */
+    #add-label-button,
+    .label-edit-button,
+    .label-delete-button,
+    .label-cancel-button,
+    .label-save-button,
+    .label-confirm-delete-button {
+      --canvas-button-padding: .67857143em 1.125em;
+    }
+    /* Add label keeps a width of its own, wide enough for its own nine
+       characters plus the side padding above, because it pairs with the
+       field beside it rather than with anything a label row shows. The
+       five buttons a row shows are capped at a flat 96 pixels instead,
+       which is wider than the longest of Edit, Save, Cancel and Delete
+       and narrow enough that a row reads as a name with two small actions
+       rather than as a name crowded by two slabs. The number is flat
+       rather than derived, since what matters here is that all five stay
+       the same box as a row moves between its three states, and a formula
+       in character widths would let the box move the moment a word
+       changed. */
+    #add-label-button {
+      min-width: calc(9ch + 2.25em);
+    }
+    .label-edit-button,
+    .label-delete-button,
+    .label-cancel-button,
+    .label-save-button,
+    .label-confirm-delete-button {
+      min-width: 96px;
+    }
+    /* The one wrapper a label row's actions cell reaches for in every one
+       of its three states, Edit paired with Delete, Cancel paired with
+       Save, or Cancel paired with Delete again. canvas-table-cell forces
+       its own text-align to right only when it carries the actions
+       attribute, per the comment on row-inline further down, and that
+       alignment reaches a block level child only through a flex wrapper's
+       own justify-content, which is what this supplies rather than
+       restating the same three rules in three different places. */
+    .label-row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-tiny);
+    }
+    /* The actions cell's own left inset, narrowed to match the smaller gap
+       the add row above now keeps. canvas-table-cell reads its whole
+       padding from --canvas-table-cell-padding as one pair, top and
+       bottom then left and right, so touching only the side that faces
+       the name column means restating all four sides here rather than
+       the pair the default uses, with the top, the bottom and the right
+       kept exactly as the default already sets them so the row's own
+       height and its own right edge never move. Scoped to this one
+       table's body so no other table on the page inherits a narrower
+       actions inset than its own rows were built for. */
+    #labels-table-body canvas-table-cell[actions] {
+      --canvas-table-cell-padding: 0.5rem 0 0.5rem 0;
+    }
+    /* The name cell's own right inset, the other half of that middle gap.
+       The two insets used to meet across a rem and a half and now meet
+       across --space-tiny alone, which is the same number the add row's
+       own gap above carries, so the field and the button beside it sit as
+       close in the add row as a name and its actions do in every row
+       below. The left inset stays exactly as the default sets it, since
+       that is the edge every row lines up on. */
+    #labels-table-body canvas-table-cell:not([actions]) {
+      --canvas-table-cell-padding: 0.5rem var(--space-tiny, 8px) 0.5rem 0;
+    }
+    /* A label row's read state and delete state both put a line of plain
+       text where the edit state puts a field, the label's own name at
+       rest and the sentence naming the deletion's consequence once Delete
+       is activated, so the two share this rather than each declaring its
+       own block level span. */
+    /* The left inset here is the one a canvas-input carries inside its
+       own border, the 1em side of --canvas-input-padding, and it is
+       repeated on this span deliberately. A row at rest shows the name as
+       text and a row being edited shows the same name inside a field, so
+       without this the words would jump sideways by that 1em the moment
+       Edit is activated and jump back when it is saved. Matching the
+       field's own inset is what makes the swap read as the same text
+       gaining a box around it rather than as the row rearranging itself. */
+    .label-name-text {
+      display: block;
+      padding-left: 1em;
+    }
+    .tab-meta {
+      color: var(--color-text-muted, #767676);
+      margin: 0 0 var(--space-small);
+    }
+    /* --- The 500 pixel cap, and the two traps that make it look simple
+       and not be
+       First, the cap lives on these spans rather than on the table cell,
+       because a max-width on a CSS table cell is not honoured reliably
+       across browsers. That part was known going in.
+       Second, and this one was found by looking at the rendered page,
+       overflow-wrap has to be break-word here and never anywhere. The
+       anywhere value is allowed to reduce the element's own min-content
+       width to a single character, so a table column asked to shrink to
+       its content shrinks to one letter and every title wraps down the
+       page one character at a time. break-word wraps a long unbroken
+       string the same way at render time while leaving min-content at the
+       longest word, which is what keeps the column an honest width. */
+    .cell-primary {
+      display: block;
+      /* max-content rather than the default, so a title sits on one line for as
+         long as it fits and only wraps once it reaches the cap. Left to itself
+         the column collapses to its longest word, since Sender takes every
+         spare pixel, and a three word title then wraps onto three lines with
+         half the table empty beside it. */
+      width: max-content;
+      max-width: 500px;
+      overflow-wrap: break-word;
+    }
+    .cell-secondary {
+      display: block;
+      font-weight: 400;
+      color: var(--color-text-muted, #767676);
+      margin-top: var(--space-mini);
+      max-width: 500px;
+      overflow-wrap: break-word;
+    }
+    /* Label and Assigned hold a badge beside a button, or a button alone, and
+       both columns are asked to stay at their minimum. nowrap is what stops
+       the button text breaking apart once the column is that narrow.
+
+       --- Why these two columns align right
+
+       A table column is as wide as its widest cell, so a lone + Label button
+       sits in a column sized by a badge and a Change button beside it, and the
+       slack lands wherever the alignment puts it. Left aligned, every short
+       cell starts at a different distance from the column it is read against
+       and the two columns look ragged down the page. Right aligned, every cell
+       ends on one edge, the slack collects on the left where nothing is being
+       read, and the actions column already did this, so the three now agree.
+
+       It goes through a flex wrapper rather than text-align, and that is
+       forced rather than chosen. CanvasTableCell sets style.textAlign to left
+       inline on every cell it renders, unconditionally, and only overwrites it
+       to right for a cell carrying the actions attribute. An inline style beats
+       any rule in this sheet, so text-align on the cell computes to left no
+       matter what is written here, measured on the running page. A wrapper
+       inside the cell is not subject to that, so every one of these cells wraps
+       its content, the single button case included, and one rule aligns them
+       all. */
+    .row-inline {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-tiny);
+      max-width: 500px;
+      white-space: nowrap;
+    }
+    canvas-table-cell[data-role="label-cell"],
+    canvas-table-cell[data-role="assign-cell"],
+    canvas-table-cell[data-role="note-cell"] {
+      white-space: nowrap;
+    }
+    .row-inline-end {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-tiny);
+    }
+    /* canvas-button lays its slot out as inline-flex, so the icon is a flex
+       item and would otherwise be free to shrink beside the text. */
+    .icon-external {
+      flex-shrink: 0;
+    }
+    /* --- The label cell ---
+       Chips wrap when a fax carries more than the cell can hold on one line,
+       which is the one place in this table where wrapping is right, because
+       the alternative is a row that scrolls sideways. The plus is last so it
+       stays reachable however many labels are on. */
+    .label-chips {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: var(--space-mini, 4px);
+      min-width: 200px;
+      max-width: 320px;
+    }
+    /* The plus is a chip that happens to be a button. Same height, same fill,
+       same radius as the mini chips it sits beside, so the row reads as one
+       group of labels with an empty slot at the end rather than as chips plus
+       a control. The 12px inset pad is what carries the hit area to the 44px
+       the design system requires without drawing anything that big. */
+    .btn-add-label {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 27px;
+      min-width: 27px;
+      padding: 0 var(--space-tiny, 8px);
+      border: 1px solid var(--color-border, rgba(34, 36, 38, 0.15));
+      border-radius: 4px;
+      background: var(--color-bg, #F5F5F5);
+      color: var(--color-text-muted, #767676);
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .btn-add-label::after {
+      content: "";
+      position: absolute;
+      inset: -9px;
+    }
+    .btn-add-label:hover {
+      border-color: var(--color-secondary, #2185D0);
+      color: var(--color-secondary, #2185D0);
+    }
+    .btn-add-label:focus-visible {
+      outline: var(--focus-ring, 2px solid #2185D0);
+      outline-offset: var(--focus-ring-offset, 2px);
+    }
+    /* --- The assigned cell, and the note cell beside it ---
+       The name is a button rather than a span, because clicking it is what
+       swaps the dropdown in, and a control that only a mouse can reach is not
+       a control. It carries the same grey fill as the plus so both read as
+       something you can act on, which is what the home app's own task list
+       does on this column.
+
+       The note button is the same control in a different column, so it shares
+       every rule here rather than restating them. Three grey pills down a row,
+       one per column, is what makes them read as one kind of thing a person
+       can act on rather than as three unrelated controls. */
+    .assign-display,
+    .btn-note {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-mini, 4px);
+      height: 27px;
+      padding: 0 var(--space-tiny, 8px);
+      border: 1px solid var(--color-border, rgba(34, 36, 38, 0.15));
+      border-radius: 4px;
+      background: var(--color-bg, #F5F5F5);
+      color: var(--color-text, rgba(0, 0, 0, 0.87));
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      white-space: nowrap;
+      position: relative;
+    }
+    .assign-display::after,
+    .btn-note::after {
+      content: "";
+      position: absolute;
+      inset: -9px 0;
+    }
+    .assign-display:hover,
+    .btn-note:hover {
+      border-color: var(--color-secondary, #2185D0);
+    }
+    .assign-display:focus-visible,
+    .btn-note:focus-visible {
+      outline: var(--focus-ring, 2px solid #2185D0);
+      outline-offset: var(--focus-ring-offset, 2px);
+    }
+    .assign-display.is-empty,
+    .btn-note.is-empty {
+      color: var(--color-text-muted, #767676);
+    }
+    /* Both editors are the same shape, a control that took the place of the
+       thing it edits, so they share a width floor rather than each picking
+       one. canvas-combobox is display block at full width, so the cell rather
+       than the component decides how wide the editor gets. */
+    .assign-editor,
+    .label-editor {
+      min-width: 220px;
+    }
+    .doc-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-mini, 4px);
+      color: var(--color-secondary, #2185D0);
+      text-decoration: none;
+      font-size: var(--font-size-label, .92857143em);
+      padding: var(--space-mini, 4px) var(--space-tiny, 8px);
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .doc-link:hover {
+      text-decoration: underline;
+    }
+    .doc-link:focus-visible {
+      outline: var(--focus-ring, 2px solid #2185D0);
+      outline-offset: var(--focus-ring-offset, 2px);
+    }
+    /* --- Why the popover body carries a min-width
+       --canvas-popover-max-width is a cap and nothing more, so a popover still
+       sizes to its content and a 350 pixel ceiling on its own changes nothing.
+       The assign combobox is the case that showed it, its Search people and
+       teams placeholder stayed clipped against the dropdown arrow at the cap.
+       So the body asks for a width and the controls inside stretch to it, which
+       is what actually spends the 350. It stays under the cap once the
+       popover's own padding is counted, so the two settings do not fight. */
+    .popover-body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-small);
+      min-width: 300px;
+    }
+    .popover-body canvas-combobox,
+    .popover-body canvas-dropdown,
+    .popover-body canvas-textarea,
+    .popover-body canvas-input {
+      width: 100%;
+    }
+    /* --- Why the cue is sticky and inline rather than floating
+
+       The design system bans floating toasts, snackbars and auto dismissing
+       notifications outright, and a toast component was removed from the
+       runtime in 1.1.0, so the answer had to be a banner. A banner at the top
+       of the content area is what the skill prescribes, and on a fifty row
+       table a reader working halfway down would never see it, which is the
+       whole complaint. Sticky keeps it a banner in the document flow, in the
+       tab it belongs to, dismissed by a person rather than by a timer, and
+       visible wherever they have scrolled to. That is a deliberate reading of
+       the rule rather than an exception to it, the ban is on a floating
+       element that takes itself away and this is neither. */
+    .tab-cue {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      margin-bottom: var(--space-small);
+    }
+    .tab-cue:empty {
+      display: none;
+      margin: 0;
+    }
+    .cue-actions {
+      display: flex;
+      gap: var(--space-mini);
+      margin-top: var(--space-mini);
+    }
+    /* The row the reader was sent to, tinted briefly so the eye lands on it.
+       The tint goes on the cells rather than the row, since a table row paints
+       nothing of its own and the cells would cover it. */
+    canvas-table-row.row-found canvas-table-cell {
+      background: var(--color-info-bg, var(--palette-blue-50, #eff6ff));
+      transition: background 400ms ease;
+    }
+    .popover-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-mini);
+      margin-top: var(--space-mini);
+    }
+    .empty-state {
+      padding: var(--space-huge);
+      text-align: center;
+    }
+    .empty-state h3 {
+      margin: 0 0 var(--space-small);
+      font-weight: 700;
+    }
+    .empty-state p {
+      margin: 0;
+      color: var(--color-text-muted, #767676);
+    }
+    /* --- The row picker's own empty row ---
+       canvas-combobox owns no single attribute that can carry two different
+       messages depending on what has been typed, an attribute always wins
+       over slot content per the design system's own reference, so the
+       empty-state attribute is left unset on the picker and this slot is the
+       one thing left to decide what shows. The default text matches the
+       attribute's old wording exactly, since nothing changes while the
+       search box is empty, and wireLabelCreateOffer rewrites it into the
+       create offer below the moment a typed name stops matching anything,
+       per Behaviour step 26. */
+    .label-empty-slot {
+      display: block;
+      width: 100%;
+      color: var(--color-text-muted, #767676);
+    }
+    /* A full width control rather than a menu item, so activating it reads
+       as its own action and not as a sixth option beside the labels above
+       it. Coloured like the other links on this page rather than like the
+       muted sentence it replaces, since this one is something to click. */
+    .label-create-offer {
+      appearance: none;
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      font: inherit;
+      font-family: inherit;
+      text-align: left;
+      color: var(--color-secondary, #2185D0);
+      cursor: pointer;
+    }
+    .label-create-offer:hover,
+    .label-create-offer:focus-visible {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div class="page-header-row">
+        <h1>Fax queue inboxes</h1>
+        <canvas-button id="manage-labels-button" variant="secondary" size="sm">Manage labels</canvas-button>
+      </div>
+      <p>Faxes waiting for review, split by who owns them. Viewing a fax and filing it to a patient still happens in Canvas, one link away from every row.</p>
+    </div>
+
+    <div id="page-error-region"></div>
+
+    <canvas-tabs>
+      <canvas-tab for="panel-unassigned" active id="tab-unassigned">
+        <canvas-tab-label>Unassigned</canvas-tab-label>
+      </canvas-tab>
+      <canvas-tab for="panel-my-team" id="tab-my-team">
+        <canvas-tab-label>My team</canvas-tab-label>
+      </canvas-tab>
+      <canvas-tab for="panel-all" id="tab-all">
+        <canvas-tab-label>All</canvas-tab-label>
+      </canvas-tab>
+
+      <canvas-tab-panel id="panel-unassigned">
+        <p class="tab-meta" id="meta-unassigned" aria-live="polite"></p>
+        <div class="tab-cue" id="cue-unassigned"></div>
+        <div class="tab-body" id="body-unassigned" data-tab="unassigned">
+          <canvas-loader text="Loading faxes ..." centered></canvas-loader>
+        </div>
+      </canvas-tab-panel>
+
+      <canvas-tab-panel id="panel-my-team">
+        <p class="tab-meta" id="meta-my-team" aria-live="polite"></p>
+        <div class="tab-cue" id="cue-my-team"></div>
+        <div class="tab-body" id="body-my-team" data-tab="my-team">
+          <canvas-loader text="Loading faxes ..." centered></canvas-loader>
+        </div>
+      </canvas-tab-panel>
+
+      <canvas-tab-panel id="panel-all">
+        <p class="tab-meta" id="meta-all" aria-live="polite"></p>
+        <div class="tab-cue" id="cue-all"></div>
+        <div class="tab-body" id="body-all" data-tab="all">
+          <canvas-loader text="Loading faxes ..." centered></canvas-loader>
+        </div>
+      </canvas-tab-panel>
+    </canvas-tabs>
+  </div>
+
+  <!-- Behaviour step 23. A sibling of .page rather than nested inside it, so
+       opening it puts the whole page behind it, the same reach the design
+       system's own inert handling expects of a modal's parent. -->
+  <canvas-modal id="labels-modal" size="medium">
+    <!-- dismissable rather than a footer button, since nothing here is a form
+         to cancel out of, every row change already saves itself as it lands,
+         so the header X is the one visible way out per component-usage.md
+         Modal Patterns, Header dismiss button. -->
+    <canvas-modal-header dismissable>Manage labels</canvas-modal-header>
+    <canvas-modal-content>
+      <div id="labels-modal-error"></div>
+      <canvas-inline-row class="add-label-row">
+        <canvas-input id="new-label-input" placeholder="New label name" aria-label="New label name"></canvas-input>
+        <canvas-button id="add-label-button" variant="secondary">Add label</canvas-button>
+      </canvas-inline-row>
+      <canvas-table aria-label="Practice labels, name order">
+        <canvas-table-head>
+          <canvas-table-row>
+            <canvas-table-cell width="100%">Name</canvas-table-cell>
+            <canvas-table-cell width="1%">&nbsp;</canvas-table-cell>
+          </canvas-table-row>
+        </canvas-table-head>
+        <canvas-table-body id="labels-table-body"></canvas-table-body>
+      </canvas-table>
+    </canvas-modal-content>
+  </canvas-modal>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // The four routes below are the ones section 4 of SPEC.md names for this
+      // surface. The base matches the two asset URLs the plugin already serves,
+      // since every route on FaxQueueAPI answers under the same prefix.
+      var API_BASE = "/plugin-io/api/fax_queue_inboxes/fax-queue-inboxes";
+
+      var TAB_CONFIG = {
+        "unassigned": {
+          tabName: "Unassigned",
+          nounSingular: "unassigned fax",
+          nounPlural: "unassigned faxes",
+          emptyHeading: "No unassigned faxes",
+          emptyBody: "Every fax already has an owner.",
+          tableLabel: "Faxes nobody has taken"
+        },
+        "my-team": {
+          tabName: "My team",
+          nounSingular: "fax for your teams",
+          nounPlural: "faxes for your teams",
+          emptyHeading: "No faxes for your teams",
+          emptyBody: "A fax assigned to one of your teams will appear here.",
+          tableLabel: "Faxes assigned to a team the signed in staff member belongs to"
+        },
+        "all": {
+          tabName: "All",
+          nounSingular: "fax in the queue",
+          nounPlural: "faxes in the queue",
+          emptyHeading: "No faxes in the queue",
+          emptyBody: "Every fax has already been reviewed or junked in Canvas.",
+          tableLabel: "Every fax waiting on review, unassigned and assigned together"
+        }
+      };
+
+      // assets/icons/external.svg from the canvas-plugin-ui skill, verbatim but
+      // for the size, the class and the two accessibility attributes. The text
+      // beside it already names the action, so the icon is hidden from the
+      // accessibility tree rather than repeating it.
+      var EXTERNAL_ICON =
+        '<svg class="icon-external" width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+        'aria-hidden="true" focusable="false">' +
+        '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+        '<polyline points="15 3 21 3 21 9"/>' +
+        '<line x1="10" y1="14" x2="21" y2="3"/>' +
+        '</svg>';
+
+      /* One source for what the note button says, read by the row and by the
+         popover trigger that stands in for it while the popover is open. They
+         were written twice once and the trigger hardcoded the bare word, so
+         opening the popover dropped what the row was showing and it only came
+         back on close. What it says belongs to the fax rather than to whether
+         a surface happens to be open over it.
+
+         The word now carries whether the fax has a note, so nothing else has
+         to. It used to read the bare word Note beside a comment icon, which
+         was a second signal for the one fact the word now states outright,
+         and it never said which of the two things clicking it would do. */
+      function noteButtonInner(hasNote) {
+        return hasNote ? "View note" : "Add note";
+      }
+
+      var labelsCache = [];
+      var labelsLoaded = false;
+
+      var assigneesCache = { teams: [], staff: [] };
+      var assigneesLoaded = false;
+
+      function escapeHtml(value) {
+        var div = document.createElement("div");
+        div.textContent = value == null ? "" : String(value);
+        return div.innerHTML;
+      }
+
+      function formatInstant(iso) {
+        if (!iso) {
+          return "";
+        }
+        var date = new Date(iso);
+        if (isNaN(date.getTime())) {
+          return "";
+        }
+        try {
+          return new Intl.DateTimeFormat(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit"
+          }).format(date);
+        } catch (err) {
+          return date.toLocaleString();
+        }
+      }
+
+      /* --- What the first column leads with, and why it is not the title ---
+
+         It led with IntegrationTask.title and fell back to type, and neither is
+         populated on a real inbound fax. All three paths in the home app that
+         create one, the two vendor serializers in
+         data_integration/serializers/fax.py and the repair command beside them,
+         write service_provider_id and document and nothing else. So both fields
+         are blank in production, and they only looked full on a local instance
+         because the seed recipe fills them itself. What a fax actually carries
+         is when it arrived and who Canvas resolved it to, so the column leads
+         with the sender and puts the arrival under it.
+
+         Three arrangements of those two facts were built behind a query string
+         switch and looked at on real rows. This is the one that was chosen, and
+         the switch came out with the choice. */
+
+      /* --- Why the arrival reads twice, as a wait and as a date ---
+
+         A queue is worked by how long something has been sitting, so the wait
+         is what a reader is actually judging and it comes first. On its own it
+         makes them work out which day 8 days ago was, and a date on its own
+         makes them work out how long that is, so both are there and neither
+         costs anything. The weekday rides along wherever a wait does, because
+         Friday is how people talk about a day they can still count to and says
+         nothing about a day months back. The time of day is only for today, where it is
+         the part that separates two faxes, and the year only when the fax did
+         not arrive in this one. */
+      function arrivalLine(iso) {
+        if (!iso) {
+          return "";
+        }
+        var then = new Date(iso);
+        if (isNaN(then.getTime())) {
+          return "";
+        }
+        var now = new Date();
+        var minutes = Math.round((now.getTime() - then.getTime()) / 60000);
+        var days = Math.floor(minutes / 1440);
+        var sameDay = then.toDateString() === now.toDateString();
+
+        /* Past a month the count stops helping. Nobody reads 400 days ago as
+           anything but old, and the date says it better, so the wait drops
+           away and the full date carries the line on its own. */
+        var wait;
+        if (minutes < 1) {
+          wait = "just now";
+        } else if (minutes < 60) {
+          wait = minutes + (minutes === 1 ? " minute ago" : " minutes ago");
+        } else if (minutes < 1440) {
+          var hours = Math.round(minutes / 60);
+          wait = hours + (hours === 1 ? " hour ago" : " hours ago");
+        } else if (days <= 30) {
+          wait = days + (days === 1 ? " day ago" : " days ago");
+        } else {
+          wait = "";
+        }
+
+        var options;
+        if (sameDay) {
+          options = { hour: "numeric", minute: "2-digit" };
+        } else {
+          options = { month: "short", day: "numeric" };
+          /* The weekday rides with the wait rather than keeping a week of its
+             own. It was cut off at seven days, which put two shapes in one
+             column and read ragged, and the honest boundary is the one that
+             already exists. While a fax is recent enough to be counted in days
+             the weekday helps place it, and once it is old enough that the
+             count was dropped the weekday is noise too. */
+          if (wait) {
+            options.weekday = "short";
+          }
+          if (then.getFullYear() !== now.getFullYear()) {
+            options.year = "numeric";
+          }
+        }
+
+        var stamp;
+        try {
+          stamp = new Intl.DateTimeFormat(undefined, options).format(then);
+        } catch (err) {
+          stamp = then.toLocaleString();
+        }
+        return wait ? wait + " \u00b7 " + stamp : stamp;
+      }
+
+      function showPageError(message) {
+        var region = document.getElementById("page-error-region");
+        region.innerHTML =
+          '<canvas-banner variant="error" header="' + escapeHtml(message) + '"></canvas-banner>';
+      }
+
+      function clearPageError() {
+        document.getElementById("page-error-region").innerHTML = "";
+      }
+
+      function request(path, options) {
+        var opts = options || {};
+        opts.credentials = "same-origin";
+        opts.headers = opts.headers || {};
+        if (opts.body && !opts.headers["Content-Type"]) {
+          opts.headers["Content-Type"] = "application/json";
+        }
+        return fetch(API_BASE + path, opts).then(function (response) {
+          if (!response.ok) {
+            throw new Error("Request to " + path + " failed with status " + response.status);
+          }
+          if (response.status === 204) {
+            return null;
+          }
+          return response.json().catch(function () {
+            return null;
+          });
+        });
+      }
+
+      function fetchLabels() {
+        return request("/labels").then(function (data) {
+          labelsCache = (data && data.labels) || (Array.isArray(data) ? data : []);
+          labelsLoaded = true;
+          return labelsCache;
+        }).catch(function (err) {
+          labelsLoaded = false;
+          return [];
+        });
+      }
+
+      function fetchAssignees() {
+        return request("/assignees").then(function (data) {
+          assigneesCache = {
+            teams: (data && data.teams) || [],
+            staff: (data && data.staff) || []
+          };
+          assigneesLoaded = true;
+          return assigneesCache;
+        }).catch(function () {
+          assigneesLoaded = false;
+          return assigneesCache;
+        });
+      }
+
+      /* The picker offers only what the fax does not already carry. usedIds is
+         the set of label ids on this fax, so a label already on it never shows
+         up to be added twice, which is also why the plus itself disappears once
+         every label in the practice is on. */
+      function labelOptionsMarkup(usedIds) {
+        if (!labelsLoaded || labelsCache.length === 0) {
+          return "";
+        }
+        var used = usedIds || {};
+        return labelsCache.filter(function (label) {
+          return !used[String(label.id)];
+        }).map(function (label) {
+          return '<canvas-option value="' + escapeHtml(label.id) + '">' +
+            escapeHtml(label.name) + '</canvas-option>';
+        }).join("");
+      }
+
+      /* One place that turns a row's labels array into the id set both the
+         picker and the plus read, so the two cannot disagree about what is
+         already on a fax. */
+      function usedLabelIds(task) {
+        var used = {};
+        (task.labels || []).forEach(function (label) {
+          used[String(label.id)] = true;
+        });
+        return used;
+      }
+
+      function assigneeOptionsMarkup() {
+        if (!assigneesLoaded) {
+          return "";
+        }
+        var teamOptions = assigneesCache.teams.map(function (team) {
+          return '<canvas-option value="team:' + escapeHtml(team.id) + '">' +
+            escapeHtml(team.name) + '</canvas-option>';
+        });
+        var staffOptions = assigneesCache.staff.map(function (member) {
+          return '<canvas-option value="staff:' + escapeHtml(member.id) + '">' +
+            escapeHtml(member.name) + '</canvas-option>';
+        });
+        return teamOptions.concat(staffOptions).join("");
+      }
+
+      function parseAssigneeValue(value) {
+        var separator = value.indexOf(":");
+        if (separator === -1) {
+          return null;
+        }
+        return { kind: value.slice(0, separator), id: value.slice(separator + 1) };
+      }
+
+      /* --- Painting a tab, and reading one again without destroying it ---
+
+         Two paths reach the same markup and the difference between them is
+         the point. loadTab is the first paint, where the container is empty,
+         a loader is the honest thing to show and there is no scroll position
+         to lose. refreshTab is every later read, where something is already
+         on screen, so it fetches quietly and reconciles into the table that
+         is already there.
+
+         Both used to be loadTab, which wiped the table to a loader before
+         the request had even gone out. That collapsed the document shorter
+         than the reader's own scroll offset, so the browser clamped them to
+         the top, and then it rebuilt every row to change one cell. */
+
+      function loadTab(tab) {
+        var bodyEl = document.getElementById("body-" + tab);
+        bodyEl.innerHTML = '<canvas-loader text="Loading faxes ..." centered></canvas-loader>';
+        document.getElementById("meta-" + tab).textContent = "";
+        return readTab(tab);
+      }
+
+      function refreshTab(tab) {
+        return readTab(tab);
+      }
+
+      function refreshEveryTab() {
+        return Promise.all(Object.keys(TAB_CONFIG).map(refreshTab));
+      }
+
+      function readTab(tab) {
+        var bodyEl = document.getElementById("body-" + tab);
+        var metaEl = document.getElementById("meta-" + tab);
+        var config = TAB_CONFIG[tab];
+
+        return request("/tasks?tab=" + encodeURIComponent(tab)).then(function (data) {
+          var tasks = (data && data.tasks) || [];
+          var count = (data && typeof data.count === "number") ? data.count : tasks.length;
+          var cap = (data && typeof data.cap === "number") ? data.cap : tasks.length;
+
+          var noun = count === 1 ? config.nounSingular : config.nounPlural;
+          metaEl.textContent = count + " " + noun + ". Showing up to " + cap + " at a time.";
+
+          updateTabBadge(tab, count);
+
+          if (tasks.length === 0) {
+            bodyEl.innerHTML =
+              '<div class="empty-state">' +
+              '<h3>' + escapeHtml(config.emptyHeading) + '</h3>' +
+              '<p>' + escapeHtml(config.emptyBody) + '</p>' +
+              '</div>';
+            return;
+          }
+
+          /* A table already standing is reconciled into. Anything else, a
+             loader, an empty state or an error banner, has no rows worth
+             keeping, so it gets the full paint. */
+          var body = bodyEl.querySelector("canvas-table-body");
+          if (body) {
+            reconcileBody(body, tab, tasks);
+            return;
+          }
+          bodyEl.innerHTML = renderTable(tab, config, tasks);
+          stampRows(bodyEl.querySelector("canvas-table-body"), tasks);
+          wireRows(bodyEl, tab);
+        }).catch(function () {
+          bodyEl.innerHTML =
+            '<canvas-banner variant="error" header="Could not load this tab">' +
+            '<p>Check your connection and try again.</p>' +
+            '<canvas-button variant="ghost" size="sm" class="retry-tab" data-tab="' + tab + '">Retry</canvas-button>' +
+            '</canvas-banner>';
+          var retryButton = bodyEl.querySelector(".retry-tab");
+          if (retryButton) {
+            retryButton.addEventListener("click", function () {
+              loadTab(tab);
+            });
+          }
+        });
+      }
+
+      function updateTabBadge(tab, count) {
+        var tabEl = document.getElementById("tab-" + tab);
+        if (tabEl) {
+          tabEl.setAttribute("badge", String(count));
+        }
+      }
+
+      /* --- The reconciler ---
+
+         A keyed diff over data-task-id, the same idea a virtual DOM does,
+         done by hand for one table. A row that survives keeps its own node,
+         so the scroll position, the focus and anything the reader has open
+         survive with it, and only the cells whose own data moved are
+         repainted.
+
+         Which faxes belong to a tab is never decided here. api.py decides
+         it, unassigned meaning no reviewer and no fax record assignment and
+         my-team meaning the authoritative team is one of the reader's own,
+         and a second copy of that predicate living in the browser would
+         drift from the first one silently. So this reconciles against what
+         the server returned and judges nothing for itself. */
+
+      function reconcileBody(body, tab, tasks) {
+        var existing = {};
+        body.querySelectorAll("canvas-table-row").forEach(function (row) {
+          existing[row.getAttribute("data-task-id")] = row;
+        });
+
+        var seen = {};
+        var cursor = body.firstElementChild;
+
+        tasks.forEach(function (task) {
+          var key = String(task.id);
+          seen[key] = true;
+          var row = existing[key] ? patchRow(existing[key], tab, task) : buildRow(tab, task);
+          if (row === cursor) {
+            cursor = cursor.nextElementSibling;
+          } else {
+            body.insertBefore(row, cursor);
+          }
+        });
+
+        Object.keys(existing).forEach(function (key) {
+          if (!seen[key]) {
+            existing[key].remove();
+          }
+        });
+      }
+
+      function buildRow(tab, task) {
+        var holder = document.createElement("div");
+        holder.innerHTML = renderRow(tab, task);
+        var row = holder.firstElementChild;
+        row._task = task;
+        wireRows(row, tab);
+        return row;
+      }
+
+      /* The task a row was last painted from, held as a property rather than
+         an attribute so no text has to survive a round trip through markup to
+         be compared afterwards. */
+      function stampRows(body, tasks) {
+        var rows = body.querySelectorAll("canvas-table-row");
+        tasks.forEach(function (task, index) {
+          if (rows[index]) {
+            rows[index]._task = task;
+          }
+        });
+      }
+
+      function patchRow(row, tab, task) {
+        var before = row._task || {};
+        var cells = row.querySelectorAll("canvas-table-cell");
+        cellSpecs(tab, task).forEach(function (spec, index) {
+          var cell = cells[index];
+          if (!cell || !fieldsMoved(before, task, spec.keys)) {
+            return;
+          }
+          cell.innerHTML = spec.html;
+          wireRows(cell, tab);
+        });
+        row._task = task;
+        return row;
+      }
+
+      /* String on an array of objects gives [object Object] whatever is in it,
+         so a labels cell compared that way would never repaint however the
+         labels changed. Anything that is an object is compared by its content
+         instead, which is correct here because every field on a row is either
+         a scalar or a small list the server built in a fixed order. */
+      function fieldValue(value) {
+        if (value == null) {
+          return "";
+        }
+        if (typeof value === "object") {
+          return JSON.stringify(value);
+        }
+        return String(value);
+      }
+
+      function fieldsMoved(before, after, keys) {
+        return keys.some(function (key) {
+          return fieldValue(before[key]) !== fieldValue(after[key]);
+        });
+      }
+
+      /* --- The optimistic patch ---
+
+         The same fax can be on more than one tab at once, all and my-team
+         both, so every tab holding it is patched rather than only the one
+         being looked at. */
+      function patchTaskEverywhere(taskId, changes) {
+        Object.keys(TAB_CONFIG).forEach(function (tab) {
+          var row = findRow(tab, taskId);
+          if (!row) {
+            return;
+          }
+          var merged = {};
+          var before = row._task || {};
+          Object.keys(before).forEach(function (key) {
+            merged[key] = before[key];
+          });
+          Object.keys(changes).forEach(function (key) {
+            merged[key] = changes[key];
+          });
+          patchRow(row, tab, merged);
+        });
+      }
+
+      /* --- Switching a tab from code, and why it reaches into a shadow root
+
+         canvas-tabs renders its own tab buttons inside its shadow root and
+         binds the click listener there. The canvas-tab elements in the light
+         DOM are metadata hosts, display none, and clicking one does nothing,
+         checked on the running page before this was written. Setting active on
+         one does not help either, its attributeChangedCallback only syncs
+         aria-selected, and the container reads active exactly once when it
+         first renders. So the only way to activate a tab without duplicating
+         the container's own logic, which hides every panel, sets visible on
+         one and syncs aria on both the button and the host, is to click the
+         button it made. This function is the single place that knows that, and
+         it is the seam. If the container ever grows a public method, this is
+         the one thing to change. */
+      function activateTab(tab) {
+        var tabsEl = document.querySelector("canvas-tabs");
+        if (!tabsEl || !tabsEl.shadowRoot) {
+          return false;
+        }
+        var buttons = tabsEl.shadowRoot.querySelectorAll(".tab-button");
+        for (var i = 0; i < buttons.length; i++) {
+          if (buttons[i].dataset.panel === "panel-" + tab) {
+            buttons[i].click();
+            return true;
+          }
+        }
+        return false;
+      }
+
+      /* Which tabs hold a fax right now, read off the reconciled tables rather
+         than worked out from the assignment. api.py decides tab membership and
+         this only reports what it decided. */
+      function locateTask(taskId) {
+        return Object.keys(TAB_CONFIG).filter(function (tab) {
+          return !!findRow(tab, taskId);
+        });
+      }
+
+      function revealTask(tab, taskId) {
+        activateTab(tab);
+        // One frame for the panel to become visible before a hidden row is
+        // asked for its position, since a hidden panel measures zero.
+        requestAnimationFrame(function () {
+          var row = findRow(tab, taskId);
+          if (!row) {
+            return;
+          }
+          row.scrollIntoView({ block: "center", behavior: "smooth" });
+          row.classList.add("row-found");
+          setTimeout(function () {
+            row.classList.remove("row-found");
+          }, 2400);
+        });
+      }
+
+      /* Ten seconds, counted down in the header so the wait is visible rather
+         than a surprise. The design system's own soft confirmation pattern is a
+         banner carrying an undo for five seconds, so a cue that takes itself
+         away is the sanctioned shape here and not the floating notification the
+         same document bans. Ten rather than five because this one also offers a
+         way to follow the fax, which takes longer to decide than an undo. */
+      var CUE_SECONDS = 10;
+      var cueTimer = null;
+
+      function stopCueTimer() {
+        if (cueTimer) {
+          clearInterval(cueTimer);
+          cueTimer = null;
+        }
+      }
+
+      function clearCue(tab) {
+        stopCueTimer();
+        var region = document.getElementById("cue-" + tab);
+        if (region) {
+          region.innerHTML = "";
+        }
+      }
+
+      function clearEveryCue() {
+        Object.keys(TAB_CONFIG).forEach(clearCue);
+      }
+
+      /* --- The countdown, and why it goes quiet before it starts
+
+         canvas-banner renders role status for an info variant, which is a
+         polite live region, so a header rewritten every second would be read
+         out every second. The banner is inserted with its plain header and
+         announces once on that, then the first tick switches the live region
+         off before it touches the header, so a screen reader hears the message
+         and never hears the clock. */
+      function startCueCountdown(tab, banner, header) {
+        stopCueTimer();
+        var left = CUE_SECONDS;
+        cueTimer = setInterval(function () {
+          if (!banner.isConnected) {
+            stopCueTimer();
+            return;
+          }
+          banner.setAttribute("aria-live", "off");
+          left -= 1;
+          if (left <= 0) {
+            clearCue(tab);
+            return;
+          }
+          banner.setAttribute("header", header + " (dismissing in " + left + "s)");
+        }, 1000);
+      }
+
+      /* --- The cue a person gets when a fax leaves the tab they are in
+
+         Assigning a fax moves it out of the unassigned tab, so the row
+         correctly disappears and the only other signal was a tab badge going
+         down by one, which is invisible to somebody halfway down fifty rows.
+         This says what happened, where the fax went, and offers the way back.
+
+         Where it went is looked up rather than assumed, because api.py owns
+         that predicate. A fax assigned to a team the reader does not belong to
+         lands only on All, and saying My team there would be a lie.
+
+         Undo is offered only when it is genuinely one. A fax that had no
+         assignee before can be put back by clearing, which is exact. A fax
+         that was reassigned cannot, since the row shape carries an assignee's
+         display name and never an id, and matching a name back to an id to
+         write with would be a guess. */
+      /* --- The cue, and why it no longer offers an undo ---
+
+         The assignment is a dropdown in the row now, so correcting one is the
+         same control again rather than a second one on a banner. What the
+         dropdown cannot do is say where a fax went, because assigning one in
+         the unassigned tab takes the row out of the list and there is nothing
+         left to look at. That is the job this kept. */
+      function announceMove(sourceTab, taskId, title, verb) {
+        var region = document.getElementById("cue-" + sourceTab);
+        if (!region) {
+          return;
+        }
+
+        var here = locateTask(taskId);
+        var elsewhere = here.filter(function (t) {
+          return t !== sourceTab && t !== "all";
+        });
+        var destination = elsewhere.length ? elsewhere[0] : (here.indexOf("all") !== -1 ? "all" : null);
+        var stillHere = here.indexOf(sourceTab) !== -1;
+
+        var where;
+        if (stillHere) {
+          where = "It is still in this tab.";
+        } else if (destination) {
+          where = "It moved to the " + TAB_CONFIG[destination].tabName + " tab.";
+        } else {
+          where = "It is no longer in any of these three tabs.";
+        }
+
+        region.innerHTML =
+          '<canvas-banner variant="info" header="' + escapeHtml(verb) + '" dismissible>' +
+          '<p>' + escapeHtml(title) + '. ' + escapeHtml(where) + '</p>' +
+          '<div class="cue-actions">' +
+          (destination && !stillHere
+            ? '<canvas-button size="sm" variant="ghost" class="cue-goto">Show me</canvas-button>'
+            : '') +
+          '</div>' +
+          '</canvas-banner>';
+
+        var banner = region.querySelector("canvas-banner");
+        // canvas-banner raises dismiss and never removes itself, the consumer does.
+        banner.addEventListener("dismiss", function () {
+          clearCue(sourceTab);
+        });
+
+        var goto = region.querySelector(".cue-goto");
+        if (goto) {
+          goto.addEventListener("click", function () {
+            /* Switching the tab raises tab-change, which clears every cue, so
+               this one is on its way out either way. Clearing here as well
+               keeps the intent local rather than relying on that. */
+            clearCue(sourceTab);
+            revealTask(destination, taskId);
+          });
+        }
+
+        startCueCountdown(sourceTab, banner, verb);
+      }
+
+      function findRow(tab, taskId) {
+        var bodyEl = document.getElementById("body-" + tab);
+        var wanted = String(taskId);
+        var match = null;
+        bodyEl.querySelectorAll("canvas-table-row").forEach(function (row) {
+          if (row.getAttribute("data-task-id") === wanted) {
+            match = row;
+          }
+        });
+        return match;
+      }
+
+      function renderTable(tab, config, tasks) {
+        var rows = tasks.map(function (task) {
+          return renderRow(tab, task);
+        }).join("");
+
+        return '<canvas-table celled aria-label="' + escapeHtml(config.tableLabel) + '">' +
+          '<canvas-table-head>' +
+          '<canvas-table-row>' +
+          /* The header row participates in the same table layout as the body,
+             so the width attribute has to match here too, otherwise the
+             column sizing set on the body cells does not hold. */
+          /* Sender is no longer a column of its own. All three variants
+             carry the sender in the first column, so a second one holding the
+             same name twice was the only thing removing it cost. */
+          '<canvas-table-cell width="100%">From</canvas-table-cell>' +
+          '<canvas-table-cell width="1%"><div class="row-inline">Label</div></canvas-table-cell>' +
+          '<canvas-table-cell width="1%"><div class="row-inline">Assigned</div></canvas-table-cell>' +
+          '<canvas-table-cell width="1%"><div class="row-inline">Note</div></canvas-table-cell>' +
+          '<canvas-table-cell width="1%">&nbsp;</canvas-table-cell>' +
+          '</canvas-table-row>' +
+          '</canvas-table-head>' +
+          '<canvas-table-body>' + rows + '</canvas-table-body>' +
+          '</canvas-table>';
+      }
+
+      function renderRow(tab, task) {
+        var cells = cellSpecs(tab, task).map(function (spec) {
+          return '<canvas-table-cell ' + spec.attrs + '>' + spec.html + '</canvas-table-cell>';
+        }).join("");
+        return '<canvas-table-row data-task-id="' + escapeHtml(task.id) + '">' + cells + '</canvas-table-row>';
+      }
+
+      /* One description of a row's cells, read by the first paint and by the
+         reconciler alike, so the two cannot drift into painting a cell two
+         different ways. The keys array names the task fields a cell renders,
+         which is what lets a patch touch only the cells whose data moved.
+         The actions cell names none, so it is never repainted, which costs
+         nothing now that the one link it holds carries the same address for
+         the life of the row. */
+      function cellSpecs(tab, task) {
+        var id = escapeHtml(task.id);
+        var when = formatInstant(task.created);
+        /* api.py sends this field as provider. It was read here as
+           service_provider with a sender fallback, neither of which the row
+           shape carries, so every row reported Unknown Provider whatever the
+           real one was, and no browser spec asserted this column. */
+        var sender = escapeHtml(task.provider || "Unknown Provider");
+
+        /* The full instant stays on the title attribute, since the line itself
+           gives the day rather than the minute once a fax is older than today,
+           and a reader chasing an exact arrival should not have to open the
+           document to find it. */
+        var arrived = arrivalLine(task.created);
+        var firstCell =
+          '<span class="cell-primary">' + sender + '</span>' +
+          '<span class="cell-secondary" data-role="created" title="' + escapeHtml(when) + '">' +
+          escapeHtml(arrived) + '</span>';
+
+        /* A fax carries several labels, each a chip that dismisses itself off,
+           and the plus is offered only while the practice still has a label
+           this fax does not have. canvas-chip always renders its own X and
+           that cannot be turned off, which is exactly what is wanted here,
+           so labels are chips where a single unremovable one was a badge. */
+        var labels = task.labels || [];
+        var chips = labels.map(function (label) {
+          return '<canvas-chip color="grey" size="mini" basic class="label-chip" ' +
+            'data-task-id="' + id + '" data-label-id="' + escapeHtml(label.id) + '">' +
+            escapeHtml(label.name) + '</canvas-chip>';
+        }).join("");
+        var everyLabelOn = labelsLoaded && labels.length >= labelsCache.length;
+        var labelCell =
+          '<div class="label-chips">' + chips +
+          (everyLabelOn ? '' :
+            '<button type="button" class="btn-add-label" data-task-id="' + id + '" ' +
+            'aria-label="Add a label to this fax">+</button>') +
+          '</div>';
+
+        /* The assignee is shown as a value and becomes a dropdown where it
+           stands when somebody clicks it, which is the mechanic the home app's
+           own task list uses on the same column. Rendering a live dropdown in
+           every row instead would put one control and every option in it on
+           screen fifty times over for a page nobody is editing. */
+        var assignCell =
+          '<div class="row-inline">' +
+          '<button type="button" class="assign-display' + (task.assignee ? '' : ' is-empty') + '" ' +
+          'data-task-id="' + id + '">' +
+          escapeHtml(task.assignee || "Unassigned") + '</button>' +
+          '</div>';
+
+        /* The note is a column of its own rather than an action at the end of
+           the row. A fax carrying a note is a fact about that fax the way its
+           label and its assignee are, so it belongs in the run of columns that
+           says what is known about it rather than beside the one link that
+           leaves the page. The word on the button says which of the two things
+           clicking it does, so a reader scanning the column sees which faxes
+           somebody has already written on. */
+        var noteCell =
+          '<div class="row-inline">' +
+          '<button type="button" class="btn-note' + (task.note ? '' : ' is-empty') + '" ' +
+          'data-task-id="' + id + '">' +
+          noteButtonInner(!!task.note) + '</button>' +
+          '</div>';
+
+        /* width="1%" is the shrink to content trick, the column takes only
+           what its own content needs and Sender, the one column carrying
+           100%, absorbs whatever is left. */
+        return [
+          {
+            attrs: 'bold width="100%"',
+            keys: ["provider", "created"],
+            html: firstCell
+          },
+          { attrs: 'width="1%" data-role="label-cell"', keys: ["labels"], html: labelCell },
+          { attrs: 'width="1%" data-role="assign-cell"', keys: ["assignee"], html: assignCell },
+          { attrs: 'width="1%" data-role="note-cell"', keys: ["note"], html: noteCell },
+          {
+            attrs: "actions",
+            keys: [],
+            /* --- The label and the icon on the row's one action ---
+
+               This cell held the note button as well until the note became
+               a column, and what is left is the single thing on a row that
+               leaves the page, which is what an actions cell is for.
+
+               It used to read Open in Canvas, which is wrong. This dashboard
+               is already running inside Canvas as a provider menu item, so
+               nothing about that link leaves Canvas. It goes to the native
+               Data Integration screen, which the home app names that way in
+               both its sidebar and its browser tab title, and whose own noun
+               for one item is document everywhere in its interface rather
+               than task or integration task. So the button says what a
+               person gets, the document, using the platform's own word.
+
+               The icon is external.svg from the canvas-plugin-ui skill,
+               inlined rather than referenced. The skill ships 76 icons but
+               defines no canvas-icon component, one line in its own
+               writing-style reference names one and is stale, so the
+               supported route is the default slot of canvas-button, which
+               takes arbitrary content and lays it out inline-flex with a
+               gap. stroke is currentColor, so it follows the button's text
+               colour with no styling of its own. It earns its place here
+               because this action alone leaves the page, opening the screen
+               in a new tab. */
+            html: '<div class="row-inline-end">' +
+              /* An anchor rather than a button calling window.open, because
+                 opening a new tab is an anchor's job and nothing else, per the
+                 design system. That is why the row carries document_url, an
+                 anchor needs its href before anybody clicks rather than
+                 fetching one on the way. */
+              '<a class="doc-link" href="' + escapeHtml(task.document_url || "#") + '" ' +
+              'target="_blank" rel="noopener">' +
+              'View document' + EXTERNAL_ICON +
+              '</a>' +
+              '</div>'
+          }
+        ];
+      }
+
+      /* querySelectorAll only ever looks at descendants, and wireRows is handed
+         a whole tab body on first paint and a single cell after a patch, so the
+         root itself has to be considered a match too. */
+      function matchesWithin(root, selector) {
+        var found = [].slice.call(root.querySelectorAll(selector));
+        if (root.matches && root.matches(selector)) {
+          found.unshift(root);
+        }
+        return found;
+      }
+
+      /* Opening a picker the moment it appears, by the same path a person would
+         take. The component opens its menu when its own inner input is clicked,
+         so that is what this does rather than reaching for a private method
+         whose name could change under us. The shadow root is built in
+         connectedCallback behind a timeout, so this retries briefly rather than
+         assuming the input is there on the next tick. */
+      /* onReady is optional and carries the input once found, for a caller
+         that needs to wire something onto it beyond the open itself, which
+         is why it is a third argument rather than a second return path, the
+         open still happens on its own with nobody asking for the callback. */
+      function openPicker(el, attempt, onReady) {
+        var tries = attempt || 0;
+        var inner = el.shadowRoot ? el.shadowRoot.querySelector("input") : null;
+        if (!inner) {
+          if (tries < 10) {
+            setTimeout(function () {
+              openPicker(el, tries + 1, onReady);
+            }, 30);
+          }
+          return;
+        }
+        inner.focus();
+        inner.click();
+        if (onReady) {
+          onReady(inner);
+        }
+      }
+
+      /* Both cells edit in place the same way, a control takes the place of the
+         thing it shows and puts it back when nothing was chosen, so the swap,
+         the immediate open, the escape and the click away all live here once
+         rather than twice. onReady is the same optional hook openPicker takes,
+         threaded through with the control and the restore closure alongside
+         the input, since a caller wiring something onto the input usually
+         needs both of those too and restore is declared below rather than
+         reached for from outside. */
+      function swapInEditor(anchor, className, innerHtml, onChosen, onReady) {
+        var wrapper = document.createElement("div");
+        wrapper.className = className;
+        wrapper.innerHTML = innerHtml;
+        anchor.replaceWith(wrapper);
+        var control = wrapper.firstElementChild;
+
+        function restore() {
+          if (wrapper.isConnected) {
+            wrapper.replaceWith(anchor);
+          }
+        }
+
+        openPicker(control, 0, function (inner) {
+          if (onReady) {
+            onReady(control, inner, restore);
+          }
+        });
+
+        /* Escape and clicking away both put the value back, because a cell left
+           as an open editor nobody chose anything in reads as a row mid edit for
+           the rest of the session. */
+        wrapper.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            restore();
+          }
+        });
+        wrapper.addEventListener("focusout", function () {
+          setTimeout(function () {
+            if (wrapper.isConnected && !wrapper.contains(document.activeElement)) {
+              restore();
+            }
+          }, 150);
+        });
+
+        control.addEventListener("change", function () {
+          onChosen(control, restore);
+        });
+        return { wrapper: wrapper, control: control, restore: restore };
+      }
+
+      function wireRows(bodyEl, tab) {
+        /* View document needs no wiring any more. It is a real anchor carrying
+           its own href and target, which is what the design system asks of a
+           link that opens a new tab. */
+        bodyEl.querySelectorAll(".btn-note").forEach(function (button) {
+          button.addEventListener("click", function () {
+            openNotePopover(button, tab);
+          });
+        });
+
+        bodyEl.querySelectorAll(".btn-add-label").forEach(function (button) {
+          button.addEventListener("click", function () {
+            openLabelPicker(button, tab);
+          });
+        });
+
+        /* One listener on the cell rather than one per chip. canvas-chip
+           dispatches dismiss composed, so it crosses the shadow boundary and
+           arrives here whichever chip raised it.
+
+           Two things this has to survive, and the first cost a real defect.
+           wireRows is called on a whole tab body at first paint and on one
+           cell after a patch, and querySelectorAll never returns the root it
+           was called on, so a patched label cell lost this listener and every
+           dismiss after the first one did nothing. It searches the root as
+           well now. Then, because a patch reuses the same cell element rather
+           than building a new one, attaching again would stack a second
+           listener on it and one X would fire two deletes, so the cell is
+           marked once and never wired twice. */
+        matchesWithin(bodyEl, 'canvas-table-cell[data-role="label-cell"]').forEach(function (cell) {
+          if (cell.labelCellWired) {
+            return;
+          }
+          cell.labelCellWired = true;
+          cell.addEventListener("dismiss", function (event) {
+            var chip = event.target.closest ? event.target.closest(".label-chip") : null;
+            if (!chip) {
+              return;
+            }
+            removeLabel(chip.getAttribute("data-task-id"), chip.getAttribute("data-label-id"));
+          });
+        });
+
+        bodyEl.querySelectorAll(".assign-display").forEach(function (button) {
+          button.addEventListener("click", function () {
+            openAssignEditor(button, tab);
+          });
+        });
+      }
+
+      function replaceButtonWithPopover(button, popoverHtml) {
+        var wrapper = document.createElement("span");
+        wrapper.innerHTML = popoverHtml;
+        var popover = wrapper.firstElementChild;
+        button.replaceWith(popover);
+        popover.setAttribute("open", "");
+        popover.addEventListener("close", function () {
+          if (popover.isConnected) {
+            popover.replaceWith(button);
+          }
+        });
+        return popover;
+      }
+
+      function openNotePopover(button, tab) {
+        var taskId = button.getAttribute("data-task-id");
+        /* The note now travels on the row, so this prefills from what the tab
+           already fetched and asks for nothing. Before this it was hardcoded
+           empty, so reopening always showed a blank field over a saved note. */
+        var noteRow = button.closest("canvas-table-row");
+        var existing = noteRow && noteRow._task ? (noteRow._task.note || "") : "";
+        var html =
+          /* --canvas-popover-max-width is a cap rather than a fixed width,
+             the surface still shrinks below it on a narrow viewport. */
+          '<canvas-popover label="Note for this fax" size="md" style="--canvas-popover-max-width: 350px">' +
+          /* The trigger is the same pill the row was showing rather than a
+             canvas-button, so opening the popover does not swap one control
+             for a differently shaped one under the pointer. canvas-popover
+             binds its click on the wrapper around the slot and sets the aria
+             on whatever is slotted, so a plain button serves as well as one
+             of its own, read out of the bundle before this was written. */
+          '<button type="button" slot="trigger" class="btn-note' + (existing ? '' : ' is-empty') + '" ' +
+          'data-task-id="' + escapeHtml(taskId) + '">' + noteButtonInner(!!existing) + '</button>' +
+          '<div class="popover-body">' +
+          '<canvas-textarea label="Note" rows="3" placeholder="Add a note for whoever picks this up ..." value="' + escapeHtml(existing) + '"></canvas-textarea>' +
+          '<div class="popover-actions">' +
+          '<canvas-button variant="ghost" size="sm" class="note-cancel">Cancel</canvas-button>' +
+          '<canvas-button variant="secondary" size="sm" class="note-save">Save</canvas-button>' +
+          '</div>' +
+          '</div>' +
+          '</canvas-popover>';
+        var popover = replaceButtonWithPopover(button, html);
+        var textarea = popover.querySelector("canvas-textarea");
+
+        /* The caret goes into the field, because opening this popover has one
+           purpose and the popover otherwise leaves focus on its own trigger,
+           measured on the running page. A plain focus on the host is enough,
+           canvas-textarea attaches its shadow root with delegatesFocus true so
+           the inner control takes it. Deferred by one turn because the popover
+           moves focus to the trigger as it activates, and a focus set inside
+           that same turn is the one that loses. */
+        setTimeout(function () {
+          if (textarea && popover.isConnected) {
+            textarea.focus();
+          }
+        }, 0);
+        popover.querySelector(".note-cancel").addEventListener("click", function () {
+          popover.close();
+        });
+        popover.querySelector(".note-save").addEventListener("click", function () {
+          request("/tasks/" + encodeURIComponent(taskId) + "/note", {
+            method: "POST",
+            body: JSON.stringify({ note: textarea.value })
+          }).then(function (data) {
+            popover.close();
+            /* The route answers with the note it stored, so the row is patched
+               from that rather than from what was typed, and the button opposite
+               changes in the same breath. */
+            patchTaskEverywhere(taskId, { note: (data && data.note) || "" });
+          }).catch(function () {
+            showPageError("Could not save the note. Try again in a moment.");
+          });
+        });
+      }
+
+      /* --- Why the row picker lost its create control, and why it is back
+
+         Spec version 3 removed creation from this exact picker. A list
+         anybody can grow from a row and nobody can correct collects Prior
+         auth beside Prior Authorization beside PA, and that reasoning was
+         sound at the time, it rested on there being no correction path. The
+         manage labels modal is that correction path, a label invented in a
+         hurry can now be renamed or removed by somebody who notices, which is
+         what the original objection was actually about, so the 2026-09-04
+         change request restores the control on that basis. The case
+         insensitive match POST /labels now runs is what keeps referral from
+         sitting beside Referral the moment creation is back on a row, per
+         criterion 31. The list can still grow faster than anybody tidies it,
+         which is accepted deliberately here rather than argued away.
+
+         The rest of the label design is unchanged and was not a mistake. A
+         practice defined label cannot live in Canvas at all, findings block
+         N9 labelled Not possible, and the plugin deliberately never suggests
+         a native document type from one, decision D13, because a wrong
+         categorisation on a clinical document is worse than none. */
+      /* The picker opens where the plus stood, in the cell, already open and
+         already searchable. It was a popover before and Jess asked for the
+         mechanics of the home app's own task list, which swaps a searchable
+         field in beside the labels rather than floating one over the row. */
+      function openLabelPicker(button, tab) {
+        var taskId = button.getAttribute("data-task-id");
+        var row = button.closest("canvas-table-row");
+        var used = usedLabelIds((row && row._task) || {});
+        var options = labelOptionsMarkup(used);
+        var editor = swapInEditor(
+          button,
+          "label-editor",
+          /* No empty-state attribute here any more. Behaviour step 26 needs
+             the empty row to carry one of two different things depending on
+             what has been typed, and the design system's own reference is
+             plain that the attribute always wins over a slot when both are
+             set, so the fixed string has to give way for the slot to be able
+             to say anything else. wireLabelCreateOffer owns everything the
+             slot shows from here on. */
+          '<canvas-combobox size="sm" placeholder="Search labels" ' +
+            'aria-label="Add a label to this fax">' +
+            options +
+            '<div slot="empty" class="label-empty-slot">Every label is already on this fax</div>' +
+            '</canvas-combobox>',
+          function (picker, restore) {
+            var id = String(picker.value == null ? "" : picker.value);
+            if (!id) {
+              return;
+            }
+            request("/tasks/" + encodeURIComponent(taskId) + "/label", {
+              method: "POST",
+              body: JSON.stringify({ label_id: id })
+            }).then(function (data) {
+              /* The route answers with every label on the fax rather than the
+                 one just added, so the cell repaints from the server's own view
+                 of the row instead of the page keeping a second copy of the
+                 list. That repaint replaces this editor, so nothing is put
+                 back by hand. A label never moves a fax between tabs and never
+                 changes a count, so nothing is read again. */
+              patchTaskEverywhere(taskId, { labels: (data && data.labels) || [] });
+              restore();
+            }).catch(function () {
+              restore();
+              showPageError("Could not add the label. Try again in a moment.");
+            });
+          },
+          function (control, inner, restore) {
+            wireLabelCreateOffer(control, inner, taskId, restore);
+          }
+        );
+        return editor;
+      }
+
+      /* --- Criteria 29 and 30, the create offer inside the picker's empty row
+
+         canvas-combobox exposes no public event for what somebody has typed,
+         change fires only once a value is chosen, so the typed text is read
+         straight off the component's own input inside its shadow root, the
+         same reach openPicker already makes to open the menu in the first
+         place. Filtering itself is entirely the component's own, a
+         case-insensitive substring match per the skill's reference, so this
+         never decides for itself whether something matches, it only repaints
+         the slot on every keystroke and lets the component's own empty row
+         decide when that repaint is the thing showing.
+
+         Two ways to activate, matching Behaviour step 26 exactly. A click on
+         the offer is wired once, delegated on the slot so one listener
+         survives the offer's own content being replaced on every keystroke.
+         Enter is the vendor's own selection key and does nothing once nothing
+         is highlighted, which is exactly the state the offer shows in, so a
+         second keydown listener on the same input covers it. offsetParent is
+         a plain layout read rather than a check on the component's own
+         visibility class, since the slot is this page's own element and that
+         is the ordinary way to ask whether an element is actually on screen,
+         nothing here depends on a class name the component did not document. */
+      function wireLabelCreateOffer(control, inner, taskId, restore) {
+        var slot = control.querySelector('[slot="empty"]');
+        if (!slot) {
+          return;
+        }
+
+        function paint(typed) {
+          if (!typed) {
+            slot.textContent = "Every label is already on this fax";
+            slot.classList.remove("is-offer");
+            return;
+          }
+          slot.innerHTML = "";
+          slot.classList.add("is-offer");
+          var offer = document.createElement("button");
+          offer.type = "button";
+          offer.className = "label-create-offer";
+          offer.textContent = 'Create "' + typed + '"';
+          slot.appendChild(offer);
+        }
+
+        function typedValue() {
+          return (inner.value || "").trim();
+        }
+
+        function activate() {
+          var typed = typedValue();
+          if (!typed) {
+            return;
+          }
+          createLabelAndApply(typed, taskId, restore);
+        }
+
+        slot.addEventListener("click", function (event) {
+          if (event.target.closest(".label-create-offer")) {
+            activate();
+          }
+        });
+
+        inner.addEventListener("input", function () {
+          paint(typedValue());
+        });
+
+        inner.addEventListener("keydown", function (event) {
+          if (event.key !== "Enter") {
+            return;
+          }
+          if (slot.offsetParent === null || !slot.classList.contains("is-offer")) {
+            return;
+          }
+          activate();
+        });
+      }
+
+      /* Behaviour step 26, one action rather than two. POST /labels then
+         POST /tasks/<id>/label are the same two routes the manage labels
+         modal and the picker's own selection already call, nothing new is
+         added to the server side of this. patchTaskEverywhere repaints this
+         row from the second route's own answer exactly like an ordinary
+         label add does, and refreshLabelsEverywhere is the same reread
+         addLabel already relies on so every other row's picker offers the
+         new label the moment it next opens, with no page reload either
+         place. */
+      function createLabelAndApply(name, taskId, restore) {
+        request("/labels", {
+          method: "POST",
+          body: JSON.stringify({ name: name })
+        }).then(function (label) {
+          return request("/tasks/" + encodeURIComponent(taskId) + "/label", {
+            method: "POST",
+            body: JSON.stringify({ label_id: label.id })
+          });
+        }).then(function (data) {
+          patchTaskEverywhere(taskId, { labels: (data && data.labels) || [] });
+          restore();
+          return refreshLabelsEverywhere();
+        }).catch(function () {
+          restore();
+          showPageError("Could not create the label. Try again in a moment.");
+        });
+      }
+
+      /* Taking a label off is the chip's own X and needs no surface of its
+         own, so this is a plain call rather than an editor. Removing a label
+         the fax does not carry is not an error at the route either, so a chip
+         dismissed twice needs no guard here. */
+      function removeLabel(taskId, labelId) {
+        if (!taskId || !labelId) {
+          return;
+        }
+        request("/tasks/" + encodeURIComponent(taskId) + "/label/" + encodeURIComponent(labelId), {
+          method: "DELETE"
+        }).then(function (data) {
+          patchTaskEverywhere(taskId, { labels: (data && data.labels) || [] });
+        }).catch(function () {
+          showPageError("Could not remove the label. Try again in a moment.");
+        });
+      }
+
+      /* --- Assigning, in the row rather than over it ---
+
+         The cell shows the assignee as a value until somebody clicks it, then
+         this swaps a dropdown in where that value stood, already open, and puts
+         the value back when nothing is chosen. It is the mechanic the home app's
+         own task list uses on the same column, and it is why the cue no longer
+         offers an undo, since changing the assignment again is the same one
+         control rather than a second one on a banner. */
+      function openAssignEditor(display, tab) {
+        var taskId = display.getAttribute("data-task-id");
+        return swapInEditor(
+          display,
+          "assign-editor",
+          '<canvas-combobox size="sm" placeholder="Search people and teams" ' +
+            'aria-label="Assign this fax" ' +
+            'empty-state="No teams or staff to search yet">' +
+            /* Clearing an assignment used to be a separate button on a popover
+               and there is no popover now, so it is the first option in the
+               same control. One place to set who owns a fax, including nobody. */
+            '<canvas-option value="none">Unassigned</canvas-option>' +
+            assigneeOptionsMarkup() +
+            '</canvas-combobox>',
+          function (combobox, restore) {
+            if (!combobox.value) {
+              return;
+            }
+            var clearing = combobox.value === "none";
+            // Each option's own value carries which kind of assignee it names,
+            // "team:" or "staff:" ahead of the id GET /assignees returned for it,
+            // since the two kinds share one control per the approved proposal.
+            var chosen = clearing ? null : parseAssigneeValue(combobox.value);
+            if (!clearing && !chosen) {
+              return;
+            }
+            /* Read before the write, because the row is about to leave this tab
+               and the cue is the only thing that will say where it went. */
+            var movingRow = findRow(tab, taskId);
+            var movingTitle = movingRow && movingRow._task
+              ? (movingRow._task.title || movingRow._task.type || "This fax")
+              : "This fax";
+            clearCue(tab);
+
+            var call = clearing
+              ? request("/tasks/" + encodeURIComponent(taskId) + "/assign", { method: "DELETE" })
+              : request("/tasks/" + encodeURIComponent(taskId) + "/assign", {
+                  method: "POST",
+                  body: JSON.stringify(
+                    chosen.kind === "team" ? { team_id: chosen.id } : { staff_id: chosen.id }
+                  )
+                });
+
+            call.then(function (data) {
+              /* No optimistic patch here, unlike the labels. _assignee_name
+                 prefers a committed IntegrationTaskReview over the plugin's own
+                 record, so what this route just wrote is not necessarily what
+                 the row will report, and patching from it could flash a name
+                 the next read corrects. An assignment also moves a fax between
+                 tabs and changes the counts, and api.py owns that decision. So
+                 every tab is read again quietly, which reconciles without a
+                 loader and leaves the scroll position alone. */
+              var name = (data && (data.assigned_staff || data.assigned_team)) || null;
+              return refreshEveryTab().then(function () {
+                restore();
+                announceMove(tab, taskId, movingTitle,
+                  clearing ? "Assignment cleared" : (name ? "Assigned to " + name : "Assigned"));
+              });
+            }).catch(function () {
+              restore();
+              showPageError(clearing
+                ? "Could not clear the assignment. Try again in a moment."
+                : "Could not assign this fax. Try again in a moment.");
+            });
+          }
+        );
+      }
+
+      /* --- Behaviour step 23, the Manage labels modal ---
+
+         Restores the surface spec version 2 withdrew for a presentation
+         reason rather than a scope one, per the change request. The three
+         routes underneath were already built and tested, so this is the one
+         page that finally calls them, plus the count GET /labels now carries
+         so a deletion can say what it costs before it happens. */
+
+      function showModalError(message) {
+        var region = document.getElementById("labels-modal-error");
+        region.innerHTML =
+          '<canvas-banner variant="error" header="' + escapeHtml(message) + '"></canvas-banner>';
+      }
+
+      function clearModalError() {
+        document.getElementById("labels-modal-error").innerHTML = "";
+      }
+
+      /* A label row's read state, read by the first paint of the modal table
+         and by every repaint after an add, a rename or a delete, so the
+         three paths cannot drift into building a row two different ways.
+         The name renders as plain text rather than as a field, per
+         Behaviour step 27, and Edit is what turns it into one. The two
+         controls share the class the shared minimum width rule already
+         reads, so a read state row lines up with the add row above the
+         same way the row's other two states do. */
+      function labelReadRowMarkup(label) {
+        var id = escapeHtml(label.id);
+        var name = escapeHtml(label.name);
+        return '<canvas-table-row data-label-id="' + id + '">' +
+          '<canvas-table-cell>' +
+          '<span class="label-name-text">' + name + '</span>' +
+          '</canvas-table-cell>' +
+          '<canvas-table-cell actions>' +
+          '<div class="label-row-actions">' +
+          '<canvas-button variant="ghost" class="label-edit-button" ' +
+          'data-label-id="' + id + '">Edit</canvas-button>' +
+          '<canvas-button variant="ghost" class="label-delete-button" ' +
+          'data-label-id="' + id + '" data-label-name="' + name + '" ' +
+          'data-fax-count="' + escapeHtml(label.fax_count) + '">Delete</canvas-button>' +
+          '</div>' +
+          '</canvas-table-cell>' +
+          '</canvas-table-row>';
+      }
+
+      /* The two cells a row swaps to on Edit, per Behaviour step 27. The
+         input carries the stored name rather than an empty one, since Save
+         commits whatever is in it and Cancel is what throws it away, and a
+         plain canvas-input runs roughly forty three pixels tall, which is
+         why its two buttons keep the base size the add row already uses
+         rather than the shorter size a table's own action buttons usually
+         take, so Cancel and Save line up with Add label as the same box
+         rather than a table sized button beside a form sized one. */
+      function labelEditCellsMarkup(label) {
+        var id = escapeHtml(label.id);
+        var name = escapeHtml(label.name);
+        return '<canvas-table-cell>' +
+          '<canvas-input class="label-name-input" data-label-id="' + id + '" ' +
+          'aria-label="Label name" value="' + name + '"></canvas-input>' +
+          '</canvas-table-cell>' +
+          '<canvas-table-cell actions>' +
+          '<div class="label-row-actions">' +
+          '<canvas-button variant="ghost" class="label-cancel-button" ' +
+          'data-label-id="' + id + '">Cancel</canvas-button>' +
+          '<canvas-button variant="secondary" class="label-save-button" ' +
+          'data-label-id="' + id + '">Save</canvas-button>' +
+          '</div>' +
+          '</canvas-table-cell>';
+      }
+
+      /* The sentence a row's delete state names, per Behaviour step 27 and
+         the change request's own third sketch. The count travels on the
+         button that asked for this state as data-fax-count, read straight
+         off GET /labels rather than asked for again, so entering the state
+         costs nothing beyond what painting the read row already paid for.
+         Deliberately singular or plural rather than the sketch's own bare
+         plural, since a label carried by exactly one fax reading as one
+         faxes would be wrong on the one row where the number is smallest
+         and easiest to notice. */
+      function deleteRowPhrase(name, faxCount) {
+        var count = parseInt(faxCount, 10) || 0;
+        var noun = count === 1 ? "fax" : "faxes";
+        return 'Delete "' + name + '", carried by ' + count + ' ' + noun;
+      }
+
+      /* The two cells a row swaps to on Delete, per Behaviour step 27. No
+         second modal opens over the manage labels modal for this, the row
+         itself becomes the confirmation, which is what the change request
+         settled and what makes Delete here a danger button rather than the
+         ghost one the read state carries, since a row already asking to
+         confirm is the confirmation the design system otherwise wants
+         standing between a person and a danger button. */
+      function labelDeleteCellsMarkup(labelId, name, faxCount) {
+        var id = escapeHtml(labelId);
+        return '<canvas-table-cell>' +
+          '<span class="label-name-text">' + escapeHtml(deleteRowPhrase(name, faxCount)) + '</span>' +
+          '</canvas-table-cell>' +
+          '<canvas-table-cell actions>' +
+          '<div class="label-row-actions">' +
+          '<canvas-button variant="ghost" class="label-cancel-button" ' +
+          'data-label-id="' + id + '">Cancel</canvas-button>' +
+          '<canvas-button variant="danger" class="label-confirm-delete-button" ' +
+          'data-label-id="' + id + '">Delete</canvas-button>' +
+          '</div>' +
+          '</canvas-table-cell>';
+      }
+
+      function findLabelRow(labelId) {
+        return document.querySelector(
+          'canvas-table-row[data-label-id="' + labelId + '"]'
+        );
+      }
+
+      /* labelsCache already arrives in name order from GET /labels, so this
+         sort costs nothing on the ordinary path and is what keeps the table
+         in order regardless, since the cache is patched in place by
+         fetchLabels rather than reread by this function. Every row this
+         paints is in its read state, which is also how Behaviour step 27's
+         one row at a time rule is kept, entering the edit or the delete
+         state always starts from this full repaint rather than from
+         whatever a row happened to be showing before, so there is never a
+         second state left over from an earlier click to track by hand. */
+      function renderLabelsModalTable() {
+        var body = document.getElementById("labels-table-body");
+        var ordered = labelsCache.slice().sort(function (a, b) {
+          return a.name.localeCompare(b.name);
+        });
+        body.innerHTML = ordered.map(labelReadRowMarkup).join("");
+        wireLabelsModalRows(body);
+      }
+
+      function wireLabelsModalRows(root) {
+        root.querySelectorAll(".label-edit-button").forEach(function (button) {
+          button.addEventListener("click", function () {
+            enterLabelEditState(button.getAttribute("data-label-id"));
+          });
+        });
+        root.querySelectorAll(".label-delete-button").forEach(function (button) {
+          button.addEventListener("click", function () {
+            enterLabelDeleteState(
+              button.getAttribute("data-label-id"),
+              button.getAttribute("data-label-name"),
+              button.getAttribute("data-fax-count")
+            );
+          });
+        });
+      }
+
+      /* Every row returns to its read state first, per Behaviour step 27's
+         one row at a time rule, and the full repaint renderLabelsModalTable
+         already does is what proves that rather than a second place
+         tracking which row was left open. The row this call is about then
+         has its own two cells swapped for the editor, keeping the same
+         canvas-table-row element and its data-label-id rather than
+         rebuilding the row itself. */
+      function enterLabelEditState(labelId) {
+        renderLabelsModalTable();
+        var label = labelsCache.find(function (entry) {
+          return String(entry.id) === String(labelId);
+        });
+        var row = findLabelRow(labelId);
+        if (!label || !row) {
+          return;
+        }
+        row.innerHTML = labelEditCellsMarkup(label);
+        wireLabelEditRow(row);
+      }
+
+      function wireLabelEditRow(row) {
+        var input = row.querySelector(".label-name-input");
+        row.querySelector(".label-cancel-button").addEventListener("click", function () {
+          // Cancel writes nothing and the stored name is what the next
+          // repaint reads, so returning to the read state is the whole of
+          // restoring it.
+          renderLabelsModalTable();
+        });
+        row.querySelector(".label-save-button").addEventListener("click", function () {
+          renameLabel(row.getAttribute("data-label-id"), input, input.value);
+        });
+      }
+
+      /* The mirror of enterLabelEditState for Delete, per Behaviour step 27.
+         The name and the count travel as arguments rather than a second
+         cache read, since the button that asked for this state already
+         carried both on its own data attributes. */
+      function enterLabelDeleteState(labelId, name, faxCount) {
+        renderLabelsModalTable();
+        var row = findLabelRow(labelId);
+        if (!row) {
+          return;
+        }
+        row.innerHTML = labelDeleteCellsMarkup(labelId, name, faxCount);
+        wireLabelDeleteRow(row);
+      }
+
+      function wireLabelDeleteRow(row) {
+        row.querySelector(".label-cancel-button").addEventListener("click", function () {
+          renderLabelsModalTable();
+        });
+        row.querySelector(".label-confirm-delete-button").addEventListener("click", function () {
+          deleteLabelRow(row.getAttribute("data-label-id"));
+        });
+      }
+
+      /* The one place a change inside the modal turns into what the rest of
+         the page shows. labelsCache is what the row level pickers read, so it
+         is refetched here, and refreshEveryTab is the existing quiet reread
+         the assignment editor already relies on for the same reason, a fax
+         label can be renamed or removed on any of the three tabs at once and
+         only the server knows which rows those are. */
+      function refreshLabelsEverywhere() {
+        return fetchLabels().then(function () {
+          renderLabelsModalTable();
+          return refreshEveryTab();
+        });
+      }
+
+      function openLabelsModal() {
+        clearModalError();
+        renderLabelsModalTable();
+        document.getElementById("labels-modal").open();
+      }
+
+      function addLabel() {
+        var input = document.getElementById("new-label-input");
+        var name = input.value.trim();
+        clearModalError();
+        request("/labels", { method: "POST", body: JSON.stringify({ name: name }) })
+          .then(function () {
+            input.value = "";
+            return refreshLabelsEverywhere();
+          })
+          .catch(function () {
+            showModalError("Could not add the label. Try again in a moment.");
+          });
+      }
+
+      /* Driven by Save now rather than by an input's own change event,
+         since the row no longer carries a field at rest for that event to
+         fire from. A failure leaves the input on screen with the error
+         attribute set rather than returning to the read state, so the
+         stored name a Cancel would restore is never confused with a name
+         that failed to commit. */
+      function renameLabel(labelId, input, name) {
+        var trimmed = name.trim();
+        if (!trimmed) {
+          input.setAttribute("error", "A label name is required");
+          return;
+        }
+        input.removeAttribute("error");
+        request("/labels/" + encodeURIComponent(labelId), {
+          method: "PUT",
+          body: JSON.stringify({ name: trimmed })
+        }).then(function () {
+          return refreshLabelsEverywhere();
+        }).catch(function () {
+          input.setAttribute("error", "Could not rename this label. Try again in a moment.");
+        });
+      }
+
+      /* Behaviour step 27's Delete commit. A failure returns the row to its
+         read state rather than leaving the delete confirmation standing,
+         since nothing about a failed request needs the row held open the
+         way a failed rename needs the input held open, there is no second
+         value waiting to be retried against the same field. */
+      function deleteLabelRow(labelId) {
+        request("/labels/" + encodeURIComponent(labelId), { method: "DELETE" })
+          .then(function () {
+            return refreshLabelsEverywhere();
+          })
+          .catch(function () {
+            renderLabelsModalTable();
+            showModalError("Could not delete the label. Try again in a moment.");
+          });
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        /* Changing tab dismisses any cue. canvas-tabs raises tab-change from
+           its own activation path, so this catches a tab clicked by a person
+           and one switched by Show me alike. */
+        var tabsEl = document.querySelector("canvas-tabs");
+        if (tabsEl) {
+          tabsEl.addEventListener("tab-change", clearEveryCue);
+        }
+
+        document.getElementById("manage-labels-button").addEventListener("click", openLabelsModal);
+        document.getElementById("add-label-button").addEventListener("click", addLabel);
+
+        clearPageError();
+        fetchLabels();
+        fetchAssignees();
+        loadTab("unassigned");
+        loadTab("my-team");
+        loadTab("all");
+      });
+    })();
+  </script>
+</body>
+</html>
