@@ -1750,7 +1750,29 @@
       $('bHbCount').textContent = plural(signed, 'consent') + ' signed.';
       show('bhandback'); replay('bhandbackView');
     }
-    $('bNext').addEventListener('click', function () { if (!$('bNext').disabled) finishOne('signed'); });
+    // With a text field active on an iPad, the first tap on the button only closes the
+    // keyboard and no click arrives. Close it on press and sign on release, so one tap
+    // does both; the click that may follow is ignored.
+    var signTap = { viaPress: false, skipClick: false };
+    $('bNext').addEventListener('pointerdown', function (e) {
+      var field = activeTextField();
+      if (!field) return;
+      field.blur(); signTap.viaPress = true;
+      // Keep the release on the button even if the screen shifts as the keyboard closes.
+      try { this.setPointerCapture(e.pointerId); } catch (x) {}
+    });
+    $('bNext').addEventListener('pointerup', function () {
+      if (!signTap.viaPress) return;
+      signTap.viaPress = false;
+      if ($('bNext').disabled) return;
+      signTap.skipClick = true; setTimeout(function () { signTap.skipClick = false; }, 600);
+      finishOne('signed');
+    });
+    $('bNext').addEventListener('pointercancel', function () { signTap.viaPress = false; });
+    $('bNext').addEventListener('click', function () {
+      if (signTap.skipClick) { signTap.skipClick = false; return; }
+      if (!$('bNext').disabled) finishOne('signed');
+    });
     $('bSkip').addEventListener('click', function () { finishOne('skipped'); });
     $('bHbContinue').addEventListener('click', function () { renderStatus(); show('bstatus'); });
 
@@ -1795,7 +1817,15 @@
     // accept draws nothing, and the hint says what to use instead.
     function strokeKind(e) { return e.pointerType === 'mouse' ? 'mouse' : 'finger'; }
     function kindAccepted(kind) { return kind === 'mouse' ? PRACTICE.accept_mouse : PRACTICE.accept_finger; }
+    // The text field that still has the keyboard up, if any.
+    function activeTextField() {
+      var a = document.activeElement;
+      return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') ? a : null;
+    }
     cv.addEventListener('pointerdown', function (e) {
+      // preventDefault keeps the pen stroke from scrolling the page, but it also keeps
+      // the touch from taking focus, so the printed name field kept the keyboard up.
+      var field = activeTextField(); if (field) field.blur();
       e.preventDefault();
       var kind = strokeKind(e);
       if (!kindAccepted(kind)) {
