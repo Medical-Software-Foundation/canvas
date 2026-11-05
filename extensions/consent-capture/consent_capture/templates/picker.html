@@ -820,6 +820,8 @@
         try { p.postMessage({ type: 'RESIZE', width: w, height: h }); } catch (e) {}
         // dvh is the height actually visible: on iPad Safari, 100vh includes the space
         // under an open tab bar, which pushed the footer buttons off the bottom.
+        // 100vh first for browsers that don't know dvh (Safari before 15.4), which keep it.
+        try { p.postMessage({ type: 'RESIZE', width: '100vw', height: '100vh' }); } catch (e) {}
         try { p.postMessage({ type: 'RESIZE', width: '100vw', height: '100dvh' }); } catch (e) {}
       }
     };
@@ -1226,7 +1228,7 @@
       if (documentBase64) payload.document_pdf = documentBase64;
       postJSON(COLLECT_URL, payload).then(function (data) {
         ui.primary.disabled = false; ui.back.disabled = false; ui.primary.textContent = lbl;
-        if (data && data.ok) { stopCamera(); afterRecorded(W.index, data.preview || {}, false); showReceipt(RECORDS[0]); }
+        if (data && data.ok) { stopCamera(); releaseCapture(CAP); afterRecorded(W.index, data.preview || {}, false); showReceipt(RECORDS[0]); }
         else ui.setMsg((data && data.error) || 'Could not record consent.', true);
       }).catch(function () { ui.primary.disabled = false; ui.back.disabled = false; ui.primary.textContent = lbl; ui.setMsg('Could not reach the server. Please try again.', true); });
     }
@@ -1288,7 +1290,13 @@
     var CAP = { pages: [], cropper: null, stream: null, queue: [], current: null, tab: 'camera' };
     function capSetMsg(text, isErr) { setMsgIn('capMsg', text, isErr ? 'error' : ''); }
 
+    // Photos are kept as blob URLs; free a capture's photos once it's recorded or replaced.
+    function releaseCapture(cap) {
+      if (!cap) return;
+      (cap.pages || []).concat(cap.queue || [], cap.current ? [cap.current] : []).forEach(function (pg) { releasePage(pg); });
+    }
     function openCapture() {
+      releaseCapture(CAP);
       CAP = { pages: [], cropper: null, stream: null, queue: [], current: null, tab: 'camera' };
       capSetMsg(''); $('capTitle').textContent = W.consent.display;
       var signable = deviceSigningFor(W.consent);
@@ -1331,6 +1339,7 @@
       });
       if (which === 'camera') startCamera(); else stopCamera();
       if ($('scCam').classList.contains('on')) capFooter('camera');
+      if (which !== 'sign') maybeStartReview();  // a photo that finished while on another tab
     }
     // Phones and tablets (iPad, iPhone, Android) take the photo with the device's own
     // camera app: full resolution, focused and exposed, with flash where the device has
@@ -1390,7 +1399,12 @@
         new ImageCapture(track).takePhoto()
           .then(shrinkImage)
           .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openReview(); } })
-          .catch(function () { if (stillHere() && track.readyState === 'live') captureVideoFrame(v, stillHere); });
+          .catch(function () {
+            if (!stillHere()) return;
+            if (track.readyState === 'live') { captureVideoFrame(v, stillHere); return; }
+            capSetMsg('Could not capture the photo. Please try again.', true);
+            stopCamera(); startCamera();  // the camera went away; reopen it and the shutter returns when it's ready
+          });
         return;
       }
       captureVideoFrame(v, stillHere);
@@ -1468,26 +1482,40 @@
           afterQueueChange();
         });
     }
-    function maybeStartReview() { if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openReview(); } }
+    // Only while the photo screens are showing: a resize that lands after staff moved on
+    // (to signing, or back) waits in the queue instead of taking over the screen.
+    function onPhotoScreens() { return $('capView').classList.contains('active') && CAP.tab !== 'sign'; }
+    function maybeStartReview() {
+      if (!onPhotoScreens()) return;
+      if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openReview(); }
+      syncReviewButtons();
+    }
     // Open the next ready page; if the review screen is left with nothing to show
     // (the last pending image failed), move on instead of sitting on the old photo.
     function afterQueueChange() {
       maybeStartReview();
-      if (CAP.current || CAP.queue.length || !$('scReview').classList.contains('on')) return;
+      if (!onPhotoScreens() || CAP.current || CAP.queue.length || !$('scReview').classList.contains('on')) return;
       if (CAP.pages.length) capStep('pages'); else { selectTab('camera'); capStep('camera'); }
     }
-    function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); }
+    function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); syncReviewButtons(); }
     function reviewNext(committed) {
       CAP.current = null;
       if (CAP.queue.length) {
         maybeStartReview();
         // Still resizing: clear the old photo and say so; it opens when ready.
-        if (!CAP.current) { $('reviewImg').removeAttribute('src'); capSetMsg('Preparing the next photo…'); }
+        if (!CAP.current) { $('reviewImg').removeAttribute('src'); capSetMsg('Preparing the next photo…'); syncReviewButtons(); }
       }
       else if (committed || CAP.pages.length) { capStep('pages'); }
       else { selectTab('camera'); capStep('camera'); }
     }
     function reviewAddPage() { if (CAP.current) addPage(CAP.current); reviewNext(true); }
+    // Retake, Add Page and Crop do nothing without a photo; turn them off while the next
+    // one is still being prepared.
+    function syncReviewButtons() {
+      if (!$('scReview').classList.contains('on')) return;
+      var none = !CAP.current;
+      $('capLeft').disabled = none; $('capRight').disabled = none; $('cropBtn').disabled = none;
+    }
     function releasePage(p) { if (p && p.url && p.url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(p.url); } catch (e) {} } }
     function reviewRetake() { releasePage(CAP.current); reviewNext(false); }
     function openCrop(src) {
@@ -1714,6 +1742,7 @@
     function currentItem() { return S.items[S.queue[S.qi]]; }
     function loadSign() {
       var it = currentItem();
+      signTap.ignoreClick = false;  // a click left over from the last consent doesn't carry over
       S.reconfirmItem = !!it.reconfirm;
       $('bProgress').textContent = S.queue.length === 1 ? '' : 'Consent ' + (S.qi + 1) + ' of ' + S.queue.length;
       $('bTitle').textContent = it.c.display;
@@ -1769,7 +1798,7 @@
         } else {
           var cap = captureSignature();
           it.sig = cap.sig; it.signedWith = cap.signedWith; it.typed = cap.typed;
-          it.entered = (cap.typed ? cap.typedName : (PRACTICE.ask_printed_name ? $('pnInput').value.trim() : '')).normalize('NFC');
+          it.entered = cleanName(cap.typed ? cap.typedName : (PRACTICE.ask_printed_name ? $('pnInput').value : ''));
           it.reused = false; it.reconfirmed = false; it.reconfirm = false;
           S.lastSig = { sig: it.sig, from: it.c.display, entered: it.entered, signedWith: it.signedWith, typed: it.typed };
         }
@@ -1862,7 +1891,10 @@
     // The text field that still has the keyboard up, if any.
     function activeTextField() {
       var a = document.activeElement;
-      return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') ? a : null;
+      if (!a) return null;
+      if (a.tagName === 'TEXTAREA') return a;
+      var t = (a.getAttribute('type') || 'text').toLowerCase();
+      return a.tagName === 'INPUT' && ['text', 'search', 'email', 'tel', 'url', 'number', 'password'].indexOf(t) !== -1 ? a : null;
     }
     cv.addEventListener('pointerdown', function (e) {
       // preventDefault keeps the pen stroke from scrolling the page, but it also keeps
@@ -1962,12 +1994,17 @@
     // scripts print as "?", so the server refuses them; catching them here keeps the
     // signer from finding out only after handing the device back.
     var CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
-    // Latin Extended letters the server's fold table has no plain letter for (keep in
-    // step with _FOLD_PAIRS / _FOLD_MULTI in pdf.py).
-    var NO_FOLD = 'ƄƅƆƍƎƏƐƔƖƛƜƦƧƨƩƪƱƷƸƹƺƻƼƽƾƿǀǁǂǃǝǮǯǶǷȜȝɁɂɅɊẜẝẟ';
+    // Latin Extended letters the server's fold table has no plain letter for, sent by
+    // the server (pdf.latin_letters_without_plain_form) so the two checks agree.
+    var NO_FOLD = "{{ no_fold|escapejs }}";
+    // The server drops characters Python doesn't count as printable (controls, format
+    // characters such as zero-width spaces, and every space but the normal one) before
+    // checking a name; do the same here, so a pasted name isn't refused on screen.
+    var INVISIBLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}]|(?! )\p{Zs}/gu;
+    function cleanName(text) { return (text || '').normalize('NFC').replace(INVISIBLE, '').trim(); }
     function unprintableChars(text) {
       var bad = [];
-      Array.from((text || '').normalize('NFC')).forEach(function (ch) {
+      Array.from(cleanName(text)).forEach(function (ch) {
         var c = ch.codePointAt(0);
         if (c < 0x80 || (c >= 0xA0 && c <= 0xFF) || CP1252_EXTRA.indexOf(ch) !== -1) return;
         if (c >= 0x300 && c < 0x370) return;  // a stray combining accent is dropped, not printed

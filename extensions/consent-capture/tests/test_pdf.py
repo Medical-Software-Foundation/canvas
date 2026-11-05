@@ -20,6 +20,7 @@ from consent_capture.pdf import (
     generate_consent_pdf,
     fold_for_pdf,
     generate_consent_pdf_base64,
+    latin_letters_without_plain_form,
     pdf_page_count,
     unprintable_chars,
 )
@@ -547,3 +548,15 @@ class TestUnprintableChars:
     def test_empty(self):
         assert unprintable_chars("") == []
         assert unprintable_chars(None) == []
+
+
+class TestLatinLettersWithoutPlainForm:
+    def test_lists_letters_that_dont_fold(self):
+        out = latin_letters_without_plain_form()
+        assert "Ə" in out and "Ŋ" not in out and "Ĳ" not in out and "ễ" not in out
+
+    def test_every_listed_letter_is_unprintable_and_the_rest_print(self):
+        out = latin_letters_without_plain_form()
+        for cp in list(range(0x100, 0x250)) + list(range(0x1E00, 0x1F00)):
+            ch = chr(cp)
+            assert bool(unprintable_chars(fold_for_pdf(ch))) == (ch in out)

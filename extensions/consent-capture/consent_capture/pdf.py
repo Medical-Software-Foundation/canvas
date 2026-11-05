@@ -83,6 +83,26 @@ _FOLD_TABLE.update({ord(k): v for k, v in _FOLD_MULTI.items()})
 _FOLD_TABLE.update({cp: None for cp in range(0x300, 0x370)})
 
 
+def _prints(ch):
+    try:
+        ch.encode("cp1252")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+def latin_letters_without_plain_form():
+    """Latin Extended letters (U+0100-U+024F, U+1E00-U+1EFF) that neither print as
+    they are nor fold to a printable form. The signing screen refuses these up front,
+    so it agrees with the server's check without keeping its own copy of the table."""
+    out = []
+    for cp in list(range(0x100, 0x250)) + list(range(0x1E00, 0x1F00)):
+        ch = chr(cp)
+        if not _prints(ch) and not _prints(fold_for_pdf(ch)):
+            out.append(ch)
+    return "".join(out)
+
+
 def fold_for_pdf(text):
     """``text`` with letters the PDF can't draw replaced by their plain letter."""
     return (text or "").translate(_FOLD_TABLE)
