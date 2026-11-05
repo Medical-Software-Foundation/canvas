@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#1a1a1a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Clipboard body -->
+  <rect x="20" y="22" width="60" height="68" rx="6"/>
+  <!-- Clipboard clip -->
+  <path d="M37 22 V14 a4 4 0 0 1 4-4 h18 a4 4 0 0 1 4 4 V22 Z" fill="#1a1a1a"/>
+  <!-- Checkmark inside -->
+  <polyline points="34,58 46,70 68,46"/>
+</svg>

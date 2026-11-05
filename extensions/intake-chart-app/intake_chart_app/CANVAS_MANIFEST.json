@@ -1,0 +1,40 @@
+{
+    "sdk_version": "0.142.0",
+    "plugin_version": "0.1.0",
+    "name": "Intake Chart App",
+    "description": "Adds an 'Intake' tab on the note body so medical assistants can capture all eight standard intake sections (Vitals, Problems, Allergies, Medications, PMH, Surgical & Procedure History, Family History, Social History) in one guided form and commit them as native Canvas commands.",
+    "components": {
+        "applications": [],
+        "protocols": [
+            {
+                "class": "intake_chart_app.applications.intake_app:IntakeApp",
+                "description": "NoteApplication that renders the Intake tab on the note body. Declared as a protocol (not an application) so the icon does not also appear in the chart's 9-dot app drawer alongside global launchers — the SDK's APPLICATION__ON_GET event still wires the note tab strip via the NoteApplication's visible()/handle().",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "intake_chart_app.api.intake_api:IntakeAPI",
+                "description": "Form-state load/save and commit handler for the Intake tab",
+                "data_access": { "event": "", "read": [], "write": [] }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [{"template": "questionnaires/atod_intake.yaml"}]
+    },
+    "secrets": [
+        "intake-note-types",
+        "canvas-instance-origin",
+        "namespace_read_write_access_key"
+    ],
+    "tags": {},
+    "references": [],
+    "custom_data": {
+        "namespace": "canvas__intake_chart_app",
+        "access": "read_write"
+    },
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

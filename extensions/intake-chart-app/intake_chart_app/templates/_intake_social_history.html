@@ -1,0 +1,33 @@
+<div class="ic-section ic-section--editable" id="section-social-history" data-section="social_history">
+  <div class="ic-section-header">
+    <h2 class="ic-section-title">Social History — ATOD assessment</h2>
+    <span class="ic-section-status" id="status-social_history"></span>
+  </div>
+
+  <form id="form-social_history" class="ic-form" onsubmit="return false;">
+    <div class="ic-editable-body">
+      <p class="ic-help">Existing ATOD answers are shown in the chart's Social History sidebar to the left. Fill a fresh assessment for this visit below; commit originates a StructuredAssessment command on the note and the answers surface on the same sidebar on next reload.</p>
+      {% for f in atod_form_fields %}
+        <div class="ic-field ic-field--full">
+          <label class="ic-label">{{ f.label }}</label>
+          {% if f.kind == "radio" %}
+            <div class="ic-radio-group" data-question-code="{{ f.question_code }}">
+              {% for opt in f.options %}
+                <label class="ic-radio">
+                  <input type="radio" name="{{ f.id }}" value="{{ opt.value }}">
+                  <span>{{ opt.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          {% else %}
+            <textarea class="ic-input ic-textarea" rows="3" name="{{ f.id }}"
+                      data-question-code="{{ f.question_code }}"></textarea>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="ic-save-row">
+        <span class="ic-status" id="save-status-social_history"></span>
+      </div>
+    </div>
+  </form>
+</div>
