@@ -21,7 +21,7 @@ picker state. This is the source of the picker/flow images in the guides.
 node capture_local.mjs
 ```
 
-Produces: `04-hub-required`, `05-hub-onfile`, `06-review`, `07-finalize`,
+Produces: `04-hub-required`, `06-review`, `07-finalize`,
 `08-finalize-representative`, `09-done`, `10-written-camera`,
 `12-written-crop`, `13-written-pages`, `14-viewer`.
 
@@ -40,7 +40,7 @@ node capture_live.mjs
 A headed Chromium window opens using a **persistent profile** in `.auth/` (gitignored), so you
 log in via SSO **once** and later runs reuse the session. Log in if prompted and land on the
 patient chart; the script polls (up to 4 minutes) until the chart loads, then captures:
-`01-chart-full` / `01-chart-button`, `03-banner`, `04-hub-required` / `05-hub-onfile`,
+`01-chart-full` / `01-chart-button`, `03-banner`, `04-live-hub` / `05-live-hub-onfile`,
 `20-consent-settings`, `21-refresh-banners`.
 
 Every shot is best-effort: a missing selector is logged and skipped rather than aborting. Some

@@ -41,16 +41,15 @@ row shows the consent name, a colored status tag, and a **›** arrow.
   - **Needed** (red) — never recorded. Record it.
   - **Renew** (amber) — was recorded but has **expired**. The row shows when it expired.
 - **Optional** — consents you *can* record but aren't required. Tags: **Optional**, or
-  **Renew** if a previous one expired. (This group is collapsed when something is required —
-  click the heading to expand it.)
+  **Renew** if a previous one expired.
 - **On File** — the patient's consent **history**. Tags: **On file** (green) or **Expired**
   (amber). Each row shows the effective date and expiration (or "No expiration"). Clicking one
   **opens the recorded document** (see section 6). This group includes consents recorded
   elsewhere, not just ones you record here.
 
-![The Consents window showing the Required group, with Needed and Renew tags](screenshots/04-hub-required.png)
+Every group starts open. Click a group's heading to fold it closed or open it again.
 
-![The full Consents window with Required, Optional, and On File groups expanded](screenshots/05-hub-onfile.png)
+![The Consents window with Required, Optional, and On File groups](screenshots/04-hub-required.png)
 
 To **record** a consent, click any row under **Required** or **Optional**.
 
