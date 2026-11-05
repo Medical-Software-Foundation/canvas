@@ -37,9 +37,12 @@ plugin) — covers all three flows in both the patient chart and the Provider Co
   for this patient (excludes locked/signed; requires an encounter), with real dates.
 - **Profile picture** uses a **square crop** and sets `Patient.photo` via read-modify-write.
 - **Camera capture** (multi-page for documents, single for photos, with crop/rotate) or **file upload**
-  (PDF / JPG / PNG / HEIC), via a portrait modal with a 3:4 viewfinder tuned for
-  documents on desktop and iPad. Uploaded images are normalized (EXIF orientation
-  corrected, HEIC converted to JPEG) in the browser.
+  (PDF / JPG / PNG / HEIC). On iPad, iPhone and Android, the Camera tab's **Take Photo**
+  opens the device's own camera app (full resolution, focus, exposure, and flash where the
+  device has one). On computers it shows a live 3:4 viewfinder that asks the camera for its
+  full resolution and turns the shutter on about a second after the camera starts.
+  Photos and uploaded images are normalized (EXIF orientation corrected, HEIC converted to
+  JPEG, at most 2400 px on the longest side) in the browser.
 - **Page management** before saving: reorder pages by drag, tap to preview (images and
   multi-page PDFs), and delete individual pages.
 - All captured/uploaded pages are combined **in the browser** into a single PDF
