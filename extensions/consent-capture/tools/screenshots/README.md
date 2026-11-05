@@ -31,10 +31,10 @@ them as illustrative examples.
 ## Live capture (real instance)
 
 Captures the things only the live instance shows: the in-chart entry points and the admin
-pages, on the sanctioned playground test patient.
+pages, on a designated test patient on a non-production instance.
 
 ```bash
-node capture_live.mjs
+CANVAS_HOST=https://<your-canvas-host> CANVAS_PATIENT_ID=<test-patient-id> node capture_live.mjs
 ```
 
 A headed Chromium window opens using a **persistent profile** in `.auth/` (gitignored), so you
@@ -49,9 +49,9 @@ missing) and on the live EHR's DOM, so selectors may need tuning after reviewing
 
 ## Notes
 
-- **Sanctioned test patient only.** The live script targets one designated playground patient.
-  Its name/DOB may appear in the modal header of live shots — acceptable for that test patient
-  on a non-production instance. Do not point this at real patients.
+- **Test patient only.** Point the live script at a designated test patient on a
+  non-production instance. Its name/DOB may appear in the modal header of live shots. Do not
+  point this at real patients.
 - **The live script records real consents** only if extended to do so; the current version does
   not submit — it captures entry points, the hub, and admin pages. (The guides' Finalize/Done
   images come from the local render.)
