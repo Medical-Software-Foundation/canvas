@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Co-sign Summary</title>
+  <link rel="stylesheet" href="/plugin-io/api/supervisor_cosign/summary/styles.css">
+</head>
+<body>
+  <header class="page-head">
+    <div>
+      <h1>Co-sign Summary</h1>
+      <p class="sub" id="scopeLine">{% if oversight %}All supervisors{% else %}Your supervisees{% endif %}</p>
+    </div>
+    <div class="summary-strip" id="summaryStrip"></div>
+  </header>
+
+  <section class="controls">
+    <div class="control">
+      <label for="mode">View</label>
+      <select id="mode">
+        <option value="records">Co-sign records</option>
+        <option value="notes">All supervisee notes</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <!-- The two views filter different date fields: a record's selected_at
+           (when the note locked) versus a note's date of service. Same range,
+           different row sets - so the label changes with the view rather than
+           quietly meaning two things. -->
+      <label for="start" id="dateLabel">Selected from</label>
+      <div class="date-pair">
+        <input type="date" id="start" value="{{ start }}">
+        <span class="to">to</span>
+        <input type="date" id="end" value="{{ end }}">
+      </div>
+    </div>
+
+    <div class="control" id="supervisorControl" hidden>
+      <label for="supervisor">Supervisor</label>
+      <select id="supervisor"><option value="">All supervisors</option></select>
+    </div>
+
+    <div class="control">
+      <label for="supervisee">Supervisee</label>
+      <select id="supervisee"><option value="">All supervisees</option></select>
+    </div>
+
+    <div class="control" id="statusControl">
+      <label for="status">Status</label>
+      <select id="status">
+        <option value="">Any</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Co-signed</option>
+      </select>
+    </div>
+
+    <div class="control checks" id="noteChecks" hidden>
+      <label class="check"><input type="checkbox" id="includeCancelled"> Include cancelled &amp; no-show</label>
+      <label class="check"><input type="checkbox" id="includeNonClinical"> Include non-clinical note types</label>
+      <label class="check"><input type="checkbox" id="eligibleOnly" checked> Co-sign-eligible note types only</label>
+    </div>
+  </section>
+
+  <p class="note-scope" id="noteScopeHint" hidden>
+    Drafts, unlocked, locked and signed notes all appear. Deleted notes never do.
+  </p>
+
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Patient</th>
+        <th>Note type</th>
+        <th>State</th>
+        <th>Supervisee</th>
+        <th class="supervisor-col">Supervisor</th>
+        <th>Co-sign</th>
+        <th class="actions-col"></th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <p class="empty" id="emptyMsg" hidden>No notes in this range.</p>
+
+  <div class="pager" id="pager" hidden>
+    <button class="ghost" id="prevPage">&larr; Previous</button>
+    <span class="pager-count" id="pagerCount"></span>
+    <button class="ghost" id="nextPage">Next &rarr;</button>
+  </div>
+
+  <template id="attestTemplate">
+    <tr class="attest-row">
+      <td colspan="8">
+        <!-- Inline, not a dialog. showModal() is blocked in some embedded
+             contexts and this page already runs inside a Canvas modal iframe,
+             where a <dialog> simply never surfaces. Inline also keeps the patient, date
+             and note type visible directly above the attestation being
+             signed, which is the evidence the supervisor is judging. -->
+        <div class="attest">
+          <p class="attest-for"></p>
+          <div class="field">
+            <label>Attestation template</label>
+            <select class="tpl"></select>
+          </div>
+          <div class="field">
+            <label>Attestation text</label>
+            <textarea class="body" rows="4"></textarea>
+          </div>
+          <div class="field">
+            <label>Additional comments (optional)</label>
+            <textarea class="comments" rows="2"
+                      placeholder="e.g., follow-up reminders, teaching notes..."></textarea>
+          </div>
+          <div class="attest-actions">
+            <button class="primary submit">Approve &amp; Co-sign</button>
+            <button class="ghost cancel">Cancel</button>
+            <span class="msg"></span>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </template>
+
+  <script>
+    // escapejs, not the default autoescape: inside a <script> block Django
+    // would render the attestation's apostrophes as &#x27; and they would
+    // land in the textarea literally.
+    window.COSIGN_CONFIG = {
+      oversight: {% if oversight %}true{% else %}false{% endif %},
+      supervisee_token: "__SUPERVISEE__",
+      default_template: "{{ default_template|escapejs }}",
+      templates: [
+        {% for opt in attestation_options %}
+        {key: "{{ opt.key|escapejs }}", label: "{{ opt.label|escapejs }}", text: "{{ opt.text|escapejs }}"}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ]
+    };
+  </script>
+  <script src="/plugin-io/api/supervisor_cosign/summary/app.js"></script>
+</body>
+</html>
