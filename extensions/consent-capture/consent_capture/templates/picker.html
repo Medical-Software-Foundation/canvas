@@ -2242,7 +2242,8 @@
       replay('bdoneView');
     }
     $('bDoneBack').addEventListener('click', function () { renderStatus(); show('bstatus'); });
-    $('bDoneClose').addEventListener('click', function () { renderHub(); show('hub'); });
+    // Done returns to the chart, the same as the single-consent flow.
+    $('bDoneClose').addEventListener('click', closeModal);
 
     /* ---------- DONE (one consent) and VIEWER ---------- */
     function clearViewer() {
