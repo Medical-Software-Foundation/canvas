@@ -1383,20 +1383,23 @@
       var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
       // Where the browser can take a real photo (Chrome and Android), use it: it's
       // full resolution and focused. Elsewhere, save a frame of the video.
-      var track = CAP.stream && CAP.stream.getVideoTracks()[0];
+      var cap = CAP, track = CAP.stream && CAP.stream.getVideoTracks()[0];
+      // Still on this capture's camera tab with the camera running.
+      var stillHere = function () { return CAP === cap && CAP.tab === 'camera' && !!CAP.stream; };
       if (window.ImageCapture && track) {
         new ImageCapture(track).takePhoto()
           .then(shrinkImage)
-          .then(function (blob) { CAP.current = photoPage(blob); openReview(); })
-          .catch(function () { captureVideoFrame(v); });
+          .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openReview(); } })
+          .catch(function () { if (stillHere() && track.readyState === 'live') captureVideoFrame(v, stillHere); });
         return;
       }
-      captureVideoFrame(v);
+      captureVideoFrame(v, stillHere);
     }
-    function captureVideoFrame(v) {
+    function captureVideoFrame(v, stillHere) {
       var shot = drawToPage(v, v.videoWidth, v.videoHeight);
       setTimeout(function () {
         shot.then(function (blob) {
+          if (stillHere && !stillHere()) return;
           if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); if (CAP.stream) setShutterReady(true); return; }
           CAP.current = photoPage(blob);
           openReview();
@@ -1505,7 +1508,7 @@
       if (!CAP.cropper) { openReview(); return; }
       var canvas = CAP.cropper.getCroppedCanvas({ maxWidth: 2000, maxHeight: 2000 });
       canvas.toBlob(function (blob) {
-        if (blob) { releasePage(CAP.current); CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: canvas.toDataURL('image/jpeg', 0.85) }; }
+        if (blob) { releasePage(CAP.current); CAP.current = photoPage(blob); }
         if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
         $('cropImg').removeAttribute('src');
         openReview();
@@ -1766,7 +1769,7 @@
         } else {
           var cap = captureSignature();
           it.sig = cap.sig; it.signedWith = cap.signedWith; it.typed = cap.typed;
-          it.entered = cap.typed ? cap.typedName : (PRACTICE.ask_printed_name ? $('pnInput').value.trim() : '');
+          it.entered = (cap.typed ? cap.typedName : (PRACTICE.ask_printed_name ? $('pnInput').value.trim() : '')).normalize('NFC');
           it.reused = false; it.reconfirmed = false; it.reconfirm = false;
           S.lastSig = { sig: it.sig, from: it.c.display, entered: it.entered, signedWith: it.signedWith, typed: it.typed };
         }
@@ -1782,29 +1785,34 @@
     // With a text field active on an iPad, the first tap on the button only closes the
     // keyboard and no click arrives. Close it on press and sign on release, so one tap
     // does both; the click that may follow is ignored.
-    var signTap = { viaPress: false, skipClick: false, rect: null };
+    // signTap.armed: a press that started with a text field active. signTap.ignoreClick:
+    // the click that may follow that press (signed on release, or backed out) is not a
+    // new tap. Only a new press on the button clears it, so a late click can't sign
+    // the next consent and a backed-out press can't sign through its click.
+    var signTap = { armed: false, ignoreClick: false, rect: null };
     function inRect(r, e) { return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
     $('bNext').addEventListener('pointerdown', function (e) {
+      signTap.ignoreClick = false;
       var field = activeTextField();
       if (!field || e.button !== 0) return;
       // Where the button was when pressed: the screen can shift as the keyboard closes.
       signTap.rect = this.getBoundingClientRect();
-      field.blur(); signTap.viaPress = true;
-      // Keep the release on the button even if the screen shifts as the keyboard closes.
-      try { this.setPointerCapture(e.pointerId); } catch (x) {}
+      field.blur(); signTap.armed = true;
     });
-    $('bNext').addEventListener('pointerup', function (e) {
-      if (!signTap.viaPress) return;
-      signTap.viaPress = false;
+    // Watched on the document (no pointer capture), so a release off the button is seen
+    // here and the browser doesn't send the button a click for it.
+    document.addEventListener('pointerup', function (e) {
+      if (!signTap.armed) return;
+      signTap.armed = false; signTap.ignoreClick = true;
       // Sliding off the button before letting go backs out, as with any button.
-      if (!inRect(signTap.rect, e) && !inRect(this.getBoundingClientRect(), e)) return;
-      if ($('bNext').disabled) return;
-      signTap.skipClick = true; setTimeout(function () { signTap.skipClick = false; }, 600);
+      var b = $('bNext');
+      if (!inRect(signTap.rect, e) && !inRect(b.getBoundingClientRect(), e)) return;
+      if (b.disabled) return;
       finishOne('signed');
     });
-    $('bNext').addEventListener('pointercancel', function () { signTap.viaPress = false; });
+    document.addEventListener('pointercancel', function () { if (signTap.armed) { signTap.armed = false; signTap.ignoreClick = true; } });
     $('bNext').addEventListener('click', function () {
-      if (signTap.skipClick) { signTap.skipClick = false; return; }
+      if (signTap.ignoreClick) { signTap.ignoreClick = false; return; }
       if (!$('bNext').disabled) finishOne('signed');
     });
     $('bSkip').addEventListener('click', function () { finishOne('skipped'); });
@@ -1954,12 +1962,17 @@
     // scripts print as "?", so the server refuses them; catching them here keeps the
     // signer from finding out only after handing the device back.
     var CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+    // Latin Extended letters the server's fold table has no plain letter for (keep in
+    // step with _FOLD_PAIRS / _FOLD_MULTI in pdf.py).
+    var NO_FOLD = 'ƄƅƆƍƎƏƐƔƖƛƜƦƧƨƩƪƱƷƸƹƺƻƼƽƾƿǀǁǂǃǝǮǯǶǷȜȝɁɂɅɊẜẝẟ';
     function unprintableChars(text) {
       var bad = [];
-      Array.prototype.forEach.call(text || '', function (ch) {
-        var c = ch.charCodeAt(0);
+      Array.from((text || '').normalize('NFC')).forEach(function (ch) {
+        var c = ch.codePointAt(0);
         if (c < 0x80 || (c >= 0xA0 && c <= 0xFF) || CP1252_EXTRA.indexOf(ch) !== -1) return;
-        if ((c >= 0x100 && c <= 0x24F) || (c >= 0x1E00 && c <= 0x1EFF)) return;
+        if (c >= 0x300 && c < 0x370) return;  // a stray combining accent is dropped, not printed
+        var latinExt = (c >= 0x100 && c <= 0x24F) || (c >= 0x1E00 && c <= 0x1EFF);
+        if (latinExt && NO_FOLD.indexOf(ch) === -1) return;
         if (bad.indexOf(ch) === -1) bad.push(ch);
       });
       return bad;

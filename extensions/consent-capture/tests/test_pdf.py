@@ -504,6 +504,18 @@ class TestFoldForPdf:
         assert fold_for_pdf("Łukasz Wałęsa") == "Lukasz Walesa"
         assert fold_for_pdf("Ştefan Ţăran") == "Stefan Taran"
 
+    def test_letters_that_fold_to_two(self):
+        assert fold_for_pdf("Ĳsbrand ẞTRASSE ǈubo") == "IJsbrand SSTRASSE Ljubo"
+
+    def test_eng_folds_to_n(self):
+        assert fold_for_pdf("Ŋuyen ŋ") == "Nuyen n"
+
+    def test_combining_accents_are_dropped(self):
+        assert fold_for_pdf("Jose\u0301") == "Jose"
+
+    def test_letters_without_a_plain_form_stay(self):
+        assert unprintable_chars(fold_for_pdf("Əliyev")) == ["Ə"]
+
     def test_cp1252_letters_are_kept(self):
         assert fold_for_pdf("José Müller Ñúñez") == "José Müller Ñúñez"
 
