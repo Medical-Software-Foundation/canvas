@@ -128,22 +128,22 @@ when your practice turned on device signing for this consent.
 
 ### Option A — Camera
 
-1. On the **Camera** tab, point the camera at the signed page.
-2. Tap the round **shutter** button to take the photo.
+1. On the **Camera** tab, take a photo of the signed page:
+   - On an iPad or phone, tap **Take Photo**. Your device's camera opens; take the photo there.
+   - On a computer, point the camera at the page and tap the round **shutter** button.
 
 ![The Camera tab: a document framed in the viewfinder with the shutter button below](screenshots/10-written-camera.png)
 
-3. On the **review** screen, check the photo:
-   - Tap **Add Page** to keep it, or
-   - Tap **Retake** to discard and try again.
-   - To trim the edges first, tap **Crop**, drag the corners to frame just the document
-     (use the rotate button if it's sideways), then tap **Apply**.
-
-![The review screen with Crop, Retake, and Add Page controls](screenshots/11-written-review.png)
+2. The photo opens on the **crop** screen. Drag the corners to frame just the document (use
+   the rotate button if it's sideways), then:
+   - Tap **Add Another** to keep this page and take the next one.
+   - Tap **Continue** to keep this page and go to the page list.
+   - Tap **Retake** to discard it and try again.
 
 ![The crop screen: drag the corner handles to frame just the document](screenshots/12-written-crop.png)
-4. To add more pages, tap **Add Another Page** and repeat. To finish, continue to the page
-   list below.
+
+3. While you take more pages, a strip under the camera shows the pages so far and how many
+   there are. Tap it to go to the page list.
 
 > If the camera doesn't work on your device, switch to the **Upload** tab.
 
@@ -151,7 +151,8 @@ when your practice turned on device signing for this consent.
 
 1. Tap the **Upload** tab, then **Choose files**.
 2. Pick one or more **images or a PDF** of the signed document.
-3. Images open on the review screen one at a time (crop if you like, then **Add Page**).
+3. Images open on the crop screen one at a time. Crop each one, then tap **Add Another** or
+   **Continue**.
 
 ### Review the pages and record
 

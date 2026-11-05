@@ -226,14 +226,16 @@
     .camrow .shutter:disabled:active { transform: none; }
     .capscreen { display: none; } .capscreen.on { display: block; animation: capfade .2s ease-out; }
     @keyframes capfade { from { opacity: 0; } to { opacity: 1; } }
-    .review-stage { position: relative; height: min(48vh, 420px); background: #0f172a; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-    .review-stage img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-    .crop-overlay { position: absolute; top: 10px; right: 10px; z-index: 5; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 7px 10px; border-radius: 999px; border: 0; background: rgba(15,23,42,.62); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .crop-overlay:hover { background: rgba(15,23,42,.82); }
-    .crop-overlay svg { width: 15px; height: 15px; }
     .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
     .flash.go { animation: capflash .3s ease; }
     @keyframes capflash { 0% { opacity: .85; } 100% { opacity: 0; } }
+    .pstrip { margin-top: 12px; width: 100%; display: flex; align-items: center; gap: 12px; background: #fff; border: 1.5px solid var(--border); border-radius: 14px; padding: 8px 10px 8px 12px; box-shadow: var(--shadow); cursor: pointer; font: inherit; text-align: left; }
+    .pstrip-thumbs { display: flex; flex: none; }
+    .pstrip-thumbs img, .pstrip-thumbs .pdf { width: 30px; height: 38px; object-fit: cover; border-radius: 5px; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(13,32,60,.2); background: var(--field); font-size: 9px; font-weight: 700; color: var(--secondary); display: flex; align-items: center; justify-content: center; }
+    .pstrip-thumbs > * + * { margin-left: -12px; }
+    .pstrip-count { font-size: 13px; font-weight: 600; color: var(--navy); }
+    .pstrip-count small { display: block; font-size: 11.5px; font-weight: 500; color: var(--secondary); }
+    .pstrip-go { margin-left: auto; flex: none; width: 38px; height: 38px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; }
     .crop-stage { position: relative; max-height: min(48vh, 420px); background: #0f172a; border-radius: 12px; overflow: hidden; }
     .crop-stage img { max-width: 100%; display: block; }
     .rotate-btn { position: absolute; top: 10px; right: 10px; z-index: 6; width: 40px; height: 40px; border-radius: 10px; border: 0; background: rgba(15,23,42,.6); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -560,13 +562,12 @@
             <p class="sub">Select <b>Continue</b> to hand the device to the signer.</p>
           </div>
         </div>
-      </div>
-      <div class="capscreen" id="scReview">
-        <p class="sub" style="margin: 0 0 9px;">Check the photo. Add it as-is, or crop it first.</p>
-        <div class="review-stage">
-          <img id="reviewImg" alt="" />
-          <button type="button" class="crop-overlay" id="cropBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/></svg>Crop</button>
-        </div>
+        <!-- Pages so far, shown under the camera and upload area; opens the page list. -->
+        <button type="button" class="pstrip hidden" id="pageStrip">
+          <span class="pstrip-thumbs" id="pageStripThumbs"></span>
+          <span class="pstrip-count"><span id="pageStripCount"></span><small>Continue to review pages</small></span>
+          <span class="pstrip-go" aria-hidden="true">→</span>
+        </button>
       </div>
       <div class="capscreen" id="scCrop">
         <p class="sub" style="margin: 0 0 9px;">Drag the corners to frame just the document.</p>
@@ -586,6 +587,7 @@
       <div class="btnrow">
         <button type="button" class="btn ghost" id="capLeft">Back</button>
         <span class="spacer"></span>
+        <button type="button" class="btn outline" id="capMid" style="display:none">Add Another</button>
         <button type="button" class="btn primary" id="capRight">Review Pages</button>
       </div>
     </div></div>
@@ -1305,27 +1307,29 @@
       // Open on Sign on this device when it is available.
       selectTab(signable ? 'sign' : 'camera'); capStep('camera');
     }
-    // Sub-screen router: camera (the tabbed source screen) | review | crop | pages.
+    // Sub-screen router: camera (the tabbed source screen) | crop | pages.
     function capStep(name) {
-      var map = { camera: 'scCam', review: 'scReview', crop: 'scCrop', pages: 'scPages' };
+      var map = { camera: 'scCam', crop: 'scCrop', pages: 'scPages' };
       for (var k in map) $(map[k]).classList.toggle('on', k === name);
       if (name === 'pages') renderPages();
       capFooter(name); scrollTop();
     }
     function capFooter(name) {
-      var L = $('capLeft'), R = $('capRight');
+      var L = $('capLeft'), R = $('capRight'), M = $('capMid');
       function set(b, txt, fn) {
         if (!txt) { b.style.display = 'none'; b.onclick = null; return; }
         b.style.display = ''; b.disabled = false; b.textContent = txt; b.onclick = fn;
       }
+      set(M, '', null);
       if (name === 'camera') {
         set(L, 'Back', function () { stopCamera(); if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; } show('wiz'); });
-        if (CAP.tab === 'sign') set(R, 'Continue', startSingleSigning);
-        else set(R, CAP.pages.length ? 'Review Pages' : '', function () { capStep('pages'); });
-      } else if (name === 'review') {
-        set(L, 'Retake', reviewRetake); set(R, 'Add Page', reviewAddPage);
+        // The page strip opens the page list, so the footer only needs Continue for signing.
+        set(R, CAP.tab === 'sign' ? 'Continue' : '', startSingleSigning);
+        renderStrip();
       } else if (name === 'crop') {
-        set(L, 'Cancel', cropCancel); set(R, 'Apply', cropApply);
+        // Every photo opens here: crop, then Add Another (back for the next page) or
+        // Continue (to the page list). Both keep the crop.
+        set(L, 'Retake', cropRetake); set(M, 'Add Another', cropAddAnother); set(R, 'Continue', cropContinue);
       } else {
         set(L, 'Add Another Page', function () { selectTab('camera'); capStep('camera'); });
         set(R, 'Record Consent', doRecord);
@@ -1388,7 +1392,7 @@
     function captureFrame() {
       var v = $('camVideo');
       if (!v.videoWidth) { capSetMsg('The camera isn’t ready yet.', true); return; }
-      setShutterReady(false);  // one capture at a time; openReview stops the camera
+      setShutterReady(false);  // one capture at a time; openNextCrop stops the camera
       var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
       // Where the browser can take a real photo (Chrome and Android), use it: it's
       // full resolution and focused. Elsewhere, save a frame of the video.
@@ -1398,7 +1402,7 @@
       if (window.ImageCapture && track) {
         new ImageCapture(track).takePhoto()
           .then(shrinkImage)
-          .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openReview(); } })
+          .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openNextCrop(); } })
           .catch(function () {
             if (!stillHere()) return;
             if (track.readyState === 'live') { captureVideoFrame(v, stillHere); return; }
@@ -1416,7 +1420,7 @@
           if (stillHere && !stillHere()) return;
           if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); if (CAP.stream) setShutterReady(true); return; }
           CAP.current = photoPage(blob);
-          openReview();
+          openNextCrop();
         });
       }, 150);
     }
@@ -1485,62 +1489,97 @@
     // Only while the photo screens are showing: a resize that lands after staff moved on
     // (to signing, or back) waits in the queue instead of taking over the screen.
     function onPhotoScreens() { return $('capView').classList.contains('active') && CAP.tab !== 'sign'; }
+    var PREPARING_MSG = 'Preparing the next photo…', ADDING_MSG = 'Adding the remaining photos…';
     function maybeStartReview() {
       if (!onPhotoScreens()) return;
-      if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openReview(); }
-      syncReviewButtons();
+      if (CAP.addRest) { addReadyUploads(); return; }
+      if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openNextCrop(); }
     }
-    // Open the next ready page; if the review screen is left with nothing to show
-    // (the last pending image failed), move on instead of sitting on the old photo.
+    // After Continue, the rest of an upload batch goes straight onto the page list,
+    // uncropped, as in the Capture plugin; staff can remove or reorder pages there.
+    function addReadyUploads() {
+      while (CAP.queue.length && !CAP.queue[0].pending) addPage(CAP.queue.shift());
+      if (CAP.queue.length) { if ($('scPages').classList.contains('on')) capSetMsg(ADDING_MSG); return; }
+      CAP.addRest = false;
+      if ($('capMsg').textContent === ADDING_MSG) capSetMsg('');
+    }
+    // When a resize finishes: open the next photo (or add it straight to the page list
+    // after Continue), and clear "Preparing the next photo…" once nothing is waiting.
+    // Other messages, such as an unreadable image, stay.
     function afterQueueChange() {
       maybeStartReview();
-      if (!onPhotoScreens() || CAP.current || CAP.queue.length || !$('scReview').classList.contains('on')) return;
-      if (CAP.pages.length) capStep('pages'); else { selectTab('camera'); capStep('camera'); }
+      if (onPhotoScreens() && !CAP.current && !CAP.queue.length && $('capMsg').textContent === PREPARING_MSG) capSetMsg('');
     }
-    function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); syncReviewButtons(); }
-    function reviewNext(committed) {
-      CAP.current = null;
-      if (CAP.queue.length) {
-        maybeStartReview();
-        // Still resizing: clear the old photo and say so; it opens when ready.
-        if (!CAP.current) { $('reviewImg').removeAttribute('src'); capSetMsg('Preparing the next photo…'); syncReviewButtons(); }
-      }
-      else if (committed || CAP.pages.length) { capStep('pages'); }
-      else { selectTab('camera'); capStep('camera'); }
-    }
-    function reviewAddPage() { if (CAP.current) addPage(CAP.current); reviewNext(true); }
-    // Retake, Add Page and Crop do nothing without a photo; turn them off while the next
-    // one is still being prepared.
-    function syncReviewButtons() {
-      if (!$('scReview').classList.contains('on')) return;
-      var none = !CAP.current;
-      $('capLeft').disabled = none; $('capRight').disabled = none; $('cropBtn').disabled = none;
-    }
+    // Every photo goes straight to the crop screen.
+    function openNextCrop() { stopCamera(); capSetMsg(''); if (CAP.current) openCrop(CAP.current.url); }
     function releasePage(p) { if (p && p.url && p.url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(p.url); } catch (e) {} } }
-    function reviewRetake() { releasePage(CAP.current); reviewNext(false); }
     function openCrop(src) {
       stopCamera();
       var img = $('cropImg');
       if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
       img.src = src; capStep('crop');
       if (!window.Cropper) { capSetMsg('Editor failed to load. Check your connection.', true); return; }
-      CAP.cropper = new Cropper(img, { viewMode: 1, autoCropArea: 0.85, guides: true, center: true,
+      // The crop box starts on the whole photo, so a page kept without touching it is
+      // saved whole; a signature near the edge is never trimmed by default.
+      CAP.cropper = new Cropper(img, { viewMode: 1, autoCropArea: 1, guides: true, center: true,
         background: false, cropBoxMovable: true, cropBoxResizable: true, dragMode: 'move', responsive: true });
     }
-    function cropCancel() {
+    function closeCropper() {
       if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
       $('cropImg').removeAttribute('src');
-      openReview();
     }
-    function cropApply() {
-      if (!CAP.cropper) { openReview(); return; }
+    // Keep the crop as the page (one at a time; a second tap waits for the first).
+    // While a page is being saved the crop buttons are off, so Retake or a second tap
+    // can't act on a different photo; the result is dropped if the photo changed anyway.
+    var cropBusy = false;
+    function setCropBusy(on) {
+      cropBusy = on;
+      ['capLeft', 'capMid', 'capRight'].forEach(function (id) { $(id).disabled = on; });
+    }
+    function keepCrop(done) {
+      if (!CAP.current || cropBusy) return;
+      if (!CAP.cropper) { done(); return; }
+      // Null until the photo has loaded into the cropper; wait for the next tap.
       var canvas = CAP.cropper.getCroppedCanvas({ maxWidth: 2000, maxHeight: 2000 });
+      if (!canvas) return;
+      var page = CAP.current, cap = CAP;
+      setCropBusy(true);
       canvas.toBlob(function (blob) {
-        if (blob) { releasePage(CAP.current); CAP.current = photoPage(blob); }
-        if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
-        $('cropImg').removeAttribute('src');
-        openReview();
+        setCropBusy(false);
+        if (CAP !== cap || CAP.current !== page) return;
+        if (blob) { releasePage(page); CAP.current = photoPage(blob); }
+        closeCropper();
+        done();
       }, 'image/jpeg', 0.85);
+    }
+    // After a page is kept or dropped: the next uploaded photo if there is one, else
+    // back to the camera or upload tab, or on to the page list.
+    function nextPhoto(toPages) {
+      CAP.current = null;
+      if (CAP.queue.length) {
+        if (toPages) { CAP.addRest = true; capStep('pages'); addReadyUploads(); return; }
+        maybeStartReview();
+        if (CAP.current) return;
+        backToSource(); capSetMsg(PREPARING_MSG);
+        return;
+      }
+      if (toPages && CAP.pages.length) capStep('pages'); else backToSource();
+    }
+    function backToSource() { selectTab(CAP.tab === 'upload' ? 'upload' : 'camera'); capStep('camera'); }
+    function cropAddAnother() { keepCrop(function () { addPage(CAP.current); nextPhoto(false); }); }
+    function cropContinue() { keepCrop(function () { addPage(CAP.current); nextPhoto(true); }); }
+    function cropRetake() { if (cropBusy) return; closeCropper(); releasePage(CAP.current); nextPhoto(false); }
+    // Thumbnails of the last two pages, the page count, and a way to the page list.
+    function renderStrip() {
+      var n = CAP.pages.length, box = $('pageStripThumbs');
+      $('pageStrip').classList.toggle('hidden', !n || CAP.tab === 'sign');
+      box.innerHTML = '';
+      CAP.pages.slice(-2).reverse().forEach(function (p) {
+        if (p.type === 'image/jpeg' && p.url) { var im = document.createElement('img'); im.src = p.url; im.alt = ''; box.appendChild(im); }
+        else box.appendChild(el('span', 'pdf', 'PDF'));
+      });
+      var total = CAP.pages.reduce(function (sum, p) { return sum + (p.pageCount || 1); }, 0);
+      $('pageStripCount').textContent = plural(total, 'page');
     }
     function addPdfFile(file) {
       var p = { blob: file, type: 'application/pdf', name: file.name || 'Document.pdf', pageCount: 1, url: null };
@@ -1550,7 +1589,7 @@
           .then(function (doc) { p.pageCount = doc.getPageCount(); renderPages(); }).catch(function () {});
       }
     }
-    function addPage(p) { CAP.pages.push(p); renderPages(); }
+    function addPage(p) { CAP.pages.push(p); renderPages(); renderStrip(); }
     function removePage(i) {
       releasePage(CAP.pages.splice(i, 1)[0]);
       if (!CAP.pages.length) { selectTab('camera'); capStep('camera'); }
@@ -1628,7 +1667,7 @@
       handleFiles(this.files); this.value = '';
       if (!CAP.current && !CAP.queue.length && CAP.pages.length) capStep('pages');
     });
-    $('cropBtn').addEventListener('click', function () { if (CAP.current) openCrop(CAP.current.url); });
+    $('pageStrip').addEventListener('click', function () { if (CAP.pages.length) capStep('pages'); });
     $('rotBtn').addEventListener('click', function () { if (CAP.cropper) CAP.cropper.rotate(90); });
 
     /* ---------- SIGNING SESSION (one consent or several) ---------- */

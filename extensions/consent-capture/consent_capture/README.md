@@ -102,8 +102,12 @@ Consent Capture turns that into a guided flow that:
    1. For verbal/electronic/other: generates a documentation PDF (built without an
       external PDF library, since the sandbox has none) with the method, capacity
       statement, questions, and full verbiage. For **Written**: the provider
-      captures the signed document with the device camera (crop + multi-page,
-      assembled into a PDF in the browser) or uploads a PDF — no PDF is generated.
+      captures the signed document with the device camera (the device's camera app on
+      phones and tablets, a live viewfinder on computers) or uploads images or a PDF.
+      Each photo opens on the crop screen with **Add Another** (next page) and
+      **Continue** (page list); a strip under the camera shows the pages so far. The
+      pages are assembled into a PDF in the browser. The server generates no
+      documentation PDF for Written consents.
    2. Creates a FHIR **Consent** (`status = active`, the consent's coding, effective
       date = the staff member's local calendar date, the document attached as
       `sourceAttachment`, **no** `period.end` — expiration is governed by the coding

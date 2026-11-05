@@ -22,7 +22,7 @@ node capture_local.mjs
 ```
 
 Produces: `04-hub-required`, `05-hub-onfile`, `06-review`, `07-finalize`,
-`08-finalize-representative`, `09-done`, `10-written-camera`, `11-written-review`,
+`08-finalize-representative`, `09-done`, `10-written-camera`,
 `12-written-crop`, `13-written-pages`, `14-viewer`.
 
 These are faithful to the real UI (same template) but use sample data, so the guides caption
