@@ -1,0 +1,57 @@
+{
+    "sdk_version": "0.111.0",
+    "plugin_version": "0.1.0",
+    "name": "visit_summaries",
+    "description": "AI-powered visit summaries: Previous Visit, Since Last Visit, and After Visit Summary generation for clinical notes.",
+    "components": {
+        "protocols": [
+            {
+                "class": "visit_summaries.protocols.avs_button:GenerateAvsButton",
+                "description": "Action button in the note footer to generate a patient-friendly After Visit Summary."
+            },
+            {
+                "class": "visit_summaries.protocols.config_api:ConfigApi",
+                "description": "SimpleAPI endpoints for reading and writing visit-summary configuration."
+            },
+            {
+                "class": "visit_summaries.protocols.summary_api:SummaryApi",
+                "description": "Authenticated endpoints serving loading pages with spinners."
+            },
+            {
+                "class": "visit_summaries.protocols.summary_api:SummaryGenerateApi",
+                "description": "Generate endpoints called by JS from within authenticated loading pages."
+            },
+            {
+                "class": "visit_summaries.applications.previous_visit:PreviousVisitApp",
+                "description": "Note body tab showing an AI-generated summary of the patient's most recent prior locked note."
+            },
+            {
+                "class": "visit_summaries.applications.since_last_visit:SinceLastVisitApp",
+                "description": "Note body tab showing interim clinical activity between visits."
+            }
+        ],
+        "applications": [
+            {
+                "class": "visit_summaries.applications.config_app:ConfigApp",
+                "name": "Visit Summary Config",
+                "description": "Global config panel for AI visit summary features and LLM settings.",
+                "scope": "global",
+                "icon": "assets/visit-summary-config-icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "LLM_API_KEY",
+        "LLM_PROVIDER",
+        "LLM_MODEL"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
