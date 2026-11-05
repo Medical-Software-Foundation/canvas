@@ -1,0 +1,96 @@
+{
+    "sdk_version": "0.260.0",
+    "plugin_version": "0.2.0",
+    "name": "canvas__screening_cascade",
+    "description": "When a short screener such as PHQ-2 or GAD-2 comes back positive, adds the follow-up questionnaire (PHQ-9, GAD-7, or any coded questionnaire) to the same note. Rules are settings: screener, threshold, follow-up, waiting period, clinician preference and optional score write-back. Off until SCREENING_CASCADE_ENABLED is true.",
+    "components": {
+        "handlers": [
+            {
+                "class": "canvas__screening_cascade.handlers.cascade:ScreeningCascade",
+                "description": "On a committed questionnaire, scores matching screeners and originates the configured follow-up questionnaire.",
+                "data_access": {
+                    "event": "QUESTIONNAIRE_COMMAND__POST_COMMIT",
+                    "read": [
+                        "Command",
+                        "Interview",
+                        "Questionnaire",
+                        "Note"
+                    ],
+                    "write": [
+                        "QuestionnaireCommand",
+                        "CreateQuestionnaireResult"
+                    ]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "SCREENING_CASCADE_ENABLED",
+            "sensitive": false,
+            "default": "false"
+        },
+        {
+            "name": "SCREENING_CASCADE_RULES",
+            "sensitive": false,
+            "default": ""
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md",
+    "catalog": {
+        "title": "Screening Follow-up Cascade",
+        "kind": "plugin",
+        "category": "Decision support",
+        "surfaces": [
+            "Note",
+            "Background"
+        ],
+        "keywords": [
+            "phq-2",
+            "phq-9",
+            "gad-2",
+            "gad-7",
+            "madrs",
+            "screening",
+            "questionnaires",
+            "behavioral-health"
+        ],
+        "screenshots": [
+            {
+                "path": "catalog/1-positive-phq2-card-top.png",
+                "caption": "Positive PHQ-2",
+                "alt": "A committed PHQ-2 questionnaire with a positive screen result in the note."
+            },
+            {
+                "path": "catalog/2-phq9-added-automatically.png",
+                "caption": "PHQ-9 added automatically",
+                "alt": "A positive PHQ-2 in the note with a Plugin Generated PHQ-9 questionnaire added beneath it."
+            },
+            {
+                "path": "catalog/3-negative-phq2-nothing-added.png",
+                "caption": "Negative PHQ-2: nothing added",
+                "alt": "A committed PHQ-2 with a negative screen; no follow-up questionnaire was added."
+            },
+            {
+                "path": "catalog/6-madrs-added-after-phq9.png",
+                "caption": "MADRS added after PHQ-9",
+                "alt": "A Plugin Generated MADRS questionnaire added after a PHQ-9 score, from a PHQ-9 to MADRS rule."
+            },
+            {
+                "path": "catalog/5-settings.png",
+                "caption": "Plugin settings",
+                "alt": "The plugin settings page showing the screening cascade enabled setting and the rules setting."
+            }
+        ],
+        "setup_guide": "catalog/SETUP.md",
+        "setup_instructions": "catalog/SETUP-AGENT.md"
+    }
+}
