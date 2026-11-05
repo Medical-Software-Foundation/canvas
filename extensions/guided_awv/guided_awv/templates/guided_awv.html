@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: #1a1a1a; background: #f8f9fa; }
+.awv-container { width: 100%; padding: 16px; }
+.awv-header { padding: 8px 0 12px 0; margin-bottom: 8px; }
+.awv-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #e3f2fd; color: #1565c0; }
+.awv-body { display: flex; flex-direction: column; gap: 8px; }
+.awv-section { border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; overflow: hidden; scroll-margin-top: 112px; }
+.awv-section-header { display: flex; align-items: center; padding: 10px 14px; cursor: pointer; background: #fafafa; border-bottom: 1px solid #e0e0e0; user-select: none; }
+.awv-section-header:hover { background: #f0f0f0; }
+.awv-section-toggle { width: 20px; font-size: 16px; font-weight: 600; color: #666; }
+.awv-section-toggle--complete { color: #4caf50; font-weight: 700; }
+.awv-section-title { font-weight: 600; font-size: 13px; flex: 1; }
+.awv-section-last-saved { font-size: 11px; color: #999; font-weight: 400; margin-left: 8px; }
+.awv-section-body { padding: 14px; }
+.awv-module-content { display: flex; flex-direction: column; gap: 6px; }
+.awv-field { margin-bottom: 10px; }
+.awv-label { display: block; font-size: 12px; font-weight: 600; color: #333; margin-bottom: 4px; }
+.awv-input, .awv-textarea, .awv-select { width: 100%; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-family: inherit; background: #fff; }
+.awv-input:focus, .awv-textarea:focus, .awv-select:focus { outline: none; border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,0.15); }
+.awv-textarea { resize: vertical; min-height: 60px; }
+.awv-radio-group, .awv-checkbox-group { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.awv-radio, .awv-checkbox { display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; padding: 2px 0; }
+.awv-radio input, .awv-checkbox input { margin: 0; cursor: pointer; }
+.awv-info-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+.awv-info-label { font-weight: 500; color: #333; flex: 1; }
+.awv-info-value { color: #555; text-align: right; flex-shrink: 0; max-width: 60%; }
+.awv-subtitle { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 8px 0 6px 0; padding-bottom: 4px; border-bottom: 2px solid #e3f2fd; }
+.awv-alert { padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; }
+.awv-alert--info { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
+.awv-alert--warning { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+.awv-alert--error { padding: 10px 14px; border-radius: 6px; font-size: 12px; background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+.awv-divider { height: 1px; background: #e0e0e0; margin: 10px 0; }
+.awv-save-row { display:flex; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid #e0e0e0; }
+.awv-save-btn { padding:6px 16px; background:#1565c0; color:#fff; border:none; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+.awv-save-btn:hover { background:#0d47a1; }
+.awv-save-btn:disabled { background:#90caf9; cursor:not-allowed; }
+.awv-status { font-size:11px; margin-left:10px; font-weight:500; }
+.awv-status--saving { color:#f57c00; }
+.awv-status--saved { color:#4caf50; }
+.awv-status--error { color:#d32f2f; }
+.awv-required { color: #d32f2f; font-weight: 700; }
+.awv-field--error .awv-input,
+.awv-field--error .awv-select,
+.awv-field--error .awv-textarea { border-color: #d32f2f; }
+.awv-field--error .awv-radio-group,
+.awv-field--error .awv-checkbox-group { outline: 1px solid #d32f2f; border-radius: 4px; padding: 2px; }
+.awv-field-error { color: #d32f2f; font-size: 11px; margin-top: 2px; }
+.awv-checkbox input:disabled { opacity: 0.4; cursor: not-allowed; }
+.awv-checkbox:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.dx-result-item:hover { background: #e3f2fd; }
+.awv-section-status { margin-left: auto; font-size: 12px; display: none; }
+</style>
+</head>
+<body>
+<div class="awv-container">
+  <div class="awv-header" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <span class="awv-badge" id="awv-badge">[[awv_label]]</span>
+    <div class="awv-type-toggle" style="display:flex;align-items:center;gap:8px;font-size:12px;">
+      <span style="color:#666;font-weight:600;">Visit type:</span>
+      <label class="awv-radio"><input type="radio" name="awv_type_toggle" value="initial" [[initial_checked]] onchange="updateAWVType()"> Initial (G0438)</label>
+      <label class="awv-radio"><input type="radio" name="awv_type_toggle" value="subsequent" [[subsequent_checked]] onchange="updateAWVType()"> Subsequent (G0439)</label>
+    </div>
+  </div>
+  <div id="completion-banner" class="awv-alert awv-alert--info" style="margin-bottom:12px;">
+    Checking completion status...
+  </div>
+  <div class="awv-body">
+    [[modules_html]]
+  </div>
+  <div class="awv-section" id="section-attestation" style="margin-top:12px;border:2px solid #1565c0;">
+    <div class="awv-section-header" onclick="toggleSection('attestation')" style="background:#e3f2fd;">
+      <span class="awv-section-toggle">+</span>
+      <span class="awv-section-title" style="color:#1565c0;">Provider Attestation</span>
+      <span class="awv-section-status" id="status-attestation"></span>
+    </div>
+    <div class="awv-section-body" id="body-attestation" style="display:none;">
+      <div class="awv-module-content">
+        <div id="attestation-completion-alert" class="awv-alert awv-alert--warning" style="margin-bottom:10px;">
+          Checking completion...
+        </div>
+        <div class="awv-field" id="attestation-elements-field">
+          <div class="awv-checkbox-group" data-required="true" style="flex-direction:column;gap:8px;">
+            <label class="awv-checkbox">
+              <input type="checkbox" name="attestation_all_elements" value="yes" disabled> All 11 CMS AWV elements have been documented <span class="awv-required">*</span>
+            </label>
+            <label class="awv-checkbox">
+              <input type="checkbox" name="attestation_patient_education" value="yes"> Patient education provided and documented
+            </label>
+          </div>
+        </div>
+        <div class="awv-field">
+          <label class="awv-label">Total face-to-face time (minutes) <span class="awv-required">*</span></label>
+          <input type="number" name="attestation_face_to_face_time" class="awv-input" min="0" step="1" data-required="true">
+        </div>
+        <div class="awv-save-row">
+          <button type="button" class="awv-save-btn" id="attestation-save-btn" onclick="saveAttestation()">Save Attestation</button>
+          <span class="awv-status" id="attestation-status"></span>
+        </div>
+        <div class="awv-alert awv-alert--info" style="margin-top:12px;border-left:4px solid #1565c0;">
+          <strong>Next steps to finalize this AWV</strong>
+          <ol style="margin:6px 0 0 18px;padding:0;">
+            <li>Close this Guided AWV panel and switch to the <strong>Note</strong> tab.</li>
+            <li>Review the staged commands (vitals, screenings, plan, etc.) and complete any orders that need a prescriber signature, lab partner, or imaging facility.</li>
+            <li>Click <strong>Commit all commands</strong> at the bottom of the note. Once committed, the diagnoses and CPT codes are finalized.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+var NOTE_UUID = "[[note_uuid]]";
+var PATIENT_ID = "[[patient_id]]";
+var AWV_TYPE = '[[awv_type]]';
+var savedSections = {};
+
+function getAwvCptCode() {
+  return AWV_TYPE === 'initial' ? 'G0438' : 'G0439';
+}
+
+function updateAWVType() {
+  var radio = document.querySelector('input[name="awv_type_toggle"]:checked');
+  if (!radio) return;
+  AWV_TYPE = radio.value;
+  var badge = document.getElementById('awv-badge');
+  if (badge) {
+    var prefix = AWV_TYPE === 'initial' ? 'Initial' : 'Subsequent';
+    badge.textContent = prefix + ' AWV (' + getAwvCptCode() + ')';
+  }
+  fetch('/plugin-io/api/guided_awv/awv/awv-type', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer internal-call' },
+    body: JSON.stringify({ note_id: NOTE_UUID, awv_type: AWV_TYPE })
+  }).catch(function(err) { console.warn('Failed to persist awv_type:', err); });
+}
+
+function showLastSaved(sectionId, isoTimestamp) {
+  var el = document.getElementById('last-saved-' + sectionId);
+  if (!el) return;
+  var d = new Date(isoTimestamp);
+  var dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  var timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  el.textContent = 'Last saved ' + dateStr + ' ' + timeStr;
+}
+
+var messagePort = null;
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+        messagePort = event.ports[0];
+        messagePort.start();
+        updateSize();
+    }
+});
+function updateSize() {
+    if (messagePort) {
+        messagePort.postMessage({ type: 'RESIZE', height: document.body.scrollHeight + 40 });
+    }
+}
+new ResizeObserver(updateSize).observe(document.body);
+
+function toggleSection(identifier) {
+  var body = document.getElementById('body-' + identifier);
+  var section = document.getElementById('section-' + identifier);
+  var toggle = section.querySelector('.awv-section-toggle');
+  var isComplete = toggle.classList.contains('awv-section-toggle--complete');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    toggle.textContent = '-';
+  } else {
+    body.style.display = 'none';
+    toggle.textContent = isComplete ? '\u2713' : '+';
+  }
+  setTimeout(updateSize, 50);
+}
+
+function advanceToNextSection(sectionId) {
+  var current = document.getElementById('section-' + sectionId);
+  if (!current) return;
+  // Collapse current section
+  var currentBody = document.getElementById('body-' + sectionId);
+  var currentToggle = current.querySelector('.awv-section-toggle');
+  if (currentBody && currentBody.style.display !== 'none') {
+    currentBody.style.display = 'none';
+    if (currentToggle) {
+      var isComplete = currentToggle.classList.contains('awv-section-toggle--complete');
+      currentToggle.textContent = isComplete ? '\u2713' : '+';
+    }
+  }
+  // Find and expand next sibling .awv-section
+  var next = current.nextElementSibling;
+  while (next && !next.classList.contains('awv-section')) {
+    next = next.nextElementSibling;
+  }
+  if (next) {
+    var nextId = next.id.replace('section-', '');
+    var nextBody = document.getElementById('body-' + nextId);
+    var nextToggle = next.querySelector('.awv-section-toggle');
+    if (nextBody && nextBody.style.display === 'none') {
+      nextBody.style.display = 'block';
+      if (nextToggle) nextToggle.textContent = '-';
+    }
+    setTimeout(function() {
+      next.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }
+  setTimeout(updateSize, 100);
+}
+
+// Auto-calculate BMI from height (in) and weight (lbs)
+function calculateBMI() {
+  var heightEl = document.querySelector('input[name="height"]');
+  var weightEl = document.querySelector('input[name="weight"]');
+  var bmiEl = document.querySelector('input[name="bmi"]');
+  var alertEl = document.getElementById('bmi-calc-alert');
+  if (!heightEl || !weightEl || !bmiEl) return;
+  var h = parseFloat(heightEl.value);
+  var w = parseFloat(weightEl.value);
+  if (h > 0 && w > 0) {
+    var bmi = 703 * w / (h * h);
+    bmiEl.value = bmi.toFixed(1);
+    if (alertEl) {
+      if (bmi >= 30) {
+        alertEl.textContent = 'Calculated BMI is ' + bmi.toFixed(1) +
+          ' (\u2265 30). CMS requires documentation of obesity counseling ' +
+          'including dietary and exercise guidance. Consider referral to ' +
+          'nutrition/weight management.';
+        alertEl.style.display = 'block';
+      } else {
+        alertEl.style.display = 'none';
+      }
+    }
+    // Update BMI category
+    var catEl = document.getElementById('bmi-category-value');
+    if (catEl) {
+      if (bmi < 18.5) catEl.textContent = 'Underweight';
+      else if (bmi < 25) catEl.textContent = 'Normal';
+      else if (bmi < 30) catEl.textContent = 'Overweight';
+      else catEl.textContent = 'Obese';
+    }
+  } else {
+    bmiEl.value = '';
+    if (alertEl) alertEl.style.display = 'none';
+    var catEl2 = document.getElementById('bmi-category-value');
+    if (catEl2) catEl2.textContent = '--';
+  }
+  setTimeout(updateSize, 50);
+}
+document.addEventListener('input', function(e) {
+  // Clear validation error on input
+  var field = e.target.closest('.awv-field');
+  if (field && field.classList.contains('awv-field--error')) {
+    field.classList.remove('awv-field--error');
+    var errMsg = field.querySelector('.awv-field-error');
+    if (errMsg) errMsg.remove();
+  }
+  if (e.target.name === 'height' || e.target.name === 'weight') {
+    calculateBMI();
+  }
+});
+
+// Sum selected radio values for a set of field names
+function sumRadios(names) {
+  var total = 0;
+  var answered = 0;
+  for (var i = 0; i < names.length; i++) {
+    var checked = document.querySelector('input[name="' + names[i] + '"]:checked');
+    if (checked) {
+      total += parseInt(checked.value, 10) || 0;
+      answered++;
+    }
+  }
+  return { total: total, answered: answered, complete: answered === names.length };
+}
+
+// PHQ-2 / PHQ-9 auto-scoring
+var phq2Names = ['phq2_q1', 'phq2_q2'];
+var phq9Names = ['phq2_q1', 'phq2_q2', 'phq9_q3', 'phq9_q4', 'phq9_q5', 'phq9_q6', 'phq9_q7', 'phq9_q8', 'phq9_q9'];
+
+function scorePHQ() {
+  var phq2 = sumRadios(phq2Names);
+  var scoreEl = document.getElementById('phq2-score');
+  var alertEl = document.getElementById('phq2-alert');
+  if (scoreEl) {
+    scoreEl.querySelector('.awv-info-value').textContent = phq2.complete ? phq2.total + ' / 6' : phq2.answered + ' of 2 answered';
+  }
+  if (alertEl) {
+    alertEl.style.display = (phq2.complete && phq2.total >= 3) ? 'block' : 'none';
+  }
+  var phq9 = sumRadios(phq9Names);
+  var score9El = document.getElementById('phq9-score');
+  var sev9El = document.getElementById('phq9-severity');
+  if (score9El) {
+    score9El.querySelector('.awv-info-value').textContent = phq9.complete ? phq9.total + ' / 27' : phq9.answered + ' of 9 answered';
+  }
+  if (sev9El) {
+    var sev = '--';
+    if (phq9.complete) {
+      if (phq9.total <= 4) sev = 'Minimal';
+      else if (phq9.total <= 9) sev = 'Mild';
+      else if (phq9.total <= 14) sev = 'Moderate';
+      else if (phq9.total <= 19) sev = 'Moderately Severe';
+      else sev = 'Severe';
+    }
+    sev9El.querySelector('.awv-info-value').textContent = sev;
+  }
+  // Show/hide PHQ-9 section and depression follow-up
+  var phq9Section = document.getElementById('phq9-section');
+  if (phq9Section) {
+    phq9Section.style.display = (phq2.complete && phq2.total >= 3) ? 'block' : 'none';
+  }
+  var depFollowup = document.getElementById('depression-followup-section');
+  if (depFollowup) {
+    depFollowup.style.display = (phq2.complete && phq2.total >= 3) ? 'block' : 'none';
+  }
+  setTimeout(updateSize, 50);
+}
+
+// AUDIT-C auto-scoring
+var auditcNames = ['auditc_q1', 'auditc_q2', 'auditc_q3'];
+
+function scoreAUDITC() {
+  var result = sumRadios(auditcNames);
+  var scoreEl = document.getElementById('auditc-score');
+  var alertEl = document.getElementById('auditc-alert');
+  if (scoreEl) {
+    scoreEl.querySelector('.awv-info-value').textContent = result.complete ? result.total + ' / 12' : result.answered + ' of 3 answered';
+  }
+  if (alertEl) {
+    // Use lower threshold (female=3) as conservative default
+    alertEl.style.display = (result.complete && result.total >= 3) ? 'block' : 'none';
+  }
+  setTimeout(updateSize, 50);
+}
+
+// Orthostatic vitals auto-calculation
+function calculateOrthostaticDrop() {
+  var lyingSbp = parseFloat((document.querySelector('input[name="ortho_lying_sbp"]') || {}).value);
+  var lyingDbp = parseFloat((document.querySelector('input[name="ortho_lying_dbp"]') || {}).value);
+  var standSbp = parseFloat((document.querySelector('input[name="ortho_standing_sbp"]') || {}).value);
+  var standDbp = parseFloat((document.querySelector('input[name="ortho_standing_dbp"]') || {}).value);
+  var sbpDropEl = document.querySelector('input[name="ortho_sbp_drop"]');
+  var dbpDropEl = document.querySelector('input[name="ortho_dbp_drop"]');
+  var resultEl = document.getElementById('ortho-result-value');
+  var alertEl = document.getElementById('ortho-alert');
+  if (!isNaN(lyingSbp) && !isNaN(lyingDbp) && !isNaN(standSbp) && !isNaN(standDbp)) {
+    var sbpDrop = lyingSbp - standSbp;
+    var dbpDrop = lyingDbp - standDbp;
+    if (sbpDropEl) sbpDropEl.value = sbpDrop;
+    if (dbpDropEl) dbpDropEl.value = dbpDrop;
+    var positive = sbpDrop >= 20 || dbpDrop >= 10;
+    if (resultEl) resultEl.textContent = positive ? 'POSITIVE' : 'Negative';
+    if (alertEl) alertEl.style.display = positive ? 'block' : 'none';
+    // Auto-check orthostatic hypotension risk factor when positive
+    if (positive) {
+      var cb = document.querySelector('input[type="checkbox"][value="Orthostatic hypotension"]');
+      if (cb && !cb.checked) cb.checked = true;
+    }
+  } else {
+    if (sbpDropEl) sbpDropEl.value = '';
+    if (dbpDropEl) dbpDropEl.value = '';
+    if (resultEl) resultEl.textContent = '--';
+    if (alertEl) alertEl.style.display = 'none';
+  }
+  calculateFallRiskLevel();
+  setTimeout(updateSize, 50);
+}
+
+// Fall risk level auto-calculation (CDC STEADI criteria)
+function calculateFallRiskLevel() {
+  var levelEl = document.getElementById('fall-risk-level');
+  var alertEl = document.getElementById('fall-risk-alert');
+  if (!levelEl) return;
+
+  // Read screening question radios
+  var fallsPastYear = (document.querySelector('input[name="falls_past_year"]:checked') || {}).value || '';
+  var fallsCountEl = document.querySelector('input[name="falls_count"]');
+  var fallsCount = fallsCountEl ? parseInt(fallsCountEl.value, 10) : 0;
+  if (isNaN(fallsCount)) fallsCount = 0;
+  var fallInjury = (document.querySelector('input[name="fall_injury"]:checked') || {}).value || '';
+  var fearOfFalling = (document.querySelector('input[name="fear_of_falling"]:checked') || {}).value || '';
+  var gaitConcern = (document.querySelector('input[name="gait_concern"]:checked') || {}).value || '';
+  var assistiveDevice = (document.querySelector('input[name="assistive_device"]:checked') || {}).value || '';
+
+  // Read TUG time
+  var tugEl = document.querySelector('input[name="tug_time_seconds"]');
+  var tugTime = tugEl ? parseFloat(tugEl.value) : NaN;
+
+  // Read orthostatic result
+  var orthoResultEl = document.getElementById('ortho-result-value');
+  var orthoPositive = orthoResultEl && orthoResultEl.textContent === 'POSITIVE';
+
+  // High risk: 2+ falls, fall with injury, TUG >= 12, positive orthostatic
+  var high = false;
+  if (fallsPastYear === 'Yes' && fallsCount >= 2) high = true;
+  if (fallsPastYear === 'Yes' && fallInjury === 'Yes') high = true;
+  if (!isNaN(tugTime) && tugTime >= 12) high = true;
+  if (orthoPositive) high = true;
+
+  // Moderate risk: 1 fall (no injury), fear of falling, unsteady gait, assistive device
+  var moderate = false;
+  if (!high) {
+    if (fallsPastYear === 'Yes' && fallsCount >= 1 && fallInjury !== 'Yes') moderate = true;
+    if (fearOfFalling === 'Yes') moderate = true;
+    if (gaitConcern === 'Yes') moderate = true;
+    if (assistiveDevice && assistiveDevice !== 'No' && assistiveDevice !== '') moderate = true;
+  }
+
+  var level = '--';
+  if (high) level = 'High';
+  else if (moderate) level = 'Moderate';
+  else {
+    // Only show Low if at least one question has been answered
+    var anyAnswered = fallsPastYear || fearOfFalling || gaitConcern || assistiveDevice || (!isNaN(tugTime) && tugTime > 0);
+    if (anyAnswered) level = 'Low';
+  }
+
+  levelEl.querySelector('.awv-info-value').textContent = level;
+  if (alertEl) {
+    alertEl.style.display = (level === 'High') ? 'block' : 'none';
+  }
+  // Show/hide fall intervention plan
+  var interventionEl = document.getElementById('fall-intervention-section');
+  if (interventionEl) {
+    interventionEl.style.display = (level === 'High') ? 'block' : 'none';
+  }
+  setTimeout(updateSize, 50);
+}
+
+// Mini-Cog auto-scoring
+function scoreMiniCog() {
+  var recallEl = document.querySelector('input[name="words_recalled"]');
+  var clockEl = document.querySelector('select[name="clock_drawing_score"]');
+  var totalEl = document.querySelector('input[name="mini_cog_total"]');
+  var alertEl = document.getElementById('minicog-alert');
+  if (!recallEl || !clockEl || !totalEl) return;
+  var recall = parseInt(recallEl.value, 10);
+  var clock = parseInt(clockEl.value, 10);
+  var interpEl = document.getElementById('minicog-interpretation-value');
+  var followupEl = document.getElementById('cognitive-followup-section');
+  if (!isNaN(recall) && !isNaN(clock)) {
+    var total = recall + clock;
+    totalEl.value = total;
+    if (alertEl) {
+      alertEl.style.display = (total <= 2) ? 'block' : 'none';
+    }
+    if (interpEl) {
+      interpEl.textContent = (total <= 2) ? 'Positive screen - further evaluation recommended' : 'Normal (negative screen)';
+    }
+    if (followupEl) {
+      followupEl.style.display = (total <= 2) ? 'block' : 'none';
+    }
+  } else {
+    totalEl.value = '';
+    if (alertEl) alertEl.style.display = 'none';
+    if (interpEl) interpEl.textContent = '--';
+    if (followupEl) followupEl.style.display = 'none';
+  }
+  setTimeout(updateSize, 50);
+}
+
+// Cognitive tool metadata for alt-tool scoring
+var COG_TOOLS = {
+  mini_cog: { label: 'Mini-Cog', max: 5, cutoff: 2, dir: 'le' },
+  moca: { label: 'MoCA', max: 30, cutoff: 25, dir: 'lt' },
+  slums: { label: 'SLUMS', max: 30, cutoff: 20, dir: 'lt' },
+  mmse: { label: 'MMSE', max: 30, cutoff: 23, dir: 'lt' }
+};
+
+function switchCognitiveTool() {
+  var sel = (document.querySelector('input[name="cognitive_tool"]:checked') || {}).value || 'mini_cog';
+  var miniDiv = document.getElementById('tool-mini_cog');
+  var altDiv = document.getElementById('tool-alt');
+  if (sel === 'mini_cog') {
+    if (miniDiv) miniDiv.style.display = 'block';
+    if (altDiv) altDiv.style.display = 'none';
+    scoreMiniCog();
+  } else {
+    if (miniDiv) miniDiv.style.display = 'none';
+    if (altDiv) altDiv.style.display = 'block';
+    var info = COG_TOOLS[sel] || COG_TOOLS.moca;
+    var infoEl = document.getElementById('alt-tool-info-value');
+    if (infoEl) infoEl.textContent = info.label + ' (max ' + info.max + ')';
+    var scoreInput = document.querySelector('input[name="alt_cog_score"]');
+    if (scoreInput) scoreInput.max = info.max;
+    scoreAltCog();
+  }
+  setTimeout(updateSize, 50);
+}
+
+function scoreAltCog() {
+  var sel = (document.querySelector('input[name="cognitive_tool"]:checked') || {}).value || 'mini_cog';
+  var info = COG_TOOLS[sel];
+  if (!info) return;
+  var scoreEl = document.querySelector('input[name="alt_cog_score"]');
+  var interpEl = document.getElementById('alt-cog-interpretation-value');
+  var alertEl = document.getElementById('alt-cog-alert');
+  var followupEl = document.getElementById('cognitive-followup-section');
+  if (!scoreEl || !interpEl) return;
+  var val = parseInt(scoreEl.value, 10);
+  if (isNaN(val)) {
+    interpEl.textContent = '--';
+    if (alertEl) alertEl.style.display = 'none';
+    if (followupEl) followupEl.style.display = 'none';
+    return;
+  }
+  var positive = false;
+  if (info.dir === 'le') positive = val <= info.cutoff;
+  else positive = val < info.cutoff;
+  interpEl.textContent = positive ? 'Positive screen - further evaluation recommended' : 'Normal (negative screen)';
+  if (alertEl) alertEl.style.display = positive ? 'block' : 'none';
+  if (followupEl) followupEl.style.display = positive ? 'block' : 'none';
+  setTimeout(updateSize, 50);
+}
+
+// STEADI assessment visibility (TUG + Orthostatic)
+function updateSteadiSections() {
+  var container = document.getElementById('steadi-assessment');
+  if (!container) return;
+  var fields = ['falls_past_year', 'fear_of_falling', 'gait_concern'];
+  var positive = false;
+  var anyAnswered = false;
+  for (var i = 0; i < fields.length; i++) {
+    var checked = document.querySelector('input[name="' + fields[i] + '"]:checked');
+    if (checked) { anyAnswered = true; if (checked.value === 'Yes') positive = true; }
+  }
+  container.style.display = positive ? 'block' : 'none';
+  var steadiResultEl = document.getElementById('steadi-result-value');
+  if (steadiResultEl) steadiResultEl.textContent = anyAnswered ? (positive ? 'Positive' : 'Negative') : '--';
+  calculateFallRiskLevel();
+  setTimeout(updateSize, 50);
+}
+
+// SDOH positive screen scoring
+function scoreSDOH() {
+  var domains = [
+    {
+      id: 'sdoh-housing-alert',
+      label: 'Housing instability',
+      test: function() {
+        var w = (document.querySelector('input[name="sdoh_housing_worried"]:checked') || {}).value;
+        var c = (document.querySelector('input[name="sdoh_housing_conditions"]:checked') || {}).value;
+        return w === 'Yes' || c === 'Yes';
+      }
+    },
+    {
+      id: 'sdoh-utility-alert',
+      label: 'Utility needs',
+      test: function() {
+        var v = (document.querySelector('input[name="sdoh_utility_concerns"]:checked') || {}).value;
+        return v === 'Yes';
+      }
+    },
+    {
+      id: 'sdoh-food-alert',
+      label: 'Food insecurity',
+      test: function() {
+        var w = (document.querySelector('input[name="sdoh_food_worry"]:checked') || {}).value;
+        var d = (document.querySelector('input[name="sdoh_food_didnt_last"]:checked') || {}).value;
+        return w === 'Often true' || w === 'Sometimes true' || d === 'Often true' || d === 'Sometimes true';
+      }
+    },
+    {
+      id: 'sdoh-transportation-alert',
+      label: 'Transportation barrier',
+      test: function() {
+        var v = (document.querySelector('input[name="sdoh_transportation"]:checked') || {}).value;
+        return v === 'Yes';
+      }
+    },
+    {
+      id: 'sdoh-social-alert',
+      label: 'Social isolation',
+      test: function() {
+        var contact = (document.querySelector('input[name="sdoh_social_contact"]:checked') || {}).value;
+        var lonely = (document.querySelector('input[name="sdoh_loneliness"]:checked') || {}).value;
+        return contact === 'Rarely' || contact === 'Never' || lonely === 'Often' || lonely === 'Always';
+      }
+    },
+    {
+      id: 'sdoh-safety-alert',
+      label: 'Safety concern',
+      test: function() {
+        var safe = (document.querySelector('input[name="sdoh_feel_safe"]:checked') || {}).value;
+        var afraid = (document.querySelector('input[name="sdoh_afraid_partner"]:checked') || {}).value;
+        return safe === 'No' || afraid === 'Yes';
+      }
+    },
+    {
+      id: 'sdoh-substance-alert',
+      label: 'Substance use',
+      test: function() {
+        var v = (document.querySelector('input[name="sdoh_recreational_drugs"]:checked') || {}).value;
+        return v === 'Yes';
+      }
+    },
+    {
+      id: 'sdoh-incontinence-alert',
+      label: 'Incontinence',
+      test: function() {
+        var v = (document.querySelector('input[name="sdoh_urinary_leakage"]:checked') || {}).value;
+        return v === 'Yes';
+      }
+    },
+    {
+      id: 'sdoh-pain-alert',
+      label: 'Pain',
+      test: function() {
+        var v = (document.querySelector('input[name="sdoh_pain_present"]:checked') || {}).value;
+        return v === 'Yes';
+      }
+    }
+  ];
+
+  var positiveLabels = [];
+  for (var i = 0; i < domains.length; i++) {
+    var d = domains[i];
+    var el = document.getElementById(d.id);
+    var positive = d.test();
+    if (el) el.style.display = positive ? 'block' : 'none';
+    if (positive) positiveLabels.push(d.label);
+  }
+
+  var refSection = document.getElementById('sdoh-referral-section');
+  var summaryEl = document.getElementById('sdoh-positive-summary');
+  if (refSection) {
+    refSection.style.display = positiveLabels.length > 0 ? 'block' : 'none';
+  }
+  if (summaryEl) {
+    summaryEl.textContent = positiveLabels.length > 0
+      ? 'Positive screens identified: ' + positiveLabels.join(', ') + '. Document referrals or care coordination below.'
+      : '';
+    summaryEl.style.display = positiveLabels.length > 0 ? 'block' : 'none';
+  }
+  setTimeout(updateSize, 50);
+}
+
+// Conditional field visibility
+function updateConditionalFields(triggerName) {
+  var conditionals = document.querySelectorAll('.awv-conditional[data-conditional-on="' + triggerName + '"]');
+  for (var i = 0; i < conditionals.length; i++) {
+    var el = conditionals[i];
+    var expectedValue = el.getAttribute('data-conditional-value');
+    var checked = document.querySelector('input[name="' + triggerName + '"]:checked');
+    if (checked && checked.value === expectedValue) {
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+  setTimeout(updateSize, 50);
+}
+
+// Event listeners for all scoring and conditional fields
+document.addEventListener('change', function(e) {
+  var name = e.target.name;
+  // Clear validation error on change
+  var field = e.target.closest('.awv-field');
+  if (field && field.classList.contains('awv-field--error')) {
+    field.classList.remove('awv-field--error');
+    var errMsg = field.querySelector('.awv-field-error');
+    if (errMsg) errMsg.remove();
+  }
+  // Conditional fields
+  updateConditionalFields(name);
+  // Tobacco
+  if (name === 'tobacco_use') {
+    var alertEl = document.getElementById('tobacco-alert');
+    if (alertEl) {
+      alertEl.style.display = (e.target.value === 'Yes') ? 'block' : 'none';
+      setTimeout(updateSize, 50);
+    }
+  }
+  // Prevention plan warnings
+  if (name === 'prevention_plan_created') {
+    var ppw = document.getElementById('prevention-plan-warning');
+    if (ppw) { ppw.style.display = (e.target.value === 'No') ? 'block' : 'none'; setTimeout(updateSize, 50); }
+  }
+  if (name === 'written_copy_given') {
+    var wcw = document.getElementById('written-copy-warning');
+    if (wcw) { wcw.style.display = (e.target.value === 'No') ? 'block' : 'none'; setTimeout(updateSize, 50); }
+  }
+  // PHQ scoring
+  if (name && name.indexOf('phq') === 0) scorePHQ();
+  // AUDIT-C scoring
+  if (name && name.indexOf('auditc_') === 0) scoreAUDITC();
+  // Mini-Cog scoring
+  if (name === 'words_recalled' || name === 'clock_drawing_score') scoreMiniCog();
+  // Cognitive tool switching
+  if (name === 'cognitive_tool') switchCognitiveTool();
+  // Fall risk level
+  if (name === 'falls_past_year' || name === 'falls_count' || name === 'fall_injury' || name === 'fear_of_falling' || name === 'gait_concern' || name === 'assistive_device') calculateFallRiskLevel();
+  if (name === 'falls_past_year' || name === 'fear_of_falling' || name === 'gait_concern') updateSteadiSections();
+  // SDOH scoring
+  if (name && name.indexOf('sdoh_') === 0) scoreSDOH();
+  updateAllSectionStatuses();
+});
+// Phone number formatting: (XXX) XXX-XXXX
+function formatPhone(input) {
+  var digits = input.value.replace(/\D/g, '').substring(0, 10);
+  var formatted = '';
+  if (digits.length > 0) formatted = '(' + digits.substring(0, 3);
+  if (digits.length >= 3) formatted += ') ' + digits.substring(3, 6);
+  if (digits.length >= 6) formatted += '-' + digits.substring(6);
+  input.value = formatted;
+}
+
+document.addEventListener('input', function(e) {
+  if (e.target.name === 'words_recalled') scoreMiniCog();
+  if (e.target.name === 'alt_cog_score') scoreAltCog();
+  if (e.target.name && e.target.name.indexOf('ortho_') === 0) calculateOrthostaticDrop();
+  if (e.target.name === 'tug_time_seconds') calculateFallRiskLevel();
+  if (e.target.name === 'acp_start_time' || e.target.name === 'acp_end_time') calculateACPTime();
+  if (e.target.name && e.target.name.indexOf('specialist_') === 0 && e.target.name.indexOf('_phone') > 0) formatPhone(e.target);
+  updateAllSectionStatuses();
+});
+
+function apiPost(path, data) {
+  return fetch('/plugin-io/api/guided_awv' + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer internal-call' },
+    body: JSON.stringify(data)
+  }).then(function(r) { return r.json(); });
+}
+
+function apiGet(path) {
+  return fetch('/plugin-io/api/guided_awv' + path, {
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer internal-call' }
+  }).then(function(r) { return r.json(); });
+}
+
+function getModuleFormData(sectionId) {
+  var container = document.getElementById('body-' + sectionId);
+  if (!container) return {};
+  var data = {};
+  // Text / number / date inputs
+  var inputs = container.querySelectorAll('input[type="text"], input[type="number"], input[type="date"]');
+  for (var i = 0; i < inputs.length; i++) {
+    if (inputs[i].name) data[inputs[i].name] = inputs[i].value;
+  }
+  // Textareas
+  var textareas = container.querySelectorAll('textarea');
+  for (var i = 0; i < textareas.length; i++) {
+    if (textareas[i].name) data[textareas[i].name] = textareas[i].value;
+  }
+  // Selects
+  var selects = container.querySelectorAll('select');
+  for (var i = 0; i < selects.length; i++) {
+    if (selects[i].name) data[selects[i].name] = selects[i].value;
+  }
+  // Radios - single selected value per name
+  var radios = container.querySelectorAll('input[type="radio"]:checked');
+  for (var i = 0; i < radios.length; i++) {
+    if (radios[i].name) data[radios[i].name] = radios[i].value;
+  }
+  // Checkboxes - collect as arrays grouped by name
+  var checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+  for (var i = 0; i < checkboxes.length; i++) {
+    var n = checkboxes[i].name;
+    if (!n) continue;
+    if (!data[n]) data[n] = [];
+    data[n].push(checkboxes[i].value);
+  }
+  return data;
+}
+
+function validateSection(sectionId) {
+  var container = document.getElementById('body-' + sectionId);
+  if (!container) return true;
+  var prevErrors = container.querySelectorAll('.awv-field--error');
+  for (var i = 0; i < prevErrors.length; i++) prevErrors[i].classList.remove('awv-field--error');
+  var prevMsgs = container.querySelectorAll('.awv-field-error');
+  for (var i = 0; i < prevMsgs.length; i++) prevMsgs[i].remove();
+  var valid = true;
+  var required = container.querySelectorAll('[data-required="true"]');
+  for (var i = 0; i < required.length; i++) {
+    var el = required[i];
+    if (!el.offsetParent && el.style.display !== 'inline') continue;
+    var field = el.closest('.awv-field');
+    var isEmpty = false;
+    if (el.classList.contains('awv-radio-group') || el.classList.contains('awv-checkbox-group')) {
+      isEmpty = !el.querySelector('input:checked');
+    } else {
+      isEmpty = !el.value || el.value.trim() === '';
+    }
+    if (isEmpty) {
+      valid = false;
+      if (field) {
+        field.classList.add('awv-field--error');
+        var msg = document.createElement('div');
+        msg.className = 'awv-field-error';
+        msg.textContent = 'This field is required';
+        field.appendChild(msg);
+      }
+    }
+  }
+  return valid;
+}
+
+function saveSection(sectionId, endpoint, transformFn, onSuccess) {
+  if (!validateSection(sectionId)) {
+    var st = document.getElementById(sectionId + '-status');
+    if (st) { st.textContent = 'Required fields missing'; st.className = 'awv-status awv-status--error'; }
+    return;
+  }
+  var btn = document.getElementById(sectionId + '-save-btn');
+  var status = document.getElementById(sectionId + '-status');
+  var formData = getModuleFormData(sectionId);
+  formData.note_id = NOTE_UUID;
+  var rawFormData = {};
+  for (var k in formData) { if (k !== 'note_id') rawFormData[k] = formData[k]; }
+  rawFormData._last_saved = new Date().toISOString();
+  if (transformFn) formData = transformFn(formData);
+  formData._form_fields = rawFormData;
+  if (btn) { btn.disabled = true; }
+  if (status) { status.textContent = 'Saving...'; status.className = 'awv-status awv-status--saving'; }
+  apiPost(endpoint, formData).then(function(result) {
+    if (result && result.success) {
+      if (status) { status.textContent = 'Saved'; status.className = 'awv-status awv-status--saved'; }
+      setTimeout(function() { if (status) { status.textContent = ''; status.className = 'awv-status'; } }, 4000);
+      savedSections[sectionId] = true;
+      showLastSaved(sectionId, new Date().toISOString());
+      updateSectionStatus(sectionId);
+      checkCompletion();
+      // Only run section-specific cleanup AFTER the server confirms success.
+      // Previously some sections (currentproviders) cleared UI state via a
+      // setTimeout in transformFn, which fired regardless of save outcome and
+      // wiped pending pharmacies on every error. Pass cleanup via onSuccess
+      // instead.
+      if (typeof onSuccess === 'function') {
+        try { onSuccess(result); } catch (e) { console.warn('onSuccess threw', e); }
+      }
+      // Don't collapse attestation section after save (prevention plan button lives there)
+      if (sectionId !== 'attestation') {
+        advanceToNextSection(sectionId);
+      }
+      // Re-run cross-section pre-fill with updated form state
+      apiGet('/awv/form-state?note_id=' + NOTE_UUID).then(function(r) {
+        if (r && r.success && r.sections) crossSectionPreFill(r.sections);
+      }).catch(function() {});
+    } else {
+      var msg = (result && result.error) ? result.error : 'Unknown error';
+      if (status) { status.textContent = 'Error: ' + msg; status.className = 'awv-status awv-status--error'; }
+    }
+    if (btn) { btn.disabled = false; }
+  }).catch(function(err) {
+    if (status) { status.textContent = 'Error: ' + err.message; status.className = 'awv-status awv-status--error'; }
+    if (btn) { btn.disabled = false; }
+  });
+}
+
+function saveVitals() {
+  saveSection('vitals', '/awv/vitals', function(d) {
+    return {
+      note_id: d.note_id,
+      height: d.height || null,
+      weight_lbs: d.weight || null,
+      blood_pressure_systole: d.systolic_bp || null,
+      blood_pressure_diastole: d.diastolic_bp || null,
+      pulse: d.heart_rate || null,
+      // bp_arm / bp_position are required radios per the CMS spec. Without
+      // these, the documentation of arm + position is lost and the handler
+      // narrative is incomplete.
+      bp_arm: d.bp_arm || '',
+      bp_position: d.bp_position || ''
+    };
+  });
+}
+
+function saveDepressionScreening() {
+  saveSection('depressionscreening', '/awv/depression-screening', function(d) {
+    var phq2 = sumRadios(phq2Names);
+    var phq9 = sumRadios(phq9Names);
+    var q9Val = d.phq9_q9 ? parseInt(d.phq9_q9, 10) : 0;
+    // safety_assessed is a radio whose actual values are
+    // assessed_no_risk / assessed_safety_plan / assessed_crisis_referral /
+    // not_assessed. The old `=== 'Yes'` comparison was always false. Map any
+    // 'assessed_*' value to True so the handler knows safety was assessed.
+    var safetyVal = d.safety_assessed || '';
+    var safetyAssessed = typeof safetyVal === 'string' && safetyVal.indexOf('assessed_') === 0;
+    return {
+      note_id: d.note_id,
+      phq2_score: phq2.total,
+      phq9_score: phq2.total >= 3 ? phq9.total : null,
+      q9_score: q9Val,
+      safety_assessed: safetyAssessed,
+      // Pass through the raw answer so the handler narrative can record which
+      // type of safety action was taken (no risk / safety plan / crisis referral).
+      safety_assessed_action: safetyVal,
+      // CMS-required fields the previous transformFn dropped entirely
+      suicide_ideation_assessed: d.suicide_ideation_assessed || '',
+      suicide_ideation_present: d.suicide_ideation_present || '',
+      depression_treatment_plan: d.depression_treatment_plan || '',
+      depression_treatment_notes: d.depression_treatment_notes || ''
+    };
+  });
+}
+
+function saveCognitiveAssessment() {
+  saveSection('cognitiveassessment', '/awv/cognitive-assessment', function(d) {
+    var tool = d.cognitive_tool || 'mini_cog';
+    if (tool === 'mini_cog') {
+      // The handler expects clinical_notes and screening_completed as the
+      // canonical keys for both branches. Use those wire-shape names so the
+      // narrative in the Mini-Cog branch can surface them.
+      return {
+        note_id: d.note_id,
+        words_recalled: d.words_recalled || 0,
+        clock_drawing_score: d.clock_drawing_score || 0,
+        screening_completed: d.cognitive_screening_completed || '',
+        clinical_notes: d.cognitive_notes || ''
+      };
+    } else {
+      return {
+        note_id: d.note_id,
+        tool: tool,
+        score: d.alt_cog_score || 0,
+        screening_completed: d.cognitive_screening_completed || '',
+        clinical_notes: d.alt_cog_notes || ''
+      };
+    }
+  });
+}
+
+function saveFallRisk() {
+  saveSection('fallrisk', '/awv/fall-risk', function(d) {
+    return {
+      note_id: d.note_id,
+      falls_past_year: d.falls_past_year || 'No',
+      falls_count: d.falls_count || null,
+      fall_injury: d.fall_injury || 'No',
+      fear_of_falling: d.fear_of_falling || 'No',
+      gait_concern: d.gait_concern || 'No',
+      assistive_device: d.assistive_device || 'No',
+      tug_time_seconds: d.tug_time_seconds || null,
+      ortho_lying_sbp: d.ortho_lying_sbp || null,
+      ortho_lying_dbp: d.ortho_lying_dbp || null,
+      ortho_lying_hr: d.ortho_lying_hr || null,
+      ortho_standing_sbp: d.ortho_standing_sbp || null,
+      ortho_standing_dbp: d.ortho_standing_dbp || null,
+      ortho_standing_hr: d.ortho_standing_hr || null,
+      risk_factors: d.fall_risk_factors || []
+    };
+  });
+}
+
+function saveHRA() {
+  saveSection('hra', '/awv/hra', function(d) {
+    // Send every form field except the meta keys saveSection adds.
+    // Previously this filter was 'hra_' === 0, which dropped every actual
+    // HRA input (tobacco_use, alcohol_use, exercise_days, food_security,
+    // housing_stability, etc. - all declared bare in modules/hra.py
+    // without an 'hra_' prefix). The handler's CPT II logic was effectively
+    // dead because nothing it looked for ever reached the server.
+    var META_KEYS = { note_id: 1, _form_fields: 1, _last_saved: 1 };
+    var responses = {};
+    for (var key in d) {
+      if (META_KEYS[key]) continue;
+      responses[key] = d[key];
+    }
+    return {
+      note_id: d.note_id,
+      responses: responses,
+      awv_type: AWV_TYPE
+    };
+  });
+}
+
+function saveFamilyHistory() {
+  saveSection('familyhistory', '/awv/family-history', function(d) {
+    var members = ['mother','father','maternal_grandmother','maternal_grandfather',
+                   'paternal_grandmother','paternal_grandfather','siblings','children'];
+    var relatives = {};
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      var status = d['fhx_' + m + '_status'] || '';
+      var age = d['fhx_' + m + '_age'] || '';
+      var conditions = d['fhx_' + m] || [];
+      if (status || age || (conditions.length && conditions.length > 0)) {
+        var displayName = m.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        relatives[displayName] = {
+          status: status,
+          age: age,
+          conditions: Array.isArray(conditions) ? conditions : [conditions]
+        };
+      }
+    }
+    return {
+      note_id: d.note_id,
+      narrative: d.fhx_additional || '',
+      relatives: relatives
+    };
+  });
+}
+
+function saveFunctionalAbility() {
+  saveSection('functionalability', '/awv/functional-ability', function(d) {
+    var adl = {};
+    var iadl = {};
+    for (var key in d) {
+      if (key.indexOf('adl_') === 0) adl[key] = d[key];
+      else if (key.indexOf('iadl_') === 0) iadl[key] = d[key];
+    }
+    return {
+      note_id: d.note_id,
+      adl_responses: adl,
+      iadl_responses: iadl,
+      home_safety_concerns: d.home_safety_concerns || '',
+      referrals_needed: d.referrals_needed || []
+    };
+  });
+}
+
+function saveAdvanceCarePlanning() {
+  saveSection('advancecareplanning', '/awv/advance-care-planning', function(d) {
+    // Ship the full set of ACP fields the module renders. Previously this
+    // dropped 9 of 16 fields including acp_total_minutes (the CMS time-
+    // documentation key for CPT 99497), code_status, acp_topics_discussed,
+    // healthcare_proxy_contact / _designated, documents_completed_today,
+    // copy_given_to_patient, documents_scanned_to_chart - all of which the
+    // handler already attempts to read.
+    return {
+      note_id: d.note_id,
+      acp_discussed: d.acp_discussed || '',
+      advance_directive_exists: d.advance_directive_exists || '',
+      advance_directive_type: d.advance_directive_type || [],
+      healthcare_proxy_name: d.healthcare_proxy_name || '',
+      healthcare_proxy_relationship: d.healthcare_proxy_relationship || '',
+      healthcare_proxy_contact: d.healthcare_proxy_contact || '',
+      healthcare_proxy_designated: d.healthcare_proxy_designated || '',
+      patient_wishes_summary: d.patient_wishes_summary || '',
+      acp_followup_needed: d.acp_followup_needed || [],
+      // CMS 99497 billable-time key
+      acp_total_minutes: d.acp_total_minutes || '',
+      acp_start_time: d.acp_start_time || '',
+      acp_end_time: d.acp_end_time || '',
+      code_status: d.code_status || '',
+      acp_topics_discussed: d.acp_topics_discussed || [],
+      documents_completed_today: d.documents_completed_today || [],
+      copy_given_to_patient: d.copy_given_to_patient || '',
+      documents_scanned_to_chart: d.documents_scanned_to_chart || ''
+    };
+  });
+}
+
+function savePreventiveServices() {
+  saveSection('preventiveservices', '/awv/preventive-services', function(d) {
+    var services = {};
+    for (var key in d) {
+      if (key.indexOf('svc_') !== 0) continue;
+      var rest = key.replace('svc_', '');
+      if (rest.endsWith('_ordered')) {
+        var svcId = rest.replace(/_ordered$/, '');
+        services[svcId] = 'ordered';
+      } else if (rest.endsWith('_discussed')) {
+        var svcId = rest.replace(/_discussed$/, '');
+        if (!services[svcId]) services[svcId] = 'discussed';
+      }
+    }
+    return {
+      note_id: d.note_id,
+      services: services,
+      prevention_plan_created: d.prevention_plan_created || '',
+      written_copy_given: d.written_copy_given || ''
+    };
+  });
+}
+
+var SPECIALTY_OPTIONS = ['Allergy & Immunology','Cardiology','Dermatology','Endocrinology','Gastroenterology','Hematology / Oncology','Infectious Disease','Nephrology','Neurology','OB/GYN','Ophthalmology','Orthopedics','Pain Management','Palliative Care','Physical Therapy','Podiatry','Psychiatry','Pulmonology','Rheumatology','Surgery - General','Surgery - Cardiothoracic','Urology','Vascular Surgery','Other'];
+
+function buildSpecialtySelect(name) {
+  var html = '<select name="' + name + '" class="awv-select" style="flex:2;"><option value="">-- Select specialty --</option>';
+  for (var i = 0; i < SPECIALTY_OPTIONS.length; i++) {
+    html += '<option value="' + SPECIALTY_OPTIONS[i] + '">' + SPECIALTY_OPTIONS[i] + '</option>';
+  }
+  html += '</select>';
+  return html;
+}
+
+function addSpecialistRow() {
+  var container = document.getElementById('specialist-rows');
+  if (!container) return;
+  var rows = container.querySelectorAll('.specialist-row');
+  if (rows.length >= 10) return;
+  var idx = rows.length;
+  var row = document.createElement('div');
+  row.className = 'specialist-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;';
+  row.innerHTML = '<input type="text" name="specialist_' + idx + '_name" class="awv-input" placeholder="Provider name" style="flex:2;">'
+    + buildSpecialtySelect('specialist_' + idx + '_specialty')
+    + '<input type="text" name="specialist_' + idx + '_phone" class="awv-input" placeholder="Phone number" style="flex:1;">';
+  container.appendChild(row);
+  setTimeout(updateSize, 50);
+}
+
+function saveCurrentProviders() {
+  saveSection('currentproviders', '/awv/current-providers', function(d) {
+    var providers = {};
+    // Note: 'pharmacy' is no longer a free-text field. Preferred pharmacies
+    // are managed via the search/pending list below and sent as
+    // new_preferred_pharmacies to fire CreatePatientPreferredPharmacies.
+    var providerFields = ['pcp', 'dme_suppliers', 'home_health', 'other_providers'];
+    for (var i = 0; i < providerFields.length; i++) {
+      if (d[providerFields[i]]) providers[providerFields[i]] = d[providerFields[i]];
+    }
+    // Collect structured specialist rows
+    var specialists = [];
+    for (var i = 0; i < 10; i++) {
+      var name = d['specialist_' + i + '_name'] || '';
+      var specialty = d['specialist_' + i + '_specialty'] || '';
+      var phone = d['specialist_' + i + '_phone'] || '';
+      if (name || specialty || phone) {
+        specialists.push({ name: name, specialty: specialty, phone: phone });
+      }
+    }
+    if (specialists.length > 0) providers.specialists = specialists;
+
+    return {
+      note_id: d.note_id,
+      patient_id: PATIENT_ID,
+      providers: providers,
+      // Send the snapshot of pending pharmacies. The UI clear happens in
+      // the onSuccess callback below so a failed save preserves them.
+      new_preferred_pharmacies: getPendingPharmacies()
+    };
+  }, function(result) {
+    // onSuccess: only fires after the server confirms success. Wipe the
+    // pending pharmacy UI now that the additions are persisted; on failure
+    // (apiPost rejected or success: false), this never runs and the
+    // provider's pending selections survive for retry.
+    clearPendingPharmacies();
+  });
+}
+
+// ----- Pharmacy search + add-to-pending -----
+
+var pharmacySearchTimer = null;
+
+function searchPharmacies(query) {
+  // Debounce input
+  if (pharmacySearchTimer) clearTimeout(pharmacySearchTimer);
+  var resultsEl = document.getElementById('pharmacy-search-results');
+  if (!resultsEl) return;
+  if (!query || query.length < 2) {
+    resultsEl.style.display = 'none';
+    while (resultsEl.firstChild) resultsEl.removeChild(resultsEl.firstChild);
+    return;
+  }
+  pharmacySearchTimer = setTimeout(function() {
+    apiGet('/awv/search-pharmacies?search=' + encodeURIComponent(query)).then(function(resp) {
+      var results = (resp && resp.results) || [];
+      // Clear previous results
+      while (resultsEl.firstChild) resultsEl.removeChild(resultsEl.firstChild);
+      if (results.length === 0) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'padding:8px 12px;color:#999;font-size:12px;';
+        empty.textContent = 'No pharmacies found.';
+        resultsEl.appendChild(empty);
+        resultsEl.style.display = 'block';
+        return;
+      }
+      // Build result rows via DOM APIs so values like "Macy's" or names
+      // containing < / > / & cannot break out of an HTML attribute or
+      // string literal. Metadata is stashed on dataset.* and the click
+      // handler reads it directly - no string interpolation into onclick.
+      for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        var addr = [r.address_line_1, r.city, r.state, r.zip_code].filter(Boolean).join(', ');
+        var row = document.createElement('div');
+        row.className = 'pharmacy-result';
+        row.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #eee;background:#fff;';
+        row.dataset.ncpdp = String(r.ncpdp_id || '');
+        row.dataset.orgName = String(r.organization_name || '');
+        row.dataset.addr = addr;
+        row.addEventListener('click', function() {
+          selectPharmacy(this.dataset.ncpdp, this.dataset.orgName, this.dataset.addr);
+        });
+        row.addEventListener('mouseover', function() { this.style.background = '#e3f2fd'; });
+        row.addEventListener('mouseout', function() { this.style.background = '#fff'; });
+
+        var nameEl = document.createElement('div');
+        nameEl.style.cssText = 'font-weight:600;font-size:12px;';
+        nameEl.textContent = r.organization_name || '(unnamed)';
+
+        var addrEl = document.createElement('div');
+        addrEl.style.cssText = 'color:#666;font-size:11px;';
+        addrEl.textContent = addr;
+
+        row.appendChild(nameEl);
+        row.appendChild(addrEl);
+        resultsEl.appendChild(row);
+      }
+      resultsEl.style.display = 'block';
+    }).catch(function(err) {
+      console.warn('Pharmacy search failed:', err);
+      resultsEl.style.display = 'none';
+    });
+  }, 250);
+}
+
+function selectPharmacy(ncpdpId, orgName, addr) {
+  if (!ncpdpId) return;
+  var pending = getPendingPharmacies();
+  // Skip if already pending
+  for (var i = 0; i < pending.length; i++) {
+    if (pending[i].ncpdp_id === ncpdpId) {
+      hidePharmacySearchResults();
+      return;
+    }
+  }
+  pending.push({ ncpdp_id: ncpdpId, organization_name: orgName, address: addr });
+  setPendingPharmacies(pending);
+  hidePharmacySearchResults();
+  // Clear the search input
+  var inp = document.getElementById('pharmacy-search');
+  if (inp) inp.value = '';
+}
+
+function removePendingPharmacy(ncpdpId) {
+  var pending = getPendingPharmacies();
+  pending = pending.filter(function(p) { return p.ncpdp_id !== ncpdpId; });
+  setPendingPharmacies(pending);
+}
+
+function getPendingPharmacies() {
+  var el = document.getElementById('pharmacy-pending');
+  if (!el) return [];
+  try {
+    return JSON.parse(el.getAttribute('data-pending-pharmacies') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function setPendingPharmacies(list) {
+  var el = document.getElementById('pharmacy-pending');
+  if (!el) return;
+  el.setAttribute('data-pending-pharmacies', JSON.stringify(list));
+  // Wipe current contents safely
+  while (el.firstChild) el.removeChild(el.firstChild);
+  if (!list || list.length === 0) {
+    el.style.color = '#999';
+    el.textContent = '(none)';
+    return;
+  }
+  el.style.color = '#1a1a1a';
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
+    var row = document.createElement('div');
+    row.style.cssText = 'padding:4px 0;border-bottom:1px solid #ffe082;';
+
+    var strong = document.createElement('strong');
+    strong.textContent = p.organization_name || '(unnamed)';
+    row.appendChild(strong);
+    row.appendChild(document.createTextNode(' '));
+
+    var addrSpan = document.createElement('span');
+    addrSpan.style.cssText = 'color:#666;font-size:11px;';
+    addrSpan.textContent = p.address || '';
+    row.appendChild(addrSpan);
+    row.appendChild(document.createTextNode(' '));
+
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.style.cssText = 'margin-left:6px;background:#e57373;color:#fff;border:none;border-radius:3px;padding:1px 6px;font-size:11px;cursor:pointer;';
+    removeBtn.textContent = 'remove';
+    removeBtn.dataset.ncpdp = String(p.ncpdp_id || '');
+    removeBtn.addEventListener('click', function() {
+      removePendingPharmacy(this.dataset.ncpdp);
+    });
+    row.appendChild(removeBtn);
+
+    el.appendChild(row);
+  }
+}
+
+function clearPendingPharmacies() {
+  setPendingPharmacies([]);
+}
+
+function hidePharmacySearchResults() {
+  var resultsEl = document.getElementById('pharmacy-search-results');
+  if (resultsEl) {
+    resultsEl.style.display = 'none';
+    while (resultsEl.firstChild) resultsEl.removeChild(resultsEl.firstChild);
+  }
+}
+
+// Hide pharmacy results dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  var resultsEl = document.getElementById('pharmacy-search-results');
+  var inp = document.getElementById('pharmacy-search');
+  if (!resultsEl || !inp) return;
+  if (e.target !== inp && !resultsEl.contains(e.target)) {
+    resultsEl.style.display = 'none';
+  }
+});
+
+function saveHearingVision() {
+  saveSection('hearingvision', '/awv/hearing-vision', function(d) {
+    var hearing = {};
+    var vision = {};
+    for (var key in d) {
+      if (key.indexOf('hearing_') === 0 || key === 'whisper_test') hearing[key] = d[key];
+      else if (key.indexOf('vision_') === 0 || key.indexOf('corrective_') === 0 || key.indexOf('snellen_') === 0 || key === 'last_eye_exam') vision[key] = d[key];
+    }
+    return {
+      note_id: d.note_id,
+      hearing: hearing,
+      vision: vision
+    };
+  });
+}
+
+function saveAlcoholScreening() {
+  saveSection('alcoholscreening', '/awv/alcohol-screening', function(d) {
+    var q1 = parseInt(d.auditc_q1 || '0', 10);
+    var q2 = parseInt(d.auditc_q2 || '0', 10);
+    var q3 = parseInt(d.auditc_q3 || '0', 10);
+    return {
+      note_id: d.note_id,
+      auditc_q1: q1,
+      auditc_q2: q2,
+      auditc_q3: q3,
+      total_score: q1 + q2 + q3,
+      patient_sex: d.patient_sex || ''
+    };
+  });
+}
+
+function saveFollowUp() {
+  saveSection('followupscheduling', '/awv/followup', function(d) {
+    // Field names must match what FollowUpSchedulingModule actually renders:
+    // next_awv_date / next_awv_timeframe / primary_care_followup /
+    // followup_reason / pending_labs / patient_goals / followup_tasks.
+    // The previous code read followup_type / followup_timeframe / followup_notes /
+    // followup_date - none of which exist - so every save produced a near-empty
+    // FollowUpCommand with a null requested_date.
+    var parts = [];
+    if (d.next_awv_date) parts.push('Next AWV: ' + d.next_awv_date);
+    if (d.next_awv_timeframe) parts.push('Timeframe: ' + d.next_awv_timeframe);
+    if (d.primary_care_followup) parts.push('Primary care follow-up: ' + d.primary_care_followup);
+    if (d.followup_reason) parts.push('Reason: ' + d.followup_reason);
+    if (d.pending_labs) parts.push('Pending labs/studies: ' + d.pending_labs);
+    if (d.patient_goals) parts.push('Patient goals: ' + d.patient_goals);
+    if (d.followup_tasks) {
+      var tasks = Array.isArray(d.followup_tasks) ? d.followup_tasks.join(', ') : d.followup_tasks;
+      if (tasks) parts.push('Tasks: ' + tasks);
+    }
+    return {
+      note_id: d.note_id,
+      comment: parts.join('. '),
+      requested_date: d.next_awv_date || null
+    };
+  });
+}
+
+function saveMedicationReconciliation() {
+  saveSection('medicationreconciliation', '/awv/medication-reconciliation', function(d) {
+    return {
+      note_id: d.note_id,
+      // medications_reconciled is the CMS-required attestation radio. The
+      // handler now gates CPT II 1111F on this answer being 'Yes' - if we
+      // don't ship it the handler can't tell whether the provider actually
+      // reconciled, only that they opened the section.
+      medications_reconciled: d.medications_reconciled || '',
+      reconciliation_method: d.reconciliation_method || '',
+      otc_medications: d.otc_medications || '',
+      supplements: d.supplements || '',
+      adherence_assessment: d.adherence_assessment || '',
+      high_risk_meds_identified: d.high_risk_meds_identified || '',
+      high_risk_meds_notes: d.high_risk_meds_notes || '',
+      reconciliation_attestation: d.reconciliation_attestation || [],
+      reconciliation_notes: d.reconciliation_notes || ''
+    };
+  });
+}
+
+function saveSDOHScreening() {
+  saveSection('sdohscreening', '/awv/sdoh-screening', function(d) {
+    var responses = {};
+    for (var key in d) {
+      if (key.indexOf('sdoh_') === 0) {
+        responses[key] = d[key];
+      }
+    }
+    return {
+      note_id: d.note_id,
+      responses: responses
+    };
+  });
+}
+
+function saveMedicalHistory() {
+  saveSection('medicalhistory', '/awv/medical-history', function(d) {
+    return {
+      note_id: d.note_id,
+      medical_history_attestation: d.medical_history_attestation || []
+    };
+  });
+}
+
+// Diagnosis search autocomplete
+var dxSearchTimer = null;
+var dxSearchInput = document.getElementById('new-dx-search');
+var dxResultsDiv = document.getElementById('new-dx-results');
+var addedDxDiv = document.getElementById('added-diagnoses');
+
+if (dxSearchInput) {
+  dxSearchInput.addEventListener('input', function() {
+    clearTimeout(dxSearchTimer);
+    var term = dxSearchInput.value.trim();
+    if (term.length < 2) { dxResultsDiv.style.display = 'none'; return; }
+    dxSearchTimer = setTimeout(function() {
+      apiGet('/awv/search-conditions?search=' + encodeURIComponent(term)).then(function(data) {
+        // Clear previous results safely
+        while (dxResultsDiv.firstChild) dxResultsDiv.removeChild(dxResultsDiv.firstChild);
+        if (!data || !data.results || data.results.length === 0) {
+          var empty = document.createElement('div');
+          empty.style.cssText = 'padding:8px;color:#999;font-size:12px;';
+          empty.textContent = 'No results found';
+          dxResultsDiv.appendChild(empty);
+          dxResultsDiv.style.display = 'block';
+          return;
+        }
+        // Build rows via DOM APIs - icd10_code and icd10_text come from the
+        // ontologies service and could in principle contain HTML special
+        // chars. textContent + dataset.* removes both the innerHTML and the
+        // string-interpolation paths that v0.14.6 fixed for the pharmacy
+        // search.
+        for (var i = 0; i < data.results.length; i++) {
+          var r = data.results[i];
+          var item = document.createElement('div');
+          item.className = 'dx-result-item';
+          item.style.cssText = 'padding:6px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:12px;';
+          item.dataset.code = String(r.icd10_code || '');
+          item.dataset.text = String(r.icd10_text || '');
+          item.addEventListener('click', function() {
+            selectCondition(this.dataset.code, this.dataset.text);
+          });
+
+          var codeEl = document.createElement('strong');
+          codeEl.textContent = r.icd10_code || '';
+
+          item.appendChild(codeEl);
+          item.appendChild(document.createTextNode(' — ' + (r.icd10_text || '')));
+          dxResultsDiv.appendChild(item);
+        }
+        dxResultsDiv.style.display = 'block';
+      });
+    }, 300);
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target !== dxSearchInput && !dxResultsDiv.contains(e.target)) {
+      dxResultsDiv.style.display = 'none';
+    }
+  });
+}
+
+function selectCondition(icd10Code, displayText) {
+  dxResultsDiv.style.display = 'none';
+  dxSearchInput.value = '';
+  var row = document.createElement('div');
+  row.className = 'awv-info-row';
+  row.style.background = '#e8f5e9';
+  row.style.borderRadius = '4px';
+  row.style.marginBottom = '4px';
+  row.style.padding = '4px 8px';
+  // Build the inner spans via DOM APIs so icd10_code / displayText cannot
+  // inject HTML even if they round-trip through a future caller that
+  // doesn't sanitize.
+  var labelSpan = document.createElement('span');
+  labelSpan.className = 'awv-info-label';
+  labelSpan.style.fontWeight = '600';
+  labelSpan.textContent = displayText || '';
+
+  var valueSpan = document.createElement('span');
+  valueSpan.className = 'awv-info-value';
+  valueSpan.style.cssText = 'font-size:11px;color:#666;';
+  valueSpan.textContent = (icd10Code || '') + ' — Adding...';
+
+  row.appendChild(labelSpan);
+  row.appendChild(valueSpan);
+  addedDxDiv.appendChild(row);
+  apiPost('/awv/diagnose', {
+    note_id: NOTE_UUID,
+    icd10_code: icd10Code,
+    today_assessment: 'Diagnosed during Annual Wellness Visit'
+  }).then(function(result) {
+    var v = row.querySelector('.awv-info-value');
+    if (!v) return;
+    if (result && result.success) {
+      v.textContent = (icd10Code || '') + ' ✓ Added';
+      v.style.color = '#2e7d32';
+    } else {
+      v.textContent = (icd10Code || '') + ' ✗ Failed';
+      v.style.color = '#c62828';
+    }
+  });
+  updateSize();
+}
+
+function saveAttestation() {
+  saveSection('attestation', '/awv/plan', function(d) {
+    var parts = ['**Provider Attestation**'];
+    if (d.attestation_all_elements) parts.push('All 11 CMS elements documented: Yes');
+    if (d.attestation_patient_education) parts.push('Patient education provided: Yes');
+    if (d.attestation_face_to_face_time) parts.push('Face-to-face time: ' + d.attestation_face_to_face_time + ' minutes');
+    return {
+      note_id: d.note_id,
+      narrative: parts.join('\n'),
+      awv_cpt_code: getAwvCptCode(),
+      attestation: 'yes',
+      // section_id tells SavePlanHandler which form-state cache slot to write.
+      // Without this, saving Attestation would clobber a previously saved
+      // Assessment & Plan section (both endpoints POST to /awv/plan).
+      section_id: 'attestation'
+    };
+  });
+}
+
+
+// ACP time calculation
+function calculateACPTime() {
+  var startEl = document.querySelector('input[name="acp_start_time"]');
+  var endEl = document.querySelector('input[name="acp_end_time"]');
+  var totalEl = document.querySelector('input[name="acp_total_minutes"]');
+  if (!startEl || !endEl || !totalEl) return;
+  var start = startEl.value;
+  var end = endEl.value;
+  if (start && end && start.indexOf(':') > 0 && end.indexOf(':') > 0) {
+    var sp = start.split(':');
+    var ep = end.split(':');
+    var startMin = parseInt(sp[0], 10) * 60 + parseInt(sp[1], 10);
+    var endMin = parseInt(ep[0], 10) * 60 + parseInt(ep[1], 10);
+    var diff = endMin - startMin;
+    if (diff > 0) {
+      totalEl.value = diff;
+    } else {
+      totalEl.value = '';
+    }
+  } else {
+    totalEl.value = '';
+  }
+}
+
+// Section status indicators
+function updateSectionStatus(sectionId) {
+  var statusEl = document.getElementById('status-' + sectionId);
+  if (!statusEl) return;
+  var container = document.getElementById('body-' + sectionId);
+  if (!container) return;
+  var required = container.querySelectorAll('[data-required="true"]');
+  if (required.length === 0) {
+    statusEl.className = 'awv-section-status';
+    // Still update toggle for saved sections with no required fields
+    var isSaved = !!savedSections[sectionId];
+    var section = document.getElementById('section-' + sectionId);
+    if (section) {
+      var toggle = section.querySelector('.awv-section-toggle');
+      var body = document.getElementById('body-' + sectionId);
+      if (toggle) {
+        var isCollapsed = body && body.style.display === 'none';
+        if (isSaved && isCollapsed) {
+          toggle.textContent = '\u2713';
+          toggle.classList.add('awv-section-toggle--complete');
+        } else if (isSaved) {
+          toggle.textContent = '-';
+          toggle.classList.add('awv-section-toggle--complete');
+        }
+      }
+    }
+    return;
+  }
+  var allFilled = true;
+  for (var i = 0; i < required.length; i++) {
+    var el = required[i];
+    // Skip fields hidden by conditional logic, but NOT fields hidden because the accordion is collapsed
+    var hid = false;
+    var node = el.parentElement;
+    while (node && node !== container) {
+      if (node.style && node.style.display === 'none') { hid = true; break; }
+      node = node.parentElement;
+    }
+    if (hid) continue;
+    if (el.classList.contains('awv-radio-group') || el.classList.contains('awv-checkbox-group')) {
+      if (!el.querySelector('input:checked')) { allFilled = false; break; }
+    } else {
+      if (!el.value || el.value.trim() === '') { allFilled = false; break; }
+    }
+  }
+  statusEl.className = 'awv-section-status' + (allFilled ? ' awv-section-status--complete' : '');
+  // Update toggle icon: show checkmark only when section has been saved
+  var isSaved = !!savedSections[sectionId];
+  var section = document.getElementById('section-' + sectionId);
+  if (section) {
+    var toggle = section.querySelector('.awv-section-toggle');
+    var body = document.getElementById('body-' + sectionId);
+    if (toggle) {
+      var isCollapsed = body && body.style.display === 'none';
+      if (isSaved && isCollapsed) {
+        toggle.textContent = '\u2713';
+        toggle.classList.add('awv-section-toggle--complete');
+      } else if (isSaved) {
+        toggle.textContent = '-';
+        toggle.classList.add('awv-section-toggle--complete');
+      } else {
+        toggle.textContent = isCollapsed ? '+' : '-';
+        toggle.classList.remove('awv-section-toggle--complete');
+      }
+    }
+  }
+}
+
+function updateAllSectionStatuses() {
+  var sections = document.querySelectorAll('.awv-section-status');
+  for (var i = 0; i < sections.length; i++) {
+    var id = sections[i].id.replace('status-', '');
+    updateSectionStatus(id);
+  }
+}
+
+// Completion tracking - checks minimum required fields for each CMS element
+function checkCompletion() {
+  var banner = document.getElementById('completion-banner');
+  if (!banner) return;
+  var incomplete = [];
+
+  // Element 1: HRA
+  var hraCompleted = document.querySelector('input[name="hra_completed"]:checked');
+  if (!hraCompleted || hraCompleted.value !== 'Yes') incomplete.push('HRA (Element 1)');
+
+  // Element 2: Medical History - attestation checkbox
+  var mhAttest = document.querySelector('input[name="medical_history_attestation"]:checked');
+  if (!mhAttest) incomplete.push('Medical History (Element 2)');
+
+  // Element 3: Family History - at least one member status
+  var fhxStatus = document.querySelector('input[name*="fhx_"][name*="_status"]:checked');
+  if (!fhxStatus) incomplete.push('Family History (Element 3)');
+
+  // Element 4: Medication Reconciliation
+  var reconMethod = document.querySelector('select[name="reconciliation_method"]');
+  if (!reconMethod || !reconMethod.value) incomplete.push('Medication Reconciliation (Element 4)');
+
+  // Element 5: Vitals - height and weight
+  var height = document.querySelector('input[name="height"]');
+  var weight = document.querySelector('input[name="weight"]');
+  if (!height || !height.value || !weight || !weight.value) incomplete.push('Vitals (Element 5)');
+
+  // Element 6: Cognitive Assessment - words recalled, alt score, or screening status
+  var wordsRecalled = document.querySelector('input[name="words_recalled"]');
+  var altCogScore = document.querySelector('input[name="alt_cog_score"]');
+  var cogScreening = document.querySelector('input[name="cognitive_screening_completed"]:checked');
+  var hasCog = (wordsRecalled && wordsRecalled.value) || (altCogScore && altCogScore.value) || (cogScreening && cogScreening.value !== 'Yes');
+  if (!hasCog) incomplete.push('Cognitive Assessment (Element 6)');
+
+  // Element 7: Fall Risk - at least one screening question
+  var fallsPast = document.querySelector('input[name="falls_past_year"]:checked');
+  if (!fallsPast) incomplete.push('Fall Risk Assessment (Element 7)');
+
+  // Element 8: Depression Screening - PHQ-2 answered
+  var phq2Result = sumRadios(phq2Names);
+  if (!phq2Result.complete) incomplete.push('Depression Screening (Element 8)');
+
+  // Element 9: SDOH Screening - at least one domain answered
+  var sdohAnswered = document.querySelector('input[name^="sdoh_"]:checked');
+  if (!sdohAnswered) incomplete.push('SDOH Screening (Element 9)');
+
+  // Element 10: Preventive Services - prevention plan created
+  var preventionPlan = document.querySelector('input[name="prevention_plan_created"]:checked');
+  if (!preventionPlan || preventionPlan.value !== 'Yes') incomplete.push('Preventive Services (Element 10)');
+
+  // Element 11: ACP - discussed question answered
+  var acpDiscussed = document.querySelector('input[name="acp_discussed"]:checked');
+  if (!acpDiscussed) incomplete.push('Advance Care Planning (Element 11)');
+
+  if (incomplete.length === 0) {
+    banner.className = 'awv-alert awv-alert--info';
+    banner.style.background = '#e8f5e9';
+    banner.style.color = '#2e7d32';
+    banner.style.borderColor = '#a5d6a7';
+    banner.innerHTML = '<strong>All 11 CMS AWV elements completed.</strong>';
+  } else {
+    banner.className = 'awv-alert awv-alert--warning';
+    banner.style.background = '';
+    banner.style.color = '';
+    banner.style.borderColor = '';
+    banner.innerHTML = '<strong>' + incomplete.length + ' of 11 CMS elements incomplete:</strong><br>' + incomplete.join(', ');
+  }
+
+  // --- Attestation section sync ---
+  var attAlert = document.getElementById('attestation-completion-alert');
+  var attCheckbox = document.querySelector('input[name="attestation_all_elements"]');
+  var attField = document.getElementById('attestation-elements-field');
+  if (attAlert) {
+    if (incomplete.length === 0) {
+      attAlert.className = 'awv-alert awv-alert--info';
+      attAlert.style.background = '#e8f5e9';
+      attAlert.style.color = '#2e7d32';
+      attAlert.style.borderColor = '#a5d6a7';
+      attAlert.innerHTML = '<strong>All 11 CMS AWV elements completed.</strong> You may now attest.';
+    } else {
+      attAlert.className = 'awv-alert awv-alert--warning';
+      attAlert.style.background = '';
+      attAlert.style.color = '';
+      attAlert.style.borderColor = '';
+      attAlert.innerHTML = '<strong>' + incomplete.length + ' of 11 elements incomplete:</strong><br>' + incomplete.join(', ');
+    }
+  }
+  if (attCheckbox) {
+    if (incomplete.length === 0) {
+      attCheckbox.disabled = false;
+    } else {
+      attCheckbox.disabled = true;
+      attCheckbox.checked = false;
+    }
+  }
+  if (attField) {
+    var prevErr = attField.querySelector('.awv-field-error');
+    if (prevErr) prevErr.remove();
+    attField.classList.remove('awv-field--error');
+    if (attCheckbox && attCheckbox.checked && incomplete.length > 0) {
+      attField.classList.add('awv-field--error');
+      var msg = document.createElement('div');
+      msg.className = 'awv-field-error';
+      msg.textContent = incomplete.length + ' element(s) still incomplete \u2014 attestation invalid';
+      attField.appendChild(msg);
+    }
+  }
+
+  setTimeout(updateSize, 50);
+}
+
+function saveAssessmentPlan() {
+  saveSection('assessmentplan', '/awv/plan', function(d) {
+    var parts = [];
+    if (d.prevention_plan) parts.push('Prevention Plan: ' + d.prevention_plan);
+    if (d.referrals) parts.push('Referrals: ' + d.referrals);
+    if (d.patient_education) parts.push('Patient Education: ' + d.patient_education);
+    return {
+      note_id: d.note_id,
+      narrative: parts.join('\n'),
+      awv_cpt_code: getAwvCptCode(),
+      section_id: 'assessmentplan'
+    };
+  });
+}
+
+function reconstructSpecialistRows(data) {
+  // Server-side renders only specialist_row(0). Saved form-state may hold
+  // specialist_1_*, specialist_2_*, ... up to specialist_9_* from prior
+  // sessions where the provider clicked '+ Add Another Specialist'. Without
+  // restoring those rows in the DOM first, populateFormFields would silently
+  // drop the values (querySelector returns null) and the next Save Providers
+  // would overwrite the cached section with the empty DOM state - permanently
+  // destroying the data.
+  if (!data) return;
+  var maxIdx = -1;
+  var re = /^specialist_(\d+)_/;
+  for (var name in data) {
+    var m = re.exec(name);
+    if (m) {
+      var n = parseInt(m[1], 10);
+      if (n > maxIdx) maxIdx = n;
+    }
+  }
+  // We always have row 0 server-rendered. addSpecialistRow() pushes a new
+  // row with index = current row count, so call it maxIdx times to land at
+  // rows 0..maxIdx.
+  if (maxIdx >= 1 && typeof addSpecialistRow === 'function') {
+    for (var i = 1; i <= maxIdx; i++) addSpecialistRow();
+  }
+}
+
+function populateFormFields(sections) {
+  // Reconstruct dynamic rows (specialists, future repeating sections) BEFORE
+  // the value-restore loop runs - otherwise the inputs don't exist yet and
+  // querySelector returns null on every miss.
+  if (sections && sections.currentproviders) {
+    reconstructSpecialistRows(sections.currentproviders);
+  }
+  for (var sectionId in sections) {
+    var data = sections[sectionId];
+    var container = document.getElementById('body-' + sectionId);
+    if (!container || !data) continue;
+
+    for (var name in data) {
+      var value = data[name];
+      if (value === null || value === undefined || value === '') continue;
+
+      // Arrays -> checkboxes
+      if (Array.isArray(value)) {
+        for (var i = 0; i < value.length; i++) {
+          var cb = container.querySelector('input[type="checkbox"][name="' + name + '"][value="' + value[i] + '"]');
+          if (cb) cb.checked = true;
+        }
+        continue;
+      }
+
+      // Radio buttons
+      var radio = container.querySelector('input[type="radio"][name="' + name + '"][value="' + String(value) + '"]');
+      if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+        continue;
+      }
+
+      // Text, number, date, textarea, select
+      var el = container.querySelector('input[name="' + name + '"], textarea[name="' + name + '"], select[name="' + name + '"]');
+      if (el) {
+        el.value = String(value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    // Mark section as saved and show "Previously saved" status
+    savedSections[sectionId] = true;
+    if (data._last_saved) {
+      showLastSaved(sectionId, data._last_saved);
+    }
+    var statusEl = document.getElementById(sectionId + '-status');
+    if (statusEl) {
+      statusEl.textContent = 'Previously saved';
+      statusEl.className = 'awv-status awv-status--saved';
+    }
+  }
+  setTimeout(function() { updateAllSectionStatuses(); updateSize(); }, 100);
+}
+
+// Cross-section pre-fill: populate later sections from earlier saved data
+function crossSectionPreFill(sections) {
+  // Helper: set a field value in a container if not already filled
+  function prefillField(containerId, fieldName, value, fieldType) {
+    var container = document.getElementById('body-' + containerId);
+    if (!container) return;
+    if (fieldType === 'radio') {
+      var radio = container.querySelector('input[type="radio"][name="' + fieldName + '"][value="' + String(value) + '"]');
+      if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } else if (fieldType === 'checkbox') {
+      var cb = container.querySelector('input[type="checkbox"][name="' + fieldName + '"][value="' + String(value) + '"]');
+      if (cb && !cb.checked) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } else if (fieldType === 'date') {
+      var el = container.querySelector('input[name="' + fieldName + '"]');
+      if (el && !el.value) {
+        el.value = String(value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+  }
+
+  var hra = sections['hra'] || null;
+  var medrecon = sections['medicationreconciliation'] || null;
+  var depression = sections['depressionscreening'] || null;
+  var cognitive = sections['cognitiveassessment'] || null;
+
+  // 1. HRA ADL/IADL → Functional Ability (same field IDs, different option values)
+  if (hra && !sections['functionalability']) {
+    var adlValueMap = {
+      'Independent': 'independent',
+      'Needs assistance': 'needs_assistance',
+      'Dependent': 'dependent'
+    };
+    var adlFields = ['adl_bathing', 'adl_dressing', 'adl_toileting',
+                     'iadl_medications', 'iadl_finances', 'iadl_transportation'];
+    for (var i = 0; i < adlFields.length; i++) {
+      var f = adlFields[i];
+      if (hra[f]) {
+        var mapped = adlValueMap[hra[f]] || hra[f];
+        prefillField('functionalability', f, mapped, 'radio');
+      }
+    }
+  }
+
+  // 2. HRA food_security → SDOH sdoh_food_worry (same options: Often true/Sometimes true/Never true)
+  if (hra && !sections['sdohscreening']) {
+    if (hra['food_security']) {
+      prefillField('sdohscreening', 'sdoh_food_worry', hra['food_security'], 'radio');
+    }
+    // 3. HRA housing_stability → SDOH sdoh_housing_worried (inverted: stable=Yes means worried=No)
+    if (hra['housing_stability']) {
+      var housingMap = { 'Yes': 'No', 'No': 'Yes', 'Unsure': 'Yes' };
+      var mappedHousing = housingMap[hra['housing_stability']];
+      if (mappedHousing) prefillField('sdohscreening', 'sdoh_housing_worried', mappedHousing, 'radio');
+    }
+    // 4. HRA social_support → SDOH sdoh_loneliness (Yes=Never lonely, No=Often, Sometimes=Sometimes)
+    if (hra['social_support']) {
+      var socialMap = { 'Yes': 'Never', 'No': 'Often', 'Sometimes': 'Sometimes' };
+      var mappedSocial = socialMap[hra['social_support']];
+      if (mappedSocial) prefillField('sdohscreening', 'sdoh_loneliness', mappedSocial, 'radio');
+    }
+  }
+
+  // 5. HRA alcohol_use → Alcohol Screening auditc_q1 (approximate)
+  if (hra && !sections['alcoholscreening']) {
+    var drinks = parseInt(hra['alcohol_use'], 10);
+    if (!isNaN(drinks)) {
+      // Map weekly drinks to AUDIT-C Q1 frequency score
+      var q1Score = '0';
+      if (drinks === 0) q1Score = '0';
+      else if (drinks <= 2) q1Score = '1';
+      else if (drinks <= 6) q1Score = '2';
+      else if (drinks <= 14) q1Score = '3';
+      else q1Score = '4';
+      prefillField('alcoholscreening', 'auditc_q1', q1Score, 'radio');
+    }
+  }
+
+  // 6. Medication Reconciliation → Medical History attestation checkbox
+  if (sections['medicationreconciliation'] && !sections['medicalhistory']) {
+    prefillField('medicalhistory', 'medical_history_attestation',
+      'Medication list reviewed (see Medication Reconciliation)', 'checkbox');
+  }
+
+  // 7. Depression Screening saved → Preventive Services annual depression date
+  if (sections['depressionscreening'] && !sections['preventiveservices']) {
+    var today = new Date().toISOString().slice(0, 10);
+    prefillField('preventiveservices', 'bh_annual_depression_last_date', today, 'date');
+  }
+
+  // 8. Cognitive Assessment saved → Preventive Services annual cognitive date
+  if (sections['cognitiveassessment'] && !sections['preventiveservices']) {
+    var todayCog = new Date().toISOString().slice(0, 10);
+    prefillField('preventiveservices', 'bh_annual_cognitive_last_date', todayCog, 'date');
+  }
+}
+
+function loadScreeningDates(savedSections) {
+  if (!PATIENT_ID) return;
+  var url = '/awv/screening-dates?patient_id=' + PATIENT_ID;
+  if (NOTE_UUID) url += '&note_id=' + NOTE_UUID;
+  apiGet(url).then(function(r) {
+    if (!r || !r.success || !r.dates) return;
+    var dates = r.dates;
+    // Map service IDs to input name prefixes
+    var prefixMap = {
+      'annual_depression': 'bh_annual_depression',
+      'annual_cognitive': 'bh_annual_cognitive',
+      'hba1c': 'chronic_hba1c',
+      'diabetic_eye_exam': 'chronic_diabetic_eye_exam',
+      'diabetic_foot_exam': 'chronic_diabetic_foot_exam',
+      'lipid_panel_cvd': 'chronic_lipid_panel_cvd',
+    };
+    for (var svcId in dates) {
+      var prefix = prefixMap[svcId] || ('svc_' + svcId);
+      var inputName = prefix + '_last_date';
+      var input = document.querySelector('[name="' + inputName + '"]');
+      if (!input) continue;
+      // Don't overwrite if section already has saved form data
+      var sectionSaved = savedSections && savedSections['preventiveservices'];
+      if (sectionSaved && input.value) continue;
+      if (!input.value && dates[svcId].last_done) {
+        input.value = dates[svcId].last_done;
+        // Add overdue badge if applicable
+        if (dates[svcId].overdue) {
+          var badge = document.createElement('span');
+          badge.style.cssText = 'color:#e65100;font-size:10px;font-weight:600;margin-left:6px;';
+          badge.textContent = '(overdue)';
+          badge.className = 'screening-overdue-badge';
+          if (input.parentNode) input.parentNode.appendChild(badge);
+        }
+      }
+    }
+  }).catch(function(e) { console.warn('AWV: screening dates lookup failed', e); });
+}
+
+if (NOTE_UUID) {
+  apiGet('/awv/form-state?note_id=' + NOTE_UUID).then(function(r) {
+    if (r && r.success && r.sections) {
+      populateFormFields(r.sections);
+      crossSectionPreFill(r.sections);
+      // Enable Generate Prevention Plan button if attestation was previously saved
+      loadScreeningDates(r.sections);
+    } else {
+      loadScreeningDates(null);
+    }
+    checkCompletion();
+    updateAllSectionStatuses();
+  }).catch(function(e) { console.warn('AWV: load form state failed', e); loadScreeningDates(null); checkCompletion(); updateAllSectionStatuses(); });
+} else {
+  loadScreeningDates(null);
+  checkCompletion();
+  updateAllSectionStatuses();
+}
+</script>
+</body>
+</html>
