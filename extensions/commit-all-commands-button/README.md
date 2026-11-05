@@ -9,18 +9,32 @@ The `commit_all_commands_button` plugin for Canvas adds a button to the footer o
 
 **User-triggered:** The plugin adds an action button to the note footer. Users click the button to commit all staged commands in the current note.
 
+**`NOTE_STATE_CHANGE_EVENT_CREATED`:** Reloads the note's action buttons whenever the note changes state.
+
 ## Effects
 
 When the button is clicked, the plugin:
 1. Queries all staged (uncommitted) commands in the current note
-2. Creates a commit effect for each command
+2. Creates a commit effect for each command that is shown in the note and has its required fields filled in
 3. Returns all commit effects, which commits the commands in Canvas
+4. Opens a modal listing any command it left uncommitted, with the reason
 
 ## How It Works
 
 - The plugin adds a button labeled **"Commit All Commands"** to the note footer.
+- The button is hidden on notes Canvas will not accept commits on: locked, relocked, signed, deleted, and canceled notes. Data notes keep the button while locked, because Canvas still accepts commits on them.
+- Each time a note changes state (locked, signed, unlocked to amend, deleted, restored), a second handler reloads the note's action buttons, so the button shows or hides without a page refresh.
 - When the button is pressed, the plugin finds all commands in the current note that are not yet committed.
 - The plugin creates commit effects for each staged command, causing them to be committed.
+
+## Commands Left Uncommitted
+
+The button skips a staged command, and lists it in a modal after the click, when:
+
+- **The command is not shown in the note.** A command can be saved to a note without appearing in the note body. Committing it would commit content the clinician never saw.
+- **A required field is empty.** Canvas rejects the commit, for example an HPI with no narrative or a Diagnose with no diagnosis. The required fields come from the command schemas in canvas-core and are listed in `REQUIRED_FIELDS` in the handler. Questionnaire, Change Medication and Immunization Statement are not checked, because the button sends some of their values with the commit.
+
+For a command with empty required fields, the modal names each one by the label Canvas shows for it, such as "Empty required field: Narrative". A **Go to note** button closes the modal. When nothing is skipped, no modal opens.
 
 ## Configuration Requirements
 
