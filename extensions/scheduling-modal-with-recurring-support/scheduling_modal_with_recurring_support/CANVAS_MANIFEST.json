@@ -1,0 +1,48 @@
+{
+    "sdk_version": "0.137.0",
+    "plugin_version": "0.0.124",
+    "name": "scheduling_modal_with_recurring_support",
+    "description": "Patient scheduling modal with provider license filtering, recurring appointment support, FHIR availability analysis, and capacity-based provider recommendations.",
+    "components": {
+        "handlers": [
+            {
+                "class": "scheduling_modal_with_recurring_support.api.scheduling_api:SchedulingAPI",
+                "description": "SimpleAPI serving the scheduling UI and JSON endpoints for provider list, availability, and booking."
+            }
+        ],
+        "applications": [
+            {
+                "class": "scheduling_modal_with_recurring_support.applications.scheduling_app:SchedulingApp",
+                "name": "Schedule Appointment",
+                "description": "Open the recurring scheduling modal from the patient chart.",
+                "scope": "patient_specific",
+                "icon": "assets/scheduling-modal-icon.png",
+                "show_in_panel": true,
+                "panel_priority": 100
+            },
+            {
+                "class": "scheduling_modal_with_recurring_support.applications.scheduling_app:GlobalSchedulingApp",
+                "name": "Schedule Appointment",
+                "description": "Schedule appointments for any patient from global navigation.",
+                "scope": "global",
+                "icon": "assets/scheduling-modal-icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "CANVAS_FHIR_BASE_URL",
+        "CANVAS_INSTANCE_URL",
+        "CANVAS_OAUTH_CLIENT_ID",
+        "CANVAS_OAUTH_CLIENT_SECRET",
+        "DEFAULT_APPOINTMENT_DURATION_MINUTES"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": true,
+    "readme": "./README.md"
+}
