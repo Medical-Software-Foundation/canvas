@@ -341,6 +341,7 @@
     .typed-preview { margin-top: 10px; height: 96px; border: 1.5px solid var(--border); border-radius: 10px; background: #fff; display: flex; align-items: center; padding: 0 22px; font-family: "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive; font-size: 40px; color: #111827; overflow: hidden; white-space: nowrap; }
     .typed-preview:empty::before { content: "Your signature appears here"; font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: var(--faint); }
     .pt-field { margin: 0 0 14px; }
+    .pt-name-err { margin: 8px 0 0; font-size: 13px; color: var(--red); }
     .pt-field .lab { margin-bottom: 8px; }
     .pt-attest { margin: 8px 0 0; font-size: 12px; color: var(--secondary); }
     .pt-attest b { color: var(--navy); font-weight: 600; }
@@ -661,6 +662,7 @@
           <button type="button" class="linkbtn" id="bReuseFresh">Use a new signature</button>
         </div>
         <p class="reuse-note hidden" id="bReuseNote"></p>
+        <p class="pt-name-err hidden" id="nameErr" role="alert"></p>
         <p class="pt-attest" id="bAttest"></p>
       </div>
     </div></div>
@@ -1342,10 +1344,7 @@
       $('nativeCam').classList.remove('hidden');
     }
     $('nativeCamBtn').addEventListener('click', function () { $('nativeCamInput').click(); });
-    $('nativeCamInput').addEventListener('change', function () {
-      handleFiles(this.files); this.value = '';
-      maybeStartReview();
-    });
+    $('nativeCamInput').addEventListener('change', function () { handleFiles(this.files); this.value = ''; });
     // The shutter is disabled until the camera stream is actually producing frames.
     var CAMERA_WARMUP_MS = 1000;
     function setShutterReady(ready) { var b = $('shutter'); if (b) b.disabled = !ready; }
@@ -1380,6 +1379,7 @@
     function captureFrame() {
       var v = $('camVideo');
       if (!v.videoWidth) { capSetMsg('The camera isn’t ready yet.', true); return; }
+      setShutterReady(false);  // one capture at a time; openReview stops the camera
       var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
       // Where the browser can take a real photo (Chrome and Android), use it: it's
       // full resolution and focused. Elsewhere, save a frame of the video.
@@ -1397,7 +1397,7 @@
       var shot = drawToPage(v, v.videoWidth, v.videoHeight);
       setTimeout(function () {
         shot.then(function (blob) {
-          if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); return; }
+          if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); if (CAP.stream) setShutterReady(true); return; }
           CAP.current = photoPage(blob);
           openReview();
         });
@@ -1426,9 +1426,18 @@
     }
     function shrinkImage(blob) {
       if (window.createImageBitmap) {
+        // Some browsers have createImageBitmap but reject this option or the image;
+        // fall back to an <img> then. The bitmap holds the full-size photo, so it's
+        // released as soon as the page is drawn.
         return createImageBitmap(blob, { imageOrientation: 'from-image' })
-          .then(function (b) { return drawToPage(b, b.width, b.height); });
+          .then(function (b) {
+            return drawToPage(b, b.width, b.height).then(function (out) { if (b.close) b.close(); return out; });
+          })
+          .catch(function () { return shrinkWithImage(blob); });
       }
+      return shrinkWithImage(blob);
+    }
+    function shrinkWithImage(blob) {
       return new Promise(function (resolve, reject) {
         var img = new Image(), url = URL.createObjectURL(blob);
         img.onload = function () { URL.revokeObjectURL(url); drawToPage(img, img.naturalWidth, img.naturalHeight).then(resolve); };
@@ -1439,24 +1448,45 @@
     function photoPage(blob) { return { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }; }
     // Uploaded images keep their order: each takes its place in the queue now and
     // is filled in once it has been resized.
+    // A result that arrives after its capture ended (Back, or a new capture) is dropped.
     function queueImage(blob) {
-      var slot = { pending: true };
-      CAP.queue.push(slot);
+      var cap = CAP, slot = { pending: true };
+      cap.queue.push(slot);
       shrinkImage(blob)
-        .then(function (small) { Object.assign(slot, photoPage(small || blob), { pending: false }); })
-        .catch(function () { CAP.queue.splice(CAP.queue.indexOf(slot), 1); capSetMsg('Couldn’t read that image.', true); })
-        .then(maybeStartReview);
+        .then(function (small) {
+          if (CAP !== cap) return;
+          Object.assign(slot, photoPage(small || blob), { pending: false });
+          afterQueueChange();
+        })
+        .catch(function () {
+          if (CAP !== cap) return;
+          var at = cap.queue.indexOf(slot); if (at !== -1) cap.queue.splice(at, 1);
+          capSetMsg('Couldn’t read that image.', true);
+          afterQueueChange();
+        });
     }
-    function maybeStartReview() { if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); openReview(); } }
+    function maybeStartReview() { if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openReview(); } }
+    // Open the next ready page; if the review screen is left with nothing to show
+    // (the last pending image failed), move on instead of sitting on the old photo.
+    function afterQueueChange() {
+      maybeStartReview();
+      if (CAP.current || CAP.queue.length || !$('scReview').classList.contains('on')) return;
+      if (CAP.pages.length) capStep('pages'); else { selectTab('camera'); capStep('camera'); }
+    }
     function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); }
     function reviewNext(committed) {
       CAP.current = null;
-      if (CAP.queue.length) { maybeStartReview(); }  // a page still resizing opens when ready
+      if (CAP.queue.length) {
+        maybeStartReview();
+        // Still resizing: clear the old photo and say so; it opens when ready.
+        if (!CAP.current) { $('reviewImg').removeAttribute('src'); capSetMsg('Preparing the next photo…'); }
+      }
       else if (committed || CAP.pages.length) { capStep('pages'); }
       else { selectTab('camera'); capStep('camera'); }
     }
     function reviewAddPage() { if (CAP.current) addPage(CAP.current); reviewNext(true); }
-    function reviewRetake() { reviewNext(false); }
+    function releasePage(p) { if (p && p.url && p.url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(p.url); } catch (e) {} } }
+    function reviewRetake() { releasePage(CAP.current); reviewNext(false); }
     function openCrop(src) {
       stopCamera();
       var img = $('cropImg');
@@ -1475,7 +1505,7 @@
       if (!CAP.cropper) { openReview(); return; }
       var canvas = CAP.cropper.getCroppedCanvas({ maxWidth: 2000, maxHeight: 2000 });
       canvas.toBlob(function (blob) {
-        if (blob) CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: canvas.toDataURL('image/jpeg', 0.85) };
+        if (blob) { releasePage(CAP.current); CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: canvas.toDataURL('image/jpeg', 0.85) }; }
         if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
         $('cropImg').removeAttribute('src');
         openReview();
@@ -1491,7 +1521,7 @@
     }
     function addPage(p) { CAP.pages.push(p); renderPages(); }
     function removePage(i) {
-      CAP.pages.splice(i, 1);
+      releasePage(CAP.pages.splice(i, 1)[0]);
       if (!CAP.pages.length) { selectTab('camera'); capStep('camera'); }
       else renderPages();
     }
@@ -1565,7 +1595,6 @@
     $('shutter').addEventListener('click', captureFrame);
     $('fileInput').addEventListener('change', function () {
       handleFiles(this.files); this.value = '';
-      maybeStartReview();
       if (!CAP.current && !CAP.queue.length && CAP.pages.length) capStep('pages');
     });
     $('cropBtn').addEventListener('click', function () { if (CAP.current) openCrop(CAP.current.url); });
@@ -1753,17 +1782,22 @@
     // With a text field active on an iPad, the first tap on the button only closes the
     // keyboard and no click arrives. Close it on press and sign on release, so one tap
     // does both; the click that may follow is ignored.
-    var signTap = { viaPress: false, skipClick: false };
+    var signTap = { viaPress: false, skipClick: false, rect: null };
+    function inRect(r, e) { return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
     $('bNext').addEventListener('pointerdown', function (e) {
       var field = activeTextField();
-      if (!field) return;
+      if (!field || e.button !== 0) return;
+      // Where the button was when pressed: the screen can shift as the keyboard closes.
+      signTap.rect = this.getBoundingClientRect();
       field.blur(); signTap.viaPress = true;
       // Keep the release on the button even if the screen shifts as the keyboard closes.
       try { this.setPointerCapture(e.pointerId); } catch (x) {}
     });
-    $('bNext').addEventListener('pointerup', function () {
+    $('bNext').addEventListener('pointerup', function (e) {
       if (!signTap.viaPress) return;
       signTap.viaPress = false;
+      // Sliding off the button before letting go backs out, as with any button.
+      if (!inRect(signTap.rect, e) && !inRect(this.getBoundingClientRect(), e)) return;
       if ($('bNext').disabled) return;
       signTap.skipClick = true; setTimeout(function () { signTap.skipClick = false; }, 600);
       finishOne('signed');
@@ -1915,13 +1949,32 @@
       else setSigMode(SIG.mode);
     }
     function hasSig() { return SIG.mode === 'draw' ? hasInk() : typedInput.value.trim() !== ''; }
+    // Characters the PDF can print: Windows-1252, plus Latin letters with accents,
+    // which print as their plain letter (the server folds them the same way). Other
+    // scripts print as "?", so the server refuses them; catching them here keeps the
+    // signer from finding out only after handing the device back.
+    var CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+    function unprintableChars(text) {
+      var bad = [];
+      Array.prototype.forEach.call(text || '', function (ch) {
+        var c = ch.charCodeAt(0);
+        if (c < 0x80 || (c >= 0xA0 && c <= 0xFF) || CP1252_EXTRA.indexOf(ch) !== -1) return;
+        if ((c >= 0x100 && c <= 0x24F) || (c >= 0x1E00 && c <= 0x1EFF)) return;
+        if (bad.indexOf(ch) === -1) bad.push(ch);
+      });
+      return bad;
+    }
     function validateSign() {
       pad.querySelector('.clearbtn').disabled = !hasSig();
       if (!S || !$('bsignView').classList.contains('active')) return;
       var it = currentItem(), qOk = answersValid(it.c.questions || [], it.answers);
-      if (S.reuseActive) { $('bNext').disabled = !qOk; return; }
+      if (S.reuseActive) { $('nameErr').classList.add('hidden'); $('bNext').disabled = !qOk; return; }
       var pnOk = !PRACTICE.ask_printed_name || SIG.mode === 'type' || $('pnInput').value.trim() !== '';
-      $('bNext').disabled = !(hasSig() && pnOk && qOk);
+      var entered = SIG.mode === 'type' ? typedInput.value : (PRACTICE.ask_printed_name ? $('pnInput').value : '');
+      var bad = unprintableChars(entered);
+      $('nameErr').textContent = bad.length ? 'The name has characters that can’t be printed (' + bad.join(' ') + '). Enter it in Latin letters.' : '';
+      $('nameErr').classList.toggle('hidden', !bad.length);
+      $('bNext').disabled = !(hasSig() && pnOk && qOk && !bad.length);
     }
     $('pnInput').addEventListener('input', validateSign);
     // Done on the on-screen keyboard puts the keyboard away.
