@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oura Ring</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         color: #1d2330; background: #fff; }
+  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  h1 { font-size: 16px; margin: 0; }
+  .pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #eef0f4; color: #4a5263; }
+  .pill.connected { background: #e6f4ea; color: #1e7b3a; }
+  .pill.expired { background: #fdecea; color: #b3261e; }
+  .pill.link_pending { background: #fff4e0; color: #8a5300; }
+  .pill.link_expired { background: #fdecea; color: #b3261e; }
+  .textlink { background: none; border: 0; padding: 6px 4px; color: #2f5bd3; text-decoration: underline; }
+  .synced { color: #6b7385; font-size: 12px; margin-left: auto; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #c9ced8; background: #fff;
+           color: #1d2330; cursor: pointer; }
+  button.primary { background: #2f5bd3; border-color: #2f5bd3; color: #fff; }
+  button.danger { color: #b3261e; border-color: #e3b4b0; }
+  button:disabled { opacity: .55; cursor: default; }
+  .range { display: inline-flex; border: 1px solid #c9ced8; border-radius: 6px; overflow: hidden; }
+  .range button { border: 0; border-radius: 0; padding: 6px 10px; }
+  .range button[aria-pressed="true"] { background: #2f5bd3; color: #fff; }
+  .notice { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; background: #f3f5f9; color: #3b4253; }
+  .notice.error { background: #fdecea; color: #8c1d18; }
+  .notice.warn { background: #fff4e0; color: #6b4100; }
+  .panel { border: 1px solid #e3e6ec; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .panel h2 { font-size: 13px; margin: 0 0 8px; }
+  .link-row { display: flex; gap: 6px; margin-top: 8px; }
+  .link-row input { flex: 1; min-width: 0; font: 12px ui-monospace, Menlo, monospace; padding: 6px; border: 1px solid #c9ced8; border-radius: 6px; }
+  .link-meta { font-size: 11px; color: #6b7385; margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 10px 12px; }
+  .card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7385; }
+  .card .value { font-size: 22px; font-weight: 600; margin: 2px 0; }
+  .card .value.empty { color: #a3a9b6; font-weight: 400; }
+  .card .meta { font-size: 11px; color: #6b7385; }
+  .card svg { display: block; width: 100%; height: 44px; margin-top: 6px; }
+  .card svg path { fill: none; stroke: #2f5bd3; stroke-width: 1.6; }
+  .card svg circle { fill: #2f5bd3; }
+  .axis { display: flex; justify-content: space-between; font-size: 10px; color: #a3a9b6; }
+  footer { font-size: 11px; color: #6b7385; border-top: 1px solid #e3e6ec; padding-top: 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Oura Ring</h1>
+  <span id="status" class="pill">Loading</span>
+  <span id="synced" class="synced"></span>
+</header>
+
+<div id="notice" class="notice" hidden></div>
+
+<div class="toolbar">
+  <button id="refresh" type="button" hidden>Refresh</button>
+  <div class="range" role="group" aria-label="Date range">
+    <button type="button" data-range="7">7d</button>
+    <button type="button" data-range="14">14d</button>
+    <button type="button" data-range="30">30d</button>
+    <button type="button" data-range="90">90d</button>
+  </div>
+  <button id="disconnect" class="danger" type="button" hidden>Disconnect</button>
+</div>
+
+<section id="connect" class="panel" hidden>
+  <h2 id="connect-title">Connect this patient's Oura Ring</h2>
+  <p id="connect-help">Send the patient a secure link through the portal. They tap it, sign in to Oura and
+     approve sharing; this panel fills in on its own. Patients can also connect themselves from
+     Oura Ring in the portal menu.</p>
+  <div class="toolbar">
+    <button id="send-portal" class="primary" type="button">Send to patient</button>
+    <button id="send-copy" class="textlink" type="button">Copy link instead</button>
+    <button id="replace" class="textlink" type="button" hidden>Send a new link</button>
+  </div>
+  <div id="link-box" hidden>
+    <div class="link-row">
+      <input id="link" type="text" readonly aria-label="Connection link">
+      <button id="copy" type="button">Copy</button>
+    </div>
+    <div id="link-meta" class="link-meta"></div>
+  </div>
+</section>
+
+<div id="cards" class="grid" hidden></div>
+<p id="source" class="link-meta" hidden>Read live from Oura each time this panel opens. Not saved to the chart.</p>
+
+<footer id="disclaimer"></footer>
+
+<script>
+(function () {
+  "use strict";
+  var PATIENT_ID = "{{ patient_id }}";
+  var API = "{{ api_path }}";
+  var state = { range: 14, data: null, busy: false, poll: null, pollUntil: 0, lastStatus: null };
+  // Until the patient is connected, check back so the panel fills in on its own
+  // when they approve, whether from a staff link or from the portal. Checking a
+  // patient who is not connected never calls Oura.
+  var POLL_PENDING_MS = 10000, POLL_IDLE_MS = 30000, POLL_FOR_MS = 30 * 60 * 1000;
+  // While data is on screen, check the connection (not the data) so a patient
+  // who stops sharing disappears from an open chart within a minute.
+  var CONSENT_CHECK_MS = 60000;
+
+  var STATUS_LABELS = {
+    connected: "Connected", expired: "Reconnect needed",
+    link_pending: "Link sent", link_expired: "Link expired", disconnected: "Not connected"
+  };
+  var ERRORS = {
+    not_connected: "This patient has not connected an Oura Ring yet.",
+    reconnect_required: "The patient's Oura connection has expired. Send them a new connection link.",
+    rate_limited: "Oura is limiting requests right now. Try again in a few minutes.",
+    oura_unavailable: "Oura did not respond. Try Refresh in a minute.",
+    plugin_not_configured: "This plugin is missing settings. Ask your Canvas administrator to finish setup.",
+    invalid_patient_id: "This chart could not identify the patient.",
+    forbidden: "You do not have access to this patient's Oura data.",
+    not_staff: "Oura data is only available to signed-in staff.",
+    all_forbidden: "The patient's Oura account is not sharing any data. They may have declined access, or their Oura membership may have lapsed.",
+    api_error: "Oura did not respond. Try Refresh in a minute.",
+    refresh_failed: "The patient's Oura connection has expired. Send them a new connection link.",
+    auth_failed: "The patient's Oura connection has expired. Send them a new connection link."
+  };
+  var ENDPOINT_LABELS = {
+    daily_sleep: "sleep score", sleep: "sleep details", daily_readiness: "readiness",
+    daily_activity: "activity", daily_spo2: "blood oxygen"
+  };
+  var PORTAL_ERRORS = {
+    no_staff_sender: "your staff account could not be identified",
+    no_messageable_channel: "the patient has no consenting email or phone on file",
+    invalid_sender_or_recipient: "Canvas rejected the message"
+  };
+  var CARDS = [
+    { key: "sleep_score", label: "Sleep score", fmt: num },
+    { key: "total_sleep_seconds", label: "Total sleep", fmt: duration },
+    { key: "resting_hr_bpm", label: "Resting heart rate", fmt: unit(" bpm") },
+    { key: "hrv_ms", label: "HRV (overnight avg)", fmt: unit(" ms") },
+    { key: "readiness_score", label: "Readiness", fmt: num },
+    { key: "steps", label: "Steps", fmt: steps },
+    { key: "spo2_pct", label: "Blood oxygen (overnight)", fmt: unit("%") }
+  ];
+
+  function $(id) { return document.getElementById(id); }
+  function num(v) { return String(Math.round(v)); }
+  function unit(suffix) { return function (v) { return (Math.round(v * 10) / 10) + suffix; }; }
+  function steps(v) { return Math.round(v).toLocaleString(); }
+  function duration(s) {
+    var m = Math.round(s / 60);
+    return Math.floor(m / 60) + "h " + (m % 60) + "m";
+  }
+  function shortDay(iso) {
+    var p = iso.split("-");
+    return Number(p[1]) + "/" + Number(p[2]);
+  }
+  function ago(iso) {
+    if (!iso) return "";
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return Math.floor(s / 60) + " min ago";
+    if (s < 86400) return Math.floor(s / 3600) + " h ago";
+    return Math.floor(s / 86400) + " d ago";
+  }
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function notice(text, kind) {
+    var n = $("notice");
+    if (!text) { n.hidden = true; return; }
+    n.textContent = text;
+    n.className = "notice" + (kind ? " " + kind : "");
+    n.hidden = false;
+  }
+
+  function call(method, path, params) {
+    var q = "patient_id=" + encodeURIComponent(PATIENT_ID);
+    Object.keys(params || {}).forEach(function (k) {
+      q += "&" + encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
+    });
+    return fetch(API + path + "?" + q, { method: method, credentials: "same-origin" })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          return { ok: r.ok, body: body };
+        });
+      });
+  }
+
+  function setBusy(busy) {
+    state.busy = busy;
+    ["refresh", "disconnect", "send-portal", "send-copy", "replace"].forEach(function (id) { $(id).disabled = busy; });
+  }
+
+  function sparkline(values) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 100 40");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("role", "img");
+    var nums = values.filter(function (v) { return typeof v === "number"; });
+    if (!nums.length) return svg;
+    var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+    var span = hi - lo || 1;
+    var step = values.length > 1 ? 100 / (values.length - 1) : 0;
+    var d = "", pen = false;
+    values.forEach(function (v, i) {
+      if (typeof v !== "number") { pen = false; return; }
+      var x = (i * step).toFixed(2), y = (36 - ((v - lo) / span) * 32).toFixed(2);
+      var prev = values[i - 1], next = values[i + 1];
+      if (typeof prev !== "number" && typeof next !== "number") {
+        var dot = document.createElementNS(ns, "circle");
+        dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", "1.6");
+        svg.appendChild(dot);
+      }
+      d += (pen ? " L" : " M") + x + " " + y;
+      pen = true;
+    });
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d.trim());
+    path.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function renderCards(data) {
+    var grid = $("cards");
+    grid.textContent = "";
+    CARDS.forEach(function (c) {
+      var latest = data.latest[c.key];
+      var avg = data.averages[c.key];
+      var card = el("div", "card");
+      card.appendChild(el("div", "label", c.label));
+      card.appendChild(el("div", latest ? "value" : "value empty",
+        latest ? c.fmt(latest.value) : "No data"));
+      var meta = [];
+      if (latest) meta.push(shortDay(latest.day));
+      if (avg !== null && avg !== undefined) meta.push(data.range + " avg " + c.fmt(avg));
+      card.appendChild(el("div", "meta", meta.join(" · ")));
+      var svg = sparkline(data.series[c.key]);
+      svg.setAttribute("aria-label", c.label + " trend, " + data.range);
+      card.appendChild(svg);
+      var axis = el("div", "axis");
+      axis.appendChild(el("span", "", shortDay(data.days[0])));
+      axis.appendChild(el("span", "", shortDay(data.days[data.days.length - 1])));
+      card.appendChild(axis);
+      grid.appendChild(card);
+    });
+    grid.hidden = false;
+  }
+
+  function render(data) {
+    state.data = data;
+    var status = data.connection_status;
+    var pill = $("status");
+    pill.textContent = STATUS_LABELS[status] || status;
+    pill.className = "pill " + status;
+    var connected = status === "connected";
+    $("synced").textContent = connected && data.last_synced_at ? "Updated " + ago(data.last_synced_at) : "";
+    $("disclaimer").textContent = data.disclaimer;
+
+    $("refresh").hidden = !connected;
+    $("disconnect").hidden = status === "disconnected";
+    $("connect").hidden = connected;
+    // While a link is out, the buttons act on that link: resending or
+    // copying it never cancels what the patient may already have.
+    var pending = status === "link_pending";
+    $("disconnect").textContent = pending ? "Cancel link" : "Disconnect";
+    $("send-portal").textContent = pending ? "Resend to patient" : "Send to patient";
+    $("send-copy").textContent = pending ? "Copy link" : "Copy link instead";
+    $("replace").hidden = !pending;
+    if (status === "expired") {
+      $("connect-title").textContent = "Reconnect this patient's Oura Ring";
+    } else if (pending) {
+      $("connect-title").textContent = "Waiting for the patient to connect";
+    } else if (status === "link_expired") {
+      $("connect-title").textContent = "The link expired before the patient used it";
+    } else {
+      $("connect-title").textContent = "Connect this patient's Oura Ring";
+    }
+    if (pending && data.link_expires_at) {
+      $("link-meta").textContent = "Link expires " + new Date(data.link_expires_at).toLocaleString() + ".";
+    }
+
+    document.querySelector(".range").hidden = !connected;
+    Array.prototype.forEach.call(document.querySelectorAll(".range button"), function (b) {
+      b.setAttribute("aria-pressed", String(Number(b.dataset.range) === state.range));
+    });
+
+    $("cards").hidden = !data.has_data;
+    $("source").hidden = !data.has_data;
+    if (data.has_data) renderCards(data);
+
+    var problem = data.fetch_error || data.last_error;
+    var justConnected = connected && !!state.lastStatus && state.lastStatus !== "connected";
+    state.lastStatus = status;
+    if (justConnected && !problem) {
+      notice("The patient connected their Oura Ring.");
+    } else if (problem && ERRORS[problem]) {
+      notice(ERRORS[problem], status === "expired" ? "error" : "warn");
+    } else if (data.forbidden_endpoints && data.forbidden_endpoints.length) {
+      var names = data.forbidden_endpoints.map(function (e) { return ENDPOINT_LABELS[e] || e; });
+      notice("The patient is not sharing: " + names.join(", ") + ".", "warn");
+    } else if (connected && !data.has_data) {
+      notice("Oura has no data for this patient in this range.");
+    } else {
+      notice("");
+    }
+    schedulePoll(status);
+  }
+
+  function schedulePoll(status) {
+    clearTimeout(state.poll);
+    state.poll = null;
+    if (status === "connected") {
+      state.pollUntil = 0;
+      state.poll = setTimeout(checkConsent, CONSENT_CHECK_MS);
+      return;
+    }
+    if (!state.pollUntil) state.pollUntil = Date.now() + POLL_FOR_MS;
+    if (Date.now() > state.pollUntil) return;
+    state.poll = setTimeout(function () {
+      if (document.hidden || state.busy) { schedulePoll(status); return; }
+      load(true);
+    }, status === "link_pending" ? POLL_PENDING_MS : POLL_IDLE_MS);
+  }
+
+  function checkConsent() {
+    if (document.hidden || state.busy) { schedulePoll("connected"); return; }
+    call("GET", "/status").then(function (r) {
+      if (r.ok && r.body.connection_status !== "connected") {
+        load(true).then(function () {
+          notice("The patient stopped sharing their Oura data.", "warn");
+        });
+      } else {
+        schedulePoll("connected");
+      }
+    }).catch(function () { schedulePoll("connected"); });
+  }
+
+  // A connected patient's data is read from Oura on every load, which takes a
+  // moment, so say so. Background polls stay quiet.
+  function load(quiet) {
+    if (!quiet) {
+      notice("Loading from Oura…");
+      $("refresh").disabled = true;
+    }
+    return call("GET", "/data", { range: state.range + "d" }).then(function (r) {
+      if (!r.ok) { notice(ERRORS[r.body.error] || "Could not load Oura data.", "error"); return; }
+      render(r.body);
+    }).catch(function () {
+      notice("Could not reach the plugin. Check your connection.", "error");
+    }).then(function () { $("refresh").disabled = state.busy; });
+  }
+
+  function sendLink(viaPortal, fresh) {
+    var reuse = !fresh && state.data && state.data.connection_status === "link_pending";
+    setBusy(true);
+    call("POST", "/send-link", { channels: viaPortal ? "portal" : "", reuse: reuse ? "1" : "0" }).then(function (r) {
+      if (!r.ok) {
+        var extra = r.body.settings ? " (" + r.body.settings.join("; ") + ")" : "";
+        notice((ERRORS[r.body.error] || "Could not create a link.") + extra, "error");
+        return;
+      }
+      $("link").value = r.body.connection_link;
+      $("link-box").hidden = false;
+      var hours = Math.max(1, Math.round(r.body.expires_in_seconds / 3600));
+      var meta = "Expires in " + (hours >= 48 ? Math.round(hours / 24) + " days" : hours + " hours") + ".";
+      $("link-meta").textContent = meta;
+      if (!viaPortal) copyLink();
+      // Reload first: a successful load replaces the notice, so the outcome
+      // message has to be shown after it, not before.
+      state.pollUntil = 0;
+      return load(true).then(function () {
+        if (r.body.portal_status === "sent") {
+          notice(r.body.reused ? "Link sent to the patient again." : "Link sent to the patient's portal.");
+        } else if (viaPortal) {
+          notice("Portal message not sent: " + (PORTAL_ERRORS[r.body.portal_error] || r.body.portal_error) +
+                 ". Copy the link and share it another way.", "warn");
+        } else {
+          notice("Link copied. Share it with the patient; it works once.");
+        }
+      });
+    }).catch(function () {
+      notice("Could not reach the plugin. Check your connection.", "error");
+    }).then(function () { setBusy(false); });
+  }
+
+  function disconnect() {
+    if (!window.confirm(state.data && state.data.connection_status === "link_pending"
+        ? "Cancel the link sent to this patient? It will stop working."
+        : "Disconnect this patient's Oura Ring? The care team will no longer see their Oura data.")) return;
+    setBusy(true);
+    call("POST", "/disconnect").then(function (r) {
+      if (!r.ok) { notice("Could not disconnect.", "error"); return; }
+      $("link-box").hidden = true;
+      return load(true).then(function () {
+        notice("Done. The patient can connect again any time.");
+      });
+    }).catch(function () {
+      notice("Could not reach the plugin. Check your connection.", "error");
+    }).then(function () { setBusy(false); });
+  }
+
+  $("refresh").addEventListener("click", function () { load(); });
+  $("disconnect").addEventListener("click", disconnect);
+  $("send-portal").addEventListener("click", function () { sendLink(true); });
+  $("send-copy").addEventListener("click", function () { sendLink(false); });
+  $("replace").addEventListener("click", function () {
+    if (!window.confirm("Send a new link? The link already sent will stop working.")) return;
+    sendLink(true, true);
+  });
+  function copyLink(done) {
+    var input = $("link");
+    input.select();
+    done = done || function () {};
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(done, function () { document.execCommand("copy"); done(); });
+    } else {
+      document.execCommand("copy");
+      done();
+    }
+  }
+  $("copy").addEventListener("click", function () { copyLink(function () { notice("Link copied."); }); });
+  Array.prototype.forEach.call(document.querySelectorAll(".range button"), function (b) {
+    b.addEventListener("click", function () {
+      if (state.busy) return;
+      state.range = Number(b.dataset.range);
+      load();
+    });
+  });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden || !state.data) return;
+    if (state.data.connection_status === "connected") checkConsent(); else load(true);
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

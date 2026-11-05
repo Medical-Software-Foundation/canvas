@@ -1,0 +1,43 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "oura-ring-viewer"
+version = "0.0.0"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+authors = [
+  {email = "mike@remingtondata.com", name = "Remington Data Systems LLC"}
+]
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+    "pyjwt>=2.10.1",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.ruff.lint]
+extend-select = ["I", "UP", "SIM", "RUF"]
+# The Canvas plugin sandbox only allows a fixed set of imports and attributes.
+# Keep typing.Callable/Sequence (collections.abc is blocked) and
+# dt.timezone.utc (the form verified on the instance) in plugin code.
+ignore = ["UP017", "UP035"]
+
+[tool.ruff.lint.per-file-ignores]
+# Django Meta.constraints is a list by convention.
+"oura_ring_viewer/models/*" = ["RUF012"]
