@@ -34,6 +34,23 @@ DIAGNOSIS_ID_KEYS = (
 )
 
 
+# Candid's answer when a coverage's payer ID isn't in its Canvas payer crosswalk
+UNKNOWN_PAYER_ERROR = "Unable to find payer"
+UNKNOWN_PAYER_HINT = (
+    " Candid doesn't know this payer ID. Check the payer on the coverage "
+    "named in the error; if it's right, ask Candid to add the payer ID to "
+    "the practice's Canvas payer mapping, then resubmit."
+)
+
+
+def _rejection_comment(split_label: str, message: str) -> str:
+    """The claim comment for a Candid rejection, with a next step when one is known."""
+    comment = f"Candid submission rejected ({split_label}): {message}"
+    if UNKNOWN_PAYER_ERROR in message:
+        comment = comment + UNKNOWN_PAYER_HINT
+    return comment
+
+
 def _normalize_dx_code(code: str | None) -> str:
     """Canvas stores ICD-10 codes without the decimal point (E119); Candid
     returns them in canonical dotted form (E11.9). Strip the dot so the two
@@ -199,8 +216,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
                     f"Candid: {split_label} of claim {claim_id} rejected: {message}"
                 )
                 return handle_submit_failure(
-                    claim_effect,
-                    f"Candid submission rejected ({split_label}): {message}",
+                    claim_effect, _rejection_comment(split_label, message)
                 )
 
             encounter_records.append(

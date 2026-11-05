@@ -477,3 +477,89 @@ def test_authenticate_rejects_mismatched_key() -> None:
     credentials.key = "wrong"
 
     assert handler.authenticate(credentials) is False
+
+
+def test_rejection_comment_adds_a_next_step_for_an_unknown_payer() -> None:
+    from candid.api.submit import UNKNOWN_PAYER_HINT, _rejection_comment
+
+    unknown = _rejection_comment(
+        "claim",
+        "<422 Unknown Error> value_error: Unable to find payer for payer ID 521",
+    )
+    other = _rejection_comment("claim", "<400 ValidationError> patient.zip missing")
+
+    assert unknown.startswith("Candid submission rejected (claim): <422 Unknown Error>")
+    assert unknown.endswith(UNKNOWN_PAYER_HINT)
+    # Prod returns this for subscriber_secondary too, not only the patient's coverage
+    assert "the coverage named in the error" in unknown
+    assert (
+        other
+        == "Candid submission rejected (claim): <400 ValidationError> patient.zip missing"
+    )
+
+
+def test_reconcile_service_lines_logs_failed_line_calls() -> None:
+    """Failed update/create/delete calls are logged and the rest still run."""
+    client = MagicMock()
+    client.get_encounter.return_value = {
+        "diagnoses": [],
+        "claims": [
+            {
+                "claim_id": "candid-claim-1",
+                "service_lines": [
+                    {"service_line_id": "sl-1", "external_id": "li-1"},
+                    {"service_line_id": "sl-old", "external_id": "li-old"},
+                ],
+            }
+        ],
+    }
+    client.update_service_line.return_value = (False, "bad update")
+    client.create_service_line.return_value = (False, "bad create")
+    client.delete_service_line.return_value = (False, "bad delete")
+
+    with patch("candid.api.submit.log") as mock_log:
+        CandidSubmitAPI._reconcile_service_lines(
+            client,
+            "enc-1",
+            {
+                "service_lines": [
+                    {"procedure_code": "G0019", "external_id": "li-1"},
+                    {"procedure_code": "G0023", "external_id": "li-3"},
+                ]
+            },
+        )
+
+    warnings = " ".join(c.args[0] for c in mock_log.warning.call_args_list)
+    assert "failed to update service line sl-1: bad update" in warnings
+    assert "failed to create service line: bad create" in warnings
+    assert "failed to delete service line sl-old: bad delete" in warnings
+
+
+def test_resubmit_update_exception_routes_to_failure_handler() -> None:
+    """If the PATCH of an existing encounter raises, the claim fails with the error."""
+    claim = _claim_in_submission_queue()
+
+    with (
+        patch("candid.api.submit.Claim") as MockClaim,
+        patch("candid.api.submit.CandidClient") as MC,
+        patch("candid.api.submit.build_split_payloads") as mock_build,
+        patch("candid.api.submit.handle_submit_failure") as mock_failure,
+        patch("candid.api.submit.notify_claim_updated"),
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = claim
+        mock_build.return_value = [({"external_id": "canvas:claim-1"}, [])]
+        client = MC.from_secrets.return_value
+        client.submit_claim.return_value = (
+            False,
+            "<422 EncounterExternalIdUniquenessError>",
+        )
+        client.find_encounter_by_external_id.return_value = "enc-1"
+        client.update_claim.side_effect = RuntimeError("patch down")
+        mock_failure.return_value = ["failure-effect"]
+
+        result = _build_handler(claim).post()
+
+    assert result[0] == "failure-effect"
+    assert "Candid update failed" in mock_failure.call_args[0][1]
+    assert "patch down" in mock_failure.call_args[0][1]
+    client.update_service_line.assert_not_called()

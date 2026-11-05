@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Callable  # noqa: UP035 - sandbox blocks collections.abc
 from urllib.parse import urlencode
 
 from canvas_sdk.utils.http import Http
@@ -11,6 +12,17 @@ CACHE_KEY_PREFIX = "candid_bearer_token:"
 # Candid tokens expire after 5 hours (18000s). Cache for 4.5 hours to
 # refresh before expiry.
 CACHE_TTL_SECONDS = 16200
+
+# Candid answers 429 when the sync reads too fast. Read-only GETs and the token
+# fetch are retried a few times, waiting what Retry-After asks (else a short
+# backoff). A Retry-After over the cap isn't retried at all, and the total wait
+# is bounded, so one rate-limited claim can't eat the cron's hourly budget.
+RATE_LIMITED = 429
+MAX_RATE_LIMIT_RETRIES = 2
+RATE_LIMIT_BACKOFF_SECONDS = (2, 5)
+MAX_RATE_LIMIT_WAIT_SECONDS = 10
+# Total waiting allowed per client; the sync builds one client per claim.
+RATE_LIMIT_WAIT_BUDGET_SECONDS = 20
 
 
 class CandidUnconfirmedError(Exception):
@@ -30,6 +42,7 @@ class CandidClient:
         self.client_secret = client_secret
         self._instance_token: str | None = None
         self.http = Http(base_url=self.base_url)
+        self._rate_limit_waited = 0.0
 
     @classmethod
     def from_secrets(cls, secrets: dict) -> "CandidClient":
@@ -77,9 +90,13 @@ class CandidClient:
         return token
 
     def _fetch_token(self) -> str:
-        response = self.http.post(
-            f"{self.base_url}/api/auth/v2/token",
-            json={"client_id": self.client_id, "client_secret": self.client_secret},
+        # Candid rate-limits the token endpoint too (in prod it's where every
+        # 429 lands), so it gets the same bounded retry as the read GETs.
+        response = self._with_rate_limit_retry(
+            lambda: self.http.post(
+                f"{self.base_url}/api/auth/v2/token",
+                json={"client_id": self.client_id, "client_secret": self.client_secret},
+            )
         )
         response.raise_for_status()
         token = response.json().get("access_token")
@@ -225,9 +242,8 @@ class CandidClient:
         adjudication sync (insurance payments, adjustments, patient
         responsibility).
         """
-        response = self.http.get(
-            f"{self.base_url}/api/encounters/v4/{encounter_id}",
-            headers=self._auth_headers(),
+        response = self._get_with_rate_limit_retry(
+            f"{self.base_url}/api/encounters/v4/{encounter_id}"
         )
         response.raise_for_status()
         return response.json()
@@ -249,9 +265,8 @@ class CandidClient:
                 "sort_direction": "desc",
             }
         )
-        response = self.http.get(
-            f"{self.base_url}/api/patient-payments/v4?{query}",
-            headers=self._auth_headers(),
+        response = self._get_with_rate_limit_retry(
+            f"{self.base_url}/api/patient-payments/v4?{query}"
         )
         response.raise_for_status()
         data = response.json()
@@ -262,6 +277,60 @@ class CandidClient:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _get_with_rate_limit_retry(self, url: str) -> "Response":
+        """GET ``url`` with the bounded 429 retry (see ``_with_rate_limit_retry``)."""
+        return self._with_rate_limit_retry(
+            lambda: self.http.get(url, headers=self._auth_headers())
+        )
+
+    def _with_rate_limit_retry(self, send: "Callable[[], Response]") -> "Response":
+        """Call ``send``, retrying a 429 up to ``MAX_RATE_LIMIT_RETRIES`` times.
+
+        Only for requests that are safe to repeat (read GETs and the token
+        POST). Returns the last response, so a 429 that outlasts the retries,
+        the wait budget, or asks for a longer wait than the cap still reaches
+        the caller's ``raise_for_status``.
+        """
+        attempt = 0
+        while True:
+            response = send()
+            if (
+                response.status_code != RATE_LIMITED
+                or attempt >= MAX_RATE_LIMIT_RETRIES
+            ):
+                return response
+            wait = self._rate_limit_wait(response, attempt)
+            if wait is None:
+                log.warning(
+                    "Candid: rate limited, Retry-After is over "
+                    f"{MAX_RATE_LIMIT_WAIT_SECONDS}s; not retrying"
+                )
+                return response
+            if self._rate_limit_waited + wait > RATE_LIMIT_WAIT_BUDGET_SECONDS:
+                log.warning("Candid: rate limited, wait budget spent; not retrying")
+                return response
+            log.info(f"Candid: rate limited, retrying in {wait:g}s")
+            time.sleep(wait)
+            self._rate_limit_waited = self._rate_limit_waited + wait
+            attempt = attempt + 1
+
+    @staticmethod
+    def _rate_limit_wait(response: "Response", attempt: int) -> float | None:
+        """Seconds to wait: Retry-After (whole seconds), else the backoff.
+
+        None when Retry-After asks for more than the cap: a retry before then
+        would most likely be refused again and only spend the wait budget.
+        """
+        default = RATE_LIMIT_BACKOFF_SECONDS[
+            min(attempt, len(RATE_LIMIT_BACKOFF_SECONDS) - 1)
+        ]
+        raw = (response.headers.get("Retry-After") or "").strip()
+        # An HTTP-date Retry-After isn't parsed; the backoff stands in for it.
+        wait = float(raw) if raw.isascii() and raw.isdigit() else default
+        if wait > MAX_RATE_LIMIT_WAIT_SECONDS:
+            return None
+        return max(wait, 1.0)
 
     def _auth_headers(self, json_body: bool = False) -> dict[str, str]:
         headers = {"Authorization": f"Bearer {self._token()}"}

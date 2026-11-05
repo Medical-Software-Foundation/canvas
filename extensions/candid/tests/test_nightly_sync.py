@@ -12,10 +12,10 @@ from candid.cron.nightly_sync import (
     LAST_START_CACHE_KEY,
     LOCK_CACHE_KEY,
     START_HOUR_VARIABLE,
+    STATS_KEY,
     NightlyCandidSync,
     start_hour,
 )
-
 from tests.conftest import MOCK_SECRETS
 
 # 07:00 UTC == 02:00 US/Central (CDT) -> the target hour.
@@ -302,3 +302,175 @@ def test_last_start_date_is_kept_in_durable_state(mocks):
 
     assert durable.data[LAST_START_CACHE_KEY] == "2026-06-03"
     assert mocks["sync"].call_count == 1
+
+
+# --- Cycle totals and the end-of-cycle path ------------------------------------
+
+
+def test_cycle_completes_after_backlog_with_totals_logged(mocks):
+    """Three hourly batches over a backlog, then "cycle complete" with totals."""
+    mocks["sync"].side_effect = lambda claim, secrets: (
+        (_ for _ in ()).throw(RuntimeError("bad claim"))
+        if claim.id == "b"
+        else [f"effect-{claim.id}"]
+    )
+
+    with (
+        patch("candid.cron.nightly_sync.MAX_CLAIMS_PER_BATCH", 2),
+        patch("candid.cron.nightly_sync.log") as mock_log,
+    ):
+        mocks["qs"].iterator.return_value = [_claim("a"), _claim("b"), _claim("c")]
+        assert _build_task().execute() == ["effect-a"]
+        assert mocks["cache"].data[CURSOR_CACHE_KEY] == "b"
+        assert mocks["cache"].data[STATS_KEY] == {
+            "processed": 2,
+            "synced": 1,
+            "failed": 1,
+            "batches": 1,
+        }
+        assert "(1 not synced), continuing next hour" in mock_log.info.call_args.args[0]
+
+        mocks["dt"].now.return_value = OFF_TARGET_HOUR
+        mocks["qs"].iterator.return_value = [_claim("c"), _claim("d"), _claim("e")]
+        assert _build_task().execute() == ["effect-c", "effect-d"]
+        assert mocks["cache"].data[CURSOR_CACHE_KEY] == "d"
+
+        mocks["qs"].iterator.return_value = [_claim("e")]
+        assert _build_task().execute() == ["effect-e"]
+
+    # The failed claim was tried once; the cursor moved past it
+    assert [c.args[0].id for c in mocks["sync"].call_args_list] == [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+    ]
+    assert CURSOR_CACHE_KEY not in mocks["cache"].data
+    assert STATS_KEY not in mocks["cache"].data
+    final = mock_log.info.call_args.args[0]
+    assert "synced 1/1 claims (0 not synced), cycle complete" in final
+    assert "4/5 claims synced, 1 not synced, over 3 batches" in final
+
+
+def test_new_cycle_clears_stale_totals(mocks):
+    """Totals left by a cycle that never finished don't leak into the next one."""
+    mocks["cache"].data[STATS_KEY] = {
+        "processed": 99,
+        "synced": 9,
+        "failed": 90,
+        "batches": 7,
+    }
+    mocks["qs"].iterator.return_value = [_claim("a")]
+    mocks["sync"].return_value = ["effect-a"]
+
+    with patch("candid.cron.nightly_sync.log") as mock_log:
+        _build_task().execute()
+
+    message = mock_log.info.call_args.args[0]
+    assert "1/1 claims synced, 0 not synced, over 1 batches" in message
+
+
+def test_malformed_totals_are_ignored(mocks):
+    mocks["dt"].now.return_value = OFF_TARGET_HOUR
+    mocks["cache"].data[CURSOR_CACHE_KEY] = "a"
+    mocks["cache"].data[STATS_KEY] = "garbage"
+    mocks["qs"].iterator.return_value = [_claim("b")]
+    mocks["sync"].return_value = ["effect-b"]
+
+    with patch("candid.cron.nightly_sync.log") as mock_log:
+        _build_task().execute()
+
+    message = mock_log.info.call_args.args[0]
+    assert "1/1 claims synced, 0 not synced, over 1 batches" in message
+
+
+class _StatsWriteFails(FakeCache):
+    """Durable state whose stats key can't be written or cleared."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.order: list[str] = []
+
+    def set(self, key: str, value, timeout_seconds: int | None = None) -> None:
+        self.order.append(key)
+        if key == STATS_KEY:
+            raise RuntimeError("db down")
+        super().set(key, value, timeout_seconds)
+
+    def delete(self, key: str) -> None:
+        self.order.append(f"delete:{key}")
+        if key == STATS_KEY:
+            raise RuntimeError("db down")
+        super().delete(key)
+
+
+def test_batch_writes_stats_before_the_cursor(mocks):
+    """The cursor goes last, so nothing after it can drop the batch's effects."""
+    order: list[str] = []
+    real_set = mocks["cache"].set
+
+    def recording_set(key, value, timeout_seconds=None):
+        order.append(key)
+        real_set(key, value, timeout_seconds)
+
+    mocks["cache"].set = recording_set
+    mocks["qs"].iterator.return_value = [_claim("a"), _claim("b"), _claim("c")]
+    mocks["sync"].side_effect = lambda claim, secrets: [f"effect-{claim.id}"]
+
+    with patch("candid.cron.nightly_sync.MAX_CLAIMS_PER_BATCH", 2):
+        _build_task().execute()
+
+    assert order.index(STATS_KEY) < order.index(CURSOR_CACHE_KEY)
+
+
+def test_failed_stats_write_still_returns_the_batch_and_moves_the_cursor():
+    durable = _StatsWriteFails()
+    with (
+        patch("candid.cron.nightly_sync.get_cache", return_value=FakeCache()),
+        patch("candid.cron.nightly_sync.SyncState", return_value=durable),
+        patch("candid.cron.nightly_sync.datetime") as mock_dt,
+        patch("candid.cron.nightly_sync.Claim") as mock_claim,
+        patch("candid.cron.nightly_sync.sync_claim_adjudications") as mock_sync,
+        patch("candid.cron.nightly_sync.MAX_CLAIMS_PER_BATCH", 2),
+        patch("candid.cron.nightly_sync.log") as mock_log,
+    ):
+        mock_dt.now.return_value = AT_TARGET_HOUR
+        ordered = mock_claim.objects.filter.return_value.order_by.return_value
+        ordered.filter.return_value = ordered
+        ordered.iterator.return_value = [_claim("a"), _claim("b"), _claim("c")]
+        mock_sync.side_effect = lambda claim, secrets: [f"effect-{claim.id}"]
+        # The new cycle's stats clear fails too; that one is allowed to raise
+        # before any claim is synced, so start with the cursor already set.
+        durable.data[CURSOR_CACHE_KEY] = "0"
+
+        effects = _build_task().execute()
+
+    assert effects == ["effect-a", "effect-b"]
+    assert durable.data[CURSOR_CACHE_KEY] == "b"
+    assert "couldn't save cycle stats" in mock_log.warning.call_args.args[0]
+
+
+def test_failed_stats_clear_at_cycle_end_still_completes():
+    durable = _StatsWriteFails()
+    durable.data[CURSOR_CACHE_KEY] = "0"
+    with (
+        patch("candid.cron.nightly_sync.get_cache", return_value=FakeCache()),
+        patch("candid.cron.nightly_sync.SyncState", return_value=durable),
+        patch("candid.cron.nightly_sync.datetime") as mock_dt,
+        patch("candid.cron.nightly_sync.Claim") as mock_claim,
+        patch("candid.cron.nightly_sync.sync_claim_adjudications") as mock_sync,
+        patch("candid.cron.nightly_sync.log") as mock_log,
+    ):
+        mock_dt.now.return_value = AT_TARGET_HOUR
+        ordered = mock_claim.objects.filter.return_value.order_by.return_value
+        ordered.filter.return_value = ordered
+        ordered.iterator.return_value = [_claim("a")]
+        mock_sync.side_effect = lambda claim, secrets: [f"effect-{claim.id}"]
+
+        effects = _build_task().execute()
+
+    assert effects == ["effect-a"]
+    assert CURSOR_CACHE_KEY not in durable.data
+    assert durable.order[-1] == f"delete:{CURSOR_CACHE_KEY}"
+    assert "cycle totals unavailable" in mock_log.info.call_args.args[0]
