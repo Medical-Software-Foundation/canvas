@@ -1827,6 +1827,47 @@ class TestDeviceSignature:
         assert result[0].content["ok"] is True
         assert mock_pdf.mock_calls[0].kwargs["responses"]
 
+    def test_non_latin_typed_name_is_refused(self):
+        body = _sig_body(signature={"signed_with": "typed", "entered_name": "Мария Лопес", "name_kept": True})
+        result, mock_pdf, _, _ = self._run(body, settings={"accept_typed": True})
+        assert result[0].content["ok"] is False
+        assert "Enter it in Latin letters" in result[0].content["error"]
+        assert mock_pdf.mock_calls == []
+
+    def test_non_latin_printed_name_is_refused(self):
+        body = _sig_body(signature={"entered_name": "Мария Лопес", "name_kept": True})
+        result, mock_pdf, _, _ = self._run(body, settings={"ask_printed_name": True})
+        assert result[0].content["ok"] is False
+        assert result[0].content["error"].startswith("The printed name has characters the PDF can't print")
+        assert mock_pdf.mock_calls == []
+
+    def test_non_latin_name_ignored_when_printed_name_not_asked(self):
+        # Not asked: the browser's value is dropped and the name from "Who is giving
+        # consent?" prints, so there's nothing unprintable to refuse.
+        body = _sig_body(signature={"entered_name": "Мария Лопес"})
+        result, mock_pdf, _, _ = self._run(body, settings={"ask_printed_name": False})
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["signature"]["entered"] == ""
+
+    def test_typed_name_that_folds_is_accepted(self):
+        # Letters outside Windows-1252 that print as their plain letter.
+        body = _sig_body(signature={"signed_with": "typed", "entered_name": "Nguyễn Łukasz Ĳsbrand", "name_kept": True})
+        result, mock_pdf, _, _ = self._run(body, settings={"accept_typed": True})
+        assert result[0].content["ok"] is True
+
+    def test_typed_latin_letter_without_a_plain_form_is_refused(self):
+        body = _sig_body(signature={"signed_with": "typed", "entered_name": "Əli Əliyev", "name_kept": True})
+        result, mock_pdf, _, _ = self._run(body, settings={"accept_typed": True})
+        assert result[0].content["error"] == (
+            "The typed name has characters the PDF can't print (Ə). Enter it in Latin letters."
+        )
+        assert mock_pdf.mock_calls == []
+
+    def test_accented_typed_name_is_accepted(self):
+        body = _sig_body(signature={"signed_with": "typed", "entered_name": "María López", "name_kept": True})
+        result, _, _, _ = self._run(body, settings={"accept_typed": True})
+        assert result[0].content["ok"] is True
+
     def test_question_edited_while_open_is_refused(self):
         shown_q = {"id": "a", "prompt": "May we share your records with your insurer?", "type": "yes_no", "required": True, "affirm": True}
         edited_q = dict(shown_q, prompt="May we share your records with anyone?")

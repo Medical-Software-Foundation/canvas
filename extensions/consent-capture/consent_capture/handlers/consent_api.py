@@ -558,6 +558,13 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             return None, "Enter the printed name before recording."
         if not typed and not settings["ask_printed_name"]:
             entered = ""  # not asked: the name from "Who is giving consent?" prints
+        # Accented Latin letters print as their plain letter; other scripts can't print.
+        bad = unprintable_chars(fold_for_pdf(entered))
+        if bad:
+            return None, (
+                "The %s name has characters the PDF can't print (%s). Enter it in Latin "
+                "letters." % ("typed" if typed else "printed", " ".join(bad))
+            )
 
         name_kept = bool(raw.get("name_kept"))
         if entered and not same_name(entered, ctx["signer_name"]) and not name_kept:

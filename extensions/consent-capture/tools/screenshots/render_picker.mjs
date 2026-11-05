@@ -94,6 +94,8 @@ const RECORDS = [
   },
 ];
 
+const NO_FOLD = 'ƄƅƆƍƎƏƐƔƖƛƜƦƧƨƩƪƱƷƸƹƺƻƼƽƾƿǀǁǂǃǝǮǯǶǷȜȝɁɂɅɊẜẝẟ';
+
 function fill(html, vars) {
   // Replace {% if is_admin %}...{% endif %} — keep the inner content (show the gear).
   html = html.replace(/\{%\s*if\s+is_admin\s*%\}/g, '').replace(/\{%\s*endif\s*%\}/g, '');
@@ -115,6 +117,8 @@ export function renderPickerHtml(outPath, practice) {
     records_json: jsEscape(JSON.stringify(RECORDS)),
     method_options_json: jsEscape(JSON.stringify(METHOD_OPTIONS)),
     practice_json: jsEscape(JSON.stringify(Object.assign({}, PRACTICE, practice || {}))),
+    // Same list the plugin sends (pdf.latin_letters_without_plain_form), for local renders.
+    no_fold: jsEscape(NO_FOLD),
     settings_url: '#settings',
   };
   const html = fill(raw, vars);

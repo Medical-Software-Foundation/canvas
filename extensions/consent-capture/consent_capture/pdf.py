@@ -72,9 +72,35 @@ _HELV_WIDTHS = {
 # Consent text is never folded: Consent Settings refuses text the PDF can't print.
 # Generated from Unicode decomposition (the sandbox has no ``unicodedata``).
 _FOLD_PAIRS = (
-    "ĀAāaĂAăaĄAąaĆCćcĈCĉcĊCċcČCčcĎDďdĐDđdĒEēeĔEĕeĖEėeĘEęeĚEěeĜGĝgĞGğgĠGġgĢGģgĤHĥhĦHħhĨIĩiĪIīiĬIĭiĮIįiİIıiĴJĵjĶKķkĸkĹLĺlĻLļlĽLľlĿLŀlŁLłlŃNńnŅNņnŇNňnŉnŌOōoŎOŏoŐOőoŔRŕrŖRŗrŘRřrŚSśsŜSŝsŞSşsŢTţtŤTťtŦTŧtŨUũuŪUūuŬUŭuŮUůuŰUűuŲUųuŴWŵwŶYŷyŹZźzŻZżzſsƀbƗIƚlƠOơoƯUưuǍAǎaǏIǐiǑOǒoǓUǔuǕUǖuǗUǘuǙUǚuǛUǜuǞAǟaǠAǡaǢÆǣæǦGǧgǨKǩkǪOǫoǬOǭoǰjǴGǵgǸNǹnǺAǻaǼÆǽæǾØǿøȀAȁaȂAȃaȄEȅeȆEȇeȈIȉiȊIȋiȌOȍoȎOȏoȐRȑrȒRȓrȔUȕuȖUȗuȘSșsȚTțtȞHȟhȦAȧaȨEȩeȪOȫoȬOȭoȮOȯoȰOȱoȲYȳyḀAḁaḂBḃbḄBḅbḆBḇbḈCḉcḊDḋdḌDḍdḎDḏdḐDḑdḒDḓdḔEḕeḖEḗeḘEḙeḚEḛeḜEḝeḞFḟfḠGḡgḢHḣhḤHḥhḦHḧhḨHḩhḪHḫhḬIḭiḮIḯiḰKḱkḲKḳkḴKḵkḶLḷlḸLḹlḺLḻlḼLḽlḾMḿmṀMṁmṂMṃmṄNṅnṆNṇnṈNṉnṊNṋnṌOṍoṎOṏoṐOṑoṒOṓoṔPṕpṖPṗpṘRṙrṚRṛrṜRṝrṞRṟrṠSṡsṢSṣsṤSṥsṦSṧsṨSṩsṪTṫtṬTṭtṮTṯtṰTṱtṲUṳuṴUṵuṶUṷuṸUṹuṺUṻuṼVṽvṾVṿvẀWẁwẂWẃwẄWẅwẆWẇwẈWẉwẊXẋxẌXẍxẎYẏyẐZẑzẒZẓzẔZẕzẖhẗtẘwẙyẛsẠAạaẢAảaẤAấaẦAầaẨAẩaẪAẫaẬAậaẮAắaẰAằaẲAẳaẴAẵaẶAặaẸEẹeẺEẻeẼEẽeẾEếeỀEềeỂEểeỄEễeỆEệeỈIỉiỊIịiỌOọoỎOỏoỐOốoỒOồoỔOổoỖOỗoỘOộoỚOớoỜOờoỞOởoỠOỡoỢOợoỤUụuỦUủuỨUứuỪUừuỬUửuỮUữuỰUựuỲYỳyỴYỵyỶYỷyỸYỹy"
+    "ĀAāaĂAăaĄAąaĆCćcĈCĉcĊCċcČCčcĎDďdĐDđdĒEēeĔEĕeĖEėeĘEęeĚEěeĜGĝgĞGğgĠGġgĢGģgĤHĥhĦHħhĨIĩiĪIīiĬIĭiĮIįiİIıiĴJĵjĶKķkĸkĹLĺlĻLļlĽLľlĿLŀlŁLłlŃNńnŅNņnŇNňnŉnŊNŋnŌOōoŎOŏoŐOőoŔRŕrŖRŗrŘRřrŚSśsŜSŝsŞSşsŢTţtŤTťtŦTŧtŨUũuŪUūuŬUŭuŮUůuŰUűuŲUųuŴWŵwŶYŷyŹZźzŻZżzſsƀbƁBƂBƃbƇCƈcƉDƊDƋDƌdƑFƓGƗIƘKƙkƚlƝNƞnƟOƠOơoƤPƥpƫtƬTƭtƮTƯUưuƲVƳYƴyƵZƶzǅDǈLǋNǍAǎaǏIǐiǑOǒoǓUǔuǕUǖuǗUǘuǙUǚuǛUǜuǞAǟaǠAǡaǢÆǣæǤGǥgǦGǧgǨKǩkǪOǫoǬOǭoǰjǲDǴGǵgǸNǹnǺAǻaǼÆǽæǾØǿøȀAȁaȂAȃaȄEȅeȆEȇeȈIȉiȊIȋiȌOȍoȎOȏoȐRȑrȒRȓrȔUȕuȖUȗuȘSșsȚTțtȞHȟhȠNȡdȤZȥzȦAȧaȨEȩeȪOȫoȬOȭoȮOȯoȰOȱoȲYȳyȴlȵnȶtȷjȺAȻCȼcȽLȾTȿsɀzɃBɄUɆEɇeɈJɉjɋqɌRɍrɎYɏyḀAḁaḂBḃbḄBḅbḆBḇbḈCḉcḊDḋdḌDḍdḎDḏdḐDḑdḒDḓdḔEḕeḖEḗeḘEḙeḚEḛeḜEḝeḞFḟfḠGḡgḢHḣhḤHḥhḦHḧhḨHḩhḪHḫhḬIḭiḮIḯiḰKḱkḲKḳkḴKḵkḶLḷlḸLḹlḺLḻlḼLḽlḾMḿmṀMṁmṂMṃmṄNṅnṆNṇnṈNṉnṊNṋnṌOṍoṎOṏoṐOṑoṒOṓoṔPṕpṖPṗpṘRṙrṚRṛrṜRṝrṞRṟrṠSṡsṢSṣsṤSṥsṦSṧsṨSṩsṪTṫtṬTṭtṮTṯtṰTṱtṲUṳuṴUṵuṶUṷuṸUṹuṺUṻuṼVṽvṾVṿvẀWẁwẂWẃwẄWẅwẆWẇwẈWẉwẊXẋxẌXẍxẎYẏyẐZẑzẒZẓzẔZẕzẖhẗtẘwẙyẚaẛsẠAạaẢAảaẤAấaẦAầaẨAẩaẪAẫaẬAậaẮAắaẰAằaẲAẳaẴAẵaẶAặaẸEẹeẺEẻeẼEẽeẾEếeỀEềeỂEểeỄEễeỆEệeỈIỉiỊIịiỌOọoỎOỏoỐOốoỒOồoỔOổoỖOỗoỘOộoỚOớoỜOờoỞOởoỠOỡoỢOợoỤUụuỦUủuỨUứuỪUừuỬUửuỮUữuỰUựuỲYỳyỴYỵyỶYỷyỸYỹyỼVỽvỾYỿy"
 )
+# Letters that fold to two (Dutch ij, digraphs, capital sharp s).
+_FOLD_MULTI = {"Ĳ": "IJ", "ĳ": "ij", "ƕ": "hv", "Ƣ": "OI", "ƣ": "oi", "Ǆ": "DZ", "ǅ": "Dž", "ǆ": "dz", "Ǉ": "LJ", "ǈ": "Lj", "ǉ": "lj", "Ǌ": "NJ", "ǋ": "Nj", "ǌ": "nj", "Ǳ": "DZ", "ǲ": "Dz", "ǳ": "dz", "Ȣ": "OU", "ȣ": "ou", "ȸ": "db", "ȹ": "qp", "ẞ": "SS", "Ỻ": "LL", "ỻ": "ll"}
 _FOLD_TABLE = {ord(_FOLD_PAIRS[i]): _FOLD_PAIRS[i + 1] for i in range(0, len(_FOLD_PAIRS), 2)}
+_FOLD_TABLE.update({ord(k): v for k, v in _FOLD_MULTI.items()})
+# Combining accents (a letter typed as letter + mark) are dropped, so "José"
+# entered in decomposed form prints like "Jose" instead of "Jose?".
+_FOLD_TABLE.update({cp: None for cp in range(0x300, 0x370)})
+
+
+def _prints(ch):
+    try:
+        ch.encode("cp1252")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+def latin_letters_without_plain_form():
+    """Latin Extended letters (U+0100-U+024F, U+1E00-U+1EFF) that neither print as
+    they are nor fold to a printable form. The signing screen refuses these up front,
+    so it agrees with the server's check without keeping its own copy of the table."""
+    out = []
+    for cp in list(range(0x100, 0x250)) + list(range(0x1E00, 0x1F00)):
+        ch = chr(cp)
+        if not _prints(ch) and not _prints(fold_for_pdf(ch)):
+            out.append(ch)
+    return "".join(out)
 
 
 def fold_for_pdf(text):

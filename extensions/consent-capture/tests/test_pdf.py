@@ -20,6 +20,7 @@ from consent_capture.pdf import (
     generate_consent_pdf,
     fold_for_pdf,
     generate_consent_pdf_base64,
+    latin_letters_without_plain_form,
     pdf_page_count,
     unprintable_chars,
 )
@@ -504,6 +505,18 @@ class TestFoldForPdf:
         assert fold_for_pdf("Łukasz Wałęsa") == "Lukasz Walesa"
         assert fold_for_pdf("Ştefan Ţăran") == "Stefan Taran"
 
+    def test_letters_that_fold_to_two(self):
+        assert fold_for_pdf("Ĳsbrand ẞTRASSE ǈubo") == "IJsbrand SSTRASSE Ljubo"
+
+    def test_eng_folds_to_n(self):
+        assert fold_for_pdf("Ŋuyen ŋ") == "Nuyen n"
+
+    def test_combining_accents_are_dropped(self):
+        assert fold_for_pdf("Jose\u0301") == "Jose"
+
+    def test_letters_without_a_plain_form_stay(self):
+        assert unprintable_chars(fold_for_pdf("Əliyev")) == ["Ə"]
+
     def test_cp1252_letters_are_kept(self):
         assert fold_for_pdf("José Müller Ñúñez") == "José Müller Ñúñez"
 
@@ -535,3 +548,15 @@ class TestUnprintableChars:
     def test_empty(self):
         assert unprintable_chars("") == []
         assert unprintable_chars(None) == []
+
+
+class TestLatinLettersWithoutPlainForm:
+    def test_lists_letters_that_dont_fold(self):
+        out = latin_letters_without_plain_form()
+        assert "Ə" in out and "Ŋ" not in out and "Ĳ" not in out and "ễ" not in out
+
+    def test_every_listed_letter_is_unprintable_and_the_rest_print(self):
+        out = latin_letters_without_plain_form()
+        for cp in list(range(0x100, 0x250)) + list(range(0x1E00, 0x1F00)):
+            ch = chr(cp)
+            assert bool(unprintable_chars(fold_for_pdf(ch))) == (ch in out)

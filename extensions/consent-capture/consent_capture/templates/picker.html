@@ -77,14 +77,16 @@
 
     /* Footer band */
     .footer, .startbar { flex: none; background: #fff; border-top: 1.5px solid var(--border); }
-    .footer .inner { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 32px calc(12px + env(safe-area-inset-bottom, 0px)); }
+    /* No extra room for the home bar: Canvas's own border around the window already
+       keeps the buttons clear of it, and the added space read as a heavy footer. */
+    .footer .inner { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 32px; }
     .footer .msg { font-size: 12px; color: var(--secondary); }
     .footer .msg.error { color: var(--red); }
     .footer .msg.warn { color: var(--amber); }
     .footer .msg:empty { display: none; }
     .btnrow { display: flex; gap: 8px; align-items: center; }
     .btnrow .spacer { flex: 1 1 auto; }
-    .startbar { padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); }
+    .startbar { padding: 10px 0; }
     .startbar .pad { display: flex; align-items: center; gap: 8px; }
     .startbar .count { flex: 1 1 auto; font-size: 12px; color: var(--secondary); }
 
@@ -214,6 +216,8 @@
     .vf video { width: 100%; height: 100%; object-fit: contain; }
     .vfmsg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; font-size: 14px; line-height: 1.5; padding: 24px; }
     .camrow { margin-top: 9px; display: flex; justify-content: center; }
+    .nativecam { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 16px; border: 1.5px dashed var(--border); border-radius: 12px; background: #fff; text-align: center; }
+    .nativecam .sub { margin: 0; }
     .camrow .shutter { width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--navy); background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform .05s; }
     .camrow .shutter span { width: 46px; height: 46px; border-radius: 50%; background: var(--navy); display: block; }
     .camrow .shutter:active { transform: scale(.94); }
@@ -336,7 +340,8 @@
     .sigpad .hint.warn { color: var(--amber); }
     .typed-preview { margin-top: 10px; height: 96px; border: 1.5px solid var(--border); border-radius: 10px; background: #fff; display: flex; align-items: center; padding: 0 22px; font-family: "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive; font-size: 40px; color: #111827; overflow: hidden; white-space: nowrap; }
     .typed-preview:empty::before { content: "Your signature appears here"; font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: var(--faint); }
-    .pt-field { margin-top: 14px; }
+    .pt-field { margin: 0 0 14px; }
+    .pt-name-err { margin: 8px 0 0; font-size: 13px; color: var(--red); }
     .pt-field .lab { margin-bottom: 8px; }
     .pt-attest { margin: 8px 0 0; font-size: 12px; color: var(--secondary); }
     .pt-attest b { color: var(--navy); font-weight: 600; }
@@ -432,6 +437,16 @@
     .vmsg { position: absolute; inset: 10px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--secondary); font-size: 14px; padding: 24px; }
     .vmsg:empty { display: none; }
     #viewerView .scroll .pad { height: 100%; }
+    /* Phones and upright tablets: Canvas sizes the window to the full screen height
+       there, so browser bars (Safari's tab bar, Chrome's bottom toolbar) cover its
+       bottom edge. The whole screen scrolls instead, and the buttons follow the
+       content, with room below them to scroll clear of the bars. */
+    @media (max-width: 899px) {
+      .view.active { overflow-y: auto; -webkit-overflow-scrolling: touch; box-sizing: border-box; padding-bottom: 120px; background: var(--tint); }
+      .view.active > .scroll, .view.active > .signscroll { flex: none; min-height: 0; overflow: visible; }
+      .view.active > .footer, .view.active > .startbar { background: transparent; border-top: 0; }
+      #viewerView.active > .scroll { height: 60vh; }
+    }
 
     @media (max-width: 600px) {
       .pad { padding: 0 20px; }
@@ -526,6 +541,11 @@
         <div class="cappanel hidden" id="panCamera">
           <div class="vf"><video id="camVideo" playsinline autoplay muted></video><div class="vfmsg hidden" id="camMsg"></div><div class="flash" id="camFlash"></div></div>
           <div class="camrow"><button type="button" class="shutter" id="shutter" aria-label="Capture page"><span></span></button></div>
+          <div class="nativecam hidden" id="nativeCam">
+            <button type="button" class="btn primary" id="nativeCamBtn">Take Photo</button>
+            <p class="sub">Take a photo of each page.</p>
+            <input type="file" id="nativeCamInput" accept="image/*" capture="environment" hidden />
+          </div>
         </div>
         <div class="cappanel hidden" id="panUpload">
           <label class="drop" id="dropZone">
@@ -630,6 +650,10 @@
       <div class="pt-doc" id="bText"></div>
       <div id="bQs"></div>
       <div class="card sigcard">
+        <!-- Name before the signature: drawing closes the keyboard, so it's gone before
+             Accept and Sign. Typing right above the button made the first taps land
+             while the keyboard was closing and the screen shifted. -->
+        <div class="pt-field" id="pnField"><label class="lab" for="pnInput">Printed name</label><input type="text" class="txt" id="pnInput" autocomplete="off" enterkeyhint="done"></div>
         <div id="sigSlot"></div>
         <div class="reuse-panel hidden" id="bReusePanel">
           <div class="rp-lbl" id="bReuseLbl"></div>
@@ -638,7 +662,7 @@
           <button type="button" class="linkbtn" id="bReuseFresh">Use a new signature</button>
         </div>
         <p class="reuse-note hidden" id="bReuseNote"></p>
-        <div class="pt-field" id="pnField"><label class="lab" for="pnInput">Printed name</label><input type="text" class="txt" id="pnInput" autocomplete="off"></div>
+        <p class="pt-name-err hidden" id="nameErr" role="alert"></p>
         <p class="pt-attest" id="bAttest"></p>
       </div>
     </div></div>
@@ -794,7 +818,11 @@
       var p = window.__consentPort;
       if (p) {
         try { p.postMessage({ type: 'RESIZE', width: w, height: h }); } catch (e) {}
+        // dvh is the height actually visible: on iPad Safari, 100vh includes the space
+        // under an open tab bar, which pushed the footer buttons off the bottom.
+        // 100vh first for browsers that don't know dvh (Safari before 15.4), which keep it.
         try { p.postMessage({ type: 'RESIZE', width: '100vw', height: '100vh' }); } catch (e) {}
+        try { p.postMessage({ type: 'RESIZE', width: '100vw', height: '100dvh' }); } catch (e) {}
       }
     };
     function resizeModal(w, h) { window.__wantW = w; window.__wantH = h; window.__applyModalSize(); }
@@ -811,9 +839,10 @@
       try { window.parent.postMessage({ type: 'CLOSE_MODAL' }, '*'); } catch (e) {}
       try { window.close(); } catch (e) {}
     }
-    // Only the middle of each screen scrolls; reset it on every screen change.
+    // Only the middle of each screen scrolls (the whole screen on phones and upright
+    // tablets); reset it on every screen change.
     function scrollTop() {
-      var nodes = document.querySelectorAll('.scroll, .signscroll');
+      var nodes = document.querySelectorAll('.view, .scroll, .signscroll');
       for (var i = 0; i < nodes.length; i++) nodes[i].scrollTop = 0;
     }
     function localDateISO() { var d = new Date(); function p(n){return (n<10?'0':'')+n;} return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
@@ -1199,7 +1228,7 @@
       if (documentBase64) payload.document_pdf = documentBase64;
       postJSON(COLLECT_URL, payload).then(function (data) {
         ui.primary.disabled = false; ui.back.disabled = false; ui.primary.textContent = lbl;
-        if (data && data.ok) { stopCamera(); afterRecorded(W.index, data.preview || {}, false); showReceipt(RECORDS[0]); }
+        if (data && data.ok) { stopCamera(); releaseCapture(CAP); afterRecorded(W.index, data.preview || {}, false); showReceipt(RECORDS[0]); }
         else ui.setMsg((data && data.error) || 'Could not record consent.', true);
       }).catch(function () { ui.primary.disabled = false; ui.back.disabled = false; ui.primary.textContent = lbl; ui.setMsg('Could not reach the server. Please try again.', true); });
     }
@@ -1261,7 +1290,13 @@
     var CAP = { pages: [], cropper: null, stream: null, queue: [], current: null, tab: 'camera' };
     function capSetMsg(text, isErr) { setMsgIn('capMsg', text, isErr ? 'error' : ''); }
 
+    // Photos are kept as blob URLs; free a capture's photos once it's recorded or replaced.
+    function releaseCapture(cap) {
+      if (!cap) return;
+      (cap.pages || []).concat(cap.queue || [], cap.current ? [cap.current] : []).forEach(function (pg) { releasePage(pg); });
+    }
     function openCapture() {
+      releaseCapture(CAP);
       CAP = { pages: [], cropper: null, stream: null, queue: [], current: null, tab: 'camera' };
       capSetMsg(''); $('capTitle').textContent = W.consent.display;
       var signable = deviceSigningFor(W.consent);
@@ -1304,19 +1339,46 @@
       });
       if (which === 'camera') startCamera(); else stopCamera();
       if ($('scCam').classList.contains('on')) capFooter('camera');
+      if (which !== 'sign') maybeStartReview();  // a photo that finished while on another tab
     }
+    // Phones and tablets (iPad, iPhone, Android) take the photo with the device's own
+    // camera app: full resolution, focused and exposed, with flash where the device has
+    // one. A frame copied from the live video comes out dark on iPad. Computers keep
+    // the live viewfinder. iPadOS Safari reports itself as a Mac, so touch tells them apart.
+    var NATIVE_CAMERA = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent || '') ||
+      (/Macintosh/.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1);
+    if (NATIVE_CAMERA) {
+      document.querySelector('#panCamera .vf').classList.add('hidden');
+      document.querySelector('#panCamera .camrow').classList.add('hidden');
+      $('nativeCam').classList.remove('hidden');
+    }
+    $('nativeCamBtn').addEventListener('click', function () { $('nativeCamInput').click(); });
+    $('nativeCamInput').addEventListener('change', function () { handleFiles(this.files); this.value = ''; });
     // The shutter is disabled until the camera stream is actually producing frames.
+    var CAMERA_WARMUP_MS = 1000;
     function setShutterReady(ready) { var b = $('shutter'); if (b) b.disabled = !ready; }
     function startCamera() {
+      if (NATIVE_CAMERA) return;  // the device's camera app opens from Take Photo
       var vid = $('camVideo');
       setShutterReady(false);
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showCamMsg('Camera isn’t available here. Use the Upload tab.'); return; }
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      // Ask for the camera's full resolution. With no size requested, browsers open
+      // a small video stream (often 640x480), and a document photographed from it
+      // looks sharp in the viewfinder but blurry on the page.
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 4096 } }, audio: false })
         .then(function (s) {
           if (CAP.tab !== 'camera') { s.getTracks().forEach(function (t) { t.stop(); }); return; }
           CAP.stream = s; vid.srcObject = s;
           $('camMsg').classList.add('hidden'); vid.style.visibility = 'visible';
-          var ready = function () { if (vid.videoWidth) setShutterReady(true); };
+          // The first frames come before the camera has adjusted to the light, and in
+          // a dim room they're nearly black. Turn the shutter on once the camera has
+          // been delivering frames for about a second.
+          var waiting = false;
+          var ready = function () {
+            if (waiting || !vid.videoWidth) return;
+            waiting = true;
+            setTimeout(function () { if (CAP.stream === s) setShutterReady(true); }, CAMERA_WARMUP_MS);
+          };
           vid.onloadedmetadata = ready; vid.oncanplay = ready; vid.onplaying = ready; ready();
         })
         .catch(function () { showCamMsg('Camera access was blocked. Use the Upload tab instead.'); });
@@ -1326,15 +1388,36 @@
     function captureFrame() {
       var v = $('camVideo');
       if (!v.videoWidth) { capSetMsg('The camera isn’t ready yet.', true); return; }
-      var cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight;
-      cv.getContext('2d').drawImage(v, 0, 0);
+      setShutterReady(false);  // one capture at a time; openReview stops the camera
       var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
+      // Where the browser can take a real photo (Chrome and Android), use it: it's
+      // full resolution and focused. Elsewhere, save a frame of the video.
+      var cap = CAP, track = CAP.stream && CAP.stream.getVideoTracks()[0];
+      // Still on this capture's camera tab with the camera running.
+      var stillHere = function () { return CAP === cap && CAP.tab === 'camera' && !!CAP.stream; };
+      if (window.ImageCapture && track) {
+        new ImageCapture(track).takePhoto()
+          .then(shrinkImage)
+          .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openReview(); } })
+          .catch(function () {
+            if (!stillHere()) return;
+            if (track.readyState === 'live') { captureVideoFrame(v, stillHere); return; }
+            capSetMsg('Could not capture the photo. Please try again.', true);
+            stopCamera(); startCamera();  // the camera went away; reopen it and the shutter returns when it's ready
+          });
+        return;
+      }
+      captureVideoFrame(v, stillHere);
+    }
+    function captureVideoFrame(v, stillHere) {
+      var shot = drawToPage(v, v.videoWidth, v.videoHeight);
       setTimeout(function () {
-        cv.toBlob(function (blob) {
-          if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); return; }
-          CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: cv.toDataURL('image/jpeg', 0.9) };
+        shot.then(function (blob) {
+          if (stillHere && !stillHere()) return;
+          if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); if (CAP.stream) setShutterReady(true); return; }
+          CAP.current = photoPage(blob);
           openReview();
-        }, 'image/jpeg', 0.9);
+        });
       }, 150);
     }
     function handleFiles(list) {
@@ -1348,17 +1431,93 @@
         } else if (/^image\//.test(f.type)) { queueImage(f); }
       });
     }
-    function queueImage(blob) { CAP.queue.push({ blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }); }
-    function maybeStartReview() { if (!CAP.current && CAP.queue.length) { CAP.current = CAP.queue.shift(); openReview(); } }
-    function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); }
+    // Every photo page is scaled so its longest side is at most 2000 pixels (about
+    // 180 dpi on a letter page) and saved as JPEG. Full-resolution camera photos run
+    // several MB each, and the server takes documents up to 10 MB.
+    var PAGE_MAX_EDGE = 2000, PAGE_JPEG_QUALITY = 0.85;
+    function drawToPage(src, w, h) {
+      var k = Math.min(1, PAGE_MAX_EDGE / Math.max(w, h));
+      var cv = document.createElement('canvas'); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+      cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
+      return new Promise(function (resolve) { cv.toBlob(resolve, 'image/jpeg', PAGE_JPEG_QUALITY); });
+    }
+    function shrinkImage(blob) {
+      if (window.createImageBitmap) {
+        // Some browsers have createImageBitmap but reject this option or the image;
+        // fall back to an <img> then. The bitmap holds the full-size photo, so it's
+        // released as soon as the page is drawn.
+        return createImageBitmap(blob, { imageOrientation: 'from-image' })
+          .then(function (b) {
+            return drawToPage(b, b.width, b.height).then(function (out) { if (b.close) b.close(); return out; });
+          })
+          .catch(function () { return shrinkWithImage(blob); });
+      }
+      return shrinkWithImage(blob);
+    }
+    function shrinkWithImage(blob) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image(), url = URL.createObjectURL(blob);
+        img.onload = function () { URL.revokeObjectURL(url); drawToPage(img, img.naturalWidth, img.naturalHeight).then(resolve); };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('unreadable')); };
+        img.src = url;
+      });
+    }
+    function photoPage(blob) { return { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: URL.createObjectURL(blob) }; }
+    // Uploaded images keep their order: each takes its place in the queue now and
+    // is filled in once it has been resized.
+    // A result that arrives after its capture ended (Back, or a new capture) is dropped.
+    function queueImage(blob) {
+      var cap = CAP, slot = { pending: true };
+      cap.queue.push(slot);
+      shrinkImage(blob)
+        .then(function (small) {
+          if (CAP !== cap) return;
+          Object.assign(slot, photoPage(small || blob), { pending: false });
+          afterQueueChange();
+        })
+        .catch(function () {
+          if (CAP !== cap) return;
+          var at = cap.queue.indexOf(slot); if (at !== -1) cap.queue.splice(at, 1);
+          capSetMsg('Couldn’t read that image.', true);
+          afterQueueChange();
+        });
+    }
+    // Only while the photo screens are showing: a resize that lands after staff moved on
+    // (to signing, or back) waits in the queue instead of taking over the screen.
+    function onPhotoScreens() { return $('capView').classList.contains('active') && CAP.tab !== 'sign'; }
+    function maybeStartReview() {
+      if (!onPhotoScreens()) return;
+      if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openReview(); }
+      syncReviewButtons();
+    }
+    // Open the next ready page; if the review screen is left with nothing to show
+    // (the last pending image failed), move on instead of sitting on the old photo.
+    function afterQueueChange() {
+      maybeStartReview();
+      if (!onPhotoScreens() || CAP.current || CAP.queue.length || !$('scReview').classList.contains('on')) return;
+      if (CAP.pages.length) capStep('pages'); else { selectTab('camera'); capStep('camera'); }
+    }
+    function openReview() { stopCamera(); $('reviewImg').src = CAP.current ? CAP.current.url : ''; capStep('review'); syncReviewButtons(); }
     function reviewNext(committed) {
       CAP.current = null;
-      if (CAP.queue.length) { CAP.current = CAP.queue.shift(); openReview(); }
+      if (CAP.queue.length) {
+        maybeStartReview();
+        // Still resizing: clear the old photo and say so; it opens when ready.
+        if (!CAP.current) { $('reviewImg').removeAttribute('src'); capSetMsg('Preparing the next photo…'); syncReviewButtons(); }
+      }
       else if (committed || CAP.pages.length) { capStep('pages'); }
       else { selectTab('camera'); capStep('camera'); }
     }
     function reviewAddPage() { if (CAP.current) addPage(CAP.current); reviewNext(true); }
-    function reviewRetake() { reviewNext(false); }
+    // Retake, Add Page and Crop do nothing without a photo; turn them off while the next
+    // one is still being prepared.
+    function syncReviewButtons() {
+      if (!$('scReview').classList.contains('on')) return;
+      var none = !CAP.current;
+      $('capLeft').disabled = none; $('capRight').disabled = none; $('cropBtn').disabled = none;
+    }
+    function releasePage(p) { if (p && p.url && p.url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(p.url); } catch (e) {} } }
+    function reviewRetake() { releasePage(CAP.current); reviewNext(false); }
     function openCrop(src) {
       stopCamera();
       var img = $('cropImg');
@@ -1377,7 +1536,7 @@
       if (!CAP.cropper) { openReview(); return; }
       var canvas = CAP.cropper.getCroppedCanvas({ maxWidth: 2000, maxHeight: 2000 });
       canvas.toBlob(function (blob) {
-        if (blob) CAP.current = { blob: blob, type: 'image/jpeg', name: 'Photo', pageCount: 1, url: canvas.toDataURL('image/jpeg', 0.85) };
+        if (blob) { releasePage(CAP.current); CAP.current = photoPage(blob); }
         if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
         $('cropImg').removeAttribute('src');
         openReview();
@@ -1393,7 +1552,7 @@
     }
     function addPage(p) { CAP.pages.push(p); renderPages(); }
     function removePage(i) {
-      CAP.pages.splice(i, 1);
+      releasePage(CAP.pages.splice(i, 1)[0]);
       if (!CAP.pages.length) { selectTab('camera'); capStep('camera'); }
       else renderPages();
     }
@@ -1467,7 +1626,6 @@
     $('shutter').addEventListener('click', captureFrame);
     $('fileInput').addEventListener('change', function () {
       handleFiles(this.files); this.value = '';
-      maybeStartReview();
       if (!CAP.current && !CAP.queue.length && CAP.pages.length) capStep('pages');
     });
     $('cropBtn').addEventListener('click', function () { if (CAP.current) openCrop(CAP.current.url); });
@@ -1584,6 +1742,7 @@
     function currentItem() { return S.items[S.queue[S.qi]]; }
     function loadSign() {
       var it = currentItem();
+      signTap.ignoreClick = false;  // a click left over from the last consent doesn't carry over
       S.reconfirmItem = !!it.reconfirm;
       $('bProgress').textContent = S.queue.length === 1 ? '' : 'Consent ' + (S.qi + 1) + ' of ' + S.queue.length;
       $('bTitle').textContent = it.c.display;
@@ -1639,7 +1798,7 @@
         } else {
           var cap = captureSignature();
           it.sig = cap.sig; it.signedWith = cap.signedWith; it.typed = cap.typed;
-          it.entered = cap.typed ? cap.typedName : (PRACTICE.ask_printed_name ? $('pnInput').value.trim() : '');
+          it.entered = cleanName(cap.typed ? cap.typedName : (PRACTICE.ask_printed_name ? $('pnInput').value : ''));
           it.reused = false; it.reconfirmed = false; it.reconfirm = false;
           S.lastSig = { sig: it.sig, from: it.c.display, entered: it.entered, signedWith: it.signedWith, typed: it.typed };
         }
@@ -1652,7 +1811,39 @@
       $('bHbCount').textContent = plural(signed, 'consent') + ' signed.';
       show('bhandback'); replay('bhandbackView');
     }
-    $('bNext').addEventListener('click', function () { if (!$('bNext').disabled) finishOne('signed'); });
+    // With a text field active on an iPad, the first tap on the button only closes the
+    // keyboard and no click arrives. Close it on press and sign on release, so one tap
+    // does both; the click that may follow is ignored.
+    // signTap.armed: a press that started with a text field active. signTap.ignoreClick:
+    // the click that may follow that press (signed on release, or backed out) is not a
+    // new tap. Only a new press on the button clears it, so a late click can't sign
+    // the next consent and a backed-out press can't sign through its click.
+    var signTap = { armed: false, ignoreClick: false, rect: null };
+    function inRect(r, e) { return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
+    $('bNext').addEventListener('pointerdown', function (e) {
+      signTap.ignoreClick = false;
+      var field = activeTextField();
+      if (!field || e.button !== 0) return;
+      // Where the button was when pressed: the screen can shift as the keyboard closes.
+      signTap.rect = this.getBoundingClientRect();
+      field.blur(); signTap.armed = true;
+    });
+    // Watched on the document (no pointer capture), so a release off the button is seen
+    // here and the browser doesn't send the button a click for it.
+    document.addEventListener('pointerup', function (e) {
+      if (!signTap.armed) return;
+      signTap.armed = false; signTap.ignoreClick = true;
+      // Sliding off the button before letting go backs out, as with any button.
+      var b = $('bNext');
+      if (!inRect(signTap.rect, e) && !inRect(b.getBoundingClientRect(), e)) return;
+      if (b.disabled) return;
+      finishOne('signed');
+    });
+    document.addEventListener('pointercancel', function () { if (signTap.armed) { signTap.armed = false; signTap.ignoreClick = true; } });
+    $('bNext').addEventListener('click', function () {
+      if (signTap.ignoreClick) { signTap.ignoreClick = false; return; }
+      if (!$('bNext').disabled) finishOne('signed');
+    });
     $('bSkip').addEventListener('click', function () { finishOne('skipped'); });
     $('bHbContinue').addEventListener('click', function () { renderStatus(); show('bstatus'); });
 
@@ -1663,7 +1854,7 @@
         '<span class="sigmode"><button type="button" data-sm="draw" class="on">Draw</button><button type="button" data-sm="type">Type</button></span>' +
         '<button type="button" class="clearbtn" disabled>Clear</button></span></div>' +
       '<div class="drawarea"><div class="sigpad"><span class="x">×</span><span class="base"></span><span class="hint"></span><canvas></canvas></div></div>' +
-      '<div class="typearea hidden"><input type="text" class="txt typed" placeholder="Type your full name" autocomplete="off" aria-label="Type your full name"><div class="typed-preview"></div></div>';
+      '<div class="typearea hidden"><input type="text" class="txt typed" placeholder="Type your full name" autocomplete="off" enterkeyhint="done" aria-label="Type your full name"><div class="typed-preview"></div></div>';
     var cv = pad.querySelector('canvas'), sigpad = pad.querySelector('.sigpad'), hintEl = pad.querySelector('.hint');
     var typedInput = pad.querySelector('.typed'), typedPreview = pad.querySelector('.typed-preview');
     var ctx = null, strokes = [], live = null, inkPoints = { finger: 0, mouse: 0 };
@@ -1697,7 +1888,18 @@
     // accept draws nothing, and the hint says what to use instead.
     function strokeKind(e) { return e.pointerType === 'mouse' ? 'mouse' : 'finger'; }
     function kindAccepted(kind) { return kind === 'mouse' ? PRACTICE.accept_mouse : PRACTICE.accept_finger; }
+    // The text field that still has the keyboard up, if any.
+    function activeTextField() {
+      var a = document.activeElement;
+      if (!a) return null;
+      if (a.tagName === 'TEXTAREA') return a;
+      var t = (a.getAttribute('type') || 'text').toLowerCase();
+      return a.tagName === 'INPUT' && ['text', 'search', 'email', 'tel', 'url', 'number', 'password'].indexOf(t) !== -1 ? a : null;
+    }
     cv.addEventListener('pointerdown', function (e) {
+      // preventDefault keeps the pen stroke from scrolling the page, but it also keeps
+      // the touch from taking focus, so the printed name field kept the keyboard up.
+      var field = activeTextField(); if (field) field.blur();
       e.preventDefault();
       var kind = strokeKind(e);
       if (!kindAccepted(kind)) {
@@ -1787,15 +1989,48 @@
       else setSigMode(SIG.mode);
     }
     function hasSig() { return SIG.mode === 'draw' ? hasInk() : typedInput.value.trim() !== ''; }
+    // Characters the PDF can print: Windows-1252, plus Latin letters with accents,
+    // which print as their plain letter (the server folds them the same way). Other
+    // scripts print as "?", so the server refuses them; catching them here keeps the
+    // signer from finding out only after handing the device back.
+    var CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+    // Latin Extended letters the server's fold table has no plain letter for, sent by
+    // the server (pdf.latin_letters_without_plain_form) so the two checks agree.
+    var NO_FOLD = "{{ no_fold|escapejs }}";
+    // The server drops characters Python doesn't count as printable (controls, format
+    // characters such as zero-width spaces, and every space but the normal one) before
+    // checking a name; do the same here, so a pasted name isn't refused on screen.
+    var INVISIBLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}]|(?! )\p{Zs}/gu;
+    function cleanName(text) { return (text || '').normalize('NFC').replace(INVISIBLE, '').trim(); }
+    function unprintableChars(text) {
+      var bad = [];
+      Array.from(cleanName(text)).forEach(function (ch) {
+        var c = ch.codePointAt(0);
+        if (c < 0x80 || (c >= 0xA0 && c <= 0xFF) || CP1252_EXTRA.indexOf(ch) !== -1) return;
+        if (c >= 0x300 && c < 0x370) return;  // a stray combining accent is dropped, not printed
+        var latinExt = (c >= 0x100 && c <= 0x24F) || (c >= 0x1E00 && c <= 0x1EFF);
+        if (latinExt && NO_FOLD.indexOf(ch) === -1) return;
+        if (bad.indexOf(ch) === -1) bad.push(ch);
+      });
+      return bad;
+    }
     function validateSign() {
       pad.querySelector('.clearbtn').disabled = !hasSig();
       if (!S || !$('bsignView').classList.contains('active')) return;
       var it = currentItem(), qOk = answersValid(it.c.questions || [], it.answers);
-      if (S.reuseActive) { $('bNext').disabled = !qOk; return; }
+      if (S.reuseActive) { $('nameErr').classList.add('hidden'); $('bNext').disabled = !qOk; return; }
       var pnOk = !PRACTICE.ask_printed_name || SIG.mode === 'type' || $('pnInput').value.trim() !== '';
-      $('bNext').disabled = !(hasSig() && pnOk && qOk);
+      var entered = SIG.mode === 'type' ? typedInput.value : (PRACTICE.ask_printed_name ? $('pnInput').value : '');
+      var bad = unprintableChars(entered);
+      $('nameErr').textContent = bad.length ? 'The name has characters that can’t be printed (' + bad.join(' ') + '). Enter it in Latin letters.' : '';
+      $('nameErr').classList.toggle('hidden', !bad.length);
+      $('bNext').disabled = !(hasSig() && pnOk && qOk && !bad.length);
     }
     $('pnInput').addEventListener('input', validateSign);
+    // Done on the on-screen keyboard puts the keyboard away.
+    function blurOnEnter(e) { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }
+    $('pnInput').addEventListener('keydown', blurOnEnter);
+    typedInput.addEventListener('keydown', blurOnEnter);
 
     // The signature as a JPEG with a white background, cropped to the ink. The PDF
     // embeds JPEG directly (the plugin sandbox can't decompress PNG).
@@ -2110,7 +2345,8 @@
       replay('bdoneView');
     }
     $('bDoneBack').addEventListener('click', function () { renderStatus(); show('bstatus'); });
-    $('bDoneClose').addEventListener('click', function () { renderHub(); show('hub'); });
+    // Done returns to the chart, the same as the single-consent flow.
+    $('bDoneClose').addEventListener('click', closeModal);
 
     /* ---------- DONE (one consent) and VIEWER ---------- */
     function clearViewer() {

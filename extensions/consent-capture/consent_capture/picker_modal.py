@@ -16,6 +16,7 @@ from canvas_sdk.v1.data import Patient
 from logger import log
 
 from consent_capture.constants import METHOD_OPTIONS, NO_STATEMENT_NOTE
+from consent_capture.pdf import latin_letters_without_plain_form
 from consent_capture.service import (
     consent_records,
     is_consent_admin,
@@ -72,6 +73,9 @@ def build_picker_modal(patient_id, staff_id, secrets):
             "records_json": json.dumps(records),
             "method_options_json": json.dumps(list(METHOD_OPTIONS)),
             "practice_json": json.dumps(practice_settings()),
+            # Letters the PDF can't print even folded; the signing screen checks names
+            # against the same list the server uses.
+            "no_fold": latin_letters_without_plain_form(),
             "no_statement_note": NO_STATEMENT_NOTE,
             "is_admin": is_admin,
             "settings_url": SETTINGS_URL,
