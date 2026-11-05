@@ -1,0 +1,1894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provider Queue</title>
+    <style>
+        :root {
+            /* Neutral scale — cool slate */
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+
+            /* Primary — blue */
+            --blue-50: #eff6ff;
+            --blue-100: #dbeafe;
+            --blue-500: #3b82f6;
+            --blue-600: #2563eb;
+            --blue-700: #1d4ed8;
+
+            /* Success — emerald */
+            --emerald-50: #ecfdf5;
+            --emerald-100: #d1fae5;
+            --emerald-200: #a7f3d0;
+            --emerald-500: #10b981;
+            --emerald-600: #059669;
+            --emerald-700: #047857;
+            --emerald-800: #065f46;
+
+            /* Warning — amber */
+            --amber-50: #fffbeb;
+            --amber-100: #fef3c7;
+            --amber-200: #fde68a;
+            --amber-500: #f59e0b;
+            --amber-600: #d97706;
+            --amber-700: #b45309;
+            --amber-800: #92400e;
+
+            /* Danger — rose */
+            --rose-50: #fff1f2;
+            --rose-100: #ffe4e6;
+            --rose-200: #fecdd3;
+            --rose-500: #f43f5e;
+            --rose-600: #e11d48;
+            --rose-700: #be123c;
+            --rose-800: #9f1239;
+
+            /* Indigo — assignment accent */
+            --indigo-50: #eef2ff;
+            --indigo-100: #e0e7ff;
+            --indigo-200: #c7d2fe;
+            --indigo-600: #4f46e5;
+            --indigo-700: #4338ca;
+            --indigo-800: #3730a3;
+
+            /* Functional aliases */
+            --text-primary: var(--gray-900);
+            --text-secondary: var(--gray-500);
+            --text-tertiary: var(--gray-400);
+            --border-color: var(--gray-200);
+            --border-subtle: var(--gray-100);
+            --bg-page: var(--gray-50);
+            --bg-surface: #ffffff;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-full: 9999px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-page);
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ---- Layout ---- */
+        .container {
+            width: 100%;
+            margin: 0;
+            padding: 24px 28px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--gray-900);
+            letter-spacing: -0.02em;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* ---- Connection Status ---- */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            padding: 6px 12px;
+            background: var(--gray-50);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-full);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--gray-400);
+            flex-shrink: 0;
+        }
+
+        .status-dot.connected {
+            background: var(--emerald-500);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+            animation: pulse-glow 2.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }
+            50% { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.08); }
+        }
+
+        /* ---- Buttons ---- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--blue-600);
+            color: white;
+            border-color: var(--blue-700);
+        }
+
+        .btn-primary:hover {
+            background: var(--blue-700);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:disabled {
+            background: var(--gray-200);
+            border-color: var(--gray-200);
+            color: var(--gray-400);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .btn-danger {
+            background: var(--bg-surface);
+            color: var(--rose-600);
+            border-color: var(--rose-200);
+        }
+
+        .btn-danger:hover {
+            background: var(--rose-50);
+            border-color: var(--rose-300);
+        }
+
+        /* ---- Metrics Panel ---- */
+        .metrics-panel {
+            margin-bottom: 20px;
+        }
+
+        .metrics-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease;
+        }
+
+        .metrics-header:hover {
+            background: var(--gray-50);
+        }
+
+        .metrics-header.expanded {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-color: transparent;
+        }
+
+        .metrics-toggle-icon {
+            font-size: 9px;
+            color: var(--text-tertiary);
+            transition: transform 0.2s ease;
+        }
+
+        .metrics-header.expanded .metrics-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .metrics-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            letter-spacing: 0.02em;
+        }
+
+        .metrics-content {
+            display: none;
+            padding: 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-bottom-left-radius: var(--radius-md);
+            border-bottom-right-radius: var(--radius-md);
+        }
+
+        .metrics-content.expanded {
+            display: block;
+        }
+
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .metric-card {
+            background: var(--bg-surface);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 2px;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+        }
+
+        .metric-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+        }
+
+        .metric-card.status-normal .metric-value {
+            color: var(--emerald-600);
+        }
+
+        .metric-card.status-warning .metric-value {
+            color: var(--amber-600);
+        }
+
+        .metric-card.status-critical .metric-value {
+            color: var(--rose-600);
+        }
+
+        .metric-card.status-neutral .metric-value {
+            color: var(--text-primary);
+        }
+
+        /* Alert cards */
+        .alerts-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .alert-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .alert-card.alert-emergent {
+            background: var(--rose-50);
+            color: var(--rose-700);
+            border: 1px solid var(--rose-200);
+        }
+
+        .alert-card.alert-urgent {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border: 1px solid var(--amber-200);
+        }
+
+        .alert-card.alert-waiting {
+            background: var(--rose-50);
+            color: var(--rose-700);
+            border: 1px solid var(--rose-200);
+        }
+
+        .alert-icon {
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .alert-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .alert-emergent .alert-dot {
+            background: var(--rose-500);
+            animation: alert-pulse 1.5s ease-in-out infinite;
+        }
+
+        .alert-urgent .alert-dot {
+            background: var(--amber-500);
+        }
+
+        .alert-waiting .alert-dot {
+            background: var(--rose-500);
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        /* ---- View Tabs ---- */
+        .view-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .view-tabs {
+            display: flex;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .view-tab {
+            padding: 9px 20px;
+            border: none;
+            background: none;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border-right: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .view-tab:last-child {
+            border-right: none;
+        }
+
+        .view-tab:hover {
+            background: var(--gray-50);
+            color: var(--text-primary);
+        }
+
+        .view-tab.active {
+            background: var(--blue-600);
+            color: white;
+            font-weight: 600;
+        }
+
+        /* ---- Queue Table ---- */
+        .queue-table {
+            width: 100%;
+            background: var(--bg-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .queue-table .table-scroll {
+            overflow-x: auto;
+        }
+
+        .queue-table table {
+            width: 100%;
+            min-width: 1100px;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+
+        .queue-table th {
+            padding: 11px 14px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 26px;
+            transition: all 0.15s ease;
+        }
+
+        th.sortable:hover {
+            color: var(--text-secondary);
+            background: var(--gray-100);
+        }
+
+        th.sortable .sort-indicator::after {
+            content: '';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            font-size: 9px;
+            transition: opacity 0.15s ease;
+        }
+
+        th.sortable:hover .sort-indicator::after {
+            content: '\25B2';
+            opacity: 0.35;
+        }
+
+        th.sorted-asc .sort-indicator::after {
+            content: '\25B2';
+            opacity: 1;
+            color: var(--blue-600);
+        }
+
+        th.sorted-desc .sort-indicator::after {
+            content: '\25BC';
+            opacity: 1;
+            color: var(--blue-600);
+        }
+
+        .queue-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .queue-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .queue-table tbody tr {
+            transition: background-color 0.1s ease;
+        }
+
+        .queue-table tbody tr:hover {
+            background: var(--gray-50);
+        }
+
+        /* Prevent wrapping in key columns */
+        .queue-table td:nth-child(1),
+        .queue-table td:nth-child(2),
+        .queue-table td:nth-child(4),
+        .queue-table td:nth-child(5) {
+            white-space: nowrap;
+        }
+
+        .queue-table td:nth-child(3) {
+            min-width: 180px;
+        }
+
+        /* Row entrance animation */
+        @keyframes row-enter {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .queue-table tbody tr {
+            animation: row-enter 0.25s ease forwards;
+            opacity: 0;
+        }
+
+        /* ---- Patient Cell ---- */
+        .patient-name {
+            font-weight: 600;
+            color: var(--blue-600);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+
+        .patient-name:hover {
+            color: var(--blue-700);
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .patient-age-sex {
+            margin-left: 6px;
+            color: var(--text-tertiary);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* ---- Priority Badges ---- */
+        .priority-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+            letter-spacing: 0.01em;
+        }
+
+        .priority-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .priority-routine {
+            background: var(--emerald-50);
+            color: var(--emerald-700);
+            border: 1px solid var(--emerald-200);
+        }
+        .priority-routine .priority-dot { background: var(--emerald-500); }
+
+        .priority-urgent {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border: 1px solid var(--amber-200);
+        }
+        .priority-urgent .priority-dot { background: var(--amber-500); }
+
+        .priority-emergent {
+            background: var(--rose-50);
+            color: var(--rose-700);
+            border: 1px solid var(--rose-200);
+        }
+        .priority-emergent .priority-dot { background: var(--rose-500); }
+
+        /* ---- Status Badges ---- */
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .status-awaiting_assignment {
+            background: var(--indigo-50);
+            color: var(--indigo-700);
+            border: 1px solid var(--indigo-200);
+        }
+
+        .status-waiting_for_provider {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border: 1px solid var(--amber-200);
+        }
+
+        .status-in_progress {
+            background: var(--emerald-50);
+            color: var(--emerald-700);
+            border: 1px solid var(--emerald-200);
+        }
+
+        .status-paused {
+            background: var(--rose-50);
+            color: var(--rose-700);
+            border: 1px solid var(--rose-200);
+        }
+
+        .status-complete {
+            background: var(--gray-100);
+            color: var(--gray-600);
+            border: 1px solid var(--gray-200);
+        }
+
+        /* ---- Wait Time ---- */
+        .wait-time {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+        }
+
+        .wait-time.long {
+            color: var(--rose-600);
+        }
+
+        /* ---- Assignment Column ---- */
+        .assigned-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--indigo-50);
+            border: 1px solid var(--indigo-200);
+            border-radius: var(--radius-full);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--indigo-700);
+        }
+
+        .unassign-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            background: transparent;
+            border: none;
+            color: var(--indigo-600);
+            cursor: pointer;
+            border-radius: 50%;
+            font-size: 12px;
+            line-height: 1;
+            transition: all 0.15s ease;
+            opacity: 0.5;
+        }
+
+        .unassign-btn:hover {
+            background: var(--rose-100);
+            color: var(--rose-600);
+            opacity: 1;
+        }
+
+        /* Provider select — styled to match assigned-badge shape */
+        .staff-select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding: 6px 30px 6px 12px;
+            border: 1.5px dashed var(--gray-300);
+            border-radius: var(--radius-full);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            background-color: var(--bg-surface);
+            color: var(--text-tertiary);
+            min-width: 164px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+
+        .staff-select:hover {
+            border-color: var(--blue-400);
+            border-style: solid;
+            color: var(--text-secondary);
+        }
+
+        .staff-select:focus {
+            outline: none;
+            border-color: var(--blue-500);
+            border-style: solid;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+            color: var(--text-primary);
+        }
+
+        /* ---- Action Buttons (key redesign) ---- */
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: var(--radius-full);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .action-btn svg {
+            flex-shrink: 0;
+        }
+
+        /* Start Visit */
+        .action-btn.action-start {
+            background: var(--emerald-50);
+            color: var(--emerald-700);
+            border-color: var(--emerald-200);
+        }
+
+        .action-btn.action-start:hover {
+            background: var(--emerald-600);
+            color: white;
+            border-color: var(--emerald-600);
+            box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.action-start:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(5, 150, 105, 0.2);
+        }
+
+        /* Pause */
+        .action-btn.action-pause {
+            background: var(--amber-50);
+            color: var(--amber-700);
+            border-color: var(--amber-200);
+        }
+
+        .action-btn.action-pause:hover {
+            background: var(--amber-500);
+            color: white;
+            border-color: var(--amber-500);
+            box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.action-pause:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(217, 119, 6, 0.2);
+        }
+
+        /* Resume */
+        .action-btn.action-resume {
+            background: var(--emerald-50);
+            color: var(--emerald-700);
+            border-color: var(--emerald-200);
+        }
+
+        .action-btn.action-resume:hover {
+            background: var(--emerald-600);
+            color: white;
+            border-color: var(--emerald-600);
+            box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.action-resume:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(5, 150, 105, 0.2);
+        }
+
+        /* ---- Error Message ---- */
+        .error-message {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--rose-50);
+            color: var(--rose-700);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--rose-200);
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* ---- Empty & Loading States ---- */
+        .empty-state {
+            text-align: center;
+            padding: 72px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 16px;
+            color: var(--gray-300);
+        }
+
+        .empty-state p:first-of-type {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .empty-state p:last-of-type {
+            font-size: 13px;
+            margin-top: 6px;
+            color: var(--text-tertiary);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 48px;
+            color: var(--text-tertiary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-left: 8px;
+            border: 2px solid var(--gray-200);
+            border-top-color: var(--blue-500);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ---- Responsive ---- */
+        @media (max-width: 1200px) {
+            .metrics-row {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 992px) {
+            .queue-table .table-scroll {
+                overflow-x: auto;
+            }
+
+            .queue-table table {
+                min-width: 900px;
+            }
+
+            .view-controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 12px;
+                text-align: center;
+            }
+
+            .metrics-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px 14px;
+            }
+
+            .metrics-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .metric-value {
+                font-size: 22px;
+            }
+
+            .view-tabs {
+                flex-wrap: wrap;
+            }
+
+            .view-tab {
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+
+            .btn {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
+            .staff-select {
+                min-width: 140px;
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .metrics-row {
+                grid-template-columns: 1fr;
+            }
+
+            .view-tab {
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1>On-Demand Provider Queue</h1>
+            </div>
+            <div class="header-right">
+                <button id="demoButton" class="btn btn-primary" onclick="addDemoPatient()" style="display: none;">
+                    + Add Demo Patient
+                </button>
+                <button id="clearQueueButton" class="btn btn-danger" onclick="clearQueue()" style="display: none;">
+                    Clear Queue
+                </button>
+                <div class="connection-status">
+                    <span class="status-dot" id="connectionStatus"></span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="metricsPanel" class="metrics-panel">
+            <div class="metrics-header" id="metricsHeader" onclick="toggleMetrics()">
+                <span class="metrics-toggle-icon">&#9660;</span>
+                <span class="metrics-title">Queue metrics</span>
+            </div>
+            <div class="metrics-content" id="metricsContent">
+                <div class="metrics-row">
+                    <div class="metric-card status-neutral" id="metric-in-queue">
+                        <div class="metric-value">-</div>
+                        <div class="metric-label">In queue</div>
+                    </div>
+                    <div class="metric-card status-neutral" id="metric-waiting">
+                        <div class="metric-value">-</div>
+                        <div class="metric-label">Waiting</div>
+                    </div>
+                    <div class="metric-card status-neutral" id="metric-in-progress">
+                        <div class="metric-value">-</div>
+                        <div class="metric-label">In progress</div>
+                    </div>
+                    <div class="metric-card status-neutral" id="metric-avg-wait">
+                        <div class="metric-value">-</div>
+                        <div class="metric-label">Avg wait</div>
+                    </div>
+                    <div class="metric-card status-neutral" id="metric-max-wait">
+                        <div class="metric-value">-</div>
+                        <div class="metric-label">Longest wait</div>
+                    </div>
+                </div>
+                <div class="alerts-row" id="alertsRow"></div>
+            </div>
+        </div>
+
+        <div class="view-controls">
+            <div class="view-tabs">
+                <button class="view-tab active" data-view="all" onclick="setView('all')">All Patients</button>
+                <button class="view-tab" data-view="unassigned" onclick="setView('unassigned')">Unassigned</button>
+                <button class="view-tab" data-view="mine" onclick="setView('mine')">My Patients</button>
+                <button class="view-tab" data-view="completed" onclick="setView('completed')">Completed</button>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+        <div id="loadingState" class="loading">Loading queue</div>
+
+        <div id="queueContent" class="queue-table" style="display: none;">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="patient_name" onclick="handleColumnSort('patient_name')">Patient<span class="sort-indicator"></span></th>
+                            <th>DOB</th>
+                            <th>Reason for Visit</th>
+                            <th class="sortable" data-sort="priority" onclick="handleColumnSort('priority')">Priority<span class="sort-indicator"></span></th>
+                            <th class="sortable sorted-asc" data-sort="created_at" onclick="handleColumnSort('created_at')">Wait Time<span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="status" onclick="handleColumnSort('status')">Status<span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="assigned_provider_name" onclick="handleColumnSort('assigned_provider_name')">Assigned To<span class="sort-indicator"></span></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queueBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            <p>No patients in queue</p>
+            <p>New requests will appear here automatically</p>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const API_BASE = window.location.origin + '/plugin-io/api/canvas__ondemand_provider_queue/routes';
+        const WS_URL = window.location.origin.replace('https://', 'wss://').replace('http://', 'ws://') + '/plugin-io/ws/canvas__ondemand_provider_queue/queue/';
+
+        // State
+        let entries = [];
+        let completedEntries = [];
+        let completedLoaded = false;
+        let staffList = [];
+        let currentView = 'all';
+        let currentUserId = null;
+        let ws = null;
+        let reconnectAttempts = 0;
+        let reconnectTimer = null;
+
+        // Sort state
+        let sortColumn = 'created_at';
+        let sortDirection = 'asc';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStaff();
+            loadConfig();
+            loadQueue();
+            connectWebSocket();
+            setInterval(loadQueue, 30000);
+        });
+
+        // --- WebSocket ---
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = function() {
+                    console.log('WebSocket connected');
+                    updateConnectionStatus(true);
+                    reconnectAttempts = 0;
+                    // Pushes sent while the socket was down are lost: re-fetch on every (re)connect.
+                    loadQueue();
+                    if (completedLoaded) loadCompletedEntries();
+                };
+
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                };
+
+                ws.onclose = function() {
+                    console.log('WebSocket disconnected');
+                    updateConnectionStatus(false);
+                    attemptReconnect();
+                };
+
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateConnectionStatus(false);
+                };
+            } catch (error) {
+                console.error('WebSocket connection error:', error);
+                updateConnectionStatus(false);
+                attemptReconnect();
+            }
+        }
+
+        // Keep reconnecting (deploys close every socket at once): capped backoff with jitter.
+        function attemptReconnect() {
+            if (reconnectTimer) return;
+            reconnectAttempts++;
+            const base = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+            const delay = base / 2 + Math.random() * base / 2;
+            reconnectTimer = setTimeout(function() {
+                reconnectTimer = null;
+                connectWebSocket();
+            }, delay);
+        }
+
+        window.addEventListener('online', function() {
+            if (!ws || ws.readyState === WebSocket.CLOSED) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+                connectWebSocket();
+            }
+        });
+
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+
+            if (connected) {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Live';
+            } else {
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('WebSocket message:', data);
+
+            switch (data.type) {
+                case 'ENTRY_CLAIMED':
+                    const claimedEntry = entries.find(e => e.id === data.entry_id);
+                    if (claimedEntry) {
+                        claimedEntry.status = 'waiting_for_provider';
+                        claimedEntry.assigned_provider_id = data.provider_id;
+                        claimedEntry.assigned_provider_name = data.provider_name;
+                        renderQueue();
+                    }
+                    break;
+                case 'ENTRY_STARTED':
+                    const startedEntry = entries.find(e => e.id === data.entry_id);
+                    if (startedEntry) {
+                        startedEntry.status = data.status || 'in_progress';
+                        renderQueue();
+                    }
+                    break;
+                case 'STATUS_CHANGED':
+                    const changedEntry = entries.find(e => e.id === data.entry_id);
+                    if (changedEntry) {
+                        changedEntry.status = data.status;
+                        renderQueue();
+                    } else {
+                        loadQueue();
+                    }
+                    break;
+                case 'ENTRY_COMPLETED':
+                    entries = entries.filter(e => e.id !== data.entry_id);
+                    if (completedLoaded) {
+                        loadCompletedEntries();
+                    }
+                    if (currentView !== 'completed') {
+                        renderQueue();
+                    }
+                    break;
+                default:
+                    loadQueue();
+            }
+        }
+
+        // --- API Calls ---
+        async function loadStaff() {
+            try {
+                const response = await fetch(`${API_BASE}/staff`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                staffList = data.staff || [];
+
+                if (data.current_user && data.current_user.id) {
+                    currentUserId = data.current_user.id;
+                }
+
+                renderQueue();
+            } catch (error) {
+                console.error('Failed to load staff:', error);
+            }
+        }
+
+        function setView(view) {
+            currentView = view;
+            document.querySelectorAll('.view-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.view === view);
+            });
+            if (view === 'completed' && !completedLoaded) {
+                loadCompletedEntries();
+                return;
+            }
+            renderQueue();
+        }
+
+        async function loadQueue() {
+            try {
+                const response = await fetch(`${API_BASE}/queue`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                entries = data.entries || [];
+                hideError();
+                renderQueue();
+            } catch (error) {
+                console.error('Failed to load queue:', error);
+                showError('Failed to load queue. Please refresh the page.');
+            }
+        }
+
+        async function loadCompletedEntries() {
+            try {
+                const response = await fetch(`${API_BASE}/queue?view=completed`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                completedEntries = data.entries || [];
+                completedLoaded = true;
+                renderQueue();
+            } catch (error) {
+                console.error('Failed to load completed entries:', error);
+                showError('Failed to load completed entries.');
+            }
+        }
+
+        // --- Rendering ---
+        function renderQueue() {
+            const loadingState = document.getElementById('loadingState');
+            const queueContent = document.getElementById('queueContent');
+            const emptyState = document.getElementById('emptyState');
+            const queueBody = document.getElementById('queueBody');
+
+            loadingState.style.display = 'none';
+            queueContent.style.display = 'block';
+
+            const metricsPanel = document.getElementById('metricsPanel');
+            if (currentView === 'completed') {
+                metricsPanel.style.display = 'none';
+                let filtered = sortEntries(completedEntries, sortColumn, sortDirection);
+
+                if (filtered.length === 0) {
+                    emptyState.style.display = 'block';
+                    queueBody.innerHTML = '';
+                    return;
+                }
+
+                emptyState.style.display = 'none';
+                queueBody.innerHTML = filtered.map((entry, idx) => renderRow(entry, idx)).join('');
+                return;
+            }
+
+            metricsPanel.style.display = '';
+
+            let viewFiltered = applyViewFilter(entries);
+            renderMetrics(viewFiltered);
+
+            let filtered = sortEntries(viewFiltered, sortColumn, sortDirection);
+
+            if (filtered.length === 0) {
+                emptyState.style.display = 'block';
+                queueBody.innerHTML = '';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            queueBody.innerHTML = filtered.map((entry, idx) => renderRow(entry, idx)).join('');
+        }
+
+        function applyViewFilter(entries) {
+            let filtered = [...entries];
+
+            if (currentView === 'unassigned') {
+                filtered = filtered.filter(e => !e.assigned_provider_id);
+            } else if (currentView === 'mine' && currentUserId) {
+                filtered = filtered.filter(e => e.assigned_provider_id === currentUserId);
+            }
+
+            return filtered;
+        }
+
+        function handleColumnSort(column) {
+            if (sortColumn === column) {
+                if (sortDirection === 'asc') {
+                    sortDirection = 'desc';
+                } else {
+                    sortColumn = 'created_at';
+                    sortDirection = 'asc';
+                }
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+
+            updateColumnHeaders();
+            renderQueue();
+        }
+
+        function updateColumnHeaders() {
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sorted-asc', 'sorted-desc');
+            });
+
+            const currentHeader = document.querySelector(`th[data-sort="${sortColumn}"]`);
+            if (currentHeader) {
+                currentHeader.classList.add(`sorted-${sortDirection}`);
+            }
+        }
+
+        function sortEntries(entries, column, direction) {
+            const sorted = [...entries];
+            const multiplier = direction === 'desc' ? -1 : 1;
+
+            switch (column) {
+                case 'patient_name':
+                    return sortByPatientName(sorted, multiplier);
+                case 'priority':
+                    return sortByPriority(sorted, multiplier);
+                case 'created_at':
+                    return sortByWaitTime(sorted, multiplier);
+                case 'status':
+                    return sortByStatus(sorted, multiplier);
+                case 'assigned_provider_name':
+                    return sortByAssignedProvider(sorted, multiplier);
+                default:
+                    return sortByWaitTime(sorted, 1);
+            }
+        }
+
+        function sortByPatientName(entries, multiplier) {
+            return entries.sort((a, b) => {
+                const nameA = (a.patient_name || '').toLowerCase();
+                const nameB = (b.patient_name || '').toLowerCase();
+                return nameA.localeCompare(nameB) * multiplier;
+            });
+        }
+
+        function sortByPriority(entries, multiplier) {
+            const PRIORITY_ORDER = { emergent: 0, urgent: 1, routine: 2 };
+            return entries.sort((a, b) => {
+                const diff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+                if (diff !== 0) return diff * multiplier;
+                return new Date(a.created_at) - new Date(b.created_at);
+            });
+        }
+
+        function sortByWaitTime(entries, multiplier) {
+            return entries.sort((a, b) => {
+                return (new Date(a.created_at) - new Date(b.created_at)) * multiplier;
+            });
+        }
+
+        function sortByStatus(entries, multiplier) {
+            const STATUS_ORDER = {
+                awaiting_assignment: 0,
+                waiting_for_provider: 1,
+                in_progress: 2,
+                paused: 3,
+                complete: 4
+            };
+            return entries.sort((a, b) => {
+                const diff = (STATUS_ORDER[a.status] || 0) - (STATUS_ORDER[b.status] || 0);
+                if (diff !== 0) return diff * multiplier;
+                return new Date(a.created_at) - new Date(b.created_at);
+            });
+        }
+
+        function sortByAssignedProvider(entries, multiplier) {
+            return entries.sort((a, b) => {
+                const nameA = a.assigned_provider_name || '';
+                const nameB = b.assigned_provider_name || '';
+                if (!nameA && !nameB) return 0;
+                if (!nameA) return multiplier;
+                if (!nameB) return -multiplier;
+                return nameA.localeCompare(nameB) * multiplier;
+            });
+        }
+
+        const STATUS_LABELS = {
+            'awaiting_assignment': 'Awaiting Assignment',
+            'waiting_for_provider': 'Waiting for Provider',
+            'in_progress': 'In Progress',
+            'paused': 'Paused',
+            'complete': 'Complete'
+        };
+
+        function renderRow(entry, idx) {
+            const waitTime = formatWaitTime(entry.created_at);
+            const isLongWait = getWaitMinutes(entry.created_at) > 30;
+            const hasAssignee = !!entry.assigned_provider_name;
+            const delay = Math.min(idx * 0.03, 0.3);
+
+            const staffOptions = staffList.map(s =>
+                `<option value="${s.id}" ${entry.assigned_provider_id === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
+            ).join('');
+
+            let assignmentCell;
+            const isComplete = entry.status === 'complete';
+            if (isComplete) {
+                assignmentCell = hasAssignee
+                    ? `<span style="color: var(--text-secondary); font-size: 13px;">${escapeHtml(entry.assigned_provider_name)}</span>`
+                    : `<span style="color: var(--text-tertiary); font-size: 13px;">-</span>`;
+            } else if (hasAssignee) {
+                assignmentCell = `
+                    <div class="assigned-badge">
+                        <span>${escapeHtml(entry.assigned_provider_name)}</span>
+                        <button class="unassign-btn" onclick="updateAssignment('${entry.id}', 'unassign')" title="Unassign">&times;</button>
+                    </div>
+                `;
+            } else {
+                assignmentCell = `
+                    <select class="staff-select" id="staff-${entry.id}" onchange="assignStaff('${entry.id}')">
+                        <option value="">Select provider...</option>
+                        ${staffOptions}
+                    </select>
+                `;
+            }
+
+            const ageSexDisplay = formatAgeSex(entry.patient_age, entry.patient_sex);
+
+            const rowStyle = isComplete
+                ? `animation-delay: ${delay}s; opacity: 0.75;`
+                : `animation-delay: ${delay}s`;
+
+            return `
+                <tr style="${rowStyle}">
+                    <td>
+                        <a href="/patient/${entry.patient_id}" target="_top" class="patient-name">
+                            ${escapeHtml(entry.patient_name || 'Unknown')}
+                        </a>
+                        ${ageSexDisplay ? `<span class="patient-age-sex">${ageSexDisplay}</span>` : ''}
+                    </td>
+                    <td>${formatDate(entry.patient_dob)}</td>
+                    <td>${escapeHtml(entry.reason_for_visit || '-')}</td>
+                    <td>
+                        <span class="priority-badge priority-${entry.priority}">
+                            <span class="priority-dot"></span>
+                            ${entry.priority}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="wait-time ${isLongWait ? 'long' : ''}">
+                            ${waitTime}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge status-${entry.status}">
+                            ${formatStatus(entry.status)}
+                        </span>
+                    </td>
+                    <td>${assignmentCell}</td>
+                    <td>${isComplete ? '' : renderActionButton(entry)}</td>
+                </tr>
+            `;
+        }
+
+        function renderActionButton(entry) {
+            switch (entry.status) {
+                case 'waiting_for_provider':
+                    return `<button class="action-btn action-start" onclick="startVisit('${entry.id}', '${entry.patient_id}')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                        Start Visit
+                    </button>`;
+                case 'in_progress':
+                    return `<button class="action-btn action-pause" onclick="pauseVisit('${entry.id}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                        Pause
+                    </button>`;
+                case 'paused':
+                    return `<button class="action-btn action-resume" onclick="resumeVisit('${entry.id}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+                        Resume
+                    </button>`;
+                default:
+                    return '';
+            }
+        }
+
+        function assignStaff(entryId) {
+            const select = document.getElementById(`staff-${entryId}`);
+            const staffId = select ? select.value : null;
+            if (staffId) {
+                updateAssignment(entryId, 'assign', staffId);
+            }
+        }
+
+        // --- Visit Lifecycle ---
+        async function startVisit(entryId, patientId) {
+            window.open(`/patient/${patientId}`, '_blank');
+
+            try {
+                const response = await fetch(`${API_BASE}/start-visit`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entry_id: entryId })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    const entry = entries.find(e => e.id === entryId);
+                    if (entry) {
+                        entry.status = 'in_progress';
+                        if (data.note_id) entry.note_id = data.note_id;
+                        renderQueue();
+                    }
+                } else {
+                    showError(data.error || 'Failed to start visit');
+                }
+            } catch (error) {
+                showError('Failed to start visit');
+            }
+        }
+
+        async function pauseVisit(entryId) {
+            try {
+                const response = await fetch(`${API_BASE}/pause-visit`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entry_id: entryId })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    const entry = entries.find(e => e.id === entryId);
+                    if (entry) {
+                        entry.status = 'paused';
+                        renderQueue();
+                    }
+                } else {
+                    showError(data.error || 'Failed to pause visit');
+                }
+            } catch (error) {
+                console.error('Failed to pause visit:', error);
+                showError('Failed to pause visit');
+            }
+        }
+
+        async function resumeVisit(entryId) {
+            try {
+                const response = await fetch(`${API_BASE}/resume-visit`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entry_id: entryId })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    const entry = entries.find(e => e.id === entryId);
+                    if (entry) {
+                        entry.status = 'in_progress';
+                        renderQueue();
+                    }
+                } else {
+                    showError(data.error || 'Failed to resume visit');
+                }
+            } catch (error) {
+                console.error('Failed to resume visit:', error);
+                showError('Failed to resume visit');
+            }
+        }
+
+        // --- Utilities ---
+        function formatWaitTime(createdAt) {
+            const minutes = getWaitMinutes(createdAt);
+
+            if (minutes < 60) {
+                return `${minutes} min`;
+            }
+
+            const hours = Math.floor(minutes / 60);
+            const remainingMinutes = minutes % 60;
+
+            if (remainingMinutes === 0) {
+                return `${hours}h`;
+            }
+
+            return `${hours}h ${remainingMinutes}m`;
+        }
+
+        function getWaitMinutes(createdAt) {
+            const created = new Date(createdAt);
+            const now = new Date();
+            const minutes = Math.floor((now - created) / (1000 * 60));
+            return Math.max(0, minutes);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        }
+
+        function formatAgeSex(age, sex) {
+            if (age === null && !sex) return '';
+            const ageStr = age !== null ? age : '?';
+            let sexStr = '';
+            if (sex) {
+                const sexLower = sex.toLowerCase();
+                if (sexLower === 'male' || sexLower === 'm') sexStr = 'M';
+                else if (sexLower === 'female' || sexLower === 'f') sexStr = 'F';
+                else if (sexLower === 'other' || sexLower === 'o') sexStr = 'O';
+                else if (sexLower === 'unknown' || sexLower === 'u') sexStr = 'U';
+                else sexStr = sex.charAt(0).toUpperCase();
+            }
+            if (sexStr) {
+                return `${ageStr}${sexStr}`;
+            }
+            return `${ageStr}`;
+        }
+
+        function formatStatus(status) {
+            return STATUS_LABELS[status] || status;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.style.display = 'flex';
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // --- Metrics & KPIs ---
+        function toggleMetrics() {
+            const header = document.getElementById('metricsHeader');
+            const content = document.getElementById('metricsContent');
+            const isExpanded = header.classList.contains('expanded');
+
+            if (isExpanded) {
+                header.classList.remove('expanded');
+                content.classList.remove('expanded');
+            } else {
+                header.classList.add('expanded');
+                content.classList.add('expanded');
+            }
+        }
+
+        function calculateKPIs(entries) {
+            const waiting = entries.filter(e =>
+                e.status === 'awaiting_assignment' || e.status === 'waiting_for_provider'
+            );
+            const inProgress = entries.filter(e =>
+                e.status === 'in_progress' || e.status === 'paused'
+            );
+            const inQueue = entries.filter(e => e.status !== 'complete').length;
+
+            const allActive = entries.filter(e => e.status !== 'complete');
+            const waitTimes = allActive.map(e => getWaitMinutes(e.created_at));
+            const avgWait = waitTimes.length > 0
+                ? Math.round(waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length)
+                : 0;
+            const maxWait = waitTimes.length > 0
+                ? Math.max(...waitTimes)
+                : 0;
+
+            const emergentWaiting = waiting.filter(e => e.priority === 'emergent').length;
+            const urgentWaiting = waiting.filter(e => e.priority === 'urgent').length;
+            const waitingOver30 = waiting.filter(e => getWaitMinutes(e.created_at) > 30).length;
+
+            return {
+                inQueue,
+                waiting: waiting.length,
+                inProgress: inProgress.length,
+                avgWait,
+                maxWait,
+                emergentWaiting,
+                urgentWaiting,
+                waitingOver30
+            };
+        }
+
+        function getWaitingStatus(count) {
+            if (count <= 3) return 'normal';
+            if (count <= 7) return 'warning';
+            return 'critical';
+        }
+
+        function getAvgWaitStatus(minutes) {
+            if (minutes < 15) return 'normal';
+            if (minutes <= 30) return 'warning';
+            return 'critical';
+        }
+
+        function getMaxWaitStatus(minutes) {
+            if (minutes < 20) return 'normal';
+            if (minutes <= 45) return 'warning';
+            return 'critical';
+        }
+
+        function formatMinutes(minutes) {
+            if (minutes === 0) return '0 min';
+            if (minutes < 60) return `${minutes} min`;
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            if (mins === 0) return `${hours}h`;
+            return `${hours}h ${mins}m`;
+        }
+
+        function renderMetrics(filteredEntries) {
+            const kpis = calculateKPIs(filteredEntries);
+
+            updateMetricCard('metric-in-queue', kpis.inQueue, 'neutral');
+            updateMetricCard('metric-waiting', kpis.waiting, getWaitingStatus(kpis.waiting));
+            updateMetricCard('metric-in-progress', kpis.inProgress, 'neutral');
+            updateMetricCard('metric-avg-wait', formatMinutes(kpis.avgWait), getAvgWaitStatus(kpis.avgWait));
+            updateMetricCard('metric-max-wait', formatMinutes(kpis.maxWait), getMaxWaitStatus(kpis.maxWait));
+
+            const alerts = [];
+
+            if (kpis.emergentWaiting > 0) {
+                alerts.push(`<div class="alert-card alert-emergent">
+                    <span class="alert-dot"></span>
+                    <span>${kpis.emergentWaiting} Emergent Waiting</span>
+                </div>`);
+            }
+
+            if (kpis.urgentWaiting > 0) {
+                alerts.push(`<div class="alert-card alert-urgent">
+                    <span class="alert-dot"></span>
+                    <span>${kpis.urgentWaiting} Urgent Waiting</span>
+                </div>`);
+            }
+
+            if (kpis.waitingOver30 > 0) {
+                alerts.push(`<div class="alert-card alert-waiting">
+                    <span class="alert-dot"></span>
+                    <span>${kpis.waitingOver30} Waiting &gt;30m</span>
+                </div>`);
+            }
+
+            document.getElementById('alertsRow').innerHTML = alerts.join('');
+        }
+
+        function updateMetricCard(id, value, status) {
+            const card = document.getElementById(id);
+            if (!card) return;
+
+            card.querySelector('.metric-value').textContent = value;
+
+            card.classList.remove('status-normal', 'status-warning', 'status-critical', 'status-neutral');
+            card.classList.add(`status-${status}`);
+        }
+
+        // --- Demo Controls ---
+        async function loadConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/config`, { credentials: 'include' });
+                const config = await response.json();
+                if (config.demo_mode_enabled) {
+                    document.getElementById('demoButton').style.display = 'inline-flex';
+                    document.getElementById('clearQueueButton').style.display = 'inline-flex';
+                }
+            } catch (error) {
+                console.log('Config not loaded:', error);
+            }
+        }
+
+        async function addDemoPatient() {
+            const button = document.getElementById('demoButton');
+            button.disabled = true;
+            button.textContent = 'Adding...';
+
+            try {
+                const response = await fetch(`${API_BASE}/demo-add-patient`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadQueue();
+                } else {
+                    showError(data.error || 'Failed to add demo patient');
+                }
+            } catch (error) {
+                showError('Failed to add demo patient');
+            } finally {
+                button.disabled = false;
+                button.textContent = '+ Add Demo Patient';
+            }
+        }
+
+        async function clearQueue() {
+            const button = document.getElementById('clearQueueButton');
+            button.disabled = true;
+            button.textContent = 'Clearing...';
+
+            try {
+                const response = await fetch(`${API_BASE}/demo-clear-queue`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadQueue();
+                } else {
+                    showError(data.error || 'Failed to clear queue');
+                }
+            } catch (error) {
+                showError('Failed to clear queue');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Clear Queue';
+            }
+        }
+
+        // --- Provider Assignment ---
+        async function updateAssignment(entryId, action, staffId = null) {
+            try {
+                const payload = { entry_id: entryId, action: action };
+                if (staffId) {
+                    payload.staff_id = staffId;
+                }
+
+                const response = await fetch(`${API_BASE}/update-assignment`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadQueue();
+                } else {
+                    showError(data.error || 'Failed to update assignment');
+                }
+            } catch (error) {
+                showError('Failed to update assignment');
+            }
+        }
+    </script>
+</body>
+</html>
