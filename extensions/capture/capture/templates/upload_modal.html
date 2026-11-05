@@ -692,7 +692,9 @@
     };
     img.onload = function () {
       cropper = new Cropper(img, {
-        viewMode: 1, dragMode: "none", autoCropArea: 0.9, background: false,
+        // The crop box starts on the whole photo, so a page kept without touching it is
+        // saved whole (a signature or date near the edge isn't trimmed by default).
+        viewMode: 1, dragMode: "none", autoCropArea: 1, background: false,
         guides: true, center: true, cropBoxMovable: true, cropBoxResizable: true,
         toggleDragModeOnDblclick: false, movable: false, zoomable: false,
         scalable: false, rotatable: true, responsive: true, checkCrossOrigin: false,
