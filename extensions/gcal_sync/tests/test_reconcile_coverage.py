@@ -362,13 +362,15 @@ def test_purge_holds_chunk_partial(mocker):
     se = mocker.patch("gcal_sync.reconcile.ScheduleEvent")
     iem = mocker.patch("gcal_sync.reconcile.InboundEventMapping")
     phc = mocker.patch("gcal_sync.reconcile.PendingHoldCreate")
+    rdh = mocker.patch("gcal_sync.reconcile.RemovedDayHold")
     mapping = SimpleNamespace(canvas_staff_id="14", google_calendar_id="cal@x")
     effects, last_id, done = purge_holds_chunk(mapping, limit=5, after_id="100")
     assert len(effects) == 3
     assert done is True  # 3 < 5 = done
-    # When done, mappings and pending markers are cleared
+    # When done, mappings, pending markers and removed-day records are cleared
     iem.objects.filter.assert_called_once_with(google_calendar_id="cal@x")
     phc.objects.filter.assert_called_once_with(google_calendar_id="cal@x")
+    rdh.objects.filter.assert_called_once_with(google_calendar_id="cal@x")
 
 
 def test_purge_holds_chunk_not_done_when_full(mocker):
@@ -399,6 +401,7 @@ def test_purge_holds_chunk_empty_result(mocker):
     se = mocker.patch("gcal_sync.reconcile.ScheduleEvent")
     iem = mocker.patch("gcal_sync.reconcile.InboundEventMapping")
     phc = mocker.patch("gcal_sync.reconcile.PendingHoldCreate")
+    mocker.patch("gcal_sync.reconcile.RemovedDayHold")
     mapping = SimpleNamespace(canvas_staff_id="14", google_calendar_id="cal@x")
     effects, last_id, done = purge_holds_chunk(mapping, limit=10, after_id="prev")
     assert effects == []
