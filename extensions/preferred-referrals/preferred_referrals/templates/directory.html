@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preferred referrals</title>
+<style>
+  :root { --ink:#1d2733; --muted:#5b6876; --line:#dde3ea; --brand:#1f5f8b; --bg:#f6f8fa; --ok:#1d7a4d; --bad:#a3312a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:1080px; margin:0 auto; padding:24px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  section { background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px; }
+  .stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .stat { flex:1 1 140px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .stat b { display:block; font-size:22px; }
+  .stat span { color:var(--muted); font-size:12px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; color:var(--muted); font-weight:600; }
+  tr.inactive td { color:var(--muted); }
+  button, select { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; min-height:32px; }
+  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .msg { margin-top:10px; }
+  .msg.ok { color:var(--ok); } .msg.bad { color:var(--bad); }
+  code { background:var(--bg); padding:1px 4px; border-radius:4px; }
+  .pill { font-size:11px; padding:1px 7px; border-radius:10px; background:#e6f1e9; color:var(--ok); }
+  .pill.off { background:#eee; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Preferred referrals</h1>
+  <p class="sub">Practices you prefer to refer to. They show first, marked <b>Preferred</b>, when staff search in a Refer command.</p>
+
+  <section>
+    <div class="row" style="justify-content:space-between">
+      <h2>Referral report</h2>
+      <label>Window
+        <select id="days">
+          <option value="30">30 days</option>
+          <option value="90" selected>90 days</option>
+          <option value="365">365 days</option>
+        </select>
+      </label>
+    </div>
+    <div class="stats" id="stats"></div>
+    <table id="by-provider"><thead><tr><th>Preferred provider</th><th>Specialty</th><th>Referrals</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  {% if is_admin %}
+  <section>
+    <h2>Import a CSV</h2>
+    <p class="sub" style="margin-bottom:10px">Header row required. Needs <code>first_name</code>, <code>specialty</code>, <code>business_address</code>. Optional: <code>last_name</code>, <code>practice_name</code>, <code>business_phone</code>, <code>business_fax</code>, <code>npi</code>, <code>direct_address</code>, <code>notes</code>. For a practice, put its name in <code>first_name</code> and leave <code>last_name</code> empty. Re-importing a row updates it; nothing is duplicated.</p>
+    <div class="row">
+      <input type="file" id="csv" accept=".csv,text/csv">
+      <button class="primary" id="import" disabled>Import</button>
+    </div>
+    <div class="msg" id="import-msg" role="status"></div>
+  </section>
+  {% endif %}
+
+  <section>
+    <h2>Directory</h2>
+    <table id="providers"><thead><tr><th>Name</th><th>Specialty</th><th>Address</th><th>Phone / fax</th><th>Referrals</th><th>Status</th>{% if is_admin %}<th></th>{% endif %}</tr></thead><tbody></tbody></table>
+    <div class="msg" id="list-msg"></div>
+  </section>
+</main>
+<script>
+(function () {
+  var BASE = "/plugin-io/api/preferred_referrals";
+  var IS_ADMIN = {{ is_admin|yesno:"true,false" }};
+  var CHUNK = {{ max_import_rows }};
+
+  function el(tag, text, cls) {
+    var node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (cls) node.className = cls;
+    return node;
+  }
+  function getJSON(path) {
+    return fetch(BASE + path, { credentials: "same-origin" }).then(function (r) {
+      return r.json().then(function (body) { if (!r.ok) throw new Error(body.error || r.status); return body; });
+    });
+  }
+  function postJSON(path, data) {
+    return fetch(BASE + path, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(data || {})
+    }).then(function (r) {
+      return r.json().then(function (body) { if (!r.ok) throw new Error(body.error || r.status); return body; });
+    });
+  }
+
+  // RFC 4180-ish: quoted fields, doubled quotes, commas and newlines inside quotes.
+  function parseCSV(text) {
+    var rows = [], row = [], field = "", quoted = false, i, c;
+    text = text.replace(/^﻿/, "");
+    for (i = 0; i < text.length; i++) {
+      c = text[i];
+      if (quoted) {
+        if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (c === '"') { quoted = false; }
+        else { field += c; }
+      } else if (c === '"') { quoted = true; }
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = ""; rows.push(row); row = [];
+      } else { field += c; }
+    }
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    rows = rows.filter(function (r) { return r.some(function (v) { return v.trim() !== ""; }); });
+    if (!rows.length) return [];
+    var header = rows[0].map(function (h) { return h.trim().toLowerCase().replace(/\s+/g, "_"); });
+    return rows.slice(1).map(function (r) {
+      var obj = {};
+      header.forEach(function (h, idx) { obj[h] = (r[idx] || "").trim(); });
+      return obj;
+    });
+  }
+
+  function loadReport() {
+    var days = document.getElementById("days").value;
+    getJSON("/report?days=" + encodeURIComponent(days)).then(function (data) {
+      var stats = document.getElementById("stats");
+      stats.replaceChildren();
+      [
+        [data.total, "referrals sent"],
+        [data.to_preferred, "to preferred providers"],
+        [data.preferred_share === null ? "-" : Math.round(data.preferred_share * 100) + "%", "preferred share"],
+        [data.awaiting_report, "awaiting a consult report"]
+      ].forEach(function (pair) {
+        var box = el("div", null, "stat");
+        box.appendChild(el("b", pair[0]));
+        box.appendChild(el("span", pair[1]));
+        stats.appendChild(box);
+      });
+      var body = document.querySelector("#by-provider tbody");
+      body.replaceChildren();
+      if (!data.by_provider.length) {
+        var tr = el("tr"); var td = el("td", "No referrals to preferred providers in this window."); td.colSpan = 3;
+        tr.appendChild(td); body.appendChild(tr);
+      }
+      data.by_provider.forEach(function (row) {
+        var tr = el("tr");
+        tr.appendChild(el("td", row.name)); tr.appendChild(el("td", row.specialty)); tr.appendChild(el("td", row.referrals));
+        body.appendChild(tr);
+      });
+    }).catch(function (err) {
+      document.getElementById("stats").textContent = "Could not load the report: " + err.message;
+    });
+  }
+
+  function loadProviders() {
+    getJSON("/providers").then(function (data) {
+      var body = document.querySelector("#providers tbody");
+      body.replaceChildren();
+      if (!data.providers.length) {
+        var tr = el("tr"); var td = el("td", "No preferred providers yet." + (IS_ADMIN ? " Import a CSV to add some." : ""));
+        td.colSpan = IS_ADMIN ? 7 : 6; tr.appendChild(td); body.appendChild(tr);
+      }
+      data.providers.forEach(function (p) {
+        var tr = el("tr", null, p.is_active ? "" : "inactive");
+        var name = el("td", p.name);
+        if (p.practice_name && p.practice_name !== p.name) { name.appendChild(el("div", p.practice_name, "sub")); }
+        tr.appendChild(name);
+        tr.appendChild(el("td", p.specialty));
+        tr.appendChild(el("td", p.business_address));
+        tr.appendChild(el("td", [p.business_phone, p.business_fax ? "fax " + p.business_fax : ""].filter(Boolean).join(" / ")));
+        tr.appendChild(el("td", p.referrals));
+        var status = el("td"); status.appendChild(el("span", p.is_active ? "Active" : "Inactive", p.is_active ? "pill" : "pill off"));
+        tr.appendChild(status);
+        if (IS_ADMIN) {
+          var cell = el("td");
+          var btn = el("button", p.is_active ? "Deactivate" : "Reactivate");
+          btn.addEventListener("click", function () {
+            btn.disabled = true;
+            postJSON("/providers/" + encodeURIComponent(p.id) + (p.is_active ? "/deactivate" : "/reactivate"))
+              .then(function () { setTimeout(loadProviders, 1000); })
+              .catch(function (err) { btn.disabled = false; document.getElementById("list-msg").textContent = err.message; });
+          });
+          cell.appendChild(btn); tr.appendChild(cell);
+        }
+        body.appendChild(tr);
+      });
+      document.getElementById("list-msg").textContent = data.truncated ? "Showing the first 1000 providers." : "";
+    }).catch(function (err) {
+      document.getElementById("list-msg").textContent = "Could not load the directory: " + err.message;
+    });
+  }
+
+  if (IS_ADMIN) {
+    var input = document.getElementById("csv");
+    var button = document.getElementById("import");
+    var msg = document.getElementById("import-msg");
+    input.addEventListener("change", function () { button.disabled = !input.files.length; msg.textContent = ""; });
+    button.addEventListener("click", function () {
+      var file = input.files[0];
+      if (!file) return;
+      button.disabled = true;
+      file.text().then(function (text) {
+        var rows = parseCSV(text);
+        if (!rows.length) throw new Error("The file has no data rows.");
+        var saved = 0, errors = [], chain = Promise.resolve();
+        for (var start = 0; start < rows.length; start += CHUNK) {
+          (function (offset) {
+            chain = chain.then(function () {
+              return postJSON("/providers/import", { rows: rows.slice(offset, offset + CHUNK) }).then(function (res) {
+                saved += res.saved;
+                res.errors.forEach(function (e) { errors.push("Line " + (e.row + offset + 1) + ": " + e.error); });
+              });
+            });
+          })(start);
+        }
+        return chain.then(function () {
+          msg.className = "msg " + (errors.length ? "bad" : "ok");
+          msg.textContent = saved + " saved." + (errors.length ? " " + errors.length + " skipped: " + errors.slice(0, 10).join(" ") : "");
+          // Effects apply after the response, so give the write a moment before re-reading.
+          setTimeout(loadProviders, 1500);
+        });
+      }).catch(function (err) {
+        msg.className = "msg bad"; msg.textContent = err.message;
+      }).then(function () { button.disabled = false; });
+    });
+  }
+
+  document.getElementById("days").addEventListener("change", loadReport);
+  loadReport();
+  loadProviders();
+})();
+</script>
+</body>
+</html>
