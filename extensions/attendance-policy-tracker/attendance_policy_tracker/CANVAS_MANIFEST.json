@@ -1,0 +1,61 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.27",
+    "name": "attendance_policy_tracker",
+    "description": "Counts the visits a patient missed, cancelled late, or moved late, attributes each one to the patient or the clinic, and raises a task at a warning threshold and at a review threshold.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "attendance_policy_tracker.applications.tracker_application:AttendancePolicyTrackerApplication",
+                "name": "Attendance Policy",
+                "description": "Review and correct the attendance record for any patient.",
+                "scope": "global",
+                "show_in_panel": true,
+                "panel_priority": 100,
+                "icon": "assets/attendance-policy-tracker-icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "attendance_policy_tracker.handlers.api:AttendancePolicyAPI",
+                "description": "Serves the review surface, the configuration screen, and the reads and corrections behind them."
+            },
+            {
+                "class": "attendance_policy_tracker.handlers.scheduled_sweep:ScheduledSweep",
+                "description": "Recomputes recently active patients every five minutes and raises the two threshold tasks."
+            },
+            {
+                "class": "attendance_policy_tracker.handlers.live:AttendanceChannel",
+                "description": "Gates the websocket channel the review surface listens on, open to any staff session."
+            },
+            {
+                "class": "attendance_policy_tracker.handlers.live:AttendanceNotifier",
+                "description": "Signals the channel when a cancellation, a no show, a booking or the clinic label changes."
+            },
+            {
+                "class": "attendance_policy_tracker.handlers.install_stamp:InstallFloorStamp",
+                "description": "Stamps the moment this plugin was installed, once, so history before it never enters the count."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "custom_data__attendance_policy_tracker",
+        "access": "read_write"
+    },
+    "variables": [
+        {
+            "name": "config_access_staff_ids",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
