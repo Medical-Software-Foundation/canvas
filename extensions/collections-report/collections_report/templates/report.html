@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Collections Report</title>
+    <title>Financial Reporting</title>
     <link rel="stylesheet" href="/plugin-io/api/collections_report/collections/report.css?v={{ cache_bust }}">
 </head>
 <body>
     <div class="page-container">
         <header class="page-header">
             <div class="header-left">
-                <h1>Collections Report</h1>
+                <h1>Financial Reporting</h1>
                 <span class="subtitle" id="dateRangeLabel">Today</span>
             </div>
             <div class="header-right">
@@ -23,6 +23,12 @@
             </div>
         </header>
 
+        <nav class="report-tabs" role="tablist">
+            <button class="report-tab report-tab-active" id="tabCollections" role="tab" aria-selected="true" data-view="collections">Collections</button>
+            <button class="report-tab" id="tabBalances" role="tab" aria-selected="false" data-view="balances">Balances Owed</button>
+        </nav>
+
+        <section id="collectionsView">
         <div class="filters-bar">
             <div class="filter-group">
                 <label for="startDate">From</label>
@@ -103,6 +109,48 @@
                 <p>Loading collections...</p>
             </div>
         </div>
+        </section>
+
+        <section id="balancesView" style="display: none;">
+            <div class="summary-cards">
+                <div class="summary-card summary-total">
+                    <div class="summary-label">Total Owed by Patients</div>
+                    <div class="summary-value" id="balancesTotal">$0.00</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Patients with a Balance</div>
+                    <div class="summary-value" id="balancesPatients">0</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header-row">
+                    <span class="record-count" id="balancesCount">0 patients</span>
+                    <span class="record-count record-note">Current patient balances, matching each patient's balance in Canvas</span>
+                </div>
+                <table class="collections-table" id="balancesTable">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th class="col-amount">Balance Owed</th>
+                            <th class="col-amount">Open Claims</th>
+                            <th>Oldest Date of Service</th>
+                        </tr>
+                    </thead>
+                    <tbody id="balancesBody">
+                    </tbody>
+                </table>
+
+                <div class="empty-state" id="balancesEmpty" style="display: none;">
+                    <p>No patients currently have a balance.</p>
+                </div>
+
+                <div class="loading-state" id="balancesLoading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Loading balances...</p>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script src="/plugin-io/api/collections_report/collections/report.js?v={{ cache_bust }}"></script>
