@@ -1,0 +1,44 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "reporting",
+    "description": "In-UI report and dashboard builder for non-technical users.",
+    "url_permissions": [],
+    "custom_data": {
+        "namespace": "canvas_medical__reporting",
+        "access": "read_write"
+    },
+    "components": {
+        "protocols": [
+            {
+                "class": "reporting.routes.reporting_api:ReportingAPI",
+                "description": "Serves the Reporting SPA, dataset metadata, and report runs.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Staff", "PracticeLocation"],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "reporting.applications.reporting_app:ReportingApp",
+                "name": "Reporting",
+                "description": "Build dashboards and reports — no SQL required.",
+                "icon": "assets/icon.png",
+                "scope": "global",
+                "menu_position": "top"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["namespace_read_write_access_key"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

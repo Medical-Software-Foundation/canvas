@@ -1,0 +1,102 @@
+"""Guards for sandbox-only failure modes that pytest cannot catch.
+
+pytest stubs canvas_sdk and django, so it never exercises the real sandbox loader.
+These tests scan the plugin source statically for the patterns that broke us on a
+live instance. The sandbox allowlist is per-NAME (not per-placement), so a Django
+import is fine at module level as long as every imported name is allowed — only the
+forbidden aggregation names below are rejected.
+"""
+
+from __future__ import annotations
+
+import pathlib
+
+_PKG = pathlib.Path(__file__).resolve().parent.parent / "reporting"
+_FORBIDDEN = ("Sum", "Avg", "Max", "Min", "Trunc", "ExpressionWrapper", "OuterRef", "Subquery")
+
+
+def _py_files() -> list[pathlib.Path]:
+    return list(_PKG.rglob("*.py"))
+
+
+def test_no_forbidden_orm_imports():
+    offenders = []
+    for path in _py_files():
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            stripped = line.strip()
+            if "import" in stripped and "django" in stripped:
+                for name in _FORBIDDEN:
+                    if name in stripped:
+                        offenders.append(f"{path}:{i}: forbidden '{name}': {stripped}")
+    assert not offenders, offenders
+
+
+def test_dataclass_modules_avoid_future_annotations():
+    """`@dataclass` + `from __future__ import annotations` crashes in the Canvas sandbox.
+
+    With future annotations the dataclass decorator resolves string annotations via
+    `sys.modules.get(cls.__module__).__dict__`, which is None in the sandbox's module
+    loader (AttributeError at import). Modules defining a dataclass must therefore use
+    real (evaluated) annotations, not the future-import form.
+    """
+    offenders = []
+    for path in _py_files():
+        text = path.read_text()
+        if "@dataclass" in text and "from __future__ import annotations" in text:
+            offenders.append(str(path))
+    assert not offenders, (
+        "These modules combine @dataclass with `from __future__ import annotations`, "
+        f"which fails in the sandbox: {offenders}"
+    )
+
+
+def test_no_self_package_imports():
+    """`from reporting.<pkg> import <sub>` re-evaluates that package in the sandbox.
+
+    The sandbox has no sys.modules caching, so importing a submodule via its parent
+    package (rather than its full dotted path) re-executes the package __init__ and,
+    when done from inside that __init__, recurses infinitely. Internal imports must use
+    full submodule paths (e.g. `from reporting.datasets.appointments import DATASET`).
+    """
+    offenders = []
+    for path in _py_files():
+        parts = path.relative_to(_PKG).parts[:-1]  # package dirs above this file
+        self_pkg = "reporting" + ("." + ".".join(parts) if parts else "")
+        bad = f"from {self_pkg} import "  # importing a name FROM one's own package
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            if line.strip().startswith(bad):
+                offenders.append(f"{path}:{i}: {line.strip()}")
+    assert not offenders, (
+        "Self-package imports found (use full submodule paths instead): " f"{offenders}"
+    )
+
+
+def test_no_submodule_object_imports():
+    """Importing a submodule OBJECT and accessing attributes on it fails in-sandbox.
+
+    `from reporting.services import reports` then `reports.create(...)` raises
+    AttributeError("...not in ALLOWED_MODULES") — the sandbox guards attribute access
+    on plugin module objects. Import the names directly instead
+    (`from reporting.services.reports import create`).
+    """
+    import re
+
+    pat = re.compile(r"^\s*from\s+(reporting\S*)\s+import\s+(.+)$")
+    offenders = []
+    for path in _py_files():
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            mobj = pat.match(line)
+            if not mobj:
+                continue
+            modpath, names = mobj.group(1), mobj.group(2)
+            rel = modpath.split(".")[1:]  # drop leading 'reporting'
+            pkg_dir = _PKG.joinpath(*rel) if rel else _PKG
+            if not pkg_dir.is_dir():
+                continue  # modpath is a module file -> imported names are symbols
+            for raw in names.replace("(", "").replace(")", "").split(","):
+                name = raw.strip().split(" as ")[0].strip()
+                if name and (pkg_dir / f"{name}.py").exists():
+                    offenders.append(
+                        f"{path}:{i}: imports submodule object '{name}' from '{modpath}'"
+                    )
+    assert not offenders, ("Import names directly, not submodule objects: " f"{offenders}")
