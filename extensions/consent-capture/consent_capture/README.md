@@ -106,7 +106,8 @@ Consent Capture turns that into a guided flow that:
       phones and tablets, a live viewfinder on computers) or uploads images or a PDF.
       Each photo opens on the crop screen with **Add Another** (next page) and
       **Continue** (page list); a strip under the camera shows the pages so far. The
-      pages are assembled into a PDF in the browser — no PDF is generated.
+      pages are assembled into a PDF in the browser. The server generates no
+      documentation PDF for Written consents.
    2. Creates a FHIR **Consent** (`status = active`, the consent's coding, effective
       date = the staff member's local calendar date, the document attached as
       `sourceAttachment`, **no** `period.end` — expiration is governed by the coding

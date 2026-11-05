@@ -105,23 +105,16 @@ async function run() {
   await page.waitForTimeout(250);
   await shotActiveView(page, '10-written-camera.png');
 
-  // ---- Written capture: Upload the sample form -> Review --------------------
+  // ---- Written capture: Upload the sample form -> Crop ----------------------
   await page.evaluate(() => document.getElementById('tabUpload').click());
   await page.waitForTimeout(150);
   await page.setInputFiles('#fileInput', SAMPLE_FORM);
-  await page.waitForTimeout(500);
-  await shotActiveView(page, '11-written-review.png');
-
-  // ---- Written capture: Crop -----------------------------------------------
-  await page.evaluate(() => document.getElementById('cropBtn').click());
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(900);
   await shotActiveView(page, '12-written-crop.png');
 
   // ---- Written capture: Pages list -----------------------------------------
-  await page.evaluate(() => document.getElementById('capRight').click());   // Apply -> review
-  await page.waitForTimeout(400);
-  await page.evaluate(() => document.getElementById('capRight').click());   // Add Page -> pages
-  await page.waitForTimeout(400);
+  await page.evaluate(() => document.getElementById('capRight').click());   // Continue -> pages
+  await page.waitForTimeout(600);
   await shotActiveView(page, '13-written-pages.png');
 
   // ---- Viewer: a completed consent's document ------------------------------

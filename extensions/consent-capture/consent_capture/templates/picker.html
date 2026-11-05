@@ -1307,7 +1307,7 @@
       // Open on Sign on this device when it is available.
       selectTab(signable ? 'sign' : 'camera'); capStep('camera');
     }
-    // Sub-screen router: camera (the tabbed source screen) | review | crop | pages.
+    // Sub-screen router: camera (the tabbed source screen) | crop | pages.
     function capStep(name) {
       var map = { camera: 'scCam', crop: 'scCrop', pages: 'scPages' };
       for (var k in map) $(map[k]).classList.toggle('on', k === name);
@@ -1392,7 +1392,7 @@
     function captureFrame() {
       var v = $('camVideo');
       if (!v.videoWidth) { capSetMsg('The camera isn’t ready yet.', true); return; }
-      setShutterReady(false);  // one capture at a time; openReview stops the camera
+      setShutterReady(false);  // one capture at a time; openNextCrop stops the camera
       var fl = $('camFlash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
       // Where the browser can take a real photo (Chrome and Android), use it: it's
       // full resolution and focused. Elsewhere, save a frame of the video.
@@ -1402,7 +1402,7 @@
       if (window.ImageCapture && track) {
         new ImageCapture(track).takePhoto()
           .then(shrinkImage)
-          .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openReview(); } })
+          .then(function (blob) { if (stillHere()) { CAP.current = photoPage(blob); openNextCrop(); } })
           .catch(function () {
             if (!stillHere()) return;
             if (track.readyState === 'live') { captureVideoFrame(v, stillHere); return; }
@@ -1420,7 +1420,7 @@
           if (stillHere && !stillHere()) return;
           if (!blob) { capSetMsg('Could not capture the photo. Please try again.', true); if (CAP.stream) setShutterReady(true); return; }
           CAP.current = photoPage(blob);
-          openReview();
+          openNextCrop();
         });
       }, 150);
     }
@@ -1489,18 +1489,29 @@
     // Only while the photo screens are showing: a resize that lands after staff moved on
     // (to signing, or back) waits in the queue instead of taking over the screen.
     function onPhotoScreens() { return $('capView').classList.contains('active') && CAP.tab !== 'sign'; }
+    var PREPARING_MSG = 'Preparing the next photo…', ADDING_MSG = 'Adding the remaining photos…';
     function maybeStartReview() {
       if (!onPhotoScreens()) return;
-      if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openReview(); }
+      if (CAP.addRest) { addReadyUploads(); return; }
+      if (!CAP.current && CAP.queue.length && !CAP.queue[0].pending) { CAP.current = CAP.queue.shift(); capSetMsg(''); openNextCrop(); }
     }
-    // Open the next ready page; if the review screen is left with nothing to show
-    // (the last pending image failed), move on instead of sitting on the old photo.
+    // After Continue, the rest of an upload batch goes straight onto the page list,
+    // uncropped, as in the Capture plugin; staff can remove or reorder pages there.
+    function addReadyUploads() {
+      while (CAP.queue.length && !CAP.queue[0].pending) addPage(CAP.queue.shift());
+      if (CAP.queue.length) { if ($('scPages').classList.contains('on')) capSetMsg(ADDING_MSG); return; }
+      CAP.addRest = false;
+      if ($('capMsg').textContent === ADDING_MSG) capSetMsg('');
+    }
+    // When a resize finishes: open the next photo (or add it straight to the page list
+    // after Continue), and clear "Preparing the next photo…" once nothing is waiting.
+    // Other messages, such as an unreadable image, stay.
     function afterQueueChange() {
       maybeStartReview();
-      if (onPhotoScreens() && !CAP.current && !CAP.queue.length) capSetMsg('');
+      if (onPhotoScreens() && !CAP.current && !CAP.queue.length && $('capMsg').textContent === PREPARING_MSG) capSetMsg('');
     }
     // Every photo goes straight to the crop screen.
-    function openReview() { stopCamera(); capSetMsg(''); if (CAP.current) openCrop(CAP.current.url); }
+    function openNextCrop() { stopCamera(); capSetMsg(''); if (CAP.current) openCrop(CAP.current.url); }
     function releasePage(p) { if (p && p.url && p.url.indexOf('blob:') === 0) { try { URL.revokeObjectURL(p.url); } catch (e) {} } }
     function openCrop(src) {
       stopCamera();
@@ -1508,7 +1519,9 @@
       if (CAP.cropper) { CAP.cropper.destroy(); CAP.cropper = null; }
       img.src = src; capStep('crop');
       if (!window.Cropper) { capSetMsg('Editor failed to load. Check your connection.', true); return; }
-      CAP.cropper = new Cropper(img, { viewMode: 1, autoCropArea: 0.85, guides: true, center: true,
+      // The crop box starts on the whole photo, so a page kept without touching it is
+      // saved whole; a signature near the edge is never trimmed by default.
+      CAP.cropper = new Cropper(img, { viewMode: 1, autoCropArea: 1, guides: true, center: true,
         background: false, cropBoxMovable: true, cropBoxResizable: true, dragMode: 'move', responsive: true });
     }
     function closeCropper() {
@@ -1516,15 +1529,25 @@
       $('cropImg').removeAttribute('src');
     }
     // Keep the crop as the page (one at a time; a second tap waits for the first).
+    // While a page is being saved the crop buttons are off, so Retake or a second tap
+    // can't act on a different photo; the result is dropped if the photo changed anyway.
     var cropBusy = false;
+    function setCropBusy(on) {
+      cropBusy = on;
+      ['capLeft', 'capMid', 'capRight'].forEach(function (id) { $(id).disabled = on; });
+    }
     function keepCrop(done) {
       if (!CAP.current || cropBusy) return;
       if (!CAP.cropper) { done(); return; }
-      cropBusy = true;
+      // Null until the photo has loaded into the cropper; wait for the next tap.
       var canvas = CAP.cropper.getCroppedCanvas({ maxWidth: 2000, maxHeight: 2000 });
+      if (!canvas) return;
+      var page = CAP.current, cap = CAP;
+      setCropBusy(true);
       canvas.toBlob(function (blob) {
-        cropBusy = false;
-        if (blob) { releasePage(CAP.current); CAP.current = photoPage(blob); }
+        setCropBusy(false);
+        if (CAP !== cap || CAP.current !== page) return;
+        if (blob) { releasePage(page); CAP.current = photoPage(blob); }
         closeCropper();
         done();
       }, 'image/jpeg', 0.85);
@@ -1534,9 +1557,10 @@
     function nextPhoto(toPages) {
       CAP.current = null;
       if (CAP.queue.length) {
+        if (toPages) { CAP.addRest = true; capStep('pages'); addReadyUploads(); return; }
         maybeStartReview();
         if (CAP.current) return;
-        backToSource(); capSetMsg('Preparing the next photo…');
+        backToSource(); capSetMsg(PREPARING_MSG);
         return;
       }
       if (toPages && CAP.pages.length) capStep('pages'); else backToSource();
@@ -1544,7 +1568,7 @@
     function backToSource() { selectTab(CAP.tab === 'upload' ? 'upload' : 'camera'); capStep('camera'); }
     function cropAddAnother() { keepCrop(function () { addPage(CAP.current); nextPhoto(false); }); }
     function cropContinue() { keepCrop(function () { addPage(CAP.current); nextPhoto(true); }); }
-    function cropRetake() { closeCropper(); releasePage(CAP.current); nextPhoto(false); }
+    function cropRetake() { if (cropBusy) return; closeCropper(); releasePage(CAP.current); nextPhoto(false); }
     // Thumbnails of the last two pages, the page count, and a way to the page list.
     function renderStrip() {
       var n = CAP.pages.length, box = $('pageStripThumbs');
@@ -1554,7 +1578,8 @@
         if (p.type === 'image/jpeg' && p.url) { var im = document.createElement('img'); im.src = p.url; im.alt = ''; box.appendChild(im); }
         else box.appendChild(el('span', 'pdf', 'PDF'));
       });
-      $('pageStripCount').textContent = plural(n, 'page');
+      var total = CAP.pages.reduce(function (sum, p) { return sum + (p.pageCount || 1); }, 0);
+      $('pageStripCount').textContent = plural(total, 'page');
     }
     function addPdfFile(file) {
       var p = { blob: file, type: 'application/pdf', name: file.name || 'Document.pdf', pageCount: 1, url: null };
