@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.157.0",
-    "plugin_version": "0.3.0",
+    "plugin_version": "0.4.0",
     "name": "lab_order_favorites",
     "description": "Create and reuse lab order favorites (single test or multi-test panels) as staged lab order commands, with personal/shared visibility, tags, search, and CSV bulk upload.",
     "components": {
