@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: #1f2937; margin: 0; padding: 16px 20px; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .muted { color: #6b7280; font-size: 13px; }
+  .box { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin: 12px 0; }
+  .warn { background: #fffbeb; border-color: #fcd34d; }
+  .info { background: #eff6ff; border-color: #bfdbfe; }
+  ul { margin: 8px 0 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .type { font-weight: 600; }
+  .actions { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+  button { font-size: 14px; padding: 8px 16px; border-radius: 6px; border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; cursor: pointer; min-height: 36px; }
+  button:disabled { opacity: .5; cursor: default; }
+  #result { margin-top: 12px; }
+  .ok { color: #047857; } .err { color: #b91c1c; }
+</style>
+</head>
+<body>
+{% if dry_run %}<div class="box info">Dry run: the plugin is in <b>dry_run</b> mode, so nothing will be faxed.</div>{% endif %}
+{% if test_number %}<div class="box info">Test mode: every fax goes to the plugin's test fax number instead of the recipient below.</div>{% endif %}
+
+{% for problem in problems %}<div class="box warn">Can't fax {{ problem }}</div>{% endfor %}
+
+{% if not has_orders %}
+  <div class="box">
+    <h2>Nothing to fax</h2>
+    {% if problems %}
+      <div class="muted">Fix the problem above, or fax by hand.</div>
+    {% else %}
+      <div class="muted">This note has no committed orders of these types: {{ order_types }}. Orders count once they are committed; the note doesn't need to be signed.</div>
+      {% for note in metadata_notes %}<div class="muted">{{ note }}</div>{% endfor %}
+    {% endif %}
+  </div>
+{% else %}
+  {% for d in deliveries %}
+  <div class="box">
+    <h2>To {{ d.name }}, fax {{ d.fax }}</h2>
+    <div class="muted">
+      {% if d.whole_note %}One fax: the whole note as it stands now. It includes these orders and the rest of the note.
+      {% else %}{{ d.fax_count }} fax{{ d.fax_count|pluralize:"es" }}: each order's own document.{% endif %}
+    </div>
+    <ul>
+      {% for o in d.orders %}<li><span class="type">{{ o.type }}</span>{% if o.label %}: {{ o.label }}{% endif %}</li>{% endfor %}
+    </ul>
+    {% if d.last_sent %}<div class="muted" style="margin-top:8px">{% if d.already_sent %}Already faxed{% else %}Last faxed{% endif %} <span class="when" data-when="{{ d.last_sent }}">{{ d.last_sent }}</span>.</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% for note in metadata_notes %}<div class="muted">{{ note }}</div>{% endfor %}
+  <div class="actions">
+    <button id="send" type="button" data-resend="{% if all_already_sent %}true{% else %}false{% endif %}">{% if all_already_sent %}Send again{% else %}Send fax{% endif %}</button>
+    {% if all_already_sent %}<span class="muted">Everything here was already faxed.</span>{% endif %}
+  </div>
+  <div id="result" role="status"></div>
+{% endif %}
+
+<script>
+  (function () {
+    document.querySelectorAll(".when").forEach(function (el) {
+      var d = new Date(el.getAttribute("data-when"));
+      if (!isNaN(d)) { el.textContent = d.toLocaleString(); }
+    });
+    var button = document.getElementById("send");
+    if (!button) { return; }
+    var request = {{ request_json|safe }};
+    var result = document.getElementById("result");
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      result.className = "muted";
+      result.textContent = "Sending…";
+      request.resend = button.getAttribute("data-resend") === "true";
+      fetch("{{ api_path }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(request)
+      }).then(function (resp) {
+        return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
+      }).then(function (r) {
+        result.className = r.ok && r.data.status !== "error" ? "ok" : "err";
+        result.textContent = r.data.message || "Something went wrong.";
+      }).catch(function () {
+        result.className = "err";
+        result.textContent = "Couldn't reach Canvas. Check the fax history before trying again.";
+        button.disabled = false;
+      });
+    });
+  })();
+</script>
+</body>
+</html>
