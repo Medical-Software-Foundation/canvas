@@ -25,6 +25,7 @@ def _inbound(mocker):
     mocker.patch.object(inbound, "_is_expanded", return_value=False)
     mocker.patch.object(inbound, "_mark_expanded")
     mocker.patch("gcal_sync.inbound.ExpandedEvent")
+    mocker.patch("gcal_sync.inbound.AdoptedBareHold")
     return inbound
 
 

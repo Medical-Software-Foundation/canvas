@@ -31,7 +31,7 @@ import arrow
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.note.appointment import ScheduleEvent
-from canvas_sdk.v1.data.appointment import Appointment, AppointmentExternalIdentifier
+from canvas_sdk.v1.data.appointment import AppointmentExternalIdentifier
 from logger import log
 
 from gcal_sync.appointment_snapshot import GOOGLE_ORIGIN_SYSTEM, build_snapshot
@@ -183,6 +183,8 @@ class InboundSync:
         state, _ = CalendarSyncState.objects.get_or_create(
             google_calendar_id=calendar_id
         )
+        if not dry_run and not state.expanded_backfilled:
+            self._backfill_expanded(state, calendar_id)
         client = self._client_factory(calendar_id)
 
         # A dry run always does a full-window pull (never a delta) so its preview matches a real
@@ -413,6 +415,9 @@ class InboundSync:
                 ExpandedEvent.objects.filter(
                     google_calendar_id=calendar_id, google_event_id=google_event_id
                 ).delete()
+                AdoptedBareHold.objects.filter(
+                    google_calendar_id=calendar_id, google_event_id=google_event_id
+                ).delete()
             if not effects:
                 stats["ignored"] = stats["ignored"] + 1
                 return []
@@ -452,12 +457,21 @@ class InboundSync:
         # midnight. Every all-day event also takes this path so its day is cut in local time rather
         # than at UTC midnight. And an event that already has per-day holds stays on it even after it
         # shrinks to one timed day (``ExpandedEvent``), so those holds are reconciled away instead of
-        # left behind.
-        spans = event_day_spans(event, self._default_zone)
-        expanded = self._is_expanded(calendar_id, google_event_id) if provider_id else False
-        if spans and (is_all_day(event) or len(spans) > 1 or expanded):
+        # left behind. Only a single-day timed event needs that lookup; every other event takes the
+        # per-day path regardless.
+        spans = event_day_spans(
+            event, self._default_zone, count_from=self._window_lower().datetime
+        )
+        if spans and (
+            is_all_day(event)
+            or len(spans) > 1
+            or (provider_id and self._is_expanded(calendar_id, google_event_id))
+        ):
+            windows: dict[str, tuple[datetime.datetime | None, int]] = {}
             live = (
-                self._live_holds_for_event(google_event_id, provider_id, per_day=True)
+                self._live_holds_for_event(
+                    google_event_id, provider_id, per_day=True, windows=windows
+                )
                 if provider_id
                 else {}
             )
@@ -475,7 +489,7 @@ class InboundSync:
                 force_rebuild,
                 dry_run,
                 verbose,
-                expanded=expanded,
+                windows=windows,
             )
 
         # A live Canvas hold already exists for this event -> update it in place, never create a
@@ -654,7 +668,7 @@ class InboundSync:
         force_rebuild: bool = False,
         dry_run: bool = False,
         verbose: bool = False,
-        expanded: bool = False,
+        windows: dict[str, tuple[datetime.datetime | None, int]] | None = None,
     ) -> list[Effect]:
         """Make this provider's holds for a multi-day event match exactly the days it covers.
 
@@ -669,9 +683,10 @@ class InboundSync:
         reshaped to its day, even when the Google event hasn't changed, because it still carries the
         whole multi-day duration (or a UTC-midnight start) it was created with.
 
-        ``expanded`` says whether the event is already marked ``ExpandedEvent`` for this calendar.
-        An unmarked event that has or gets per-day holds is marked here, which also back-fills the
-        mark for events expanded before it existed the first time a pass reaches them.
+        ``windows`` maps each live hold id to its ``(start_time, duration_minutes)``, read in the
+        same query as ``live``, so checking whether an adopted hold still needs reshaping costs no
+        extra query. An event that gets per-day holds is marked ``ExpandedEvent`` here; events that
+        already had them when the mark was introduced are marked by :meth:`_backfill_expanded`.
         """
         google_event_id = event["id"]
         dates = [span.date for span in spans]
@@ -681,9 +696,7 @@ class InboundSync:
             # nothing to resolve, update, or create.
             stats["ignored"] = stats["ignored"] + 1
             return []
-        if not expanded and not dry_run and self._has_day_holds(live, google_event_id):
-            self._mark_expanded(calendar_id, google_event_id)
-            expanded = True
+        windows = windows or {}
 
         # Map each live hold onto the day it covers. A hold that lands on no covered day (the event
         # shrank or moved), or on a day already covered, is stale and gets removed.
@@ -728,7 +741,7 @@ class InboundSync:
         reshape = {
             date
             for date in adopted
-            if not self._hold_matches_span(live_by_date[date], span_by_date[date])
+            if not self._hold_matches_span(windows.get(live_by_date[date]), span_by_date[date])
         }
 
         new_hash = google_event_content_hash(event)
@@ -736,7 +749,7 @@ class InboundSync:
         content_changed = new_hash != last_applied
         # Days that ended before the import window are not back-filled: a span that began before
         # it (long leave) is still reconciled, but nobody can book against its earlier days.
-        window_lower = arrow.utcnow().shift(months=self._FULL_PULL_TIME_MIN_SHIFT_MONTHS)
+        window_lower = self._window_lower()
         missing = [
             date
             for date in dates
@@ -747,6 +760,14 @@ class InboundSync:
             >= window_lower
         ]
         if not content_changed and not missing and not stale and not reshape:
+            if adopted_date and not dry_run:
+                # A hold adopted by an earlier version, or on a pass that wrote nothing, has no
+                # record of its day yet. Write it now so a later cancel blocks only that day.
+                AdoptedBareHold.objects.get_or_create(
+                    google_event_id=google_event_id,
+                    google_calendar_id=calendar_id,
+                    defaults={"adopted_date": adopted_date},
+                )
             _dry_trace(stats, "already current (no change)", event)
             _event_log(
                 verbose,
@@ -761,8 +782,8 @@ class InboundSync:
         # Creates are the dedup-sensitive part: a re-delivered webhook must not mint a second hold
         # while a previous pass's create is still applying. The marker is per day, so only a day
         # whose own create is still inside the grace window is held back. Days an edit adds, and
-        # every update and removal, go through in the same pass; holding back the whole event left
-        # PTO extended soon after it was first imported bookable on the added days.
+        # every update and removal, go through in the same pass, so PTO extended minutes after it
+        # was imported is held on the added days straight away.
         if missing:
             in_flight = self._days_in_flight(calendar_id, google_event_id, missing)
             # A marker on the bare event id comes from the single-hold path: the hold it waits on
@@ -816,10 +837,15 @@ class InboundSync:
         # whole event stays unheld. A bare hold this sync retired itself does not count.
         if not force_rebuild and missing:
             removed_by_sync = self._days_removed_by_sync(calendar_id, google_event_id, missing)
+            # One lookup covers every missing day and the bare id.
+            values = [hold_external_id(google_event_id, date) for date in missing]
+            if google_event_id not in live:
+                values.append(google_event_id)
+            ever_held = self._existing_values(values, provider_id)
             blocked_by_bare: set[str] = set()
             if (
                 google_event_id not in live
-                and self._external_value_exists(google_event_id, provider_id)
+                and google_event_id in ever_held
                 and not self._bare_retired_by_sync(calendar_id, google_event_id)
             ):
                 adopted_on = self._bare_adopted_date(calendar_id, google_event_id)
@@ -830,9 +856,7 @@ class InboundSync:
                 if date in removed_by_sync
                 or not (
                     date in blocked_by_bare
-                    or self._external_value_exists(
-                        hold_external_id(google_event_id, date), provider_id
-                    )
+                    or hold_external_id(google_event_id, date) in ever_held
                 )
             ]
 
@@ -868,8 +892,19 @@ class InboundSync:
             return []
 
         if not dry_run:
-            if created and not expanded:
+            if created:
                 self._mark_expanded(calendar_id, google_event_id)
+            if (
+                force_rebuild
+                and created
+                and bare_hold is None
+                and google_event_id in self._existing_values([google_event_id], provider_id)
+            ):
+                # A deliberate re-import rebuilt this event as per-day holds while its pre-expansion
+                # hold is cancelled (Purge, Reset, or staff). The per-day holds replace it, so record
+                # it as retired; otherwise the cancelled bare hold would block every day a later
+                # edit adds.
+                bare_retired = True
             self._record_day_changes(
                 calendar_id,
                 google_event_id,
@@ -1010,6 +1045,10 @@ class InboundSync:
                 google_event_id__in=[hold_external_id(google_event_id, d) for d in uncovered],
             ).delete()
 
+    def _window_lower(self) -> "arrow.Arrow":
+        """The past edge of the import window: the same ``now - 1 month`` a full pull uses."""
+        return arrow.utcnow().shift(months=self._FULL_PULL_TIME_MIN_SHIFT_MONTHS)
+
     def _within_import_window(self, event: dict) -> bool:
         """Does this event overlap the same ``[now-1mo, now+6mo]`` window a full pull uses?
 
@@ -1026,7 +1065,7 @@ class InboundSync:
             return True
         start = arrow.get(window[0])
         end = start.shift(minutes=window[1])
-        lower = arrow.utcnow().shift(months=self._FULL_PULL_TIME_MIN_SHIFT_MONTHS)
+        lower = self._window_lower()
         upper = arrow.utcnow().shift(months=self._FULL_PULL_TIME_MAX_SHIFT_MONTHS)
         return start <= upper and end >= lower
 
@@ -1048,7 +1087,11 @@ class InboundSync:
 
     @staticmethod
     def _live_holds_for_event(
-        google_event_id: str, provider_id: str | None, *, per_day: bool
+        google_event_id: str,
+        provider_id: str | None,
+        *,
+        per_day: bool,
+        windows: dict[str, tuple[datetime.datetime | None, int]] | None = None,
     ) -> dict[str, str]:
         """Map external-id value -> live Canvas hold id for this (provider, Google event).
 
@@ -1059,6 +1102,9 @@ class InboundSync:
         that have or get per-day holds; everything else is an exact match. The prefix can also catch
         a *different* event whose id merely starts with this one, so the exact separator check in
         Python is what makes the result precise.
+
+        Pass ``windows`` to also collect each hold's ``(start_time, duration_minutes)`` from the
+        same query, keyed by hold id.
         """
         value_filter = (
             {"value__startswith": google_event_id} if per_day else {"value": google_event_id}
@@ -1070,34 +1116,62 @@ class InboundSync:
                 **value_filter,
             )
             .exclude(appointment__status="cancelled")
-            .values_list("value", "appointment__id")
+            .values_list(
+                "value",
+                "appointment__id",
+                "appointment__start_time",
+                "appointment__duration_minutes",
+            )
         )
         prefix = f"{google_event_id}:"
-        return {
-            str(value): str(appointment_id)
-            for value, appointment_id in rows
-            if str(value) == google_event_id or str(value).startswith(prefix)
-        }
+        live: dict[str, str] = {}
+        for value, appointment_id, start_time, duration_minutes in rows:
+            if str(value) == google_event_id or str(value).startswith(prefix):
+                live[str(value)] = str(appointment_id)
+                if windows is not None:
+                    windows[str(appointment_id)] = (start_time, int(duration_minutes or 0))
+        return live
 
     @staticmethod
-    def _external_value_exists(value: str, provider_id: str | None) -> bool:
-        """Has a hold ever existed FOR THIS PROVIDER under this exact external id (any status)?
+    def _existing_values(values: list[str], provider_id: str | None) -> set[str]:
+        """Which of these exact external ids has a hold ever existed under FOR THIS PROVIDER?
 
-        The per-day equivalent of :meth:`_external_hold_exists` — the convergence backstop for one
-        day of an expanded all-day event.
+        Any status. The per-day equivalent of :meth:`_external_hold_exists`, the convergence
+        backstop for the days of an expanded event, answered in one query for the whole set.
         """
-        return bool(
+        if not values:
+            return set()
+        rows = AppointmentExternalIdentifier.objects.filter(
+            system=GOOGLE_ORIGIN_SYSTEM,
+            value__in=values,
+            appointment__provider__id=provider_id,
+        ).values_list("value", flat=True)
+        return {str(value) for value in rows}
+
+    def _backfill_expanded(self, state: CalendarSyncState, calendar_id: str) -> None:
+        """Mark every event this calendar's provider already has live per-day holds for, once.
+
+        Events expanded before ``ExpandedEvent`` existed have per-day holds and no mark. Without
+        it, cancelling one in Google would look up the bare id only and leave its per-day holds
+        live. Runs on the calendar's first pull after upgrade, before any of its deltas, and sets
+        ``expanded_backfilled`` so it never runs again.
+        """
+        _note_type_id, provider_id, _location_id = self._import_context(calendar_id)
+        if not provider_id:
+            return
+        values = (
             AppointmentExternalIdentifier.objects.filter(
                 system=GOOGLE_ORIGIN_SYSTEM,
-                value=value,
                 appointment__provider__id=provider_id,
-            ).exists()
+                value__contains=":",
+            )
+            .exclude(appointment__status="cancelled")
+            .values_list("value", flat=True)
         )
-
-    @staticmethod
-    def _has_day_holds(live: dict[str, str], google_event_id: str) -> bool:
-        """Do the event's live holds include per-day (``{event_id}:{date}``) ones?"""
-        return any(value != google_event_id for value in live)
+        for google_event_id in sorted({str(value).split(":", 1)[0] for value in values}):
+            self._mark_expanded(calendar_id, google_event_id)
+        state.expanded_backfilled = True
+        state.save()
 
     @staticmethod
     def _is_expanded(calendar_id: str, google_event_id: str) -> bool:
@@ -1121,16 +1195,13 @@ class InboundSync:
         )
 
     @staticmethod
-    def _hold_matches_span(canvas_id: str, day: DaySpan) -> bool:
-        """Does this hold already start and last exactly as ``day`` says?"""
-        row = (
-            Appointment.objects.filter(id=canvas_id)
-            .values_list("start_time", "duration_minutes")
-            .first()
-        )
-        if row is None or row[0] is None:
+    def _hold_matches_span(
+        window: tuple[datetime.datetime | None, int] | None, day: DaySpan
+    ) -> bool:
+        """Does a hold with this ``(start_time, duration_minutes)`` already cover exactly ``day``?"""
+        if window is None or window[0] is None:
             return False
-        return arrow.get(row[0]) == arrow.get(day.start) and int(row[1] or 0) == day.duration_minutes
+        return arrow.get(window[0]) == arrow.get(day.start) and int(window[1] or 0) == day.duration_minutes
 
     @staticmethod
     def _day_hold_update_effect(canvas_id: str, event: dict, day: DaySpan) -> Effect:

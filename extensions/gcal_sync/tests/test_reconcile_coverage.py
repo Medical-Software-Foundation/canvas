@@ -363,6 +363,8 @@ def test_purge_holds_chunk_partial(mocker):
     iem = mocker.patch("gcal_sync.reconcile.InboundEventMapping")
     phc = mocker.patch("gcal_sync.reconcile.PendingHoldCreate")
     rdh = mocker.patch("gcal_sync.reconcile.RemovedDayHold")
+    mocker.patch("gcal_sync.reconcile.AdoptedBareHold")
+    mocker.patch("gcal_sync.reconcile.ExpandedEvent")
     mapping = SimpleNamespace(canvas_staff_id="14", google_calendar_id="cal@x")
     effects, last_id, done = purge_holds_chunk(mapping, limit=5, after_id="100")
     assert len(effects) == 3
@@ -402,6 +404,8 @@ def test_purge_holds_chunk_empty_result(mocker):
     iem = mocker.patch("gcal_sync.reconcile.InboundEventMapping")
     phc = mocker.patch("gcal_sync.reconcile.PendingHoldCreate")
     mocker.patch("gcal_sync.reconcile.RemovedDayHold")
+    mocker.patch("gcal_sync.reconcile.AdoptedBareHold")
+    mocker.patch("gcal_sync.reconcile.ExpandedEvent")
     mapping = SimpleNamespace(canvas_staff_id="14", google_calendar_id="cal@x")
     effects, last_id, done = purge_holds_chunk(mapping, limit=10, after_id="prev")
     assert effects == []

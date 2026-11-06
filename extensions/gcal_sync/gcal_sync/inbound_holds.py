@@ -49,10 +49,10 @@ _PRIVATE_VISIBILITIES = {"private", "confidential"}
 
 # One multi-day event can legitimately run long (a sabbatical, a seasonal closure) and each covered day
 # becomes its own Canvas hold, so cap the expansion rather than minting an unbounded number of
-# appointments from one Google event. Sized to just past the inbound import window (+6 months), so
-# the window stays the binding constraint and the cap is only a sanity bound — real events do run
-# long (one live install carries a 238-day hold), and anything past the cap is left unblocked, which
-# is the failure this fix exists to prevent.
+# appointments from one Google event. Sized to just past the inbound import window (+6 months) and
+# counted from the window's lower edge (see ``event_day_spans``), so the window stays the binding
+# constraint and the cap is only a sanity bound. Real events do run long (one live install carries a
+# 238-day hold), and anything past the cap is left unblocked.
 MAX_SPAN_DAYS = 186
 
 # The zone a day is cut in when neither the event, its calendar, nor the install's
@@ -124,12 +124,17 @@ def _local_time(day: datetime.date, hour: int, minute: int, zone: ZoneInfo) -> "
     return arrow.get(datetime.datetime(day.year, day.month, day.day, hour, minute, tzinfo=zone))
 
 
-def event_day_spans(event: dict, default_zone: str | None = None) -> list[DaySpan]:
+def event_day_spans(
+    event: dict,
+    default_zone: str | None = None,
+    count_from: datetime.datetime | None = None,
+) -> list[DaySpan]:
     """Split an event into the part that falls on each local date it covers.
 
-    Days are cut in :func:`event_time_zone` (``default_zone`` is the install's setting). A fully covered day blocks 00:00 to 23:59 local, so the
-    hold stays inside its own date: a block that runs into the next date leaves the day bookable on
-    the Canvas schedule. A partially covered first or last day keeps the event's real start or end.
+    Days are cut in :func:`event_time_zone` (``default_zone`` is the install's setting). A fully
+    covered day blocks 00:00 to 23:59 local, so the hold stays inside its own date: a block that runs
+    into the next date leaves the day bookable on the Canvas schedule. A partially covered first or
+    last day keeps the event's real start or end.
 
     Google stores an all-day event's ``end.date`` **exclusively**, so PTO entered for 8/31 through
     9/4 arrives as ``start.date=2026-08-31`` / ``end.date=2026-09-05`` and covers five days. A timed
@@ -137,7 +142,10 @@ def event_day_spans(event: dict, default_zone: str | None = None) -> list[DaySpa
     non-advancing end means a single day (all-day) or 30 minutes (timed), matching
     :func:`parse_event_window`.
 
-    Returns ``[]`` for an unparseable event. Capped at :data:`MAX_SPAN_DAYS` days.
+    Returns ``[]`` for an unparseable event. Capped at :data:`MAX_SPAN_DAYS` days, counting only
+    days that end at or after ``count_from`` (the import window's lower edge). Earlier days are still
+    returned, so their existing holds are kept, but they don't use up the cap: a long leave that
+    began months ago is held through the whole window.
     """
     zone = event_time_zone(event, default_zone)
     start_field = event.get("start") or {}
@@ -169,11 +177,12 @@ def event_day_spans(event: dict, default_zone: str | None = None) -> list[DaySpa
         return []
 
     spans: list[DaySpan] = []
+    counted = 0
     day = start_local.date()
     while _local_time(day, 0, 0, zone) < end_local:
-        if len(spans) >= MAX_SPAN_DAYS:
+        if counted >= MAX_SPAN_DAYS:
             log.info(
-                "gcal inbound: event %s spans more than %s days; blocking the first %s only",
+                "gcal inbound: event %s spans more than %s days; blocking %s days only",
                 event.get("id"),
                 MAX_SPAN_DAYS,
                 MAX_SPAN_DAYS,
@@ -193,6 +202,8 @@ def event_day_spans(event: dict, default_zone: str | None = None) -> list[DaySpa
             spans.append(
                 DaySpan(day.isoformat(), seg_start.to("UTC").datetime, minutes)
             )
+            if count_from is None or seg_end >= arrow.get(count_from):
+                counted += 1
         day += datetime.timedelta(days=1)
     return spans
 

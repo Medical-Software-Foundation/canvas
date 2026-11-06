@@ -24,8 +24,10 @@ from gcal_sync.google.auth import GoogleAuthError
 from gcal_sync.google.client import GoogleApiError, GoogleRateLimitError
 from gcal_sync.inbound import InboundSync
 from gcal_sync.models import (
+    AdoptedBareHold,
     AppointmentEventMapping,
     CalendarSyncState,
+    ExpandedEvent,
     InboundEventMapping,
     PendingHoldCreate,
     ProviderSyncLock,
@@ -392,7 +394,18 @@ def reset_inbound_for_provider(mapping: StaffCalendarMapping) -> list[Effect]:
     RemovedDayHold.objects.filter(
         google_calendar_id=mapping.google_calendar_id
     ).delete()
+    _clear_day_state(mapping.google_calendar_id)
     return effects
+
+
+def _clear_day_state(calendar_id: str) -> None:
+    """Drop the calendar's per-day bookkeeping, for Purge and Reset.
+
+    Every hold is being cancelled on purpose, so no adopted day or expanded mark describes a live
+    hold any more; the rebuild that follows writes them again.
+    """
+    AdoptedBareHold.objects.filter(google_calendar_id=calendar_id).delete()
+    ExpandedEvent.objects.filter(google_calendar_id=calendar_id).delete()
 
 
 def purge_holds_chunk(
@@ -431,6 +444,7 @@ def purge_holds_chunk(
         RemovedDayHold.objects.filter(
             google_calendar_id=mapping.google_calendar_id
         ).delete()
+        _clear_day_state(mapping.google_calendar_id)
     last_id = str(ids[-1]) if ids else after_id
     return effects, last_id, done
 
