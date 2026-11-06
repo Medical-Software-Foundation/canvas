@@ -83,11 +83,16 @@ class CalendarSyncState(CustomModel):
     ``sync_token`` is Google's opaque cursor for ``events.list``. When Google returns ``410 Gone``
     the token is invalid; we clear it and set ``needs_full_resync`` so the next reconcile does a full
     pull instead of an incremental one (spec §6.4).
+
+    ``expanded_backfilled`` is set once the calendar's existing per-day holds have been marked in
+    ``ExpandedEvent`` (see ``InboundSync._backfill_expanded``). Nullable, so it reads as unset on
+    every row that predates it.
     """
 
     google_calendar_id = TextField()
     sync_token = TextField(default="")
     needs_full_resync = BooleanField(default=False)
+    expanded_backfilled = BooleanField(null=True)
     updated_at = DateTimeField(auto_now=True)
 
     class Meta:
@@ -136,6 +141,11 @@ class PendingHoldCreate(CustomModel):
 
     ``created_at`` is set explicitly (not ``auto_now_add``) so a past-grace re-create refreshes the
     window rather than being pinned to the first attempt.
+
+    A multi-day event's holds are marked per day, with ``google_event_id`` set to the per-day value
+    ``{event_id}:{YYYY-MM-DD}``, so only a day whose own create is still applying is held back and
+    days added by a later edit are created straight away. The bare event id marks the single-hold
+    path's create.
     """
 
     google_calendar_id = TextField()
@@ -147,6 +157,80 @@ class PendingHoldCreate(CustomModel):
             UniqueConstraint(
                 fields=["google_event_id", "google_calendar_id"],
                 name="uq_pending_hold_cal_event",
+            ),
+        ]
+
+
+class RemovedDayHold(CustomModel):
+    """A hold the sync cancelled itself, so the convergence guard does not treat it as out-of-band.
+
+    Each covered day gets at most one hold for its whole life, so a hold cancelled out-of-band (a
+    purge, or staff cancelling it in Canvas) is never re-created by a delta. A row here marks a
+    cancelled hold as the sync's own doing. For a day the event stopped covering, the day may be
+    held again if the event covers it again, and the row is deleted when that happens.
+
+    ``google_event_id`` holds the per-day value ``{event_id}:{YYYY-MM-DD}``, the same value stamped on
+    the hold, or the bare event id for a pre-expansion hold the sync retired (replaced by a per-day
+    hold, or rebuilt as per-day holds by a re-import). Rows are per calendar like
+    ``PendingHoldCreate``.
+    """
+
+    google_calendar_id = TextField()
+    google_event_id = TextField()
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["google_event_id", "google_calendar_id"],
+                name="uq_removed_day_cal_event",
+            ),
+        ]
+
+
+class AdoptedBareHold(CustomModel):
+    """The day a pre-expansion (bare event id) hold was adopted onto, per calendar.
+
+    A hold imported before per-day expansion carries the bare event id and is adopted as the first
+    covered day's hold. If staff later cancel it, the convergence guard reads this row and keeps
+    only that day unheld, so days a later edit adds still get holds. A bare hold cancelled before it
+    was ever adopted has no row and keeps the whole event unheld. Deleted when the event is
+    cancelled and on Purge or Reset.
+    """
+
+    google_calendar_id = TextField()
+    google_event_id = TextField()
+    adopted_date = TextField()
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["google_event_id", "google_calendar_id"],
+                name="uq_adopted_bare_cal_event",
+            ),
+        ]
+
+
+class ExpandedEvent(CustomModel):
+    """A Google event this calendar's provider has per-day (``{event_id}:{date}``) holds for.
+
+    Only an expanded event needs the prefix lookup on hold external ids, which no index can serve
+    under the production collation. Every other single-day timed event uses the exact bare-id
+    lookup, so this row is what tells an expanded event that later shrank to one timed day, or a
+    cancellation (which carries no dates), to look for per-day holds. Deleted when the event is
+    cancelled and on Purge or Reset.
+    """
+
+    google_calendar_id = TextField()
+    google_event_id = TextField()
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["google_event_id", "google_calendar_id"],
+                name="uq_expanded_event_cal_event",
             ),
         ]
 
