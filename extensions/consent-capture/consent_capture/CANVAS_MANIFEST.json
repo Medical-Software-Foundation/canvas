@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.243.0",
-    "plugin_version": "1.39.0",
+    "plugin_version": "1.39.1",
     "name": "consent_capture",
     "description": "Multi-consent capture and management. A 'Consents' chart-header button (always shown; red when the patient still has a required consent due, neutral gray once satisfied) opens a picker of all configured consents, and records the selected one via the Canvas FHIR API with a generated documentation PDF. Written consents can be signed on the staff device, one or several at a time. Configure consents (verbiage, questions, capacity statements) at runtime on the Consent Settings page, opened from the app drawer by consent admins or at /plugin-io/api/consent_capture/admin/settings.",
     "url_permissions": [

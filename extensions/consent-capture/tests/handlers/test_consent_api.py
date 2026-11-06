@@ -5,6 +5,8 @@ import json
 from http import HTTPStatus
 from unittest.mock import MagicMock, call, patch
 
+import pytest
+
 from consent_capture.handlers.consent_api import (
     ConsentAdminApi,
     ConsentApi,
@@ -26,6 +28,14 @@ from consent_capture.handlers.consent_api import (
 from consent_capture.signing import questions_fingerprint, statement_fingerprint
 
 MODULE = "consent_capture.handlers.consent_api"
+
+
+@pytest.fixture(autouse=True)
+def _no_expiration_lookup():
+    """Recording reads the coding's expiration rule; tests that don't set one get
+    a consent that never expires."""
+    with patch(f"{MODULE}.expiration_date_for", return_value="") as mock_exp:
+        yield mock_exp
 
 # A minimal valid PDF (magic header) as base64, for the Written-document path.
 _PDF_BYTES = b"%PDF-1.4\n%%EOF\n"
@@ -2160,3 +2170,30 @@ class TestReviewFixes:
             mfhir.return_value.read.return_value = {"sourceAttachment": {"data": "B64"}}
             api.document()
             q.order_by.assert_called_once_with("-effective_date", "-created")
+
+
+class TestPreviewExpiration:
+    """The done screen shows the expiration Canvas will set, from the preview."""
+
+    def test_collect_preview_carries_expiration(self, _no_expiration_lookup):
+        _no_expiration_lookup.return_value = "2027-07-07"
+        api = _make_api(
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Verbal", "local_date": "2026-07-07"}
+        )
+        with patch(f"{MODULE}.definition_by_code", return_value=_defn()), patch(
+            f"{MODULE}._resolve_patient", return_value=("Jane Doe", "1980-01-01")
+        ), patch(f"{MODULE}._resolve_staff", return_value="Dr. Smith"), patch(
+            f"{MODULE}.generate_consent_pdf_base64", return_value=base64.b64encode(b"%PDF-1.4 /Type /Page ").decode()
+        ), patch(f"{MODULE}.build_consent_payload", return_value={"resourceType": "Consent"}), patch(
+            f"{MODULE}.CanvasFhir"
+        ), patch(f"{MODULE}.ConsentCaptureDetail"), patch(f"{MODULE}.log"):
+            result = api.collect()
+        assert result[0].content["preview"]["expiration_date"] == "2027-07-07"
+        assert _no_expiration_lookup.mock_calls == [call("http://loinc.org", "universal", "2026-07-07")]
+
+    def test_decline_preview_carries_expiration(self, _no_expiration_lookup):
+        _no_expiration_lookup.return_value = "2026-12-31"
+        result, _, _, _ = TestDecline()._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written", "local_date": "2026-10-22"}
+        )
+        assert result[0].content["preview"]["expiration_date"] == "2026-12-31"

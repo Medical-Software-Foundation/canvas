@@ -758,3 +758,42 @@ class TestReviewFixesService:
         assert values["reuse_signature"] is False
         assert values["ask_printed_name"] is True
         assert values["accept_finger"] is True   # missing -> default
+
+
+class TestExpirationDateFor:
+    """Mirrors Canvas's expiration rules for the done screen."""
+
+    def _rule(self, rule):
+        mock_pcc = MagicMock()
+        mock_pcc.objects.filter.return_value.values_list.return_value.first.return_value = rule
+        return patch("consent_capture.service.PatientConsentCoding", mock_pcc)
+
+    def test_in_one_year(self):
+        with self._rule("in_one_year") as mock_pcc:
+            assert service.expiration_date_for("INTERNAL", "rpm", "2026-11-06") == "2027-11-06"
+        assert mock_pcc.objects.filter.mock_calls[0] == call(system="INTERNAL", code="rpm")
+
+    def test_leap_day_moves_to_feb_28(self):
+        with self._rule("in_one_year"):
+            assert service.expiration_date_for("INTERNAL", "rpm", "2028-02-29") == "2029-02-28"
+
+    def test_end_of_year(self):
+        with self._rule("end_of_year"):
+            assert service.expiration_date_for("INTERNAL", "x", "2026-03-15") == "2026-12-31"
+
+    def test_never_and_missing_coding(self):
+        with self._rule("never"):
+            assert service.expiration_date_for("INTERNAL", "x", "2026-03-15") == ""
+        with self._rule(None):
+            assert service.expiration_date_for("INTERNAL", "x", "2026-03-15") == ""
+
+    def test_enum_rule_value(self):
+        class Rule:
+            value = "in_one_year"
+
+        with self._rule(Rule()):
+            assert service.expiration_date_for("INTERNAL", "x", "2026-01-31") == "2027-01-31"
+
+    def test_bad_date(self):
+        with self._rule("in_one_year"):
+            assert service.expiration_date_for("INTERNAL", "x", "") == ""

@@ -1260,7 +1260,7 @@
       RECORDS.unshift({
         id: '', code: c.code, system: c.system, display: c.display,
         status: declined ? 'declined' : 'active', on_file: !declined,
-        effective_date: pv.date || localDateISO(), expiration_date: '',
+        effective_date: pv.date || localDateISO(), expiration_date: pv.expiration_date || '',
         obtained_by: pv.collected_by || '', method: pv.method || '', consented_by: pv.consented_by || '',
         capacity_statement: pv.capacity_statement || '', pages: pv.pages || 0, signature: pv.signature || ''
       });

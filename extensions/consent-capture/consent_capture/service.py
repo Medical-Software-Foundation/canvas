@@ -6,9 +6,9 @@ so it is straightforward to unit-test.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from canvas_sdk.v1.data import Patient, PatientConsent
+from canvas_sdk.v1.data import Patient, PatientConsent, PatientConsentCoding
 
 from logger import log
 
@@ -26,6 +26,32 @@ from consent_capture.models import (
     ConsentPracticeSettings,
 )
 from consent_capture.signing import SIGNED_WITH_LABELS, questions_fingerprint, statement_fingerprint
+
+
+def expiration_date_for(system, code, effective_iso):
+    """The expiration date Canvas sets on a consent recorded on ``effective_iso``,
+    from the coding's expiration rule, as ISO ``YYYY-MM-DD``, or "" when it never
+    expires. Mirrors Canvas: one year later (Feb 29 moves to Feb 28), or the end of
+    the effective date's year. Lets the done screen show the date before the
+    Consents window reloads."""
+    rule = (
+        PatientConsentCoding.objects.filter(system=system, code=code)
+        .values_list("expiration_rule", flat=True)
+        .first()
+    )
+    rule = getattr(rule, "value", rule)
+    try:
+        effective = date.fromisoformat(effective_iso)
+    except (TypeError, ValueError):
+        return ""
+    if rule == "in_one_year":
+        try:
+            return effective.replace(year=effective.year + 1).isoformat()
+        except ValueError:  # Feb 29 with no Feb 29 next year
+            return effective.replace(year=effective.year + 1, day=28).isoformat()
+    if rule == "end_of_year":
+        return date(effective.year, 12, 31).isoformat()
+    return ""
 
 
 def active_definitions():

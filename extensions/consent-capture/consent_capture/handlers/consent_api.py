@@ -66,6 +66,7 @@ from consent_capture.questions import evaluate_answers, normalize_questions
 from consent_capture.service import (
     clean_practice_settings,
     definition_by_code,
+    expiration_date_for,
     is_consent_admin,
     normalize_staff_id,
     patients_missing_required,
@@ -789,6 +790,9 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                         "collected_by": ctx["staff_name"],
                         "capacity_statement": ctx["capacity_statement"],
                         "date": today,
+                        "expiration_date": expiration_date_for(
+                            definition.system, definition.code, today
+                        ),
                         "time": ctx["time_display"],
                         "pdf": bool(pdf_b64),
                         "pages": doc_pages,
@@ -891,6 +895,9 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                         "method": "",
                         "collected_by": ctx["staff_name"],
                         "date": today,
+                        "expiration_date": expiration_date_for(
+                            definition.system, definition.code, today
+                        ),
                         "declined": True,
                     },
                 },
