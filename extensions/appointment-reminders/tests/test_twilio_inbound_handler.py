@@ -66,6 +66,21 @@ def _mock_claims():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _recent_reminder_and_default_config():
+    """Default every test here to "a reminder went out" and the stock config.
+
+    The tests in this file predate the confirm window and exercise what happens
+    once a reply is accepted. The window itself, and the other-reply task, are
+    covered in test_twilio_inbound_reply_gating.py. A test that patches
+    ``load_config`` itself overrides the default below.
+    """
+    with patch.object(
+        TwilioInboundAPI, "_appointment_sms_sent_recently", return_value=True
+    ), patch(f"{_MOD}.load_config", return_value=CampaignConfig()):
+        yield
+
+
 def _api(
     body: str,
     headers: dict | None = None,
@@ -184,9 +199,12 @@ def test_inbound_confirm_updates_appointment_status() -> None:
     assert result[-1].status_code == HTTPStatus.OK
 
 
-def test_inbound_confirm_without_appointment_logs_no_appointment() -> None:
+def test_inbound_confirm_without_appointment_is_unrecognized() -> None:
     # "C" confirms without also being a Twilio opt-in keyword, so this isolates
     # the no-appointment branch. The YES overlap is covered separately below.
+    # With no appointment there is no reminder it can be answering, so it is
+    # logged like any other unrecognized reply (it used to be
+    # "confirmed_no_appointment").
     api = _api("Body=C&From=%2B14155551234")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=None), \
@@ -196,7 +214,7 @@ def test_inbound_confirm_without_appointment_logs_no_appointment() -> None:
         api.inbound()
     mock_appt.assert_not_called()
     mock_consent.assert_not_called()
-    assert mock_log.call_args.kwargs["status"] == "confirmed_no_appointment"
+    assert mock_log.call_args.kwargs["status"] == "unrecognized"
 
 
 def test_inbound_decline_opens_followup_task() -> None:
@@ -645,16 +663,18 @@ def test_decline_team_falls_back_to_unassigned_when_team_deleted() -> None:
         assert api._decline_task_team_id(cfg) is None
 
 
-def test_confirm_does_not_read_the_team_config() -> None:
-    """Only a decline needs it, so the lookup stays off every other path."""
+def test_confirm_reads_the_config_once_and_not_the_team() -> None:
+    """A confirm needs the config for its window, read once; no team lookup."""
     api = _api("Body=Y&From=%2B14155551234")
     with patch.object(api, "_resolve_patient", return_value=_patient()), \
          patch.object(api, "_nearest_upcoming_appointment", return_value=_appt()), \
          patch(f"{_MOD}.Appointment"), \
-         patch(f"{_MOD}.load_config") as mock_load, \
+         patch(f"{_MOD}.Team") as mock_team, \
+         patch(f"{_MOD}.load_config", return_value=CampaignConfig()) as mock_load, \
          patch(f"{_MOD}.log_inbound_response"):
         api.inbound()
-    mock_load.assert_not_called()
+    mock_load.assert_called_once()
+    mock_team.objects.filter.assert_not_called()
 
 
 # ---- decline task due date ----
