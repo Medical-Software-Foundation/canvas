@@ -6,7 +6,7 @@ Appointment reminders and confirmations over SMS and email, with per-business-li
 
 - **Appointment notifications** — confirmation, reminder, cancellation, no-show, and telehealth-join messages via Twilio (SMS) and SendGrid (email). Per-note-type templates with `{{placeholder}}`s; multi-interval reminder cadence (default `[4320, 45]` = 3 days + 45 min).
 - **Per-business-line branding + routing** — `{{business_line_attribution}}` / `{{business_line}}` placeholders; per-line **attribution** override → default fallback; per-line outbound **from-number** → global fallback. A patient's business line (`Patient.business_line`) drives which branding/number is used.
-- **Two-way structured confirm** — a signature-gated Twilio inbound webhook: `Y` confirms the patient's nearest upcoming appointment, `N` opens a follow-up Task routed to a configurable team. Strict Y/N token match (no free-form), `MessageSid` replay dedup, fail-closed signature check.
+- **Two-way structured confirm** — a signature-gated Twilio inbound webhook: `Y` confirms the patient's nearest upcoming appointment when a reminder for it went out recently (see *Confirm window*), `N` opens a follow-up Task routed to a configurable team. Strict Y/N token match (no free-form), `MessageSid` replay dedup, fail-closed signature check.
 - **STOP writes back to the chart** — a patient who texts a Twilio opt-out keyword has `has_consent` cleared on the number they texted from, so the opt-out survives in Canvas and not just in Twilio's block list. `START` / `UNSTOP` / `YES` restore it.
 - **Admin console gated by role** — the `/admin` endpoints require a staff role listed in `ADMIN_ROLE_NAMES`. Fail-closed: unset means nobody.
 - **Testing-mode gate** — a fail-closed allowlist, set in the admin app, that restricts *all* sends to specific patients **and** recipients. On by default, so a fresh install cannot message anyone until someone deliberately opens it up.
@@ -136,6 +136,16 @@ Three things the rule does deliberately:
 Leaving the team **Unassigned** is the default and matches what the plugin did before this was configurable: the Task is still created and still carries the `appointment-decline` label, but it lands in no team's queue, so someone has to go looking for it.
 
 If the chosen team is later deleted in Canvas, the Task is created unassigned and a warning is logged rather than the effect being risked on a dangling id — losing the Task would mean losing the only signal that this patient wants to reschedule. The dropdown flags a configured team it can no longer find, so a stale setting is visible rather than silently behaving as "Unassigned".
+
+### Other replies
+
+**Create a task for other replies** is off by default. Switch it on and a reply that is not a confirm, a decline or a bare consent keyword (`STOP`, `START`, ...) opens a Task, labelled `sms-reply`, for the team chosen under **Team for other replies**, with the reply quoted in the title (first 120 characters). It uses the same due-date rule as the decline task. Off, those replies are only logged, as before. `STOP` and its synonyms never open a Task.
+
+### Confirm window
+
+A confirm reply (`Y`, `YES`, `1`, `C`, ...) confirms the patient's nearest upcoming appointment only if a reminder, telehealth-join or booking SMS **for that appointment** was accepted by Twilio within **Confirm window (days)** (default 4). Otherwise it is handled as an other reply: nothing is confirmed, it is logged as `unrecognized` (`opted_in+unrecognized` for `YES`, which still restores SMS consent), and it opens a Task if that setting is on.
+
+This matters when the inbound number also carries other traffic: a `YES` to a portal invite or a staff text used to confirm whatever appointment came next. The default of 4 days covers the default 3-day-out reminder, which goes out at the day-out send time, so a reply just before an appointment later that day lands a little over 3 days after it. Before v0.21.0 a confirm with no upcoming appointment was logged as `confirmed_no_appointment`; it is now `unrecognized`.
 
 ## Testing mode
 
