@@ -490,10 +490,25 @@ class TestSignatureSection:
 
 
 class TestOutcomeRow:
-    def test_outcome_row_follows_consenting_party(self):
+    def test_declined_labels_the_party_and_adds_the_reason(self):
+        texts = _texts(
+            _build_ops("T", "P", "", "S", "2026-10-22", [], outcome="Declined", reason="Refused")
+        )
+        assert "CONSENTING PARTY" not in texts
+        assert texts.index("OUTCOME") == texts.index("DECLINED BY") + 2
+        assert texts.index("REASON") == texts.index("OUTCOME") + 2
+        assert "Refused" in texts
+
+    def test_ineligible_has_no_party_row(self):
+        texts = _texts(
+            _build_ops("T", "P", "", "S", "2026-10-22", [], consented_by="", outcome="Ineligible", reason="Ineligible")
+        )
+        assert "CONSENTING PARTY" not in texts and "DECLINED BY" not in texts
+        assert "Ineligible" in texts
+
+    def test_no_reason_row_without_a_reason(self):
         texts = _texts(_build_ops("T", "P", "", "S", "2026-10-22", [], outcome="Declined"))
-        assert "OUTCOME" in texts and "Declined" in texts
-        assert texts.index("OUTCOME") == texts.index("CONSENTING PARTY") + 2
+        assert "REASON" not in texts
 
     def test_no_outcome_row_by_default(self):
         assert "OUTCOME" not in _texts(_build_ops("T", "P", "", "S", "2026-10-22", []))

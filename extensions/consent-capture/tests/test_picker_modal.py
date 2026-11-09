@@ -106,3 +106,21 @@ class TestBuildPickerModal:
             mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = None
             build_picker_modal("p1", "staff-42", {"CONSENT_ADMIN_USERS": "staff-42"})
             mock_admin.assert_called_once_with("staff-42", "staff-42")
+
+    def test_passes_decline_reasons_without_the_settings_list(self):
+        options = {
+            "codings": [{"system": "S", "code": "r", "display": "Refused", "chosen": True, "ineligible": False}],
+            "reasons": [{"system": "S", "code": "r", "display": "Refused"}],
+            "ineligible": {"system": "S", "code": "i", "display": "Ineligible"},
+        }
+        with patch(f"{MODULE}.picker_items", return_value=[]), patch(
+            f"{MODULE}.consent_records", return_value=[]
+        ), patch(f"{MODULE}.decline_options", return_value=options), patch(
+            f"{MODULE}.is_consent_admin", return_value=False
+        ), patch(f"{MODULE}.render_to_string", return_value="") as mock_render, patch(f"{MODULE}.log"):
+            build_picker_modal("", "staff-9", {})
+        context = mock_render.mock_calls[0].args[1]
+        # The Consents window gets the Reason list and the Ineligible coding only.
+        assert json.loads(context["decline_json"]) == {
+            "reasons": options["reasons"], "ineligible": options["ineligible"],
+        }

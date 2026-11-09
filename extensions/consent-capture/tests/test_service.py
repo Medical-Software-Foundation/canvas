@@ -421,17 +421,21 @@ class TestConsentRecords:
         assert consent_records("") == []
 
     def _stub_rows(self, mock_pc, rows):
-        # rows are (id, code, system, display, effective_date, expired_date[, state]),
-        # newest-first. A row without a state is an accepted consent.
+        # rows are (id, code, system, display, effective_date, expired_date[, state
+        # [, rejection reason]]), newest-first. A row without a state is an accepted
+        # consent; one without a reason has none.
+        rows = [r if len(r) >= 7 else tuple(r) + ("accepted",) for r in rows]
         (
             mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value
-        ) = [r if len(r) == 7 else tuple(r) + ("accepted",) for r in rows]
+        ) = [r if len(r) == 8 else tuple(r) + (None,) for r in rows]
 
     def _stub_details(self, mock_ccd, rows):
         # rows are (system, code, effective_date, obtained_by_name, method,
-        # consented_by, capacity_statement, pages[, signed_on_device, signed_with]).
+        # consented_by, capacity_statement, pages[, signed_on_device, signed_with
+        # [, reason_display]]).
+        rows = [r if len(r) >= 10 else tuple(r) + (False, "") for r in rows]
         mock_ccd.objects.filter.return_value.values_list.return_value = [
-            r if len(r) == 10 else tuple(r) + (False, "") for r in rows
+            r if len(r) == 11 else tuple(r) + ("",) for r in rows
         ]
 
     def test_returns_one_entry_per_record_not_deduped(self):
@@ -452,7 +456,7 @@ class TestConsentRecords:
                 "status": "active", "on_file": True,
                 "effective_date": "2026-01-02", "expiration_date": "",
                 "obtained_by": "", "method": "", "consented_by": "", "capacity_statement": "",
-                "pages": 0, "signature": "",
+                "pages": 0, "signature": "", "reason": "", "ineligible": False,
             }
             assert mock_pc.objects.filter.mock_calls[0] == call(
                 patient__id="p1",
@@ -617,12 +621,15 @@ class TestDeclinedConsents:
             f"{MODULE}.ConsentCaptureDetail"
         ) as mock_ccd:
             mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value = [
-                (7, "c", "s", "C", EFF, None, "rejected"),
+                (7, "c", "s", "C", EFF, None, "rejected", "Refused"),
             ]
             mock_ccd.objects.filter.return_value.values_list.return_value = []
             out = consent_records("p1")
             assert out[0]["status"] == "declined"
             assert out[0]["on_file"] is False
+            # The reason comes from Canvas, so a profile-tab decline shows it too.
+            assert out[0]["reason"] == "Refused"
+            assert out[0]["ineligible"] is False
 
     def test_patients_with_active_pair_counts_declines(self):
         with patch(f"{MODULE}.PatientConsent") as mock_pc:
@@ -651,10 +658,10 @@ class TestSignatureDetail:
             f"{MODULE}.ConsentCaptureDetail"
         ) as mock_ccd:
             mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value = [
-                (1, "c", "s", "C", EFF, None, "accepted"),
+                (1, "c", "s", "C", EFF, None, "accepted", None),
             ]
             mock_ccd.objects.filter.return_value.values_list.return_value = [
-                ("s", "c", "2026-01-02", "Sam", "Written", "Patient", "", 1, True, "mouse"),
+                ("s", "c", "2026-01-02", "Sam", "Written", "Patient", "", 1, True, "mouse", ""),
             ]
             out = consent_records("p1")
             assert out[0]["signature"] == "Signed on this device (mouse or trackpad)"
@@ -797,3 +804,89 @@ class TestExpirationDateFor:
     def test_bad_date(self):
         with self._rule("in_one_year"):
             assert service.expiration_date_for("INTERNAL", "x", "") == ""
+
+
+class TestDeclineOptions:
+    """Reasons staff can choose, and the Ineligible coding, from Canvas's
+    rejection codings and the practice's saved choice."""
+
+    CODINGS = [
+        {"system": "INTERNAL", "code": "ineligible", "display": "Ineligible"},
+        {"system": "INTERNAL", "code": "REJECT_VIA_PORTAL", "display": "Rejected via Patient Portal"},
+        {"system": "INTERNAL", "code": "refused", "display": "Refused"},
+    ]
+
+    def _saved(self, row):
+        mock_ps = MagicMock()
+        mock_ps.objects.filter.return_value.values_list.return_value.first.return_value = row
+        return patch("consent_capture.service.ConsentPracticeSettings", mock_ps)
+
+    def test_rejection_codings_reads_displayed_codings(self):
+        mock = MagicMock()
+        mock.objects.filter.return_value.values_list.return_value.order_by.return_value = [
+            ("INTERNAL", "refused", "Refused"), ("Sys", "", None),
+        ]
+        with patch("consent_capture.service.PatientConsentRejectionCoding", mock):
+            out = service.rejection_codings()
+        assert mock.objects.filter.mock_calls[0] == call(user_selected=True)
+        assert out == [
+            {"system": "INTERNAL", "code": "refused", "display": "Refused"},
+            {"system": "Sys", "code": "", "display": "Sys"},
+        ]
+
+    def test_defaults_leave_out_the_portal_coding(self):
+        with patch("consent_capture.service.rejection_codings", return_value=self.CODINGS), self._saved(None):
+            out = service.decline_options()
+        assert [r["code"] for r in out["reasons"]] == ["refused"]
+        assert out["ineligible"]["code"] == "ineligible"
+        flags = {c["code"]: (c["chosen"], c["ineligible"]) for c in out["codings"]}
+        assert flags == {"ineligible": (True, True), "REJECT_VIA_PORTAL": (False, False), "refused": (True, False)}
+
+    def test_saved_choice_wins(self):
+        saved = (True, [{"system": "INTERNAL", "code": "REJECT_VIA_PORTAL"}])
+        with patch("consent_capture.service.rejection_codings", return_value=self.CODINGS), self._saved(saved):
+            out = service.decline_options()
+        assert [r["code"] for r in out["reasons"]] == ["REJECT_VIA_PORTAL"]
+        assert out["ineligible"] is None  # Ineligible exists but isn't chosen
+
+    def test_ineligible_found_by_name_ignoring_capitals(self):
+        codings = [{"system": "S", "code": "x1", "display": " INELIGIBLE "}]
+        with patch("consent_capture.service.rejection_codings", return_value=codings), self._saved(None):
+            out = service.decline_options()
+        assert out["ineligible"]["code"] == "x1"
+        assert out["reasons"] == []
+
+    def test_allowed_reasons_add_ineligible_only_when_the_consent_allows_it(self):
+        refused = {"system": "S", "code": "r", "display": "Refused"}
+        inel = {"system": "S", "code": "i", "display": "Ineligible"}
+        options = {"reasons": [refused], "ineligible": inel}
+        allows, doesnt = MagicMock(allow_ineligible=True), MagicMock(allow_ineligible=False)
+        assert service.allowed_decline_reasons(allows, options) == [refused, inel]
+        assert service.allowed_decline_reasons(doesnt, options) == [refused]
+        assert service.allowed_decline_reasons(allows, {"reasons": [], "ineligible": None}) == []
+
+    def test_clean_decline_reasons(self):
+        with patch("consent_capture.service.rejection_codings", return_value=self.CODINGS):
+            assert service.clean_decline_reasons("nope") is None
+            assert service.clean_decline_reasons([
+                {"system": "INTERNAL", "code": "refused"}, {"system": "INTERNAL", "code": "refused"},
+                {"system": "X", "code": "gone"}, "junk",
+            ]) == [{"system": "INTERNAL", "code": "refused"}]
+
+    def test_save_decline_reasons_upserts(self):
+        mock_ps = MagicMock()
+        mock_ps.objects.filter.return_value.update.return_value = 0
+        with patch("consent_capture.service.ConsentPracticeSettings", mock_ps):
+            service.save_decline_reasons([{"system": "S", "code": "r"}])
+        assert mock_ps.objects.create.mock_calls == [
+            call(key="practice", decline_reasons_set=True, decline_reasons=[{"system": "S", "code": "r"}])
+        ]
+
+    def test_ineligible_record_flagged(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc, patch(f"{MODULE}.ConsentCaptureDetail") as mock_ccd:
+            mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value = [
+                (7, "ccm", "s", "CCM", EFF, None, "rejected", "Ineligible"),
+            ]
+            mock_ccd.objects.filter.return_value.values_list.return_value = []
+            out = consent_records("p1")
+        assert out[0]["ineligible"] is True and out[0]["reason"] == "Ineligible"

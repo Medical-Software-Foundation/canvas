@@ -358,6 +358,7 @@
                   <div class="writtennote hidden" id="writtenNote"><strong>Written</strong> consents attach the signed form. The provider captures or uploads it, or the signer signs on the device.</div>
                 </div>
                 <div class="trow"><div class="tmain" data-toggle="allowDevice"><div class="tt">Allow signing on this device</div><div class="td">Adds <b>Sign on this device</b> to <b>Written</b> consents. The signature, signer, and time print on the PDF.</div></div><button type="button" class="switch" data-toggle="allowDevice" aria-label="Allow signing on this device"><span class="knob"></span></button></div>
+                <div class="trow" id="ineligibleRow"><div class="tmain" data-toggle="allowIneligible"><div class="tt">Allow marking ineligible</div><div class="td" id="ineligibleNote"></div></div><button type="button" class="switch" data-toggle="allowIneligible" aria-label="Allow marking ineligible"><span class="knob"></span></button></div>
                 <div class="trow"><div class="tmain" style="cursor:default"><div class="tt">Ask who is giving consent</div><div class="td">The patient, or a representative with their name and relationship.</div></div></div>
                 <div class="trow"><div class="tmain" data-toggle="capacityEnabled"><div class="tt">Include a capacity statement</div><div class="td">Adds a capacity attestation to the PDF.</div></div><button type="button" class="switch" data-toggle="capacityEnabled"><span class="knob"></span></button></div>
                 <div class="inset" id="capInset">
@@ -397,6 +398,13 @@
             <div class="trow"><div class="tmain" data-ps="ask_printed_name"><div class="tt">Ask for a printed name</div><div class="td">The signer enters their name under the signature. When off, the name from <b>Who is giving consent?</b> prints under the signature.</div></div><button type="button" class="switch" data-ps="ask_printed_name" aria-label="Ask for a printed name"><span class="knob"></span></button></div>
           </div>
         </div>
+        <div class="card" style="margin-top:16px">
+          <div class="ch"><h3>Decline reasons</h3><p>Apply to every consent. The reasons listed are the codings under <b>Patient consent rejection codings</b> in admin settings.</p></div>
+          <div class="capgroup">
+            <div class="trow"><div class="tmain" style="cursor:default"><div class="tt">Reasons staff can choose</div><div class="td">Check the reasons staff can choose when they decline a consent. To add a reason, add a coding under <b>Patient consent rejection codings</b> in admin settings.</div>
+              <div class="acc-opts" id="reasonOpts"></div><div class="td" id="ineligibleHint" style="margin-top:10px"></div></div></div>
+          </div>
+        </div>
       </div></div>
     </div></div>
     <div class="toast" id="toast"></div>
@@ -409,6 +417,12 @@
     var DEFAULT_CAP_PATIENT = "{{ default_capacity_patient|escapejs }}";
     var DEFAULT_CAP_REP = "{{ default_capacity_representative|escapejs }}";
     var PRACTICE = JSON.parse("{{ practice_json|escapejs }}");
+    // Displayed rejection codings: [{system, code, display, chosen, ineligible}].
+    var DECLINE_CODINGS = JSON.parse("{{ decline_json|escapejs }}");
+    function chosenReasons(codings) {
+      return codings.filter(function (c) { return c.chosen; }).map(function (c) { return { system: c.system, code: c.code }; });
+    }
+    PRACTICE.decline_reasons = chosenReasons(DECLINE_CODINGS);
     var CODINGS = [];   // every consent coding in Canvas (sidebar + equivalents picker)
 
     var TYPE_LABELS = { yes_no: 'Yes / No', acknowledge: 'Acknowledge', text: 'Free text' };
@@ -434,7 +448,8 @@
         required: !!c.required, active: !!c.active, sort: c.sort_order,
         satisfiedBy: JSON.parse(JSON.stringify(c.satisfied_by || [])),
         capPatient: c.capacity_patient_template || '', capRep: c.capacity_representative_template || '',
-        allowDevice: !!c.allow_device_signature
+        allowDevice: !!c.allow_device_signature,
+        allowIneligible: !!c.allow_ineligible
       };
     }
     function defaultForm() {
@@ -442,7 +457,7 @@
         verbiage: '', questions: [], methodOptions: METHOD_OPTIONS.slice(),
         methodEnabled: true, obtainedEnabled: true, capacityEnabled: true,
         required: false, active: true, sort: 100, satisfiedBy: [],
-        capPatient: DEFAULT_CAP_PATIENT, capRep: DEFAULT_CAP_REP, allowDevice: false
+        capPatient: DEFAULT_CAP_PATIENT, capRep: DEFAULT_CAP_REP, allowDevice: false, allowIneligible: false
       };
     }
     function snap(f) { return JSON.stringify(f); }
@@ -570,7 +585,8 @@
     /* ---------- at capture ---------- */
     function renderCapture() {
       var f = state.form;
-      setSwitch('capacityEnabled'); setSwitch('allowDevice');
+      setSwitch('capacityEnabled'); setSwitch('allowDevice'); setSwitch('allowIneligible');
+      renderIneligibleRow();
       el('capInset').classList.toggle('hidden', !f.capacityEnabled);
       var pills = el('methodPills'); pills.innerHTML = '';
       METHOD_OPTIONS.forEach(function (m) {
@@ -651,6 +667,16 @@
       });
     }
 
+    // Ineligible needs a coding named Ineligible, turned on in Practice settings.
+    function ineligibleCoding() { return DECLINE_CODINGS.filter(function (c) { return c.ineligible; })[0] || null; }
+    function renderIneligibleRow() {
+      var c = ineligibleCoding(), on = !!(c && c.chosen);
+      var row = el('ineligibleRow'); row.classList.toggle('locked', !on); row.style.opacity = on ? '' : '.5';
+      if (!on) row.querySelector('.switch').classList.remove('on');   // shown off while unavailable; the saved choice is kept
+      el('ineligibleNote').innerHTML = !c
+        ? 'Requires an Ineligible coding under <b>Patient consent rejection codings</b> in admin settings.'
+        : (on ? 'Adds <b>Ineligible</b> next to <b>Decline</b> for this consent.' : 'Turn on <b>Ineligible</b> in <b>Practice settings</b> first.');
+    }
     function setSwitch(field) {
       var on = !!state.form[field];
       var nodes = document.querySelectorAll('.switch[data-toggle="' + field + '"]');
@@ -727,7 +753,10 @@
     function bindToggles() {
       var nodes = document.querySelectorAll('[data-toggle]');
       for (var i = 0; i < nodes.length; i++) (function (node) {
-        node.addEventListener('click', function () { var f = node.getAttribute('data-toggle'); state.form[f] = !state.form[f]; touch(); });
+        node.addEventListener('click', function () {
+          if (node.closest('.trow.locked')) return;   // unavailable until set up
+          var f = node.getAttribute('data-toggle'); state.form[f] = !state.form[f]; touch();
+        });
       })(nodes[i]);
     }
     bindToggles();
@@ -771,7 +800,8 @@
         satisfied_by: f.satisfiedBy.slice(),
         required: f.required, active: f.active, sort_order: parseInt(f.sort, 10) || 100,
         capacity_patient_template: f.capPatient, capacity_representative_template: f.capRep,
-        allow_device_signature: !!f.allowDevice
+        allow_device_signature: !!f.allowDevice,
+        allow_ineligible: !!f.allowIneligible
       };
       state.saving = true; renderStatus();
       fetch(BASE + '/consents', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -825,6 +855,7 @@
       // The last checked box can't be cleared.
       accs.forEach(function (cb) { cb.disabled = cb.checked && on === 1; });
       document.querySelectorAll('.switch[data-ps]').forEach(function (s) { s.classList.toggle('on', !!f[s.getAttribute('data-ps')]); });
+      renderReasonOpts();
       var dirty = psDirty(), st = el('psStatus');
       st.querySelector('.stext').textContent = ps.saving ? 'Saving…' : (dirty ? 'Unsaved changes' : 'All changes saved');
       st.querySelector('.sdot').style.background = (dirty && !ps.saving) ? 'var(--warn)' : 'var(--disabled-dot)';
@@ -848,6 +879,23 @@
     document.querySelectorAll('[data-ps]').forEach(function (n) {
       n.addEventListener('click', function () { var k = n.getAttribute('data-ps'); ps.form[k] = !ps.form[k]; renderPractice(); });
     });
+    function isChosen(c) { return ps.form.decline_reasons.some(function (r) { return r.system === c.system && r.code === c.code; }); }
+    function renderReasonOpts() {
+      var box = el('reasonOpts'); box.innerHTML = '';
+      if (!DECLINE_CODINGS.length) box.appendChild(mk('span', 'td', 'No rejection codings are set up yet.'));
+      DECLINE_CODINGS.forEach(function (c) {
+        var lab = document.createElement('label'); var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isChosen(c);
+        cb.addEventListener('change', function () {
+          ps.form.decline_reasons = ps.form.decline_reasons.filter(function (r) { return !(r.system === c.system && r.code === c.code); });
+          if (cb.checked) ps.form.decline_reasons.push({ system: c.system, code: c.code });
+          renderPractice();
+        });
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + c.display)); box.appendChild(lab);
+      });
+      el('ineligibleHint').innerHTML = ineligibleCoding()
+        ? '<b>Ineligible</b> shows as its own choice next to <b>Decline</b>, on consents with <b>Allow marking ineligible</b> turned on.'
+        : 'To offer <b>Ineligible</b>, add a coding named Ineligible under <b>Patient consent rejection codings</b> in admin settings.';
+    }
     el('psDiscard').addEventListener('click', function () { if (ps.saving) return; ps.form = JSON.parse(ps.saved); renderPractice(); });
     el('psSave').addEventListener('click', function () {
       if (ps.saving) return;
@@ -855,7 +903,12 @@
       fetch(BASE + '/practice-settings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ps.form) })
         .then(function (r) { return r.json(); }).then(function (d) {
           ps.saving = false;
-          if (d && d.ok) { PRACTICE = d.settings; ps.form = JSON.parse(JSON.stringify(d.settings)); ps.saved = JSON.stringify(d.settings); }
+          if (d && d.ok) {
+            if (d.decline_reasons) DECLINE_CODINGS = d.decline_reasons;
+            PRACTICE = d.settings; PRACTICE.decline_reasons = chosenReasons(DECLINE_CODINGS);
+            ps.form = JSON.parse(JSON.stringify(PRACTICE)); ps.saved = JSON.stringify(PRACTICE);
+            if (state.form) renderCapture();
+          }
           else toast((d && d.error) || 'Could not save.', true);
           renderPractice();
         }).catch(function () { ps.saving = false; renderPractice(); toast('Could not reach the server.', true); });

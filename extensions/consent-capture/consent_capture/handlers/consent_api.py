@@ -13,7 +13,7 @@ Two SimpleAPI handlers:
 
 import base64
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from http import HTTPStatus
 
 # Matches an ISO calendar date (YYYY-MM-DD) sent by the browser.
@@ -24,6 +24,11 @@ import json
 from canvas_sdk.clients.canvas_fhir import CanvasFhir
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.action_button import ReloadPatientActionButtonsEffect
+from canvas_sdk.effects.patient_consent import (
+    ConsentCodingReference,
+    ConsentDocument,
+    RecordPatientConsent,
+)
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
@@ -33,6 +38,7 @@ from canvas_sdk.v1.data import (
     Patient,
     PatientConsent,
     PatientConsentCoding,
+    PatientConsentStatus,
     Staff,
 )
 
@@ -54,7 +60,7 @@ from consent_capture.constants import (
     parse_statement,
     render_capacity,
 )
-from consent_capture.fhir import build_consent_payload
+from consent_capture.fhir import _attachment_filename, build_consent_payload
 from consent_capture.models import ConsentCaptureDetail, ConsentDefinition
 from consent_capture.pdf import (
     fold_for_pdf,
@@ -64,13 +70,18 @@ from consent_capture.pdf import (
 )
 from consent_capture.questions import evaluate_answers, normalize_questions
 from consent_capture.service import (
+    allowed_decline_reasons,
+    clean_decline_reasons,
     clean_practice_settings,
+    decline_options,
     definition_by_code,
     expiration_date_for,
     is_consent_admin,
+    is_ineligible_display,
     normalize_staff_id,
     patients_missing_required,
     practice_settings,
+    save_decline_reasons,
     save_practice_settings,
     signature_label,
 )
@@ -352,12 +363,13 @@ def _fhir_access_token(fumage_url, client_id, client_secret):
 class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
     PREFIX = "/consent"
 
-    def _capture_context(self, body):
+    def _capture_context(self, body, decline=False):
         """Validate what a recording needs, shared by ``collect`` and ``decline``.
 
         Returns ``(context, error_response)``: a dict with the resolved definition,
         patient, staff, who consented, method, capacity statement and local date and
-        time, or ``None`` and a ready-to-return error response."""
+        time, or ``None`` and a ready-to-return error response. A ``decline`` needs
+        no method, and a capacity statement only when the provider confirmed it."""
         patient_id = body.get("patient_id")
 
         # Authoritative identity of the collector: the logged-in staff session.
@@ -406,7 +418,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         # Method — required when the consent uses it. Validated against the
         # consent's own configured options (falling back to the default set).
         method = ""
-        if definition.method_enabled:
+        if definition.method_enabled and not decline:
             allowed = normalize_method_options(definition.method_options) or list(METHOD_OPTIONS)
             method = _clean_method(body.get("method"), allowed)
             if not method:
@@ -431,7 +443,9 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         # attestation whenever capacity is enabled — so recording is blocked unless it is
         # confirmed, regardless of the recorded statement's wording.
         if definition.capacity_enabled and not body.get("capacity_confirmed"):
-            return None, [_error("Consent cannot be recorded unless capacity is confirmed.")]
+            if not decline:
+                return None, [_error("Consent cannot be recorded unless capacity is confirmed.")]
+            capacity_statement = ""  # a decline records the statement only when confirmed
 
         # Use the end user's LOCAL calendar date (sent by the browser) so the
         # consent date reflects the user's day, not UTC. Fall back to server UTC.
@@ -807,23 +821,47 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/decline")
     def decline(self) -> list[Response | Effect]:
-        """Record that the patient declined a consent: a FHIR Consent with status
-        "rejected" and a generated PDF stating the outcome. Canvas treats it as
-        asked and answered, so it clears the red button and the chart banner."""
+        """Record that the patient declined a consent, or isn't eligible for it: a
+        rejected consent with its rejection coding and a generated PDF stating the
+        outcome. Canvas treats it as asked and answered, so it clears the red button
+        and the chart banner.
+
+        Recorded with Canvas's RecordPatientConsent effect, which, unlike the FHIR
+        API, stores the rejection reason on the consent. ``reason_system`` /
+        ``reason_code`` must name one of the reasons staff can choose (or the
+        Ineligible coding, when the consent allows it); they're required whenever
+        any reason is available."""
         body = self.request.json() or {}
-        ctx, error_response = self._capture_context(body)
+        ctx, error_response = self._capture_context(body, decline=True)
         if error_response:
             return error_response
         definition = ctx["definition"]
         patient_id = ctx["patient_id"]
         today = ctx["today"]
         title = definition.display or definition.code
+
+        allowed = allowed_decline_reasons(definition, decline_options())
+        reason = None
+        if allowed:
+            pair = (
+                _clean_text(body.get("reason_system"), limit=200),
+                _clean_text(body.get("reason_code"), limit=120),
+            )
+            reason = next((r for r in allowed if (r["system"], r["code"]) == pair), None)
+            if reason is None:
+                return [_error("Select a reason.")]
+        ineligible = bool(reason) and is_ineligible_display(reason["display"])
+        outcome = "Ineligible" if ineligible else "Declined"
+        # Nobody declined an Ineligible consent: no party and no capacity statement.
+        consented_by = "" if ineligible else ctx["consented_by"]
+        capacity_statement = "" if ineligible else ctx["capacity_statement"]
+
         paragraphs = parse_statement(definition.verbiage)
         statement_text, statement_sha256 = statement_fingerprint(paragraphs)
         stale = _stale_statement(body, statement_sha256, definition.code, patient_id)
         if stale:
             return stale
-        unprintable = _unprintable_record(statement_text, [], ctx["capacity_statement"])
+        unprintable = _unprintable_record(statement_text, [], capacity_statement)
         if unprintable:
             return unprintable
 
@@ -837,27 +875,35 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             date=today,
             statement_paragraphs=paragraphs,
             time=ctx["time_display"],
-            consented_by=ctx["consented_by"],
+            consented_by=consented_by,
             method="",
-            capacity_statement=ctx["capacity_statement"],
-            outcome="Declined",
+            capacity_statement=capacity_statement,
+            outcome=outcome,
+            reason=reason["display"] if reason else "",
         )
-        payload = build_consent_payload(
-            system=definition.system,
-            code=definition.code,
-            display=definition.display,
+        record = RecordPatientConsent(
             patient_id=patient_id,
-            pdf_base64=pdf_b64,
-            today=today,
-            status="rejected",
-        )
-        fhir_error = self._create_fhir_consent(ctx, payload)
-        if fhir_error:
-            return fhir_error
+            consent=ConsentCodingReference(
+                system=definition.system, code=definition.code, display=definition.display or ""
+            ),
+            state=PatientConsentStatus.REJECTED,
+            effective_date=date.fromisoformat(today),
+            rejection_reason=(
+                ConsentCodingReference(
+                    system=reason["system"], code=reason["code"], display=reason["display"]
+                )
+                if reason
+                else None
+            ),
+            document=ConsentDocument(
+                filename=_attachment_filename(definition.display, definition.code, today),
+                content=pdf_b64,
+            ),
+        ).apply()
 
         log.info(
-            "ConsentApi: recorded declined consent %s for patient %s, collected by %s"
-            % (definition.code, patient_id, ctx["staff_name"])
+            "ConsentApi: recorded %s consent %s for patient %s, collected by %s"
+            % (outcome.lower(), definition.code, patient_id, ctx["staff_name"])
         )
         _store_capture_detail(
             patient_id=patient_id,
@@ -867,8 +913,8 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             obtained_by_id=str(ctx["staff_id"] or ""),
             obtained_by_name=ctx["staff_name"],
             method="",
-            consented_by=ctx["consented_by"],
-            capacity_statement=ctx["capacity_statement"],
+            consented_by=consented_by,
+            capacity_statement=capacity_statement,
             pages=pdf_page_count(base64.b64decode(pdf_b64)),
             # A decline replaces any same-day recording of this consent, so it
             # clears the signature detail rather than leaving it on a declined row.
@@ -882,8 +928,13 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                 "printed_name": "",
                 "name_kept": False,
                 "reconfirmed": False,
+                "reason_system": reason["system"] if reason else "",
+                "reason_code": reason["code"] if reason else "",
+                "reason_display": reason["display"] if reason else "",
             },
         )
+        # The consent is written when Canvas applies the effect, so it comes before
+        # the button reload.
         return [
             JSONResponse(
                 {
@@ -891,7 +942,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                     "preview": {
                         "code": definition.code,
                         "title": title,
-                        "consented_by": ctx["consented_by"],
+                        "consented_by": consented_by,
                         "method": "",
                         "collected_by": ctx["staff_name"],
                         "date": today,
@@ -899,10 +950,13 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                             definition.system, definition.code, today
                         ),
                         "declined": True,
+                        "reason": reason["display"] if reason else "",
+                        "ineligible": ineligible,
                     },
                 },
                 status_code=HTTPStatus.OK,
-            )
+            ),
+            record,
         ] + self._reload_effects(patient_id)
 
     @api.get("/document")
@@ -1022,6 +1076,7 @@ _BOOL_FIELDS = (
     "required",
     "active",
     "allow_device_signature",
+    "allow_ineligible",
 )
 
 
@@ -1097,6 +1152,7 @@ def serialize_definition(defn):
         "satisfied_by": defn.satisfied_by or [],
         "required": bool(defn.required),
         "allow_device_signature": bool(getattr(defn, "allow_device_signature", False)),
+        "allow_ineligible": bool(getattr(defn, "allow_ineligible", False)),
         "active": bool(defn.active),
         "sort_order": defn.sort_order,
     }
@@ -1138,6 +1194,7 @@ def render_admin_page(_default_system=""):
             "default_capacity_patient": DEFAULT_CAPACITY_PATIENT,
             "default_capacity_representative": DEFAULT_CAPACITY_REPRESENTATIVE,
             "practice_json": json.dumps(practice_settings()),
+            "decline_json": json.dumps(decline_options()["codings"]),
         },
     )
 
@@ -1400,7 +1457,14 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_admin():
             return [_error("You don't have access to Consent Settings.")]
         return [
-            JSONResponse({"ok": True, "settings": practice_settings()}, status_code=HTTPStatus.OK)
+            JSONResponse(
+                {
+                    "ok": True,
+                    "settings": practice_settings(),
+                    "decline_reasons": decline_options()["codings"],
+                },
+                status_code=HTTPStatus.OK,
+            )
         ]
 
     @api.post("/practice-settings")
@@ -1408,13 +1472,25 @@ class ConsentAdminApi(StaffSessionAuthMixin, SimpleAPI):
         """Save the Practice settings tab. At least one accepted signature stays on."""
         if not self._is_admin():
             return [_error("You don't have access to Consent Settings.")]
-        values, error = clean_practice_settings(self.request.json() or {})
+        body = self.request.json() or {}
+        values, error = clean_practice_settings(body)
         if error:
             return [_error(error)]
         saved = save_practice_settings(values)
+        reasons = clean_decline_reasons(body.get("decline_reasons"))
+        if reasons is not None:
+            save_decline_reasons(reasons)
         staff_id = self.request.headers.get("canvas-logged-in-user-id", "")
-        log.info("ConsentAdminApi: practice settings saved by staff %s: %s" % (staff_id or "unknown", saved))
-        return [JSONResponse({"ok": True, "settings": saved}, status_code=HTTPStatus.OK)]
+        log.info(
+            "ConsentAdminApi: practice settings saved by staff %s: %s, decline reasons %s"
+            % (staff_id or "unknown", saved, reasons)
+        )
+        return [
+            JSONResponse(
+                {"ok": True, "settings": saved, "decline_reasons": decline_options()["codings"]},
+                status_code=HTTPStatus.OK,
+            )
+        ]
 
     @api.post("/consents/delete")
     def delete_consent(self) -> list[Response | Effect]:

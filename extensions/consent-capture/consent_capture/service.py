@@ -8,7 +8,12 @@ so it is straightforward to unit-test.
 import re
 from datetime import date, datetime, timezone
 
-from canvas_sdk.v1.data import Patient, PatientConsent, PatientConsentCoding
+from canvas_sdk.v1.data import (
+    Patient,
+    PatientConsent,
+    PatientConsentCoding,
+    PatientConsentRejectionCoding,
+)
 
 from logger import log
 
@@ -275,11 +280,12 @@ def consent_records(patient_id):
             "effective_date",
             "expired_date",
             "state",
+            "rejection_reason__display",
         )
         .order_by("-effective_date", "-created")
     )
     out = []
-    for record_id, code, system, display, effective_date, expired_date, state in rows:
+    for record_id, code, system, display, effective_date, expired_date, state, rejection in rows:
         # Identity is the (system, code) pair; some codings carry it in system alone
         # (empty code), so only skip records with neither.
         if not code and not system:
@@ -303,6 +309,11 @@ def consent_records(patient_id):
                 "capacity_statement": detail.get("capacity_statement", ""),
                 "pages": detail.get("pages", 0),
                 "signature": detail.get("signature", ""),
+                # The decline reason, from Canvas (also set for declines recorded on
+                # the profile tab) or else the plugin's own record.
+                "reason": (rejection or detail.get("reason", "")) if state in DECLINED_STATES else "",
+                "ineligible": state in DECLINED_STATES
+                and is_ineligible_display(rejection or detail.get("reason", "")),
             }
         )
     return out
@@ -326,11 +337,12 @@ def _capture_details(patient_id):
         "pages",
         "signed_on_device",
         "signed_with",
+        "reason_display",
     )
     out = {}
     for (
         system, code, eff, obtained_by, method, consented_by, capacity, pages,
-        signed_on_device, signed_with,
+        signed_on_device, signed_with, reason,
     ) in rows:
         out[(system or "", code or "", eff or "")] = {
             "obtained_by": obtained_by or "",
@@ -339,6 +351,7 @@ def _capture_details(patient_id):
             "capacity_statement": capacity or "",
             "pages": int(pages or 0),
             "signature": signature_label(signed_on_device, signed_with),
+            "reason": reason or "",
         }
     return out
 
@@ -379,6 +392,7 @@ def _picker_item(d, info, is_active):
         "questions": d.questions or [],
         "required": bool(d.required),
         "allow_device_signature": bool(getattr(d, "allow_device_signature", False)),
+        "allow_ineligible": bool(getattr(d, "allow_ineligible", False)),
         "active": is_active,
         "on_file": status == "on_file",
         "status": status,
@@ -614,3 +628,110 @@ def save_practice_settings(values):
     if not updated:
         ConsentPracticeSettings.objects.create(key=PRACTICE_SETTINGS_KEY, **values)
     return practice_settings()
+
+
+# --------------------------------------------------------------------------- #
+# Decline reasons (Practice settings tab) and Ineligible
+# --------------------------------------------------------------------------- #
+
+# Canvas creates this rejection coding for declines made in the patient portal.
+# Staff don't choose it, so it's left out until a practice chooses otherwise.
+PORTAL_REJECTION_CODE = "REJECT_VIA_PORTAL"
+
+
+def is_ineligible_display(display):
+    """Whether a rejection coding's name means the patient is ineligible. The
+    plugin finds the Ineligible coding by its name, ignoring capitals and spaces."""
+    return (display or "").strip().lower() == "ineligible"
+
+
+def rejection_codings():
+    """The rejection codings Canvas shows ("Toggle displaying rejection reason in
+    the UI" on), as ``[{system, code, display}]`` sorted by name."""
+    rows = (
+        PatientConsentRejectionCoding.objects.filter(user_selected=True)
+        .values_list("system", "code", "display")
+        .order_by("display")
+    )
+    return [
+        {"system": system or "", "code": code or "", "display": display or code or system or ""}
+        for system, code, display in rows
+    ]
+
+
+def _saved_decline_reasons():
+    """The saved ``[(system, code)]`` choice, or ``None`` until the practice saves it."""
+    row = (
+        ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY)
+        .values_list("decline_reasons_set", "decline_reasons")
+        .first()
+    )
+    if not row or not row[0]:
+        return None
+    return {
+        (item.get("system") or "", item.get("code") or "")
+        for item in (row[1] or [])
+        if isinstance(item, dict)
+    }
+
+
+def decline_options():
+    """What staff can choose when declining.
+
+    Returns ``{codings, reasons, ineligible}``: every displayed rejection coding
+    with whether it's chosen and whether it's the Ineligible one (for Consent
+    Settings); the chosen reasons other than Ineligible (the Reason list); and the
+    Ineligible coding when it exists and is chosen, else ``None``."""
+    codings = rejection_codings()
+    saved = _saved_decline_reasons()
+
+    def chosen(c):
+        if saved is None:
+            return c["code"] != PORTAL_REJECTION_CODE
+        return (c["system"], c["code"]) in saved
+
+    ineligible = next((c for c in codings if is_ineligible_display(c["display"])), None)
+    return {
+        "codings": [
+            dict(c, chosen=chosen(c), ineligible=c is ineligible) for c in codings
+        ],
+        "reasons": [c for c in codings if chosen(c) and c is not ineligible],
+        "ineligible": ineligible if ineligible is not None and chosen(ineligible) else None,
+    }
+
+
+def allowed_decline_reasons(definition, options):
+    """The rejection codings a decline of ``definition`` may be recorded with:
+    the chosen reasons, plus Ineligible when the consent allows it."""
+    allowed = list(options["reasons"])
+    if options["ineligible"] and getattr(definition, "allow_ineligible", False):
+        allowed.append(options["ineligible"])
+    return allowed
+
+
+def clean_decline_reasons(raw):
+    """Validate a submitted ``[{system, code}]`` list against the displayed
+    rejection codings. Returns the cleaned list, or ``None`` when ``raw`` isn't a
+    list (the setting is left as it is)."""
+    if not isinstance(raw, list):
+        return None
+    known = {(c["system"], c["code"]) for c in rejection_codings()}
+    out, seen = [], set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        pair = (str(item.get("system") or ""), str(item.get("code") or ""))
+        if pair in known and pair not in seen:
+            seen.add(pair)
+            out.append({"system": pair[0], "code": pair[1]})
+    return out
+
+
+def save_decline_reasons(reasons):
+    """Store the chosen decline reasons on the practice settings row."""
+    values = {"decline_reasons_set": True, "decline_reasons": reasons}
+    updated = ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY).update(
+        **values
+    )
+    if not updated:
+        ConsentPracticeSettings.objects.create(key=PRACTICE_SETTINGS_KEY, **values)

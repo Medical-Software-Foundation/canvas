@@ -299,6 +299,7 @@ def _defn(**over):
     d.satisfied_by = over.get("satisfied_by", [])
     d.required = over.get("required", False)
     d.allow_device_signature = over.get("allow_device_signature", False)
+    d.allow_ineligible = over.get("allow_ineligible", False)
     return d
 
 
@@ -1178,7 +1179,7 @@ def test_serialize_definition_shape():
         "obtained_by_enabled", "capacity_enabled", "method_options",
         "capacity_patient_template", "capacity_representative_template",
         "questions", "satisfied_by", "required", "active", "sort_order",
-        "allow_device_signature",
+        "allow_device_signature", "allow_ineligible",
     }
 
 
@@ -1937,34 +1938,47 @@ class TestDeviceSignature:
 # --------------------------------------------------------------------------- #
 # Decline
 # --------------------------------------------------------------------------- #
+REFUSED = {"system": "INTERNAL", "code": "refused", "display": "Refused"}
+UNABLE = {"system": "INTERNAL", "code": "unable_to_consent", "display": "Unable to consent"}
+INELIGIBLE = {"system": "INTERNAL", "code": "ineligible", "display": "Ineligible"}
+
+
 class TestDecline:
-    def _run(self, body, fhir_exc=None):
+    def _run(self, body, options=None, defn=None):
         api = _make_api(body)
-        with patch(f"{MODULE}.definition_by_code", return_value=_defn()), patch(
+        options = options or {"codings": [], "reasons": [], "ineligible": None}
+        with patch(f"{MODULE}.definition_by_code", return_value=defn or _defn()), patch(
             f"{MODULE}._resolve_patient", return_value=("Maria Lopez", "1951-06-14")
         ), patch(f"{MODULE}._resolve_staff", return_value="Sam Rivera"), patch(
             f"{MODULE}.generate_consent_pdf_base64", return_value=base64.b64encode(b"%PDF-1.4 /Type /Page ").decode()
-        ) as mock_pdf, patch(
-            f"{MODULE}.build_consent_payload", return_value={"resourceType": "Consent"}
-        ) as mock_payload, patch(f"{MODULE}.CanvasFhir") as mock_fhir, patch(
+        ) as mock_pdf, patch(f"{MODULE}.decline_options", return_value=options), patch(
+            f"{MODULE}.CanvasFhir"
+        ) as mock_fhir, patch(
             f"{MODULE}.ConsentCaptureDetail"
         ) as mock_ccd, patch(f"{MODULE}.ReloadPatientActionButtonsEffect") as mock_reload, patch(f"{MODULE}.log"):
-            if fhir_exc:
-                mock_fhir.return_value.create.side_effect = fhir_exc
             mock_ccd.objects.filter.return_value.update.return_value = 0
             mock_reload.return_value.apply.return_value = "RELOAD"
             result = api.decline()
-        return result, mock_pdf, mock_payload, mock_ccd
+        # A decline is saved by the effect, never through the FHIR API.
+        assert mock_fhir.mock_calls == []
+        return result, mock_pdf, None, mock_ccd
 
     def test_records_rejected_consent_with_declined_pdf(self):
-        result, mock_pdf, mock_payload, mock_ccd = self._run(
-            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written", "local_date": "2026-10-22"}
+        result, mock_pdf, _, mock_ccd = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written", "local_date": "2026-10-22",
+             "capacity_confirmed": True}
         )
         assert result[0].content["ok"] is True
         assert result[0].content["preview"]["declined"] is True
-        assert result[1] == "RELOAD"
+        effect = result[1]["values"]
+        assert effect["patient_id"] == "patient-1"
+        assert effect["state"] == "rejected"
+        assert effect["consent"].__dict__ == {"system": "http://loinc.org", "code": "universal", "display": "Universal Consent"}
+        assert effect["effective_date"].isoformat() == "2026-10-22"
+        assert effect["rejection_reason"] is None  # no reasons set up on the instance
+        assert effect["document"].filename.endswith(".pdf")
+        assert result[2] == "RELOAD"  # after the consent effect
         assert mock_pdf.mock_calls[0].kwargs["outcome"] == "Declined"
-        assert mock_payload.mock_calls[0].kwargs["status"] == "rejected"
         stored = mock_ccd.objects.create.mock_calls[0].kwargs
         assert stored["status"] == "declined"
         # Nothing was signed, so no method on the PDF or the record.
@@ -1972,6 +1986,75 @@ class TestDecline:
         assert mock_pdf.mock_calls[0].kwargs["method"] == ""
         assert result[0].content["preview"]["method"] == ""
         assert stored["pages"] == 1
+
+    def test_decline_needs_no_method_or_capacity(self):
+        # The single-consent Decline step asks for neither.
+        result, mock_pdf, _, mock_ccd = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "local_date": "2026-10-22",
+             "capacity_confirmed": False}
+        )
+        assert result[0].content["ok"] is True
+        assert mock_pdf.mock_calls[0].kwargs["capacity_statement"] == ""
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["capacity_statement"] == ""
+
+    def test_reason_required_when_reasons_exist(self):
+        options = {"codings": [], "reasons": [REFUSED, UNABLE], "ineligible": None}
+        result, mock_pdf, _, _ = self._run({"patient_id": "patient-1", "consent_code": "universal"}, options)
+        assert result[0].content == {"ok": False, "error": "Select a reason."}
+        assert mock_pdf.mock_calls == []
+
+    def test_unknown_reason_refused(self):
+        options = {"codings": [], "reasons": [REFUSED], "ineligible": None}
+        result, _, _, _ = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "reason_system": "INTERNAL", "reason_code": "made_up"},
+            options,
+        )
+        assert result[0].content == {"ok": False, "error": "Select a reason."}
+
+    def test_records_the_reason(self):
+        options = {"codings": [], "reasons": [REFUSED, UNABLE], "ineligible": None}
+        result, mock_pdf, _, mock_ccd = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "reason_system": "INTERNAL",
+             "reason_code": "unable_to_consent", "consent_by": "representative",
+             "representative_name": "Jamie Lopez", "representative_relationship": "Daughter"},
+            options,
+        )
+        assert result[0].content["preview"]["reason"] == "Unable to consent"
+        assert result[0].content["preview"]["ineligible"] is False
+        assert result[1]["values"]["rejection_reason"].__dict__ == UNABLE
+        kwargs = mock_pdf.mock_calls[0].kwargs
+        assert kwargs["reason"] == "Unable to consent" and kwargs["outcome"] == "Declined"
+        assert kwargs["consented_by"] == "Jamie Lopez (Daughter)"
+        stored = mock_ccd.objects.create.mock_calls[0].kwargs
+        assert (stored["reason_system"], stored["reason_code"], stored["reason_display"]) == (
+            "INTERNAL", "unable_to_consent", "Unable to consent"
+        )
+
+    def test_ineligible_recorded_when_the_consent_allows_it(self):
+        options = {"codings": [], "reasons": [REFUSED], "ineligible": INELIGIBLE}
+        result, mock_pdf, _, mock_ccd = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "reason_system": "INTERNAL", "reason_code": "ineligible",
+             "capacity_confirmed": True},
+            options,
+            _defn(allow_ineligible=True),
+        )
+        assert result[0].content["preview"]["ineligible"] is True
+        assert result[0].content["preview"]["consented_by"] == ""
+        assert result[1]["values"]["rejection_reason"].__dict__ == INELIGIBLE
+        kwargs = mock_pdf.mock_calls[0].kwargs
+        assert kwargs["outcome"] == "Ineligible"
+        # Nobody declined: no party and no capacity statement.
+        assert kwargs["consented_by"] == "" and kwargs["capacity_statement"] == ""
+        assert mock_ccd.objects.create.mock_calls[0].kwargs["consented_by"] == ""
+
+    def test_ineligible_refused_when_the_consent_doesnt_allow_it(self):
+        options = {"codings": [], "reasons": [REFUSED], "ineligible": INELIGIBLE}
+        result, _, _, _ = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "reason_system": "INTERNAL", "reason_code": "ineligible"},
+            options,
+            _defn(allow_ineligible=False),
+        )
+        assert result[0].content == {"ok": False, "error": "Select a reason."}
 
     def test_decline_refused_when_text_cant_print(self):
         api = _make_api(
@@ -1992,7 +2075,7 @@ class TestDecline:
         assert mock_pdf.mock_calls == []
 
     def test_decline_refused_when_text_changed(self):
-        result, mock_pdf, mock_payload, _ = self._run(
+        result, mock_pdf, _, _ = self._run(
             {
                 "patient_id": "patient-1",
                 "consent_code": "universal",
@@ -2002,22 +2085,11 @@ class TestDecline:
         )
         assert "changed while it was open" in result[0].content["error"]
         assert mock_pdf.mock_calls == []
-        assert mock_payload.mock_calls == []
 
     def test_validation_shared_with_collect(self):
         result, mock_pdf, _, _ = self._run({"patient_id": "", "consent_code": "universal"})
         assert result[0].content["error"] == "No patient was identified for this consent."
         assert mock_pdf.mock_calls == []
-
-    def test_fhir_failure_reported(self):
-        exc = Exception("boom")
-        exc.response = MagicMock(status_code=500, text="err")
-        result, _, _, mock_ccd = self._run(
-            {"patient_id": "patient-1", "consent_code": "universal", "method": "Written"}, fhir_exc=exc
-        )
-        assert result[0].content["ok"] is False
-        assert "couldn't save the consent" in result[0].content["error"]
-        assert mock_ccd.objects.create.mock_calls == []
 
 
 # --------------------------------------------------------------------------- #
@@ -2036,7 +2108,7 @@ class TestPracticeSettingsApi:
             f"{MODULE}.practice_settings", return_value=_SETTINGS
         ):
             result = api.get_practice_settings()
-        assert result[0].content == {"ok": True, "settings": _SETTINGS}
+        assert result[0].content == {"ok": True, "settings": _SETTINGS, "decline_reasons": []}
 
     def test_post_requires_admin(self):
         api = _admin({"accept_typed": True})
@@ -2064,7 +2136,26 @@ class TestPracticeSettingsApi:
         ) as mock_save:
             result = api.update_practice_settings()
         assert mock_save.mock_calls == [call(saved)]
-        assert result[0].content == {"ok": True, "settings": saved}
+        assert result[0].content == {"ok": True, "settings": saved, "decline_reasons": []}
+
+    def test_post_saves_decline_reasons(self):
+        api = _admin({"decline_reasons": [{"system": "INTERNAL", "code": "refused"}, {"system": "X", "code": "nope"}]})
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.save_practice_settings", return_value=_SETTINGS
+        ), patch("consent_capture.service.rejection_codings", return_value=[REFUSED, UNABLE]), patch(
+            f"{MODULE}.save_decline_reasons"
+        ) as mock_save_reasons:
+            api.update_practice_settings()
+        # Only displayed codings are kept.
+        assert mock_save_reasons.mock_calls == [call([{"system": "INTERNAL", "code": "refused"}])]
+
+    def test_post_without_decline_reasons_leaves_them(self):
+        api = _admin({"accept_typed": True})
+        with patch.object(ConsentAdminApi, "_is_admin", return_value=True), patch(
+            f"{MODULE}.save_practice_settings", return_value=_SETTINGS
+        ), patch(f"{MODULE}.save_decline_reasons") as mock_save_reasons:
+            api.update_practice_settings()
+        assert mock_save_reasons.mock_calls == []
 
     def test_upsert_accepts_allow_device_signature(self):
         api = _admin({"code": "universal", "system": "INTERNAL", "allow_device_signature": True})

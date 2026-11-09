@@ -68,6 +68,11 @@ class ConsentDefinition(CustomModel):
     # Off by default; rows created before the field existed read as None (off).
     allow_device_signature = BooleanField(default=False)
 
+    # Whether staff can mark the patient Ineligible for this consent (recorded as a
+    # decline with the practice's "Ineligible" rejection coding). Off by default;
+    # rows created before the field existed read as None (off).
+    allow_ineligible = BooleanField(default=False)
+
     active = BooleanField(default=True)
     sort_order = IntegerField(default=100)
 
@@ -117,6 +122,12 @@ class ConsentCaptureDetail(CustomModel):
     # Rows written before this field existed read as None and mean accepted.
     status = TextField(default="accepted")
 
+    # The rejection coding a decline was recorded with (empty for accepted
+    # consents, and for declines recorded before reasons existed).
+    reason_system = TextField(default="")
+    reason_code = TextField(default="")
+    reason_display = TextField(default="")
+
     # "Sign on this device" detail. The method stays "Written"; these say how the
     # signature was captured. ``signed_with`` is finger | mouse | typed.
     signed_on_device = BooleanField(default=False)
@@ -163,6 +174,12 @@ class ConsentPracticeSettings(CustomModel):
 
     # Ask the signer to print their name under a drawn signature.
     ask_printed_name = BooleanField(default=False)
+
+    # Rejection codings staff can choose when declining, as [{system, code}].
+    # Until ``decline_reasons_set`` is saved, every displayed coding except the
+    # patient portal's own counts as chosen.
+    decline_reasons_set = BooleanField(default=False)
+    decline_reasons = JSONField(default=list)
 
     updated_at = DateTimeField(auto_now=True)
 
