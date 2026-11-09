@@ -135,6 +135,26 @@ def load_fhir_settings(environment):
     fumage = FHIRHelper({'INSTANCE_NAME': environment, 'CLIENT_ID': client_id, 'CLIENT_SECRET': client_secret})
     return fumage
 
+
+def resource_id_from_location(resource_type, location):
+    """
+    Return the resource id from a FHIR Location header such as
+    https://fumage-<env>.canvasmedical.com/Patient/<id>/_history/1.
+
+    Reads the path segment after /<ResourceType>/, so the scheme and host don't
+    matter. Fumage switched Location from http:// to https:// in Oct 2026; the old
+    prefix strip then returned the whole URL as the id.
+    """
+    path = (location or '').split('?')[0].split('#')[0].split('/_history/')[0].rstrip('/')
+    marker = f'/{resource_type}/'
+    if marker not in path:
+        raise ValueError(f"Unexpected Location header for {resource_type}: {location}")
+    resource_id = path.rsplit(marker, 1)[1].split('/')[0]
+    if not resource_id:
+        raise ValueError(f"No {resource_type} id in Location header: {location}")
+    return resource_id
+
+
 class FHIRHelper:
     """
     Helper class to take care of all the FHIR auth and calls
@@ -227,7 +247,7 @@ class FHIRHelper:
         if response.status_code != 201:
             raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers.get('fumage-correlation-id', '')} \n {response.text}")
 
-        return response.headers['location'].replace(f'http://fumage-{self.instance_name}.canvasmedical.com/{payload["resourceType"]}/', '').replace('/_history/1', '').replace(f'http://localhost:8888/{payload["resourceType"]}/', '')
+        return resource_id_from_location(payload['resourceType'], response.headers['location'])
 
 
     def perform_create_lab_report(self, payload):
