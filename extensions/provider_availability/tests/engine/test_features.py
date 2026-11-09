@@ -89,7 +89,8 @@ def one_provider():
          patch(f"{MOD}.get_all_recurring_blocks", return_value=[]), \
          patch(f"{MOD}.get_admin_calendars", return_value=[MagicMock(id="cal1")]), \
          patch(f"{MOD}.get_provider_displays", return_value={P1: {"name": "Pat One"}}), \
-         patch(f"{MOD}.to_provider_naive", side_effect=lambda d, pid: d.replace(tzinfo=None)):
+         patch(f"{MOD}.to_provider_naive", side_effect=lambda d, pid: d.replace(tzinfo=None)), \
+         patch(f"{MOD}.provider_tz", return_value=dt.UTC):
         yield
 
 
@@ -108,7 +109,7 @@ class TestAffectedItems:
         assert result["columns"] == ["Date", "Appointment", "Buffer"]
         assert result["providers"] == [{
             "provider_id": P1, "name": "Pat One", "count": 2,
-            "rows": [["Thu Oct 15", "2:00 PM", "15 min before"], ["Thu Oct 15", "2:30 PM", "15 min after"]],
+            "rows": [["Thu Oct 15", "2:00 PM UTC", "15 min before"], ["Thu Oct 15", "2:30 PM UTC", "15 min after"]],
         }]
 
     def test_holds_show_their_type(self, one_provider):
@@ -116,7 +117,7 @@ class TestAffectedItems:
         with patch(f"{MOD}.EventModel") as ev:
             ev.objects.filter.return_value = _QS([_evt("h1", start, start + dt.timedelta(hours=2), "Next Day Hold")])
             result = features.affected_items("holds", NOW)
-        assert result["providers"][0]["rows"] == [["Fri Oct 16", "3:00 PM – 5:00 PM", "Next-day"]]
+        assert result["providers"][0]["rows"] == [["Fri Oct 16", "3:00 PM – 5:00 PM UTC", "Next-day"]]
 
     def test_overrides_list_upcoming_dates_only(self, one_provider):
         rule = ProviderAvailabilityRule(provider_id=P1, date_overrides=[
@@ -128,7 +129,7 @@ class TestAffectedItems:
             result = features.affected_items("overrides", NOW)
         assert result["providers"][0]["rows"] == [
             ["Thu Nov 26", "Closed", "Thanksgiving"],
-            ["Thu Dec 24", "8:00 AM – 12:00 PM", ""],
+            ["Thu Dec 24", "8:00 AM – 12:00 PM UTC", ""],
         ]
 
     def test_timezones_list_providers_who_would_move(self):

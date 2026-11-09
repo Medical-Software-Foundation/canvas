@@ -116,10 +116,14 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .schedule-row .date-range, .schedule-row .date-range-row { display: contents; }
 .schedule-row .repeat-unit { flex: 1; width: auto; min-width: 0; }
 .date-facade:disabled { cursor: default; color: var(--muted); opacity: .7; }
-.no-end-row { margin-top: 8px; }
+/* End date box with a × inside it to clear a picked date. */
+.end-date-line { position: relative; }
+.end-date-line .date-facade { width: 100%; padding-right: 34px; }
+.end-date-line .date-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; }
+.end-date-line .date-clear:hover { background: var(--soft); color: var(--ink); }
 .no-end-row canvas-checkbox { font-size: 13.5px; font-family: inherit; }
 .no-end-row canvas-checkbox::part(label) { color: var(--ink); }
-.ms-chip { font-size: 12.5px; font-weight: 600; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.ms-chip { font-size: 12.5px; font-weight: 400; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
 .ms-dropdown { border: 1.5px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgba(13, 32, 60, .14); }
 .ms-option:hover { background: var(--field); }
 
@@ -202,6 +206,9 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .schedule-mode-toggle { display: inline-flex; background: var(--field); border: 1.5px solid var(--line); border-radius: 9px; padding: 3px; width: auto; }
 .schedule-mode-toggle .mode-btn { border: 0; background: none; padding: 5px 14px; font: inherit; font-size: 13px; color: var(--muted); border-radius: 7px; cursor: pointer; flex: none; }
 .schedule-mode-toggle .mode-btn.active { background: var(--soft); color: var(--accent); font-weight: 700; box-shadow: none; }
+/* The toggle sits right under its label, and the fields it controls follow closely, as one section. */
+.schedule-mode-toggle { margin-top: 0; }
+#form-available > .schedule-mode-block, #form-blocked > .schedule-mode-block { margin-bottom: -12px; }
 
 /* Weekly schedule: one row per day, its hours on one line, Add hours on the right.
    No collapsing; a day with no hours reads "No hours". Pairs are split by a thin bar. */
@@ -220,7 +227,6 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .days-grid .day-body > div { position: relative; }
 .days-grid .day-body > div + div { margin-left: 22px; }
 .days-grid .day-body > div + div::before { content: ""; position: absolute; left: -13px; top: 4px; bottom: 4px; width: 1.5px; background: #c3d3da; border-radius: 1px; }
-.days-grid .day-body:not(:has(.day-time-inputs))::before { content: "No hours"; font-size: 13.5px; color: var(--muted); }
 .days-grid .day-body .add-time-btn { margin-left: auto !important; border: 0; flex: 0 0 auto; width: auto; }
 .days-grid .day-body { width: 100%; }
 .day-time-inputs { display: inline-flex; align-items: center; gap: 8px; }
@@ -262,7 +268,7 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .ax-lbl { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin: 18px 0 6px; }
 .ax-help { font-size: 13.5px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
 .note { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
-.tok { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; line-height: 22px; white-space: nowrap; }
+.tok { display: inline-block; font-size: 12.5px; font-weight: 400; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; line-height: 22px; white-space: nowrap; }
 .toks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .linkish { color: var(--accent); font-weight: 600; cursor: pointer; font-size: 13px; background: none; border: 0; padding: 0; font-family: inherit; }
 .linkish:hover { text-decoration: underline; }
@@ -270,6 +276,12 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .rs b { display: block; font-weight: 600; }
 .rs.ok { border-color: #bfe3c9; background: #f1faf4; color: #2e7d4f; }
 .rs.warn { border-color: #f1d9ad; background: #fdf6e9; color: #9a5b00; }
+/* Access control: the "Who can do what" summary, the scheduler callout, and the admin editor. */
+.access-sum { width: 100%; max-width: 640px; margin: 10px 0 12px; }
+.access-sum td:first-child { font-weight: 600; color: var(--ink); width: 45%; }
+.access-sum .sum-n { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.callout { font-size: 13.5px; color: var(--ink); background: var(--field); border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 12px; margin: 0 0 12px; max-width: 70ch; }
+.adm-group-lbl { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 2px; align-self: center; }
 
 .ax-switchrow { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; padding: 12px 0 10px; border-top: 1px solid var(--rule); cursor: pointer; }
 .ax-sw-text b { font-size: 14px; color: var(--ink); font-weight: 600; }
@@ -361,6 +373,8 @@ details.how summary { cursor: pointer; color: var(--accent); font-weight: 600; f
 
 /* Features switched off in Settings (admin.js applyFeatureVisibility) */
 .feature-off-holds #type-hold { display: none !important; }
+/* With the Hold card hidden, Available and Blocked split the row in two. */
+.feature-off-holds .type-selector { grid-template-columns: 1fr 1fr; }
 .feature-off-overrides #date-overrides-section { display: none !important; }
 .feature-off-buffers .setting-item[data-field="buffer_pre"], .feature-off-buffers .setting-item[data-field="buffer_post"] { display: none; }
 .feature-off-lead_time .setting-item[data-field="min_lead_hours"] { display: none; }
@@ -372,3 +386,60 @@ details.how summary { cursor: pointer; color: var(--accent); font-weight: 600; f
   .set-list { border-right: 0; border-bottom: 1.5px solid var(--line); }
   .grid3 { grid-template-columns: 1fr; }
 }
+
+/* Blocked single event: date, times, All day and "+ Add to list" on one row, then the queued blocks. */
+.block-entry-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 16px; align-items: start; }
+.block-entry-actions { display: flex; align-items: center; gap: 14px; height: 40px; white-space: nowrap; align-self: end; }
+.block-entry-actions canvas-checkbox { font-size: 13.5px; font-family: inherit; }
+.block-entry-row .is-off { opacity: .45; }
+.block-entries { margin-top: 14px; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; max-width: 640px; }
+.block-entries-h { font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 12px; border-bottom: 1.5px solid var(--rule); }
+.block-entry { display: grid; grid-template-columns: 170px 1fr auto; align-items: center; gap: 12px; padding: 7px 12px; font-size: 13.5px; color: var(--ink); }
+.block-entry + .block-entry { border-top: 1px solid var(--rule); }
+.block-entry .be-when { color: var(--body); }
+
+/* Provider card counts: the legend's symbol, then plain text. */
+.provider-chips { gap: 8px 18px; }
+.provider-chips .card-count { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--body); }
+.provider-chips .card-count .type-chip { width: 22px; height: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.provider-chips .card-count .type-chip svg { width: 11px; height: 11px; }
+/* Gray hint after a name in pickers (role code, staff count). */
+.ms-option .ms-hint, .ms-chip .ms-chip-hint { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.ms-chip .ms-chip-hint { margin-left: 2px; }
+/* Admins: one plain line for teams, one for people. */
+.adm-lines { margin-top: 8px; font-size: 13.5px; color: var(--body); display: flex; flex-direction: column; gap: 3px; }
+.adm-lines b { font-weight: 600; color: var(--ink); }
+
+/* One box style on every form: the tinted field look, 40px tall, for text, date, time and the input component. */
+input.input, .time-combo-input, .ms-control { min-height: 40px; box-sizing: border-box; }
+input.input, .time-combo-input { height: 40px; }
+.time-combo-input {
+  font: inherit; font-size: 14px; color: var(--body); background: var(--field); border: 1.5px solid var(--line);
+  border-radius: 9px; padding: 8px 11px;
+}
+.time-combo-input:focus { background: #fff; border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(150, 211, 221, .2); }
+canvas-input {
+  --canvas-input-bg: var(--field); --canvas-input-border: 1.5px solid var(--line); --canvas-input-radius: 9px;
+  --canvas-input-padding: 10px 11px; --canvas-input-font-size: 14px; --canvas-input-color: var(--body);
+  --canvas-input-focus-border: var(--accent2); --canvas-input-placeholder: var(--muted);
+}
+.time-combo-input::placeholder, input.input::placeholder { color: var(--muted); }
+/* Buffer and lead time: a short box with its unit right after it. */
+.setting-item .num-input { width: 96px; flex: none; }
+
+/* Timezone note sits under the date and time fields it describes. */
+.tz-convert-hint.tz-below { margin: 8px 0 0; }
+
+/* Provider card counts: one plain line. */
+.provider-chips .card-counts { font-size: 13px; color: var(--muted); }
+/* Date overrides: plain rows like the blocks list. */
+.ovr-list { border: 1.5px solid var(--line); border-radius: 9px; background: #fff; max-width: 760px; }
+.ovr-row { display: grid; grid-template-columns: 170px 1fr 1fr auto; gap: 12px; align-items: center; padding: 8px 12px; font-size: 13.5px; }
+.ovr-row + .ovr-row, .ovr-confirm + .ovr-row { border-top: 1px solid var(--rule); }
+.ovr-row .ovr-date { color: var(--ink); font-weight: 600; }
+.ovr-row .ovr-when { color: var(--body); }
+.ovr-row .ovr-reason { color: var(--muted); }
+.ovr-row .ovr-acts { display: flex; gap: 12px; }
+.ovr-confirm { margin: 0 10px 10px; }
+/* Toggles inside a field keep their own width. */
+.field > .schedule-mode-toggle { align-self: flex-start; }

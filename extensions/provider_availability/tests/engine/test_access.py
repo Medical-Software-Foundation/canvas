@@ -37,21 +37,26 @@ class TestAdmins:
         assert Access.for_staff(ADMIN, secrets).is_admin is True
         assert Access.for_staff(OTHER, secrets).is_admin is False
 
-    def test_team_replaces_the_secret(self, settings_cache, team_members):
-        settings.set_admin_team(TEAM)
+    def test_team_and_secret_both_count(self, settings_cache, team_members):
+        settings.set_admins([TEAM], [])
         secrets = {"allowed-staff-keys": OTHER}
         assert Access.for_staff(ADMIN, secrets).is_admin is True
-        assert Access.for_staff(OTHER, secrets).is_admin is False
-        assert team_members.objects.filter.mock_calls == [call(id=TEAM), call(id=TEAM)]
+        assert Access.for_staff(OTHER, secrets).is_admin is True
+        assert Access.for_staff(SCHED, secrets).is_admin is False
+        assert team_members.objects.filter.mock_calls == [call(id__in=[TEAM])] * 3
 
-    def test_empty_team_falls_back_to_the_secret(self, settings_cache, team_members):
+    def test_people_and_teams_add_up(self, settings_cache, team_members):
+        settings.set_admins([TEAM], [SCHED])
+        assert admin_ids({}) == {ADMIN, SCHED}
+
+    def test_empty_team_adds_nobody(self, settings_cache, team_members):
         team_members.objects.filter.return_value = _Members([])
-        settings.set_admin_team(TEAM)
+        settings.set_admins([TEAM], [])
         assert admin_ids({"allowed-staff-keys": OTHER}) == {OTHER}
 
     def test_malformed_team_id_is_never_queried(self, settings_cache, team_members):
         assert team_member_ids("not-a-uuid") == set()
-        assert team_member_ids("") == set()
+        assert team_member_ids(["", "nope"]) == set()
         assert team_members.objects.filter.mock_calls == []
 
 

@@ -33,13 +33,13 @@ After install, open **Provider Availability** from the provider menu to manage s
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff key UUIDs who are admins when no admin team is picked in Settings. Empty, with no team picked, = every staff member is an admin (bootstrap). |
+| `allowed-staff-keys` | Comma-separated staff key UUIDs who are always admins, on top of the admins picked in Settings. Use it to get back into Settings. Empty, with no admins picked, = every staff member is an admin (bootstrap). |
 
 ### Access control
 
 Set in **Settings → Access control**. Any signed-in staff member can open the app; what they can see and change follows these rules, checked on every write:
 
-1. **Admins** edit every provider and change Settings. Admins are the members of the Canvas team picked as the admin team. With no team picked (or a team with no members), the `allowed-staff-keys` secret lists them. With neither, everyone is an admin.
+1. **Admins** edit every provider and change Settings. Admins are the members of the Canvas teams and the people picked in Settings, plus anyone in the `allowed-staff-keys` secret, who is always an admin. With nobody in any of them, everyone is an admin. Settings refuses to save admins that leave out the person saving, so nobody can lock themselves out.
 2. **Every provider** can always edit their own availability.
 3. **Editing groups** are made in the app: a group's schedulers can edit only that group's providers (they can still view others unless default access is No access). The group form can add everyone at a primary practice location at once.
 4. **Everyone else** gets the **default access** level: Full access (view and edit every provider, the starting value), View access, or No access (only their own).
@@ -80,7 +80,7 @@ Until you save a list, every staff member with a Provider role type is schedulab
 
 ![Recurring availability rule](../screenshots/02-recurring-rule.png)
 
-**Multi-date holiday batch** - All-day toggle plus a chip picker to queue several dates and save them in one action:
+**Multi-date holiday batch** - "+ Add to list" queues several dates, each with its own times or All day, and saves them in one action. Saved together, they edit together later:
 
 ![Multi-date holiday batch](../screenshots/03-holiday-batch.png)
 
@@ -217,7 +217,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | PUT | `/settings/features` | Turn a Scheduling feature on or off, with the keep/remove choice (admins only) |
 | GET | `/settings/affected/<feature>` | What turning a feature off would affect, by provider (admins only) |
 | PUT | `/settings/rule-defaults` | Save new rule defaults (admins only) |
-| PUT | `/settings/access` | Set the admin team and/or default access (admins only) |
+| PUT | `/settings/access` | Set the admin teams and people (`admin_team_ids`, `admin_staff_ids`) and/or default access (admins only) |
 | POST | `/settings/groups` | Create an editing group (admins only) |
 | PUT | `/settings/groups/<group_id>` | Replace an editing group (admins only) |
 | DELETE | `/settings/groups/<group_id>` | Delete an editing group (admins only) |
@@ -250,7 +250,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff UUIDs who are admins when no admin team is picked. Dashed or undashed UUIDs both work. Empty, with no team picked, makes every staff member an admin (bootstrap). See Access control. |
+| `allowed-staff-keys` | Comma-separated staff UUIDs who are always admins, on top of the admins picked in Settings. Dashed or undashed UUIDs both work. Empty, with no admins picked, makes every staff member an admin (bootstrap). See Access control. |
 
 ### Data Model
 

@@ -44,6 +44,7 @@ class TestGetSettings:
         assert data["access"]["default_access"] == "none"  # the secret restricts access and nothing is saved
         assert data["admins"] == [{"id": ADMIN, "name": "Ada Admin"}]
         assert data["admins_from"] == "secret"
+        assert data["secret_admins"] == [ADMIN]
         assert data["teams"] == [{"id": TEAM, "name": "Admins"}]
         assert len(data["staff"]) == 4
 
@@ -73,21 +74,54 @@ class TestRuleDefaults:
 
 
 class TestAccess:
-    def test_team_and_default(self):
-        data, code = _parse(_handler(json_body={"admin_team_id": TEAM, "default_access": "view"}).put_access()[0])
+    @pytest.fixture(autouse=True)
+    def team_members(self):
+        with patch("provider_availability.engine.access.Team") as team:
+            team.objects.filter.return_value.values_list.return_value = [SCHED]
+            yield team
+
+    def test_admins_and_default(self):
+        body = {"admin_team_ids": [TEAM], "admin_staff_ids": [PROV1], "default_access": "view"}
+        data, code = _parse(_handler(json_body=body).put_access()[0])
         assert code == HTTPStatus.OK
-        assert data["access"]["admin_team_id"] == TEAM
+        assert data["access"]["admin_team_ids"] == [TEAM]
+        assert data["access"]["admin_staff_ids"] == [PROV1]
         assert data["access"]["default_access"] == "view"
 
     def test_unknown_team_is_rejected(self):
-        data, code = _parse(_handler(json_body={"admin_team_id": "nope"}).put_access()[0])
+        data, code = _parse(_handler(json_body={"admin_team_ids": ["nope"]}).put_access()[0])
         assert code == HTTPStatus.BAD_REQUEST
-        assert settings.get_access_config()["admin_team_id"] == ""
+        assert settings.get_access_config()["admin_team_ids"] == []
 
-    def test_clearing_the_team(self):
-        settings.set_admin_team(TEAM)
-        _parse(_handler(json_body={"admin_team_id": ""}).put_access()[0])
-        assert settings.get_access_config()["admin_team_id"] == ""
+    def test_inactive_admin_is_rejected(self):
+        data, code = _parse(_handler(json_body={"admin_staff_ids": ["z" * 32]}).put_access()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "active" in data["error"]
+
+    def test_admins_must_be_lists(self):
+        _, code = _parse(_handler(json_body={"admin_team_ids": TEAM}).put_access()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+
+    def test_clearing_the_admins(self):
+        settings.set_admins([TEAM], [PROV1])
+        _parse(_handler(json_body={"admin_team_ids": [], "admin_staff_ids": []}).put_access()[0])
+        config = settings.get_access_config()
+        assert (config["admin_team_ids"], config["admin_staff_ids"]) == ([], [])
+
+    def test_cannot_save_admins_that_leave_you_out(self):
+        # SCHED is an admin only through their team; dropping the team would lock them out.
+        settings.set_admins([TEAM], [])
+        handler = _make_handler(staff_id=SCHED, json_body={"admin_team_ids": [], "admin_staff_ids": [PROV1]}, secrets={})
+        data, code = _parse(handler.put_access()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "lock you out" in data["error"]
+        assert settings.get_access_config()["admin_team_ids"] == [TEAM]
+
+    def test_the_secret_keeps_its_admins_in(self):
+        # ADMIN is in the plugin secret, so saving admins without them still leaves them an admin.
+        data, code = _parse(_handler(json_body={"admin_team_ids": [], "admin_staff_ids": [PROV1]}).put_access()[0])
+        assert code == HTTPStatus.OK
+        assert data["access"]["admin_staff_ids"] == [PROV1]
 
     def test_bad_level(self):
         _, code = _parse(_handler(json_body={"default_access": "all"}).put_access()[0])

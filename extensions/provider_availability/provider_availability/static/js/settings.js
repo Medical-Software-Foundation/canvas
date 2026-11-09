@@ -15,25 +15,30 @@
   var defaultsDirty = false;
 
   var FEATURES = [
-    { k: 'buffers', name: 'Appointment buffers', desc: 'Blocks time before and after appointments, as set on each rule.',
+    { k: 'buffers', name: 'Appointment buffers', desc: 'Blocks time before and after new and rescheduled appointments. Existing appointments are not changed.',
       title: 'Disable appointment buffers', noun: 'buffers',
+      lead: 'New appointments will no longer receive buffers.',
       body: function (n) { return 'New appointments will no longer receive buffers. ' + n + ' currently on provider calendars.'; },
       choices: [['keep', 'Keep existing buffers until their appointments end'], ['remove', 'Remove existing buffers now']] },
     { k: 'lead_time', name: 'Lead time', desc: 'Blocks booking within each rule\'s minimum lead time.',
       title: 'Disable lead time', noun: 'lead time blocks',
+      lead: 'Lead time blocks will no longer be created.',
       body: function (n) { return 'Lead time blocks will no longer be created. ' + n + ' currently on provider calendars.'; },
       choices: [['keep', 'Keep existing blocks until they expire'], ['remove', 'Remove existing blocks now']] },
     { k: 'holds', name: 'Same-day and next-day holds', desc: 'Reserves time that opens for booking the day before or the day of.',
       title: 'Disable same-day and next-day holds', noun: 'holds',
+      lead: 'The Hold rule type will be hidden, and holds will no longer refresh.',
       body: function (n) { return 'The Hold rule type will be hidden, and holds will no longer refresh. ' + n + ' currently on provider calendars.'; },
       choices: [['keep', 'Keep existing holds until they end'], ['remove', 'Remove existing holds now']] },
-    { k: 'overrides', name: 'Date overrides', desc: 'Changes a provider\'s hours on specific dates, such as holidays or half days.',
+    { k: 'overrides', name: 'Date overrides', desc: 'Changes a provider\'s hours on specific dates.',
       title: 'Disable date overrides', noun: 'upcoming overrides',
+      lead: 'New date overrides can no longer be added.',
       body: function (n) { return 'New date overrides can no longer be added. ' + n + ' change provider hours.'; },
-      choices: [['keep', 'Continue applying existing overrides'], ['stop', 'Stop applying existing overrides (those dates revert to regular hours)']] },
+      choices: [['keep', 'Keep honoring overrides already saved'], ['stop', 'Ignore saved overrides; those dates use the weekly schedule again']] },
     { k: 'provider_timezones', name: 'Provider timezones', desc: 'Allows a provider to work in a timezone other than the practice timezone.',
       title: 'Disable provider timezones', noun: 'providers with their own timezone',
-      body: function (n) { return 'All providers will use the practice timezone. Hours for the ' + n + ' will move to the practice timezone.'; },
+      lead: 'All providers will use the practice timezone.',
+      body: function (n) { return 'All providers will use the practice timezone. Hours for the ' + n + ' keep the same clock times in the practice timezone.'; },
       choices: [['move', 'Move these providers to the practice timezone']] }
   ];
   var LEVELS = {
@@ -102,18 +107,33 @@
     if (asking === k) drawFeatures();
   }
 
+  // A provider's 8:00 AM stays 8:00 AM on the clock and moves to the practice timezone.
+  function tzExample(d) {
+    var p = d && d.providers && d.providers[0];
+    if (!p || !p.rows[0]) return '';
+    return ' ' + p.name + ': 8:00 AM ' + p.rows[0][0] + ' becomes 8:00 AM ' + p.rows[0][1] + '.';
+  }
+
   function askHtml(f) {
     var d = affectedCache[f.k];
-    var countText = d ? d.total + ' ' + f.noun + (d.total === 1 ? ' is' : ' are') : 'Some ' + f.noun + ' are';
-    if (f.k === 'provider_timezones') countText = d ? plural(d.total, 'provider with their own timezone', 'providers with their own timezone') : f.noun;
-    if (f.k === 'overrides') countText = d ? plural(d.total, 'upcoming override', 'upcoming overrides') : 'Upcoming overrides';
-    return '<div class="ax-ask" id="set-ask"><div class="ax-cf-title">' + esc(f.title) + '</div><p>' + esc(f.body(countText)) + '</p>' +
+    var head = '<div class="ax-ask" id="set-ask"><div class="ax-cf-title">' + esc(f.title) + '</div>';
+    var acts = function (ready) {
+      return '<span style="flex:1"></span><button type="button" class="btn" id="set-ask-cancel">Cancel</button>' +
+        '<button type="button" class="btn btn-primary" id="set-ask-ok"' + (ready ? '' : ' disabled') + '>Disable</button></div></div>';
+    };
+    if (!d) return head + '<p>' + esc(f.lead) + ' Checking calendars\u2026</p><div class="acts">' + acts(false);
+    // Nothing on calendars: there is nothing to keep or remove, so no question.
+    if (!d.total) return head + '<p>' + esc(f.lead) + ' Nothing on calendars right now.</p><div class="acts">' + acts(true);
+    var countText = d.total + ' ' + f.noun + (d.total === 1 ? ' is' : ' are');
+    if (f.k === 'provider_timezones') countText = plural(d.total, 'provider with their own timezone', 'providers with their own timezone');
+    if (f.k === 'overrides') countText = plural(d.total, 'upcoming override', 'upcoming overrides');
+    var body = f.body(countText) + (f.k === 'provider_timezones' ? tzExample(d) : '');
+    return head + '<p>' + esc(body) + '</p>' +
       '<div class="opts">' + f.choices.map(function (c, i) {
         return '<label class="ax-check"><input type="radio" name="set-ask" value="' + c[0] + '"' + (i === 0 ? ' checked' : '') + '>' + esc(c[1]) + '</label>';
       }).join('') + '</div>' +
       '<div class="aff" id="set-aff" hidden>' + affectedHtml(f.k) + '</div>' +
-      '<div class="acts"><button type="button" class="linkish" id="set-see">View affected items</button><span style="flex:1"></span>' +
-      '<button type="button" class="btn" id="set-ask-cancel">Cancel</button><button type="button" class="btn btn-primary" id="set-ask-ok">Disable</button></div></div>';
+      '<div class="acts"><button type="button" class="linkish" id="set-see">View affected items</button>' + acts(true);
   }
 
   function drawFeatures() {
@@ -130,16 +150,20 @@
     el.querySelectorAll('.ax-sw input').forEach(function (c) { c.addEventListener('change', function () { onSwitch(c); }); });
     if (!asking) return;
     var aff = $('set-aff');
-    if (affOpen) aff.hidden = false;
-    $('set-see').textContent = aff.hidden ? 'View affected items' : 'Hide affected items';
-    $('set-see').onclick = function () { aff.hidden = !aff.hidden; this.textContent = aff.hidden ? 'View affected items' : 'Hide affected items'; };
-    aff.querySelectorAll('tr.prow').forEach(function (r) {
-      r.addEventListener('click', function () { r.classList.toggle('open'); aff.querySelector('tr.drow[data-i="' + r.dataset.i + '"]').classList.toggle('open'); });
-    });
+    if (aff) {
+      if (affOpen) aff.hidden = false;
+      $('set-see').textContent = aff.hidden ? 'View affected items' : 'Hide affected items';
+      $('set-see').onclick = function () { aff.hidden = !aff.hidden; this.textContent = aff.hidden ? 'View affected items' : 'Hide affected items'; };
+      aff.querySelectorAll('tr.prow').forEach(function (r) {
+        r.addEventListener('click', function () { r.classList.toggle('open'); aff.querySelector('tr.drow[data-i="' + r.dataset.i + '"]').classList.toggle('open'); });
+      });
+    }
     $('set-ask-cancel').onclick = function () { asking = null; drawFeatures(); };
     $('set-ask-ok').onclick = function () {
+      // With nothing on calendars there is no question; the first choice leaves nothing to undo.
       var picked = document.querySelector('#set-ask input[name="set-ask"]:checked');
-      changeFeature(asking, false, picked ? picked.value : '');
+      var f = FEATURES.find(function (x) { return x.k === asking; });
+      changeFeature(asking, false, picked ? picked.value : f.choices[0][0]);
     };
   }
 
@@ -206,41 +230,67 @@
     return list;
   }
 
+  function teamName(id) {
+    var t = (state.teams || []).find(function (x) { return x.id === id; });
+    return t ? t.name : 'Unknown team';
+  }
+
   function drawAccess() {
     if (!state) return;
     var a = state.access;
     var lv = a.default_access;
-    var teamSel = $('set-admin-team');
-    teamSel.innerHTML = state.teams.map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.id === a.admin_team_id ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('') +
-      '<option value=""' + (a.admin_team_id ? '' : ' selected') + '>None</option>';
-    $('set-admin-members').innerHTML = (state.admins || []).map(function (m) { return '<span class="tok">' + esc(m.name || m.id) + '</span>'; }).join('');
-    $('set-admin-note').textContent = {
-      team: 'If no team is selected, admins are read from the allowed-staff-keys plugin secret.',
-      secret: 'No admin team selected. ' + plural((state.admins || []).length, 'staff member is', 'staff are') + ' listed in the allowed-staff-keys plugin secret.',
-      everyone: 'No admin team selected and the allowed-staff-keys plugin secret is empty, so every staff member is an admin.'
-    }[state.admins_from] || '';
+    var admins = state.admins || [];
+    var secretIds = state.secret_admins || [];
+    var everyone = state.admins_from === 'everyone';
+    $('set-sum-admins').textContent = everyone ? '(everyone)' : '(' + admins.length + ')';
+    $('set-how-group').textContent = lv === 'full' ? 'Only their group\u2019s providers' : 'Their group\u2019s providers';
+    $('set-how-else').textContent = { full: 'Every provider', view: 'Nothing (can view every provider)', none: 'Nothing (cannot see other providers)' }[lv];
+    var line = function (label, names) { return '<div class="adm-line"><b>' + label + ':</b> ' + (names.length ? esc(names.join(', ')) : 'None') + '</div>'; };
+    $('set-admin-members').innerHTML = everyone ? '' :
+      line('Teams', (a.admin_team_ids || []).map(teamName)) + line('People', (a.admin_staff_ids || []).map(staffName));
+    var secretNames = secretIds.map(staffName).join(', ');
+    $('set-admin-note').textContent = everyone
+      ? 'No admins are selected, so every staff member is an admin. Select admins to limit who can change Settings.'
+      : state.admins_from === 'secret'
+        ? 'No admins are selected. Admins come from the allowed-staff-keys plugin secret: ' + secretNames + '.'
+        : plural(admins.length, 'person is an admin', 'people are admins') + (secretIds.length ? '. Always admins through the allowed-staff-keys plugin secret: ' + secretNames + '.' : '.');
     var limited = lv !== 'full' || (a.groups || []).length > 0;
-    var summary = plural((state.admins || []).length, 'admin', 'admins') + ' · ' + plural((a.groups || []).length, 'editing group', 'editing groups') + ' · Default access: ' + LEVELS[lv].short;
-    if (state.admins_from === 'everyone') summary = 'Every staff member is an admin · ' + plural((a.groups || []).length, 'editing group', 'editing groups') + ' · Default access: ' + LEVELS[lv].short;
-    $('set-access-status').innerHTML = limited
-      ? '<div class="rs ok"><b>Access control is configured.</b>' + esc(summary) + '</div>'
-      : '<div class="rs warn"><b>All staff can edit every provider.</b>' + esc(summary) + '. Create editing groups or change default access to restrict editing.</div>';
+    $('set-access-status').innerHTML = limited ? '' :
+      '<div class="rs warn"><b>Every staff member can edit every provider.</b>Create an editing group or change default access to limit editing.</div>';
     $('set-default-access').value = lv;
-    $('set-how-group').textContent = lv === 'full' ? 'Only providers in their group' : 'Providers in their group';
-    $('set-how-else').textContent = LEVELS[lv].short;
-    $('set-groups-desc').textContent = lv === 'full'
-      ? 'Schedulers in a group can edit only that group\'s providers. Staff outside a group can edit all providers.'
-      : 'Schedulers in a group can edit that group\'s providers. Staff outside a group receive the default access level.';
+    $('set-groups-desc').textContent = 'Schedulers in a group can edit only that group\u2019s providers. Staff outside a group get the default access.';
   }
 
   async function saveAccess(body, message) {
     var res = await apiCall('/settings/access', { method: 'PUT', body: JSON.stringify(body) });
-    if (!res || res.error) { showMsg((res && res.error) || 'The change was not saved.', 'error'); drawAccess(); return; }
+    if (!res || res.error) { showMsg((res && res.error) || 'The change was not saved.', 'error'); drawAccess(); return false; }
     showMsg(message, 'success');
     await open();
+    return true;
   }
-  $('set-admin-team').addEventListener('change', function () { saveAccess({ admin_team_id: this.value }, 'Admin team saved'); });
   $('set-default-access').addEventListener('change', function () { saveAccess({ default_access: this.value }, 'Default access set to ' + LEVELS[this.value].short.toLowerCase()); });
+
+  // Admins: Canvas teams and people, picked together and saved together.
+  function openAdminEditor() {
+    var a = state.access;
+    var teams = (state.teams || []).map(function (t) { return { id: t.id, name: t.name, location_id: '' }; });
+    $('set-edit-admins').style.display = 'none';
+    $('set-admin-editor').innerHTML = '<div class="gedit"><div class="ax-cf-title" style="margin-bottom:4px">Edit admins</div>' +
+      '<label class="ax-lbl">Teams</label><div class="pick" data-pick="admteam">' + teams.map(function (t) {
+        return '<label class="ax-check"><input type="checkbox" value="' + esc(t.id) + '"' + ((a.admin_team_ids || []).indexOf(t.id) >= 0 ? ' checked' : '') + '>' + esc(t.name) + '</label>';
+      }).join('') + '</div>' +
+      '<label class="ax-lbl">People</label>' + pickerHtml('admstaff', state.staff || [], a.admin_staff_ids || []) +
+      '<div class="save-row"><span class="status" id="set-adm-status"></span><button type="button" class="btn" id="set-adm-cancel">Cancel</button><button type="button" class="btn btn-primary" id="set-adm-save">Save admins</button></div></div>';
+    wirePicker('admstaff');
+    $('set-adm-cancel').onclick = closeAdminEditor;
+    $('set-adm-save').onclick = async function () {
+      var pick = function (key) { return Array.from(document.querySelectorAll('[data-pick="' + key + '"] input:checked')).map(function (i) { return i.value; }); };
+      var ok = await saveAccess({ admin_team_ids: pick('admteam'), admin_staff_ids: pick('admstaff') }, 'Admins saved');
+      if (ok) closeAdminEditor();
+    };
+  }
+  function closeAdminEditor() { $('set-admin-editor').innerHTML = ''; $('set-edit-admins').style.display = ''; }
+  $('set-edit-admins').addEventListener('click', openAdminEditor);
 
   // ── Editing groups ────────────────────────────────────────────────
   function drawGroups() {
@@ -317,11 +367,12 @@
       var added = 0;
       box.querySelectorAll('label[data-loc-id="' + CSS.escape(loc) + '"] input').forEach(function (i) { if (!i.checked) { i.checked = true; added++; } });
       showMsg('Added ' + plural(added, 'person', 'people') + ' at ' + this.options[this.selectedIndex].text, 'success');
-      this.value = '';
+      // The location stays showing so it is clear who was added; Clear resets it.
       recount();
     });
     document.querySelector('[data-clear="' + key + '"]').addEventListener('click', function () {
       box.querySelectorAll('input:checked').forEach(function (i) { i.checked = false; });
+      document.querySelector('[data-loc="' + key + '"]').value = '';
       recount();
     });
     recount();
@@ -334,8 +385,8 @@
     (state.staff || []).forEach(function (s) { locById[s.id] = s.location_id; });
     var providers = providerList().map(function (p) { return { id: p.id, name: p.name, location_id: locById[p.id] || '' }; });
     $('set-group-editor').innerHTML = '<div class="gedit"><div class="ax-cf-title" style="margin-bottom:4px">' + (id ? 'Edit editing group' : 'New editing group') + '</div>' +
-      '<label class="ax-lbl" for="set-grp-name">Group name</label><input class="input" id="set-grp-name" placeholder="e.g. Orange County" value="' + esc(g.name) + '" style="max-width:360px">' +
-      '<label class="ax-lbl">Schedulers</label>' + pickerHtml('sched', state.staff || [], g.schedulers) +
+      '<label class="ax-lbl" for="set-grp-name">Group name</label><input class="input" id="set-grp-name" placeholder="Orange County" value="' + esc(g.name) + '" style="max-width:360px">' +
+      '<label class="ax-lbl">Schedulers</label><div class="note" style="margin:-2px 0 8px">Staff who can manage the providers below. Providers already manage their own availability.</div>' + pickerHtml('sched', state.staff || [], g.schedulers) +
       '<label class="ax-lbl">Providers</label>' + pickerHtml('prov', providers, g.providers) +
       '<div class="save-row"><span class="status" id="set-grp-status"></span><button type="button" class="btn" id="set-grp-cancel">Cancel</button><button type="button" class="btn btn-primary" id="set-grp-save">Save group</button></div></div>';
     wirePicker('sched');

@@ -173,6 +173,8 @@ document.addEventListener('change', function(e) {
 function syncDateFacade(hiddenId) {
   var hidden = document.getElementById(hiddenId);
   var display = document.getElementById(hiddenId + '_display');
+  var clear = document.getElementById(hiddenId + '_clear');
+  if (clear) clear.style.display = hidden.value ? '' : 'none';
   if (!display || !hidden.value) { if (display) display.value = ''; return; }
   var parts = hidden.value.split('-');
   var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
@@ -198,7 +200,7 @@ function setScheduleMode(mode) {
   if (ovr) {
     if (isSingle) {
       ovr.style.display = 'none';
-    } else if (document.getElementById('editing_rule_id').value) {
+    } else {
       ovr.style.display = '';
       renderOverridesList();
     }
@@ -351,7 +353,7 @@ function timeFieldHtml(val, id) {
   var idAttr = id ? ' id="' + id + '"' : '';
   var display = val ? _fmt12(val) : '';
   return '<span class="time-combo">' +
-    '<input type="text" class="time-combo-input" autocomplete="off" list="' + TIME_OPTIONS_ID + '" placeholder="e.g. 9:00 AM" value="' + display + '">' +
+    '<input type="text" class="time-combo-input" autocomplete="off" list="' + TIME_OPTIONS_ID + '" placeholder="Enter time" value="' + display + '">' +
     '<input type="hidden" class="time-input"' + idAttr + ' value="' + val + '">' +
     '</span>';
 }
@@ -629,53 +631,116 @@ function _clearDailyTimeWindows(containerId) {
 
 /* ---------- Block all-day + multi-date chips ---------- */
 
-var _blockDateChips = [];
+// Blocks queued with "+ Add to list": [{date, allDay, start, end}], each with its own times.
+var _blockEntries = [];
 // When set, the form is editing a multi-date block group (one provider, many
 // dates) — saving will replace the entire group instead of updating one block.
 var _editingBlockGroup = null;
 
-function onBlockAllDayToggle(checked) {
-  var startField = document.getElementById('block-start-time-field');
-  var endField = document.getElementById('block-end-time-field');
-  var timeRow = document.getElementById('block-time-row');
-  if (startField) startField.style.display = checked ? 'none' : '';
-  if (endField) endField.style.display = checked ? 'none' : '';
-  if (timeRow) timeRow.style.gridTemplateColumns = checked ? '1fr' : '1fr 1fr 1fr';
+// Hold type toggle: Same-day or Next-day, kept in a hidden input the save reads.
+function setHoldType(value) {
+  var v = value === 'next_day' ? 'next_day' : 'same_day';
+  document.getElementById('hold_type_select').value = v;
+  ['same_day', 'next_day'].forEach(function(k) {
+    var b = document.getElementById('hold-type-' + k);
+    if (b) { b.classList.toggle('active', k === v); b.setAttribute('aria-pressed', k === v ? 'true' : 'false'); }
+  });
+  var hint = document.getElementById('hold-type-hint');
+  if (hint) hint.textContent = v === 'next_day' ? 'Availability blocked until the day before.' : 'Availability blocked until the day of.';
 }
 
-function _renderBlockDateChips() {
-  var box = document.getElementById('block-date-chips');
-  if (!box) return;
-  box.innerHTML = '';
-  _blockDateChips.forEach(function(d, idx) {
-    var chip = document.createElement('span');
-    chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surface-muted, #f0f0f0);border-radius:12px;font-size:13px;';
-    chip.textContent = d;
-    var x = document.createElement('button');
-    x.type = 'button';
-    x.className = 'date-chip-remove';
-    x.textContent = '×';
-    x.style.cssText = 'background:none;border:0;cursor:pointer;font-size:16px;line-height:1;padding:0 0 0 2px;color:var(--text-muted);';
-    x.onclick = function() { _blockDateChips.splice(idx, 1); _renderBlockDateChips(); };
-    chip.appendChild(x);
-    box.appendChild(chip);
+function onBlockAllDayToggle(checked) {
+  // The time boxes keep their place (grayed out) so the row does not jump around.
+  ['block_start_time', 'block_end_time'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.disabled = checked;
+  });
+  ['block-start-time-field', 'block-end-time-field'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('is-off', checked);
   });
 }
 
-function addBlockDateChip() {
-  var d = document.getElementById('block_date').value;
-  if (!d) { showMsg('Pick a date first', 'error'); return; }
-  if (_blockDateChips.indexOf(d) === -1) _blockDateChips.push(d);
-  _blockDateChips.sort();
-  _renderBlockDateChips();
-  // Clear the date input so the next pick adds another chip cleanly
+function _blockTzShort(isoDate) {
+  var pids = msBlockProvider ? msBlockProvider.getValue() : [];
+  var tz = pids.length === 1 ? providerTz(pids[0]) : _practiceTz;
+  try {
+    var parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' }).formatToParts(new Date(isoDate + 'T12:00:00Z'));
+    var zone = parts.find(function(x) { return x.type === 'timeZoneName'; });
+    return zone ? zone.value : '';
+  } catch (e) { return ''; }
+}
+
+function _blockEntryKey(e) { return e.date + '|' + (e.allDay ? 'all' : e.start + '-' + e.end); }
+
+function _renderBlockEntries() {
+  var box = document.getElementById('block-entries');
+  if (!box) return;
+  _blockEntries.sort(function(a, b) { return _blockEntryKey(a) < _blockEntryKey(b) ? -1 : 1; });
+  box.style.display = _blockEntries.length ? '' : 'none';
+  box.innerHTML = '<div class="block-entries-h">Blocks to save (' + _blockEntries.length + ')</div>' +
+    _blockEntries.map(function(e, i) {
+      var when = e.allDay ? 'All day' : fmtHHMM(e.start) + ' \u2013 ' + fmtHHMM(e.end) + ' ' + _blockTzShort(e.date);
+      var day = new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      return '<div class="block-entry"><span class="be-date">' + day + '</span><span class="be-when">' + when + '</span>' +
+        '<button type="button" class="lnk-sm danger be-x" aria-label="Remove ' + day + '" data-i="' + i + '">Remove</button></div>';
+    }).join('');
+  box.querySelectorAll('.be-x').forEach(function(x) {
+    x.onclick = function() { _blockEntries.splice(+x.dataset.i, 1); _renderBlockEntries(); };
+  });
+}
+
+// The date and times typed in the row above, or an error message.
+function _readBlockEntryInputs() {
+  var date = document.getElementById('block_date').value;
+  var allDayEl = document.getElementById('block_all_day');
+  var allDay = !!(allDayEl && allDayEl.checked);
+  var start = document.getElementById('block_start_time').value;
+  var end = document.getElementById('block_end_time').value;
+  if (!date) return { error: 'Select a date first' };
+  if (!allDay && (!start || !end)) return { error: 'Start and end time are required (or check All day)' };
+  if (!allDay && start >= end) return { error: 'Start time must be before end time' };
+  return { date: date, allDay: allDay, start: allDay ? '' : start, end: allDay ? '' : end };
+}
+
+function addBlockEntry() {
+  var e = _readBlockEntryInputs();
+  if (e.error) { showMsg(e.error, 'error'); return; }
+  if (!_blockEntries.some(function(x) { return _blockEntryKey(x) === _blockEntryKey(e); })) _blockEntries.push(e);
+  _renderBlockEntries();
+  // Clear the date so the next pick starts fresh; the times stay for the next date.
   document.getElementById('block_date').value = '';
   syncDateFacade('block_date');
 }
 
-function _resetBlockDateChips() {
-  _blockDateChips = [];
-  _renderBlockDateChips();
+function _resetBlockEntries() {
+  _blockEntries = [];
+  _renderBlockEntries();
+}
+
+// Entries sharing the same times go in one request, since POST /blocks takes one time range for its dates.
+function _blockEntryBatches(entries) {
+  var batches = {};
+  entries.forEach(function(e) {
+    var k = e.allDay ? 'all' : e.start + '-' + e.end;
+    (batches[k] = batches[k] || { allDay: e.allDay, start: e.start, end: e.end, dates: [] }).dates.push(e.date);
+  });
+  return Object.keys(batches).map(function(k) { return batches[k]; });
+}
+
+async function _postBlockEntries(pid, entries, reason, locationIds, groupId) {
+  var created = 0;
+  for (const batch of _blockEntryBatches(entries)) {
+    const body = { provider_id: pid, dates: batch.dates, all_day: batch.allDay, reason: reason, location_ids: locationIds, group_id: groupId };
+    if (!batch.allDay) {
+      body.start = '1970-01-01T' + batch.start + ':00';
+      body.end = '1970-01-01T' + batch.end + ':00';
+    }
+    const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
+    if (data.error) return { error: data.error, created: created };
+    created += data.blocks ? data.blocks.length : batch.dates.length;
+  }
+  return { created: created };
 }
 
 function getInitials(name) {
@@ -786,6 +851,9 @@ class MultiSelect {
     this.displayKey = options.displayKey || 'name';
     this.valueKey = options.valueKey || 'id';
     this.extraDisplayKey = options.extraDisplayKey || null;
+    // Gray text after a name: hintKey in the list, chipHintKey on the picked chip.
+    this.hintKey = options.hintKey || null;
+    this.chipHintKey = options.chipHintKey || null;
     // summaryNoun: once more than 3 items are picked, the field shows one summary
     // chip ("All providers", "12 of 15 providers") instead of a chip per item.
     // startAll: with nothing picked yet, every item starts checked.
@@ -851,7 +919,8 @@ class MultiSelect {
     const filtered = this.items.filter(item => {
       const label = String(item[this.displayKey] || '').toLowerCase();
       const extra = this.extraDisplayKey ? String(item[this.extraDisplayKey] || '').toLowerCase() : '';
-      return label.includes(filter) || extra.includes(filter);
+      const hint = this.hintKey ? String(item[this.hintKey] || '').toLowerCase() : '';
+      return label.includes(filter) || extra.includes(filter) || hint.includes(filter);
     });
     this.dropdown.innerHTML = '';
     if (filtered.length === 0) { this.dropdown.innerHTML = '<div class="ms-empty">No matches</div>'; return; }
@@ -895,11 +964,16 @@ class MultiSelect {
       cb.type = 'checkbox';
       cb.checked = isSelected;
       opt.appendChild(cb);
-      let label = item[this.displayKey] || val;
-      if (this.extraDisplayKey && item[this.extraDisplayKey]) label += ' (' + item[this.extraDisplayKey] + ')';
       const span = document.createElement('span');
-      span.textContent = label;
+      span.textContent = item[this.displayKey] || val;
       opt.appendChild(span);
+      const hintText = (this.hintKey && item[this.hintKey]) || (this.extraDisplayKey && item[this.extraDisplayKey]);
+      if (hintText) {
+        const hint = document.createElement('span');
+        hint.className = 'ms-hint';
+        hint.textContent = hintText;
+        opt.appendChild(hint);
+      }
       opt.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(val); });
       this.dropdown.appendChild(opt);
     });
@@ -930,7 +1004,8 @@ class MultiSelect {
       const label = item ? (item[this.displayKey] || val) : val;
       const chip = document.createElement('span');
       chip.className = 'ms-chip';
-      chip.innerHTML = _escHtml(label) + ' <span class="ms-chip-remove">&times;</span>';
+      const chipHint = item && this.chipHintKey && item[this.chipHintKey] ? ' <span class="ms-chip-hint">' + _escHtml(item[this.chipHintKey]) + '</span>' : '';
+      chip.innerHTML = _escHtml(label) + chipHint + ' <span class="ms-chip-remove">&times;</span>';
       chip.querySelector('.ms-chip-remove').addEventListener('click', (e) => { e.stopPropagation(); this.toggle(val); });
       this.chipsArea.appendChild(chip);
     });
@@ -1553,14 +1628,17 @@ function renderAccordion() {
     html += '<div class="provider-name-col">';
     html += '<span class="provider-name">' + _escHtml(name) + '</span>';
     if (!_viewTz) {
-      html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' (default)') + '</div>';
+      html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' \u00b7 practice default') + '</div>';
     }
     html += '</div></div>';
     html += '<div class="provider-chips">';
-    if (availableCount > 0) html += '<span class="meta-pip pip-avail">' + availableCount + ' available</span>';
-    if (pureBlockCount > 0) html += '<span class="meta-pip pip-block">' + pureBlockCount + ' blocked</span>';
-    if (holdCount > 0) html += '<span class="meta-pip pip-hold">' + holdCount + ' hold</span>';
-    if (overrideCount > 0) html += '<span class="meta-pip pip-override">' + overrideCount + ' override</span>';
+    // Counts are one line of plain text; color lives in the expanded rows and the legend.
+    var counts = [];
+    if (availableCount > 0) counts.push(availableCount + ' available');
+    if (pureBlockCount > 0) counts.push(pureBlockCount + ' blocked');
+    if (holdCount > 0) counts.push(holdCount + (holdCount === 1 ? ' hold' : ' holds'));
+    if (overrideCount > 0) counts.push(overrideCount + (overrideCount === 1 ? ' override' : ' overrides'));
+    if (counts.length) html += '<span class="card-counts">' + counts.join(' \u00b7 ') + '</span>';
     html += '</div>';
     html += '<div class="provider-header-right">';
     if (readOnly) html += '<span class="read-only-note">View only</span>';
@@ -2059,32 +2137,52 @@ function addRecurringBlockWindow(day, startVal, endVal) {
 
 /* ---------- Date Overrides ---------- */
 
+// Overrides added while creating a rule. They are sent through the override
+// endpoint right after the rule saves, so they get the same checks as any other.
+var _pendingOverrides = [];
+// The override date whose Remove is waiting for a confirm, or null.
+var _removingOverride = null;
+
+function askRemoveOverride(dateStr) {
+  _removingOverride = dateStr;
+  renderOverridesList();
+}
+
 function renderOverridesList() {
   const ruleId = document.getElementById('editing_rule_id').value;
   const providerId = msProvider.getValue()[0];
-  if (!ruleId || !providerId) return;
-
-  const rule = _findCurrentRule(providerId, ruleId);
-  const overrides = (rule && rule.date_overrides) || [];
+  let overrides = _pendingOverrides;
+  if (ruleId) {
+    if (!providerId) return;
+    const rule = _findCurrentRule(providerId, ruleId);
+    overrides = (rule && rule.date_overrides) || [];
+  }
   const container = document.getElementById('overrides-list');
   if (overrides.length === 0) {
     container.innerHTML = '<p style="font-size:13px;color:var(--text-muted);">No date overrides.</p>';
     return;
   }
-  let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+  let html = '<div class="ovr-list">';
   overrides.sort((a, b) => a.date.localeCompare(b.date));
   overrides.forEach(o => {
     const dateStr = o.date;
     const dateObj = new Date(dateStr + 'T12:00:00');
     const dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()];
-    const detail = (o.time_windows || []).map(w => fmtHHMM(w.start) + ' \u2013 ' + fmtHHMM(w.end)).join(', ') || 'No hours';
-    const reasonLabel = o.reason ? ' \u2014 ' + _escHtml(o.reason) : '';
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--override-bg);border:1px solid var(--override-border);border-radius:6px;">';
-    html += '<span style="font-weight:600;font-size:13px;min-width:120px;">' + dayAbbr + ', ' + fmtDate(dateStr) + '</span>';
-    html += '<span style="font-size:13px;color:var(--text-muted);flex:1;">' + detail + reasonLabel + '</span>';
-    html += '<button type="button" class="action-chip action-chip-edit" style="font-size:12px;padding:3px 8px;" onclick=\'editOverrideInPlace(' + _escHtml(JSON.stringify(JSON.stringify(o))) + ')\'>Edit</button>';
-    html += '<button type="button" class="remove-time" onclick="deleteOverride(\'' + dateStr + '\')">' + SVG_X_SM + '</button>';
+    const detail = (o.time_windows || []).map(w => fmtHHMM(w.start) + ' \u2013 ' + fmtHHMM(w.end)).join(', ') || 'Closed';
+    const label = dayAbbr + ', ' + fmtDate(dateStr);
+    html += '<div class="ovr-row">';
+    html += '<span class="ovr-date">' + _escHtml(label) + '</span>';
+    html += '<span class="ovr-when">' + detail + '</span>';
+    html += '<span class="ovr-reason">' + _escHtml(o.reason || '') + '</span>';
+    html += '<span class="ovr-acts"><button type="button" class="lnk-sm" onclick=\'editOverrideInPlace(' + _escHtml(JSON.stringify(JSON.stringify(o))) + ')\'>Edit</button>';
+    html += '<button type="button" class="lnk-sm danger" onclick="askRemoveOverride(\'' + dateStr + '\')">Remove</button></span>';
     html += '</div>';
+    if (_removingOverride === dateStr) {
+      html += '<div class="ax-confirm ovr-confirm"><div><div class="ax-cf-title">Remove the override for ' + _escHtml(label) + '?</div>' +
+        '<p>That date goes back to the weekly schedule.</p></div>' +
+        '<button type="button" class="btn" onclick="askRemoveOverride(null)">Cancel</button>' +
+        '<button type="button" class="btn btn-danger" onclick="deleteOverride(\'' + dateStr + '\')">Remove</button></div>';
+    }
   });
   html += '</div>';
   container.innerHTML = html;
@@ -2162,8 +2260,18 @@ async function saveOverride() {
     }
   }
   if (timeWindows.length === 0) { showMsg('Please add at least one time window', 'error'); return; }
-  // If editing an existing override and the date changed, delete the old one first
   var editingDate = document.getElementById('editing_override_date') ? document.getElementById('editing_override_date').value : '';
+  if (!ruleId) {
+    // New rule: keep it on the page; it saves right after the rule does.
+    var reasonNew = document.getElementById('override_reason') ? document.getElementById('override_reason').value : '';
+    _pendingOverrides = _pendingOverrides.filter(function(o) { return o.date !== dateVal && o.date !== editingDate; });
+    _pendingOverrides.push({ date: dateVal, is_closed: false, time_windows: timeWindows, reason: reasonNew });
+    document.getElementById('editing_override_date').value = '';
+    hideOverrideForm();
+    renderOverridesList();
+    return;
+  }
+  // If editing an existing override and the date changed, delete the old one first
   if (editingDate && editingDate !== dateVal) {
     const moved = await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides/' + editingDate, { method: 'DELETE' });
     if (moved.error) { showMsg(moved.error, 'error'); return; }
@@ -2182,7 +2290,13 @@ async function saveOverride() {
 }
 
 async function deleteOverride(dateStr) {
+  _removingOverride = null;
   const ruleId = document.getElementById('editing_rule_id').value;
+  if (!ruleId) {
+    _pendingOverrides = _pendingOverrides.filter(function(o) { return o.date !== dateStr; });
+    renderOverridesList();
+    return;
+  }
   const providerId = msProvider.getValue()[0];
   const data = await apiCall('/rules/' + providerId + '/' + ruleId + '/overrides/' + dateStr, {
     method: 'DELETE',
@@ -2261,6 +2375,7 @@ function resetForm() {
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('editor-title').textContent = 'Add new rule';
   document.getElementById('editing_rule_id').value = '';
+  _pendingOverrides = [];
   document.getElementById('editing_block_id').value = '';
   document.getElementById('editing_recurring_block_id').value = '';
   document.getElementById('editing_group_id').value = '';
@@ -2288,16 +2403,14 @@ function resetForm() {
   applyFeatureVisibility();
   document.getElementById('effective_start').value = today;
   document.getElementById('effective_end').value = '';
-  document.getElementById('no_end_date').checked = true;
-  toggleNoEndDate('effective_end', true);
+  clearEndDate('effective_end');
   syncDateFacade('effective_start');
   syncDateFacade('effective_end');
   document.getElementById('rule_reason').value = '';
   document.getElementById('block_reason').value = '';
   document.getElementById('rb_effective_start').value = today;
   document.getElementById('rb_effective_end').value = '';
-  document.getElementById('rb_no_end_date').checked = true;
-  toggleNoEndDate('rb_effective_end', true);
+  clearEndDate('rb_effective_end');
   syncDateFacade('rb_effective_start');
   syncDateFacade('rb_effective_end');
   document.getElementById('block_date').value = '';
@@ -2318,7 +2431,7 @@ function resetForm() {
     allDayEl.checked = false;
     onBlockAllDayToggle(false);
   }
-  _resetBlockDateChips();
+  _resetBlockEntries();
   _editingBlockGroup = null;
 
   // Reset recurrence controls and clear daily-mode editors
@@ -2342,11 +2455,10 @@ function resetForm() {
   document.getElementById('editing_hold_id').value = '';
   document.getElementById('editing_hold_group_id').value = '';
   document.getElementById('hold_reason').value = '';
-  document.getElementById('hold_type_select').value = 'same_day';
+  setHoldType('same_day');
   document.getElementById('hold_effective_start').value = today;
   document.getElementById('hold_effective_end').value = '';
-  document.getElementById('hold_no_end_date').checked = true;
-  toggleNoEndDate('hold_effective_end', true);
+  clearEndDate('hold_effective_end');
   syncDateFacade('hold_effective_start');
   syncDateFacade('hold_effective_end');
   if (msHoldProvider) msHoldProvider.clear();
@@ -2359,16 +2471,12 @@ function resetForm() {
   _formDirty = false;
 }
 
-function toggleNoEndDate(inputId, checked) {
-  const el = document.getElementById(inputId);
-  const facade = document.getElementById(inputId + '_display');
-  if (checked) el.value = '';
-  // The end date box stays in place so the two date columns line up; it is grayed out while "No end date" is ticked.
-  if (facade) {
-    if (checked) facade.value = '';
-    facade.disabled = checked;
-    facade.placeholder = checked ? 'No end date' : 'Select date...';
-  }
+// An empty end date means no end. The × in the box clears a picked date.
+function clearEndDate(inputId) {
+  var el = document.getElementById(inputId);
+  if (!el) return;
+  el.value = '';
+  el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function editRule(ruleJson) {
@@ -2408,8 +2516,6 @@ function editRule(ruleJson) {
     setScheduleMode('recurring');
     document.getElementById('effective_start').value = r.effective_start || '';
     document.getElementById('effective_end').value = r.effective_end || '';
-    document.getElementById('no_end_date').checked = !hasEnd;
-    toggleNoEndDate('effective_end', !hasEnd);
     syncDateFacade('effective_start');
     syncDateFacade('effective_end');
     // Restore stored recurrence on the form
@@ -2469,9 +2575,6 @@ function editRecurringBlock(blockJson) {
   document.getElementById('rb_effective_start').value = b.effective_start || '';
   document.getElementById('rb_effective_end').value = b.effective_end || '';
 
-  const hasEnd = !!b.effective_end;
-  document.getElementById('rb_no_end_date').checked = !hasEnd;
-  toggleNoEndDate('rb_effective_end', !hasEnd);
   syncDateFacade('rb_effective_start');
   syncDateFacade('rb_effective_end');
 
@@ -2533,32 +2636,28 @@ function editBlock(blockJson) {
     onBlockAllDayToggle(!!b.all_day);
   }
 
-  // Multi-date group detection: if siblings have different dates than this
-  // block, the group represents a holiday-list-style batch. Load all the
-  // group's dates into the chip list so the user sees and can edit the
-  // whole list (saving will replace the whole group).
+  // Multi-date group: list every block in the group with its own date and
+  // times, and clear the row above so it is free for adding more. Saving
+  // replaces the whole group.
   _editingBlockGroup = null;
   if (b.group_id) {
-    var siblingDates = [];
-    var sameDate = (b.start || '').slice(0, 10);
+    var siblings = [];
     _overviewData.forEach(function(p) {
-      (p.blocks || []).forEach(function(pb) {
-        if (pb.group_id === b.group_id) {
-          var d = (pb.start || '').slice(0, 10);
-          if (siblingDates.indexOf(d) === -1) siblingDates.push(d);
-        }
-      });
+      if (p.provider_id !== b.provider_id) return;
+      (p.blocks || []).forEach(function(pb) { if (pb.group_id === b.group_id) siblings.push(pb); });
     });
-    var hasDifferentDates = siblingDates.some(function(d) { return d !== sameDate; });
-    if (hasDifferentDates) {
+    var sameDate = (b.start || '').slice(0, 10);
+    if (siblings.some(function(pb) { return (pb.start || '').slice(0, 10) !== sameDate; })) {
       _editingBlockGroup = b.group_id;
-      _resetBlockDateChips();
-      // Put every group date into chips except the one shown in block_date
-      // (the active date input doubles as the "primary" entry on save).
-      siblingDates.sort().forEach(function(d) {
-        if (d !== sameDate && _blockDateChips.indexOf(d) === -1) _blockDateChips.push(d);
+      _resetBlockEntries();
+      siblings.forEach(function(pb) {
+        var e = { date: (pb.start || '').slice(0, 10), allDay: !!pb.all_day,
+                  start: pb.all_day ? '' : (pb.start || '').slice(11, 16), end: pb.all_day ? '' : (pb.end || '').slice(11, 16) };
+        if (!_blockEntries.some(function(x) { return _blockEntryKey(x) === _blockEntryKey(e); })) _blockEntries.push(e);
       });
-      _renderBlockDateChips();
+      _renderBlockEntries();
+      document.getElementById('block_date').value = '';
+      syncDateFacade('block_date');
     }
   }
 
@@ -2720,17 +2819,25 @@ async function saveRule() {
   let errors = [];
   let saved = 0;
 
+  const overridesToAdd = _scheduleMode === 'recurring' ? _pendingOverrides.slice() : [];
   for (const pid of providerIds) {
     const rule = Object.assign({}, ruleBase, { provider_id: pid, group_id: newGroupId });
     const data = await apiCall('/rules', { method: 'POST', body: JSON.stringify(rule) });
-    if (data.error) errors.push(data.error);
-    else saved++;
+    if (data.error) { errors.push(data.error); continue; }
+    saved++;
+    const newRuleId = data.rule && data.rule.id;
+    for (const o of overridesToAdd) {
+      if (!newRuleId) break;
+      const res = await apiCall('/rules/' + pid + '/' + newRuleId + '/overrides', { method: 'POST', body: JSON.stringify(o) });
+      if (res && res.error) errors.push('Override ' + fmtDate(o.date) + ': ' + res.error);
+    }
   }
+  _pendingOverrides = [];
 
-  if (errors.length > 0) {
-    showMsg(errors.join('; '), 'error');
-  } else {
-    showMsg(saved === 1 ? 'Availability saved' : saved + ' availability rules created', 'success');
+  if (errors.length > 0) showMsg(errors.join('; '), 'error');
+  else showMsg(saved === 1 ? 'Availability saved' : saved + ' availability rules created', 'success');
+  // Once any rule is saved, leave the form so a second Save can't create it twice.
+  if (saved > 0) {
     _skipDirtyCheck = true;
     await loadOverview();
     showTab('availability');
@@ -2882,37 +2989,30 @@ async function saveOneoffBlock() {
   const providerIds = msBlockProvider.getValue();
   if (providerIds.length === 0) { showMsg('Please select at least one provider', 'error'); return; }
 
-  const allDayEl = document.getElementById('block_all_day');
-  const allDay = !!(allDayEl && allDayEl.checked);
-
-  // Collect all dates: queued chips + the date input (if filled)
-  const liveDate = document.getElementById('block_date').value;
-  const dateSet = {};
-  _blockDateChips.forEach(function(d) { dateSet[d] = true; });
-  if (liveDate) dateSet[liveDate] = true;
-  const allDates = Object.keys(dateSet).sort();
-
-  const startTime = document.getElementById('block_start_time').value;
-  const endTime = document.getElementById('block_end_time').value;
+  // Every block to save: the list, plus the row above when a date is filled in.
+  const entries = _blockEntries.slice();
+  if (document.getElementById('block_date').value) {
+    const live = _readBlockEntryInputs();
+    if (live.error) { showMsg(live.error, 'error'); return; }
+    if (!entries.some(function(x) { return _blockEntryKey(x) === _blockEntryKey(live); })) entries.push(live);
+  }
+  const allDates = entries.map(function(e) { return e.date; }).sort();
+  const allDay = entries.length > 0 && entries[0].allDay;
+  const startTime = entries.length > 0 ? entries[0].start : '';
+  const endTime = entries.length > 0 ? entries[0].end : '';
   const reason = document.getElementById('block_reason').value;
   const groupId = document.getElementById('editing_group_id').value;
   const applyToGroup = document.getElementById('apply_to_group').checked && groupId;
   const locationIds = msBlockLocation.getValue();
 
-  if (allDates.length === 0) {
-    showMsg('Pick at least one date', 'error'); return;
-  }
-  if (!allDay && (!startTime || !endTime)) {
-    showMsg('Start and end time are required (or check All day)', 'error'); return;
-  }
-  if (!allDay && startTime >= endTime) {
-    showMsg('Start time must be before end time', 'error'); return;
+  if (entries.length === 0) {
+    showMsg('Select at least one date', 'error'); return;
   }
 
   // Multi-date edit path. Enters when either:
   //   (a) editing an existing multi-date group, or
   //   (b) editing a single-date block AND the user added more dates as chips.
-  if (providerIds.length === 1 && blockId && (_editingBlockGroup || allDates.length > 1)) {
+  if (providerIds.length === 1 && blockId && (_editingBlockGroup || entries.length > 1)) {
     // Build the list of providers to operate on. By default, only the
     // editing provider. If the user checked "Apply to all" on a
     // multi-provider group, also include the sibling providers.
@@ -2950,28 +3050,16 @@ async function saveOneoffBlock() {
     }
     const batchGroupId = _editingBlockGroup
       || groupId
-      || (allDates.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
+      || (entries.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
     let totalCreated = 0;
     for (const pid of groupProviderIds) {
-      const body = {
-        provider_id: pid,
-        dates: allDates,
-        all_day: allDay,
-        reason: reason,
-        location_ids: locationIds,
-        group_id: batchGroupId,
-      };
-      if (!allDay) {
-        body.start = '1970-01-01T' + startTime + ':00';
-        body.end = '1970-01-01T' + endTime + ':00';
-      }
-      const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
-      if (data.error) { showMsg(data.error, 'error'); return; }
-      totalCreated += allDates.length;
+      const res = await _postBlockEntries(pid, entries, reason, locationIds, batchGroupId);
+      totalCreated += res.created;
+      if (res.error) { showMsg(res.error, 'error'); return; }
     }
     showMsg(totalCreated + ' block(s) saved', 'success');
     _editingBlockGroup = null;
-    _resetBlockDateChips();
+    _resetBlockEntries();
     _skipDirtyCheck = true;
     await loadOverview();
     showTab('availability');
@@ -2979,31 +3067,19 @@ async function saveOneoffBlock() {
   }
 
   // Multi-date or all-day batch path: use new dates[] payload to fan out server-side.
-  const isBatch = allDates.length > 1 || allDay;
+  const isBatch = entries.length > 1 || allDay;
   if (isBatch && !blockId) {
-    // Per provider, send one request with the list of dates so the server can
-    // mint a shared group_id and create N blocks atomically per provider.
-    const newGroupId = providerIds.length > 1 ? crypto.randomUUID() : null;
+    // Per provider, one request per set of times, all sharing one group id so
+    // the blocks edit together later.
+    const newGroupId = providerIds.length > 1 || entries.length > 1 ? crypto.randomUUID() : null;
     let errors = [];
     let saved = 0;
     for (const pid of providerIds) {
-      const body = {
-        provider_id: pid,
-        dates: allDates,
-        all_day: allDay,
-        reason: reason,
-        location_ids: locationIds,
-        group_id: newGroupId,
-      };
-      if (!allDay) {
-        body.start = '1970-01-01T' + startTime + ':00';
-        body.end = '1970-01-01T' + endTime + ':00';
-      }
-      const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
-      if (data.error) errors.push(data.error);
-      else saved += (data.blocks ? data.blocks.length : 1);
+      const res = await _postBlockEntries(pid, entries, reason, locationIds, newGroupId);
+      saved += res.created;
+      if (res.error) errors.push(res.error);
     }
-    _resetBlockDateChips();
+    _resetBlockEntries();
     if (errors.length > 0) showMsg(errors.join('; '), 'error');
     else {
       showMsg(saved + ' block(s) created', 'success');
@@ -3248,7 +3324,7 @@ function updateEditorTzLabels() {
   var icon = '<svg style="width:13px;height:13px;vertical-align:-2px;margin-right:3px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
   var selectedPids = (msProvider ? msProvider.getValue() : []).concat(msBlockProvider ? msBlockProvider.getValue() : []).concat(msHoldProvider ? msHoldProvider.getValue() : []);
   var editorProvTz = selectedPids.length === 1 ? providerTz(selectedPids[0]) : _practiceTz;
-  var hint = icon + 'Times in provider\u2019s timezone: <strong>' + editorProvTz + '</strong>';
+  var hint = icon + 'Times are in the provider\u2019s timezone, <strong>' + editorProvTz + '</strong>.';
   ['single-event-tz-hint', 'block-event-tz-hint', 'weekly-avail-tz-hint', 'weekly-block-tz-hint', 'weekly-hold-tz-hint'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.innerHTML = hint;
@@ -3264,9 +3340,8 @@ function getEditorTimezone() {
 
 function _roleItems(available) {
   return (available || []).map(function(r) {
-    var base = r.name ? r.name + ' (' + r.code + ')' : r.code;
-    var count = r.staff_count ? ' — ' + r.staff_count + ' staff' : '';
-    return { code: r.code, name: base + count };
+    var hint = [r.name ? r.code : '', r.staff_count ? r.staff_count + ' staff' : ''].filter(Boolean).join(' \u00b7 ');
+    return { code: r.code, name: r.name || r.code, hint: hint, chipHint: r.name ? r.code : '' };
   });
 }
 
@@ -3282,7 +3357,7 @@ async function loadSchedulableRoles() {
   // Keep any configured code no active staff currently hold, so it isn't dropped.
   configured.forEach(function(code) {
     if (!items.some(function(i) { return String(i.code).toUpperCase() === code; })) {
-      items.push({ code: code, name: code + ' — no active staff' });
+      items.push({ code: code, name: code, hint: 'No active staff', chipHint: '' });
     }
   });
   msSchedulableRoles.setItems(items);
@@ -3373,7 +3448,7 @@ async function renderSettingsPanel() {
     return aLast.localeCompare(bLast);
   });
 
-  var html = '<table class="settings-tz-table"><thead><tr><th>Provider</th><th>Timezone</th><th>Status</th></tr></thead><tbody>';
+  var html = '<table class="settings-tz-table"><thead><tr><th>Provider</th><th>Timezone</th></tr></thead><tbody>';
   sortedProviders.forEach(function(p) {
     var entry = _providerTzMap[p.id];
     var isExplicit = entry && entry.explicit;
@@ -3381,18 +3456,11 @@ async function renderSettingsPanel() {
     html += '<tr>';
     html += '<td><strong>' + _escHtml(p.name || p.id) + '</strong></td>';
     html += '<td><select class="input provider-tz-dropdown" data-provider-id="' + p.id + '" onchange="saveProviderTz(this)">';
-    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice default (' + _practiceTz + ')</option>';
+    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice timezone \u00b7 ' + _practiceTz + '</option>';
     COMMON_TZS.forEach(function(tz) {
       html += '<option value="' + tz + '"' + (tz === currentTz ? ' selected' : '') + '>' + tz + '</option>';
     });
     html += '</select></td>';
-    html += '<td>';
-    if (isExplicit) {
-      html += '<span class="badge badge-active">Set</span>';
-    } else {
-      html += '<span class="badge badge-expired" title="No override — using the practice default (' + _practiceTz + ')">Default</span>';
-    }
-    html += '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -3474,12 +3542,9 @@ function editHold(holdJson) {
   document.getElementById('editing_hold_id').value = h.id || '';
   document.getElementById('editing_hold_group_id').value = h.group_id || '';
   document.getElementById('hold_reason').value = h.reason || '';
-  document.getElementById('hold_type_select').value = h.hold_type || 'same_day';
+  setHoldType(h.hold_type || 'same_day');
   document.getElementById('hold_effective_start').value = h.effective_start || '';
   document.getElementById('hold_effective_end').value = h.effective_end || '';
-  var hasEnd = !!h.effective_end;
-  document.getElementById('hold_no_end_date').checked = !hasEnd;
-  toggleNoEndDate('hold_effective_end', !hasEnd);
   syncDateFacade('hold_effective_start');
   syncDateFacade('hold_effective_end');
   msHoldProvider.setValue([h.provider_id]);
@@ -3676,7 +3741,7 @@ msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search lo
 msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
 msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id', summaryNoun: 'locations' });
 msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers', startAll: true });
-msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
+msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code', hintKey: 'hint', chipHintKey: 'chipHint' });
 
 buildTimeOptions();
 

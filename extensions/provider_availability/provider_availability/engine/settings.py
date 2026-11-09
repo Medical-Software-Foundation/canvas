@@ -104,10 +104,11 @@ def set_rule_defaults(values: dict[str, Any]) -> dict[str, int]:
 # ── Access control ─────────────────────────────────────────────────────
 
 def get_access_config() -> dict[str, Any]:
-    """Admin team, default access, and editing groups.
+    """Admin teams and people, default access, and editing groups.
 
-    ``admin_team_id`` is "" when no team is picked; the ``allowed-staff-keys``
-    secret then lists the admins (see engine.access).
+    Admins are the members of every team in ``admin_team_ids`` plus everyone in
+    ``admin_staff_ids``; the ``allowed-staff-keys`` secret adds more (see
+    engine.access). An older single ``admin_team_id`` reads as a one-team list.
     """
     stored = _get_cache().get(ACCESS_KEY) or {}
     level = stored.get("default_access", DEFAULT_ACCESS)
@@ -121,8 +122,13 @@ def get_access_config() -> dict[str, Any]:
         for g in stored.get("groups", [])
         if g.get("id")
     ]
+    team_ids = stored.get("admin_team_ids")
+    if team_ids is None:
+        legacy = str(stored.get("admin_team_id", "") or "")
+        team_ids = [legacy] if legacy else []
     return {
-        "admin_team_id": str(stored.get("admin_team_id", "") or ""),
+        "admin_team_ids": [str(t) for t in team_ids if t],
+        "admin_staff_ids": [str(s) for s in stored.get("admin_staff_ids", []) if s],
         "default_access": level if level in ACCESS_LEVELS else DEFAULT_ACCESS,
         # False until someone saves a default access level. engine.access uses it
         # so a practice that restricted access with the secret stays restricted.
@@ -139,10 +145,11 @@ def _save_access_config(config: dict[str, Any]) -> dict[str, Any]:
     return get_access_config()
 
 
-def set_admin_team(team_id: str) -> dict[str, Any]:
-    """Pick the admin team. "" clears it, which hands admin back to the plugin secret."""
+def set_admins(team_ids: Any, staff_ids: Any) -> dict[str, Any]:
+    """Replace the admin teams and admin people. Empty lists hand admin back to the plugin secret."""
     config = get_access_config()
-    config["admin_team_id"] = (team_id or "").strip()
+    config["admin_team_ids"] = _clean_ids(team_ids)
+    config["admin_staff_ids"] = _clean_ids(staff_ids)
     return _save_access_config(config)
 
 

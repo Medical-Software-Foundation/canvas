@@ -54,7 +54,7 @@ from provider_availability.engine.storage import (
     get_practice_timezone,
     get_rules_for_provider,
 )
-from provider_availability.engine.tz_utils import to_provider_naive
+from provider_availability.engine.tz_utils import provider_tz, to_provider_naive
 
 BUFFER_TITLE = "Buffer"  # protocols/appointment_buffer.py draws these
 CHOICES = {
@@ -115,6 +115,16 @@ def _day(d: dt.date) -> str:
     return f"{d:%a} {d:%b} {d.day}"
 
 
+def _zone(provider_id: str, when: dt.datetime) -> str:
+    """Short timezone name ("PDT", "EST") for a time on a provider's calendar.
+
+    ``when`` is aware, or naive in the provider's timezone (as override times are).
+    """
+    tz = provider_tz(provider_id)
+    local = when.astimezone(tz) if when.tzinfo is not None else when.replace(tzinfo=tz)
+    return local.strftime("%Z")
+
+
 def _minutes(a: dt.datetime, b: dt.datetime) -> int:
     return int((b - a).total_seconds() // 60)
 
@@ -137,15 +147,16 @@ def _event_rows(feature: str, provider_id: str, now: dt.datetime) -> list[list[s
     for evt in events:
         start = to_provider_naive(evt.starts_at, provider_id)
         end = to_provider_naive(evt.ends_at, provider_id)
+        zone = _zone(provider_id, evt.starts_at)
         if feature == "buffers":
             before = evt.ends_at in appt_starts
             appt_time = end if before else start
-            rows.append([_day(start.date()), _clock(appt_time), f"{_minutes(start, end)} min {'before' if before else 'after'}"])
+            rows.append([_day(start.date()), f"{_clock(appt_time)} {zone}", f"{_minutes(start, end)} min {'before' if before else 'after'}"])
         elif feature == "lead_time":
-            rows.append([_day(start.date()), _span(start, end)])
+            rows.append([_day(start.date()), f"{_span(start, end)} {zone}"])
         else:
             kind = "Next-day" if "Next" in (evt.title or "") else "Same-day"
-            rows.append([_day(start.date()), _span(start, end), kind])
+            rows.append([_day(start.date()), f"{_span(start, end)} {zone}", kind])
     return rows
 
 
@@ -155,7 +166,11 @@ def _override_rows(provider_id: str, today: dt.date) -> list[list[str]]:
         for ovr in rule.date_overrides:
             if ovr.date < today:
                 continue
-            change = "Closed" if ovr.is_closed else ", ".join(f"{_clock(w.start)} – {_clock(w.end)}" for w in ovr.time_windows)
+            if ovr.is_closed or not ovr.time_windows:
+                change = "Closed"
+            else:
+                zone = _zone(provider_id, dt.datetime.combine(ovr.date, ovr.time_windows[0].start))
+                change = ", ".join(f"{_clock(w.start)} – {_clock(w.end)}" for w in ovr.time_windows) + f" {zone}"
             rows.append((ovr.date, [_day(ovr.date), change, ovr.reason or ""]))
     return [r for _, r in sorted(rows, key=lambda pair: pair[0])]
 

@@ -38,7 +38,7 @@ from provider_availability.engine.lookups import (
     get_staff_directory,
     get_teams,
 )
-from provider_availability.engine.access import admin_ids, effective_default_access
+from provider_availability.engine.access import admin_ids, effective_default_access, secret_admin_ids
 from provider_availability.engine.features import CHOICES, affected_items, apply_feature_change
 from provider_availability.engine.settings import (
     delete_group,
@@ -47,7 +47,7 @@ from provider_availability.engine.settings import (
     is_feature_on,
     get_rule_defaults,
     save_group,
-    set_admin_team,
+    set_admins,
     set_default_access,
     set_rule_defaults,
 )
@@ -1826,12 +1826,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         admins = admin_ids(self.secrets, config)
         staff = get_staff_directory()
         names = {s["id"]: s["name"] for s in staff}
+        from_settings = admin_ids({}, config)
         return [JSONResponse({
             "features": get_features(),
             "rule_defaults": get_rule_defaults(),
             "access": {**config, "default_access": effective_default_access(self.secrets, config)},
             "admins": [{"id": a, "name": names.get(a, "")} for a in sorted(admins)],
-            "admins_from": "team" if config["admin_team_id"] and admins else ("secret" if admins else "everyone"),
+            "secret_admins": sorted(secret_admin_ids(self.secrets)),
+            "admins_from": "settings" if from_settings else ("secret" if admins else "everyone"),
             "teams": get_teams(),
             "staff": staff,
             "locations": get_active_locations(),
@@ -1879,17 +1881,37 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.put("/settings/access")
     def put_access(self) -> list[Response | Effect]:
-        """Change the admin team and/or default access. Either key may be left out."""
+        """Change the admins and/or default access. Any key may be left out.
+
+        ``admin_team_ids`` and ``admin_staff_ids`` are sent together and replace
+        the saved admins. A change that would leave out the person saving it is
+        refused, so nobody can lock themselves out of Settings.
+        """
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
         body = self.request.json()
         try:
-            if "admin_team_id" in body:
-                team_id = str(body.get("admin_team_id") or "")
-                if team_id and team_id not in {t["id"] for t in get_teams()}:
+            if "admin_team_ids" in body or "admin_staff_ids" in body:
+                team_ids = body.get("admin_team_ids", [])
+                staff_ids = body.get("admin_staff_ids", [])
+                if not isinstance(team_ids, list) or not isinstance(staff_ids, list):
+                    return self._bad_request("admin_team_ids and admin_staff_ids must be lists")
+                known_teams = {t["id"] for t in get_teams()}
+                if any(str(t) not in known_teams for t in team_ids):
                     return self._bad_request("That team doesn't exist")
-                set_admin_team(team_id)
+                active = {s["id"] for s in get_staff_directory()}
+                if any(str(s) not in active for s in staff_ids):
+                    return self._bad_request("Admins must be active Canvas staff")
+                proposed = {**get_access_config(), "admin_team_ids": [str(t) for t in team_ids],
+                            "admin_staff_ids": [str(s) for s in staff_ids]}
+                after = admin_ids(self.secrets, proposed)
+                if after and _signed_in_staff_id(self.request) not in after:
+                    return self._bad_request(
+                        "This would remove you from the admins and lock you out of Settings. "
+                        "Add yourself, or a team you're on, before saving."
+                    )
+                set_admins(team_ids, staff_ids)
             if "default_access" in body:
                 set_default_access(str(body.get("default_access")))
         except ValueError as exc:

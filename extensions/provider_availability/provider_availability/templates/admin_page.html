@@ -141,28 +141,28 @@
             <div class="section-label">Who</div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;">
               <div class="field">
-                <label>Provider(s) <span class="req">*</span></label>
+                <label>Providers <span class="req">*</span></label>
                 <div id="ms-provider" class="multi-select"></div>
               </div>
               <div class="field">
-                <label>Location(s)</label>
+                <label>Locations</label>
                 <div id="ms-location" class="multi-select"></div>
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;margin-top:14px;">
               <div class="field">
                 <label>Reason</label>
-                <canvas-input type="text" id="rule_reason" placeholder="e.g. Office hours, Telehealth, Walk-ins..."></canvas-input>
+                <canvas-input type="text" id="rule_reason" placeholder="Office hours, Telehealth, Walk-ins"></canvas-input>
               </div>
               <div class="field">
-                <label>Visit type(s)</label>
+                <label>Visit types</label>
                 <div id="ms-visit-type" class="multi-select"></div>
               </div>
             </div>
           </div>
 
           <!-- Schedule Mode Toggle -->
-          <div>
+          <div class="schedule-mode-block">
             <div class="section-label">Schedule</div>
             <div class="schedule-mode-toggle">
               <button type="button" class="mode-btn active" id="mode-single" onclick="setScheduleMode('single')">Single event</button>
@@ -172,8 +172,6 @@
 
           <!-- Single Event fields (default visible) -->
           <div id="single-event-fields">
-            <div class="section-label">Date and time <span style="color:var(--block);font-size:13px;margin-left:2px;">*</span></div>
-            <p id="single-event-tz-hint" class="tz-convert-hint" style="margin-bottom:8px;"></p>
             <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
               <div class="field" style="position:relative;">
                 <label>Date <span class="req">*</span></label>
@@ -189,6 +187,7 @@
                 <span id="single_end_time_wrap"></span>
               </div>
             </div>
+            <p id="single-event-tz-hint" class="tz-convert-hint tz-below"></p>
           </div>
 
           <!-- Recurring schedule fields (hidden in single mode) -->
@@ -205,7 +204,7 @@
                   </select>
                 </div>
                 <p class="field-hint" style="margin:0;">
-                  e.g. <em>2 weeks</em> = bi-weekly &middot; <em>17 days</em> = every 17 days
+                  2 weeks = bi-weekly &middot; 17 days = every 17 days
                 </p>
                 <p id="daily-mode-hint" style="display:none;"></p>
               </div>
@@ -218,10 +217,10 @@
                   </div>
                   <div class="field" style="position:relative;">
                     <label>End date <span class="label-hint">(optional)</span></label>
-                    <input class="input date-facade" type="text" id="effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('effective_end').showPicker()">
-                    <input type="date" id="effective_end" class="date-hidden" onchange="syncDateFacade('effective_end')" tabindex="-1">
-                    <div class="no-end-row">
-                      <canvas-checkbox id="no_end_date" label="No end date" checked onchange="toggleNoEndDate('effective_end', this.checked)"></canvas-checkbox>
+                    <div class="end-date-line">
+                      <input class="input date-facade" type="text" id="effective_end_display" readonly placeholder="No end date" onclick="document.getElementById('effective_end').showPicker()">
+                      <input type="date" id="effective_end" class="date-hidden" onchange="syncDateFacade('effective_end')" tabindex="-1">
+                      <button type="button" class="date-clear" id="effective_end_clear" aria-label="Clear end date" style="display:none;" onclick="clearEndDate('effective_end')">&times;</button>
                     </div>
                   </div>
                 </div>
@@ -270,7 +269,7 @@
               </div>
               <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;margin-top:10px;">
                 <label style="font-size:13px;font-weight:600;">Reason</label>
-                <canvas-input type="text" id="override_reason" placeholder="e.g. Holiday, Special hours..." style="flex:1;min-width:180px;"></canvas-input>
+                <canvas-input type="text" id="override_reason" placeholder="Holiday, Special hours" style="flex:1;min-width:180px;"></canvas-input>
               </div>
               <div style="display:flex;gap:8px;margin-top:12px;">
                 <canvas-button size="sm" onclick="saveOverride()">Save override</canvas-button>
@@ -290,7 +289,7 @@
                 <span class="setting-label">Pre-appointment buffer</span>
                 <span class="setting-desc">Blocked time before each appointment</span>
                 <div style="display:flex;align-items:center;gap:6px;">
-                  <input type="number" id="buffer_pre" value="0" min="0" placeholder="0" style="flex:1;">
+                  <input type="number" id="buffer_pre" value="0" min="0" placeholder="0" class="num-input">
                   <span class="unit-label">minutes</span>
                 </div>
               </div>
@@ -298,7 +297,7 @@
                 <span class="setting-label">Post-appointment buffer</span>
                 <span class="setting-desc">Blocked time after each appointment</span>
                 <div style="display:flex;align-items:center;gap:6px;">
-                  <input type="number" id="buffer_post" value="0" min="0" placeholder="0" style="flex:1;">
+                  <input type="number" id="buffer_post" value="0" min="0" placeholder="0" class="num-input">
                   <span class="unit-label">minutes</span>
                 </div>
               </div>
@@ -306,7 +305,7 @@
                 <span class="setting-label">Minimum lead time</span>
                 <span class="setting-desc">How far in advance patients must book</span>
                 <div style="display:flex;align-items:center;gap:6px;">
-                  <input type="number" id="min_lead_hours" value="0" min="0" placeholder="0" style="flex:1;">
+                  <input type="number" id="min_lead_hours" value="0" min="0" placeholder="0" class="num-input">
                   <span class="unit-label">hours</span>
                 </div>
               </div>
@@ -320,24 +319,24 @@
             <div class="section-label">Who</div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;">
               <div class="field">
-                <label>Provider(s) <span class="req">*</span></label>
+                <label>Providers <span class="req">*</span></label>
                 <div id="ms-block-provider" class="multi-select"></div>
               </div>
               <div class="field">
-                <label>Location(s)</label>
+                <label>Locations</label>
                 <div id="ms-block-location" class="multi-select"></div>
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;margin-top:14px;">
               <div class="field">
                 <label>Reason</label>
-                <canvas-input type="text" id="block_reason" placeholder="e.g. PTO, Lunch break, Admin time..."></canvas-input>
+                <canvas-input type="text" id="block_reason" placeholder="PTO, Lunch break, Admin time"></canvas-input>
               </div>
             </div>
           </div>
 
           <!-- Block Schedule Mode Toggle -->
-          <div id="block-type-selector">
+          <div id="block-type-selector" class="schedule-mode-block">
             <div class="section-label">Block type</div>
             <div class="schedule-mode-toggle">
               <button type="button" class="mode-btn active" id="block-mode-single" onclick="setBlockMode('single')">Single event</button>
@@ -346,13 +345,7 @@
           </div>
 
           <div id="oneoff-block-fields">
-            <div class="section-label">Date and time <span style="color:var(--block);font-size:13px;margin-left:2px;">*</span></div>
-            <p id="block-event-tz-hint" class="tz-convert-hint" style="margin-bottom:8px;"></p>
-            <div class="form-row" style="grid-template-columns:auto auto;align-items:center;margin-bottom:6px;">
-              <canvas-checkbox id="block_all_day" label="All day" onchange="onBlockAllDayToggle(this.checked)"></canvas-checkbox>
-              <div style="font-size:12.5px;color:var(--text-muted);">Tip: add multiple dates below to block them all in one save (e.g. holiday list).</div>
-            </div>
-            <div class="form-row" id="block-time-row" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="block-entry-row" id="block-time-row">
               <div class="field" style="position:relative;">
                 <label>Date <span class="req">*</span></label>
                 <input class="input date-facade" type="text" id="block_date_display" readonly placeholder="Select date..." onclick="document.getElementById('block_date').showPicker()">
@@ -366,12 +359,13 @@
                 <label>End time <span class="req">*</span></label>
                 <span id="block_end_time_wrap"></span>
               </div>
+              <div class="block-entry-actions">
+                <canvas-checkbox id="block_all_day" label="All day" onchange="onBlockAllDayToggle(this.checked)"></canvas-checkbox>
+                <button type="button" class="btn" onclick="addBlockEntry()">+ Add to list</button>
+              </div>
             </div>
-            <div class="form-row" style="grid-template-columns:1fr auto;align-items:end;margin-top:6px;">
-              <div class="field" style="font-size:12.5px;color:var(--text-muted);">Add the date above and click <strong>Add date</strong> to queue more days. The block will be saved for each.</div>
-              <button type="button" class="add-time-btn" onclick="addBlockDateChip()">+ Add date</button>
-            </div>
-            <div id="block-date-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
+            <p id="block-event-tz-hint" class="tz-convert-hint tz-below"></p>
+            <div id="block-entries" class="block-entries" style="display:none;"></div>
           </div>
 
           <div id="block-weekly-fields" style="display:none;">
@@ -387,7 +381,7 @@
                 </select>
               </div>
               <p class="field-hint" style="margin:0;">
-                e.g. <em>2 weeks</em> = bi-weekly &middot; <em>17 days</em> = every 17 days
+                2 weeks = bi-weekly &middot; 17 days = every 17 days
               </p>
               <p id="rb-daily-mode-hint" style="display:none;"></p>
             </div>
@@ -400,10 +394,10 @@
                 </div>
                 <div class="field" style="position:relative;">
                   <label>End date <span class="label-hint">(optional)</span></label>
-                  <input class="input date-facade" type="text" id="rb_effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('rb_effective_end').showPicker()">
-                  <input type="date" id="rb_effective_end" class="date-hidden" onchange="syncDateFacade('rb_effective_end')" tabindex="-1">
-                  <div class="no-end-row">
-                    <canvas-checkbox id="rb_no_end_date" label="No end date" checked onchange="toggleNoEndDate('rb_effective_end', this.checked)"></canvas-checkbox>
+                  <div class="end-date-line">
+                    <input class="input date-facade" type="text" id="rb_effective_end_display" readonly placeholder="No end date" onclick="document.getElementById('rb_effective_end').showPicker()">
+                    <input type="date" id="rb_effective_end" class="date-hidden" onchange="syncDateFacade('rb_effective_end')" tabindex="-1">
+                    <button type="button" class="date-clear" id="rb_effective_end_clear" aria-label="Clear end date" style="display:none;" onclick="clearEndDate('rb_effective_end')">&times;</button>
                   </div>
                 </div>
               </div>
@@ -441,25 +435,27 @@
             <div class="section-label">Who</div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;">
               <div class="field">
-                <label>Provider(s) <span class="req">*</span></label>
+                <label>Providers <span class="req">*</span></label>
                 <div id="ms-hold-provider" class="multi-select"></div>
               </div>
               <div class="field">
-                <label>Location(s)</label>
+                <label>Locations</label>
                 <div id="ms-hold-location" class="multi-select"></div>
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;margin-top:14px;">
               <div class="field">
                 <label>Reason</label>
-                <canvas-input type="text" id="hold_reason" placeholder="e.g. Same-day slots, Walk-in reserve..."></canvas-input>
+                <canvas-input type="text" id="hold_reason" placeholder="Same-day slots, Walk-in reserve"></canvas-input>
               </div>
               <div class="field">
                 <label>Hold type <span class="req">*</span></label>
-                <canvas-dropdown id="hold_type_select">
-                  <canvas-option value="same_day" selected>Same-day hold (releases day-of)</canvas-option>
-                  <canvas-option value="next_day">Next-day hold (releases day before)</canvas-option>
-                </canvas-dropdown>
+                <input type="hidden" id="hold_type_select" value="same_day">
+                <div class="schedule-mode-toggle" role="radiogroup" aria-label="Hold type">
+                  <button type="button" class="mode-btn active" id="hold-type-same_day" onclick="setHoldType('same_day')">Same-day</button>
+                  <button type="button" class="mode-btn" id="hold-type-next_day" onclick="setHoldType('next_day')">Next-day</button>
+                </div>
+                <span class="field-hint" id="hold-type-hint">Availability blocked until the day of.</span>
               </div>
             </div>
           </div>
@@ -473,10 +469,10 @@
               </div>
               <div class="field" style="position:relative;">
                 <label>End date <span class="label-hint">(optional)</span></label>
-                <input class="input date-facade" type="text" id="hold_effective_end_display" readonly placeholder="Select date..." onclick="document.getElementById('hold_effective_end').showPicker()">
-                <input type="date" id="hold_effective_end" class="date-hidden" onchange="syncDateFacade('hold_effective_end')" tabindex="-1">
-                <div class="no-end-row">
-                  <canvas-checkbox id="hold_no_end_date" label="No end date" checked onchange="toggleNoEndDate('hold_effective_end', this.checked)"></canvas-checkbox>
+                <div class="end-date-line">
+                  <input class="input date-facade" type="text" id="hold_effective_end_display" readonly placeholder="No end date" onclick="document.getElementById('hold_effective_end').showPicker()">
+                  <input type="date" id="hold_effective_end" class="date-hidden" onchange="syncDateFacade('hold_effective_end')" tabindex="-1">
+                  <button type="button" class="date-clear" id="hold_effective_end_clear" aria-label="Clear end date" style="display:none;" onclick="clearEndDate('hold_effective_end')">&times;</button>
                 </div>
               </div>
             </div>
@@ -534,40 +530,39 @@
         </section>
 
         <section class="set-page" id="set-p-access">
-          <div class="pg-head"><div class="pg-title">Access control</div><div class="pg-sub">Control who can view and edit provider availability. Providers can always edit their own availability.</div></div>
-          <div class="blk first"><div id="set-access-status"></div></div>
+          <div class="pg-head"><div class="pg-title">Access control</div><div class="pg-sub">Who can edit provider availability and change these settings.</div></div>
+          <div class="blk first">
+            <h3>Who can do what</h3>
+            <table class="ax-tbl access-sum">
+              <tr><th>Who</th><th>Can edit</th></tr>
+              <tr><td>Admins <span class="sum-n" id="set-sum-admins"></span></td><td>Every provider, and Settings</td></tr>
+              <tr><td>Providers</td><td>Their own availability</td></tr>
+              <tr><td>Schedulers in an editing group</td><td id="set-how-group"></td></tr>
+              <tr><td>Everyone else</td><td id="set-how-else"></td></tr>
+            </table>
+            <div id="set-access-status"></div>
+          </div>
           <div class="blk">
-            <h3>Admins</h3>
-            <p class="blk-p">Admins can edit all providers and change settings. Admin membership is managed through a Canvas team.</p>
-            <label class="ax-lbl" for="set-admin-team" style="margin-top:0">Admin team</label>
-            <select class="input" id="set-admin-team" style="max-width:320px"></select>
-            <div class="toks" id="set-admin-members"></div>
+            <div class="blk-h"><div><h3>Admins</h3><p class="blk-p">Can edit every provider and change Settings. Select Canvas teams, people, or both with <strong>Edit admins</strong>.</p></div><button type="button" class="btn" id="set-edit-admins">Edit admins</button></div>
+            <div id="set-admin-editor"></div>
+            <div class="adm-lines" id="set-admin-members"></div>
             <div class="note" id="set-admin-note"></div>
           </div>
           <div class="blk">
-            <div class="blk-h"><div><h3>Editing groups</h3><p class="blk-p" id="set-groups-desc"></p></div><button type="button" class="btn btn-primary" id="set-new-group">+ New group</button></div>
-            <div id="set-group-editor"></div>
-            <div class="glist" id="set-groups"></div>
-            <div class="note" id="set-groups-loose"></div>
-          </div>
-          <div class="blk">
             <h3>Default access</h3>
-            <p class="blk-p">Applies to staff who are not admins and not in an editing group. When no groups exist, it applies to all staff who are not admins.</p>
+            <p class="blk-p">For staff who aren't admins and aren't schedulers in an editing group.</p>
             <select class="input" id="set-default-access" style="max-width:560px">
               <option value="full">Full access: Create, edit, and view availability for all providers</option>
               <option value="view">View access: View availability for all providers without making changes</option>
               <option value="none">No access: No access to other providers' availability</option>
             </select>
-            <details class="how" style="margin-top:14px">
-              <summary>How access works</summary>
-              <table class="ax-tbl" style="margin-top:8px">
-                <tr><th>Role</th><th>Access</th></tr>
-                <tr><td>Admins</td><td>All providers and settings</td></tr>
-                <tr><td>Editing group schedulers</td><td id="set-how-group"></td></tr>
-                <tr><td>Providers</td><td>Their own availability</td></tr>
-                <tr><td>All other staff</td><td id="set-how-else"></td></tr>
-              </table>
-            </details>
+          </div>
+          <div class="blk">
+            <div class="blk-h"><div><h3>Editing groups</h3><p class="blk-p" id="set-groups-desc"></p></div><button type="button" class="btn btn-primary" id="set-new-group">+ New group</button></div>
+            <p class="callout">Providers can always manage their own availability. To let someone manage other providers too, add them as a scheduler in a group.</p>
+            <div id="set-group-editor"></div>
+            <div class="glist" id="set-groups"></div>
+            <div class="note" id="set-groups-loose"></div>
           </div>
         </section>
 

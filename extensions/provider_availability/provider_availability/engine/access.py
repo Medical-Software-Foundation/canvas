@@ -3,10 +3,11 @@
 The rules, in order:
 
 1. Admins can view and edit every provider and change Settings. Admins are the
-   members of the Canvas team picked in Settings. With no team picked (or a team
-   with no members), the ``allowed-staff-keys`` plugin secret lists them. With
-   neither, every staff member is an admin, which is how the plugin behaved
-   before access control existed.
+   members of the Canvas teams and the people picked in Settings, plus anyone in
+   the ``allowed-staff-keys`` plugin secret. The secret always counts, so a
+   practice can get back into Settings after saving admins that leave everyone
+   out. With nobody in any of them, every staff member is an admin, which is how
+   the plugin behaved before access control existed.
 2. Every staff member can view and edit their own availability.
 3. A scheduler in one or more editing groups can edit only the providers in
    those groups. They can view everyone else unless default access is "none".
@@ -24,7 +25,6 @@ from typing import Any
 from uuid import UUID
 
 from canvas_sdk.v1.data.team import Team
-from logger import log
 
 from provider_availability.api._auth import _canonical_id
 from provider_availability.engine.settings import get_access_config
@@ -35,28 +35,34 @@ def _secret_admin_ids(secrets: dict | None) -> set[str]:
     return {_canonical_id(part) for part in raw.split(",") if part.strip()}
 
 
-def team_member_ids(team_id: str) -> set[str]:
-    """Canonical staff ids of a Canvas team's members. Empty for an unknown team id."""
+def team_member_ids(team_ids: list[str] | str) -> set[str]:
+    """Canonical staff ids of the members of the given Canvas teams. Unknown team ids add nobody."""
     # A malformed id would raise a ValidationError inside the query, which the
     # sandbox gives no way to catch, so it is screened out here instead.
-    try:
-        UUID(team_id)
-    except (ValueError, TypeError, AttributeError):
+    valid: list[str] = []
+    for team_id in [team_ids] if isinstance(team_ids, str) else team_ids:
+        try:
+            UUID(team_id)
+        except (ValueError, TypeError, AttributeError):
+            continue
+        valid.append(team_id)
+    if not valid:
         return set()
-    members = Team.objects.filter(id=team_id).values_list("members__id", flat=True)
+    members = Team.objects.filter(id__in=valid).values_list("members__id", flat=True)
     return {_canonical_id(str(m)) for m in members if m}
+
+
+def secret_admin_ids(secrets: dict | None) -> set[str]:
+    """Staff listed in the ``allowed-staff-keys`` secret. They are always admins."""
+    return _secret_admin_ids(secrets)
 
 
 def admin_ids(secrets: dict | None, config: dict[str, Any] | None = None) -> set[str]:
     """Staff ids that count as admins. Empty means everyone is an admin."""
     config = config if config is not None else get_access_config()
-    team_id = config.get("admin_team_id", "")
-    if team_id:
-        members = team_member_ids(team_id)
-        if members:
-            return members
-        log.warning("access: admin team %s has no members; using the allowed-staff-keys secret", team_id)
-    return _secret_admin_ids(secrets)
+    admins = team_member_ids(config.get("admin_team_ids", []))
+    admins |= {_canonical_id(s) for s in config.get("admin_staff_ids", []) if s}
+    return admins | _secret_admin_ids(secrets)
 
 
 def effective_default_access(secrets: dict | None, config: dict[str, Any] | None = None) -> str:
