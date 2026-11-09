@@ -69,109 +69,136 @@ def _cents_to_dollars(cents: int | None) -> Decimal | None:
     return (Decimal(cents) / Decimal(100)).quantize(Decimal("0.01"))
 
 
-def _match_line_item(
-    candid_line: dict,
-    line_items: list,
-    canvas_claim_id: str,
-    index: int | None = None,
-) -> str | None:
-    """Match a Candid service_line to a Canvas ClaimLineItem.
+def _is_overflow_placeholder(candid_line: dict) -> bool:
+    """A supplemental-split 99499 placeholder ($0.01), which is on no Canvas claim.
 
-    Tries in order:
-    1. ``external_id`` (set by the plugin at submission time)
-    2. Exact ``procedure_code`` match
-    3. Fallback: ``charge_amount`` + ``date_of_service`` (handles payer code remaps)
-    4. Fallback: positional index (same order as submitted)
+    It exists only to carry diagnosis codes past the CMS-1500 limit, so it is
+    never matched (its ERA adjustments must not land on a real line).
     """
-    # Supplemental-split overflow placeholders (99499 at $0.01) don't correspond
-    # to any Canvas line item — they exist only to carry diagnosis codes past
-    # the CMS-1500 limit. Skip so their ERA adjustments aren't misrouted to
-    # line_items[0] via the positional-index fallback.
-    if (
+    return (
         candid_line.get("procedure_code") == OVERFLOW_CPT_CODE
         and candid_line.get("charge_amount_cents") == OVERFLOW_CHARGE_CENTS
-    ):
-        return None
-
-    # Pass 1: match on external_id (most reliable — set by the plugin)
-    if external_id := candid_line.get("external_id"):
-        match = next((li for li in line_items if str(li.id) == external_id), None)
-        if match:
-            return str(match.id)
-
-    candid_proc = candid_line.get("procedure_code", "")
-    candid_charge_cents = candid_line.get("charge_amount_cents")
-    candid_dos = candid_line.get("date_of_service_range", {})
-    candid_from_date = candid_dos.get("start_date") or candid_dos.get(
-        "date_of_service"
     )
-    candid_charge_dollars = _cents_to_dollars(candid_charge_cents)
 
-    # Pass 2: match on procedure code
-    if candid_proc:
-        matches = [li for li in line_items if li.proc_code == candid_proc]
 
-        # If ambiguous, narrow by date and charge
-        if len(matches) > 1:
+def _service_date(candid_line: dict) -> str | None:
+    dos = candid_line.get("date_of_service_range") or {}
+    return dos.get("start_date") or dos.get("date_of_service")
+
+
+def _same_date(line_item: Any, candid_date: str | None) -> bool:
+    return not candid_date or str(line_item.from_date) == str(candid_date)
+
+
+# Payer code remaps seen in prod: the code on the Candid (payer) line, mapped
+# to the Canvas line codes it may stand for. Add a pair only once it's seen in
+# real remittances; anything else unmatched goes to a biller via a comment.
+KNOWN_PAYER_REMAPS: dict[str, frozenset[str]] = {
+    "99487": frozenset({"G0023"}),
+    "G0023": frozenset({"99487"}),
+}
+
+
+def _match_service_lines(
+    service_lines: list[dict], line_items: list, canvas_claim_id: str
+) -> list[str | None]:
+    """Match each Candid service line to a Canvas ClaimLineItem, one to one.
+
+    Returns one Canvas line item ID (or None) per service line, in order. Each
+    pass runs over every service line before the next pass starts, and a
+    Canvas line taken by an earlier pass is never given to a second Candid
+    line:
+
+    1. ``external_id`` (the Canvas line item ID, set at submission)
+    2. ``procedure_code``, narrowed by date and charge when ambiguous
+    3. A known payer remap (``KNOWN_PAYER_REMAPS``), same date of service
+
+    Pass 3 only applies to a Candid line whose procedure code is on no Canvas
+    line at all. There is no charge+date or positional fallback: in prod they
+    mostly paired unrelated procedures (99214 with 90833, 96127 with 90837),
+    putting one procedure's money on another's line. A line left unmatched
+    gets a claim comment instead, so a biller posts it by hand.
+
+    One to one matters for posting: two Candid lines on one Canvas line put two
+    payment rows on that line in one posting, which Canvas rejects ("Specify an
+    adjustment amount for added adjustments..."), and that failed the whole
+    claim every night (PLUGIN-501).
+    """
+    matches: list[str | None] = [None] * len(service_lines)
+    taken: set[str] = set()
+    ids = {str(li.id) for li in line_items}
+    # Lines a fallback must not touch: placeholders, and lines whose code is
+    # on the claim
+    no_fallback: set[int] = set()
+
+    def free(li: Any) -> bool:
+        return str(li.id) not in taken
+
+    def take(idx: int, li_id: str) -> None:
+        matches[idx] = li_id
+        taken.add(li_id)
+
+    for idx, sl in enumerate(service_lines):
+        if _is_overflow_placeholder(sl):
+            no_fallback.add(idx)
+            continue
+        external_id = sl.get("external_id")
+        if external_id and external_id in ids and external_id not in taken:
+            take(idx, external_id)
+
+    for idx, sl in enumerate(service_lines):
+        proc = sl.get("procedure_code") or ""
+        if matches[idx] or idx in no_fallback or not proc:
+            continue
+        same_code = [li for li in line_items if li.proc_code == proc]
+        if not same_code:
+            continue
+        no_fallback.add(idx)
+        candidates = [li for li in same_code if free(li)]
+        if len(candidates) > 1:
+            charge = _cents_to_dollars(sl.get("charge_amount_cents"))
             narrowed = [
                 li
-                for li in matches
-                if (
-                    not candid_from_date
-                    or str(li.from_date) == str(candid_from_date)
-                )
-                and (
-                    candid_charge_dollars is None
-                    or li.charge == candid_charge_dollars
-                )
+                for li in candidates
+                if _same_date(li, _service_date(sl))
+                and (charge is None or li.charge == charge)
             ]
-            if narrowed:
-                matches = narrowed
-
-        if len(matches) == 1:
-            return str(matches[0].id)
-
-        if len(matches) > 1:
+            candidates = narrowed or candidates
+        if len(candidates) == 1:
+            take(idx, str(candidates[0].id))
+        elif candidates:
             log.warning(
-                f"Candid sync: ambiguous match for procedure {candid_proc} "
-                f"on claim {canvas_claim_id} — {len(matches)} candidates, skipping"
+                f"Candid sync: ambiguous match for procedure {proc} on claim "
+                f"{canvas_claim_id}: {len(candidates)} candidates, skipping"
             )
-            return None
 
-    # Pass 3: fallback on charge + date (handles payer code remaps like
-    # 99487→G0023 where Candid changes the proc code after submission)
-    if candid_charge_dollars is not None:
-        matches = [
+    for idx, sl in enumerate(service_lines):
+        proc = sl.get("procedure_code") or ""
+        remap_to = KNOWN_PAYER_REMAPS.get(proc)
+        if matches[idx] or idx in no_fallback or not remap_to:
+            continue
+        candidates = [
             li
             for li in line_items
-            if li.charge == candid_charge_dollars
-            and (
-                not candid_from_date
-                or str(li.from_date) == str(candid_from_date)
-            )
+            if free(li)
+            and li.proc_code in remap_to
+            and _same_date(li, _service_date(sl))
         ]
-        if len(matches) == 1:
+        if len(candidates) == 1:
+            take(idx, str(candidates[0].id))
             log.info(
-                f"Candid sync: matched {candid_proc} to {matches[0].proc_code} "
-                f"via charge+date fallback on claim {canvas_claim_id}"
+                f"Candid sync: matched {proc} to {candidates[0].proc_code} "
+                f"(known payer remap) on claim {canvas_claim_id}"
             )
-            return str(matches[0].id)
 
-    # Pass 4: positional index fallback (same order as submitted)
-    if index is not None and 0 <= index < len(line_items):
-        li = line_items[index]
-        log.info(
-            f"Candid sync: matched {candid_proc} to {li.proc_code} "
-            f"via index fallback (position {index}) on claim {canvas_claim_id}"
-        )
-        return str(li.id)
-
-    log.warning(
-        f"Candid sync: no match for procedure {candid_proc} "
-        f"(charge={candid_charge_cents}c, date={candid_from_date}) "
-        f"on claim {canvas_claim_id}"
-    )
-    return None
+    for idx, sl in enumerate(service_lines):
+        if matches[idx] is None and not _is_overflow_placeholder(sl):
+            log.warning(
+                f"Candid sync: no Canvas line matched procedure "
+                f"{sl.get('procedure_code')} (charge={sl.get('charge_amount_cents')}c, "
+                f"date={_service_date(sl)}) on claim {canvas_claim_id}, skipping it"
+            )
+    return matches
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +260,7 @@ def _build_insurance_transactions(
     transfer_to: str | None = None,
     pr_transfer_to: str = PATIENT_COVERAGE_ID,
     sequestration: bool = False,
+    matches: list[str | None] | None = None,
 ) -> list[LineItemTransaction]:
     """Build insurance payment + adjustment transactions from encounter service lines.
 
@@ -242,13 +270,15 @@ def _build_insurance_transactions(
     Patient responsibility (deductible, coinsurance, copay) moves to
     ``pr_transfer_to``. With ``sequestration`` (a Medicare primary on an
     instance that opted in), each paid line also gets an inferred CO-253
-    write-off unless the payer reported one.
+    write-off unless the payer reported one. ``matches`` is
+    ``_match_service_lines``'s result, when the caller already has it.
     """
     txns: list[LineItemTransaction] = []
     line_items_by_id = {str(li.id): li for li in line_items}
+    if matches is None:
+        matches = _match_service_lines(service_lines, line_items, canvas_claim_id)
 
-    for idx, sl in enumerate(service_lines):
-        line_item_id = _match_line_item(sl, line_items, canvas_claim_id, index=idx)
+    for sl, line_item_id in zip(service_lines, matches, strict=True):
         if not line_item_id:
             continue
 
@@ -369,12 +399,11 @@ def _sequestration_transactions(
 
 
 def _build_secondary_transactions(
-    service_lines: list[dict], line_items: list, canvas_claim_id: str, paid_field: str
+    service_lines: list[dict], matches: list[str | None], paid_field: str
 ) -> list[LineItemTransaction]:
     """Build payment transactions for secondary/tertiary payer."""
     txns: list[LineItemTransaction] = []
-    for idx, sl in enumerate(service_lines):
-        line_item_id = _match_line_item(sl, line_items, canvas_claim_id, index=idx)
+    for sl, line_item_id in zip(service_lines, matches, strict=True):
         if not line_item_id:
             continue
         payment = _cents_to_dollars(sl.get(paid_field))
@@ -409,7 +438,10 @@ def _coverage_balance_by_line(coverage: Any) -> dict[int, Decimal]:
 
 
 def _secondary_leftover_transactions(
-    state: "_SyncState", service_lines: list[dict], next_responsible: str
+    state: "_SyncState",
+    service_lines: list[dict],
+    matches: list[str | None],
+    next_responsible: str,
 ) -> list[LineItemTransaction]:
     """Move what the secondary left unpaid to whoever Candid says owes the rest."""
     if next_responsible == "patient":
@@ -421,12 +453,8 @@ def _secondary_leftover_transactions(
 
     balances = _coverage_balance_by_line(state.secondary_coverage)
     dbid_by_line_id = {str(li.id): li.dbid for li in state.line_items}
-    # Several Candid lines can match one Canvas line; its leftover moves once
     paid_by_line: dict[str, Decimal] = {}
-    for idx, sl in enumerate(service_lines):
-        line_item_id = _match_line_item(
-            sl, state.line_items, state.canvas_claim_id, index=idx
-        )
+    for sl, line_item_id in zip(service_lines, matches, strict=True):
         if not line_item_id:
             continue
         paid = _cents_to_dollars(sl.get("secondary_paid_amount_cents")) or Decimal("0")
@@ -791,6 +819,14 @@ def _post_era_payments(
         state.era_totals[eid] = cumulative_total
         state.attempted_era_ids.append(eid)
 
+    matches = _match_service_lines(
+        service_lines, state.line_items, state.canvas_claim_id
+    )
+    if comment := _unposted_lines_comment(
+        service_lines, matches, [str(era["era_id"]) for era in new_eras]
+    ):
+        state.effects.append(state.claim_effect.add_comment(comment))
+
     # Primary insurance (ERA index 0)
     if (
         _has_delta(current_amounts, state.prev_synced_amounts, "primary")
@@ -805,6 +841,7 @@ def _post_era_payments(
             transfer_to=transfer_to,
             pr_transfer_to=state.secondary_id or PATIENT_COVERAGE_ID,
             sequestration=state.post_sequestration,
+            matches=matches,
         )
         if insurance_txns:
             _append_payment_effect(state, state.primary_id, insurance_txns, primary_era)
@@ -833,12 +870,12 @@ def _post_era_payments(
             continue
         txns: list[LineItemTransaction] = []
         if _has_delta(current_amounts, state.prev_synced_amounts, tier):
-            txns = _build_secondary_transactions(
-                service_lines, state.line_items, state.canvas_claim_id, paid_field
-            )
+            txns = _build_secondary_transactions(service_lines, matches, paid_field)
         if tier == "secondary" and secondary_adjudicated:
             txns.extend(
-                _secondary_leftover_transactions(state, service_lines, next_responsible)
+                _secondary_leftover_transactions(
+                    state, service_lines, matches, next_responsible
+                )
             )
         if not txns:
             continue
@@ -846,6 +883,77 @@ def _post_era_payments(
 
     # Roll the cumulative amounts forward so the next sync computes against this point
     state.prev_synced_amounts = current_amounts
+
+
+_UNPOSTED_AMOUNT_FIELDS = (
+    ("primary_paid_amount_cents", "primary paid"),
+    ("secondary_paid_amount_cents", "secondary paid"),
+    ("tertiary_paid_amount_cents", "tertiary paid"),
+    ("deductible_cents", "deductible"),
+    ("coinsurance_cents", "coinsurance"),
+    ("copay_cents", "copay"),
+)
+
+
+def _adjustment_labels(sl: dict) -> list[str]:
+    """ERA and manual adjustments on a Candid line, as "CO-45 $12.00" labels.
+
+    A denial can pay $0 and carry only adjustments; without these the line
+    would be left out of the unposted-lines comment and its write-offs and
+    transfers would go unposted silently.
+    """
+    adjustments = (sl.get("service_line_era_data") or {}).get(
+        "service_line_adjustments"
+    ) or []
+    adjustments = adjustments + (sl.get("service_line_manual_adjustments") or [])
+    labels = []
+    for adj in adjustments:
+        amount = _cents_to_dollars(adj.get("adjustment_amount_cents"))
+        if not amount:
+            continue
+        group_code = adj.get("adjustment_group_code") or ""
+        reason_code = adj.get("adjustment_reason_code") or ""
+        code = (
+            f"{group_code}-{reason_code}"
+            if group_code and reason_code
+            else "adjustment"
+        )
+        labels.append(f"{code} ${amount}")
+    return labels
+
+
+def _unposted_lines_comment(
+    service_lines: list[dict], matches: list[str | None], era_ids: list[str]
+) -> str | None:
+    """A claim comment naming Candid lines with money that matched no Canvas line.
+
+    The sync marks the ERA as synced either way, so without this a biller would
+    never learn that part of the remittance wasn't posted. Candid's line amounts
+    are running totals, so a later ERA repeats the earlier money: the comment
+    names its ERAs and says the amounts are totals, so nobody posts them twice.
+    """
+    unposted = []
+    for sl, line_item_id in zip(service_lines, matches, strict=True):
+        if line_item_id or _is_overflow_placeholder(sl):
+            continue
+        amounts = [
+            f"{label} ${amount}"
+            for cents_field, label in _UNPOSTED_AMOUNT_FIELDS
+            if (amount := _cents_to_dollars(sl.get(cents_field)))
+        ] + _adjustment_labels(sl)
+        if amounts:
+            unposted.append(
+                f"{sl.get('procedure_code') or '?'} on {_service_date(sl) or '?'} "
+                f"({', '.join(amounts)})"
+            )
+    if not unposted:
+        return None
+    return (
+        f"Candid sync (ERA {', '.join(era_ids) or '?'}): these Candid lines match "
+        "no line on this claim and were not posted. Amounts are Candid's totals to "
+        "date, so subtract anything already posted by hand for an earlier ERA: "
+        f"{'; '.join(unposted)}"
+    )
 
 
 def _append_payment_effect(
@@ -1039,6 +1147,10 @@ def _finalize_effects(state: _SyncState, claim: Claim) -> None:
     )
 
 
+class CandidFetchError(Exception):
+    """No encounter of a claim could be read from Candid, so nothing was synced."""
+
+
 def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     """Pull adjudication and patient payment data from Candid for a single claim.
 
@@ -1054,6 +1166,10 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     3. ``GET /patient-payments/v4?claim_id={candid_claim_id}`` → patient payments
 
     Dedup IDs are appended to claim metadata in the same effect batch.
+
+    Raises ``CandidFetchError`` when none of the claim's encounters could be
+    fetched, so nothing is written over the claim's status. If only some
+    splits fail, the fetched ones are synced and the failure is logged.
     """
     encounters_meta = get_claim_metadata(claim, META_ENCOUNTERS)
     if not encounters_meta:
@@ -1065,6 +1181,8 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     client = CandidClient.from_secrets(secrets)
     state = _init_sync_state(claim, secrets)
 
+    fetched = 0
+    last_error: Exception | None = None
     for encounter_record in encounters_meta:
         candid_encounter_id = encounter_record.get("candid_encounter_id")
         if not candid_encounter_id:
@@ -1076,13 +1194,25 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
                 f"Candid sync: failed to fetch encounter {candid_encounter_id} "
                 f"for claim {state.canvas_claim_id}: {e}"
             )
+            last_error = e
             continue
+        fetched = fetched + 1
         _process_encounter(
             state,
             encounter_data,
             client,
             overflow=(encounter_record.get("split") or 1) > 1,
         )
+
+    if last_error is not None and not fetched:
+        # Nothing was read from Candid, so writing the status, banner and a
+        # sync-history row would overwrite the claim's real Candid status with
+        # "synced". Fail the claim instead; the cron counts it and retries it
+        # next cycle.
+        raise CandidFetchError(
+            f"Candid sync: could not fetch any encounter for claim "
+            f"{state.canvas_claim_id}: {last_error}"
+        ) from last_error
 
     _post_collected_patient_payments(state)
     _finalize_effects(state, claim)

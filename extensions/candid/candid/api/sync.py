@@ -20,7 +20,11 @@ from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPIRoute
 from canvas_sdk.v1.data.claim import Claim
 from logger import log
 
-from candid.adjudication_sync import sync_claim_adjudications, sync_patient_payments
+from candid.adjudication_sync import (
+    CandidFetchError,
+    sync_claim_adjudications,
+    sync_patient_payments,
+)
 from candid.effect_helpers import check_internal_auth
 
 
@@ -40,7 +44,15 @@ def _sync_handler(
             log.warning(f"Candid {label}: claim {canvas_claim_id} not found")
             return [JSONResponse({"error": "claim not found"}, status_code=404)]
 
-        effects = sync_fn(claim, self.secrets)
+        try:
+            effects = sync_fn(claim, self.secrets)
+        except CandidFetchError as exc:
+            log.warning(f"Candid {label}: {exc}")
+            return [
+                JSONResponse(
+                    {"error": "Couldn't reach Candid for this claim"}, status_code=502
+                )
+            ]
         log.info(
             f"Candid {label}: triggered for claim {canvas_claim_id}, "
             f"{len(effects)} effects generated"

@@ -13,7 +13,11 @@ from candid.adjudication_sync import (
     _cents_to_dollars,
     _coverage_balance_by_line,
     _determine_target_queue,
-    _match_line_item,
+    _era_kwargs,
+    _match_service_lines,
+    _post_patient_payments_for_candid_claim,
+    _resolve_transfer_target,
+    _secondary_leftover_transactions,
     sync_claim_adjudications,
     sync_patient_payments,
 )
@@ -189,15 +193,17 @@ def test_match_line_item_exact_match() -> None:
     candid_line = _candid_service_line(
         procedure_code="99213", charge_amount_cents=10000
     )
-    assert _match_line_item(candid_line, [li], CANVAS_CLAIM_ID) == "li-match"
+    assert _match_service_lines([candid_line], [li], CANVAS_CLAIM_ID) == ["li-match"]
 
 
 def test_match_line_item_no_match() -> None:
+    """A different code and charge at a position past the claim's lines: no match."""
     li = _fake_line_item("99214", Decimal("150.00"), "2026-01-15", "li-1")
-    candid_line = _candid_service_line(
-        procedure_code="99213", charge_amount_cents=10000
-    )
-    assert _match_line_item(candid_line, [li], CANVAS_CLAIM_ID) is None
+    lines = [
+        _candid_service_line("99214", 15000),
+        _candid_service_line(procedure_code="99213", charge_amount_cents=10000),
+    ]
+    assert _match_service_lines(lines, [li], CANVAS_CLAIM_ID) == ["li-1", None]
 
 
 def test_match_line_item_ambiguous() -> None:
@@ -206,7 +212,7 @@ def test_match_line_item_ambiguous() -> None:
     candid_line = _candid_service_line(
         procedure_code="99213", charge_amount_cents=10000
     )
-    assert _match_line_item(candid_line, [li1, li2], CANVAS_CLAIM_ID) is None
+    assert _match_service_lines([candid_line], [li1, li2], CANVAS_CLAIM_ID) == [None]
 
 
 def test_match_line_item_skips_supplemental_overflow() -> None:
@@ -214,7 +220,89 @@ def test_match_line_item_skips_supplemental_overflow() -> None:
     must not be index-matched to a Canvas line item."""
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
     overflow = _candid_service_line(procedure_code="99499", charge_amount_cents=1)
-    assert _match_line_item(overflow, [li], CANVAS_CLAIM_ID, index=0) is None
+    assert _match_service_lines([overflow], [li], CANVAS_CLAIM_ID) == [None]
+
+
+def test_match_by_external_id_first() -> None:
+    li1 = _fake_line_item("90833", Decimal("80.00"), li_id="li-1")
+    li2 = _fake_line_item("90833", Decimal("80.00"), li_id="li-2")
+    line = {**_candid_service_line("90833", 8000), "external_id": "li-2"}
+    assert _match_service_lines([line], [li1, li2], CANVAS_CLAIM_ID) == ["li-2"]
+
+
+def test_match_same_code_lines_pair_off_one_to_one() -> None:
+    """Two identical Candid lines on two identical Canvas lines: first is
+    ambiguous (skipped), as before, and never doubles up on one line."""
+    li1 = _fake_line_item("90837", Decimal("200.00"), "2026-01-15", "li-1")
+    li2 = _fake_line_item("90837", Decimal("200.00"), "2026-01-22", "li-2")
+    lines = [
+        _candid_service_line("90837", 20000, date_of_service="2026-01-22"),
+        _candid_service_line("90837", 20000, date_of_service="2026-01-15"),
+    ]
+    assert _match_service_lines(lines, [li1, li2], CANVAS_CLAIM_ID) == ["li-2", "li-1"]
+
+
+def test_match_known_remap_g0023_to_99487() -> None:
+    """99487 remapped to G0023 by the payer: the known remap finds the line."""
+    li = _fake_line_item("99487", Decimal("120.00"), li_id="li-1")
+    other = _fake_line_item("99213", Decimal("100.00"), li_id="li-2")
+    line = _candid_service_line("G0023", 12000)
+    with patch("candid.adjudication_sync.log") as mock_log:
+        assert _match_service_lines([line], [other, li], CANVAS_CLAIM_ID) == ["li-1"]
+    assert "known payer remap" in mock_log.info.call_args.args[0]
+
+
+def test_match_known_remap_works_the_other_way() -> None:
+    li = _fake_line_item("G0023", Decimal("120.00"), li_id="li-1")
+    line = _candid_service_line("99487", 9900)
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == ["li-1"]
+
+
+def test_known_remap_needs_the_same_date() -> None:
+    li = _fake_line_item("99487", Decimal("120.00"), "2026-01-15", "li-1")
+    line = _candid_service_line("G0023", 12000, date_of_service="2026-01-16")
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == [None]
+
+
+def test_no_charge_date_fallback_for_an_unknown_remap() -> None:
+    """Prod: charge+date paired 99214 with 90833. Same charge and date is no
+    longer enough; the line stays unmatched for a biller."""
+    li = _fake_line_item("90833", Decimal("150.00"), li_id="li-90833")
+    line = _candid_service_line("99214", 15000)
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == [None]
+
+
+def test_no_index_fallback() -> None:
+    """Prod: index paired 99490 with 99454. Position alone never matches."""
+    li = _fake_line_item("99454", Decimal("80.00"), li_id="li-1")
+    line = _candid_service_line("99490", 9900)
+    assert _match_service_lines([line], [li], CANVAS_CLAIM_ID) == [None]
+
+
+def test_fallback_never_takes_a_line_another_candid_line_matched() -> None:
+    """The production shape: Candid has 99214 + 90833, Canvas has only 90833 at
+    the same charge. 99214 must not land on 90833's line (by charge+date or
+    by index); it is skipped instead of failing the whole posting."""
+    li = _fake_line_item("90833", Decimal("150.00"), li_id="li-90833")
+    lines = [
+        _candid_service_line("99214", 15000, primary_paid_amount_cents=9000),
+        _candid_service_line("90833", 15000, primary_paid_amount_cents=6000),
+    ]
+    assert _match_service_lines(lines, [li], CANVAS_CLAIM_ID) == [None, "li-90833"]
+
+
+def test_fallback_skips_a_line_whose_code_is_on_the_claim_but_taken() -> None:
+    """An extra 90833 from Candid must not fall back onto the 99214 line."""
+    li_em = _fake_line_item("99214", Decimal("80.00"), li_id="li-em")
+    li_add = _fake_line_item("90833", Decimal("80.00"), li_id="li-add")
+    lines = [
+        {**_candid_service_line("90833", 8000), "external_id": "li-add"},
+        _candid_service_line("90833", 8000),
+    ]
+    assert _match_service_lines(lines, [li_add, li_em], CANVAS_CLAIM_ID) == [
+        "li-add",
+        None,
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -528,7 +616,7 @@ def test_sync_extracts_status_from_claim() -> None:
 
     with (
         patch("candid.adjudication_sync.CandidClient") as MC,
-        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.ClaimEffect"),
         patch("candid.adjudication_sync.sync_banner") as mock_banner,
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
@@ -1270,6 +1358,42 @@ def test_sync_skips_encounter_on_fetch_failure_and_continues() -> None:
         )
 
 
+def test_sync_raises_when_no_encounter_could_be_fetched() -> None:
+    """Nothing read from Candid: no status, banner or history is written."""
+    from candid.adjudication_sync import CandidFetchError
+
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim(
+        [li],
+        metadata={
+            "candid_encounters": [
+                {"candid_encounter_id": "enc-1"},
+                {"candid_encounter_id": "enc-2", "split": 2},
+            ]
+        },
+    )
+
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner") as banner,
+        patch("candid.adjudication_sync._finalize_effects") as finalize,
+    ):
+        MC.from_secrets.return_value.get_encounter.side_effect = RuntimeError(
+            "429 Client Error"
+        )
+        try:
+            sync_claim_adjudications(claim, MOCK_SECRETS)
+        except CandidFetchError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected CandidFetchError")
+
+    finalize.assert_not_called()
+    banner.assert_not_called()
+    MCE.return_value.post_payment.assert_not_called()
+
+
 def test_sync_continues_when_patient_payments_fetch_fails() -> None:
     """get_patient_payments raising does not blow up ERA processing for the same encounter."""
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
@@ -1963,3 +2087,268 @@ def test_canvas_collection_lookup_resolves_against_sdk_models() -> None:
     assert "bulkpatientposting" in sql
     assert "baseposting" in sql
     assert "Candid patient payment" in sql
+
+
+# ---------------------------------------------------------------------------
+# PLUGIN-501 follow-up: one Canvas line, two Candid lines
+# ---------------------------------------------------------------------------
+
+
+def _sdk_sequence_errors(txns: list) -> list:
+    """The SDK's own per-line ordering rules for one posting (no DB needed)."""
+    errors: list = []
+    for i, txn in enumerate(txns):
+        first = txn.is_first_transaction_for_line_item(txns, i)
+        errors.extend(txn.is_payment_required(first))
+        errors.extend(txn.is_adjustment_required(first))
+    return errors
+
+
+def test_sdk_rule_rejects_two_payments_on_one_line() -> None:
+    """Guards the helper: this is the production _PostClaimPayment failure."""
+    from canvas_sdk.effects.claim import LineItemTransaction
+
+    txns = [
+        LineItemTransaction(claim_line_item_id="li-1", payment=Decimal("60.00")),
+        LineItemTransaction(claim_line_item_id="li-1", payment=Decimal("90.00")),
+    ]
+    assert "Specify an adjustment amount" in _sdk_sequence_errors(txns)[0][1]
+
+
+def _sync_extra_candid_line(secondary: bool = False) -> MagicMock:
+    li = _fake_line_item("90833", Decimal("150.00"), "2026-01-15", "li-90833")
+    coverages = [_fake_coverage("cov-primary", "Primary")]
+    if secondary:
+        coverages.append(_fake_coverage("cov-secondary", "Secondary"))
+    claim = _fake_claim(
+        [li],
+        coverages=coverages,
+        metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
+    )
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                "99214",
+                15000,
+                primary_paid_amount_cents=9000,
+                allowed_amount_cents=12000,
+                secondary_paid_amount_cents=1000,
+            ),
+            _candid_service_line(
+                "90833",
+                15000,
+                primary_paid_amount_cents=6000,
+                allowed_amount_cents=8000,
+                secondary_paid_amount_cents=500,
+            ),
+        ],
+        eras=[{"era_id": "era-1"}, {"era_id": "era-2"}],
+    )
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+        patch("candid.adjudication_sync._coverage_balance_by_line", return_value={}),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+    return MCE.return_value
+
+
+def test_extra_candid_line_posts_valid_payments_and_flags_the_rest() -> None:
+    ce = _sync_extra_candid_line(secondary=True)
+
+    postings = ce.post_payment.call_args_list
+    assert [c.kwargs["claim_coverage_id"] for c in postings] == [
+        "cov-primary",
+        "cov-secondary",
+    ]
+    for call in postings:
+        txns = call.kwargs["line_item_transactions"]
+        assert _sdk_sequence_errors(txns) == []
+        assert {t.claim_line_item_id for t in txns} == {"li-90833"}
+    primary_txns = postings[0].kwargs["line_item_transactions"]
+    # Only 90833's own money lands on its line
+    assert [t.payment for t in primary_txns if t.payment] == [Decimal("60.00")]
+    secondary_txns = postings[1].kwargs["line_item_transactions"]
+    assert [t.payment for t in secondary_txns if t.payment] == [Decimal("5.00")]
+
+    comment = ce.add_comment.call_args.args[0]
+    assert "99214 on 2026-01-15" in comment
+    assert "primary paid $90.00" in comment
+    assert "secondary paid $10.00" in comment
+
+
+def test_unposted_comment_skips_lines_without_money_and_placeholders() -> None:
+    from candid.adjudication_sync import _unposted_lines_comment
+
+    lines = [
+        _candid_service_line("99214", 15000),
+        _candid_service_line("99499", 1, primary_paid_amount_cents=1),
+        {"charge_amount_cents": 100, "copay_cents": 2500},
+    ]
+    assert _unposted_lines_comment(lines[:2], [None, None], ["era-1"]) is None
+    assert _unposted_lines_comment(lines, [None, None, None], ["era-1"]).endswith(
+        "? on ? (copay $25.00)"
+    )
+
+
+def test_unposted_comment_lists_an_adjustment_only_denial() -> None:
+    """A $0-paid denial with only CO adjustments must still reach a biller."""
+    from candid.adjudication_sync import _unposted_lines_comment
+
+    line = _candid_service_line(
+        "99214",
+        15000,
+        era_adjustments=[
+            {
+                "adjustment_group_code": "CO",
+                "adjustment_reason_code": "97",
+                "adjustment_amount_cents": 15000,
+            }
+        ],
+        manual_adjustments=[{"adjustment_amount_cents": 500}],
+    )
+    comment = _unposted_lines_comment([line], [None], ["era-1"])
+    assert comment is not None
+    assert "99214 on 2026-01-15 (CO-97 $150.00, adjustment $5.00)" in comment
+
+
+def test_unposted_comment_skips_zero_adjustments() -> None:
+    from candid.adjudication_sync import _unposted_lines_comment
+
+    line = _candid_service_line(
+        "99214",
+        15000,
+        era_adjustments=[
+            {
+                "adjustment_group_code": "CO",
+                "adjustment_reason_code": "45",
+                "adjustment_amount_cents": 0,
+            }
+        ],
+    )
+    assert _unposted_lines_comment([line], [None], ["era-1"]) is None
+
+
+def test_unposted_comment_on_a_later_era_says_amounts_are_totals() -> None:
+    """A secondary ERA arriving a night later repeats the line's primary money.
+
+    The second comment names its own ERA and says the amounts are running
+    totals, so a biller doesn't post the primary money by hand a second time.
+    """
+    li = _fake_line_item("90833", Decimal("150.00"), "2026-01-15", "li-90833")
+    claim = _fake_claim(
+        [li],
+        coverages=[
+            _fake_coverage("cov-primary", "Primary"),
+            _fake_coverage("cov-secondary", "Secondary"),
+        ],
+        metadata={
+            "candid_encounters": [{"candid_encounter_id": "enc-abc"}],
+            "candid_synced_adjudication_ids": ["era-1"],
+        },
+    )
+    encounter = _encounter_response(
+        service_lines=[
+            _candid_service_line(
+                "99214",
+                15000,
+                primary_paid_amount_cents=9000,
+                secondary_paid_amount_cents=1000,
+            ),
+            _candid_service_line("90833", 15000, primary_paid_amount_cents=6000),
+        ],
+        eras=[{"era_id": "era-1"}, {"era_id": "era-2"}],
+    )
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect") as MCE,
+        patch("candid.adjudication_sync.sync_banner"),
+        patch("candid.adjudication_sync._coverage_balance_by_line", return_value={}),
+    ):
+        MC.from_secrets.return_value.get_encounter.return_value = encounter
+        MC.from_secrets.return_value.get_patient_payments.return_value = []
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+
+    comment = MCE.return_value.add_comment.call_args.args[0]
+    assert "ERA era-2" in comment
+    assert "era-1" not in comment
+    assert "totals to date" in comment
+    assert "primary paid $90.00" in comment
+
+
+# ---------------------------------------------------------------------------
+# Small helpers: transfer targets, ERA kwargs, guard clauses
+# ---------------------------------------------------------------------------
+
+
+def _target_state(**ids: str | None) -> MagicMock:
+    state = MagicMock()
+    state.primary_id = ids.get("primary")
+    state.secondary_id = ids.get("secondary")
+    state.tertiary_id = ids.get("tertiary")
+    return state
+
+
+def test_resolve_transfer_target_each_responsible_party() -> None:
+    """Each next-responsible value maps to its coverage, or None when it's missing."""
+    state = _target_state(primary="cov-p", secondary="cov-s", tertiary="cov-t")
+    assert _resolve_transfer_target(state, "patient") == "patient"
+    assert _resolve_transfer_target(state, "primary") == "cov-p"
+    assert _resolve_transfer_target(state, "secondary") == "cov-s"
+    assert _resolve_transfer_target(state, "tertiary") == "cov-t"
+    assert _resolve_transfer_target(_target_state(), "tertiary") is None
+    assert _resolve_transfer_target(state, "unknown") is None
+
+
+def test_era_kwargs_ignores_bad_check_date() -> None:
+    """A malformed check_date is dropped; the check number is kept."""
+    assert _era_kwargs({"check_number": 123, "check_date": "not-a-date"}) == {
+        "check_number": "123"
+    }
+
+
+def test_patient_payments_fetch_skipped_without_line_items() -> None:
+    """No line items on the claim means no patient-payment fetch."""
+    state = MagicMock()
+    state.first_line = None
+    client = MagicMock()
+    _post_patient_payments_for_candid_claim(state, client, "cc-1")
+    client.get_patient_payments.assert_not_called()
+
+
+def test_secondary_leftover_moves_to_tertiary() -> None:
+    """What the secondary left unpaid moves to the tertiary when Candid says so."""
+    state = _target_state(tertiary="cov-t")
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    state.line_items = [li]
+    state.moved_to_secondary = {}
+    with patch(
+        "candid.adjudication_sync._coverage_balance_by_line",
+        return_value={li.dbid: Decimal("30.00")},
+    ):
+        txns = _secondary_leftover_transactions(
+            state,
+            [_candid_service_line(secondary_paid_amount_cents=1000)],
+            ["li-1"],
+            "tertiary",
+        )
+    assert len(txns) == 1
+    assert txns[0].claim_line_item_id == "li-1"
+    assert txns[0].adjustment == Decimal("20.00")
+    assert txns[0].transfer_remaining_balance_to == "cov-t"
+
+
+def test_sync_skips_encounter_record_without_id() -> None:
+    """An encounters-metadata entry with no candid_encounter_id is skipped."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    claim = _fake_claim([li], metadata={"candid_encounters": [{}]})
+    with (
+        patch("candid.adjudication_sync.CandidClient") as MC,
+        patch("candid.adjudication_sync.ClaimEffect"),
+        patch("candid.adjudication_sync.sync_banner"),
+    ):
+        sync_claim_adjudications(claim, MOCK_SECRETS)
+        MC.from_secrets.return_value.get_encounter.assert_not_called()
