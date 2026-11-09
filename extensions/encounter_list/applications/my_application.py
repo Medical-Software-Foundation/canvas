@@ -15,6 +15,22 @@ from canvas_sdk.v1.data.note import NoteStates, NoteTypeCategories, NoteType
 from canvas_sdk.v1.data.task import TaskStatus
 
 
+# Note states that remove an encounter from the worklist.
+CLOSED_NOTE_STATES = (
+    NoteStates.SIGNED,
+    NoteStates.LOCKED,
+    NoteStates.DELETED,
+    NoteStates.DISCHARGED,
+    NoteStates.SCHEDULING,
+    NoteStates.BOOKED,
+    NoteStates.CANCELLED,
+    NoteStates.CONFIRM_IMPORT,
+    NoteStates.REVERTED,
+)
+
+EXCLUDED_NOTE_TYPE_CATEGORIES = (NoteTypeCategories.MESSAGE, NoteTypeCategories.LETTER)
+
+
 class MyApplication(Application):
     """An embeddable application that can be registered to Canvas."""
 
@@ -53,20 +69,11 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
 
         note_queryset = Note.objects.select_related(
             "patient", "provider", "location", "note_type_version"
-        ).exclude(current_state__state__in=(
-            NoteStates.SIGNED,
-            NoteStates.LOCKED,
-            NoteStates.DELETED,
-            NoteStates.DISCHARGED,
-            NoteStates.SCHEDULING,
-            NoteStates.BOOKED,
-            NoteStates.CANCELLED,
-            NoteStates.CONFIRM_IMPORT,
-            NoteStates.REVERTED
-        ))
+        ).exclude(current_state__state__in=CLOSED_NOTE_STATES)
 
-        note_queryset = note_queryset.exclude(note_type_version__category__in=(NoteTypeCategories.MESSAGE,
-                                                               NoteTypeCategories.LETTER,))
+        note_queryset = note_queryset.exclude(
+            note_type_version__category__in=EXCLUDED_NOTE_TYPE_CATEGORIES
+        )
 
         if provider_ids:
             clean_ids = [pid.strip() for pid in provider_ids.split(',') if pid.strip()]
@@ -200,13 +207,18 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/note_types")
     def get_note_types(self) -> list[Response | Effect]:
-        """Get list of note type names."""
+        """Get list of note type names that have open encounters."""
 
-        note_types = list(NoteType.objects.exclude(
-            category__in=(
-                NoteTypeCategories.MESSAGE,
-                NoteTypeCategories.LETTER,
-            )
+        open_note_type_ids = Note.objects.exclude(
+            current_state__state__in=CLOSED_NOTE_STATES
+        ).exclude(
+            note_type_version__category__in=EXCLUDED_NOTE_TYPE_CATEGORIES
+        ).values("note_type_version_id")
+
+        note_types = list(NoteType.objects.filter(
+            pk__in=open_note_type_ids
+        ).exclude(
+            category__in=EXCLUDED_NOTE_TYPE_CATEGORIES
         ).order_by("name").values("name").distinct())
 
         return [JSONResponse({

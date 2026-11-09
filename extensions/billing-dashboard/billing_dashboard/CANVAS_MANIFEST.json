@@ -1,13 +1,13 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.7.1",
+    "plugin_version": "0.8.1",
     "name": "billing_dashboard",
-    "description": "Billing Dashboard — full-page financial analytics application for practice managers and billing staff. Shows financial overview, payer analysis, and reimbursement trends with CMS benchmark comparisons.",
+    "description": "Billing Dashboard — full-page financial analytics application for practice managers and billing staff. Shows financial overview, payer analysis, reimbursement trends with CMS benchmark comparisons, and a sortable claims list with CSV export.",
     "components": {
         "protocols": [
             {
                 "class": "billing_dashboard.handlers.billing_api:BillingDashboardAPI",
-                "description": "SimpleAPI serving the billing dashboard HTML, CSS, JS, and JSON metrics endpoints (staff-only)"
+                "description": "SimpleAPI serving the billing dashboard HTML, CSS, JS, JSON metrics, claims list, and claims CSV export endpoints (staff-only)"
             }
         ],
         "commands": [],
@@ -26,7 +26,12 @@
         ],
         "views": []
     },
-    "secrets": [],
+    "variables": [
+        {
+            "name": "CLAIMS_BUSINESS_LINE_FILTER",
+            "default": "false"
+        }
+    ],
     "tags": {},
     "references": [],
     "license": "MIT",

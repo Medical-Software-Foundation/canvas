@@ -161,6 +161,45 @@ class CandidClient:
             return True, response.json().get("encounter_id", encounter_id)
         return False, self._format_error(response)
 
+    def create_diagnosis(
+        self, encounter_id: str, code: str, code_type: str
+    ) -> tuple[bool, str]:
+        """Add a diagnosis to an existing encounter via POST /api/diagnoses/v2.
+
+        PATCH /encounters only takes ``diagnosis_ids`` (existing Candid
+        diagnoses), so a diagnosis added to the claim after the first submit
+        has to be created here before a service line can link to it.
+
+        Returns ``(was_successful, message)``. On success, ``message`` is the
+        new diagnosis_id. On failure, ``message`` is a human-readable error.
+        """
+        response = self.http.post(
+            f"{self.base_url}/api/diagnoses/v2",
+            json={"encounter_id": encounter_id, "code": code, "code_type": code_type},
+            headers=self._auth_headers(json_body=True),
+        )
+        if response.ok:
+            return True, response.json().get("diagnosis_id", "")
+        return False, self._format_error(response)
+
+    def update_diagnosis(self, diagnosis_id: str, payload: dict) -> tuple[bool, str]:
+        """Update a diagnosis via PATCH /api/diagnoses/v2/{diagnosis_id}.
+
+        Used to move the principal (ABK) code_type when the claim's rank-1
+        diagnosis changes on resubmit.
+
+        Returns ``(was_successful, message)``. On success, ``message`` is the
+        diagnosis_id. On failure, ``message`` is a human-readable error.
+        """
+        response = self.http.patch(
+            f"{self.base_url}/api/diagnoses/v2/{diagnosis_id}",
+            json=payload,
+            headers=self._auth_headers(json_body=True),
+        )
+        if response.ok:
+            return True, response.json().get("diagnosis_id", diagnosis_id)
+        return False, self._format_error(response)
+
     def create_service_line(self, payload: dict) -> tuple[bool, str]:
         """Create a service line via POST /api/service-lines/v2.
 

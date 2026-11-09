@@ -50,6 +50,7 @@ When a claim is moved to the **QueuedForSubmission** queue, the plugin schedules
 - Payload errors are caught per-section (patient, billing provider, etc.) and surfaced as claim comments rather than crashing the handler
 - Stores Candid encounter IDs in claim metadata for traceability
 - **Resubmission handling:** If the POST fails with `EncounterExternalIdUniquenessError` (the encounter already exists in Candid), the plugin looks up the existing encounter by `external_id` and PATCHes it instead. The PATCH payload excludes `diagnoses` and `service_lines` (Candid's update schema uses `diagnosis_ids` instead and does not accept service lines)
+- **Resubmission reconciliation:** After the PATCH, the plugin brings the encounter's diagnoses and service lines in line with the claim: it creates new diagnoses, moves the principal (ABK) code type when the rank-1 code changes, updates lines in place by `external_id` (clearing diagnosis links a line no longer uses), creates new lines, then deletes lines no longer on the claim, and finally sets `diagnosis_ids` in rank order. Deletes run only after every create and update succeeded, and any error (including an unexpected exception) fails the claim with a comment, so a retry picks up where it stopped
 - On success: adds a claim comment with the submission date and Candid encounter IDs, adds a status banner, and moves claim to **FiledAwaitingResponse**
 - On failure: adds an error comment, writes a `candid_submission_error` metadata entry, and moves claim to **NeedsCodingReview**
 

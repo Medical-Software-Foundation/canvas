@@ -2,6 +2,7 @@
 # Each test is wrapped inside a transaction that is rolled back at the end of the test.
 # If you want to modify which files are used for testing, check the [tool.pytest.ini_options] section in pyproject.toml.
 
+import json
 import uuid
 from unittest.mock import MagicMock, Mock, patch
 
@@ -17,6 +18,7 @@ def create_mock_interview(questionnaire_name: str, responses: list[int]):
     """Create a mock interview with specified questionnaire name and response values."""
     mock_interview = MagicMock()
     mock_interview.committer = MagicMock()
+    mock_interview.entered_in_error = None
 
     # Mock questionnaire
     mock_questionnaire = MagicMock()
@@ -67,6 +69,8 @@ def test_phq9_score_20_or_below_triggers_madrs():
          patch("phq9_madrs_workflow.protocols.phq9_madrs_workflow.Questionnaire") as MockQuestionnaire, \
          patch("phq9_madrs_workflow.protocols.phq9_madrs_workflow.QuestionnaireCommand") as MockQuestionnaireCommand:
         MockCommand.objects.get.return_value = mock_command
+        # No MADRS under the internal code, so the name fallback runs.
+        MockQuestionnaire.objects.filter.return_value.first.return_value = None
         MockQuestionnaire.objects.filter.return_value.all.return_value = [mock_madrs]
 
         # Mock the QuestionnaireCommand instance
@@ -134,6 +138,9 @@ def test_madrs_commit_adds_comment_with_normal_interpretation():
         # Assert
         assert len(effects) == 1
         assert effects[0].type == EffectType.CREATE_QUESTIONNAIRE_RESULT
+        payload = json.loads(effects[0].payload)["data"]
+        assert payload["code_system"] == "INTERNAL"
+        assert payload["code"] == "MADRS"
 
 
 def test_madrs_commit_adds_comment_with_mild_interpretation():
@@ -239,6 +246,27 @@ def test_uncommitted_interview_returns_no_effects():
         assert len(effects) == 0
 
 
+def test_entered_in_error_interview_returns_no_effects():
+    """A MADRS interview that was entered in error gets no result."""
+    mock_event = MagicMock()
+    mock_event.target.id = "command-123"
+    mock_event.context = {"note": {"uuid": "note-456"}}
+
+    protocol = Protocol(event=mock_event)
+
+    mock_command = MagicMock()
+    mock_interview = create_mock_interview("MADRS", [3, 3, 3, 3, 3, 3, 3, 3, 3, 3])
+    mock_interview.entered_in_error = MagicMock()
+    mock_command.anchor_object = mock_interview
+
+    with patch("phq9_madrs_workflow.protocols.phq9_madrs_workflow.Command") as MockCommand:
+        MockCommand.objects.get.return_value = mock_command
+
+        effects = protocol.compute()
+
+        assert effects == []
+
+
 def test_unknown_questionnaire_returns_no_effects():
     """Test that an unknown questionnaire type returns no effects."""
     # Arrange
@@ -276,6 +304,7 @@ def test_score_calculation_handles_invalid_values():
     mock_command = MagicMock()
     mock_interview = MagicMock()
     mock_interview.committer = MagicMock()
+    mock_interview.entered_in_error = None
     mock_interview.id = uuid.uuid4()
 
     mock_questionnaire = MagicMock()
@@ -341,6 +370,7 @@ def test_madrs_fallback_to_first_match_when_no_exact_name():
          patch("phq9_madrs_workflow.protocols.phq9_madrs_workflow.QuestionnaireCommand") as MockQuestionnaireCommand:
         MockCommand.objects.get.return_value = mock_command
         # Return multiple MADRS, none with exact name
+        MockQuestionnaire.objects.filter.return_value.first.return_value = None
         MockQuestionnaire.objects.filter.return_value.all.return_value = [mock_madrs1, mock_madrs2]
 
         # Mock the QuestionnaireCommand instance
@@ -351,11 +381,11 @@ def test_madrs_fallback_to_first_match_when_no_exact_name():
         # Act
         effects = protocol.compute()
 
-        # Assert - should use first match
+        # Assert - skips the versioned "(v2)" questionnaire and uses the first unversioned match
         assert len(effects) == 1
         assert effects[0].type == EffectType.ORIGINATE_QUESTIONNAIRE_COMMAND
         call_kwargs = MockQuestionnaireCommand.call_args[1]
-        assert call_kwargs["questionnaire_id"] == str(mock_madrs1.id)  # Should use first one
+        assert call_kwargs["questionnaire_id"] == str(mock_madrs2.id)
 
 
 def test_madrs_out_of_range_score():

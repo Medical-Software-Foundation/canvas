@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.6",
+    "plugin_version": "0.0.7",
     "name": "phq9_madrs_workflow",
     "description": "Automates depression screening workflow: originates MADRS questionnaire when PHQ-9 score is ≤20, and adds score interpretation when MADRS is completed",
     "components": {

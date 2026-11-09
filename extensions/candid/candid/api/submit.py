@@ -7,6 +7,7 @@ from canvas_sdk.effects.simple_api import Response
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPIRoute
 from canvas_sdk.v1.data.claim import Claim, ClaimQueues
 from logger import log
+from requests import RequestException
 
 from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
@@ -97,6 +98,64 @@ def _standalone_service_line(
     standalone.update(zip(DIAGNOSIS_ID_KEYS, diagnosis_ids))
 
     return standalone
+
+
+ICD10_PRINCIPAL = "ABK"
+ICD10_OTHER = "ABF"
+
+
+def _reconcile_principal_diagnosis(
+    client: CandidClient,
+    encounter_id: str,
+    encounter_diagnoses: list[dict],
+    note_diagnoses: list[dict],
+) -> list[str]:
+    """Bring each existing diagnosis's ICD-10 code_type (ABK principal / ABF
+    other) in line with the claim's rank order.
+
+    Candid marks the principal diagnosis by code_type, not by its position in
+    the encounter's diagnosis_ids, and PATCH /encounters can't change it. When
+    the claim's rank-1 code changes, the old principal is demoted to ABF and
+    the new one promoted to ABK via PATCH /api/diagnoses/v2/{diagnosis_id}
+    (https://docs.joincandidhealth.com/api-reference/diagnoses/update).
+    Demotions run first so the encounter never holds two principals.
+    Diagnoses just created already carry the right code_type, and non-ICD-10
+    code types are left alone.
+    """
+    desired = {
+        _normalize_dx_code(dx.get("code")): dx.get("code_type")
+        for dx in note_diagnoses
+        if dx.get("code")
+    }
+    demote: list[str] = []
+    promote: list[str] = []
+    for d in encounter_diagnoses:
+        current = d.get("code_type")
+        if current not in (ICD10_PRINCIPAL, ICD10_OTHER):
+            continue
+        # A principal that left the claim is demoted too; it's dropped from
+        # diagnosis_ids at the end, but must not block the new principal.
+        target = desired.get(_normalize_dx_code(d["code"])) or ICD10_OTHER
+        if target == current or target not in (ICD10_PRINCIPAL, ICD10_OTHER):
+            continue
+        (promote if target == ICD10_PRINCIPAL else demote).append(d["diagnosis_id"])
+
+    errors: list[str] = []
+    for diagnosis_ids, code_type in ((demote, ICD10_OTHER), (promote, ICD10_PRINCIPAL)):
+        for diagnosis_id in diagnosis_ids:
+            ok, msg = client.update_diagnosis(diagnosis_id, {"code_type": code_type})
+            if ok:
+                log.info(
+                    f"Candid: set diagnosis {diagnosis_id} code_type to {code_type}"
+                )
+            else:
+                log.warning(
+                    f"Candid: failed to set code_type on diagnosis {diagnosis_id}: {msg}"
+                )
+                errors.append(f"set diagnosis {diagnosis_id} to {code_type}: {msg}")
+        if errors:
+            return errors
+    return errors
 
 
 class CandidSubmitAPI(SimpleAPIRoute):
@@ -207,9 +266,34 @@ class CandidSubmitAPI(SimpleAPIRoute):
                             f"Candid update failed ({split_label}): {e}",
                         )
 
-                    # PATCH can't touch service lines — reconcile them separately
+                    # PATCH can't touch diagnoses or service lines — reconcile
+                    # them separately. Any failure fails the whole claim so it
+                    # never looks submitted with lines missing on Candid.
                     if success:
-                        self._reconcile_service_lines(client, encounter_id, payload)
+                        # Any exception (token fetch, network, bad JSON) must
+                        # fail the claim like a rejected write does, or it is
+                        # left in QueuedForSubmission with no comment.
+                        try:
+                            reconcile_errors = self._reconcile_service_lines(
+                                client, encounter_id, payload
+                            )
+                        except Exception as exc:
+                            log.exception(
+                                f"Candid: service line reconciliation raised for "
+                                f"{split_label} of claim {claim_id}"
+                            )
+                            reconcile_errors = [f"unexpected error: {exc}"]
+                        if reconcile_errors:
+                            detail = "; ".join(reconcile_errors)
+                            log.warning(
+                                f"Candid: service line reconciliation failed for "
+                                f"{split_label} of claim {claim_id} "
+                                f"({len(reconcile_errors)} error(s); see claim comment)"
+                            )
+                            return handle_submit_failure(
+                                claim_effect,
+                                f"Candid service line update failed ({split_label}): {detail}",
+                            )
 
             if not success:
                 log.warning(
@@ -239,31 +323,44 @@ class CandidSubmitAPI(SimpleAPIRoute):
     @staticmethod
     def _reconcile_service_lines(
         client: CandidClient, encounter_id: str, payload: dict
-    ) -> None:
-        """Reconcile the encounter's service lines with the claim's line items.
+    ) -> list[str]:
+        """Reconcile the encounter's diagnoses and service lines with the claim.
 
-        PATCH /encounters can't modify service lines, so on resubmission we diff
-        the lines already on the encounter against the claim's current line
-        items, keyed on external_id (the Canvas line-item id):
+        PATCH /encounters can't create diagnoses or modify service lines, so on
+        resubmission we:
 
-        - on both          -> PATCH the existing line in place
-        - only on encounter -> DELETE it
-        - only on the claim -> POST a new line
+        1. POST any claim diagnosis the encounter doesn't have yet, so new or
+           changed lines can link to it.
+        2. Diff the lines already on the encounter against the claim's current
+           line items, keyed on external_id (the Canvas line-item id):
+
+           - on both          -> PATCH the existing line in place
+           - only on the claim -> POST a new line
+           - only on encounter -> DELETE it
+
+        3. PATCH the encounter's diagnosis_ids to the claim's list, in claim
+           rank order, once no line still points at a dropped diagnosis.
+
+        Deletes run only after every diagnosis, create and update succeeded. A
+        rejected replacement line must never leave the encounter with its old
+        line deleted and nothing in its place.
 
         Updating in place rather than deleting and recreating keeps the Candid
         service line order aligned with the note (reordering a note line creates
         a new line at the bottom, which we mirror) and avoids reusing an
         external_id, which Candid reserves per claim even after a delete and
         rejects with 409 EntityConflictError.
+
+        Returns a list of error messages; empty means everything reconciled.
         """
         try:
             encounter = client.get_encounter(encounter_id)
-        except Exception as e:
+        except RequestException as e:
             log.warning(
                 f"Candid: failed to fetch encounter {encounter_id} "
                 f"for service line reconciliation: {e}"
             )
-            return
+            return [f"could not fetch encounter {encounter_id}: {e}"]
 
         candid_claims = encounter.get("claims", [])
         claim_id = next(
@@ -274,15 +371,53 @@ class CandidSubmitAPI(SimpleAPIRoute):
                 f"Candid: encounter {encounter_id} has no claim_id; "
                 "cannot reconcile service lines"
             )
-            return
+            return [f"encounter {encounter_id} has no claim_id"]
 
         # Candid stores diagnoses at the encounter level, not under claims.
-        code_to_diagnosis_id = {
-            _normalize_dx_code(d.get("code")): d.get("diagnosis_id")
+        encounter_diagnoses = [
+            d
             for d in encounter.get("diagnoses", [])
             if d.get("code") and d.get("diagnosis_id")
+        ]
+        code_to_diagnosis_id = {
+            _normalize_dx_code(d["code"]): d["diagnosis_id"]
+            for d in encounter_diagnoses
         }
         note_diagnoses = payload.get("diagnoses", [])
+
+        # Create diagnoses added to the claim since the last submit. Without
+        # them a new line has no diagnosis to link and Candid rejects it (422).
+        # The code is sent as Canvas stores it (undotted, e.g. E119), the same
+        # form the initial POST /encounters/v4 sends. Candid's ICD-10 format
+        # makes the period optional, so both forms are valid input:
+        # https://docs.joincandidhealth.com/api-reference/diagnoses/create
+        errors: list[str] = []
+        for dx in note_diagnoses:
+            code = _normalize_dx_code(dx.get("code"))
+            if not code or code in code_to_diagnosis_id:
+                continue
+            ok, msg = client.create_diagnosis(
+                encounter_id, dx["code"].strip(), dx.get("code_type", "ABF")
+            )
+            if ok and not msg:
+                ok, msg = False, "Candid returned no diagnosis_id"
+            if ok:
+                log.info(f"Candid: created diagnosis {msg} on encounter {encounter_id}")
+                code_to_diagnosis_id[code] = msg
+            else:
+                # Code stays out of the log (PHI); it's in the claim comment.
+                log.warning(
+                    f"Candid: failed to create diagnosis on encounter {encounter_id}: {msg}"
+                )
+                errors.append(f"diagnosis {dx['code']}: {msg}")
+        if errors:
+            return errors
+
+        errors = _reconcile_principal_diagnosis(
+            client, encounter_id, encounter_diagnoses, note_diagnoses
+        )
+        if errors:
+            return errors
 
         existing_lines = [
             sl
@@ -291,9 +426,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
             if sl.get("service_line_id")
         ]
         existing_by_external_id = {
-            sl["external_id"]: sl["service_line_id"]
-            for sl in existing_lines
-            if sl.get("external_id")
+            sl["external_id"]: sl for sl in existing_lines if sl.get("external_id")
         }
 
         # Update matched lines and create new ones, in note order so created
@@ -306,10 +439,11 @@ class CandidSubmitAPI(SimpleAPIRoute):
             external_id = standalone.get("external_id")
             if external_id:
                 current_external_ids.add(external_id)
-            service_line_id = (
+            existing_line = (
                 existing_by_external_id.get(external_id) if external_id else None
             )
-            if service_line_id:
+            if existing_line:
+                service_line_id = existing_line["service_line_id"]
                 # PATCH can't take claim_id, and external_id is already set on
                 # the line — sending it again risks tripping uniqueness.
                 update = {
@@ -317,6 +451,13 @@ class CandidSubmitAPI(SimpleAPIRoute):
                     for k, v in standalone.items()
                     if k not in ("claim_id", "external_id")
                 }
+                # PATCH leaves omitted fields alone, so a slot the line no
+                # longer uses would keep pointing at its old diagnosis (which
+                # may be dropped from the encounter below). Null out any slot
+                # the line currently holds but no longer needs.
+                for key in DIAGNOSIS_ID_KEYS:
+                    if key not in update and existing_line.get(key):
+                        update[key] = None
                 ok, msg = client.update_service_line(service_line_id, update)
                 if ok:
                     log.info(f"Candid: updated service line {service_line_id}")
@@ -324,12 +465,21 @@ class CandidSubmitAPI(SimpleAPIRoute):
                     log.warning(
                         f"Candid: failed to update service line {service_line_id}: {msg}"
                     )
+                    errors.append(
+                        f"update {line.get('procedure_code')} line {service_line_id}: {msg}"
+                    )
             else:
                 ok, msg = client.create_service_line(standalone)
                 if ok:
                     log.info(f"Candid: created service line {msg}")
                 else:
                     log.warning(f"Candid: failed to create service line: {msg}")
+                    errors.append(f"create {line.get('procedure_code')} line: {msg}")
+
+        # Never delete after a failed create or update: the line being replaced
+        # is the encounter's only copy of the charge until its replacement lands.
+        if errors:
+            return errors
 
         # Delete lines on the encounter that are no longer on the claim
         # (including any legacy line missing an external_id, which can't match).
@@ -342,3 +492,25 @@ class CandidSubmitAPI(SimpleAPIRoute):
                 log.info(f"Candid: deleted service line {sl_id}")
             else:
                 log.warning(f"Candid: failed to delete service line {sl_id}: {msg}")
+                errors.append(f"delete line {sl_id}: {msg}")
+        if errors:
+            return errors
+
+        # Bring the encounter's diagnosis list in line with the claim (adds,
+        # drops and rank order). Done last so no line still links a dropped one.
+        diagnosis_ids = []
+        for dx in note_diagnoses:
+            dx_id = code_to_diagnosis_id.get(_normalize_dx_code(dx.get("code")))
+            if dx_id and dx_id not in diagnosis_ids:
+                diagnosis_ids.append(dx_id)
+        if diagnosis_ids:
+            ok, msg = client.update_claim(
+                encounter_id, {"diagnosis_ids": diagnosis_ids}
+            )
+            if not ok:
+                log.warning(
+                    f"Candid: failed to update diagnoses on encounter {encounter_id}: {msg}"
+                )
+                errors.append(f"update encounter diagnoses: {msg}")
+
+        return errors

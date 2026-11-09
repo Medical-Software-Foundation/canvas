@@ -232,6 +232,78 @@ def test_create_service_line_returns_formatted_error_on_failure() -> None:
     assert "422" in message
 
 
+def test_create_diagnosis_posts_to_v2_and_returns_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.side_effect = [
+        _ok_response({"access_token": "tok"}),
+        _ok_response({"diagnosis_id": "dx-new"}),
+    ]
+
+    success, message = client.create_diagnosis("enc-1", "J449", "ABF")
+
+    assert success is True
+    assert message == "dx-new"
+    last = client.http.post.call_args_list[-1]
+    assert last.args[0].endswith("/api/diagnoses/v2")
+    assert last.kwargs["json"] == {
+        "encounter_id": "enc-1",
+        "code": "J449",
+        "code_type": "ABF",
+    }
+
+
+def test_create_diagnosis_returns_formatted_error_on_failure() -> None:
+    client = _client()
+    failure = MagicMock()
+    failure.ok = False
+    failure.status_code = 422
+    failure.json.return_value = {
+        "errorName": "HttpRequestValidationError",
+        "content": {},
+    }
+    client.http = MagicMock()
+    client.http.post.side_effect = [_ok_response({"access_token": "tok"}), failure]
+
+    success, message = client.create_diagnosis("enc-1", "J449", "ABF")
+
+    assert success is False
+    assert "422" in message
+
+
+def test_update_diagnosis_patches_v2_and_returns_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.patch.return_value = _ok_response({"diagnosis_id": "dx-1"})
+
+    success, message = client.update_diagnosis("dx-1", {"code_type": "ABK"})
+
+    assert (success, message) == (True, "dx-1")
+    call = client.http.patch.call_args
+    assert call.args[0].endswith("/api/diagnoses/v2/dx-1")
+    assert call.kwargs["json"] == {"code_type": "ABK"}
+
+
+def test_update_diagnosis_returns_formatted_error_on_failure() -> None:
+    client = _client()
+    failure = MagicMock()
+    failure.ok = False
+    failure.status_code = 422
+    failure.json.return_value = {
+        "errorName": "HttpRequestValidationError",
+        "content": {},
+    }
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.patch.return_value = failure
+
+    success, message = client.update_diagnosis("dx-1", {"code_type": "ABK"})
+
+    assert success is False
+    assert "422" in message
+
+
 def test_delete_service_line_calls_delete_with_id() -> None:
     client = _client()
     client.http = MagicMock()

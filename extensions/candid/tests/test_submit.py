@@ -378,15 +378,25 @@ def test_resubmit_reconciles_service_lines() -> None:
             "diagnosis_pointers" not in p for p in [*updates.values(), *created]
         )
 
+        # Every claim diagnosis already existed, so none is created; the
+        # encounter's diagnosis list is set to the claim's, in rank order.
+        client.create_diagnosis.assert_not_called()
+        assert client.update_claim.call_args_list[-1].args == (
+            "enc-1",
+            {"diagnosis_ids": ["dx-e11", "dx-i10"]},
+        )
+
 
 def test_reconcile_service_lines_skips_when_encounter_has_no_claim_id() -> None:
-    """If the fetched encounter has no claim_id, nothing is changed."""
+    """If the fetched encounter has no claim_id, nothing is changed and an error is returned."""
     client = MagicMock()
     client.get_encounter.return_value = {"claims": [{"service_lines": []}]}
 
-    CandidSubmitAPI._reconcile_service_lines(
+    errors = CandidSubmitAPI._reconcile_service_lines(
         client, "enc-1", {"service_lines": [{"procedure_code": "G0019"}]}
     )
+
+    assert errors == ["encounter enc-1 has no claim_id"]
 
     client.update_service_line.assert_not_called()
     client.create_service_line.assert_not_called()
@@ -394,15 +404,447 @@ def test_reconcile_service_lines_skips_when_encounter_has_no_claim_id() -> None:
 
 
 def test_reconcile_service_lines_handles_encounter_fetch_failure() -> None:
-    """A failed encounter fetch is logged and swallowed — no changes."""
+    """A failed encounter fetch makes no changes and returns an error."""
     client = MagicMock()
     client.get_encounter.side_effect = requests.RequestException("boom")
 
-    CandidSubmitAPI._reconcile_service_lines(client, "enc-1", {"service_lines": []})
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", {"service_lines": []}
+    )
+
+    assert len(errors) == 1
+    assert "could not fetch encounter enc-1" in errors[0]
 
     client.update_service_line.assert_not_called()
     client.create_service_line.assert_not_called()
     client.delete_service_line.assert_not_called()
+
+
+# PLUGIN-573: a CPT change plus a new diagnosis used to 422 the new line and
+# then delete the old one, leaving the Candid encounter with no service lines.
+
+
+def _cpt_change_payload() -> dict:
+    """Claim after a CPT change (li-old removed, li-new added) and a new J449."""
+    return {
+        "external_id": "canvas:claim-1",
+        "diagnoses": [
+            {"code": "E119", "code_type": "ABK"},
+            {"code": "J449", "code_type": "ABF"},
+        ],
+        "service_lines": [
+            {
+                "procedure_code": "99205",
+                "units": "UN",
+                "quantity": "1",
+                "charge_amount_cents": "30000",
+                "external_id": "li-new",
+                "diagnosis_pointers": [0, 1],
+            },
+        ],
+    }
+
+
+def _cpt_change_client() -> MagicMock:
+    """Encounter as first submitted: one G0423 line, only E11.9 on file."""
+    client = MagicMock()
+    client.get_encounter.return_value = {
+        "encounter_id": "enc-1",
+        "diagnoses": [{"diagnosis_id": "dx-e11", "code": "E11.9"}],
+        "claims": [
+            {
+                "claim_id": "candid-claim-1",
+                "service_lines": [
+                    {"service_line_id": "sl-old", "external_id": "li-old"},
+                ],
+            }
+        ],
+    }
+    client.create_diagnosis.return_value = (True, "dx-j449")
+    client.create_service_line.return_value = (True, "sl-new")
+    client.update_service_line.return_value = (True, "ok")
+    client.delete_service_line.return_value = (True, "ok")
+    client.update_claim.return_value = (True, "enc-1")
+    return client
+
+
+def test_reconcile_creates_new_diagnosis_and_links_it_before_replacing_line() -> None:
+    client = _cpt_change_client()
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert errors == []
+    client.create_diagnosis.assert_called_once_with("enc-1", "J449", "ABF")
+    created = client.create_service_line.call_args.args[0]
+    assert created["procedure_code"] == "99205"
+    assert created["diagnosis_id_zero"] == "dx-e11"
+    assert created["diagnosis_id_one"] == "dx-j449"
+    client.delete_service_line.assert_called_once_with("sl-old")
+    client.update_claim.assert_called_once_with(
+        "enc-1", {"diagnosis_ids": ["dx-e11", "dx-j449"]}
+    )
+
+
+def test_reconcile_keeps_old_line_when_new_line_create_fails() -> None:
+    client = _cpt_change_client()
+    client.create_service_line.return_value = (
+        False,
+        (
+            "<422 HttpRequestValidationError> diagnoses: Service lines must have "
+            "at least one diagnosis code linked."
+        ),
+    )
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert len(errors) == 1
+    assert errors[0].startswith("create 99205 line: <422")
+    client.delete_service_line.assert_not_called()
+    client.update_claim.assert_not_called()
+
+
+def test_reconcile_keeps_old_line_on_409_external_id_conflict() -> None:
+    client = _cpt_change_client()
+    client.create_service_line.return_value = (False, "<409 EntityConflictError>")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert errors == ["create 99205 line: <409 EntityConflictError>"]
+    client.delete_service_line.assert_not_called()
+
+
+def test_reconcile_skips_deletes_when_a_line_update_fails() -> None:
+    client = _cpt_change_client()
+    payload = _cpt_change_payload()
+    # A second, persistent line that fails to update.
+    payload["service_lines"].append(
+        {"procedure_code": "93000", "external_id": "li-keep", "diagnosis_pointers": [0]}
+    )
+    client.get_encounter.return_value["claims"][0]["service_lines"].append(
+        {"service_line_id": "sl-keep", "external_id": "li-keep"}
+    )
+    client.update_service_line.return_value = (False, "<422 Bad>")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(client, "enc-1", payload)
+
+    assert errors == ["update 93000 line sl-keep: <422 Bad>"]
+    client.delete_service_line.assert_not_called()
+
+
+def test_reconcile_stops_before_touching_lines_when_diagnosis_create_fails() -> None:
+    client = _cpt_change_client()
+    client.create_diagnosis.return_value = (False, "<422 Bad code>")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert errors == ["diagnosis J449: <422 Bad code>"]
+    client.create_service_line.assert_not_called()
+    client.update_service_line.assert_not_called()
+    client.delete_service_line.assert_not_called()
+    client.update_claim.assert_not_called()
+
+
+def test_reconcile_treats_diagnosis_create_without_id_as_failure() -> None:
+    client = _cpt_change_client()
+    client.create_diagnosis.return_value = (True, "")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert errors == ["diagnosis J449: Candid returned no diagnosis_id"]
+    client.create_service_line.assert_not_called()
+    client.delete_service_line.assert_not_called()
+
+
+def test_reconcile_reports_delete_failure() -> None:
+    client = _cpt_change_client()
+    client.delete_service_line.return_value = (False, "<500 Oops>")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert errors == ["delete line sl-old: <500 Oops>"]
+    client.update_claim.assert_not_called()
+
+
+def test_reconcile_reports_encounter_diagnosis_update_failure() -> None:
+    client = _cpt_change_client()
+    client.update_claim.return_value = (False, "<422 Bad ids>")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert errors == ["update encounter diagnoses: <422 Bad ids>"]
+
+
+def test_resubmit_routes_reconcile_failure_to_failure_handler() -> None:
+    """A failed line create must fail the claim, not mark it submitted."""
+    claim = _claim_in_submission_queue()
+
+    with (
+        patch("candid.api.submit.Claim") as MockClaim,
+        patch("candid.api.submit.CandidClient") as MC,
+        patch("candid.api.submit.build_split_payloads") as mock_build,
+        patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.handle_submit_failure") as mock_failure,
+        patch("candid.api.submit.notify_claim_updated"),
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = claim
+        mock_build.return_value = [(_cpt_change_payload(), [])]
+        client = _cpt_change_client()
+        MC.from_secrets.return_value = client
+        client.submit_claim.return_value = (
+            False,
+            "<422 EncounterExternalIdUniquenessError>",
+        )
+        client.find_encounter_by_external_id.return_value = "enc-1"
+        client.create_service_line.return_value = (False, "<422 Rejected>")
+        mock_failure.return_value = ["failure-effect"]
+
+        result = _build_handler(claim).post()
+
+        assert result[0] == "failure-effect"
+        mock_success.assert_not_called()
+        comment = mock_failure.call_args.args[1]
+        assert comment.startswith("Candid service line update failed (claim):")
+        assert "create 99205 line: <422 Rejected>" in comment
+        client.delete_service_line.assert_not_called()
+
+
+# Review follow-ups: stale diagnosis links, principal code_type, exceptions.
+
+
+def _two_dx_payload(codes: list[str], pointers: list[int]) -> dict:
+    """One persistent line (li-1) on a claim with the given ranked codes."""
+    return {
+        "external_id": "canvas:claim-1",
+        "diagnoses": [
+            {"code": c, "code_type": "ABK" if i == 0 else "ABF"}
+            for i, c in enumerate(codes)
+        ],
+        "service_lines": [
+            {
+                "procedure_code": "99213",
+                "external_id": "li-1",
+                "diagnosis_pointers": pointers,
+            }
+        ],
+    }
+
+
+def _linked_line_client() -> MagicMock:
+    """Encounter with E11.9 (ABK) and I10 (ABF), one line linked to both."""
+    client = MagicMock()
+    client.get_encounter.return_value = {
+        "encounter_id": "enc-1",
+        "diagnoses": [
+            {"diagnosis_id": "dx-e11", "code": "E11.9", "code_type": "ABK"},
+            {"diagnosis_id": "dx-i10", "code": "I10", "code_type": "ABF"},
+        ],
+        "claims": [
+            {
+                "claim_id": "candid-claim-1",
+                "service_lines": [
+                    {
+                        "service_line_id": "sl-1",
+                        "external_id": "li-1",
+                        "diagnosis_id_zero": "dx-e11",
+                        "diagnosis_id_one": "dx-i10",
+                    }
+                ],
+            }
+        ],
+    }
+    client.create_diagnosis.return_value = (True, "dx-new")
+    client.update_diagnosis.return_value = (True, "ok")
+    client.update_service_line.return_value = (True, "ok")
+    client.create_service_line.return_value = (True, "sl-new")
+    client.delete_service_line.return_value = (True, "ok")
+    client.update_claim.return_value = (True, "enc-1")
+    return client
+
+
+def test_reconcile_clears_stale_diagnosis_slot_on_line_update() -> None:
+    """Dropping I10 nulls diagnosis_id_one so the line stops linking it."""
+    client = _linked_line_client()
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _two_dx_payload(["E119"], [0])
+    )
+
+    assert errors == []
+    update = client.update_service_line.call_args.args[1]
+    assert update["diagnosis_id_zero"] == "dx-e11"
+    assert update["diagnosis_id_one"] is None
+    # Slots the line never held aren't sent.
+    assert "diagnosis_id_two" not in update
+    client.update_claim.assert_called_once_with("enc-1", {"diagnosis_ids": ["dx-e11"]})
+
+
+def test_reconcile_does_not_null_slots_when_links_unchanged() -> None:
+    client = _linked_line_client()
+
+    CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _two_dx_payload(["E119", "I10"], [0, 1])
+    )
+
+    update = client.update_service_line.call_args.args[1]
+    assert update["diagnosis_id_zero"] == "dx-e11"
+    assert update["diagnosis_id_one"] == "dx-i10"
+    assert None not in update.values()
+    client.update_diagnosis.assert_not_called()
+
+
+def test_reconcile_swaps_principal_when_rank_order_changes() -> None:
+    """I10 moved to rank 1: demote E11.9 to ABF first, then promote I10 to ABK."""
+    client = _linked_line_client()
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _two_dx_payload(["I10", "E119"], [0, 1])
+    )
+
+    assert errors == []
+    assert [c.args for c in client.update_diagnosis.call_args_list] == [
+        ("dx-e11", {"code_type": "ABF"}),
+        ("dx-i10", {"code_type": "ABK"}),
+    ]
+    client.update_claim.assert_called_once_with(
+        "enc-1", {"diagnosis_ids": ["dx-i10", "dx-e11"]}
+    )
+
+
+def test_reconcile_new_principal_is_created_as_abk_and_old_one_demoted() -> None:
+    """A brand-new rank-1 code is created ABK (undotted, as Canvas stores it)."""
+    client = _linked_line_client()
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _two_dx_payload(["J449", "E119"], [0, 1])
+    )
+
+    assert errors == []
+    client.create_diagnosis.assert_called_once_with("enc-1", "J449", "ABK")
+    # E11.9 demoted; I10 already ABF and dropped from the claim, left alone.
+    client.update_diagnosis.assert_called_once_with("dx-e11", {"code_type": "ABF"})
+
+
+def test_reconcile_stops_before_lines_when_principal_update_fails() -> None:
+    client = _linked_line_client()
+    client.update_diagnosis.return_value = (False, "<422 Bad>")
+
+    errors = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _two_dx_payload(["I10", "E119"], [0, 1])
+    )
+
+    assert errors == ["set diagnosis dx-e11 to ABF: <422 Bad>"]
+    # Promotion isn't attempted after a failed demotion, and no line is touched.
+    client.update_diagnosis.assert_called_once()
+    client.update_service_line.assert_not_called()
+    client.delete_service_line.assert_not_called()
+    client.update_claim.assert_not_called()
+
+
+def test_reconcile_retry_after_partial_success_reuses_created_objects() -> None:
+    """First attempt created J449 and the new line, then the delete failed.
+    The retry sees both on the encounter: it creates nothing again, updates the
+    new line in place, and finishes the delete."""
+    client = _cpt_change_client()
+    client.delete_service_line.return_value = (False, "<500 Oops>")
+
+    first = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+    assert first == ["delete line sl-old: <500 Oops>"]
+
+    # Encounter state after the partial success.
+    encounter = client.get_encounter.return_value
+    encounter["diagnoses"].append(
+        {"diagnosis_id": "dx-j449", "code": "J44.9", "code_type": "ABF"}
+    )
+    encounter["claims"][0]["service_lines"].append(
+        {
+            "service_line_id": "sl-new",
+            "external_id": "li-new",
+            "diagnosis_id_zero": "dx-e11",
+            "diagnosis_id_one": "dx-j449",
+        }
+    )
+    client.reset_mock()
+    client.delete_service_line.return_value = (True, "ok")
+
+    second = CandidSubmitAPI._reconcile_service_lines(
+        client, "enc-1", _cpt_change_payload()
+    )
+
+    assert second == []
+    client.create_diagnosis.assert_not_called()
+    client.create_service_line.assert_not_called()
+    client.update_service_line.assert_called_once()
+    assert client.update_service_line.call_args.args[0] == "sl-new"
+    client.delete_service_line.assert_called_once_with("sl-old")
+    client.update_claim.assert_called_once_with(
+        "enc-1", {"diagnosis_ids": ["dx-e11", "dx-j449"]}
+    )
+
+
+def _resubmit_with_reconcile_raising(exc: Exception) -> tuple[MagicMock, MagicMock]:
+    claim = _claim_in_submission_queue()
+    with (
+        patch("candid.api.submit.Claim") as MockClaim,
+        patch("candid.api.submit.CandidClient") as MC,
+        patch("candid.api.submit.build_split_payloads") as mock_build,
+        patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.handle_submit_failure") as mock_failure,
+        patch("candid.api.submit.notify_claim_updated"),
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = claim
+        mock_build.return_value = [(_cpt_change_payload(), [])]
+        client = _cpt_change_client()
+        MC.from_secrets.return_value = client
+        client.submit_claim.return_value = (
+            False,
+            "<422 EncounterExternalIdUniquenessError>",
+        )
+        client.find_encounter_by_external_id.return_value = "enc-1"
+        client.create_diagnosis.side_effect = exc
+        mock_failure.return_value = ["failure-effect"]
+
+        result = _build_handler(claim).post()
+
+    assert result[0] == "failure-effect"
+    return mock_success, mock_failure
+
+
+def test_resubmit_routes_reconcile_runtime_error_to_failure_handler() -> None:
+    """A token fetch RuntimeError mid-reconcile fails the claim with a comment."""
+    mock_success, mock_failure = _resubmit_with_reconcile_raising(
+        RuntimeError("Could not fetch Candid API token")
+    )
+
+    mock_success.assert_not_called()
+    comment = mock_failure.call_args.args[1]
+    assert comment.startswith("Candid service line update failed (claim):")
+    assert "Could not fetch Candid API token" in comment
+
+
+def test_resubmit_routes_reconcile_value_error_to_failure_handler() -> None:
+    """A non-JSON Candid response (ValueError) also fails the claim."""
+    mock_success, mock_failure = _resubmit_with_reconcile_raising(
+        ValueError("Expecting value")
+    )
+
+    mock_success.assert_not_called()
+    assert "Expecting value" in mock_failure.call_args.args[1]
 
 
 def test_standalone_service_line_maps_pointers_and_coerces_charge() -> None:
@@ -532,7 +974,8 @@ def test_reconcile_service_lines_logs_failed_line_calls() -> None:
     warnings = " ".join(c.args[0] for c in mock_log.warning.call_args_list)
     assert "failed to update service line sl-1: bad update" in warnings
     assert "failed to create service line: bad create" in warnings
-    assert "failed to delete service line sl-old: bad delete" in warnings
+    # 0.0.8 (PLUGIN-573): never delete after a failed create or update.
+    client.delete_service_line.assert_not_called()
 
 
 def test_resubmit_update_exception_routes_to_failure_handler() -> None:

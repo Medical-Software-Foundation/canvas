@@ -33,6 +33,7 @@ class TestBuildPickerModal:
             mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
                 "Jane",
                 "Doe",
+                "",
                 dob,
             )
             effect = build_picker_modal("patient-123", "staff-9", {"CONSENT_ADMIN_USERS": "jane"})
@@ -46,6 +47,7 @@ class TestBuildPickerModal:
         assert json.loads(context["records_json"]) == records
         assert json.loads(context["method_options_json"]) == ["Verbal", "Electronic", "Written", "Other"]
         assert context["is_admin"] is True
+        assert "Ə" in context["no_fold"]
         assert context["settings_url"] == SETTINGS_URL
         # An un-applied DEFAULT_MODAL effect carrying the rendered HTML.
         assert effect.target == "default_modal"

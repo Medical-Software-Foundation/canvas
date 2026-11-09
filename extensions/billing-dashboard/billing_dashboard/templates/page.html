@@ -16,6 +16,7 @@
         <button class="tab-button active" data-tab="overview" aria-selected="true">Financial Overview</button>
         <button class="tab-button" data-tab="payer" aria-selected="false">Payer Analysis</button>
         <button class="tab-button" data-tab="trends" aria-selected="false">Reimbursement Trends</button>
+        <button class="tab-button" data-tab="claims" aria-selected="false">Claims</button>
     </nav>
     <main class="content">
 
@@ -112,6 +113,41 @@
                 <div class="chart-container" style="height:280px;">
                     <canvas id="trends-chart" aria-label="Reimbursement over time chart"></canvas>
                 </div>
+            </div>
+        </section>
+
+        <!-- Tab 4: Claims list (sort + CSV export) -->
+        <section id="panel-claims" class="tab-panel">
+            <div class="claims-toolbar">
+                <label class="claims-filter">Date of service
+                    <select id="claims-window" aria-label="Date of service window"></select>
+                </label>
+                <label class="claims-filter">Queue
+                    <select id="claims-queue" aria-label="Claim queue">
+                        <option value="">All (except Trash)</option>
+                    </select>
+                </label>
+                <label class="claims-filter" id="claims-bl-wrap" hidden>Business line
+                    <select id="claims-business-line" aria-label="Business line">
+                        <option value="">All business lines</option>
+                    </select>
+                </label>
+                <a class="claims-export" id="claims-export" href="#" download>Download CSV</a>
+            </div>
+            <div class="error-banner" id="claims-error" role="alert"></div>
+            <div class="table-card">
+                <div class="table-card-title" id="claims-title">Claims</div>
+                <div class="claims-table-wrap">
+                    <table id="claims-table" aria-label="Claims table">
+                        <thead>
+                            <tr id="claims-head"></tr>
+                        </thead>
+                        <tbody id="claims-body">
+                            <tr><td colspan="10" style="text-align:center;padding:24px;color:#9ca3af">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="claims-footnote" id="claims-footnote"></div>
             </div>
         </section>
 
