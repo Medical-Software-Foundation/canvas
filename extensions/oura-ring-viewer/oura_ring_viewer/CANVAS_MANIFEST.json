@@ -1,0 +1,92 @@
+{
+    "sdk_version": "0.118.0",
+    "plugin_version": "0.1.0",
+    "name": "oura_ring_viewer",
+    "description": "Shows a patient's Oura Ring sleep, readiness, activity and blood oxygen summaries in the patient chart, fetched live from Oura when the chart is opened and never stored. Patients connect with one tap from the patient portal or from a link their care team sends, and can stop sharing from the portal. Presented as patient-generated wellness data, not clinical vitals.",
+    "components": {
+        "applications": [
+            {
+                "class": "oura_ring_viewer.applications.oura_chart_app:OuraChartApp",
+                "name": "Oura Ring",
+                "description": "View patient Oura Ring wellness data in the chart.",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            },
+            {
+                "class": "oura_ring_viewer.applications.oura_portal_app:OuraPortalApp",
+                "name": "Oura Ring",
+                "description": "Connect your Oura Ring to share sleep, readiness, activity and blood oxygen summaries with your care team, or stop sharing.",
+                "scope": "portal_menu_item",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "oura_ring_viewer.protocols.chart_api:OuraChartAPI",
+                "description": "Staff-authenticated SimpleAPI: chart shell, live /data, send-link, disconnect.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "oura_ring_viewer.protocols.oauth_api:OuraOAuthAPI",
+                "description": "Patient-facing OAuth bridge (JWT-authenticated): /connect and /callback handlers for the Oura hosted login.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "oura_ring_viewer.protocols.portal_api:OuraPortalAPI",
+                "description": "Patient-session SimpleAPI for the portal menu item: connect, status, stop sharing.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "OURA_CLIENT_ID",
+            "sensitive": false
+        },
+        {
+            "name": "OURA_CLIENT_SECRET",
+            "sensitive": true
+        },
+        {
+            "name": "OURA_REDIRECT_URI",
+            "sensitive": false
+        },
+        {
+            "name": "OURA_ENVIRONMENT",
+            "sensitive": false
+        },
+        {
+            "name": "OURA_MAGIC_LINK_SECRET",
+            "sensitive": true
+        },
+        {
+            "name": "OURA_ACCESS_RULE",
+            "sensitive": false
+        }
+    ],
+    "custom_data": {
+        "namespace": "remington_data__wearables",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

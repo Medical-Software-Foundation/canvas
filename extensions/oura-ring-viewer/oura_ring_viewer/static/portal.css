@@ -1,0 +1,29 @@
+/* Patient portal page. Loaded after shared.css. */
+h1 { margin: 0 0 6px; }
+main { max-width: 520px; padding: 32px 16px; }
+.card { padding: 24px; }
+.pill { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
+        background: #eef0f4; color: #4a5263; margin-bottom: 16px; }
+.pill.connected { background: #e6f4ea; color: #1e7b3a; }
+.pill.reconnect { background: #fff4e0; color: #8a5300; }
+ul { margin: 0 0 16px; padding-left: 20px; color: #3b4253; }
+li { margin-bottom: 4px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 8px; }
+.button { font: inherit; font-weight: 600; padding: 11px 18px; border-radius: 10px; border: 1px solid #c9ced8;
+          background: #fff; color: #1d2330; cursor: pointer; text-decoration: none; display: inline-block; }
+.button.primary { background: #2f5bd3; border-color: #2f5bd3; color: #fff; }
+.button.danger { color: #b3261e; border-color: #e3b4b0; }
+.button:disabled { opacity: .55; cursor: default; }
+.notice { padding: 10px 12px; border-radius: 8px; margin: 0 0 16px; background: #f3f5f9; color: #3b4253; font-size: 15px; }
+.notice.error { background: #fdecea; color: #8c1d18; }
+@media (prefers-color-scheme: dark) {
+  ul { color: #c4c9d4; }
+  .button { background: #262b35; color: #e8eaf0; border-color: #3a4150; }
+  .button.primary { background: #3d6ae0; border-color: #3d6ae0; color: #fff; }
+  .button.danger { color: #ff8a80; border-color: #5c2a27; }
+  .pill { background: #2a2f3a; color: #c4c9d4; }
+  .pill.connected { background: #183524; color: #6fd08f; }
+  .pill.reconnect { background: #3a2c12; color: #f2c46d; }
+  .notice { background: #262b35; color: #c4c9d4; }
+  .notice.error { background: #3a1d1b; color: #ffb4ab; }
+}
