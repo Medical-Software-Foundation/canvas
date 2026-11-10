@@ -1322,7 +1322,8 @@
     /* ---------- SINGLE CONSENT: Decline or Ineligible ---------- */
     function ineligibleFor(c) { return !!(DECLINE.ineligible && c.allow_ineligible); }
     function declineLabel(c) { return ineligibleFor(c) ? 'Decline or Ineligible' : 'Decline'; }
-    function reasonKey(r) { return r.system + '|' + r.code; }
+    // System and code, plus the name when the code is blank (codings can lack one).
+    function reasonKey(r) { return r.system + '|' + r.code + '|' + (r.code ? '' : (r.display || '').trim()); }
     function reasonByKey(key) {
       var all = DECLINE.reasons.concat(DECLINE.ineligible ? [DECLINE.ineligible] : []);
       return all.filter(function (r) { return reasonKey(r) === key; })[0] || null;
@@ -1398,7 +1399,7 @@
         local_date: D.date || localDateISO(), local_time: localTimeStr(), local_tz: localTZ(),
         consent_by: (D.outcome === 'declined' && c.obtained_by_enabled) ? D.who : 'patient',
         representative_name: D.repName, representative_relationship: D.repRel,
-        reason_system: reason ? reason.system : '', reason_code: reason ? reason.code : ''
+        reason_system: reason ? reason.system : '', reason_code: reason ? reason.code : '', reason_display: reason ? reason.display : ''
       };
       postJSON(DECLINE_URL, payload).then(function (data) {
         $('nextBtn').disabled = false; $('backBtn').disabled = false; $('nextBtn').textContent = lbl;
@@ -2490,7 +2491,7 @@
         var declined = it.status === 'declined';
         // Signed on this device: the answers given on the signing screen go with it.
         var payload = basePayload(it.c, it.method, S, (it.method !== 'Written' || it.status === 'signed') ? it.answers : {});
-        if (declined) { var rsn = reasonByKey(it.reason || ''); payload.reason_system = rsn ? rsn.system : ''; payload.reason_code = rsn ? rsn.code : ''; }
+        if (declined) { var rsn = reasonByKey(it.reason || ''); payload.reason_system = rsn ? rsn.system : ''; payload.reason_code = rsn ? rsn.code : ''; payload.reason_display = rsn ? rsn.display : ''; }
         if (it.status === 'signed') {
           payload.signature = { image: it.sig, signed_with: it.signedWith, entered_name: it.entered, name_kept: !!it.nameKept,
             reused: !!it.reused, reconfirmed: !!it.reconfirmed,

@@ -79,6 +79,7 @@ from consent_capture.service import (
     is_consent_admin,
     is_ineligible_display,
     normalize_staff_id,
+    reason_key,
     patients_missing_required,
     practice_settings,
     save_decline_reasons,
@@ -843,11 +844,14 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         allowed = allowed_decline_reasons(definition, decline_options())
         reason = None
         if allowed:
-            pair = (
+            key = reason_key(
                 _clean_text(body.get("reason_system"), limit=200),
                 _clean_text(body.get("reason_code"), limit=120),
+                _clean_text(body.get("reason_display"), limit=200),
             )
-            reason = next((r for r in allowed if (r["system"], r["code"]) == pair), None)
+            reason = next(
+                (r for r in allowed if reason_key(r["system"], r["code"], r["display"]) == key), None
+            )
             if reason is None:
                 return [_error("Select a reason.")]
         ineligible = bool(reason) and is_ineligible_display(reason["display"])

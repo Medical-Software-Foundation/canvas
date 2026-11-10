@@ -175,7 +175,8 @@ class ConsentPracticeSettings(CustomModel):
     # Ask the signer to print their name under a drawn signature.
     ask_printed_name = BooleanField(default=False)
 
-    # Rejection codings staff can choose when declining, as [{system, code}].
+    # Rejection codings staff can choose when declining, as [{system, code, display}]
+    # (the name tells apart codings that have no code).
     # Until ``decline_reasons_set`` is saved, every displayed coding except the
     # patient portal's own counts as chosen.
     decline_reasons_set = BooleanField(default=False)

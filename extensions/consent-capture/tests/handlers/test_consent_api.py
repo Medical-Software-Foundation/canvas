@@ -2047,6 +2047,22 @@ class TestDecline:
         assert kwargs["consented_by"] == "" and kwargs["capacity_statement"] == ""
         assert mock_ccd.objects.create.mock_calls[0].kwargs["consented_by"] == ""
 
+    def test_blank_code_reasons_told_apart_by_name(self):
+        # Two codings with the same system and no code: the name decides.
+        unable = {"system": "INTERNAL", "code": "", "display": "Unable to consent"}
+        inel = {"system": "INTERNAL", "code": "", "display": "Ineligible"}
+        options = {"codings": [], "reasons": [unable], "ineligible": inel}
+        result, mock_pdf, _, _ = self._run(
+            {"patient_id": "patient-1", "consent_code": "universal", "reason_system": "INTERNAL", "reason_code": "",
+             "reason_display": "Unable to consent"},
+            options,
+            _defn(allow_ineligible=True),
+        )
+        assert result[0].content["preview"]["reason"] == "Unable to consent"
+        assert result[0].content["preview"]["ineligible"] is False
+        assert result[1]["values"]["rejection_reason"].__dict__ == unable
+        assert mock_pdf.mock_calls[0].kwargs["outcome"] == "Declined"
+
     def test_ineligible_refused_when_the_consent_doesnt_allow_it(self):
         options = {"codings": [], "reasons": [REFUSED], "ineligible": INELIGIBLE}
         result, _, _, _ = self._run(
@@ -2147,7 +2163,7 @@ class TestPracticeSettingsApi:
         ) as mock_save_reasons:
             api.update_practice_settings()
         # Only displayed codings are kept.
-        assert mock_save_reasons.mock_calls == [call([{"system": "INTERNAL", "code": "refused"}])]
+        assert mock_save_reasons.mock_calls == [call([{"system": "INTERNAL", "code": "refused", "display": "Refused"}])]
 
     def test_post_without_decline_reasons_leaves_them(self):
         api = _admin({"accept_typed": True})

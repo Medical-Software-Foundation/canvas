@@ -871,7 +871,24 @@ class TestDeclineOptions:
             assert service.clean_decline_reasons([
                 {"system": "INTERNAL", "code": "refused"}, {"system": "INTERNAL", "code": "refused"},
                 {"system": "X", "code": "gone"}, "junk",
-            ]) == [{"system": "INTERNAL", "code": "refused"}]
+            ]) == [{"system": "INTERNAL", "code": "refused", "display": "Refused"}]
+
+    def test_blank_code_codings_stay_separate(self):
+        codings = [
+            {"system": "INTERNAL", "code": "", "display": "Ineligible"},
+            {"system": "INTERNAL", "code": "", "display": "Unable to consent"},
+        ]
+        saved = (True, [{"system": "INTERNAL", "code": "", "display": "Unable to consent"}])
+        with patch("consent_capture.service.rejection_codings", return_value=codings), self._saved(saved):
+            out = service.decline_options()
+            cleaned = service.clean_decline_reasons([{"system": "INTERNAL", "code": "", "display": "Ineligible"}])
+        assert [r["display"] for r in out["reasons"]] == ["Unable to consent"]
+        assert out["ineligible"] is None  # same system and blank code, but not chosen
+        assert cleaned == [{"system": "INTERNAL", "code": "", "display": "Ineligible"}]
+
+    def test_reason_key_ignores_the_name_when_there_is_a_code(self):
+        assert service.reason_key("S", "r", "Refused") == service.reason_key("S", "r", "Renamed")
+        assert service.reason_key("S", "", "A") != service.reason_key("S", "", "B")
 
     def test_save_decline_reasons_upserts(self):
         mock_ps = MagicMock()

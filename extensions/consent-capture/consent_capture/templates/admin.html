@@ -419,8 +419,10 @@
     var PRACTICE = JSON.parse("{{ practice_json|escapejs }}");
     // Displayed rejection codings: [{system, code, display, chosen, ineligible}].
     var DECLINE_CODINGS = JSON.parse("{{ decline_json|escapejs }}");
+    // A coding is told apart by system and code, plus its name when the code is blank.
+    function sameCoding(a, b) { return a.system === b.system && a.code === b.code && (a.code || (a.display || '').trim() === (b.display || '').trim()); }
     function chosenReasons(codings) {
-      return codings.filter(function (c) { return c.chosen; }).map(function (c) { return { system: c.system, code: c.code }; });
+      return codings.filter(function (c) { return c.chosen; }).map(function (c) { return { system: c.system, code: c.code, display: c.display }; });
     }
     PRACTICE.decline_reasons = chosenReasons(DECLINE_CODINGS);
     var CODINGS = [];   // every consent coding in Canvas (sidebar + equivalents picker)
@@ -879,15 +881,15 @@
     document.querySelectorAll('[data-ps]').forEach(function (n) {
       n.addEventListener('click', function () { var k = n.getAttribute('data-ps'); ps.form[k] = !ps.form[k]; renderPractice(); });
     });
-    function isChosen(c) { return ps.form.decline_reasons.some(function (r) { return r.system === c.system && r.code === c.code; }); }
+    function isChosen(c) { return ps.form.decline_reasons.some(function (r) { return sameCoding(r, c); }); }
     function renderReasonOpts() {
       var box = el('reasonOpts'); box.innerHTML = '';
       if (!DECLINE_CODINGS.length) box.appendChild(mk('span', 'td', 'No rejection codings are set up yet.'));
       DECLINE_CODINGS.forEach(function (c) {
         var lab = document.createElement('label'); var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isChosen(c);
         cb.addEventListener('change', function () {
-          ps.form.decline_reasons = ps.form.decline_reasons.filter(function (r) { return !(r.system === c.system && r.code === c.code); });
-          if (cb.checked) ps.form.decline_reasons.push({ system: c.system, code: c.code });
+          ps.form.decline_reasons = ps.form.decline_reasons.filter(function (r) { return !sameCoding(r, c); });
+          if (cb.checked) ps.form.decline_reasons.push({ system: c.system, code: c.code, display: c.display });
           renderPractice();
         });
         lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + c.display)); box.appendChild(lab);

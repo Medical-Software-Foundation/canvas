@@ -659,8 +659,21 @@ def rejection_codings():
     ]
 
 
+def reason_key(system, code, display):
+    """How a rejection coding is told apart: system and code, plus the name when the
+    code is blank (some instances add codings without a code, so two can share the
+    same system and empty code)."""
+    system, code = system or "", code or ""
+    return (system, code, "" if code else (display or "").strip())
+
+
+def _coding_key(c):
+    return reason_key(c.get("system"), c.get("code"), c.get("display"))
+
+
 def _saved_decline_reasons():
-    """The saved ``[(system, code)]`` choice, or ``None`` until the practice saves it."""
+    """The saved choice as a set of ``reason_key`` tuples, or ``None`` until the
+    practice saves it."""
     row = (
         ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY)
         .values_list("decline_reasons_set", "decline_reasons")
@@ -668,11 +681,7 @@ def _saved_decline_reasons():
     )
     if not row or not row[0]:
         return None
-    return {
-        (item.get("system") or "", item.get("code") or "")
-        for item in (row[1] or [])
-        if isinstance(item, dict)
-    }
+    return {_coding_key(item) for item in (row[1] or []) if isinstance(item, dict)}
 
 
 def decline_options():
@@ -688,7 +697,7 @@ def decline_options():
     def chosen(c):
         if saved is None:
             return c["code"] != PORTAL_REJECTION_CODE
-        return (c["system"], c["code"]) in saved
+        return _coding_key(c) in saved
 
     ineligible = next((c for c in codings if is_ineligible_display(c["display"])), None)
     return {
@@ -710,20 +719,21 @@ def allowed_decline_reasons(definition, options):
 
 
 def clean_decline_reasons(raw):
-    """Validate a submitted ``[{system, code}]`` list against the displayed
+    """Validate a submitted ``[{system, code, display}]`` list against the displayed
     rejection codings. Returns the cleaned list, or ``None`` when ``raw`` isn't a
     list (the setting is left as it is)."""
     if not isinstance(raw, list):
         return None
-    known = {(c["system"], c["code"]) for c in rejection_codings()}
+    known = {_coding_key(c): c for c in rejection_codings()}
     out, seen = [], set()
     for item in raw:
         if not isinstance(item, dict):
             continue
-        pair = (str(item.get("system") or ""), str(item.get("code") or ""))
-        if pair in known and pair not in seen:
-            seen.add(pair)
-            out.append({"system": pair[0], "code": pair[1]})
+        key = reason_key(str(item.get("system") or ""), str(item.get("code") or ""), str(item.get("display") or ""))
+        if key in known and key not in seen:
+            seen.add(key)
+            c = known[key]
+            out.append({"system": c["system"], "code": c["code"], "display": c["display"]})
     return out
 
 
