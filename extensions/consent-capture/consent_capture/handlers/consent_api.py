@@ -928,7 +928,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
         if coding_error:
             return [_error(coding_error)]
 
-        ineligible = bool(reason) and is_ineligible_display(reason["display"])
+        ineligible = reason is not None and is_ineligible_display(reason["display"])
         outcome = "Ineligible" if ineligible else "Declined"
         # Nobody declined an Ineligible consent: no party and no capacity statement.
         consented_by = "" if ineligible else ctx["consented_by"]
