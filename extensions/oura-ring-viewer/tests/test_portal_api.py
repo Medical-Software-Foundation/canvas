@@ -4,6 +4,7 @@ import datetime as dt
 import json
 from http import HTTPStatus
 from typing import Any
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -72,13 +73,14 @@ class TestPage:
         effect = _api("GET", "/").page()[0]
         assert isinstance(effect, HTMLResponse)
         html = effect.content.decode()
-        assert 'var API = "/plugin-io/api/oura_ring_viewer/portal";' in html
-        assert "var AVAILABLE = true;" in html
-        assert "<script src=" not in html
+        assert 'data-api="/plugin-io/api/oura_ring_viewer/portal"' in html
+        assert 'data-available="true"' in html
+        assert '<script src="/plugin-io/api/oura_ring_viewer/portal/static/portal.js">' in html
+        assert "<script>" not in html and "<style>" not in html, "scripts and styles are static files"
 
     def test_says_when_connecting_is_unavailable(self) -> None:
         html = _api("GET", "/", secrets={}).page()[0].content.decode()
-        assert "var AVAILABLE = false;" in html
+        assert 'data-available="false"' in html
 
     def test_without_an_identifiable_patient(self) -> None:
         effect = _api("GET", "/", headers={"canvas-logged-in-user-id": "bad id"}).page()[0]
@@ -148,7 +150,9 @@ class TestStopSharing:
     def test_removes_only_the_patients_own_connection(self) -> None:
         _connect()
         _connect("someone-else")
-        assert _json(_api("POST", "/disconnect").disconnect()[0]) == {"disconnected": True}
+        with patch("oura_ring_viewer.services.disconnect.build_client"):
+            body = _json(_api("POST", "/disconnect").disconnect()[0])
+        assert body == {"disconnected": True, "revoked_at_oura": True}
         assert get_tokens(PATIENT) is None
         assert get_tokens("someone-else") is not None
 

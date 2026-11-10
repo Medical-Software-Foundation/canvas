@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 import pytest
 from canvas_sdk.templates.utils import _engine_for_plugin
+from canvas_sdk.test_utils.factories import PatientFactory
 
 PLUGIN_DIR = Path(__file__).resolve().parent.parent / "oura_ring_viewer"
 
@@ -24,6 +25,22 @@ def render_template(template_name: str, context: dict[str, Any] | None = None) -
     """Render a plugin template exactly as the SDK would at runtime."""
     engine = _engine_for_plugin(PLUGIN_DIR)
     return str(engine.render_to_string(str(PLUGIN_DIR / template_name.lstrip("/")), context=context))
+
+
+# The ids the tests use by name. The plugin's rows reference a real patient.
+KNOWN_PATIENTS = ("abc123", "pat123", "chart-patient", "patient-1", "patient-2", "p1", "someone-else")
+
+
+@pytest.fixture(autouse=True)
+def _patients() -> None:
+    for patient_id in KNOWN_PATIENTS:
+        PatientFactory.create(id=patient_id)
+
+
+@pytest.fixture(autouse=True)
+def _no_race_wait() -> Iterator[None]:
+    with patch("oura_ring_viewer.services.oauth.time.sleep"):
+        yield
 
 
 @pytest.fixture(autouse=True)

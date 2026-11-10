@@ -10,6 +10,19 @@ readiness, steps and overnight blood oxygen, with trends over the last 7, 14,
 30 or 90 days. Data is read live from Oura each time the chart opens and is
 never stored. Patients can stop sharing from the portal at any time.
 
+Capabilities:
+
+1. Shows sleep score, total sleep, resting heart rate, HRV, readiness, steps and
+   overnight blood oxygen in the patient chart, with 7, 14, 30 and 90 day trends.
+2. Lets a patient connect their ring with one tap from the patient portal.
+3. Lets staff send the patient a secure connection link through the portal, or
+   copy it to share another way.
+4. Lets a patient or staff member stop sharing at any time, which ends the app's
+   access at Oura and removes everything the plugin holds for that patient.
+5. Limits each patient's data to their care team by default, with a setting to
+   open it to all active staff.
+6. Reads data live from Oura on each chart open and stores none of it.
+
 ## Problem it solves
 
 Patients who wear an Oura Ring often want their clinician to see how they are
@@ -46,9 +59,19 @@ control, without copying any wearable data into the health record.
 4. The patient portal menu now shows **Oura Ring**, and staff see an
    **Oura Ring** app in the patient chart.
 
-Oura's sandbox serves test data without a ring. Leave `OURA_ENVIRONMENT` unset
-to try the plugin end to end before going live. Using real patient data needs
-Oura's approval of your application beyond its 10-user development limit.
+Oura's sandbox serves test data without a ring. Set `OURA_ENVIRONMENT` to
+`sandbox` to try the plugin end to end before going live; the chart shows a
+"Sandbox data" banner the whole time. Using real patient data needs Oura's
+approval of your application beyond its 10-user development limit.
+
+## Dependencies and prerequisites
+
+- No other plugins are required.
+- The patient portal must be enabled for the portal menu item and for sending
+  links through the portal.
+- An application in the Oura developer portal. Real patient data needs Oura's
+  approval of that application, beyond its 10-user development limit.
+- Canvas SDK 0.118.0 or newer, the first release with custom data models.
 
 ## Screenshots
 
@@ -107,7 +130,8 @@ Link details:
 
 ## Testing and verification
 
-The plugin has 317 tests at 100% line coverage, strict mypy is clean, and
+The plugin has 386 tests at 99% branch coverage, with a 90% floor enforced in
+`pyproject.toml`. Strict mypy is clean, and
 `canvas validate` loads every handler in the Canvas sandbox.
 
 Verified against Oura itself:
@@ -160,6 +184,9 @@ The plugin keeps two small tables, both per patient:
 - `OuraSyncState`: connection status only. When data was last read, the last
   error code, and the pending link's nonce. No health values.
 
+Both tables live in the `remington_data__wearables` custom data namespace, and
+each row references the real patient record through a one-to-one link.
+
 Disconnect deletes both rows. Because there is no stored data, there is no
 retention job and nothing to purge.
 
@@ -172,20 +199,48 @@ Six plugin variables, two of them sensitive:
 | `OURA_CLIENT_ID` | no | From the Oura API application |
 | `OURA_CLIENT_SECRET` | yes | From the Oura API application |
 | `OURA_REDIRECT_URI` | no | `https://<your-instance>/plugin-io/api/oura_ring_viewer/callback`, registered with Oura exactly |
-| `OURA_ENVIRONMENT` | no | `production`, or anything else for sandbox |
+| `OURA_ENVIRONMENT` | no | `production` or `sandbox`. Sandbox shows Oura's sample data under a banner |
 | `OURA_MAGIC_LINK_SECRET` | yes | Random string of at least 32 characters, used to sign patient links |
 | `OURA_ACCESS_RULE` | no | Who may see a patient's Oura data: `care_team` (default) or `practice` |
 
 Each route checks only the settings it needs and reports anything missing or
 unusable to staff by name, rather than failing when a patient taps a link.
 
-- `OURA_ENVIRONMENT` fails safe: any value other than `production` routes to
-  the sandbox, so a typo cannot reach live patient data.
+- `OURA_ENVIRONMENT` must be exactly `production` or `sandbox`. Anything else,
+  including unset, is refused and reported, so a typo can never show sample data
+  as a real patient's.
 - `OURA_REDIRECT_URI` must be `https`, since the connection link it derives
   carries a bearer token. Plain `http` is accepted only for `localhost`.
 - `OURA_MAGIC_LINK_SECRET` shorter than 32 characters is refused.
 - `OURA_ACCESS_RULE` with any value other than `care_team` or `practice` is
   refused and reported, never treated as permission to widen access.
+
+## Access
+
+Applications:
+
+| Application | Where | Who can use it |
+|---|---|---|
+| Oura Ring | Patient chart | Signed-in staff. Patient data needs the access rule below |
+| Oura Ring | Patient portal menu | The signed-in patient, for their own connection only |
+
+Routes, under `/plugin-io/api/oura_ring_viewer`:
+
+| Route | Who can use it |
+|---|---|
+| `GET /` | Staff who pass the access rule |
+| `GET /data` | Staff who pass the access rule |
+| `GET /status` | Staff who pass the access rule |
+| `POST /send-link` | Staff who pass the access rule |
+| `POST /disconnect` | Staff who pass the access rule |
+| `GET /static/<asset>` | Any signed-in staff. CSS and JS only, no patient data |
+| `GET /portal/` | The signed-in patient |
+| `GET /portal/status` | The signed-in patient |
+| `GET /portal/start` | The signed-in patient |
+| `POST /portal/disconnect` | The signed-in patient |
+| `GET /portal/static/<asset>` | Any signed-in patient. CSS and JS only, no patient data |
+| `GET /connect` | Anyone holding a link signed by this plugin |
+| `GET /callback` | Oura's redirect, carrying a state value signed by this plugin |
 
 ## Who can see a patient's data
 
@@ -202,7 +257,10 @@ before it reads or changes anything for that patient:
 
 Inactive staff never qualify under either rule. The caller is identified from
 the session headers Canvas sets itself and strips from client requests. A
-refused request changes nothing: no link is issued and nothing is deleted.
+refused request changes nothing: no link is issued and nothing is deleted, and
+the message says only that the person does not have access. The chart app
+itself stays listed for all staff, because Canvas does not offer `visible()` to
+`patient_specific` applications.
 
 ## Security notes
 
@@ -211,8 +269,10 @@ refused request changes nothing: no link is issued and nothing is deleted.
   signed-in patient and act only on the patient named by the Canvas session,
   never on an id in the URL. A login acting for someone else, such as a parent,
   is refused: connecting a wearable is the patient's own decision. **Link
-  routes** (`/connect`, `/callback`) are public by necessity and are protected
-  instead by signed, expiring tokens bound to a single-use nonce.
+  routes** (`/connect`, `/callback`) have no Canvas session by necessity, so
+  `authenticate()` requires this plugin's signed token for the route. The
+  handlers then check expiry and a single-use nonce, so that a link that has run
+  out gets a readable page rather than a bare error.
 - Link and OAuth state tokens carry a type claim, so neither can be replayed as
   the other. The signing algorithm is pinned, so an unsigned `alg: none` token
   is rejected.
@@ -224,17 +284,27 @@ refused request changes nothing: no link is issued and nothing is deleted.
   encryption when the platform allows it.
 - The chart page loads no external scripts and writes every value with
   `textContent`, never `innerHTML`.
-- **Disconnect** (staff) and **Stop sharing** (patient) delete both rows this
-  plugin holds for the patient, but do not yet revoke the grant at Oura.
-  Patients can revoke it in their Oura account, as the portal page says.
+- **Disconnect** (staff) and **Stop sharing** (patient) revoke the grant at
+  Oura, then delete both rows this plugin holds for the patient. The rows are
+  deleted even if Oura cannot be reached, and the page says so and tells the
+  patient to remove the app in their Oura account settings.
+- Calls to Oura time out after 8 seconds. A timeout or an unreadable response
+  shows staff "Oura did not respond" and never costs the patient their
+  connection.
 
 ## Known limitations
 
 - **Production use needs Oura's approval.** Oura limits a new API application
   to 10 users and, under its API Agreement, approves each practice as an end
   customer before real patient data is used.
-- **Disconnect does not yet revoke the grant at Oura.** Patients can revoke it
-  in their Oura account, as the portal page tells them.
+- **OAuth tokens are not encrypted at rest.** The plugin sandbox does not
+  provide encryption, so tokens are plain text in the plugin's custom data
+  tables. `services/crypto.py` is the seam for encrypted storage when the
+  platform offers it.
+- **"Today" uses the instance's time zone.** Oura files data under the wearer's
+  local date and a plugin has no time zone for the wearer, so the chart's
+  window ends on today's date in `INSTALLATION_TIME_ZONE`. A patient far from
+  the practice can see the newest day appear a few hours early or late.
 
 ## Development
 

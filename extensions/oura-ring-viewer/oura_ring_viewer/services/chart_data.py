@@ -82,6 +82,7 @@ def build_payload(
     rows: Sequence[NormalizedDay] = (),
     forbidden_endpoints: Sequence[str] = (),
     fetch_error: str = "",
+    sandbox: bool = False,
 ) -> dict[str, Any]:
     """Shape everything the chart needs from in-memory rows and status."""
     start_day, _ = window(range_days, today)
@@ -101,6 +102,7 @@ def build_payload(
         "connection_status": status,
         "last_error": state.last_error if state else "",
         "fetch_error": fetch_error,
+        "sandbox": sandbox,
         "forbidden_endpoints": list(forbidden_endpoints),
         "last_synced_at": _iso(state.last_synced_at if state else None),
         "link_sent_at": _iso(state.last_link_sent_at if state else None),

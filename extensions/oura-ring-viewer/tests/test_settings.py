@@ -23,10 +23,14 @@ class TestOuraCollectionBase:
     def test_production_uses_live_collection(self) -> None:
         assert oura_collection_base("production") == f"{OURA_API_HOST}/v2/usercollection"
 
-    @pytest.mark.parametrize("value", ["sandbox", "", "   ", "anything-else"])
-    def test_everything_else_falls_back_to_sandbox(self, value: str) -> None:
-        """Unknown or empty environments must not reach production data."""
-        assert oura_collection_base(value) == f"{OURA_API_HOST}/v2/sandbox/usercollection"
+    def test_sandbox_uses_the_sample_collection(self) -> None:
+        assert oura_collection_base("sandbox") == f"{OURA_API_HOST}/v2/sandbox/usercollection"
+
+    @pytest.mark.parametrize("value", ["", "   ", "prod", "anything-else"])
+    def test_anything_else_is_refused(self, value: str) -> None:
+        """A typo must never route anywhere, least of all to sample data shown as real."""
+        with pytest.raises(ValueError):
+            oura_collection_base(value)
 
     @pytest.mark.parametrize("value", ["PRODUCTION", "Production", "  production  "])
     def test_production_match_is_case_and_space_insensitive(self, value: str) -> None:

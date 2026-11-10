@@ -4,10 +4,17 @@ Covers the OAuth token endpoint and the usercollection summary endpoints. It
 does not retry, refresh tokens, or persist anything: refresh-on-401 is composed
 in ``services/oauth.py`` and persistence belongs to the sync service.
 
-Outbound HTTP goes through ``canvas_sdk.utils.http.Http``, which adds metrics
-tracking, URL validation and the 30 second timeout ceiling. Every request is
-path-only against ``OURA_API_HOST``; the authorize URL on cloud.ouraring.com is
-built here but only ever visited by the patient's browser, never fetched.
+Requests go straight through ``requests`` because ``canvas_sdk.utils.http.Http``
+fixes every call at its 30 second ceiling and has no per-request timeout. Staff
+wait on these calls, so ``REQUEST_TIMEOUT_SECONDS`` is used instead. Every
+request is path-only against ``OURA_API_HOST``; the authorize URL on
+cloud.ouraring.com is built here but only ever visited by the patient's
+browser, never fetched.
+
+A timeout, a dropped connection or a 200 that is not JSON all surface as
+``OuraAPIError``, so a caller only ever has Oura's own error types to handle.
+``requests`` raises subclasses of ``OSError`` for transport failures and of
+``ValueError`` for an unparseable body.
 """
 
 import datetime as dt
@@ -15,20 +22,25 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 
-from canvas_sdk.utils.http import Http
+import requests
 
 from oura_ring_viewer.services.settings import (
     MAX_PAGES,
     OURA_API_HOST,
     OURA_AUTHORIZE_URL,
     OURA_OAUTH_SCOPE,
+    OURA_REVOKE_PATH,
     OURA_TOKEN_PATH,
+    REQUEST_TIMEOUT_SECONDS,
     oura_collection_path,
 )
 
+# Reported as the status of a request that never got a usable response.
+STATUS_NO_RESPONSE = 503
+
 
 class OuraAPIError(RuntimeError):
-    """Raised on a non-2xx Oura response that is not an auth failure."""
+    """Oura failed: a non-2xx that is not an auth failure, or no usable response."""
 
     def __init__(self, status_code: int, body: str) -> None:
         super().__init__(f"Oura API error {status_code}: {body[:200]}")
@@ -70,6 +82,19 @@ class TokenSet:
         return dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=self.expires_in)
 
 
+class _TimedHttp:
+    """Path-only requests against the Oura API host, with a short timeout."""
+
+    def get(self, path: str, headers: dict[str, str]) -> Any:
+        return requests.get(f"{OURA_API_HOST}{path}", headers=headers,
+                            timeout=REQUEST_TIMEOUT_SECONDS)
+
+    def post(self, path: str, data: dict[str, str] | None = None,
+             headers: dict[str, str] | None = None) -> Any:
+        return requests.post(f"{OURA_API_HOST}{path}", data=data, headers=headers,
+                             timeout=REQUEST_TIMEOUT_SECONDS)
+
+
 class OuraClient:
     """Sync HTTP client. The caller owns token storage and refresh."""
 
@@ -86,9 +111,8 @@ class OuraClient:
         self._client_id = client_id
         self._client_secret = client_secret
         self._redirect_uri = redirect_uri
-        # ``http`` is an injection point for tests; the runtime uses
-        # ``canvas_sdk.utils.http.Http`` bound to the Oura API host.
-        self._http = http if http is not None else Http(OURA_API_HOST)
+        # ``http`` is an injection point for tests.
+        self._http = http if http is not None else _TimedHttp()
 
     @property
     def collection_path(self) -> str:
@@ -125,6 +149,20 @@ class OuraClient:
             "client_secret": self._client_secret,
         })
 
+    def revoke(self, access_token: str) -> None:
+        """End this app's access at Oura, so stopping sharing is real at the source.
+
+        Raises ``OuraAuthError`` if the access token is no longer valid.
+        """
+        try:
+            response = self._http.post(f"{OURA_REVOKE_PATH}?{urlencode({'access_token': access_token})}")
+        except OSError as exc:
+            raise _no_response(exc) from exc
+        if response.status_code == 401:
+            raise OuraAuthError("access token rejected (401)")
+        if response.status_code >= 400:
+            raise OuraAPIError(response.status_code, response.text)
+
     def fetch_collection(
         self,
         access_token: str,
@@ -159,16 +197,19 @@ class OuraClient:
         return records
 
     def _token_request(self, body: dict[str, str]) -> TokenSet:
-        response = self._http.post(
-            OURA_TOKEN_PATH,
-            data=body,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
+        try:
+            response = self._http.post(
+                OURA_TOKEN_PATH,
+                data=body,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        except OSError as exc:
+            raise _no_response(exc) from exc
         if response.status_code in (400, 401, 403):
             raise OuraAuthError(f"token request rejected ({response.status_code})")
         if response.status_code >= 400:
             raise OuraAPIError(response.status_code, response.text)
-        payload = response.json()
+        payload = _json_body(response)
         if not isinstance(payload, dict):
             raise OuraAPIError(response.status_code, "token response was not an object")
         tokens = TokenSet(
@@ -188,17 +229,32 @@ class OuraClient:
     def _authed_get(self, path: str, access_token: str, params: dict[str, str]) -> Any:
         # ``Http.get`` takes no ``params`` kwarg, so the query is encoded into
         # the path before joining against the base URL.
-        response = self._http.get(
-            f"{path}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
+        try:
+            response = self._http.get(
+                f"{path}?{urlencode(params)}",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        except OSError as exc:
+            raise _no_response(exc) from exc
         if response.status_code == 401:
             raise OuraAuthError("access token rejected (401)")
         if response.status_code == 403:
             raise OuraForbiddenError(403, response.text)
         if response.status_code >= 400:
             raise OuraAPIError(response.status_code, response.text)
+        return _json_body(response)
+
+
+def _no_response(exc: OSError) -> OuraAPIError:
+    # Only the exception type: its text can include the request URL.
+    return OuraAPIError(STATUS_NO_RESPONSE, type(exc).__name__)
+
+
+def _json_body(response: Any) -> Any:
+    try:
         return response.json()
+    except ValueError as exc:
+        raise OuraAPIError(STATUS_NO_RESPONSE, "response was not JSON") from exc
 
 
 def _safe_int(value: Any) -> int:

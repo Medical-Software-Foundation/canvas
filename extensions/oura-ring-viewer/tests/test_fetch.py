@@ -156,7 +156,7 @@ class TestHappyPath:
         before = _plugin_row_counts()
         _fetch(_client())
         assert _plugin_row_counts() == before
-        state = OuraSyncState.objects.get(patient_id=PATIENT)
+        state = OuraSyncState.objects.get(patient__id=PATIENT)
         stored_text = " ".join(str(getattr(state, f.name)) for f in state._meta.fields)
         assert "9000" not in stored_text and "97.0" not in stored_text
 
@@ -194,7 +194,7 @@ class TestTokenRotation:
         client.refresh.assert_called_once_with("RT1")
         assert seen == ["AT1"] + ["AT2"] * 5
         assert len(result.rows) == 4
-        stored = OuraOAuthToken.objects.get(patient_id=PATIENT)
+        stored = OuraOAuthToken.objects.get(patient__id=PATIENT)
         assert (stored.access_token, stored.refresh_token) == ("AT2", "RT2")
         assert stored.last_refresh_at == NOW
 
@@ -208,7 +208,7 @@ class TestTokenRotation:
 
         state = get_sync_state(PATIENT)
         assert state is not None and state.last_error == ERROR_REFRESH_FAILED
-        assert OuraOAuthToken.objects.get(patient_id=PATIENT).refresh_token == "RT1"
+        assert OuraOAuthToken.objects.get(patient__id=PATIENT).refresh_token == "RT1"
 
     def test_still_rejected_after_refresh_is_an_auth_failure(self) -> None:
         _connect()
@@ -293,7 +293,7 @@ class TestDisconnect:
 
         delete_all_for_patient(PATIENT)
 
-        assert not OuraOAuthToken.objects.filter(patient_id=PATIENT).exists()
+        assert not OuraOAuthToken.objects.filter(patient__id=PATIENT).exists()
         assert get_sync_state(PATIENT) is None
-        assert OuraOAuthToken.objects.filter(patient_id=OTHER).exists()
+        assert OuraOAuthToken.objects.filter(patient__id=OTHER).exists()
         assert get_sync_state(OTHER) is not None

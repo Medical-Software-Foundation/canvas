@@ -1,10 +1,11 @@
 """Patient-session SimpleAPI behind the "Oura Ring" portal menu item.
 
 Routes (all under ``/portal``):
-  GET  /           -> the patient's own page (inline CSS and JS)
+  GET  /           -> the patient's own page
+  GET  /static/<asset> -> the page's own CSS and JS, no patient data
   GET  /status     -> JSON: is this patient connected
   GET  /start      -> begin the Oura consent flow (opened in a new tab)
-  POST /disconnect -> stop sharing: remove the patient's tokens and status
+  POST /disconnect -> stop sharing: end access at Oura, remove tokens and status
 
 ``PatientSessionAuthMixin`` admits only a signed-in patient, and the patient is
 always the one named by the Canvas-set session header, never a query
@@ -27,6 +28,7 @@ from canvas_sdk.templates import render_to_string
 from logger import log
 
 from oura_ring_viewer.services import magic_link
+from oura_ring_viewer.services.assets import PORTAL_ASSETS
 from oura_ring_viewer.services.chart_data import (
     STATUS_CONNECTED,
     STATUS_EXPIRED,
@@ -39,10 +41,10 @@ from oura_ring_viewer.services.config import (
     clean_patient_id,
     config_problems,
 )
+from oura_ring_viewer.services.disconnect import stop_sharing
 from oura_ring_viewer.services.links import live_link_nonce
 from oura_ring_viewer.services.settings import PLUGIN_API_PATH
 from oura_ring_viewer.services.storage import (
-    delete_all_for_patient,
     get_sync_state,
     get_tokens,
     upsert_sync_state,
@@ -70,6 +72,20 @@ class OuraPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                 "available": not config_problems(self.secrets, OAUTH_SECRETS),
             }) or "",
             status_code=HTTPStatus.OK,
+        )]
+
+    @api.get("/static/<asset>")
+    def static_asset(self) -> list[Response | Effect]:
+        """Serve the page's own CSS or JS. Carries no patient data."""
+        name = self.request.path_params["asset"]
+        content_type = PORTAL_ASSETS.get(name)
+        if content_type is None:
+            return [Response(status_code=HTTPStatus.NOT_FOUND)]
+        return [Response(
+            (render_to_string(f"static/{name}") or "").encode(),
+            status_code=HTTPStatus.OK,
+            headers={"Cache-Control": "no-cache"},
+            content_type=content_type,
         )]
 
     @api.get("/status")
@@ -101,8 +117,9 @@ class OuraPortalAPI(PatientSessionAuthMixin, SimpleAPI):
         patient_id = self._patient_id()
         if patient_id is None:
             return [_page_error("We could not identify your account.", HTTPStatus.BAD_REQUEST)]
-        if config_problems(self.secrets, OAUTH_SECRETS):
-            log.error("oura portal start: plugin settings incomplete")
+        problems = config_problems(self.secrets, OAUTH_SECRETS)
+        if problems:
+            log.error(f"oura portal start: plugin settings unusable: {', '.join(problems)}")
             return [_page_error("Connecting is not available right now. Please contact your "
                                 "care team.", HTTPStatus.SERVICE_UNAVAILABLE)]
 
@@ -123,8 +140,8 @@ class OuraPortalAPI(PatientSessionAuthMixin, SimpleAPI):
         patient_id = self._patient_id()
         if patient_id is None:
             return [JSONResponse(content={"error": "invalid_patient"}, status_code=HTTPStatus.BAD_REQUEST)]
-        delete_all_for_patient(patient_id)
-        return [JSONResponse(content={"disconnected": True})]
+        revoked = stop_sharing(patient_id, self.secrets, _now())
+        return [JSONResponse(content={"disconnected": True, "revoked_at_oura": revoked})]
 
     def _patient_id(self) -> str | None:
         """The signed-in patient, from the header Canvas sets and strips from clients."""

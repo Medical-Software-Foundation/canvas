@@ -1,0 +1,42 @@
+/* Staff chart panel and staff message page. */
+* { box-sizing: border-box; }
+body { margin: 0; padding: 16px; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       color: #1d2330; background: #fff; }
+header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+h1 { font-size: 16px; margin: 0; }
+.pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #eef0f4; color: #4a5263; }
+.pill.connected { background: #e6f4ea; color: #1e7b3a; }
+.pill.expired { background: #fdecea; color: #b3261e; }
+.pill.link_pending { background: #fff4e0; color: #8a5300; }
+.pill.link_expired { background: #fdecea; color: #b3261e; }
+.textlink { background: none; border: 0; padding: 6px 4px; color: #2f5bd3; text-decoration: underline; }
+.synced { color: #6b7385; font-size: 12px; margin-left: auto; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #c9ced8; background: #fff;
+         color: #1d2330; cursor: pointer; }
+button.primary { background: #2f5bd3; border-color: #2f5bd3; color: #fff; }
+button.danger { color: #b3261e; border-color: #e3b4b0; }
+button:disabled { opacity: .55; cursor: default; }
+.range { display: inline-flex; border: 1px solid #c9ced8; border-radius: 6px; overflow: hidden; }
+.range button { border: 0; border-radius: 0; padding: 6px 10px; }
+.range button[aria-pressed="true"] { background: #2f5bd3; color: #fff; }
+.notice { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; background: #f3f5f9; color: #3b4253; }
+.notice.error { background: #fdecea; color: #8c1d18; }
+.notice.warn { background: #fff4e0; color: #6b4100; }
+.panel { border: 1px solid #e3e6ec; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.panel h2 { font-size: 13px; margin: 0 0 8px; }
+.link-row { display: flex; gap: 6px; margin-top: 8px; }
+.link-row input { flex: 1; min-width: 0; font: 12px ui-monospace, Menlo, monospace; padding: 6px; border: 1px solid #c9ced8; border-radius: 6px; }
+.link-meta { font-size: 11px; color: #6b7385; margin-top: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.card { border: 1px solid #e3e6ec; border-radius: 10px; padding: 10px 12px; }
+.card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7385; }
+.card .value { font-size: 22px; font-weight: 600; margin: 2px 0; }
+.card .value.empty { color: #a3a9b6; font-weight: 400; }
+.card .meta { font-size: 11px; color: #6b7385; }
+.card svg { display: block; width: 100%; height: 44px; margin-top: 6px; }
+.card svg path { fill: none; stroke: #2f5bd3; stroke-width: 1.6; }
+.card svg circle { fill: #2f5bd3; }
+.axis { display: flex; justify-content: space-between; font-size: 10px; color: #a3a9b6; }
+footer { font-size: 11px; color: #6b7385; border-top: 1px solid #e3e6ec; padding-top: 10px; }
+[hidden] { display: none !important; }

@@ -12,24 +12,26 @@ which this plugin deliberately does not request.
 # mypy: disable-error-code="var-annotated"
 
 from canvas_sdk.v1.data.base import CustomModel
-from django.db.models import CharField, DateTimeField, TextField, UniqueConstraint
+from django.db.models import (
+    DO_NOTHING,
+    CharField,
+    DateTimeField,
+    OneToOneField,
+    TextField,
+)
+
+from oura_ring_viewer.models.proxy import PatientProxy
 
 
 class OuraOAuthToken(CustomModel):
     """One row per connected patient. Tokens are stored opaquely."""
 
-    patient_id = CharField(max_length=64)
+    patient = OneToOneField(
+        PatientProxy, to_field="dbid", on_delete=DO_NOTHING, related_name="oura_token"
+    )
     access_token = TextField()
     refresh_token = TextField()
     expires_at = DateTimeField()
-    scopes = CharField(max_length=256, blank=True, default="")
+    scopes = CharField(default="")
     connected_at = DateTimeField()
-    last_refresh_at = DateTimeField(null=True, blank=True)
-
-    class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["patient_id"],
-                name="ouraoauthtoken_unique_patient",
-            ),
-        ]
+    last_refresh_at = DateTimeField()

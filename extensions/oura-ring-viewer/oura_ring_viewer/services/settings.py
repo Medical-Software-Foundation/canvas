@@ -12,6 +12,10 @@ pure normalization layer and its tests can import from it freely.
 PLUGIN_NAME: str = "oura_ring_viewer"
 PLUGIN_API_PATH: str = f"/plugin-io/api/{PLUGIN_NAME}"
 
+ENV_PRODUCTION: str = "production"
+ENV_SANDBOX: str = "sandbox"
+ENVIRONMENTS: tuple[str, ...] = (ENV_PRODUCTION, ENV_SANDBOX)
+
 DEFAULT_RANGE_DAYS: int = 14
 RANGE_OPTIONS: tuple[int, ...] = (7, 14, 30, 90)
 
@@ -36,14 +40,24 @@ DISCLAIMER: str = (
 )
 
 # Guard against a misbehaving ``next_token`` looping forever. A 90 day window
-# of daily summaries fits in a single page, so 20 is generous.
-MAX_PAGES: int = 20
+# of daily summaries fits in a single page, so 5 is generous.
+MAX_PAGES: int = 5
+
+# Staff wait on these calls, so a slow Oura fails fast rather than holding the
+# chart open. The first timeout ends the whole fetch.
+REQUEST_TIMEOUT_SECONDS: int = 8
+
+# A second request that loses a token-refresh race is rejected at about the
+# moment the winner is saving the new tokens, so it looks once more after this
+# pause before deciding the connection is dead.
+REFRESH_RACE_WAIT_SECONDS: float = 1.0
 
 # Oura hosted authorization lives on cloud.ouraring.com; the token exchange and
 # all data reads live on api.ouraring.com.
 OURA_AUTHORIZE_URL: str = "https://cloud.ouraring.com/oauth/authorize"
 OURA_API_HOST: str = "https://api.ouraring.com"
 OURA_TOKEN_PATH: str = "/oauth/token"
+OURA_REVOKE_PATH: str = "/oauth/revoke"
 
 # Request only the scopes v1 actually reads. ``daily`` covers the sleep,
 # readiness and activity summaries plus sleep periods; ``spo2`` covers the
@@ -69,19 +83,28 @@ FAMILY_ACTIVITY: str = "activity"
 FAMILY_SPO2: str = "spo2"
 FAMILIES: tuple[str, ...] = (FAMILY_SLEEP, FAMILY_READINESS, FAMILY_ACTIVITY, FAMILY_SPO2)
 
+def resolve_environment(raw: str | None) -> str | None:
+    """The recognized environment name, or None if ``raw`` is not one.
+
+    There is no default. Sandbox responses are sample data, so a typo must be
+    a configuration error rather than a quiet fall through to made-up values
+    in a real patient's chart.
+    """
+    env = (raw or "").strip().lower()
+    return env if env in ENVIRONMENTS else None
+
+
 def oura_collection_path(environment: str) -> str:
-    """Return the usercollection path for the given environment string.
+    """Return the usercollection path for a recognized environment.
 
     Oura's sandbox is a path prefix on the same host, not a separate host, and
     it serves the same response shapes as production. That is what lets this
-    plugin be built and reviewed without a physical ring. Anything other than
-    the exact string ``production`` routes to the sandbox, so a typo in the
-    environment variable cannot reach live patient data.
+    plugin be built and reviewed without a physical ring.
     """
-    env = (environment or "").strip().lower()
-    if env == "production":
-        return "/v2/usercollection"
-    return "/v2/sandbox/usercollection"
+    env = resolve_environment(environment)
+    if env is None:
+        raise ValueError("unrecognized Oura environment")
+    return "/v2/usercollection" if env == ENV_PRODUCTION else "/v2/sandbox/usercollection"
 
 
 def oura_collection_base(environment: str) -> str:

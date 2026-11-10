@@ -72,6 +72,24 @@ def verify_state(state: str, secret: str, *, now: int | None = None) -> Claims:
     return _verify(_TYP_STATE, state, secret, now)
 
 
+def link_is_authentic(token: str, secret: str) -> bool:
+    """Whether this is a link token this plugin signed, expired or not."""
+    return _is_authentic(_TYP_LINK, token, secret)
+
+
+def state_is_authentic(state: str, secret: str) -> bool:
+    """Whether this is a state token this plugin signed, expired or not."""
+    return _is_authentic(_TYP_STATE, state, secret)
+
+
+def _is_authentic(typ: str, token: str, secret: str) -> bool:
+    try:
+        _verify(typ, token, secret, None, check_expiry=False)
+    except InvalidToken:
+        return False
+    return True
+
+
 def _sign(typ: str, patient_id: str, nonce: str, secret: str, ttl: int, now: int | None) -> str:
     _require_secret(secret)
     if not patient_id or not nonce:
@@ -81,7 +99,9 @@ def _sign(typ: str, patient_id: str, nonce: str, secret: str, ttl: int, now: int
     return jwt.encode(claims, secret, algorithm=_ALG)
 
 
-def _verify(typ: str, token: str, secret: str, now: int | None) -> Claims:
+def _verify(
+    typ: str, token: str, secret: str, now: int | None, *, check_expiry: bool = True
+) -> Claims:
     _require_secret(secret)
     if not token:
         raise InvalidToken("token is empty")
@@ -100,7 +120,7 @@ def _verify(typ: str, token: str, secret: str, now: int | None) -> Claims:
     if isinstance(expires_at, bool) or not isinstance(expires_at, int):
         raise InvalidToken("token has no valid expiry")
     current = int(time.time()) if now is None else now
-    if current >= expires_at:
+    if check_expiry and current >= expires_at:
         raise InvalidToken("token has expired")
     return Claims(patient_id=patient_id, nonce=nonce, expires_at=expires_at)
 

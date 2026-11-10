@@ -125,9 +125,11 @@ class TestShellAndData:
         effect = _api("GET", "/").chart_shell()[0]
         assert isinstance(effect, HTMLResponse)
         html = effect.content.decode()
-        assert 'var PATIENT_ID = "abc123";' in html
-        assert 'var API = "/plugin-io/api/oura_ring_viewer";' in html
-        assert "<script src=" not in html, "the chart must not load external scripts"
+        assert 'data-patient-id="abc123"' in html
+        assert 'data-api="/plugin-io/api/oura_ring_viewer"' in html
+        assert '<script src="/plugin-io/api/oura_ring_viewer/static/chart.js">' in html
+        assert "<script>" not in html and "<style>" not in html, "scripts and styles are static files"
+        assert 'id="sandbox"' in html
 
     def test_data_returns_the_view_model(self) -> None:
         body = _json(_api("GET", "/data", {"range": "30d"}).chart_data()[0])
@@ -365,9 +367,10 @@ class TestMessageableChannel:
 def test_disconnect_removes_tokens_and_status() -> None:
     _connect()
     upsert_sync_state(PATIENT, last_synced_at=dt.datetime.now(dt.UTC))
-    body = _json(_api("POST", "/disconnect").disconnect()[0])
-    assert body == {"disconnected": True}
-    assert not OuraOAuthToken.objects.filter(patient_id=PATIENT).exists()
+    with patch("oura_ring_viewer.services.disconnect.build_client"):
+        body = _json(_api("POST", "/disconnect").disconnect()[0])
+    assert body == {"disconnected": True, "revoked_at_oura": True}
+    assert not OuraOAuthToken.objects.filter(patient__id=PATIENT).exists()
     assert get_sync_state(PATIENT) is None
 
 

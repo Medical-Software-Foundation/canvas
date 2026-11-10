@@ -9,9 +9,14 @@ the link has no Canvas session. Security comes instead from:
     nonce, so the callback is tied to a link this plugin issued.
 
 The nonce is cleared when the callback succeeds, so a completed link cannot be
-replayed. ``authenticate`` always returns True and each handler validates its
-own token, which is how an unauthenticated public callback is expressed under
-the Canvas SimpleAPI auth model.
+replayed.
+
+``authenticate`` proves the request carries a token this plugin signed for that
+route. It deliberately accepts an expired one: a SimpleAPI authentication
+failure can only return bare JSON, and a link that has run out is the most
+ordinary failure here, on a patient's phone. Expiry and the single-use nonce
+are checked in the handlers, which can answer with a page saying what to do.
+Nothing is read or changed for an expired token.
 
 Every response is a human-readable page: the patient arrives from their phone,
 not from the chart.
@@ -37,7 +42,11 @@ from oura_ring_viewer.services.config import (
 from oura_ring_viewer.services.crypto import TokenCipher
 from oura_ring_viewer.services.oauth import persist_tokens
 from oura_ring_viewer.services.oura_client import OuraAPIError, OuraAuthError
-from oura_ring_viewer.services.storage import get_sync_state, upsert_sync_state
+from oura_ring_viewer.services.storage import (
+    PatientNotFound,
+    get_sync_state,
+    upsert_sync_state,
+)
 
 
 def _now() -> dt.datetime:
@@ -45,24 +54,26 @@ def _now() -> dt.datetime:
 
 
 class OuraOAuthAPI(SimpleAPI):
-    """Patient-facing OAuth bridge. Auth happens per handler via signed tokens."""
+    """Patient-facing OAuth bridge, authenticated by signed tokens."""
 
     def authenticate(self, credentials: Credentials) -> bool:
-        """Always accept; each handler validates its own token."""
-        return True
+        """Accept only a request carrying this plugin's signed token for the route."""
+        problems = config_problems(self.secrets, OAUTH_SECRETS)
+        if problems:
+            log.error(f"oura oauth: plugin settings unusable: {', '.join(problems)}")
+            return False
+        params = self.request.query_params
+        secret = self.secrets[MAGIC_LINK_SECRET]
+        if self.request.path == "/connect":
+            return magic_link.link_is_authentic((params.get("token") or "").strip(), secret)
+        if self.request.path == "/callback":
+            return magic_link.state_is_authentic((params.get("state") or "").strip(), secret)
+        return False
 
     @api.get("/connect")
     def connect(self) -> list[Response | Effect]:
         """Verify the connection link, then send the patient to Oura's consent page."""
         token = (self.request.query_params.get("token") or "").strip()
-        if not token:
-            return [_page_error("This link is incomplete. Please ask your care team for a new one.",
-                                HTTPStatus.BAD_REQUEST)]
-        if config_problems(self.secrets, OAUTH_SECRETS):
-            log.error("oura connect: plugin settings incomplete")
-            return [_page_error("Connecting is not available right now. Please contact your care team.",
-                                HTTPStatus.SERVICE_UNAVAILABLE)]
-
         now = _now()
         secret = self.secrets[MAGIC_LINK_SECRET]
         try:
@@ -94,13 +105,9 @@ class OuraOAuthAPI(SimpleAPI):
 
         code = (params.get("code") or "").strip()
         state = (params.get("state") or "").strip()
-        if not code or not state:
+        if not code:
             return [_page_error("Something went wrong connecting to Oura. Please ask your care "
                                 "team for a new link.", HTTPStatus.BAD_REQUEST)]
-        if config_problems(self.secrets, OAUTH_SECRETS):
-            log.error("oura callback: plugin settings incomplete")
-            return [_page_error("Connecting is not available right now. Please contact your care team.",
-                                HTTPStatus.SERVICE_UNAVAILABLE)]
 
         now = _now()
         try:
@@ -123,16 +130,21 @@ class OuraOAuthAPI(SimpleAPI):
             return [_page_error("Oura did not complete the connection. Please try the link again, "
                                 "or ask your care team for a new one.", HTTPStatus.BAD_GATEWAY)]
 
-        persist_tokens(claims.patient_id, TokenCipher(), tokens, is_initial_connection=True, now=now)
-        # Burn the nonce so this link and state cannot be replayed, and clear
-        # any earlier reconnect-required error so the chart shows "connected".
-        upsert_sync_state(
-            claims.patient_id,
-            last_link_nonce="",
-            link_pending=False,
-            last_error="",
-            last_error_at=None,
-        )
+        try:
+            persist_tokens(claims.patient_id, TokenCipher(), tokens, is_initial_connection=True, now=now)
+            # Burn the nonce so this link and state cannot be replayed, and clear
+            # any earlier reconnect-required error so the chart shows "connected".
+            upsert_sync_state(
+                claims.patient_id,
+                last_link_nonce="",
+                link_pending=False,
+                last_error="",
+                last_error_at=None,
+            )
+        except PatientNotFound:
+            log.warning(f"oura callback for missing patient {claims.patient_id}")
+            return [_page_error("We could not find your health record. Please contact your care team.",
+                                HTTPStatus.NOT_FOUND)]
         return [_page("templates/connected_success.html", {}, HTTPStatus.OK)]
 
 

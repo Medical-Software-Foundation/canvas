@@ -83,8 +83,9 @@ class TestEnvironment:
         assert _client("sandbox")[0].collection_path == "/v2/sandbox/usercollection"
         assert _client("production")[0].collection_path == "/v2/usercollection"
 
-    def test_unknown_environment_fails_safe_to_sandbox(self) -> None:
-        assert _client("prod")[0].collection_path == "/v2/sandbox/usercollection"
+    def test_an_unknown_environment_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            _client("prod")
 
 
 class TestTokenRequests:

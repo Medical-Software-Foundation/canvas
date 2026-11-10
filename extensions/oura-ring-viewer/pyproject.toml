@@ -26,7 +26,11 @@ dev = [
 ]
 
 [tool.coverage.run]
+branch = true
 omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 90
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]

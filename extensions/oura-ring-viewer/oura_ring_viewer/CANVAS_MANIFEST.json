@@ -1,5 +1,5 @@
 {
-    "sdk_version": "0.35.0",
+    "sdk_version": "0.118.0",
     "plugin_version": "0.1.0",
     "name": "oura_ring_viewer",
     "description": "Shows a patient's Oura Ring sleep, readiness, activity and blood oxygen summaries in the patient chart, fetched live from Oura when the chart is opened and never stored. Patients connect with one tap from the patient portal or from a link their care team sends, and can stop sharing from the portal. Presented as patient-generated wellness data, not clinical vitals.",
@@ -81,7 +81,7 @@
         }
     ],
     "custom_data": {
-        "namespace": "canvas__oura_ring_viewer",
+        "namespace": "remington_data__wearables",
         "access": "read_write"
     },
     "tags": {},

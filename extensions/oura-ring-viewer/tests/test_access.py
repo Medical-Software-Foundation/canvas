@@ -191,11 +191,11 @@ class TestGate:
         assert effect.status_code == HTTPStatus.OK
         assert _body(effect)["connection_status"] == "disconnected"
 
-    def test_non_member_is_refused_with_the_rule_named(self) -> None:
+    def test_non_member_gets_a_generic_refusal(self) -> None:
         staff_id, patient_id = _ids()
         effect = _call("chart_data", staff_id, patient_id)[0]
         assert effect.status_code == HTTPStatus.FORBIDDEN
-        assert _body(effect) == {"error": "forbidden", "rule": "care_team"}
+        assert _body(effect) == {"error": "forbidden"}
 
     def test_the_chart_drawer_gets_a_readable_refusal(self) -> None:
         staff_id, patient_id = _ids()
@@ -203,8 +203,9 @@ class TestGate:
         assert isinstance(effect, HTMLResponse)
         assert effect.status_code == HTTPStatus.FORBIDDEN
         page = effect.content.decode()
-        assert "care team" in page and "OURA_ACCESS_RULE" in page
-        assert "PATIENT_ID" not in page, "a refused request must not receive the chart"
+        assert "You do not have access to this patient" in page
+        assert "care team" not in page and "OURA_ACCESS_RULE" not in page
+        assert "data-patient-id" not in page, "a refused request must not receive the chart"
 
     def test_practice_rule_admits_any_active_staff(self) -> None:
         staff_id, patient_id = _ids()
@@ -242,4 +243,4 @@ class TestGate:
                       expires_at=now, scopes="daily", now=now, is_initial_connection=True)
         effect = _call("disconnect", staff_id, patient_id)[0]
         assert effect.status_code == HTTPStatus.FORBIDDEN
-        assert OuraOAuthToken.objects.filter(patient_id=patient_id).exists()
+        assert OuraOAuthToken.objects.filter(patient__id=patient_id).exists()

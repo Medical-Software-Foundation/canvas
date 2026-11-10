@@ -1,7 +1,8 @@
 """Staff-authenticated SimpleAPI for the chart-drawer Application.
 
 Routes:
-  GET  /                       -> HTML shell (inline CSS and JS, no external scripts)
+  GET  /                       -> HTML shell
+  GET  /static/<asset>         -> the shell's own CSS and JS, no patient data
   GET  /data?patient_id=&range -> JSON view-model, fetched live from Oura, never stored
   GET  /status?patient_id=     -> connection status only; never calls Oura
   POST /send-link?patient_id=  -> issue a connection link, optionally via the portal;
@@ -36,12 +37,12 @@ from pydantic import ValidationError
 from oura_ring_viewer.services import magic_link
 from oura_ring_viewer.services.access import (
     ACCESS_RULE,
-    RULE_CARE_TEAM,
     RULES,
     logged_in_staff_id,
     resolve_rule,
     staff_can_view,
 )
+from oura_ring_viewer.services.assets import CHART_ASSETS
 from oura_ring_viewer.services.chart_data import (
     STATUS_CONNECTED,
     build_payload,
@@ -57,8 +58,10 @@ from oura_ring_viewer.services.config import (
     clean_patient_id,
     config_problems,
     connect_url,
+    is_sandbox,
 )
 from oura_ring_viewer.services.crypto import TokenCipher
+from oura_ring_viewer.services.disconnect import stop_sharing
 from oura_ring_viewer.services.fetch import fetch_window
 from oura_ring_viewer.services.links import live_link_nonce
 from oura_ring_viewer.services.oauth import RefreshFailed, TokensNotFound
@@ -68,11 +71,8 @@ from oura_ring_viewer.services.settings import (
     PLUGIN_API_PATH,
     parse_range_days,
 )
-from oura_ring_viewer.services.storage import (
-    delete_all_for_patient,
-    get_sync_state,
-    upsert_sync_state,
-)
+from oura_ring_viewer.services.storage import get_sync_state, upsert_sync_state
+from oura_ring_viewer.services.time_utils import local_today
 
 
 def _now() -> dt.datetime:
@@ -113,14 +113,8 @@ def _gate(request: Any, secrets: dict[str, str] | None, *, html: bool = False) -
 
     if not staff_can_view(staff_id, patient_id, rule):
         log.info(f"oura access denied: staff {staff_id}, patient {patient_id}, rule {rule}")
-        message = (
-            "Oura data for this patient is limited to the patient's care team, and you "
-            "are not on it. A Canvas administrator can change this with the "
-            f"{ACCESS_RULE} setting."
-            if rule == RULE_CARE_TEAM
-            else "Your staff account does not have access to this patient's Oura data."
-        )
-        return _deny("forbidden", HTTPStatus.FORBIDDEN, html, message, rule=rule)
+        return _deny("forbidden", HTTPStatus.FORBIDDEN, html,
+                     "You do not have access to this patient's Oura data.")
 
     return _Grant(patient_id=patient_id, staff_id=staff_id)
 
@@ -140,6 +134,20 @@ class OuraChartAPI(StaffSessionAuthMixin, SimpleAPI):
         )
         return [HTMLResponse(content=html or "", status_code=HTTPStatus.OK)]
 
+    @api.get("/static/<asset>")
+    def static_asset(self) -> list[Response | Effect]:
+        """Serve the shell's own CSS or JS. Carries no patient data."""
+        name = self.request.path_params["asset"]
+        content_type = CHART_ASSETS.get(name)
+        if content_type is None:
+            return [Response(status_code=HTTPStatus.NOT_FOUND)]
+        return [Response(
+            (render_to_string(f"static/{name}") or "").encode(),
+            status_code=HTTPStatus.OK,
+            headers={"Cache-Control": "no-cache"},
+            content_type=content_type,
+        )]
+
     @api.get("/data")
     def chart_data(self) -> list[Response | Effect]:
         """Fetch the requested window live from Oura and return the view-model.
@@ -154,17 +162,19 @@ class OuraChartAPI(StaffSessionAuthMixin, SimpleAPI):
         patient_id = grant.patient_id
         range_days = parse_range_days(self.request.query_params.get("range"))
         now = _now()
+        today = local_today(now, self.environment)
+        sandbox = is_sandbox(self.secrets)
         status, state = connection_status(patient_id, now)
         if status != STATUS_CONNECTED:
             return [JSONResponse(content=build_payload(
-                range_days=range_days, today=now.date(), status=status, state=state,
+                range_days=range_days, today=today, status=status, state=state, sandbox=sandbox,
             ))]
 
         problems = config_problems(self.secrets, FETCH_SECRETS)
         if problems:
             return [_misconfigured(problems)]
 
-        start_day, end_day = window(range_days, now.date())
+        start_day, end_day = window(range_days, today)
         result = None
         fetch_error = ""
         try:
@@ -191,12 +201,13 @@ class OuraChartAPI(StaffSessionAuthMixin, SimpleAPI):
         status, state = connection_status(patient_id, now)
         return [JSONResponse(content=build_payload(
             range_days=range_days,
-            today=now.date(),
+            today=today,
             status=status,
             state=state,
             rows=result.rows if result else (),
             forbidden_endpoints=result.forbidden_endpoints if result else (),
             fetch_error=fetch_error,
+            sandbox=sandbox,
         ))]
 
     @api.get("/status")
@@ -273,12 +284,12 @@ class OuraChartAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/disconnect")
     def disconnect(self) -> list[Response | Effect]:
-        """Remove the patient's tokens and connection status."""
+        """End access at Oura and remove the patient's tokens and status."""
         grant = _gate(self.request, self.secrets)
         if isinstance(grant, Response):
             return [grant]
-        delete_all_for_patient(grant.patient_id)
-        return [JSONResponse(content={"disconnected": True})]
+        revoked = stop_sharing(grant.patient_id, self.secrets, _now())
+        return [JSONResponse(content={"disconnected": True, "revoked_at_oura": revoked})]
 
 
 def _channels(raw: str | None) -> set[str]:
@@ -328,20 +339,17 @@ def _has_messageable_channel(patient_id: str) -> bool:
             state=ContactPointState.ACTIVE.value,
         ).exists()
     )
-def _deny(
-    code: str, status: HTTPStatus, html: bool, message: str, *, rule: str | None = None
-) -> Response:
+
+
+def _deny(code: str, status: HTTPStatus, html: bool, message: str) -> Response:
     """A refusal: a readable page for the chart drawer, JSON for the API routes."""
     if html:
         return _staff_page(message, status)
-    content: dict[str, str] = {"error": code}
-    if rule is not None:
-        content["rule"] = rule
-    return JSONResponse(content=content, status_code=status)
+    return JSONResponse(content={"error": code}, status_code=status)
 
 
 def _staff_page(message: str, status: HTTPStatus) -> HTMLResponse:
-    html = render_to_string("templates/staff_message.html", context={"message": message})
+    html = render_to_string("templates/staff_message.html", context={"message": message, "api_path": PLUGIN_API_PATH})
     return HTMLResponse(content=html or "", status_code=status)
 
 

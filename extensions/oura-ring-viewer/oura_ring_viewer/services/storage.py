@@ -11,6 +11,18 @@ import datetime as dt
 from typing import Any
 
 from oura_ring_viewer.models import OuraOAuthToken, OuraSyncState
+from oura_ring_viewer.models.proxy import PatientProxy
+
+
+class PatientNotFound(RuntimeError):
+    """The Canvas patient no longer exists, so no row can reference it."""
+
+
+def _patient(patient_id: str) -> PatientProxy:
+    patient = PatientProxy.objects.filter(id=patient_id).first()
+    if patient is None:
+        raise PatientNotFound(patient_id)
+    return patient
 
 
 def upsert_tokens(
@@ -34,12 +46,12 @@ def upsert_tokens(
         defaults["scopes"] = scopes
     if is_initial_connection:
         defaults["connected_at"] = now
-    OuraOAuthToken.objects.update_or_create(patient_id=patient_id, defaults=defaults)
+    OuraOAuthToken.objects.update_or_create(patient=_patient(patient_id), defaults=defaults)
 
 
 def get_tokens(patient_id: str) -> OuraOAuthToken | None:
     """Return the raw stored token row for the patient, or None."""
-    return OuraOAuthToken.objects.filter(patient_id=patient_id).first()
+    return OuraOAuthToken.objects.filter(patient__id=patient_id).first()
 
 
 def delete_all_for_patient(patient_id: str) -> None:
@@ -48,16 +60,16 @@ def delete_all_for_patient(patient_id: str) -> None:
     Tokens are deleted first, so a failure partway through still leaves the
     patient effectively disconnected: with no tokens, nothing can be fetched.
     """
-    OuraOAuthToken.objects.filter(patient_id=patient_id).delete()
-    OuraSyncState.objects.filter(patient_id=patient_id).delete()
+    OuraOAuthToken.objects.filter(patient__id=patient_id).delete()
+    OuraSyncState.objects.filter(patient__id=patient_id).delete()
 
 
 def upsert_sync_state(patient_id: str, **fields: Any) -> OuraSyncState:
     """Update or create the status row, writing only the supplied fields."""
-    state, _ = OuraSyncState.objects.update_or_create(patient_id=patient_id, defaults=fields)
+    state, _ = OuraSyncState.objects.update_or_create(patient=_patient(patient_id), defaults=fields)
     return state
 
 
 def get_sync_state(patient_id: str) -> OuraSyncState | None:
     """Return the status row, or None if the patient never connected."""
-    return OuraSyncState.objects.filter(patient_id=patient_id).first()
+    return OuraSyncState.objects.filter(patient__id=patient_id).first()

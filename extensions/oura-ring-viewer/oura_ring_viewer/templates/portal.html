@@ -4,47 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oura Ring</title>
-<style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         background: #f5f6f8; color: #1d2330; }
-  main { max-width: 520px; margin: 0 auto; padding: 32px 16px; }
-  .card { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-  h1 { font-size: 22px; margin: 0 0 6px; }
-  .pill { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
-          background: #eef0f4; color: #4a5263; margin-bottom: 16px; }
-  .pill.connected { background: #e6f4ea; color: #1e7b3a; }
-  .pill.reconnect { background: #fff4e0; color: #8a5300; }
-  p { margin: 0 0 12px; color: #3b4253; }
-  ul { margin: 0 0 16px; padding-left: 20px; color: #3b4253; }
-  li { margin-bottom: 4px; }
-  .muted { font-size: 14px; color: #6b7385; }
-  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 8px; }
-  .button { font: inherit; font-weight: 600; padding: 11px 18px; border-radius: 10px; border: 1px solid #c9ced8;
-            background: #fff; color: #1d2330; cursor: pointer; text-decoration: none; display: inline-block; }
-  .button.primary { background: #2f5bd3; border-color: #2f5bd3; color: #fff; }
-  .button.danger { color: #b3261e; border-color: #e3b4b0; }
-  .button:disabled { opacity: .55; cursor: default; }
-  .notice { padding: 10px 12px; border-radius: 8px; margin: 0 0 16px; background: #f3f5f9; color: #3b4253; font-size: 15px; }
-  .notice.error { background: #fdecea; color: #8c1d18; }
-  [hidden] { display: none !important; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #14171d; color: #e8eaf0; }
-    .card { background: #1d2129; box-shadow: none; }
-    p, ul { color: #c4c9d4; } .muted { color: #8d94a5; }
-    .button { background: #262b35; color: #e8eaf0; border-color: #3a4150; }
-    .button.primary { background: #3d6ae0; border-color: #3d6ae0; color: #fff; }
-    .button.danger { color: #ff8a80; border-color: #5c2a27; }
-    .pill { background: #2a2f3a; color: #c4c9d4; }
-    .pill.connected { background: #183524; color: #6fd08f; }
-    .pill.reconnect { background: #3a2c12; color: #f2c46d; }
-    .notice { background: #262b35; color: #c4c9d4; }
-    .notice.error { background: #3a1d1b; color: #ffb4ab; }
-  }
-</style>
+<link rel="stylesheet" href="{{ api_path }}/static/shared.css">
+<link rel="stylesheet" href="{{ api_path }}/static/portal.css">
 </head>
-<body>
+<body data-api="{{ api_path }}" data-available="{{ available|yesno:'true,false' }}">
 <main>
   <div class="card">
     <h1>Oura Ring</h1>
@@ -86,93 +49,6 @@
     </section>
   </div>
 </main>
-<script>
-(function () {
-  "use strict";
-  var API = "{{ api_path }}";
-  var AVAILABLE = {{ available|yesno:"true,false" }};
-  var POLL_MS = 3000, POLL_FOR_MS = 10 * 60 * 1000;
-  var state = { status: null, waitingUntil: 0, timer: null };
-
-  function $(id) { return document.getElementById(id); }
-  function notice(text, kind) {
-    var n = $("notice");
-    if (!text) { n.hidden = true; return; }
-    n.textContent = text;
-    n.className = "notice" + (kind ? " " + kind : "");
-    n.hidden = false;
-  }
-  function showConfirm(on) {
-    $("stop").hidden = on;
-    $("stop-confirm").hidden = !on;
-    $("stop-cancel").hidden = !on;
-  }
-
-  function render(body) {
-    var previous = state.status;
-    state.status = body.status;
-    var pill = $("pill");
-    var connected = body.status === "connected";
-    pill.textContent = connected ? "Connected" : body.status === "reconnect" ? "Reconnect needed" : "Not connected";
-    pill.className = "pill " + (connected ? "connected" : body.status === "reconnect" ? "reconnect" : "");
-    $("connected").hidden = !connected;
-    $("not-connected").hidden = connected || !AVAILABLE;
-    $("unavailable").hidden = connected || AVAILABLE;
-    $("connect").textContent = body.status === "reconnect" ? "Reconnect Oura Ring" : "Connect Oura Ring";
-    $("lead").textContent = connected
-      ? "You are sharing your Oura Ring summaries with your care team. They can see:"
-      : "Share your Oura Ring summaries with your care team. They will see:";
-    if (connected && body.connected_at) {
-      $("since").textContent = "Sharing since " + new Date(body.connected_at).toLocaleDateString() + ".";
-    }
-    if (connected && previous && previous !== "connected") {
-      state.waitingUntil = 0;
-      notice("You're connected. Your care team can now see your Oura summaries.");
-    } else if (body.status === "reconnect" && !previous) {
-      notice("Your Oura connection has expired. Reconnect to keep sharing.");
-    }
-    schedule();
-  }
-
-  function schedule() {
-    clearTimeout(state.timer);
-    if (state.status === "connected" || Date.now() > state.waitingUntil) return;
-    state.timer = setTimeout(refresh, POLL_MS);
-  }
-
-  function refresh() {
-    return fetch(API + "/status", { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
-      .then(render)
-      .catch(function () { notice("Could not reach your health record. Check your connection.", "error"); });
-  }
-
-  $("connect").addEventListener("click", function () {
-    state.waitingUntil = Date.now() + POLL_FOR_MS;
-    notice("Finish in the Oura tab. This page will update when you are done.");
-    schedule();
-  });
-  $("stop").addEventListener("click", function () { showConfirm(true); });
-  $("stop-cancel").addEventListener("click", function () { showConfirm(false); });
-  $("stop-confirm").addEventListener("click", function () {
-    $("stop-confirm").disabled = true;
-    fetch(API + "/disconnect", { method: "POST", credentials: "same-origin" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("failed");
-        showConfirm(false);
-        notice("Sharing stopped. Your care team can no longer see your Oura data.");
-        return refresh();
-      })
-      .catch(function () { notice("Could not stop sharing. Please try again.", "error"); })
-      .then(function () { $("stop-confirm").disabled = false; });
-  });
-  // Coming back from the Oura tab is the moment the answer is most likely new.
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && state.status !== "connected") refresh();
-  });
-
-  refresh();
-})();
-</script>
+<script src="{{ api_path }}/static/portal.js"></script>
 </body>
 </html>

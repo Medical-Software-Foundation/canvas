@@ -9,9 +9,12 @@ from urllib.parse import quote
 
 from oura_ring_viewer.services.oura_client import OuraClient
 from oura_ring_viewer.services.settings import (
+    ENV_SANDBOX,
+    ENVIRONMENTS,
     MAX_PATIENT_ID_LENGTH,
     MIN_SECRET_LENGTH,
     PLUGIN_API_PATH,
+    resolve_environment,
 )
 
 CLIENT_ID = "OURA_CLIENT_ID"
@@ -56,7 +59,15 @@ def config_problems(secrets: dict[str, str] | None, required: tuple[str, ...]) -
     redirect = values.get(REDIRECT_URI) if REDIRECT_URI in required else None
     if redirect and _origin(redirect) is None:
         problems.append(f"{REDIRECT_URI} (must be an absolute https URL)")
+    environment = values.get(ENVIRONMENT) if ENVIRONMENT in required else None
+    if environment and resolve_environment(environment) is None:
+        problems.append(f"{ENVIRONMENT} (must be one of: {', '.join(ENVIRONMENTS)})")
     return problems
+
+
+def is_sandbox(secrets: dict[str, str] | None) -> bool:
+    """Whether this install reads Oura's sample data rather than real data."""
+    return resolve_environment((secrets or {}).get(ENVIRONMENT)) == ENV_SANDBOX
 
 
 def build_client(secrets: dict[str, str]) -> OuraClient:
