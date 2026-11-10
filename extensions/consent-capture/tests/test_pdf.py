@@ -505,6 +505,7 @@ class TestOutcomeRow:
         )
         assert "CONSENTING PARTY" not in texts and "DECLINED BY" not in texts
         assert "Ineligible" in texts
+        assert "REASON" not in texts  # "Outcome: Ineligible" already says it
 
     def test_no_reason_row_without_a_reason(self):
         texts = _texts(_build_ops("T", "P", "", "S", "2026-10-22", [], outcome="Declined"))

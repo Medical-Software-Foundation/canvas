@@ -224,7 +224,7 @@ def _build_pages(
 
     ``outcome`` adds an "Outcome" row ("Declined" or "Ineligible") and ``reason``
     a "Reason" row after it. A declined record labels the party "Declined by"; an
-    Ineligible one has no party row. ``signature`` adds a
+    Ineligible one has no party row and no Reason row, since the outcome says it. ``signature`` adds a
     Signature section for a consent signed on the device: a dict with ``width`` /
     ``height`` (the JPEG's pixel size), ``heading`` ("Signature of patient"),
     ``signer``, optional ``entered_label`` / ``entered`` (a printed or typed name
@@ -268,7 +268,7 @@ def _build_pages(
         rows.append(("Consenting Party", consented_by or "Patient"))
     if outcome:
         rows.append(("Outcome", outcome))
-    if reason:
+    if reason and outcome != "Ineligible":  # the outcome already says it
         rows.append(("Reason", reason))
     if method:
         rows.append(("Method obtained", method))

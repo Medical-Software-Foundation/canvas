@@ -2593,7 +2593,7 @@
       VIEWER_RETURN = from || 'hub';
       $('viewerPrint').classList.add('hidden');
       $('viewerTitle').textContent = r.display;
-      $('viewerSub').textContent = (r.status === 'declined' ? 'Declined consent' : 'Signed document') + (r.effective_date ? ' · Recorded ' + fmtDate(r.effective_date) : '');
+      $('viewerSub').textContent = (r.status === 'declined' ? (r.ineligible ? 'Ineligible' : 'Declined consent') : 'Signed document') + (r.effective_date ? ' · Recorded ' + fmtDate(r.effective_date) : '');
       $('viewerMsg').textContent = 'Loading document…';
       clearViewer(); show('viewer');
       // An empty id (a just-recorded consent) falls back server-side to the most
