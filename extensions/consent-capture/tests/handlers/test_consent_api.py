@@ -1986,6 +1986,8 @@ class TestDecline:
         assert mock_pdf.mock_calls[0].kwargs["method"] == ""
         assert result[0].content["preview"]["method"] == ""
         assert stored["pages"] == 1
+        # The result screen shows the record's page count, as for a recording.
+        assert result[0].content["preview"]["pages"] == 1
 
     def test_decline_needs_no_method_or_capacity(self):
         # The single-consent Decline step asks for neither.

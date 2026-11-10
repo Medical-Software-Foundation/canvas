@@ -885,6 +885,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             outcome=outcome,
             reason=reason["display"] if reason else "",
         )
+        pages = pdf_page_count(base64.b64decode(pdf_b64))
         record = RecordPatientConsent(
             patient_id=patient_id,
             consent=ConsentCodingReference(
@@ -919,7 +920,7 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
             method="",
             consented_by=consented_by,
             capacity_statement=capacity_statement,
-            pages=pdf_page_count(base64.b64decode(pdf_b64)),
+            pages=pages,
             # A decline replaces any same-day recording of this consent, so it
             # clears the signature detail rather than leaving it on a declined row.
             extra={
@@ -954,6 +955,8 @@ class ConsentApi(StaffSessionAuthMixin, SimpleAPI):
                             definition.system, definition.code, today
                         ),
                         "declined": True,
+                        "pages": pages,
+                        "pdf": True,
                         "reason": reason["display"] if reason else "",
                         "ineligible": ineligible,
                     },
