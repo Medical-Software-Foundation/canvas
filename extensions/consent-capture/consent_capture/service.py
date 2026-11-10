@@ -653,9 +653,12 @@ def rejection_codings():
         .values_list("system", "code", "display")
         .order_by("display")
     )
+    # A coding with neither a code nor a name can't be referenced when recording,
+    # so it isn't offered.
     return [
-        {"system": system or "", "code": code or "", "display": display or code or system or ""}
+        {"system": system or "", "code": code or "", "display": display or code}
         for system, code, display in rows
+        if code or display
     ]
 
 

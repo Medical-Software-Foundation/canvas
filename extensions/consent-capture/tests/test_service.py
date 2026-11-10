@@ -824,14 +824,15 @@ class TestDeclineOptions:
     def test_rejection_codings_reads_displayed_codings(self):
         mock = MagicMock()
         mock.objects.filter.return_value.values_list.return_value.order_by.return_value = [
-            ("INTERNAL", "refused", "Refused"), ("Sys", "", None),
+            ("INTERNAL", "refused", "Refused"), ("Sys", "", None), ("Sys", "", "Unable to consent"),
         ]
         with patch("consent_capture.service.PatientConsentRejectionCoding", mock):
             out = service.rejection_codings()
         assert mock.objects.filter.mock_calls[0] == call(user_selected=True)
+        # A coding with neither a code nor a name can't be referenced, so it's left out.
         assert out == [
             {"system": "INTERNAL", "code": "refused", "display": "Refused"},
-            {"system": "Sys", "code": "", "display": "Sys"},
+            {"system": "Sys", "code": "", "display": "Unable to consent"},
         ]
 
     def test_defaults_leave_out_the_portal_coding(self):

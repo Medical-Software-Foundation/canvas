@@ -1194,7 +1194,7 @@
         w.appendChild(radios);
         var rn = document.createElement('input'); rn.type = 'text'; rn.className = 'txt'; rn.placeholder = "Representative's full name"; rn.value = st.repName;
         rn.addEventListener('input', function () { st.repName = rn.value; opts.onChange(); });
-        var rr = document.createElement('input'); rr.type = 'text'; rr.className = 'txt'; rr.placeholder = 'Relationship to patient (e.g. parent, healthcare proxy)'; rr.value = st.repRel;
+        var rr = document.createElement('input'); rr.type = 'text'; rr.className = 'txt'; rr.placeholder = 'Relationship to patient'; rr.value = st.repRel;
         rr.addEventListener('input', function () { st.repRel = rr.value; opts.onChange(); });
         rep.appendChild(rn); rep.appendChild(rr); w.appendChild(rep); host.appendChild(w);
       }
@@ -1314,7 +1314,8 @@
       renderStep();
     });
     $('declBtn').addEventListener('click', function () {
-      W.decline = { outcome: 'declined', reason: DECLINE.reasons.length ? reasonKey(DECLINE.reasons[0]) : '',
+      // No reason is preselected: staff choose one.
+      W.decline = { outcome: 'declined', reason: '',
                     who: 'patient', repName: '', repRel: '', date: localDateISO() };
       W.steps = ['review', 'outcome']; W.idx = 1; renderStep();
     });
@@ -1356,14 +1357,14 @@
       if (D.outcome === 'declined') {
         if (DECLINE.reasons.length) {
           var rf = el('div', 'field'); rf.appendChild(el('span', 'lab', 'Reason'));
-          radioGroup(rf, DECLINE.reasons.map(function (r) { return [reasonKey(r), r.display]; }), D.reason, function (v) { D.reason = v; });
+          radioGroup(rf, DECLINE.reasons.map(function (r) { return [reasonKey(r), r.display]; }), D.reason, function (v) { D.reason = v; validateOutcome(); });
           card.appendChild(rf);
         }
         if (c.obtained_by_enabled) {
           var wf = el('div', 'field'); wf.appendChild(el('span', 'lab', 'Who declined?'));
           var rep = el('div', 'rep' + (D.who === 'representative' ? ' show' : ''));
           var rn = document.createElement('input'); rn.type = 'text'; rn.className = 'txt'; rn.placeholder = "Representative's full name"; rn.value = D.repName;
-          var rr = document.createElement('input'); rr.type = 'text'; rr.className = 'txt'; rr.placeholder = 'Relationship to patient (e.g. parent, healthcare proxy)'; rr.value = D.repRel;
+          var rr = document.createElement('input'); rr.type = 'text'; rr.className = 'txt'; rr.placeholder = 'Relationship to patient'; rr.value = D.repRel;
           radioGroup(wf, [['patient', 'Patient'], ['representative', 'Representative']], D.who, function (v) {
             D.who = v; rep.classList.toggle('show', v === 'representative'); validateOutcome(); if (v === 'representative') rn.focus();
           });
@@ -1386,7 +1387,9 @@
     }
     function validateOutcome() {
       var D = W.decline;
-      $('nextBtn').disabled = D.outcome === 'declined' && D.who === 'representative' && !(D.repName.trim() && D.repRel.trim());
+      var needsReason = D.outcome === 'declined' && DECLINE.reasons.length && !reasonByKey(D.reason);
+      var needsRep = D.outcome === 'declined' && D.who === 'representative' && !(D.repName.trim() && D.repRel.trim());
+      $('nextBtn').disabled = !!(needsReason || needsRep);
     }
     function postDecline() {
       var c = W.consent, D = W.decline;
@@ -2248,7 +2251,7 @@
         form.appendChild(el('label', 'lab', 'Representative’s full name'));
         var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'txt'; form.appendChild(nm);
         form.appendChild(el('label', 'lab', 'Relationship to patient'));
-        var rel = document.createElement('input'); rel.type = 'text'; rel.className = 'txt'; rel.placeholder = 'Relationship to patient (e.g. parent, healthcare proxy)'; form.appendChild(rel);
+        var rel = document.createElement('input'); rel.type = 'text'; rel.className = 'txt'; rel.placeholder = 'Relationship to patient'; form.appendChild(rel);
         form.appendChild(el('p', 'capq', capacityText('representative')));
         var radios = el('div', 'radios'), rname = 'mmcap' + gi;
         [['yes', 'Yes'], ['no', 'No']].forEach(function (o) {
@@ -2345,9 +2348,8 @@
           var opts = DECLINE.reasons.slice();
           if (ineligibleFor(it.c)) opts.push(DECLINE.ineligible);
           if (opts.length) {
-            if (!reasonByKey(it.reason || '')) it.reason = reasonKey(opts[0]);
             var rbox = el('div', 'sreason'); rbox.appendChild(el('b', null, 'Reason'));
-            radioGroup(rbox, opts.map(function (r) { return [reasonKey(r), r.display]; }), it.reason, function (v) { it.reason = v; });
+            radioGroup(rbox, opts.map(function (r) { return [reasonKey(r), r.display]; }), it.reason || '', function (v) { it.reason = v; renderStatus(); });
             row.appendChild(rbox);
           }
         }
@@ -2357,8 +2359,11 @@
       var open = S.items.filter(isOpen).length;
       var rec = $('bRecord');
       rec.textContent = S.single ? 'Record Consent' : 'Record Consents (' + finished + ')';
-      rec.disabled = finished === 0 || mm > 0;
+      // A decline needs a reason when the practice has reasons to choose from.
+      var noReason = DECLINE.reasons.length ? S.items.filter(function (it) { return it.status === 'declined' && !it.recorded && !reasonByKey(it.reason || ''); }).length : 0;
+      rec.disabled = finished === 0 || mm > 0 || noReason > 0;
       if (mm) setMsgIn('bStatusMsg', 'Choose an option for the names that don’t match before recording.', 'warn');
+      else if (noReason) setMsgIn('bStatusMsg', 'Select a reason for each declined consent.', 'warn');
       else if (open) setMsgIn('bStatusMsg', (open === 1 ? '1 consent is' : open + ' consents are') + ' not signed and will stay Needed.');
       else setMsgIn('bStatusMsg', '');
     }
