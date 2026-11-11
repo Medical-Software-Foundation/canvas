@@ -60,6 +60,9 @@ _BOOKED_STATUSES = ["unconfirmed", "attempted", "confirmed"]
 # can be answering. See _appointment_sms_sent_recently.
 _REPLYABLE_CAMPAIGNS = ["reminder", "telehealth", "confirmation"]
 
+# Most recent sent-SMS rows read when several charts share the sending number.
+_SHARED_NUMBER_ROW_LIMIT = 50
+
 # Longest stretch of the patient's reply quoted in a follow-up task title.
 _TASK_QUOTE_LIMIT = 120
 
@@ -424,14 +427,16 @@ class TwilioInboundAPI(SimpleAPI):
 
         The Python pass stays: it confirms the exact normalized match, so a
         suffix collision between two different numbers cannot resolve wrongly.
+        When more than one chart matches exactly, ``_pick_shared_number_patient``
+        decides which one the reply belongs to.
         """
         digits = "".join(c for c in (from_number or "") if c.isdigit())
         if len(digits) < 10:
             return None
         suffix = digits[-10:]
         # Deliberately uncapped. After a 10-digit suffix match, more than one
-        # hit means genuinely duplicated patient records — a data-quality
-        # problem the caller should see rather than have silently truncated.
+        # hit means charts that genuinely share the number (family members, or
+        # duplicated records), and every one of them must be weighed.
         candidates = (
             Patient.objects.filter(
                 telecom__system="phone", telecom__value__endswith=suffix
@@ -439,14 +444,89 @@ class TwilioInboundAPI(SimpleAPI):
             .prefetch_related("telecom")
             .distinct()
         )
-        for patient in candidates:
-            for contact in patient.telecom.all():
-                if (
-                    contact.system == "phone"
-                    and _normalize_phone(contact.value) == from_number
-                ):
-                    return patient
-        return None
+        matches = [
+            patient
+            for patient in candidates
+            if any(
+                contact.system == "phone"
+                and _normalize_phone(contact.value) == from_number
+                for contact in patient.telecom.all()
+            )
+        ]
+        if len(matches) <= 1:
+            return matches[0] if matches else None
+        return self._pick_shared_number_patient(matches, from_number)
+
+    def _pick_shared_number_patient(
+        self, matches: list[Patient], from_number: str
+    ) -> Patient:
+        """Choose among several charts that carry the same phone number.
+
+        Family members often share one number, and the reply belongs to the
+        chart we texted, not whichever chart the lookup happened to return
+        first. Using this plugin's own sent-SMS rows to that number:
+
+        1. If exactly one chart has an upcoming booked appointment that a
+           reminder, telehealth or booking SMS was about within the confirm
+           window, that chart — it is the one with something to reply to.
+        2. Otherwise the chart we most recently texted at this number.
+        3. With no sent rows at all, the first match, as before.
+
+        Only reached when more than one chart matches, so the single-chart path
+        pays no extra query.
+        """
+        by_dbid = {patient.dbid: patient for patient in matches}
+        # Newest first, capped: only the latest sends to this number matter.
+        sent = list(
+            NotificationDelivery.objects.filter(
+                patient_id__in=list(by_dbid),
+                recipient=from_number,
+                channel="sms",
+                status="accepted",
+            )
+            .order_by("-created_at")
+            .values_list("patient_id", "appointment_id", "campaign_type", "created_at")[
+                :_SHARED_NUMBER_ROW_LIMIT
+            ]
+        )
+        if not sent:
+            log.warning(
+                f"[inbound] {len(matches)} charts share the sending number and "
+                f"none was texted by this plugin; using patient {matches[0].id}"
+            )
+            return matches[0]
+
+        window_days = load_config().confirm_reply_window_days
+        cutoff = datetime.now(UTC) - timedelta(days=window_days)
+        reminded = {
+            str(appointment_id): patient_dbid
+            for patient_dbid, appointment_id, campaign, created_at in sent
+            if appointment_id
+            and campaign in _REPLYABLE_CAMPAIGNS
+            and created_at >= cutoff
+        }
+        if reminded:
+            upcoming = AppointmentModel.objects.filter(
+                id__in=list(reminded),
+                start_time__gte=datetime.now(timezone.utc),
+                status__in=_BOOKED_STATUSES,
+            ).values_list("id", flat=True)
+            with_upcoming = {reminded[str(appointment_id)] for appointment_id in upcoming}
+            if len(with_upcoming) == 1:
+                chosen = by_dbid[with_upcoming.pop()]
+                log.info(
+                    f"[inbound] {len(matches)} charts share the sending number; "
+                    f"using patient {chosen.id}, the only one with a reminded "
+                    "upcoming appointment"
+                )
+                return chosen
+
+        chosen = by_dbid[sent[0][0]]
+        log.info(
+            f"[inbound] {len(matches)} charts share the sending number; "
+            f"using patient {chosen.id}, the one most recently texted"
+        )
+        return chosen
 
     def _nearest_upcoming_appointment(self, patient: Patient) -> AppointmentModel | None:
         """Return the patient's soonest upcoming booked appointment, or None."""

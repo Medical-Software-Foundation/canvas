@@ -147,6 +147,10 @@ A confirm reply (`Y`, `YES`, `1`, `C`, ...) confirms the patient's nearest upcom
 
 This matters when the inbound number also carries other traffic: a `YES` to a portal invite or a staff text used to confirm whatever appointment came next. The default of 4 days covers the default 3-day-out reminder, which goes out at the day-out send time, so a reply just before an appointment later that day lands a little over 3 days after it. Before v0.21.0 a confirm with no upcoming appointment was logged as `confirmed_no_appointment`; it is now `unrecognized`.
 
+### Shared phone numbers
+
+When more than one chart carries the number a reply came from (family members often share one), the reply goes to the chart the plugin texted at that number. If exactly one of those charts has an upcoming booked appointment that a reminder, telehealth-join or booking SMS was about within the confirm window, it goes there; otherwise to the chart most recently texted at that number. With no sent SMS to that number on any of the charts, it goes to the first chart found, as before. A number on only one chart is unaffected. Before v0.21.1 a shared number always went to the first chart found.
+
 ## Testing mode
 
 A fail-closed safe-launch gate, set under **Settings → Testing mode** in the admin app. The card starts collapsed; when the gate is on, the header carries an **ON** badge so a closed gate is visible without opening it. While it is on, a message sends only when **both** the patient and the destination address are allowlisted. One without the other sends nothing, which is deliberate.
