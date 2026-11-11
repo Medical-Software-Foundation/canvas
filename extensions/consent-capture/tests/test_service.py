@@ -435,8 +435,9 @@ class TestConsentRecords:
         # consented_by, capacity_statement, pages[, signed_on_device, signed_with
         # [, reason_display]]).
         rows = [r if len(r) >= 10 else tuple(r) + (False, "") for r in rows]
+        rows = [r if len(r) >= 11 else tuple(r) + ("",) for r in rows]
         mock_ccd.objects.filter.return_value.values_list.return_value = [
-            r if len(r) == 11 else tuple(r) + ("",) for r in rows
+            r if len(r) == 12 else tuple(r) + (None,) for r in rows
         ]
 
     def test_returns_one_entry_per_record_not_deduped(self):
@@ -662,7 +663,7 @@ class TestSignatureDetail:
                 (1, "c", "s", "C", EFF, None, "accepted", None),
             ]
             mock_ccd.objects.filter.return_value.values_list.return_value = [
-                ("s", "c", "2026-01-02", "Sam", "Written", "Patient", "", 1, True, "mouse", ""),
+                ("s", "c", "2026-01-02", "Sam", "Written", "Patient", "", 1, True, "mouse", "", "accepted"),
             ]
             out = consent_records("p1")
             assert out[0]["signature"] == "Signed on this device (mouse or trackpad)"
@@ -938,3 +939,30 @@ class TestPickerItemIneligibleAfterReload:
             out = accepted_status_pairs("p1", [("S", "ccm")])
         assert out[("S", "ccm")]["status"] == "declined"
         assert out[("S", "ccm")]["reason"] == "Ineligible"
+
+
+class TestDetailMatchesTheDecision:
+    """A same-day decision made outside the plugin doesn't borrow the plugin's detail."""
+
+    def _run(self, state, detail_status):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc, patch(f"{MODULE}.ConsentCaptureDetail") as mock_ccd:
+            mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value = [
+                (1, "c", "s", "C", EFF, None, state, "Refused" if state == "rejected" else None),
+            ]
+            mock_ccd.objects.filter.return_value.values_list.return_value = [
+                ("s", "c", "2026-01-02", "Sam", "Verbal", "Patient", "", 1, False, "", "", detail_status),
+            ]
+            return consent_records("p1")[0]
+
+    def test_profile_tab_decline_after_plugin_acceptance(self):
+        rec = self._run("rejected", "accepted")
+        assert rec["status"] == "declined" and rec["reason"] == "Refused"
+        assert rec["method"] == "" and rec["obtained_by"] == "" and rec["consented_by"] == ""
+
+    def test_matching_detail_is_used(self):
+        assert self._run("accepted", "accepted")["method"] == "Verbal"
+        assert self._run("accepted", None)["method"] == "Verbal"  # older rows mean accepted
+        assert self._run("rejected", "declined")["obtained_by"] == "Sam"
+
+    def test_accepted_record_ignores_a_decline_detail(self):
+        assert self._run("accepted", "declined")["method"] == ""

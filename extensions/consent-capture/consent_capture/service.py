@@ -297,6 +297,11 @@ def consent_records(patient_id):
         status = _record_status(state, expired_date, now)
         eff_iso = _iso_date(effective_date)
         detail = details.get((system or "", code or "", eff_iso), {})
+        # Use the plugin's saved detail only when it describes this decision: a
+        # same-day change made elsewhere (a decline on the Profile tab after an
+        # acceptance here) must not show the earlier decision's method or party.
+        if detail and detail.get("declined") != (state in DECLINED_STATES):
+            detail = {}
         out.append(
             {
                 "id": str(record_id),
@@ -342,11 +347,12 @@ def _capture_details(patient_id):
         "signed_on_device",
         "signed_with",
         "reason_display",
+        "status",
     )
     out = {}
     for (
         system, code, eff, obtained_by, method, consented_by, capacity, pages,
-        signed_on_device, signed_with, reason,
+        signed_on_device, signed_with, reason, status,
     ) in rows:
         out[(system or "", code or "", eff or "")] = {
             "obtained_by": obtained_by or "",
@@ -356,6 +362,8 @@ def _capture_details(patient_id):
             "pages": int(pages or 0),
             "signature": signature_label(signed_on_device, signed_with),
             "reason": reason or "",
+            # Rows written before status existed read as None and mean accepted.
+            "declined": status == "declined",
         }
     return out
 
