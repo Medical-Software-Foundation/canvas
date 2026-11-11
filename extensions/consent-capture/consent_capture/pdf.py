@@ -76,7 +76,7 @@ _FOLD_PAIRS = (
 )
 # Letters that fold to two (Dutch ij, digraphs, capital sharp s).
 _FOLD_MULTI = {"Ĳ": "IJ", "ĳ": "ij", "ƕ": "hv", "Ƣ": "OI", "ƣ": "oi", "Ǆ": "DZ", "ǅ": "Dž", "ǆ": "dz", "Ǉ": "LJ", "ǈ": "Lj", "ǉ": "lj", "Ǌ": "NJ", "ǋ": "Nj", "ǌ": "nj", "Ǳ": "DZ", "ǲ": "Dz", "ǳ": "dz", "Ȣ": "OU", "ȣ": "ou", "ȸ": "db", "ȹ": "qp", "ẞ": "SS", "Ỻ": "LL", "ỻ": "ll"}
-_FOLD_TABLE = {ord(_FOLD_PAIRS[i]): _FOLD_PAIRS[i + 1] for i in range(0, len(_FOLD_PAIRS), 2)}
+_FOLD_TABLE: dict[int, str | None] = {ord(_FOLD_PAIRS[i]): _FOLD_PAIRS[i + 1] for i in range(0, len(_FOLD_PAIRS), 2)}
 _FOLD_TABLE.update({ord(k): v for k, v in _FOLD_MULTI.items()})
 # Combining accents (a letter typed as letter + mark) are dropped, so "José"
 # entered in decomposed form prints like "Jose" instead of "Jose?".
@@ -213,6 +213,7 @@ def _build_pages(
     responses=None,
     outcome="",
     signature=None,
+    reason="",
 ):
     """Build per-page drawing ops for the consent-record form.
 
@@ -221,7 +222,9 @@ def _build_pages(
     Returns a list of pages, each a list of ops. Helvetica throughout (``F1``
     regular, ``F2`` bold); grayscale; thin borders, no shading.
 
-    ``outcome`` adds an "Outcome" row (e.g. "Declined"). ``signature`` adds a
+    ``outcome`` adds an "Outcome" row ("Declined" or "Ineligible") and ``reason``
+    a "Reason" row after it. A declined record labels the party "Declined by"; an
+    Ineligible one has no party row and no Reason row, since the outcome says it. ``signature`` adds a
     Signature section for a consent signed on the device: a dict with ``width`` /
     ``height`` (the JPEG's pixel size), ``heading`` ("Signature of patient"),
     ``signer``, optional ``entered_label`` / ``entered`` (a printed or typed name
@@ -256,10 +259,17 @@ def _build_pages(
     rows = [
         ("Patient", patient_name or "(name unavailable)"),
         ("Date of birth", patient_dob or "-"),
-        ("Consenting Party", consented_by or "Patient"),
     ]
+    if outcome == "Ineligible":
+        pass  # nobody consented or declined; the patient isn't eligible
+    elif outcome:
+        rows.append(("Declined by", consented_by or "Patient"))
+    else:
+        rows.append(("Consenting Party", consented_by or "Patient"))
     if outcome:
         rows.append(("Outcome", outcome))
+    if reason and outcome != "Ineligible":  # the outcome already says it
+        rows.append(("Reason", reason))
     if method:
         rows.append(("Method obtained", method))
     rows += [
@@ -548,6 +558,7 @@ def generate_consent_pdf(
     responses=None,
     outcome="",
     signature=None,
+    reason="",
 ):
     """Return the consent documentation as raw PDF bytes (one or more pages).
 
@@ -567,6 +578,7 @@ def generate_consent_pdf(
         responses,
         outcome,
         signature,
+        reason,
     )
     return _assemble_pdf([_content_stream(page) for page in pages], signature)
 
@@ -600,6 +612,7 @@ def generate_consent_pdf_base64(
     responses=None,
     outcome="",
     signature=None,
+    reason="",
 ):
     """Return the consent documentation PDF as a base64-encoded string."""
     pdf_bytes = generate_consent_pdf(
@@ -616,5 +629,6 @@ def generate_consent_pdf_base64(
         responses,
         outcome,
         signature,
+        reason,
     )
     return base64.b64encode(pdf_bytes).decode("ascii")

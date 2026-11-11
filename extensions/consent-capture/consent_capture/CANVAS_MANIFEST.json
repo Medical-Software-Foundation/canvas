@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.243.0",
-    "plugin_version": "1.39.0",
+    "sdk_version": "0.248.0",
+    "plugin_version": "1.40.0",
     "name": "consent_capture",
     "description": "Multi-consent capture and management. A 'Consents' chart-header button (always shown; red when the patient still has a required consent due, neutral gray once satisfied) opens a picker of all configured consents, and records the selected one via the Canvas FHIR API with a generated documentation PDF. Written consents can be signed on the staff device, one or several at a time. Configure consents (verbiage, questions, capacity statements) at runtime on the Consent Settings page, opened from the app drawer by consent admins or at /plugin-io/api/consent_capture/admin/settings.",
     "url_permissions": [
@@ -13,17 +13,17 @@
                 "description": "'Consents' action button in the patient chart header, always shown for a patient. It turns red only for an active, non-deceased patient with a required consent still due, and is a neutral gray otherwise; it opens the consent picker.",
                 "data_access": {
                     "event": "",
-                    "read": ["Patient", "PatientConsent"],
+                    "read": ["Patient", "PatientConsent", "PatientConsentRejectionCoding"],
                     "write": []
                 }
             },
             {
                 "class": "consent_capture.handlers.consent_api:ConsentApi",
-                "description": "Endpoints that record the selected consent (or a declined one) via the Canvas FHIR API, with the signature when it was signed on the device, and serve the recorded consent's PDF for the completed cards.",
+                "description": "Endpoints that record the selected consent via the Canvas FHIR API, with the signature when it was signed on the device; record a declined or Ineligible consent with its rejection reason via the RecordPatientConsent effect; and serve the recorded consent's PDF for the completed cards.",
                 "data_access": {
                     "event": "",
-                    "read": ["Patient", "PatientConsent", "Staff"],
-                    "write": []
+                    "read": ["Patient", "PatientConsent", "PatientConsentCoding", "PatientConsentRejectionCoding", "Staff"],
+                    "write": ["PatientConsent"]
                 }
             },
             {
@@ -31,7 +31,7 @@
                 "description": "Admin endpoints for the Consent Settings UI: lists the instance's Patient Consent Codings, stores the plugin workflow (verbiage, questions) configured for each and the practice signing settings, and runs the admin-only banner backfill across active patients.",
                 "data_access": {
                     "event": "",
-                    "read": ["PatientConsentCoding", "Patient", "PatientConsent", "BannerAlert"],
+                    "read": ["PatientConsentCoding", "PatientConsentRejectionCoding", "Patient", "PatientConsent", "BannerAlert"],
                     "write": []
                 }
             },

@@ -167,14 +167,42 @@ Needed. With **Allow reusing a signature** on, later consents offer the signer's
 first signature for them to accept. The PDF notes "Signer applied the signature
 from an earlier consent in this session and accepted this consent separately."
 
-### Declined consents
+### Declined and Ineligible consents
 
-**Decline** on **Review consents** records a FHIR `Consent` with `status =
-rejected` and a PDF whose Outcome reads "Declined". A declined consent counts as
-asked and answered: it clears the red button and the banner and shows as
-**Declined** under On File. It stays in the Consents list with a gray
-**Declined** tag, so it can be recorded later if the patient changes their mind.
-A declined consent has no method on its PDF or record, since nothing was signed.
+Staff decline a consent from its **Review** step: **Decline** (or **Decline or
+Ineligible**, on consents that allow Ineligible) sits next to **Continue**. The
+next step asks for:
+
+- **Outcome**: **Declined** or **Ineligible**, when the consent allows Ineligible.
+- **Reason** (Declined): one of the practice's decline reasons (see Practice
+  settings below).
+- **Who declined?** (Declined): the patient, or a representative with their name
+  and relationship, on consents that ask who is giving consent.
+- **Date**.
+
+**Record Decline** / **Record Ineligible** saves a rejected consent with the
+chosen rejection coding as its reason and a PDF whose Outcome reads "Declined" or
+"Ineligible" (with the reason, and "Declined by" for a decline). On **Review
+consents** (several at once), **Decline** on an unsigned consent asks for the
+reason in the same row.
+
+Declines are written with Canvas's `RecordPatientConsent` effect rather than the
+FHIR API, because the FHIR API can't set a rejection reason. The reason lands on
+Canvas's own consent record, the same place a decline recorded on the patient's
+profile tab keeps it, so reports see both.
+
+A declined or Ineligible consent counts as asked and answered: it clears the red
+button and the banner and shows as **Declined** or **Ineligible** under On File,
+with its reason (also for declines recorded on the profile tab). It stays in the
+Consents list with a gray tag, so it can be recorded later if the patient changes
+their mind. It has no method on its PDF or record, since nothing was signed.
+
+> **Upgrade note (1.40.0).** Needs SDK 0.248.0 (the `RecordPatientConsent`
+> effect). To offer **Ineligible**, add a coding named "Ineligible" under **Patient
+> consent rejection codings** in admin settings, then turn on **Allow marking
+> ineligible** on the consents that should offer it. Decline reasons default to
+> every displayed rejection coding except "Rejected via Patient Portal" until the
+> Practice settings tab is saved.
 
 > **Upgrade note (1.38.0): admin access.** `CONSENT_ADMIN_USERS` now matches staff
 > ids only. Names in the list no longer grant access, and the "Canvas Support" /
@@ -250,7 +278,7 @@ never invents one — and configure its workflow:
 | **Position in the modal** | Order in the picker (editable, lower first). |
 | **Content (verbiage)** | The consent language the provider reads. Blank lines start new paragraphs. |
 | **Questions** | Asked and recorded in order (Yes/No, Acknowledge, Text; each required and optionally "must be Yes to record"). |
-| **At capture** | Which methods are offered, **Allow signing on this device** for Written consents (off by default), whether to ask who is giving consent, and a capacity statement (templates use `[Patient name]` / `[Name]`). |
+| **At capture** | Which methods are offered, **Allow signing on this device** for Written consents (off by default), **Allow marking ineligible** (off by default), whether to ask who is giving consent, and a capacity statement (templates use `[Patient name]` / `[Name]`). |
 
 A live document preview shows how the PDF will read as you edit.
 
@@ -262,6 +290,18 @@ to every consent:
 | **Signing several consents** | Sign each consent | Or **Allow reusing a signature** across the consents in one session. |
 | **Accepted signatures** | Finger or stylus, Mouse or trackpad | Add **Typed**, or clear one. At least one stays on. |
 | **Ask for a printed name** | Off | The signer enters their name under a drawn signature. When off, the name from **Who is giving consent?** prints. |
+
+It also holds **Decline reasons**: a checkbox per rejection coding Canvas shows
+(**Patient consent rejection codings** in admin settings, with "Toggle displaying
+rejection reason in the UI" on). Checked codings are the reasons staff can choose
+when declining. Until the tab is saved, every coding except the portal's own
+"Rejected via Patient Portal" (code `REJECT_VIA_PORTAL`) is checked.
+
+**Ineligible** is the coding named "Ineligible" (capitals and spaces ignored). When
+it exists and is checked, it's offered as its own **Ineligible** choice, not in
+the Reason list, on consents with **Allow marking ineligible** turned on (a switch
+under **At capture**, off by default). Without it, the switch is grayed out and
+says what's missing.
 
 > **"Show in the consent modal" gates *recording*, not display.** A consent that's
 > already on file still appears under **On File** even if the modal toggle is off.
@@ -310,7 +350,7 @@ Declared in `CANVAS_MANIFEST.json`:
 - **`consent_api:ConsentApi`** — staff-authenticated capture + document endpoints:
   `POST /consent/collect` (generates/attaches the document, with the signature when
   it was signed on the device, and creates the FHIR `Consent`), `POST
-  /consent/decline` (records a declined consent) and `GET /consent/document`
+  /consent/decline` (records a declined or Ineligible consent with its reason) and `GET /consent/document`
   (serves a recorded consent's PDF).
 - **`consent_api:ConsentAdminApi`** — staff + admin endpoints behind Consent
   Settings: `GET /admin/settings`, `GET /admin/codings`, `/admin/consents` (list /
@@ -358,11 +398,13 @@ The Written-consent capture flow loads client libraries from `cdn.jsdelivr.net`
 
 The plugin reads `Patient` (name, DOB, active/deceased), `PatientConsent` (on-file
 status and history), `Staff` (the collector's name), `PatientConsentCoding` (to list
-the instance's consents), and `BannerAlert` (to reconcile banners). It stores
+the instance's consents), `PatientConsentRejectionCoding` (decline reasons), and
+`BannerAlert` (to reconcile banners). It stores
 workflow overlays in its own `ConsentDefinition` custom-data table, the capture
 detail (including how a device signature was made and the consent text shown) in
 `ConsentCaptureDetail`, and the practice settings in `ConsentPracticeSettings`. It writes the
-`Consent` resource through the Canvas FHIR API, and emits `AddBannerAlert` /
+`Consent` resource through the Canvas FHIR API (a decline through the
+`RecordPatientConsent` effect, with its rejection reason), and emits `AddBannerAlert` /
 `RemoveBannerAlert` effects. It does not read or write anything else.
 
 ---

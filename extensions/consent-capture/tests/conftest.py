@@ -191,6 +191,39 @@ _simple_api_effects.JSONResponse = JSONResponse
 _simple_api_effects.HTMLResponse = HTMLResponse
 _effects.simple_api = _simple_api_effects
 
+# canvas_sdk.effects.patient_consent: records the value objects it was given.
+_patient_consent_effects = _module("canvas_sdk.effects.patient_consent")
+
+
+class _Recorded:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        return "%s(%s)" % (type(self).__name__, self.__dict__)
+
+
+class ConsentCodingReference(_Recorded):
+    pass
+
+
+class ConsentDocument(_Recorded):
+    pass
+
+
+class RecordPatientConsent(_Recorded):
+    def apply(self):
+        return {"effect": "RECORD_PATIENT_CONSENT", "values": self.__dict__}
+
+
+_patient_consent_effects.ConsentCodingReference = ConsentCodingReference
+_patient_consent_effects.ConsentDocument = ConsentDocument
+_patient_consent_effects.RecordPatientConsent = RecordPatientConsent
+_effects.patient_consent = _patient_consent_effects
+
 _handlers = _module("canvas_sdk.handlers")
 _canvas_sdk.handlers = _handlers
 
@@ -316,6 +349,15 @@ class PatientConsentCoding:
     objects = None
 
 
+class PatientConsentRejectionCoding:
+    objects = None
+
+
+class PatientConsentStatus:
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
 class BannerAlert:
     objects = None
 
@@ -324,6 +366,8 @@ _data.Patient = Patient
 _data.PatientConsent = PatientConsent
 _data.Staff = Staff
 _data.PatientConsentCoding = PatientConsentCoding
+_data.PatientConsentRejectionCoding = PatientConsentRejectionCoding
+_data.PatientConsentStatus = PatientConsentStatus
 _data.BannerAlert = BannerAlert
 _v1.data = _data
 
@@ -419,5 +463,22 @@ def _no_saved_practice_settings(monkeypatch):
 
     objects = MagicMock()
     objects.filter.return_value.values.return_value.first.return_value = None
+    objects.filter.return_value.values_list.return_value.first.return_value = None
     monkeypatch.setattr(models.ConsentPracticeSettings, "objects", objects)
+    return objects
+
+
+# --------------------------------------------------------------------------- #
+# 4. No rejection codings by default, so a decline needs no reason. Tests that
+#    need reasons patch ``rejection_codings`` or ``decline_options``.
+# --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def _no_rejection_codings(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from consent_capture import service
+
+    objects = MagicMock()
+    objects.filter.return_value.values_list.return_value.order_by.return_value = []
+    monkeypatch.setattr(service.PatientConsentRejectionCoding, "objects", objects)
     return objects

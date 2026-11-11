@@ -19,6 +19,7 @@ from consent_capture.constants import METHOD_OPTIONS, NO_STATEMENT_NOTE
 from consent_capture.pdf import latin_letters_without_plain_form
 from consent_capture.service import (
     consent_records,
+    decline_options,
     is_consent_admin,
     picker_items,
     practice_settings,
@@ -73,6 +74,10 @@ def build_picker_modal(patient_id, staff_id, secrets):
             "records_json": json.dumps(records),
             "method_options_json": json.dumps(list(METHOD_OPTIONS)),
             "practice_json": json.dumps(practice_settings()),
+            # Reasons for declining, and the Ineligible coding when it's offered.
+            "decline_json": json.dumps(
+                {k: v for k, v in decline_options().items() if k != "codings"}
+            ),
             # Letters the PDF can't print even folded; the signing screen checks names
             # against the same list the server uses.
             "no_fold": latin_letters_without_plain_form(),

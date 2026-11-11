@@ -4,7 +4,7 @@
 // variables it declares:
 //   {{ patient_id|escapejs }}  {{ patient_name|escapejs }}  {{ consents_json|escapejs }}
 //   {{ records_json|escapejs }} {{ method_options_json|escapejs }}  {{ practice_json|escapejs }}
-//   {{ settings_url }}
+//   {{ settings_url }}  {{ decline_json|escapejs }}
 //   {% if is_admin %} ... {% endif %}  (the Settings gear)
 //
 // The JSON shapes mirror service.py: picker_items() -> CONSENTS, consent_records() -> RECORDS.
@@ -41,7 +41,7 @@ const CONSENTS = [
   {
     code: 'TREAT', system: 'INTERNAL', display: 'Treatment Consent',
     paragraphs: PARAGRAPHS, method_enabled: true, obtained_by_enabled: true, capacity_enabled: true,
-    method_options: METHOD_OPTIONS, questions: QUESTIONS, allow_device_signature: true,
+    method_options: METHOD_OPTIONS, questions: QUESTIONS, allow_device_signature: true, allow_ineligible: true,
     required: true, active: true, on_file: false, status: 'needed',
     effective_date: '', expiration_date: '',
   },
@@ -94,6 +94,16 @@ const RECORDS = [
   },
 ];
 
+// DECLINE mirrors decline_options() without "codings": the Reason list and the
+// Ineligible coding.
+const DECLINE = {
+  reasons: [
+    { system: 'INTERNAL', code: 'refused', display: 'Refused' },
+    { system: 'INTERNAL', code: 'unable_to_consent', display: 'Unable to consent' },
+  ],
+  ineligible: { system: 'INTERNAL', code: 'ineligible', display: 'Ineligible' },
+};
+
 const NO_FOLD = 'ƄƅƆƍƎƏƐƔƖƛƜƦƧƨƩƪƱƷƸƹƺƻƼƽƾƿǀǁǂǃǝǮǯǶǷȜȝɁɂɅɊẜẝẟ';
 
 function fill(html, vars) {
@@ -120,6 +130,7 @@ export function renderPickerHtml(outPath, practice) {
     // Same list the plugin sends (pdf.latin_letters_without_plain_form), for local renders.
     no_fold: jsEscape(NO_FOLD),
     settings_url: '#settings',
+    decline_json: jsEscape(JSON.stringify(DECLINE)),
   };
   const html = fill(raw, vars);
   writeFileSync(outPath, html, 'utf8');
@@ -139,4 +150,4 @@ function jsEscape(s) {
     .replace(/\r/g, '\\r');
 }
 
-export { CONSENTS, RECORDS, METHOD_OPTIONS, PRACTICE };
+export { CONSENTS, RECORDS, METHOD_OPTIONS, PRACTICE, DECLINE };
