@@ -146,11 +146,12 @@ class TestAcceptedCodes:
 
 
 def _stub_pair_rows(mock_pc, rows):
-    # rows are (system, code, effective_date, expired_date[, state]), newest-first.
-    # A row without a state is an accepted consent.
+    # rows are (system, code, effective_date, expired_date[, state[, rejection
+    # reason]]), newest-first. A row without a state is an accepted consent.
+    rows = [r if len(r) >= 5 else tuple(r) + ("accepted",) for r in rows]
     (
         mock_pc.objects.filter.return_value.values_list.return_value.order_by.return_value
-    ) = [r if len(r) == 5 else tuple(r) + ("accepted",) for r in rows]
+    ) = [r if len(r) == 6 else tuple(r) + (None,) for r in rows]
 
 
 class TestAcceptedStatusPairs:
@@ -170,9 +171,9 @@ class TestAcceptedStatusPairs:
             ])
             assert result == {
                 ("Universal_Written_Consent", ""): {
-                    "status": "active", "effective_date": "2026-01-02", "expired_date": ""},
+                    "status": "active", "effective_date": "2026-01-02", "expired_date": "", "reason": ""},
                 ("INTERNAL", "verbal"): {
-                    "status": "expired", "effective_date": "2026-01-02", "expired_date": "2000-01-01"},
+                    "status": "expired", "effective_date": "2026-01-02", "expired_date": "2000-01-01", "reason": ""},
             }
             # Queries all of the patient's recorded consents (pairs filtered in Python).
             assert mock_pc.objects.filter.mock_calls[0] == call(
@@ -908,3 +909,32 @@ class TestDeclineOptions:
             mock_ccd.objects.filter.return_value.values_list.return_value = []
             out = consent_records("p1")
         assert out[0]["ineligible"] is True and out[0]["reason"] == "Ineligible"
+
+
+class TestPickerItemIneligibleAfterReload:
+    """The list's tag comes from the saved decline, not only from this session."""
+
+    def _defn(self):
+        return MagicMock(code="ccm", system="S", display="CCM", verbiage="Text.", method_enabled=True,
+                         obtained_by_enabled=True, capacity_enabled=False, method_options=["Verbal"],
+                         questions=[], required=True, allow_device_signature=False, allow_ineligible=True)
+
+    def test_saved_ineligible_decline_is_flagged(self):
+        item = service._picker_item(self._defn(), {"status": "declined", "reason": "Ineligible"}, True)
+        assert item["status"] == "declined"
+        assert item["ineligible"] is True and item["reason"] == "Ineligible"
+
+    def test_other_decline_reason_is_not_ineligible(self):
+        item = service._picker_item(self._defn(), {"status": "declined", "reason": "Refused"}, True)
+        assert item["ineligible"] is False and item["reason"] == "Refused"
+
+    def test_accepted_consent_has_no_reason(self):
+        item = service._picker_item(self._defn(), {"status": "active", "reason": ""}, True)
+        assert item["ineligible"] is False and item["reason"] == ""
+
+    def test_status_pairs_carry_the_reason(self):
+        with patch(f"{MODULE}.PatientConsent") as mock_pc:
+            _stub_pair_rows(mock_pc, [("S", "ccm", EFF, None, "rejected", "Ineligible")])
+            out = accepted_status_pairs("p1", [("S", "ccm")])
+        assert out[("S", "ccm")]["status"] == "declined"
+        assert out[("S", "ccm")]["reason"] == "Ineligible"

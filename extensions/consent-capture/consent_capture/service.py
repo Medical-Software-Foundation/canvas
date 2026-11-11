@@ -220,17 +220,21 @@ def accepted_status_pairs(patient_id, pairs):
             "effective_date",
             "expired_date",
             "state",
+            "rejection_reason__display",
         )
         .order_by("-effective_date", "-created")
     )
-    for system, code, effective_date, expired_date, state in rows:
+    for system, code, effective_date, expired_date, state, rejection in rows:
         pair = (system or "", code or "")
         if pair not in want or pair in out:
             continue  # keep the most recent (rows are newest-first)
+        status = _record_status(state, expired_date, now)
         out[pair] = {
-            "status": _record_status(state, expired_date, now),
+            "status": status,
             "effective_date": _iso_date(effective_date),
             "expired_date": _iso_date(expired_date),
+            # A decline's reason, so the list tags an Ineligible one as Ineligible.
+            "reason": (rejection or "") if status == "declined" else "",
         }
     return out
 
@@ -398,6 +402,8 @@ def _picker_item(d, info, is_active):
         "status": status,
         "effective_date": info.get("effective_date", ""),
         "expiration_date": info.get("expired_date", ""),
+        "reason": info.get("reason", "") if status == "declined" else "",
+        "ineligible": status == "declined" and is_ineligible_display(info.get("reason", "")),
     }
 
 
