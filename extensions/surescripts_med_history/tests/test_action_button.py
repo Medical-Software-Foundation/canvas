@@ -2,12 +2,16 @@ import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from surescripts_med_history.protocols.action_button import (
     _build_active_code_sets,
     _build_history_item,
     _group_history_items,
     _is_matched,
     _request_status,
+    build_history_payload,
+    FDB_SYSTEM,
     RXNORM_SYSTEM,
     NDC_SYSTEM,
 )
@@ -68,66 +72,132 @@ class TestBuildActiveCodeSets:
     def test_extracts_rxnorm_codes(self):
         coding = _make_coding(RXNORM_SYSTEM, "12345")
         med = _make_med([coding])
-        rxnorm, ndc, descs = _build_active_code_sets([med])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
         assert "12345" in rxnorm
 
     def test_extracts_ndc_codes_strips_dashes(self):
         coding = _make_coding(NDC_SYSTEM, "0093-0054-01")
         med = _make_med([coding])
-        rxnorm, ndc, descs = _build_active_code_sets([med])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
         assert "0093005401" in ndc
 
     def test_extracts_ndc_from_national_drug_code_field(self):
         med = _make_med([], ndc="12345-678-90")
-        rxnorm, ndc, descs = _build_active_code_sets([med])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
         assert "1234567890" in ndc
 
     def test_extracts_descriptions_over_10_chars(self):
         coding = _make_coding(RXNORM_SYSTEM, "123", display="Buspirone HCl 10mg tablet")
         med = _make_med([coding], clin_desc="buspirone hydrochloride")
-        rxnorm, ndc, descs = _build_active_code_sets([med])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
         assert "buspirone hcl 10mg tablet" in descs
         assert "buspirone hydrochloride" in descs
 
     def test_ignores_short_descriptions(self):
         coding = _make_coding(RXNORM_SYSTEM, "123", display="Short")
         med = _make_med([coding])
-        rxnorm, ndc, descs = _build_active_code_sets([med])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
         assert len(descs) == 0
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_extracts_fdb_codes_without_lookup_when_rxnorm_present(self, mock_http):
+        med = _make_med(
+            [_make_coding(FDB_SYSTEM, "202624"), _make_coding(RXNORM_SYSTEM, "197361")]
+        )
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
+        assert fdb == {"202624"}
+        assert rxnorm == {"197361"}
+        mock_http.get_json.assert_not_called()
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_fdb_only_med_gets_rxnorm_from_fdb(self, mock_http):
+        """A migrated med carries only its FDB code; FDB supplies the RxNorm."""
+        resp = MagicMock()
+        resp.json.return_value = {"med_medication_id": 161359, "rxnorm_rxcui": "314200"}
+        mock_http.get_json.return_value = resp
+
+        med = _make_med([_make_coding(FDB_SYSTEM, "161359")])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
+
+        assert fdb == {"161359"}
+        assert rxnorm == {"314200"}
+        mock_http.get_json.assert_called_once_with("/fdb/grouped-medication/161359/")
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_fdb_only_med_without_fdb_rxnorm_adds_nothing(self, mock_http):
+        resp = MagicMock()
+        resp.json.return_value = {"med_medication_id": 592763, "rxnorm_rxcui": None}
+        mock_http.get_json.return_value = resp
+
+        med = _make_med([_make_coding(FDB_SYSTEM, "592763")])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
+
+        assert fdb == {"592763"}
+        assert rxnorm == set()
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_free_text_med_contributes_only_its_description(self, mock_http):
+        coding = _make_coding(
+            "UNSTRUCTURED", "", display="Catapres-TTS-1 0.1 mg/24 hr patch weekly"
+        )
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([_make_med([coding])])
+        assert (rxnorm, ndc, fdb) == (set(), set(), set())
+        assert descs == ["catapres-tts-1 0.1 mg/24 hr patch weekly"]
+        mock_http.get_json.assert_not_called()
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_fdb_lookup_failure_keeps_fdb_code(self, mock_http):
+        mock_http.get_json.side_effect = requests.RequestException("timeout")
+
+        med = _make_med([_make_coding(FDB_SYSTEM, "161359")])
+        rxnorm, ndc, fdb, descs = _build_active_code_sets([med])
+
+        assert fdb == {"161359"}
+        assert rxnorm == set()
 
 
 class TestIsMatched:
     def test_matches_by_rxnorm(self):
         coding = _make_coding(RXNORM_SYSTEM, "866083")
         med = _make_history_med(codings=[coding])
-        matched, method = _is_matched(med, {"866083"}, set(), [])
+        matched, method = _is_matched(med, {"866083"}, set(), set(), [])
+        assert matched is True
+        assert method == "rxnorm"
+
+    def test_matches_rxnorm_stored_with_term_type(self):
+        """Canvas stores Surescripts RxNorm codes as "<rxcui> <term type>"."""
+        coding = _make_coding(RXNORM_SYSTEM, "866083 SCD")
+        med = _make_history_med(codings=[coding])
+        matched, method = _is_matched(med, {"866083"}, set(), set(), [])
         assert matched is True
         assert method == "rxnorm"
 
     def test_matches_by_ndc(self):
         coding = _make_coding(NDC_SYSTEM, "0093-0054-01")
         med = _make_history_med(codings=[coding])
-        matched, method = _is_matched(med, set(), {"0093005401"}, [])
+        matched, method = _is_matched(med, set(), {"0093005401"}, set(), [])
         assert matched is True
         assert method == "ndc"
 
     def test_matches_by_description_substring(self):
         med = _make_history_med(drug_description="buspirone HCl 10 mg")
         matched, method = _is_matched(
-            med, set(), set(), ["buspirone hcl 10 mg tablet oral"]
+            med, set(), set(), set(), ["buspirone hcl 10 mg tablet oral"]
         )
         assert matched is True
         assert method == "description"
 
     def test_no_match(self):
         med = _make_history_med(drug_description="unknown drug", codings=[])
-        matched, method = _is_matched(med, set(), set(), [])
+        matched, method = _is_matched(med, set(), set(), set(), [])
         assert matched is False
         assert method == ""
 
     def test_description_match_is_case_insensitive(self):
         med = _make_history_med(drug_description="Buspirone HCl")
-        matched, _ = _is_matched(med, set(), set(), ["buspirone hcl 10 mg tablet"])
+        matched, _ = _is_matched(
+            med, set(), set(), set(), ["buspirone hcl 10 mg tablet"]
+        )
         assert matched is True
 
 
@@ -160,6 +230,11 @@ class TestBuildHistoryItem:
         item = _build_history_item(med, is_match=False)
         assert item["last_fill_date"] == ""
         assert item["written_date"] == ""
+
+    def test_strips_term_type_from_rxnorm_codes(self):
+        med = _make_history_med(codings=[_make_coding(RXNORM_SYSTEM, "856999 SCD")])
+        item = _build_history_item(med, is_match=False)
+        assert item["rxnorm_codes"] == ["856999"]
 
 
 class TestGroupHistoryItems:
@@ -996,9 +1071,9 @@ class TestSpiProviderChoices:
         assert out == [{"id": "a", "name": "Doe, Ann"}]
 
 
-class TestNdcRxnormXref:
-    """The NDC→RxNorm cross-reference is a blocking FDB HTTP call per row, so
-    it must be cached across rows and skipped when it can't possibly match."""
+class TestNdcXref:
+    """The NDC cross-reference is a blocking FDB HTTP call per row, so it must
+    be cached across rows and skipped when it can't possibly match."""
 
     @staticmethod
     def _fills(ndc, count):
@@ -1012,8 +1087,6 @@ class TestNdcRxnormXref:
 
     @patch("surescripts_med_history.protocols.action_button.ontologies_http")
     def test_distinct_ndcs_looked_up_once_each(self, mock_http):
-        from surescripts_med_history.protocols.action_button import _is_matched
-
         resp = MagicMock()
         resp.json.return_value = {"rxnorm_rxcui": "999"}
         mock_http.get_json.return_value = resp
@@ -1022,48 +1095,172 @@ class TestNdcRxnormXref:
         meds = self._fills("111", 4) + self._fills("222", 4) + self._fills("333", 4)
         cache = {}
         for med in meds:
-            _is_matched(med, {"unrelated"}, set(), [], cache)
+            _is_matched(med, {"unrelated"}, set(), set(), [], cache)
 
         assert mock_http.get_json.call_count == 3
         assert set(cache) == {"111", "222", "333"}
 
     @patch("surescripts_med_history.protocols.action_button.ontologies_http")
     def test_misses_are_cached_and_not_retried(self, mock_http):
-        from surescripts_med_history.protocols.action_button import _is_matched
-
         resp = MagicMock()
-        resp.json.return_value = {}  # no rxnorm_rxcui
+        resp.json.return_value = {}  # no med_medication_id or rxnorm_rxcui
         mock_http.get_json.return_value = resp
 
         cache = {}
         for med in self._fills("111", 5):
-            _is_matched(med, {"unrelated"}, set(), [], cache)
+            _is_matched(med, {"unrelated"}, set(), set(), [], cache)
 
         assert mock_http.get_json.call_count == 1
-        assert cache == {"111": ""}
+        assert cache == {"111": ("", "")}
 
     @patch("surescripts_med_history.protocols.action_button.ontologies_http")
-    def test_skipped_entirely_when_no_active_rxnorm_codes(self, mock_http):
-        """No active RxNorm codes means no resolved code could ever match —
-        the common case on a chart with few active meds."""
-        from surescripts_med_history.protocols.action_button import _is_matched
+    def test_failed_lookups_are_cached_as_misses(self, mock_http):
+        mock_http.get_json.side_effect = requests.RequestException("timeout")
 
+        cache = {}
+        for med in self._fills("111", 3):
+            matched, _ = _is_matched(med, {"unrelated"}, set(), set(), [], cache)
+            assert matched is False
+
+        assert mock_http.get_json.call_count == 1
+        assert cache == {"111": ("", "")}
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_skipped_entirely_when_no_active_rxnorm_or_fdb_codes(self, mock_http):
+        """No active RxNorm or FDB codes means no resolved code could ever
+        match — the common case on a chart with few active meds."""
         for med in self._fills("111", 5):
-            matched, method = _is_matched(med, set(), set(), [], {})
+            matched, method = _is_matched(med, set(), set(), set(), [], {})
             assert (matched, method) == (False, "")
 
         mock_http.get_json.assert_not_called()
 
     @patch("surescripts_med_history.protocols.action_button.ontologies_http")
     def test_still_matches_through_the_xref(self, mock_http):
-        from surescripts_med_history.protocols.action_button import _is_matched
-
         resp = MagicMock()
         resp.json.return_value = {"rxnorm_rxcui": "866083"}
         mock_http.get_json.return_value = resp
 
         med = _make_history_med(codings=[_make_coding(NDC_SYSTEM, "111")])
-        matched, method = _is_matched(med, {"866083"}, set(), [], {})
+        matched, method = _is_matched(med, {"866083"}, set(), set(), [], {})
 
         assert matched
         assert method == "ndc_rxnorm_xref:111->866083"
+
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    def test_matches_fdb_only_med_through_the_ndc_fdb_code(self, mock_http):
+        """A chart whose meds carry only FDB codes still runs the xref."""
+        resp = MagicMock()
+        resp.json.return_value = {"med_medication_id": 202624, "rxnorm_rxcui": None}
+        mock_http.get_json.return_value = resp
+
+        med = _make_history_med(codings=[_make_coding(NDC_SYSTEM, "29300039710")])
+        matched, method = _is_matched(med, set(), set(), {"202624"}, [], {})
+
+        assert matched
+        assert method == "ndc_fdb_xref:29300039710->202624"
+        mock_http.get_json.assert_called_once_with(
+            "/fdb/ndc-to-medication/29300039710/"
+        )
+
+
+class TestBuildHistoryPayloadMatching:
+    """End to end through `build_history_payload` for a chart whose active
+    meds were loaded with only an FDB code (e.g. by a data migration)."""
+
+    @patch(
+        "surescripts_med_history.protocols.action_button._last_requested_display",
+        return_value="",
+    )
+    @patch(
+        "surescripts_med_history.protocols.action_button._request_status",
+        return_value={
+            "state": "matched",
+            "detail": "",
+            "last_response_at": "",
+            "response_provider": "",
+        },
+    )
+    @patch("surescripts_med_history.protocols.action_button.ontologies_http")
+    @patch("surescripts_med_history.protocols.action_button.MedicationDismissal")
+    @patch("surescripts_med_history.protocols.action_button.Medication")
+    @patch(
+        "surescripts_med_history.protocols.action_button.MedicationHistoryMedication"
+    )
+    def test_generic_fill_matches_fdb_only_brand_and_unknown_stays_unresolved(
+        self,
+        mock_hist_cls,
+        mock_med_cls,
+        mock_dismissal_cls,
+        mock_http,
+        mock_status,
+        mock_last_req,
+    ):
+        responses = {
+            # Brand on the list, coded only in FDB.
+            "/fdb/grouped-medication/161359/": {
+                "med_medication_id": 161359,
+                "rxnorm_rxcui": "314200",
+            },
+            # Generic fill: a different FDB code, same RxNorm.
+            "/fdb/ndc-to-medication/13668042990/": {
+                "med_medication_id": 255555,
+                "rxnorm_rxcui": "314200",
+            },
+            "/fdb/ndc-to-medication/00093330105/": {
+                "med_medication_id": 199999,
+                "rxnorm_rxcui": "835603",
+            },
+        }
+
+        def get_json(url):
+            resp = MagicMock()
+            resp.json.return_value = responses[url]
+            return resp
+
+        mock_http.get_json.side_effect = get_json
+
+        generic_fill = _make_history_med(
+            drug_description="PANTOPRAZOLE SOD DR 40 MG TAB",
+            codings=[
+                _make_coding("{'uri': '%s'}" % NDC_SYSTEM, "13668042990"),
+            ],
+            last_fill_date=datetime(2026, 9, 6),
+        )
+        unrelated_fill = _make_history_med(
+            drug_description="TRAMADOL HCL 50 MG TABLET",
+            codings=[
+                _make_coding("{'uri': '%s'}" % NDC_SYSTEM, "00093330105"),
+            ],
+            last_fill_date=datetime(2026, 10, 3),
+        )
+        mock_hist_qs = MagicMock()
+        mock_hist_cls.objects.filter.return_value = mock_hist_qs
+        mock_hist_qs.prefetch_related.return_value = mock_hist_qs
+        mock_hist_qs.order_by.return_value = mock_hist_qs
+        mock_hist_qs.__getitem__ = MagicMock(
+            return_value=[unrelated_fill, generic_fill]
+        )
+
+        brand_on_list = _make_med(
+            [
+                _make_coding(
+                    FDB_SYSTEM, "161359", "Protonix 40 mg tablet,delayed release"
+                )
+            ]
+        )
+        mock_active_qs = MagicMock()
+        mock_med_cls.objects.active.return_value = mock_active_qs
+        mock_active_qs.filter.return_value = mock_active_qs
+        mock_active_qs.prefetch_related.return_value = iter([brand_on_list])
+
+        mock_dismissal_cls.objects.filter.return_value = []
+
+        payload, _ = build_history_payload(MagicMock(dbid=42))
+
+        groups = {g["drug_description"]: g for g in payload["grouped_items"]}
+        pantoprazole = groups["PANTOPRAZOLE SOD DR 40 MG TAB"]
+        assert pantoprazole["is_match"] is True
+        assert pantoprazole["match_method"] == "ndc_rxnorm_xref:13668042990->314200"
+        assert groups["TRAMADOL HCL 50 MG TABLET"]["is_match"] is False
+        mock_hist_qs.__getitem__.assert_called_once_with(slice(None, 500))

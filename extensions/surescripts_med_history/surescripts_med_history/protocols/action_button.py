@@ -24,6 +24,7 @@ from surescripts_med_history.protocols.settings import MOCK_SECRET_NAME, parse_m
 
 RXNORM_SYSTEM = "http://www.nlm.nih.gov/research/umls/rxnorm"
 NDC_SYSTEM = "http://hl7.org/fhir/sid/ndc"
+FDB_SYSTEM = "http://www.fdbhealth.com/"
 
 
 def _get_system_uri(system) -> str:
@@ -33,26 +34,48 @@ def _get_system_uri(system) -> str:
         return RXNORM_SYSTEM
     if NDC_SYSTEM in s:
         return NDC_SYSTEM
+    if FDB_SYSTEM in s:
+        return FDB_SYSTEM
     return s
+
+
+def _rxnorm_code(code: str) -> str:
+    """Drop the term type Canvas appends to Surescripts RxNorm codes ("856999 SCD")."""
+    return code.partition(" ")[0]
 
 
 def _build_active_code_sets(
     active_meds: list,
-) -> tuple[set[str], set[str], list[str]]:
-    """Build RxNorm codes, NDC codes, and description list from active Canvas medications."""
+) -> tuple[set[str], set[str], set[str], list[str]]:
+    """Build RxNorm, NDC and FDB codes and a description list from active Canvas medications.
+
+    A medication coded only in FDB (e.g. one loaded by a data migration) gets
+    its RxNorm from FDB, so a fill of the generic still matches a brand-name
+    medication on the list, and vice versa.
+    """
     rxnorm_codes: set[str] = set()
     ndc_codes: set[str] = set()
+    fdb_codes: set[str] = set()
+    fdb_only_codes: set[str] = set()
     descriptions: list[str] = []
 
     for med in active_meds:
+        has_rxnorm = False
+        med_fdb_codes: set[str] = set()
         for coding in med.codings.all():
             sys_uri = _get_system_uri(coding.system)
             if sys_uri == RXNORM_SYSTEM and coding.code:
                 rxnorm_codes.add(coding.code)
+                has_rxnorm = True
             elif sys_uri == NDC_SYSTEM and coding.code:
                 ndc_codes.add(coding.code.replace("-", ""))
+            elif sys_uri == FDB_SYSTEM and coding.code:
+                med_fdb_codes.add(coding.code)
             if coding.display and len(coding.display) > 10:
                 descriptions.append(coding.display.lower())
+        fdb_codes |= med_fdb_codes
+        if not has_rxnorm:
+            fdb_only_codes |= med_fdb_codes
         if med.national_drug_code:
             ndc_codes.add(med.national_drug_code.replace("-", ""))
         if (
@@ -66,13 +89,33 @@ def _build_active_code_sets(
         ):
             descriptions.append(med.quantity_qualifier_description.lower())
 
-    return rxnorm_codes, ndc_codes, descriptions
+    for fdb_code in sorted(fdb_only_codes):
+        rxnorm = _fdb_to_rxnorm(fdb_code)
+        if rxnorm:
+            rxnorm_codes.add(rxnorm)
+
+    return rxnorm_codes, ndc_codes, fdb_codes, descriptions
 
 
-def _ndc_to_rxnorm(ndc_code: str, cache: dict | None = None) -> str:
-    """Look up RxNorm code for an NDC via FDB. Returns empty string when the
-    HTTP call fails or the response has no RxNorm cui — any other error
-    (e.g. an unexpected response shape) bubbles up so it surfaces in Sentry.
+def _fdb_to_rxnorm(fdb_code: str) -> str:
+    """Look up the RxNorm code FDB lists for an FDB medication. Returns empty
+    string when the HTTP call fails or FDB has no RxNorm for it."""
+    try:
+        resp = ontologies_http.get_json("/fdb/grouped-medication/%s/" % fdb_code)
+    except requests.RequestException as e:
+        log.warning("FDB->RxNorm lookup failed for FDB code %s: %s" % (fdb_code, e))
+        return ""
+    result = resp.json()
+    if isinstance(result, dict) and result.get("rxnorm_rxcui"):
+        return str(result["rxnorm_rxcui"])
+    return ""
+
+
+def _ndc_to_fdb(
+    ndc_code: str, cache: dict[str, tuple[str, str]] | None = None
+) -> tuple[str, str]:
+    """Look up the FDB code and RxNorm code for an NDC via FDB. Either is an
+    empty string when the HTTP call fails or FDB has no value for it.
 
     `cache` memoizes results (misses included) for the life of one payload
     build. A drug with several fills produces several history rows carrying
@@ -81,37 +124,42 @@ def _ndc_to_rxnorm(ndc_code: str, cache: dict | None = None) -> str:
     if cache is not None and ndc_code in cache:
         return cache[ndc_code]
 
-    rxnorm = ""
+    fdb_code, rxnorm = "", ""
     try:
         resp = ontologies_http.get_json("/fdb/ndc-to-medication/%s/" % ndc_code)
     except requests.RequestException as e:
-        log.warning("FDB NDC->RxNorm lookup failed for %s: %s" % (ndc_code, e))
+        log.warning("FDB NDC lookup failed for %s: %s" % (ndc_code, e))
     else:
         result = resp.json()
         if isinstance(result, dict):
-            rxcui = result.get("rxnorm_rxcui", "") or ""
-            rxnorm = str(rxcui) if rxcui else ""
+            fdb_code = str(result.get("med_medication_id") or "")
+            rxnorm = str(result.get("rxnorm_rxcui") or "")
 
     if cache is not None:
-        cache[ndc_code] = rxnorm
-    return rxnorm
+        cache[ndc_code] = (fdb_code, rxnorm)
+    return fdb_code, rxnorm
 
 
 def _is_matched(
     history_med: MedicationHistoryMedication,
     active_rxnorm_codes: set[str],
     active_ndc_codes: set[str],
+    active_fdb_codes: set[str],
     active_descriptions: list[str],
     xref_cache: dict | None = None,
 ) -> tuple:
     """Return (matched: bool, match_method: str) for a Surescripts medication.
 
-    `xref_cache` is threaded into the FDB NDC→RxNorm lookups so one payload
-    build resolves each distinct NDC at most once.
+    `xref_cache` is threaded into the FDB NDC lookups so one payload build
+    resolves each distinct NDC at most once.
     """
     for coding in history_med.codings.all():
         sys_uri = _get_system_uri(coding.system)
-        if sys_uri == RXNORM_SYSTEM and coding.code in active_rxnorm_codes:
+        if (
+            sys_uri == RXNORM_SYSTEM
+            and coding.code
+            and _rxnorm_code(coding.code) in active_rxnorm_codes
+        ):
             return True, "rxnorm"
         if (
             sys_uri == NDC_SYSTEM
@@ -126,16 +174,19 @@ def _is_matched(
             if drug_desc in desc:
                 return True, "description"
 
-    # NDC→RxNorm cross-reference: look up the Surescripts NDC in FDB to get its
-    # RxNorm. Each lookup is a blocking HTTP round trip, so skip the whole pass
-    # when the patient has no active RxNorm codes — nothing it resolves could
-    # match, and that's exactly the case (few/no active meds) where the most
-    # rows fall through to here.
-    if active_rxnorm_codes:
+    # NDC cross-reference: look up the Surescripts NDC in FDB. Its FDB code
+    # matches the same drug on the list; its RxNorm also matches the brand or
+    # generic equivalent. Each lookup is a blocking HTTP round trip, so skip
+    # the whole pass when the patient has no active RxNorm or FDB codes —
+    # nothing it resolves could match, and that's exactly the case (few/no
+    # active meds) where the most rows fall through to here.
+    if active_rxnorm_codes or active_fdb_codes:
         for coding in history_med.codings.all():
             sys_uri = _get_system_uri(coding.system)
             if sys_uri == NDC_SYSTEM and coding.code:
-                resolved_rxnorm = _ndc_to_rxnorm(coding.code, xref_cache)
+                fdb_code, resolved_rxnorm = _ndc_to_fdb(coding.code, xref_cache)
+                if fdb_code and fdb_code in active_fdb_codes:
+                    return True, "ndc_fdb_xref:%s->%s" % (coding.code, fdb_code)
                 if resolved_rxnorm and resolved_rxnorm in active_rxnorm_codes:
                     return True, "ndc_rxnorm_xref:%s->%s" % (
                         coding.code,
@@ -152,7 +203,7 @@ def _build_history_item(med, is_match, match_method=""):
     for c in med.codings.all():
         sys_uri = _get_system_uri(c.system)
         if sys_uri == RXNORM_SYSTEM and c.code:
-            rxnorm_codes.append(c.code)
+            rxnorm_codes.append(_rxnorm_code(c.code))
         elif sys_uri == NDC_SYSTEM and c.code:
             ndc_codes.append(c.code)
 
@@ -415,14 +466,16 @@ def build_history_payload(patient, include_mock: bool = False) -> tuple[dict, li
     history_meds = list(
         MedicationHistoryMedication.objects.filter(patient=patient)
         .prefetch_related("codings")
-        .order_by("-last_fill_date")[:100]
+        .order_by("-last_fill_date")[:500]
     )
 
     active_meds = list(
         Medication.objects.active().filter(patient=patient).prefetch_related("codings")
     )
 
-    rxnorm_codes, ndc_codes, descriptions = _build_active_code_sets(active_meds)
+    rxnorm_codes, ndc_codes, fdb_codes, descriptions = _build_active_code_sets(
+        active_meds
+    )
 
     active_meds_summary = []
     for med in active_meds:
@@ -449,12 +502,12 @@ def build_history_payload(patient, include_mock: bool = False) -> tuple[dict, li
 
     # Shared across every row so each distinct NDC costs at most one FDB call
     # per payload build (fills of the same drug repeat their NDC).
-    xref_cache: dict[str, str] = {}
+    xref_cache: dict[str, tuple[str, str]] = {}
 
     history_items = []
     for med in history_meds:
         is_match, match_method = _is_matched(
-            med, rxnorm_codes, ndc_codes, descriptions, xref_cache
+            med, rxnorm_codes, ndc_codes, fdb_codes, descriptions, xref_cache
         )
         history_items.append(_build_history_item(med, is_match, match_method))
 
