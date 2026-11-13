@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Send to Photon</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css?v={{cache_bust}}" />
+    <script>
+      window.PHOTON_SEND_CONFIG = {{ config_json|safe }};
+    </script>
+    <script type="module" src="send.js?v={{cache_bust}}"></script>
+  </head>
+  <body>
+    <main id="root" aria-live="polite">
+      <div class="status" id="status">Preparing Photon send&hellip;</div>
+      <ul id="results" class="results"></ul>
+    </main>
+  </body>
+</html>
