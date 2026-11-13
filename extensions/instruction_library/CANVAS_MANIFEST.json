@@ -1,0 +1,52 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_instructions",
+    "description": "Admin-managed library of reusable patient instructions with an action button to add them to notes via InstructCommand.",
+    "components": {
+        "applications": [
+            {
+                "class": "patient_instructions.applications.library_app:InstructionLibraryAdmin",
+                "name": "Instruction Library",
+                "description": "Manage the shared library of patient instructions",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "patient_instructions.protocols.api:PatientInstructionsApi",
+                "description": "API for instruction library CRUD and adding instructions to notes",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_instructions.protocols.action_button:PatientInstructionsButton",
+                "description": "Action button in note header to launch the instructions picker",
+                "data_access": {
+                    "event": "",
+                    "read": ["Note"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": []
+    },
+    "secrets": [],
+    "custom_data": {
+        "namespace": "custom_data__patient_instructions",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
