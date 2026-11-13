@@ -628,9 +628,13 @@ function _clearDailyTimeWindows(containerId) {
 /* ---------- Block all-day + multi-date chips ---------- */
 
 var _blockDateChips = [];
-// When set, the form is editing a multi-date block group (one provider, many
-// dates) — saving will replace the entire group instead of updating one block.
+// When set, the form is editing one date of a multi-date block group (one
+// provider, many dates). Saving updates only the edited date, deletes dates
+// removed from the chip list and creates dates added to it; the group's other
+// dates keep their own times (PLUGIN-462).
 var _editingBlockGroup = null;
+// The edited block's date when the form opened.
+var _editingBlockOrigDate = null;
 
 function onBlockAllDayToggle(checked) {
   var startField = document.getElementById('block-start-time-field');
@@ -1054,10 +1058,13 @@ function showMsg(msg, type) {
   const dismissBtn = '<button class="alert-dismiss" onclick="dismissMsg()">&times;</button>';
   // Messages carry server and form-path text, so they are always shown as text.
   const alertHtml = '<div class="alert alert-' + type + '"><span>' + _escHtml(msg) + '</span>' + dismissBtn + '</div>';
-  const elTop = document.getElementById('status-msg');
-  const elBot = document.getElementById('status-msg-bottom');
-  if (elTop) elTop.innerHTML = alertHtml;
-  if (elBot) elBot.innerHTML = alertHtml;
+  // One message, at the top of the page. A second fixed copy at the bottom of
+  // the viewport used to show the same text twice and cover form fields.
+  const el = document.getElementById('status-msg');
+  if (el) {
+    el.innerHTML = alertHtml;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   const timeout = type === 'error' ? 10000 : 4000;
   clearTimeout(showMsg._timer);
   showMsg._timer = setTimeout(dismissMsg, timeout);
@@ -1065,10 +1072,8 @@ function showMsg(msg, type) {
 showMsg._timer = null;
 function dismissMsg() {
   clearTimeout(showMsg._timer);
-  const elTop = document.getElementById('status-msg');
-  const elBot = document.getElementById('status-msg-bottom');
-  if (elTop) elTop.innerHTML = '';
-  if (elBot) elBot.innerHTML = '';
+  const el = document.getElementById('status-msg');
+  if (el) el.innerHTML = '';
 }
 
 /* ---------- Bulk CSV Import ---------- */
@@ -1345,16 +1350,26 @@ function selectType(type) {
   document.getElementById('form-hold').style.display = type === 'hold' ? '' : 'none';
 }
 
-function saveCurrentForm() {
-  const type = document.getElementById('editing_type').value;
-  if (type === 'available') {
-    saveRule();
-  } else if (type === 'hold') {
-    saveHold();
-  } else if (_blockMode === 'single') {
-    saveOneoffBlock();
-  } else {
-    saveRecurringBlock();
+// A second click while a save is still running would send the same rule or
+// block twice and draw duplicate calendar events, so it is ignored.
+let _saveInFlight = false;
+
+async function saveCurrentForm() {
+  if (_saveInFlight) return;
+  _saveInFlight = true;
+  try {
+    const type = document.getElementById('editing_type').value;
+    if (type === 'available') {
+      await saveRule();
+    } else if (type === 'hold') {
+      await saveHold();
+    } else if (_blockMode === 'single') {
+      await saveOneoffBlock();
+    } else {
+      await saveRecurringBlock();
+    }
+  } finally {
+    _saveInFlight = false;
   }
 }
 
@@ -2254,6 +2269,8 @@ function resetForm() {
   document.getElementById('editing_group_id').value = '';
   document.getElementById('editing_type').value = 'available';
   document.getElementById('group-banner').style.display = 'none';
+  var multidateNotice = document.getElementById('multidate-notice');
+  if (multidateNotice) multidateNotice.style.display = 'none';
   // The banner's checkbox keeps DOM state across edits; reset it so a prior
   // edit's "Apply to all" choice never silently carries into the next one.
   var applyToGroupEl = document.getElementById('apply_to_group');
@@ -2517,32 +2534,31 @@ function editBlock(blockJson) {
     onBlockAllDayToggle(!!b.all_day);
   }
 
-  // Multi-date group detection: if siblings have different dates than this
-  // block, the group represents a holiday-list-style batch. Load all the
-  // group's dates into the chip list so the user sees and can edit the
-  // whole list (saving will replace the whole group).
+  // A block that shares a group with other blocks (more dates, more
+  // providers, or both) is saved by _saveMultiDateGroupMember. The chip list
+  // shows only THIS provider's dates in the group: other providers' dates are
+  // theirs, and adding or removing a chip never touches them. Time, reason
+  // and location changes apply to this date only (PLUGIN-462).
   _editingBlockGroup = null;
+  _editingBlockOrigDate = (b.start || '').slice(0, 10);
   if (b.group_id) {
-    var siblingDates = [];
     var sameDate = (b.start || '').slice(0, 10);
-    _overviewData.forEach(function(p) {
-      (p.blocks || []).forEach(function(pb) {
-        if (pb.group_id === b.group_id) {
-          var d = (pb.start || '').slice(0, 10);
-          if (siblingDates.indexOf(d) === -1) siblingDates.push(d);
-        }
+    var groupHasOthers = _overviewData.some(function(p) {
+      return (p.blocks || []).some(function(pb) {
+        return pb.group_id === b.group_id && pb.id !== b.id;
       });
     });
-    var hasDifferentDates = siblingDates.some(function(d) { return d !== sameDate; });
-    if (hasDifferentDates) {
+    if (groupHasOthers) {
       _editingBlockGroup = b.group_id;
       _resetBlockDateChips();
-      // Put every group date into chips except the one shown in block_date
-      // (the active date input doubles as the "primary" entry on save).
-      siblingDates.sort().forEach(function(d) {
-        if (d !== sameDate && _blockDateChips.indexOf(d) === -1) _blockDateChips.push(d);
-      });
+      // The active date input holds the edited date, so it is not a chip.
+      var ownDates = _ownGroupChipDates(_overviewData, b.provider_id, b.group_id, sameDate);
+      ownDates.forEach(function(d) { _blockDateChips.push(d); });
       _renderBlockDateChips();
+      if (ownDates.length > 0) {
+        var notice = document.getElementById('multidate-notice');
+        if (notice) notice.style.display = '';
+      }
     }
   }
 
@@ -2861,6 +2877,139 @@ async function saveRecurringBlock() {
   }
 }
 
+// The blocks of one provider that belong to a group, from the loaded overview.
+function _groupBlocksFor(pid, groupId) {
+  var out = [];
+  _overviewData.forEach(function(p) {
+    if (p.provider_id !== pid) return;
+    (p.blocks || []).forEach(function(pb) {
+      if (pb.group_id === groupId) out.push(pb);
+    });
+  });
+  return out;
+}
+
+// The chip dates for editing a grouped block: the dates of THIS provider's
+// blocks in the group, minus the edited date, sorted and de-duplicated. Other
+// providers' dates are never included (PLUGIN-462: a union across providers
+// brought back dates the user had removed for this provider).
+function _ownGroupChipDates(overviewData, providerId, groupId, editedDate) {
+  var out = [];
+  (overviewData || []).forEach(function(p) {
+    if (p.provider_id !== providerId) return;
+    (p.blocks || []).forEach(function(pb) {
+      if (pb.group_id !== groupId) return;
+      var d = (pb.start || '').slice(0, 10);
+      if (d && d !== editedDate && out.indexOf(d) === -1) out.push(d);
+    });
+  });
+  return out.sort();
+}
+
+// What saving the chip list does to the edited provider's own group blocks.
+// members: that provider's blocks in the group. The edited block is handled
+// by PUT /blocks, so it is never deleted here. Returns the block ids to delete
+// (dates no longer in the chip list) and the dates to create (chip dates the
+// provider has no block on yet).
+function _planOwnGroupDateChanges(members, editedBlockId, liveDate, allDates) {
+  var keep = {};
+  allDates.forEach(function(d) { keep[d] = true; });
+  var have = {};
+  have[liveDate] = true;
+  var toDelete = [];
+  members.forEach(function(pb) {
+    if (pb.id === editedBlockId) return;
+    var d = (pb.start || '').slice(0, 10);
+    have[d] = true;
+    if (!keep[d]) toDelete.push(pb.id);
+  });
+  var toAdd = allDates.filter(function(d) { return !have[d]; });
+  return { toDelete: toDelete, toAdd: toAdd };
+}
+
+// Save an edit to one block in a group (PLUGIN-462).
+// Only the edited block takes the form's time, reason and location; the
+// group's other dates keep theirs. Dates removed from the chip list are
+// deleted and dates added to it are created in the group with the form's
+// times, for the edited provider ONLY. "Apply to all" never adds or removes
+// dates for other providers: on the server it moves the other providers'
+// blocks on the edited date (time, reason and, if the date changed, the date)
+// along with the edited block, and nothing else.
+async function _saveMultiDateGroupMember(o) {
+  if (!o.liveDate) { showMsg('Pick a date for this block', 'error'); return; }
+  var origDate = _editingBlockOrigDate;
+  var ownOthers = _groupBlocksFor(o.providerId, o.groupId).filter(function(pb) {
+    return pb.id !== o.blockId;
+  });
+  if (o.liveDate !== origDate && ownOthers.some(function(pb) {
+    return (pb.start || '').slice(0, 10) === o.liveDate;
+  })) {
+    showMsg('This group already has a block on ' + o.liveDate + '. Edit that date instead.', 'error');
+    return;
+  }
+
+  var putBody = {
+    id: o.blockId,
+    provider_id: o.providerId,
+    start: o.allDay ? o.liveDate + 'T00:00:00' : o.liveDate + 'T' + o.startTime + ':00',
+    end: o.allDay ? o.liveDate + 'T23:59:59' : o.liveDate + 'T' + o.endTime + ':00',
+    reason: o.reason,
+    location_ids: o.locationIds,
+    group_id: o.groupId,
+    apply_to_group: o.applyToGroup,
+    all_day: o.allDay,
+  };
+  var putData = await apiCall('/blocks', { method: 'PUT', body: JSON.stringify(putBody) });
+  if (putData.error) { showMsg(putData.error, 'error'); return; }
+
+  var removed = 0;
+  var added = 0;
+  var failure = null;
+  var plan = _planOwnGroupDateChanges(
+    _groupBlocksFor(o.providerId, o.groupId), o.blockId, o.liveDate, o.allDates
+  );
+  for (const bid of plan.toDelete) {
+    var delResp = await apiCall(
+      '/blocks/' + o.providerId + '/' + bid + '?apply_to_group=false',
+      { method: 'DELETE' }
+    );
+    if (delResp && delResp.error) { failure = delResp.error; break; }
+    removed++;
+  }
+  if (!failure && plan.toAdd.length > 0) {
+    var body = {
+      provider_id: o.providerId,
+      dates: plan.toAdd,
+      all_day: o.allDay,
+      reason: o.reason,
+      location_ids: o.locationIds,
+      group_id: o.groupId,
+    };
+    if (!o.allDay) {
+      body.start = '1970-01-01T' + o.startTime + ':00';
+      body.end = '1970-01-01T' + o.endTime + ':00';
+    }
+    var data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
+    if (data.error) failure = data.error;
+    else added += plan.toAdd.length;
+  }
+
+  _editingBlockGroup = null;
+  _editingBlockOrigDate = null;
+  _resetBlockDateChips();
+  _skipDirtyCheck = true;
+  await loadOverview();
+  if (failure) {
+    showMsg('This date was saved, but changing the other dates failed: ' + failure, 'error');
+    return;
+  }
+  var parts = [putData.message || 'Block updated'];
+  if (added) parts.push(added + ' date(s) added');
+  if (removed) parts.push(removed + ' date(s) removed');
+  showMsg(parts.join(', '), 'success');
+  showTab('availability');
+}
+
 async function saveOneoffBlock() {
   const blockId = document.getElementById('editing_block_id').value;
   const providerIds = msBlockProvider.getValue();
@@ -2893,10 +3042,23 @@ async function saveOneoffBlock() {
     showMsg('Start time must be before end time', 'error'); return;
   }
 
-  // Multi-date edit path. Enters when either:
-  //   (a) editing an existing multi-date group, or
-  //   (b) editing a single-date block AND the user added more dates as chips.
-  if (providerIds.length === 1 && blockId && (_editingBlockGroup || allDates.length > 1)) {
+  // Editing one date of an existing multi-date group (PLUGIN-462). The edited
+  // block is updated on its own with PUT /blocks, so the group's other dates
+  // keep their own times. Dates removed from the chip list are deleted, and
+  // dates added to it are created in the same group with the form's times.
+  if (providerIds.length === 1 && blockId && _editingBlockGroup) {
+    await _saveMultiDateGroupMember({
+      blockId: blockId, providerId: providerIds[0], groupId: _editingBlockGroup,
+      liveDate: liveDate, allDates: allDates, allDay: allDay,
+      startTime: startTime, endTime: endTime, reason: reason,
+      locationIds: locationIds, applyToGroup: !!applyToGroup,
+    });
+    return;
+  }
+
+  // Multi-date edit path. Enters when editing a single-date block AND the
+  // user added more dates as chips.
+  if (providerIds.length === 1 && blockId && allDates.length > 1) {
     // Build the list of providers to operate on. By default, only the
     // editing provider. If the user checked "Apply to all" on a
     // multi-provider group, also include the sibling providers.
@@ -2932,8 +3094,7 @@ async function saveOneoffBlock() {
         if (delResp && delResp.error) { showMsg(delResp.error, 'error'); return; }
       }
     }
-    const batchGroupId = _editingBlockGroup
-      || groupId
+    const batchGroupId = groupId
       || (allDates.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
     let totalCreated = 0;
     for (const pid of groupProviderIds) {

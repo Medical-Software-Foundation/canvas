@@ -5,7 +5,6 @@ from __future__ import annotations
 from http import HTTPStatus
 from datetime import UTC, datetime, timedelta
 from hmac import compare_digest
-from uuid import uuid4
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
@@ -19,6 +18,7 @@ from canvas_sdk.v1.data.calendar import Event as EventModel
 from logger import log
 
 from provider_availability.api.availability_api import _reconcile_availability_to_roles
+from provider_availability.engine.admin_calendar import deterministic_calendar_id
 from provider_availability.engine.roles import (
     get_available_roles,
     get_effective_schedulable_roles,
@@ -93,7 +93,11 @@ class ProvisionAPI(SimpleAPI):
                         staff.first_name, staff.last_name,
                     )
                 else:
-                    calendar_id = str(uuid4())
+                    # Same id the install rebuild uses, so two runs that race
+                    # collide on one calendar instead of making two.
+                    calendar_id = deterministic_calendar_id(
+                        staff_key, CalendarType.Clinic, None
+                    )
                     cal_effect = CalendarEffect(
                         id=calendar_id,
                         provider=staff_key,
