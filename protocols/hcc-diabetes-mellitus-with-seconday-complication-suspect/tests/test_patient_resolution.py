@@ -1,0 +1,60 @@
+"""Patient resolution for the events the protocol responds to."""
+
+import json
+from datetime import date
+from typing import Any
+
+import pytest
+from canvas_generated.messages.events_pb2 import Event as EventRequest
+from canvas_sdk.events import Event, EventType
+from canvas_sdk.test_utils.factories import PatientFactory
+from canvas_sdk.v1.data.condition import Condition
+from protocols.hcc003v1_diabetes_secondary_complication import Hcc003v1
+
+MISSING_ID = "00000000000000000000000000000000"
+PROTOCOLS = (Hcc003v1,)
+
+
+def _protocol(
+    protocol_class: type,
+    event_type: int,
+    target: str,
+    context: dict[str, Any] | None = None,
+) -> Any:
+    """Build a protocol for a real SDK event."""
+    request = EventRequest(type=event_type, target=target, context=json.dumps(context or {}))
+    return protocol_class(event=Event(request))
+
+
+def test_record_events_resolve_the_targets_patient() -> None:
+    """A condition event with no event context resolves to the condition's patient."""
+    patient = PatientFactory.create()
+    condition = Condition.objects.create(
+        patient=patient,
+        deleted=False,
+        onset_date=date(2020, 1, 1),
+        resolution_date=date(2020, 1, 1),
+        clinical_status="active",
+        notes="",
+        surgical=False,
+    )
+    protocol = _protocol(Hcc003v1, EventType.CONDITION_CREATED, str(condition.id))
+    assert protocol.patient_id_from_target() == str(patient.id)
+
+
+@pytest.mark.parametrize(
+    ("protocol_class", "event_name"),
+    [
+        (protocol_class, name)
+        for protocol_class in PROTOCOLS
+        for name in protocol_class.RESPONDS_TO
+        if not name.startswith("PATIENT_")
+    ],
+)
+def test_sdk_maps_every_record_event_the_protocol_responds_to(
+    protocol_class: type, event_name: str
+) -> None:
+    """The SDK lookup runs for each record event; an unknown target finds no patient."""
+    protocol = _protocol(protocol_class, EventType.Value(event_name), MISSING_ID)
+    with pytest.raises(ValueError, match="No patient found"):
+        protocol.patient_id_from_target()
