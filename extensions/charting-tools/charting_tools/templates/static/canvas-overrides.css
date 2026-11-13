@@ -1,0 +1,844 @@
+/* Canvas's global overrides on top of stock Semantic UI 2.4, ported from
+ * home-app static/styles/semantic-overrides.scss and app.scss, plus the few
+ * layout rules this page needs. The app-wide font stays Semantic's Lato,
+ * as it does in Canvas itself. */
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  background: #fff;
+  color: #000;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+a {
+  cursor: pointer;
+  color: #000;
+  text-decoration: none;
+}
+
+a:hover {
+  transition: color 0.2s;
+  color: #1d6fc5;
+}
+
+.ui.dimmer:not(.inverted) {
+  background-color: rgba(0 0 0 / 50%) !important;
+}
+
+.ui.dimmer.inverted {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.ui.basic.label {
+  background-color: #fff !important;
+}
+
+.ui.card .meta {
+  color: #000;
+}
+
+.ui.form .disabled.field,
+.ui.form .disabled.fields .field,
+.ui.form .field :disabled {
+  opacity: 95% !important;
+}
+
+.ui.form .field.disabled > label,
+.ui.form .fields.disabled > label {
+  opacity: unset;
+}
+
+/* ── Page layout ─────────────────────────────────────────────── */
+
+.nt-page {
+  padding: 20px 24px;
+}
+
+.nt-page > .ui.header .sub.header {
+  margin-top: 4px;
+}
+
+.nt-list .item .ui.label {
+  float: right;
+}
+
+/* Semantic paints menu item labels white-on-gray; the basic-label override
+   above makes the background white too, so give basic ones gray text. */
+.nt-list .item > .ui.basic.label {
+  color: #767676 !important;
+}
+
+/* Native form controls don't inherit the page font in Chrome. */
+.nt-page select,
+.nt-page textarea {
+  font-family: inherit;
+}
+
+.nt-commands {
+  margin-bottom: 14px;
+}
+
+.nt-command + .nt-command {
+  margin-top: 14px;
+}
+
+/* Gray title bar per command, like a command header in the note. */
+.ui.segment.nt-command-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+}
+
+.nt-command-number {
+  flex: none;
+  min-width: 22px;
+  font-weight: 700;
+  color: #606063;
+}
+
+.ui.form .nt-command-head select.ui.dropdown.nt-command-type {
+  flex: 1;
+  width: auto;
+  font-weight: 700;
+  background: transparent;
+  border-color: transparent;
+  padding: 4px 8px;
+}
+
+.ui.form .nt-command-head select.ui.dropdown.nt-command-type:hover,
+.ui.form .nt-command-head select.ui.dropdown.nt-command-type:focus {
+  background: #fff;
+  border-color: rgba(34, 36, 38, 0.15);
+}
+
+/* Questionnaire choice sits in the header next to the command type. */
+.ui.form .nt-command-head select.ui.dropdown.nt-questionnaire {
+  flex: 1.4;
+  width: auto;
+  padding: 4px 8px;
+}
+
+.ui.form .nt-command-head select.ui.dropdown.nt-questionnaire.nt-missing {
+  border-color: #e0b4b4;
+  background: #fff6f6;
+  color: #9f3a38;
+}
+
+.ui.segment.nt-command-body {
+  padding: 14px 16px;
+}
+
+.ui.form .nt-command-body .field:last-child {
+  margin-bottom: 0;
+}
+
+.nt-empty {
+  color: #767676;
+  text-align: center;
+  padding: 48px 0;
+}
+
+
+/* Note types as a compact multi-column checkbox list. */
+.nt-note-types {
+  columns: 3 220px;
+  column-gap: 24px;
+  padding: 4px 0;
+}
+
+.ui.form .nt-note-types .field {
+  break-inside: avoid;
+  margin: 0 0 8px;
+}
+
+.nt-hint {
+  color: #767676;
+  font-size: 0.92857143em;
+  margin: -2px 0 8px;
+}
+
+/* Carry forward on the left, the scribe prompt link on the right. */
+.ui.form .nt-command-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+a.nt-prompt-toggle {
+  color: #1d6fc5;
+  white-space: nowrap;
+}
+
+.nt-prompt-preview {
+  color: #606063;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Links on a command's options row: details, scribe prompt. */
+.nt-links {
+  display: flex;
+  gap: 16px;
+}
+
+/* Typeahead: results drop below the input. */
+.nt-typeahead {
+  position: relative;
+}
+
+.ui.vertical.menu.nt-results {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  width: auto;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+
+.nt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ui.label.nt-chosen {
+  margin: 0;
+  font-weight: 400;
+}
+
+.ui.label.nt-chosen .nt-clear,
+.ui.label.nt-chosen .nt-dx-scope {
+  margin-left: 8px;
+  opacity: 1;
+  color: #1d6fc5;
+}
+
+.ui.label.nt-chosen .nt-clear {
+  color: #9f3a38;
+}
+
+.ui.form h4.ui.dividing.header {
+  margin-top: 28px;
+}
+
+/* ── Commands, styled like Canvas's own ──────────────────────────────
+ * From home-app's commands/command.scss:
+ * a 0.3em left rule in the command's SOAP color, the command and its values
+ * in Sentinel serif, field captions in small uppercase Gotham. Fallbacks are
+ * the ones Canvas uses when the Hoefler webfonts don't load. */
+
+:root {
+  --canvas-sans: "Gotham SSm A", "Gotham SSm B", arial, sans-serif;
+  --canvas-serif: "Sentinel SSm A", "Sentinel SSm B", georgia, serif;
+}
+
+.nt-command {
+  border-left: 0.3em solid #d0111f;
+  border-radius: 4px;
+}
+
+.nt-command.nt-sec-subjective { border-left-color: #000; }
+.nt-command.nt-sec-objective { border-left-color: #23b135; }
+.nt-command.nt-sec-assessment { border-left-color: #ed4b0a; }
+.nt-command.nt-sec-plan { border-left-color: #1d6fc5; }
+.nt-command.nt-sec-procedures { border-left-color: #5019be; }
+.nt-command.nt-sec-history { border-left-color: #935330; }
+
+.nt-command > .ui.attached.segment {
+  border-left: 0;
+}
+
+.nt-command > .ui.top.attached.segment {
+  border-top-left-radius: 0;
+}
+
+.nt-command > .ui.bottom.attached.segment {
+  border-bottom-left-radius: 0;
+}
+
+.ui.form .nt-command-head select.ui.dropdown.nt-command-type {
+  font-family: var(--canvas-serif);
+  font-size: 16px;
+}
+
+.ui.form .nt-command-head select.ui.dropdown.nt-questionnaire {
+  font-family: var(--canvas-serif);
+}
+
+/* The form: short fields share rows, long ones take the full width. */
+.nt-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px 16px;
+  align-items: end;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.ui.form .nt-details .field.nt-field {
+  margin: 0;
+}
+
+.nt-details .nt-wide {
+  grid-column: 1 / -1;
+}
+
+.nt-details .nt-check {
+  align-self: center;
+}
+
+.ui.form .nt-command .nt-caption {
+  display: block;
+  font-family: var(--canvas-sans);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #767676;
+  margin: 0 0 4px;
+}
+
+.ui.form .nt-command-body input[type="text"],
+.ui.form .nt-command-body input[type="number"],
+.ui.form .nt-command-body select.ui.dropdown,
+.ui.form .nt-command-body textarea {
+  font-family: var(--canvas-serif);
+  font-size: 15px;
+  color: #000;
+  border: 1px solid #bcccdc;
+  border-radius: 5px;
+  padding: 6px 10px;
+}
+
+.ui.form .nt-command-body input[type="text"],
+.ui.form .nt-command-body input[type="number"],
+.ui.form .nt-command-body select.ui.dropdown {
+  height: 36px;
+}
+
+.ui.form .nt-command-body textarea {
+  min-height: 56px;
+  padding: 8px 10px;
+}
+
+.ui.form .nt-command-body input::placeholder,
+.ui.form .nt-command-body textarea::placeholder {
+  font-family: var(--canvas-sans);
+  font-size: 13px;
+  color: #9aa5b1;
+}
+
+.nt-command-body .ui.label.nt-chosen {
+  font-family: var(--canvas-serif);
+  font-size: 14px;
+}
+
+.nt-command-body .ui.label.nt-chosen .nt-clear {
+  font-family: var(--canvas-sans);
+  font-size: 12px;
+}
+
+.ui.form .nt-command-body input[type="date"] {
+  font-family: var(--canvas-serif);
+  font-size: 15px;
+  height: 36px;
+  border: 1px solid #bcccdc;
+  border-radius: 5px;
+  padding: 6px 10px;
+}
+
+/* A multiple-choice question's options, in columns. */
+.nt-options {
+  columns: 3 180px;
+  column-gap: 20px;
+}
+
+.nt-options .ui.checkbox {
+  display: block;
+  break-inside: avoid;
+  margin-bottom: 6px;
+}
+
+.nt-options .ui.checkbox label,
+.nt-check .ui.checkbox label {
+  font-family: var(--canvas-serif);
+  font-size: 14px;
+}
+
+/* ── Editor top: name and status ─────────────────────────────────── */
+
+.nt-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.ui.form .nt-top .field.nt-name {
+  flex: 1;
+  margin: 0;
+}
+
+.ui.form .nt-top .nt-name input {
+  font-size: 18px;
+  font-weight: 700;
+  height: 44px;
+}
+
+.nt-status {
+  flex: none;
+  min-width: 150px;
+  padding-top: 30px;
+}
+
+.nt-status .nt-hint {
+  margin: 6px 0 0;
+}
+
+/* ── Where it shows up: two choice tiles ─────────────────────────── */
+
+.nt-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+button.nt-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  color: #000;
+  background: #fff;
+  border: 1px solid #d6d6d6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button.nt-choice:hover {
+  border-color: #767676;
+}
+
+button.nt-choice:focus-visible {
+  outline: 2px solid #1d6fc5;
+  outline-offset: 2px;
+}
+
+button.nt-choice.is-on {
+  border-color: #1d6fc5;
+  background: #f2f7fd;
+  box-shadow: inset 0 0 0 1px #1d6fc5;
+}
+
+.nt-choice-box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid #a3a3a3;
+  border-radius: 3px;
+  background: #fff;
+  position: relative;
+}
+
+.nt-choice.is-on .nt-choice-box {
+  border-color: #1d6fc5;
+  background: #1d6fc5;
+}
+
+/* The check mark, drawn so it needs no icon font. */
+.nt-choice.is-on .nt-choice-box::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.nt-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nt-choice-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.nt-choice-desc {
+  color: #606063;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ── Note type picker ────────────────────────────────────────────── */
+
+.nt-picker {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #1d6fc5;
+  border-radius: 4px;
+  background: #f2f7fd;
+}
+
+.nt-picker .nt-chips:empty {
+  display: none;
+}
+
+.nt-picker .ui.label.nt-chosen {
+  background: #fff !important;
+}
+
+.nt-picker .nt-hint {
+  margin: 8px 0 0;
+}
+
+.ui.vertical.menu.nt-results .item.disabled {
+  color: #9b9b9b;
+  cursor: default;
+}
+
+.nt-owner {
+  float: right;
+  font-size: 12px;
+  color: #767676;
+}
+
+.ui.vertical.menu.nt-results .item.nt-muted {
+  color: #767676;
+}
+
+@media (max-width: 640px) {
+  .nt-top {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .nt-status {
+    padding-top: 0;
+  }
+}
+
+.ui.label.nt-chosen .nt-clear {
+  font-size: 16px;
+  line-height: 1;
+  text-decoration: none;
+  color: #767676;
+}
+
+.ui.label.nt-chosen .nt-clear:hover {
+  color: #9f3a38;
+}
+
+.ui.form .field.nt-adder-field {
+  max-width: 320px;
+  margin-top: 4px;
+}
+
+.ui.form .nt-adder-field select.ui.dropdown.nt-adder {
+  border-style: dashed;
+  color: #1d6fc5;
+  font-weight: 700;
+}
+
+.nt-command-options .nt-links {
+  margin-left: auto;
+}
+
+/* List rows: name opens the item, the copy button duplicates it. */
+.ui.vertical.menu .item.nt-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+
+.nt-list-row .nt-list-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.92857143em 0 0.92857143em 1.14285714em;
+  color: inherit;
+}
+
+.nt-list-row .nt-list-name .ui.label {
+  margin: 0;
+}
+
+button.nt-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-right: 8px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: #767676;
+  cursor: pointer;
+}
+
+button.nt-copy:hover {
+  color: #1d6fc5;
+  border-color: #d6d6d6;
+  background: #fff;
+}
+
+button.nt-copy:focus-visible {
+  outline: 2px solid #1d6fc5;
+  outline-offset: 1px;
+}
+
+/* Rules: inline label-and-control rows. */
+.nt-inline {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ui.form .nt-inline .field {
+  margin: 0;
+  min-width: 180px;
+}
+
+.nt-when {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ui.form .nt-when select.ui.dropdown {
+  width: auto;
+}
+
+.ui.form .nt-inline .field.nt-grow {
+  flex: 1;
+}
+
+.nt-rule-mode {
+  margin-top: 16px;
+}
+
+/* Lab partners and their tests: one row per lab. */
+.nt-labs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.nt-lab-row {
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  background: #fafafa;
+}
+
+.nt-lab-row > .ui.button {
+  align-self: center;
+}
+
+@media (max-width: 720px) {
+  .nt-lab-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Rule conditions and actions are logic, not commands: a plain outlined card,
+   so the colored section rule stays a signal that something is a command. */
+.nt-command.nt-logic {
+  border-left: 0;
+}
+
+.nt-command.nt-logic > .ui.attached.segment {
+  border-left: 1px solid rgba(34, 36, 38, 0.15);
+}
+
+.nt-command.nt-logic > .ui.top.attached.segment {
+  border-top-left-radius: 4px;
+}
+
+.nt-command.nt-logic > .ui.bottom.attached.segment {
+  border-bottom-left-radius: 4px;
+}
+
+.nt-command.nt-logic > .ui.segment.nt-command-head {
+  background: #fafafa;
+}
+
+/* "and" / "or" between conditions. */
+.nt-conditions .nt-join {
+  margin: 6px 0 6px 18px;
+  padding-left: 14px;
+  border-left: 2px solid #d4d4d5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #767676;
+  line-height: 26px;
+}
+
+.nt-conditions .nt-join + .nt-command {
+  margin-top: 0;
+}
+
+/* Actions are steps run in order: a numbered badge on a line joining them. */
+.nt-steps {
+  position: relative;
+}
+
+.nt-steps > .nt-action {
+  position: relative;
+  margin-left: 34px;
+}
+
+.nt-steps > .nt-action:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: -22px;
+  top: 38px;
+  bottom: -10px;
+  border-left: 2px solid #d4d4d5;
+}
+
+.nt-steps > .nt-action > .nt-command-head > .nt-command-number {
+  position: absolute;
+  left: -34px;
+  top: 8px;
+  width: 26px;
+  min-width: 0;
+  height: 26px;
+  border-radius: 50%;
+  background: #1b1c1d;
+  color: #fff;
+  font-size: 12px;
+  line-height: 26px;
+  text-align: center;
+}
+
+/* A remove step reads as destructive. */
+.nt-steps > .nt-action-delete > .nt-command-head > .nt-command-number {
+  background: #9f3a38;
+}
+
+.nt-action .nt-command-body > .nt-commands {
+  margin-bottom: 10px;
+}
+
+.nt-lab-row .nt-lab-name {
+  font-family: var(--canvas-serif);
+  font-weight: 700;
+  padding-top: 8px;
+}
+
+/* Tag picker: creating a new tag reads as the secondary choice. */
+.ui.vertical.menu.nt-results .item.nt-create {
+  color: #1d6fc5;
+  font-style: italic;
+}
+
+.ui.vertical.menu.nt-results .item.nt-divider-label {
+  font-size: 12px;
+  padding-top: 6px;
+  padding-bottom: 2px;
+}
+
+.ui.vertical.menu.nt-results a.item.active {
+  background: #f2f7fd;
+}
+
+/* Download and upload, beside the page title. */
+.nt-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nt-transfer {
+  display: flex;
+  gap: 8px;
+  flex: none;
+  padding-top: 4px;
+}
+
+.nt-transfer-group {
+  margin-top: 18px;
+}
+
+.nt-transfer-kind {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 12px;
+  color: #767676;
+}
+
+.nt-transfer-problem {
+  color: #9f3a38;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.nt-transfer-warning {
+  color: #8a6d3b;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.nt-transfer-skip .header {
+  color: #767676;
+}
+
+.nt-transfer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+/* DME item: choose formulary product or free text, then the field below. */
+.nt-dme-item .nt-item-mode {
+  margin-bottom: 8px;
+}
