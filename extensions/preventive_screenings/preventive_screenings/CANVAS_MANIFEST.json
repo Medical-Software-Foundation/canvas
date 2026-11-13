@@ -1,0 +1,66 @@
+{
+    "sdk_version": "0.226.1",
+    "plugin_version": "0.19.2",
+    "name": "preventive_screenings",
+    "description": "Show which preventive screenings a patient is due or overdue for the moment their chart opens, with the last completed date and a one-click order, and let the practice set its own ages, intervals and screenings without a developer.",
+    "components": {
+        "handlers": [
+            {
+                "class": "preventive_screenings.handlers.event_handlers:PreventiveScreeningCards",
+                "description": "Puts a protocol card on the chart for every screening the practice tracks"
+            },
+            {
+                "class": "preventive_screenings.api.routes:ScreeningAdminAPI",
+                "description": "Serves the screening editor and reads/writes the screening rules"
+            },
+            {
+                "class": "preventive_screenings.handlers.sweep:PreventiveScreeningSweep",
+                "description": "Rewrites the cards whose answer changed because the date changed"
+            },
+            {
+                "class": "preventive_screenings.handlers.chart_section:PreventiveScreeningChartSection",
+                "description": "Shows every applicable screening with its last completed date on chart open"
+            },
+            {
+                "class": "preventive_screenings.api.record_routes:ScreeningRecordAPI",
+                "description": "Serves one patient's screening record to the chart-side app"
+            }
+        ],
+        "applications": [
+            {
+                "class": "preventive_screenings.applications.admin_app:ScreeningAdminApplication",
+                "name": "Preventive Screenings",
+                "description": "Configure which preventive screenings the practice tracks, and how often",
+                "scope": "global",
+                "icon": "assets/icon.png"
+            },
+            {
+                "class": "preventive_screenings.applications.record_app:ScreeningRecordApplication",
+                "name": "Screening record",
+                "description": "This patient's preventive screenings, with the date each was last done",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "canvas_medical__preventive_screenings",
+        "access": "read_write"
+    },
+    "variables": [
+        {
+            "name": "ADMIN_STAFF_KEYS",
+            "sensitive": false,
+            "default": ""
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
