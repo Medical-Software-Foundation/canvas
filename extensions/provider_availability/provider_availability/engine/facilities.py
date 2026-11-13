@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -11,6 +10,8 @@ from canvas_sdk.v1.data.facility import Facility
 from canvas_sdk.v1.data.patient import PatientFacilityAddress
 from django.db.models import Count
 
+from provider_availability.engine.models import is_uuid
+from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.storage import (
     CACHE_TTL_SECONDS,
     PROVIDER_FACILITIES_INDEX_KEY,
@@ -19,9 +20,6 @@ from provider_availability.engine.storage import (
     _get_cache,
 )
 
-# Facility ids are UUIDs. A malformed id raises a validation error inside the query
-# that the sandbox can't catch, so ids are screened before they reach the ORM.
-_UUID = re.compile(r"^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")
 
 # A provider's patients, for suggestions: anyone with a visit with them in this
 # many days back, or any time ahead.
@@ -33,7 +31,9 @@ _KEPT_STATUSES = [s for s in AppointmentProgressStatus.values if s != Appointmen
 
 def active_facility_name(facility_id: str) -> str | None:
     """The name of an active facility, or None when the id doesn't match one."""
-    if not facility_id or not _UUID.match(facility_id):
+    # A malformed id raises a validation error inside the query that the sandbox
+    # can't catch, so ids are screened before they reach the ORM.
+    if not is_uuid(facility_id):
         return None
     name: str | None = Facility.objects.filter(id=facility_id, active=True).values_list("name", flat=True).first()
     return name
@@ -143,7 +143,9 @@ def facility_patient_counts() -> dict[str, int]:
 
 
 # Each provider's facilities live under their own key, so two saves for different
-# providers can't overwrite each other. An index lists who has any, for reads.
+# providers can't overwrite each other. Reads go by the schedulable providers plus an
+# index of who has saved any; the index is a hint, so an entry lost to two saves at
+# once hides nothing.
 
 
 def _move_legacy_provider_facilities() -> None:
@@ -169,16 +171,30 @@ def get_provider_facilities(active_ids: set[str] | None = None) -> dict[str, lis
     """
     _move_legacy_provider_facilities()
     cache = _get_cache()
-    index = [str(p) for p in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []]
-    if not index:
+    pids = sorted({str(p) for p in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []} | get_schedulable_provider_ids())
+    if not pids:
         return {}
+    keys = [f"{PROVIDER_FACILITIES_PREFIX}{pid}" for pid in pids]
+    stored = cache.get_many(keys) or {}
     active = active_ids if active_ids is not None else {f["id"] for f in get_active_facilities()}
     result: dict[str, list[str]] = {}
-    for pid in index:
-        ids = [str(f) for f in cache.get(f"{PROVIDER_FACILITIES_PREFIX}{pid}") or [] if str(f) in active]
+    for pid, key in zip(pids, keys):
+        # get_many can return the keys with the cache's own prefix, so match on the end.
+        value = next((v for k, v in stored.items() if str(k).endswith(key)), None)
+        ids = [str(f) for f in value or [] if str(f) in active]
         if ids:
             result[pid] = ids
     return result
+
+
+def refresh_provider_facility_ttls(provider_ids: list[str]) -> None:
+    """Keep each schedulable provider's facilities from expiring, whether or not the index lists them."""
+    cache = _get_cache()
+    for pid in provider_ids:
+        key = f"{PROVIDER_FACILITIES_PREFIX}{pid}"
+        value = cache.get(key)
+        if value is not None:
+            cache.set(key, value, timeout_seconds=CACHE_TTL_SECONDS)
 
 
 def set_provider_facilities(provider_id: str, facility_ids: Any) -> list[str]:

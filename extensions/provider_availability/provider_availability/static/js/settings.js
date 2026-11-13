@@ -412,7 +412,9 @@
     var names = loose.slice(0, 2).map(function (p) { return p.name; }).join(', ') + (loose.length > 2 ? ' + ' + (loose.length - 2) + ' more' : '');
     $('set-groups-loose').textContent = groups.length && loose.length
       ? plural(loose.length, 'provider isn\u2019t', 'providers aren\u2019t') + ' in a group: ' + names + '. ' +
-        (lv === 'full' ? 'Only admins and staff who aren\u2019t in a group can edit them.' : 'Only admins can edit them.')
+        (lv === 'full'
+          ? 'Only admins, the providers themselves, and staff who aren\u2019t in a group can edit them.'
+          : 'Only admins and the providers themselves can edit them.')
       : '';
     list.querySelectorAll('.grow-row').forEach(function (r) {
       r.addEventListener('click', function (e) { if (e.target.closest('button')) return; openGroups[r.dataset.id] = !openGroups[r.dataset.id]; drawGroups(); });

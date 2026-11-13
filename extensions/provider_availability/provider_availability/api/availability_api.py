@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import UTC, date, datetime, time
 from http import HTTPStatus
 from typing import Any, Callable
@@ -79,6 +78,7 @@ from provider_availability.engine.models import (
     DateOverride,
     ProviderAvailabilityRule,
     RecurringBlock,
+    is_uuid,
 )
 from provider_availability.engine.overlap import check_override_overlap, check_rule_overlap
 from provider_availability.engine.storage import (
@@ -180,15 +180,12 @@ _VALID_RECURRENCE_FREQUENCIES = ("weekly", "daily")
 
 # Saved rules and blocks have UUID ids. The page puts ids in its click handlers, so an
 # id sent in any other shape is refused rather than stored.
-_ID_RE = re.compile(r"^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")
-
-
 def _id_error(body: dict[str, Any]) -> list[Response | Effect] | None:
     """A 400 when the payload's id isn't a UUID; None when it is, or when there's no id."""
     value = body.get("id")
     if value in (None, ""):
         return None
-    if isinstance(value, str) and _ID_RE.match(value):
+    if is_uuid(value):
         return None
     return [JSONResponse({"error": "id must be the id of a saved item"}, status_code=HTTPStatus.BAD_REQUEST)]
 
@@ -473,8 +470,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def get_facility_patient_counts(self) -> list[Response | Effect]:
         """How many patients each active facility has, for a facility block's details.
 
-        Asked for by the page only when a facility block is on screen.
+        Asked for by the page only when a facility block is on screen. Answered while
+        facility blocks are on, for staff who can view other providers' availability;
+        anyone else gets no counts and the details leave the line out.
         """
+        access = _access(self.request, self.secrets)
+        can_view_others = access.is_admin or access.group_providers is not None or access.default_access != "none"
+        if not is_feature_on("facility_blocks") or not access.staff_id or not can_view_others:
+            return [JSONResponse({"counts": {}})]
         return [JSONResponse({"counts": facility_patient_counts()})]
 
     @api.get("/visit-types")
@@ -1092,11 +1095,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def create_block(self) -> list[Response | Effect]:
         """Create one or more admin blocks.
 
-        Three accepted payload shapes:
+        Accepted payload shapes:
         - Single timed block:  { provider_id, start, end, ... }
-        - Single all-day block: { provider_id, dates: ["YYYY-MM-DD"], all_day: true, ... }
-        - Multi-date all-day batch: { provider_id, dates: [...], all_day: true, ... }
-          → creates one AdminBlock per date, sharing a fresh group_id.
+        - Dates sharing times: { provider_id, dates: [...], all_day, start, end, ... }
+        - Dates with their own times: { provider_id, entries: [{date, all_day, start, end}], ... }
+          → one AdminBlock per date, sharing a group_id when there are several.
         """
         body = self.request.json()
         bad_id = _id_error(body)
@@ -1132,52 +1135,52 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         all_day = bool(body.get("all_day", False))
         dates_payload = body.get("dates") or []
+        entries_payload = body.get("entries") or []
         reason = body.get("reason", "")
         location_ids = body.get("location_ids", [])
         existing_group_id = body.get("group_id")
 
-        # Multi-date / all-day path
-        if dates_payload:
-            try:
-                parsed_dates = sorted({date.fromisoformat(d) for d in dates_payload})
-            except (TypeError, ValueError):
-                return [
-                    JSONResponse(
-                        {"error": "dates must be a list of YYYY-MM-DD strings"},
-                        status_code=HTTPStatus.BAD_REQUEST,
-                    )
-                ]
-            if not all_day:
-                # Per-date timed block requires start/end times
-                start_str = body.get("start", "")
-                end_str = body.get("end", "")
-                if not start_str or not end_str:
+        # Multi-date path. ``entries`` gives each date its own times, so an edited group
+        # saves in one request: either every block saves or none does. ``dates`` shares
+        # one set of times (or all day) across the dates.
+        if entries_payload or dates_payload:
+            slots: list[tuple[str, bool, str, str]] = []
+            if entries_payload:
+                if not isinstance(entries_payload, list) or not all(isinstance(e, dict) for e in entries_payload):
+                    return [JSONResponse({"error": "entries must be a list of dates with times"}, status_code=HTTPStatus.BAD_REQUEST)]
+                for e in entries_payload:
+                    slots.append((str(e.get("date", "")), bool(e.get("all_day")), str(e.get("start") or ""), str(e.get("end") or "")))
+            else:
+                slots = [(str(d), all_day, str(body.get("start", "") or ""), str(body.get("end", "") or "")) for d in dates_payload]
+
+            spans: list[tuple[datetime, datetime, bool]] = []
+            for day_str, slot_all_day, start_str, end_str in slots:
+                try:
+                    d = date.fromisoformat(day_str)
+                except ValueError:
                     return [
                         JSONResponse(
-                            {"error": "start and end are required when all_day=false"},
+                            {"error": "dates must be a list of YYYY-MM-DD strings"},
                             status_code=HTTPStatus.BAD_REQUEST,
                         )
                     ]
-
-            # Use a shared group_id when fanning out to multiple dates so the
-            # frontend can manage them as a unit.
-            group_id = existing_group_id
-            if len(parsed_dates) > 1 and not group_id:
-                import uuid as _uuid
-                group_id = str(_uuid.uuid4())
-
-            spans: list[tuple[datetime, datetime]] = []
-            for d in parsed_dates:
-                if all_day:
+                if slot_all_day:
                     # 00:00:00 -> 23:59:59 on the same day. Ending at next-day
                     # midnight makes the calendar event spill into the next day.
                     start_dt = datetime.combine(d, time.min)
                     end_dt = datetime.combine(d, time(23, 59, 59))
                 else:
+                    if not start_str or not end_str:
+                        return [
+                            JSONResponse(
+                                {"error": "start and end are required when all_day=false"},
+                                status_code=HTTPStatus.BAD_REQUEST,
+                            )
+                        ]
                     # parse start/end as time-of-day applied to this date
                     try:
-                        start_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['start'][-8:] if 'T' in body['start'] else body['start']}")
-                        end_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['end'][-8:] if 'T' in body['end'] else body['end']}")
+                        start_dt = datetime.fromisoformat(f"{d.isoformat()}T{start_str[-8:] if 'T' in start_str else start_str}")
+                        end_dt = datetime.fromisoformat(f"{d.isoformat()}T{end_str[-8:] if 'T' in end_str else end_str}")
                     except ValueError:
                         return [JSONResponse({"error": "start and end must be times like 09:00"}, status_code=HTTPStatus.BAD_REQUEST)]
                 if start_dt >= end_dt:
@@ -1187,11 +1190,20 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                             status_code=HTTPStatus.BAD_REQUEST,
                         )
                     ]
-                spans.append((start_dt, end_dt))
+                if (start_dt, end_dt, slot_all_day) not in spans:
+                    spans.append((start_dt, end_dt, slot_all_day))
+            spans.sort()
+
+            # Use a shared group_id when fanning out to multiple dates so the
+            # frontend can manage them as a unit.
+            group_id = existing_group_id
+            if len(spans) > 1 and not group_id:
+                import uuid as _uuid
+                group_id = str(_uuid.uuid4())
 
             event_effects: list[Effect] = self._replace_blocks(provider_id, replaced)
             created_blocks: list[AdminBlock] = []
-            for start_dt, end_dt in spans:
+            for start_dt, end_dt, slot_all_day in spans:
                 block = AdminBlock(
                     provider_id=provider_id,
                     start=start_dt,
@@ -1199,7 +1211,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     reason=reason,
                     location_ids=location_ids,
                     group_id=group_id,
-                    all_day=all_day,
+                    all_day=slot_all_day,
                     facility_id=body["facility_id"],
                     facility_name=body["facility_name"],
                 )
@@ -1256,9 +1268,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             facility_id=body["facility_id"],
             facility_name=body["facility_name"],
         )
-        save_block(block)
-
+        # Replaced blocks go first: their events are matched by time, and a new block
+        # already saved at the same time would be redrawn alongside its own events.
         event_effects = self._replace_blocks(provider_id, replaced)
+        save_block(block)
 
         # If converting from a recurring block, delete old events BEFORE creating
         # the new single event — avoids same-time collision on the calendar.
@@ -1372,10 +1385,15 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 gb.start = block.start
                 gb.end = block.end
                 gb.reason = block.reason
+                was_facility = bool(gb.facility_id)
                 gb.facility_id = block.facility_id
                 gb.facility_name = block.facility_name
+                # A facility block covers every location. Turning one back into time
+                # off takes the edited block's locations, not "all" left over from it.
                 if block.facility_id:
                     gb.location_ids = []
+                elif was_facility:
+                    gb.location_ids = list(block.location_ids)
                 save_block(gb)
                 all_effects.extend(build_block_event_effects(gb))
                 updated_count += 1
@@ -1605,11 +1623,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 previous.append(RecurringBlock.from_dict(gb.to_dict()))
                 gb.weekly_schedule = block.weekly_schedule
                 gb.reason = block.reason
+                was_facility = bool(gb.facility_id)
                 gb.facility_id = block.facility_id
                 gb.facility_name = block.facility_name
                 if block.facility_id:
                     gb.location_ids = []
                     gb.hold_type = "none"
+                elif was_facility:
+                    gb.location_ids = list(block.location_ids)
                 gb.effective_start = block.effective_start
                 gb.effective_end = block.effective_end
                 gb.is_active = block.is_active
@@ -2249,8 +2270,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         Sent while rounds are on, or off with saved rounds kept on calendars, so a
         kept round's facility still shows when it is edited, and while facility
-        blocks are on. With facility blocks on, each facility carries its patient
-        count for the block's details.
+        blocks are on. Patient counts come separately (GET /facility-patient-counts).
         """
         if not is_feature_on("facility_blocks") and not is_feature_on("facility_rounds") and not rounds_drawn():
             return {"facilities": [], "by_provider": {}}

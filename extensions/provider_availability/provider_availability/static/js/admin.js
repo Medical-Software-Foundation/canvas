@@ -870,33 +870,20 @@ function _resetBlockEntries() {
   _renderBlockEntries();
 }
 
-// Entries sharing the same times go in one request, since POST /blocks takes one time range for its dates.
-function _blockEntryBatches(entries) {
-  var batches = {};
-  entries.forEach(function(e) {
-    var k = e.allDay ? 'all' : e.start + '-' + e.end;
-    (batches[k] = batches[k] || { allDay: e.allDay, start: e.start, end: e.end, dates: [] }).dates.push(e.date);
-  });
-  return Object.keys(batches).map(function(k) { return batches[k]; });
-}
-
-// replaceIds: saved blocks this save replaces. The first request carries them, and the
-// server removes them only once that request's checks pass.
+// One request per provider with every date and its times, so either all of them
+// save or none do. replaceIds: saved blocks this save replaces; the server removes
+// them only once the request's checks pass.
 async function _postBlockEntries(pid, entries, reason, locationIds, groupId, facilityId, replaceIds) {
-  var created = 0;
-  var replacing = (replaceIds || []).slice();
-  for (const batch of _blockEntryBatches(entries)) {
-    const body = { provider_id: pid, dates: batch.dates, all_day: batch.allDay, reason: reason, location_ids: locationIds, group_id: groupId, facility_id: facilityId || '', replace_block_ids: replacing };
-    replacing = [];
-    if (!batch.allDay) {
-      body.start = '1970-01-01T' + batch.start + ':00';
-      body.end = '1970-01-01T' + batch.end + ':00';
-    }
-    const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
-    if (data.error) return { error: data.error, created: created };
-    created += data.blocks ? data.blocks.length : batch.dates.length;
-  }
-  return { created: created };
+  const body = {
+    provider_id: pid, reason: reason, location_ids: locationIds, group_id: groupId,
+    facility_id: facilityId || '', replace_block_ids: (replaceIds || []).slice(),
+    entries: entries.map(function(e) {
+      return { date: e.date, all_day: !!e.allDay, start: e.allDay ? '' : e.start + ':00', end: e.allDay ? '' : e.end + ':00' };
+    }),
+  };
+  const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
+  if (data.error) return { error: data.error, created: 0 };
+  return { created: data.blocks ? data.blocks.length : entries.length };
 }
 
 function getInitials(name) {
@@ -1681,11 +1668,7 @@ function renderAccordion() {
   // Save expanded card state before re-render
   var expandedProviders = [];
   container.querySelectorAll('.provider-card:not(.collapsed)').forEach(function(card) {
-    var btn = card.querySelector('[onclick*="addForProvider"]');
-    if (btn) {
-      var match = btn.getAttribute('onclick').match(/addForProvider\('([^']+)'/);
-      if (match) expandedProviders.push(match[1]);
-    }
+    if (card.dataset.providerId) expandedProviders.push(card.dataset.providerId);
   });
   var savedScroll = window.scrollY;
   // Build TZ hint HTML for embedding in the legend bar
@@ -1778,7 +1761,7 @@ function renderAccordion() {
     const hasData = counts.avail + counts.round + counts.fblock + counts.block + counts.hold > 0;
 
     var readOnly = p.can_edit === false;
-    html += '<div class="provider-card' + (readOnly ? ' read-only' : '') + '">';
+    html += '<div class="provider-card' + (readOnly ? ' read-only' : '') + '" data-provider-id="' + _escHtml(pid) + '">';
 
     // Header
     html += '<div class="provider-card-header" onclick="toggleCard(this)">';
@@ -1942,14 +1925,8 @@ function renderAccordion() {
   }
   container.innerHTML = html;
   // Restore expanded card state — collapse cards that weren't open before
-  container.querySelectorAll('.provider-card').forEach(function(card) {
-    var btn = card.querySelector('[onclick*="addForProvider"]');
-    if (btn) {
-      var match = btn.getAttribute('onclick').match(/addForProvider\('([^']+)'/);
-      if (match && expandedProviders.indexOf(match[1]) === -1) {
-        card.classList.add('collapsed');
-      }
-    }
+  container.querySelectorAll('.provider-card[data-provider-id]').forEach(function(card) {
+    if (expandedProviders.indexOf(card.dataset.providerId) === -1) card.classList.add('collapsed');
   });
   // Sync expand/collapse button label
   var ecBtn = document.querySelector('.btn-expand-collapse');
@@ -3045,6 +3022,16 @@ async function saveOneoffBlock() {
     // its checks pass, so a refused save leaves the old blocks in place. We must
     // NOT use the server's ?apply_to_group=true here because that flag is
     // cross-provider and would wipe sibling providers' blocks unconditionally.
+    // Each provider saves in its own request, so check up front that every one can be
+    // edited; otherwise a refusal partway through would leave the group half changed.
+    var locked = groupProviderIds.filter(function(pid) {
+      var p = _providers.find(function(x) { return String(x.id) === String(pid); });
+      return !p || p.can_edit === false;
+    });
+    if (locked.length) {
+      showMsg('You can’t edit every provider in this group. Clear the checkbox at the top to change only this provider.', 'error');
+      return;
+    }
     var replaceIdsByProvider = {};
     for (const pid of groupProviderIds) {
       var blockIdsToDelete = [];
@@ -3925,7 +3912,9 @@ function FacilityPicker(hostId, opts) {
     query = '';
     shown = null;
     drawControl();
-    if (opts.onClose && before && before.join('|') !== selected.join('|')) opts.onClose(selected.slice());
+    // A picker redrawn off the page (Settings rebuilds its rows) saves nothing: the
+    // new picker in its place shows the saved list, and an old selection would overwrite it.
+    if (opts.onClose && root.isConnected && before && before.join('|') !== selected.join('|')) opts.onClose(selected.slice());
   }
   control.onclick = open;
   drawControl();

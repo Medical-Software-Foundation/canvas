@@ -1,11 +1,20 @@
 """Data models for provider availability rules and slots."""
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 import datetime as dt
 from datetime import date, datetime, timedelta
 from typing import Any, Optional, cast
+
+# Ids here, and the Canvas ids the plugin is sent, are UUIDs, dashed or not.
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")
+
+
+def is_uuid(value: Any) -> bool:
+    """Whether ``value`` is a UUID string, dashed or not."""
+    return isinstance(value, str) and bool(_UUID_RE.match(value))
 
 
 DAYS_OF_WEEK = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")

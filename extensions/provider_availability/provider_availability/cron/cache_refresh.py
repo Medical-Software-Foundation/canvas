@@ -10,6 +10,7 @@ from canvas_sdk.handlers.cron_task import CronTask
 from logger import log
 
 from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
+from provider_availability.engine.facilities import refresh_provider_facility_ttls
 from provider_availability.engine.job_errors import log_job_failure
 from provider_availability.engine.roles import (
     get_schedulable_provider_ids,
@@ -46,7 +47,8 @@ class CacheRefreshTask(CronTask):
     SCHEDULE = "*/5 * * * *"
 
     def execute(self) -> list[Effect]:
-        if should_refresh_ttls():
+        ttls_due = should_refresh_ttls()
+        if ttls_due:
             refreshed = refresh_all_ttls()
             log.info(f"Cache TTL refresh complete: {refreshed} keys refreshed")
         else:
@@ -63,6 +65,8 @@ class CacheRefreshTask(CronTask):
             log_job_failure("schedulable_staff")
             schedulable = None
         effects = _ensure_provider_calendars(schedulable) if schedulable is not None else []
+        if ttls_due and schedulable is not None:
+            refresh_provider_facility_ttls([str(s.id) for s in schedulable])
 
         # Who is bookable changes outside the plugin too: a role edited on a
         # staff record, someone activated or deactivated, or the Provider role

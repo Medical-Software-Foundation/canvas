@@ -1782,10 +1782,31 @@ class TestFacilityList:
         assert counts.mock_calls == []
         assert by_provider.mock_calls == [call({FACILITY_ID})]
 
-    def test_patient_counts_come_on_request(self):
+    def test_patient_counts_come_on_request_while_facility_blocks_are_on(self):
+        from provider_availability.engine.settings import set_feature
+
+        set_feature("facility_blocks", True)
         with patch(f"{MODULE}.facility_patient_counts", return_value={FACILITY_ID: 6}):
             data, code = _parse(_make_handler().get_facility_patient_counts()[0])
         assert (code, data) == (HTTPStatus.OK, {"counts": {FACILITY_ID: 6}})
+
+    def test_no_patient_counts_while_facility_blocks_are_off(self):
+        with patch(f"{MODULE}.facility_patient_counts") as counts:
+            data, _ = _parse(_make_handler().get_facility_patient_counts()[0])
+        assert data == {"counts": {}}
+        assert counts.mock_calls == []
+
+    def test_no_patient_counts_for_staff_with_no_access_to_others(self):
+        from provider_availability.engine.access import Access
+        from provider_availability.engine.settings import set_feature
+
+        set_feature("facility_blocks", True)
+        no_access = Access("staff-1", is_admin=False, group_providers=None, default_access="none")
+        with patch(f"{MODULE}._access", return_value=no_access), \
+             patch(f"{MODULE}.facility_patient_counts") as counts:
+            data, _ = _parse(_make_handler().get_facility_patient_counts()[0])
+        assert data == {"counts": {}}
+        assert counts.mock_calls == []
 
 
 @pytest.mark.parametrize("route", ["create_or_update_rule", "update_rule_group", "create_block", "update_block", "create_recurring_block", "update_recurring_block"])
@@ -1802,3 +1823,110 @@ def test_an_undashed_uuid_id_is_accepted():
     assert _id_error({"id": "0a1b2c3d00004000800000000000000a"}) is None
     assert _id_error({}) is None
     assert _id_error({"id": 5}) is not None
+
+
+
+@patch(f"{MODULE}._check_write_access", return_value=None)
+class TestReplaceAndGroupLocations:
+    def test_one_request_saves_dates_with_their_own_times(self, _access):
+        body = {
+            "provider_id": PROVIDER_ID,
+            "entries": [
+                {"date": "2026-03-12", "all_day": False, "start": "09:00:00", "end": "10:00:00"},
+                {"date": "2026-03-10", "all_day": True, "start": "", "end": ""},
+            ],
+        }
+        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+            result = _make_handler(json_body=body).create_block()
+        data, code = _parse(result[-1])
+        saved = [c.args[0] for c in save.mock_calls]
+        assert code == HTTPStatus.CREATED
+        assert [(b.start, b.end, b.all_day) for b in saved] == [
+            (datetime(2026, 3, 10, 0, 0), datetime(2026, 3, 10, 23, 59, 59), True),
+            (datetime(2026, 3, 12, 9, 0), datetime(2026, 3, 12, 10, 0), False),
+        ]
+        assert saved[0].group_id and saved[0].group_id == saved[1].group_id == data["group_id"]
+
+    def test_one_bad_entry_saves_nothing_and_keeps_the_replaced_blocks(self, _access):
+        old = AdminBlock(id=BLOCK_ID, provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 10))
+        body = {
+            "provider_id": PROVIDER_ID, "replace_block_ids": [BLOCK_ID],
+            "entries": [
+                {"date": "2026-03-10", "all_day": True},
+                {"date": "2026-03-11", "all_day": False, "start": "10:00:00", "end": "09:00:00"},
+            ],
+        }
+        with patch(f"{MODULE}.get_block_by_id", return_value=old), \
+             patch(f"{MODULE}.delete_block") as delete, patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).create_block()
+        assert _parse(result[0])[1] == HTTPStatus.BAD_REQUEST
+        assert delete.mock_calls == [] and save.mock_calls == []
+
+    def test_entries_must_be_a_list_of_objects(self, _access):
+        result = _make_handler(json_body={"provider_id": PROVIDER_ID, "entries": ["2026-03-10"]}).create_block()
+        assert _parse(result[0]) == ({"error": "entries must be a list of dates with times"}, HTTPStatus.BAD_REQUEST)
+
+    def test_a_single_replacement_removes_the_old_block_before_saving_the_new_one(self, _access):
+        old = AdminBlock(id=BLOCK_ID, provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 10))
+        order: list[str] = []
+
+        def delete_events(*args, **kwargs):
+            order.append("delete events")
+            return []
+
+        body = {"provider_id": PROVIDER_ID, "start": "2026-03-10T09:00:00", "end": "2026-03-10T10:00:00", "replace_block_ids": [BLOCK_ID]}
+        with patch(f"{MODULE}.get_block_by_id", return_value=old), \
+             patch(f"{MODULE}.build_delete_block_effects", side_effect=delete_events), \
+             patch(f"{MODULE}.delete_block", side_effect=lambda *a: order.append("delete block")), \
+             patch(f"{MODULE}.save_block", side_effect=lambda b: order.append("save")), \
+             patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+            _make_handler(json_body=body).create_block()
+        assert order == ["delete events", "delete block", "save"]
+
+    def test_a_group_leaving_a_facility_takes_the_edited_blocks_locations(self, _access):
+        other = AdminBlock(
+            id=BLOCK_ID_2, provider_id=PROVIDER_ID_2, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 12),
+            reason="Riverstone Visit", group_id="g-1", facility_id=FACILITY_ID, facility_name="Riverstone",
+        )
+        body = {
+            "id": BLOCK_ID, "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00",
+            "group_id": "g-1", "apply_to_group": True, "reason": "PTO", "location_ids": [LOCATION_ID],
+        }
+        with patch(f"{MODULE}.get_blocks_by_group", return_value=[other]), \
+             patch(f"{MODULE}.get_block_by_id", return_value=None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.build_block_event_effects", return_value=[]), \
+             patch(f"{MODULE}.save_block"):
+            _make_handler(json_body=body).update_block()
+        assert (other.facility_id, other.reason, other.location_ids) == ("", "PTO", [LOCATION_ID])
+
+    def test_a_time_off_group_keeps_each_blocks_own_locations(self, _access):
+        other = AdminBlock(
+            id=BLOCK_ID_2, provider_id=PROVIDER_ID_2, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 12),
+            reason="PTO", group_id="g-1", location_ids=["loc-own"],
+        )
+        body = {
+            "id": BLOCK_ID, "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00",
+            "group_id": "g-1", "apply_to_group": True, "reason": "PTO", "location_ids": [LOCATION_ID],
+        }
+        with patch(f"{MODULE}.get_blocks_by_group", return_value=[other]), \
+             patch(f"{MODULE}.get_block_by_id", return_value=None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.build_block_event_effects", return_value=[]), \
+             patch(f"{MODULE}.save_block"):
+            _make_handler(json_body=body).update_block()
+        assert other.location_ids == ["loc-own"]
+
+    def test_a_recurring_group_leaving_a_facility_takes_the_edited_blocks_locations(self, _access):
+        other = RecurringBlock(id=RB_ID_2, provider_id=PROVIDER_ID_2, reason="Riverstone Visit", group_id="g-1",
+                               facility_id=FACILITY_ID, facility_name="Riverstone")
+        body = {
+            "id": RB_ID, "provider_id": PROVIDER_ID, "group_id": "g-1", "apply_to_group": True, "effective_start": "2026-01-05",
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "reason": "Lunch", "location_ids": [LOCATION_ID],
+        }
+        with patch(f"{MODULE}.get_recurring_blocks_by_group", return_value=[other]), \
+             patch(f"{MODULE}.get_recurring_block_by_id", return_value=None), \
+             patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[]), \
+             patch(f"{MODULE}.save_recurring_block"):
+            _make_handler(json_body=body).update_recurring_block()
+        assert (other.facility_id, other.location_ids) == ("", [LOCATION_ID])

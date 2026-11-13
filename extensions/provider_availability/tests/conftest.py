@@ -173,6 +173,9 @@ class FakeCache:
     def delete(self, key):
         self.data.pop(key, None)
 
+    def get_many(self, keys):
+        return {k: self.data[k] for k in keys if k in self.data}
+
 
 @pytest.fixture(autouse=True)
 def settings_cache():

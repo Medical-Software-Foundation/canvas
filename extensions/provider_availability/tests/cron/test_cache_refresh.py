@@ -54,6 +54,23 @@ class TestCacheRefreshTaskExecute:
             assert mock_hold.mock_calls == []
             assert result == []
 
+    def test_refresh_keeps_every_schedulable_providers_facilities(self):
+        handler = CacheRefreshTask(MagicMock())
+        staff = [MagicMock(id="s1"), MagicMock(id="s2")]
+
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=staff), \
+             patch(f"{CR_MODULE}.should_refresh_ttls", return_value=True), \
+             patch(f"{CR_MODULE}.refresh_all_ttls", return_value=0), \
+             patch(f"{CR_MODULE}.refresh_provider_facility_ttls") as mock_fac, \
+             patch(f"{CR_MODULE}.get_last_sync_date", return_value=date.today().isoformat()), \
+             patch(f"{CR_MODULE}._ensure_provider_calendars", return_value=[]), \
+             patch(f"{CR_MODULE}._daily_resync", return_value=[]), \
+             patch(f"{CR_MODULE}._refresh_lead_time_blocks", return_value=[]), \
+             patch(f"{CR_MODULE}._refresh_hold_blocks", return_value=[]):
+            handler.execute()
+
+        assert mock_fac.mock_calls == [call(["s1", "s2"])]
+
     def test_execute_skips_refresh_when_not_due(self):
         handler = CacheRefreshTask(MagicMock())
 
