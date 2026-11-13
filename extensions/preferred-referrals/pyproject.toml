@@ -1,0 +1,22 @@
+# Local development and testing only. The Canvas plugin has its own packaging
+# process that does not use this file.
+[project]
+name = "preferred-referrals"
+version = "0.1.0"
+description = "Practice-curated preferred referral directory on top of the native Refer command"
+license = "MIT"
+readme = "preferred_referrals/README.md"
+requires-python = ">=3.12"
+dependencies = ["canvas[test-utils]"]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "pytest-cov>=4.1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+branch = true
+source = ["preferred_referrals"]
+omit = ["tests/*"]
