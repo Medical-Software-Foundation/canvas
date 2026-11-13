@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#2185D0"/>
+  <!-- Calendar base -->
+  <rect x="18" y="28" width="64" height="52" rx="5" ry="5" fill="#FFFFFF"/>
+  <!-- Calendar top bar -->
+  <rect x="18" y="28" width="64" height="18" rx="5" ry="5" fill="#1A6FB5"/>
+  <!-- Fix bottom-rounded corners on top bar -->
+  <rect x="18" y="38" width="64" height="8" fill="#1A6FB5"/>
+  <!-- Calendar binding pegs -->
+  <rect x="32" y="21" width="7" height="14" rx="3" fill="#FFFFFF"/>
+  <rect x="61" y="21" width="7" height="14" rx="3" fill="#FFFFFF"/>
+  <!-- Grid dots representing dates -->
+  <rect x="26" y="54" width="8" height="8" rx="2" fill="#2185D0"/>
+  <rect x="41" y="54" width="8" height="8" rx="2" fill="#2185D0"/>
+  <rect x="56" y="54" width="8" height="8" rx="2" fill="#22BA45"/>
+  <rect x="71" y="54" width="8" height="8" rx="2" fill="#2185D0"/>
+  <rect x="26" y="68" width="8" height="8" rx="2" fill="#2185D0"/>
+  <rect x="41" y="68" width="8" height="8" rx="2" fill="#2185D0"/>
+  <rect x="56" y="68" width="8" height="8" rx="2" fill="#2185D0"/>
+  <!-- Recurring arrows -->
+  <path d="M64 36 Q70 30 76 36" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <polygon points="76,32 76,40 82,36" fill="#FFFFFF"/>
+</svg>
