@@ -1,0 +1,30 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_sync_target",
+    "description": "Target half of patient-sync. Receives an anonymized patient bundle and dispatches import effects to recreate the patient with preserved ids. See SPEC.md alongside this plugin.",
+    "components": {
+        "handlers": [
+            {
+                "class": "patient_sync_target.handlers.importer:PatientSyncTargetAPI",
+                "description": "HTTP API that receives a patient bundle and dispatches import effects."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "simpleapi-api-key", "sensitive": true}
+    ],
+    "custom_data": {
+        "namespace": "canvas__patient_sync_target",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

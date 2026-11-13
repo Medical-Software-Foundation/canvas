@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_sync_source",
+    "description": "Source half of patient-sync. Walks a patient graph, anonymizes PHI, and POSTs the bundle to a target Canvas instance. See SPEC.md alongside this plugin.",
+    "components": {
+        "handlers": [
+            {
+                "class": "patient_sync_source.handlers.exporter:PatientSyncSourceAPI",
+                "description": "HTTP API to trigger a patient export to a target Canvas instance."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "simpleapi-api-key", "sensitive": true},
+        {"name": "target_api_key", "sensitive": true},
+        {"name": "callback_shared_secret", "sensitive": true},
+        {"name": "anonymization_key", "sensitive": true},
+        {"name": "source_host", "sensitive": false}
+    ],
+    "custom_data": {
+        "namespace": "canvas__patient_sync_source",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
