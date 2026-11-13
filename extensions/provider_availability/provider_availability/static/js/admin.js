@@ -569,6 +569,13 @@ var _EXPIRED_TYPES = {
 
 // Safe in element text and in attribute values, including inline handlers:
 // the browser decodes the entities back before running the handler.
+// A value as a script string inside an onclick attribute. Escaping alone isn't enough
+// there: the browser decodes the attribute before running it, so the value is first
+// encoded as a JS string, then escaped for the attribute.
+function _jsArg(value) {
+  return _escHtml(JSON.stringify(value == null ? '' : value));
+}
+
 function _escHtml(text) {
   return (text == null ? '' : String(text))
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1795,14 +1802,14 @@ function renderAccordion() {
     });
     if (countHtml) html += '<span class="rule-counts">' + countHtml + '</span>';
     if (readOnly) html += '<span class="read-only-note">View only</span>';
-    html += '<button class="btn btn-avail" onclick="event.stopPropagation();addForProvider(\'' + pid + '\',\'available\')">+ Available</button>';
-    html += '<button class="btn btn-block-add" onclick="event.stopPropagation();addForProvider(\'' + pid + '\',\'blocked\')">+ Blocked</button>';
+    html += '<button class="btn btn-avail" onclick="event.stopPropagation();addForProvider(' + _jsArg(pid) + ',\'available\')">+ Available</button>';
+    html += '<button class="btn btn-block-add" onclick="event.stopPropagation();addForProvider(' + _jsArg(pid) + ',\'blocked\')">+ Blocked</button>';
     html += '<svg class="chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
     html += '</div></div>';
 
     if (!hasData) {
       html += '<div style="padding:32px 24px;text-align:center;color:var(--text-muted);font-size:14px;">No availability or blocks configured';
-      html += '<br><button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="addForProvider(\'' + pid + '\',\'available\')">+ Add Availability</button>';
+      html += '<br><button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="addForProvider(' + _jsArg(pid) + ',\'available\')">+ Add Availability</button>';
       html += '</div>';
     } else {
       html += '<table class="rule-table">' + RULE_TABLE_HEAD + '<tbody>';
@@ -1839,7 +1846,7 @@ function renderAccordion() {
             type: type, when: whenLabel(r, group.days), hours: hoursText(group.windows), place: place, reason: r.reason,
             effective: effectiveHtml(r.effective_start, r.effective_end, isExpiredRow(r)), items: items,
             edit: 'editRule(' + ruleJson + ')',
-            del: 'deleteRuleDays("' + r.provider_id + '","' + r.id + '",' + JSON.stringify(group.days) + ',' + ruleJson + ')',
+            del: 'deleteRuleDays(' + _jsArg(r.provider_id) + ',' + _jsArg(r.id) + ',' + _jsArg(group.days) + ',' + ruleJson + ')',
           });
         });
         if (groups.length === 0) {
@@ -1847,7 +1854,7 @@ function renderAccordion() {
             type: type, when: 'No days', hours: '—', place: place, reason: r.reason,
             effective: effectiveHtml(r.effective_start, r.effective_end, isExpiredRow(r)), items: items,
             edit: 'editRule(' + ruleJson + ')',
-            del: 'confirmDeleteRule("' + r.provider_id + '","' + r.id + '")',
+            del: 'confirmDeleteRule(' + _jsArg(r.provider_id) + ',' + _jsArg(r.id) + ')',
           });
         }
         rows.push({ order: RULE_ORDER[type], sortKey: r.effective_start || '0000-00-00', html: rowHtml });
@@ -1861,8 +1868,8 @@ function renderAccordion() {
           rows.push({ order: RULE_ORDER.over, sortKey: ovr.date, html: ruleRowHtml({
             type: 'over', when: fmtWeekdayDate(ovr.date), hours: ovr.is_closed ? 'Closed' : hoursText(ovr.time_windows || []),
             place: place, reason: ovr.reason, effective: effectiveHtml(ovr.date, ovr.date, isExpiredOverride(ovr)), items: ovrItems,
-            edit: 'editOverrideFromAccordion("' + r.provider_id + '","' + r.id + '",' + ovrJson + ')',
-            del: 'deleteOverrideFromAccordion("' + r.provider_id + '","' + r.id + '","' + ovr.date + '")',
+            edit: 'editOverrideFromAccordion(' + _jsArg(r.provider_id) + ',' + _jsArg(r.id) + ',' + ovrJson + ')',
+            del: 'deleteOverrideFromAccordion(' + _jsArg(r.provider_id) + ',' + _jsArg(r.id) + ',' + _jsArg(ovr.date) + ')',
           }) });
         });
       });
@@ -1881,7 +1888,7 @@ function renderAccordion() {
           reason: fb ? '' : b.reason, effective: effectiveHtml(day, day, isExpiredBlock(b)),
           items: fb ? facilityBlockItems(b) : (locNames.length > 1 ? [['Locations', locNames.join(', ')]] : []),
           edit: 'editBlock(' + blockJson + ')',
-          del: 'confirmDeleteBlock("' + b.provider_id + '","' + b.id + '")',
+          del: 'confirmDeleteBlock(' + _jsArg(b.provider_id) + ',' + _jsArg(b.id) + ')',
         }) });
       });
 
@@ -1910,8 +1917,8 @@ function renderAccordion() {
             reason: reason, effective: effectiveHtml(rb.effective_start, rb.effective_end, isExpiredRow(rb)), items: items,
             edit: (isHold ? 'editHold(' : 'editRecurringBlock(') + rbJson + ')',
             del: isHold
-              ? 'deleteHold("' + rb.provider_id + '","' + rb.id + '")'
-              : 'deleteRecurringBlockDays("' + rb.provider_id + '","' + rb.id + '",' + JSON.stringify(group.days) + ',' + rbJson + ')',
+              ? 'deleteHold(' + _jsArg(rb.provider_id) + ',' + _jsArg(rb.id) + ')'
+              : 'deleteRecurringBlockDays(' + _jsArg(rb.provider_id) + ',' + _jsArg(rb.id) + ',' + _jsArg(group.days) + ',' + rbJson + ')',
           });
         });
         rows.push({ order: RULE_ORDER[type], sortKey: rb.effective_start || '0000-00-00', html: rowHtml });
@@ -2167,13 +2174,13 @@ function renderOverridesList() {
     html += '<span class="ovr-when">' + detail + '</span>';
     html += '<span class="ovr-reason">' + _escHtml(o.reason || '') + '</span>';
     html += '<span class="ovr-acts"><button type="button" class="lnk-sm" onclick=\'editOverrideInPlace(' + _escHtml(JSON.stringify(JSON.stringify(o))) + ')\'>Edit</button>';
-    html += '<button type="button" class="lnk-sm danger" onclick="askRemoveOverride(\'' + dateStr + '\')">Remove</button></span>';
+    html += '<button type="button" class="lnk-sm danger" onclick="askRemoveOverride(' + _jsArg(dateStr) + ')">Remove</button></span>';
     html += '</div>';
     if (_removingOverride === dateStr) {
       html += '<div class="ax-confirm ovr-confirm"><div><div class="ax-cf-title">Remove the override for ' + _escHtml(label) + '?</div>' +
         '<p>That date goes back to the weekly schedule.</p></div>' +
         '<button type="button" class="btn" onclick="askRemoveOverride(null)">Cancel</button>' +
-        '<button type="button" class="btn btn-danger" onclick="deleteOverride(\'' + dateStr + '\')">Remove</button></div>';
+        '<button type="button" class="btn btn-danger" onclick="deleteOverride(' + _jsArg(dateStr) + ')">Remove</button></div>';
     }
   });
   html += '</div>';

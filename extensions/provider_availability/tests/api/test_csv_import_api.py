@@ -426,3 +426,43 @@ def test_commit_saves_a_round_with_the_canvas_name_and_recounts_it():
     assert (saved.facility_id, saved.facility_name, saved.max_visits) == (FAC_ID, "Sunrise Terrace", 6)
     assert refresh.mock_calls == [call("prov-1")]
     assert "round-full" in result
+
+
+def test_commit_ignores_sent_ids_and_block_facilities():
+    """An import creates new records with ids of its own, and its blocks are always time off,
+    whatever the browser sends."""
+    block_rec = {
+        "kind": "block", "provider_id": "prov-1", "location_ids": [], "id": 'x"),alert(1),("',
+        "start": "2026-07-04T00:00:00", "end": "2026-07-04T23:59:59", "all_day": True, "reason": "Holiday",
+        "facility_id": "0d3c9f4e-5a2b-4c8d-9e1f-123456789abc", "facility_name": "Anything",
+    }
+    rblock_rec = {
+        "kind": "rblock", "provider_id": "prov-1", "location_ids": [], "id": "rb-1",
+        "weekly_schedule": {"monday": [{"start": "12:00", "end": "13:00"}]},
+        "time_windows": [], "recurrence_frequency": "weekly", "recurrence_interval": 1,
+        "reason": "Lunch", "hold_type": "none", "effective_start": None, "effective_end": None, "is_active": True,
+        "facility_id": "0d3c9f4e-5a2b-4c8d-9e1f-123456789abc", "facility_name": "Anything",
+    }
+    handler = _handler(json_body={"records": [block_rec, rblock_rec]})
+
+    with patch(CSV_MODULE + "._check_write_access", return_value=None), patch.multiple(
+        CSV_MODULE,
+        save_block=DEFAULT,
+        save_recurring_block=DEFAULT,
+        build_block_event_effects=DEFAULT,
+        build_recurring_blocks_resync_effects=DEFAULT,
+        get_active_staff_ids=DEFAULT,
+        get_all_rules=DEFAULT,
+    ) as mocks:
+        mocks["get_active_staff_ids"].return_value = {"prov-1"}
+        mocks["get_all_rules"].return_value = []
+        mocks["build_block_event_effects"].return_value = []
+        mocks["build_recurring_blocks_resync_effects"].return_value = []
+        handler.commit_records()
+
+    block = mocks["save_block"].call_args.args[0]
+    rblock = mocks["save_recurring_block"].call_args.args[0]
+    assert (block.facility_id, block.facility_name, block.reason) == ("", "", "Holiday")
+    assert (rblock.facility_id, rblock.facility_name) == ("", "")
+    assert block.id != 'x"),alert(1),("' and len(block.id) == 36
+    assert rblock.id != "rb-1"

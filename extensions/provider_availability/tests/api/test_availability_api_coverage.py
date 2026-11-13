@@ -41,6 +41,13 @@ VISIT_TYPE_ID = "visit-type-uuid-789"
 
 MODULE = "provider_availability.api.availability_api"
 
+# Saved ids are UUIDs; the save routes refuse anything else.
+RULE_ID = "0a1b2c3d-0000-4000-8000-000000000001"
+BLOCK_ID = "0a1b2c3d-0000-4000-8000-000000000002"
+RB_ID = "0a1b2c3d-0000-4000-8000-000000000003"
+BLOCK_ID_2 = "0a1b2c3d-0000-4000-8000-000000000004"
+RB_ID_2 = "0a1b2c3d-0000-4000-8000-000000000005"
+
 
 def _parse(response) -> tuple[dict, int]:
     """Extract (body_dict, status_code) from a JSONResponse."""
@@ -131,7 +138,7 @@ class TestUpdateRuleGroupBranches:
         """When payload omits date_overrides/timezone, they come from the existing
         rule; an active lead-time rule produces lead-time block effects."""
         existing = ProviderAvailabilityRule(
-            id="r1",
+            id=RULE_ID,
             provider_id=PROVIDER_ID,
             timezone="US/Eastern",
             date_overrides=[
@@ -145,7 +152,7 @@ class TestUpdateRuleGroupBranches:
         mock_get_rules.return_value = [_lead_time_rule()]
 
         body = {
-            "id": "r1",
+            "id": RULE_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -184,7 +191,7 @@ class TestUpdateRuleGroupBranches:
         """No remaining lead-time rule -> orphaned Lead Time events are cleaned up
         via delete_provider_lead_time_events."""
         body = {
-            "id": "r1",
+            "id": RULE_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "weekly_schedule": {},
@@ -458,7 +465,7 @@ class TestUpdateBlockGroupSkipsSelf:
         mock_access,
     ):
         same = AdminBlock(
-            id="b1",
+            id=BLOCK_ID,
             provider_id=PROVIDER_ID,
             start=datetime(2026, 3, 10, 8, 0),
             end=datetime(2026, 3, 10, 11, 0),
@@ -466,7 +473,7 @@ class TestUpdateBlockGroupSkipsSelf:
         )
         mock_group.return_value = [same]
         body = {
-            "id": "b1",
+            "id": BLOCK_ID,
             "provider_id": PROVIDER_ID,
             "start": "2026-03-10T09:00:00",
             "end": "2026-03-10T12:00:00",
@@ -1406,7 +1413,7 @@ class TestStartDateRequired:
     @patch(f"{MODULE}.get_recurring_block_by_id", new=lambda *a: None)
     def test_missing_start_date_is_rejected(self, mock_access, route):
         handler = _make_handler(json_body={
-            "id": "x1", "provider_id": PROVIDER_ID,
+            "id": RULE_ID, "provider_id": PROVIDER_ID,
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
         })
         data, code = _parse(getattr(handler, route)()[0])
@@ -1490,7 +1497,7 @@ class TestRoundSave:
         self, _access, _feature, _overlap, _sync, _lead, _del_lead
     ):
         sibling = ProviderAvailabilityRule(id="r2", provider_id=PROVIDER_ID_2, group_id="g1")
-        body = dict(ROUND_BODY, id="r1", group_id="g1", apply_to_group=True, max_visits=6)
+        body = dict(ROUND_BODY, id=RULE_ID, group_id="g1", apply_to_group=True, max_visits=6)
         handler = _make_handler(json_body=body)
         with patch("provider_availability.engine.facilities.active_facility_name", return_value="Apple Valley Care"), \
              patch(f"{MODULE}.get_rules_by_group", return_value=[sibling]), \
@@ -1511,8 +1518,8 @@ class TestRoundSave:
     @patch(f"{MODULE}.delete_rule_by_id")
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_deleting_a_round_clears_its_full_blocks(self, _access, _delete, _sync, _rules, _lead):
-        doomed = ProviderAvailabilityRule(id="r1", provider_id=PROVIDER_ID, facility_id=ROUND_FACILITY_ID)
-        handler = _make_handler(path_params={"provider_id": PROVIDER_ID, "rule_id": "r1"})
+        doomed = ProviderAvailabilityRule(id=RULE_ID, provider_id=PROVIDER_ID, facility_id=ROUND_FACILITY_ID)
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID, "rule_id": RULE_ID})
         with patch(f"{MODULE}.get_rule_by_id", return_value=doomed), \
              patch(f"{MODULE}.refresh_round_limits", return_value=["round-fx"]) as refresh:
             result = handler.delete_rule()
@@ -1575,10 +1582,10 @@ class TestFacilityBlocks:
 
     def test_a_saved_facility_block_can_be_edited_while_the_switch_is_off(self, _access):
         old = AdminBlock(
-            id="b-1", provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 13), end=datetime(2026, 3, 10, 16),
+            id=BLOCK_ID, provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 13), end=datetime(2026, 3, 10, 16),
             reason="Old Name Visit", facility_id=FACILITY_ID, facility_name="Old Name",
         )
-        body = {"id": "b-1", "provider_id": PROVIDER_ID, "start": "2026-03-10T14:00:00", "end": "2026-03-10T17:00:00", "facility_id": FACILITY_ID}
+        body = {"id": BLOCK_ID, "provider_id": PROVIDER_ID, "start": "2026-03-10T14:00:00", "end": "2026-03-10T17:00:00", "facility_id": FACILITY_ID}
         with patch(f"{MODULE}.get_block_by_id", return_value=old), \
              patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
              patch(f"{MODULE}.build_block_event_effects", return_value=[]), \
@@ -1591,11 +1598,11 @@ class TestFacilityBlocks:
 
     def test_a_group_edit_moves_every_block_to_the_facility(self, _access, facility_blocks_on):
         other = AdminBlock(
-            id="b-2", provider_id=PROVIDER_ID_2, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 12),
+            id=BLOCK_ID_2, provider_id=PROVIDER_ID_2, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 12),
             reason="PTO", location_ids=[LOCATION_ID], group_id="g-1",
         )
         body = {
-            "id": "b-1", "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00",
+            "id": BLOCK_ID, "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00",
             "group_id": "g-1", "apply_to_group": True, "facility_id": FACILITY_ID,
         }
         with patch(f"{MODULE}.get_blocks_by_group", return_value=[other]), \
@@ -1623,8 +1630,8 @@ class TestFacilityBlocks:
         )
 
     def test_moving_a_time_off_block_to_a_facility_needs_the_switch(self, _access):
-        old = AdminBlock(id="b-1", provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 13), end=datetime(2026, 3, 10, 16), reason="PTO")
-        body = {"id": "b-1", "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00", "facility_id": FACILITY_ID}
+        old = AdminBlock(id=BLOCK_ID, provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 13), end=datetime(2026, 3, 10, 16), reason="PTO")
+        body = {"id": BLOCK_ID, "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00", "facility_id": FACILITY_ID}
         with patch(f"{MODULE}.get_block_by_id", return_value=old), patch(f"{MODULE}.save_block") as save:
             result = _make_handler(json_body=body).update_block()
         data, code = _parse(result[0])
@@ -1667,7 +1674,7 @@ class TestFacilityBlocks:
         assert _parse(result[-1])[1] == HTTPStatus.CREATED
         assert result[:-1] == ["del"] * 3 + ["new"] * 2
         assert delete.mock_calls == [call(PROVIDER_ID, b.id) for b in group]
-        assert dele.mock_calls == [call(PROVIDER_ID, b, skip_ids={"b-0", "b-1", "b-2"}) for b in group]
+        assert dele.mock_calls == [call(PROVIDER_ID, b, skip_ids={b.id for b in group}) for b in group]
         assert [c.args[0].reason for c in save.mock_calls] == ["Old Name Visit"] * 2
 
     def test_a_refused_replacement_leaves_the_saved_blocks(self, _access):
@@ -1728,9 +1735,9 @@ class TestFacilityBlocks:
         assert save.call_args.args[0].hold_type == "none"
 
     def test_a_recurring_facility_block_edit_needs_the_switch_for_a_new_facility(self, _access):
-        before = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, reason="PTO")
+        before = RecurringBlock(id=RB_ID, provider_id=PROVIDER_ID, reason="PTO")
         body = {
-            "id": "rb-1", "provider_id": PROVIDER_ID, "effective_start": "2026-01-05",
+            "id": RB_ID, "provider_id": PROVIDER_ID, "effective_start": "2026-01-05",
             "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
         }
         with patch(f"{MODULE}.get_recurring_block_by_id", return_value=before), \
@@ -1741,9 +1748,9 @@ class TestFacilityBlocks:
         assert save.mock_calls == []
 
     def test_a_recurring_group_edit_moves_every_block_to_the_facility(self, _access, facility_blocks_on):
-        other = RecurringBlock(id="rb-2", provider_id=PROVIDER_ID_2, reason="PTO", location_ids=[LOCATION_ID], group_id="g-1", hold_type="same_day")
+        other = RecurringBlock(id=RB_ID_2, provider_id=PROVIDER_ID_2, reason="PTO", location_ids=[LOCATION_ID], group_id="g-1", hold_type="same_day")
         body = {
-            "id": "rb-1", "provider_id": PROVIDER_ID, "group_id": "g-1", "apply_to_group": True, "effective_start": "2026-01-05",
+            "id": RB_ID, "provider_id": PROVIDER_ID, "group_id": "g-1", "apply_to_group": True, "effective_start": "2026-01-05",
             "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
         }
         with patch(f"{MODULE}.get_recurring_blocks_by_group", return_value=[other]), \
@@ -1779,3 +1786,19 @@ class TestFacilityList:
         with patch(f"{MODULE}.facility_patient_counts", return_value={FACILITY_ID: 6}):
             data, code = _parse(_make_handler().get_facility_patient_counts()[0])
         assert (code, data) == (HTTPStatus.OK, {"counts": {FACILITY_ID: 6}})
+
+
+@pytest.mark.parametrize("route", ["create_or_update_rule", "update_rule_group", "create_block", "update_block", "create_recurring_block", "update_recurring_block"])
+def test_an_id_that_is_not_a_uuid_is_refused(route):
+    body = {"id": 'x"),alert(1),("', "provider_id": PROVIDER_ID}
+    with patch(f"{MODULE}._check_write_access", return_value=None):
+        data, code = _parse(getattr(_make_handler(json_body=body), route)()[0])
+    assert (code, data["error"]) == (HTTPStatus.BAD_REQUEST, "id must be the id of a saved item")
+
+
+def test_an_undashed_uuid_id_is_accepted():
+    from provider_availability.api.availability_api import _id_error
+
+    assert _id_error({"id": "0a1b2c3d00004000800000000000000a"}) is None
+    assert _id_error({}) is None
+    assert _id_error({"id": 5}) is not None

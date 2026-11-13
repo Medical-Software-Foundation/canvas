@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, date, datetime, time
 from http import HTTPStatus
 from typing import Any, Callable
@@ -175,6 +176,21 @@ def _enrich_rules(rules: list[ProviderAvailabilityRule]) -> list[dict]:
 
 
 _VALID_RECURRENCE_FREQUENCIES = ("weekly", "daily")
+
+
+# Saved rules and blocks have UUID ids. The page puts ids in its click handlers, so an
+# id sent in any other shape is refused rather than stored.
+_ID_RE = re.compile(r"^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")
+
+
+def _id_error(body: dict[str, Any]) -> list[Response | Effect] | None:
+    """A 400 when the payload's id isn't a UUID; None when it is, or when there's no id."""
+    value = body.get("id")
+    if value in (None, ""):
+        return None
+    if isinstance(value, str) and _ID_RE.match(value):
+        return None
+    return [JSONResponse({"error": "id must be the id of a saved item"}, status_code=HTTPStatus.BAD_REQUEST)]
 
 
 def _facility_list() -> list[dict[str, Any]]:
@@ -699,6 +715,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def create_or_update_rule(self) -> list[Response | Effect]:
         """Create or update a rule for a provider."""
         body = self.request.json()
+        bad_id = _id_error(body)
+        if bad_id:
+            return bad_id
 
         raw_provider_id = body.get("provider_id", "")
         provider_npi = body.get("provider_npi", "")
@@ -799,6 +818,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def update_rule_group(self) -> list[Response | Effect]:
         """Update a rule, optionally applying to all group members."""
         body = self.request.json()
+        bad_id = _id_error(body)
+        if bad_id:
+            return bad_id
         apply_to_group = body.pop("apply_to_group", False)
         rule_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
@@ -1077,6 +1099,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
           → creates one AdminBlock per date, sharing a fresh group_id.
         """
         body = self.request.json()
+        bad_id = _id_error(body)
+        if bad_id:
+            return bad_id
 
         provider_id = body.get("provider_id", "")
         if not provider_id:
@@ -1267,6 +1292,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def update_block(self) -> list[Response | Effect]:
         """Update an existing admin block."""
         body = self.request.json()
+        bad_id = _id_error(body)
+        if bad_id:
+            return bad_id
         block_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
         batch_blocks = get_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
@@ -1436,6 +1464,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def create_recurring_block(self) -> list[Response | Effect]:
         """Create a new recurring weekly block."""
         body = self.request.json()
+        bad_id = _id_error(body)
+        if bad_id:
+            return bad_id
 
         provider_id = body.get("provider_id", "")
         weekly_schedule = body.get("weekly_schedule", {})
@@ -1515,6 +1546,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def update_recurring_block(self) -> list[Response | Effect]:
         """Update an existing recurring block."""
         body = self.request.json()
+        bad_id = _id_error(body)
+        if bad_id:
+            return bad_id
         block_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
         batch_blocks = get_recurring_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []

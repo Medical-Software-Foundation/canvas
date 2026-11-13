@@ -36,6 +36,11 @@ VISIT_TYPE_ID = "visit-type-uuid-789"
 
 MODULE = "provider_availability.api.availability_api"
 
+# Saved ids are UUIDs; the save routes refuse anything else.
+RULE_ID = "0a1b2c3d-0000-4000-8000-000000000001"
+BLOCK_ID = "0a1b2c3d-0000-4000-8000-000000000002"
+RB_ID = "0a1b2c3d-0000-4000-8000-000000000003"
+
 
 def _sched(*ids):
     """Build a list of schedulable-staff mocks with the given ids."""
@@ -926,7 +931,7 @@ class TestUpdateRuleGroup:
     @patch(f"{MODULE}.get_rule_by_id", return_value=None)
     def test_success(self, mock_get_rule, mock_overlap, mock_save, mock_get_rules, mock_sync, mock_access):
         body = {
-            "id": "r1",
+            "id": RULE_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -939,7 +944,7 @@ class TestUpdateRuleGroup:
         assert "Updated 1 rule(s)" in data["message"]
         assert mock_save.mock_calls == [call(mock_save.call_args[0][0])]
         assert mock_sync.mock_calls == [call(PROVIDER_ID)]
-        assert mock_overlap.mock_calls == [call(mock_overlap.call_args[0][0], exclude_rule_id="r1")]
+        assert mock_overlap.mock_calls == [call(mock_overlap.call_args[0][0], exclude_rule_id=RULE_ID)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_id_or_provider(self, mock_access):
@@ -962,7 +967,7 @@ class TestUpdateRuleGroup:
     @patch(f"{MODULE}.get_rule_by_id", return_value=None)
     def test_overlap_error(self, mock_get_rule, mock_overlap, mock_access):
         body = {
-            "id": "r1",
+            "id": RULE_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "weekly_schedule": {},
@@ -972,7 +977,7 @@ class TestUpdateRuleGroup:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "Overlap" in data["error"]
-        assert mock_overlap.mock_calls == [call(mock_overlap.call_args[0][0], exclude_rule_id="r1")]
+        assert mock_overlap.mock_calls == [call(mock_overlap.call_args[0][0], exclude_rule_id=RULE_ID)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
@@ -989,7 +994,7 @@ class TestUpdateRuleGroup:
         mock_group.return_value = [group_rule]
 
         body = {
-            "id": "r1",
+            "id": RULE_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "group_id": "g1",
@@ -1018,12 +1023,12 @@ class TestUpdateRuleGroup:
     def test_apply_to_group_skips_self(self, mock_get_rule, mock_overlap, mock_group, mock_save, mock_get_rules, mock_sync, mock_access):
         """Group update skips the rule being edited (same ID)."""
         same_rule = ProviderAvailabilityRule(
-            id="r1", provider_id=PROVIDER_ID, group_id="g1"
+            id=RULE_ID, provider_id=PROVIDER_ID, group_id="g1"
         )
         mock_group.return_value = [same_rule]
 
         body = {
-            "id": "r1",
+            "id": RULE_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "group_id": "g1",
@@ -1046,7 +1051,7 @@ class TestUpdateRuleGroup:
         mock_access.return_value = [
             JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)
         ]
-        handler = _make_handler(json_body={"id": "r1", "provider_id": PROVIDER_ID})
+        handler = _make_handler(json_body={"id": RULE_ID, "provider_id": PROVIDER_ID})
         result = handler.update_rule_group()
         data, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
@@ -1481,7 +1486,7 @@ class TestUpdateBlock:
     @patch(f"{MODULE}.get_block_by_id", return_value=None)
     def test_success(self, mock_get, mock_del_effects, mock_save, mock_create_effects, mock_access):
         body = {
-            "id": "b1",
+            "id": BLOCK_ID,
             "provider_id": PROVIDER_ID,
             "start": "2026-03-10T09:00:00",
             "end": "2026-03-10T12:00:00",
@@ -1492,12 +1497,12 @@ class TestUpdateBlock:
         data, code = _parse(resp)
         assert code == HTTPStatus.OK
         assert "Updated 1 block(s)" in data["message"]
-        assert mock_get.mock_calls == [call(PROVIDER_ID, "b1")]
+        assert mock_get.mock_calls == [call(PROVIDER_ID, BLOCK_ID)]
         assert mock_save.mock_calls == [call(mock_save.call_args[0][0])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_fields(self, mock_access):
-        body = {"id": "b1"}
+        body = {"id": BLOCK_ID}
         handler = _make_handler(json_body=body)
         result = handler.update_block()
         data, code = _parse(result[0])
@@ -1508,7 +1513,7 @@ class TestUpdateBlock:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_invalid_time_range(self, mock_access):
         body = {
-            "id": "b1",
+            "id": BLOCK_ID,
             "provider_id": PROVIDER_ID,
             "start": "2026-03-10T14:00:00",
             "end": "2026-03-10T09:00:00",
@@ -1529,14 +1534,14 @@ class TestUpdateBlock:
     ):
         """When old block exists, delete effects are generated for it."""
         old_block = AdminBlock(
-            id="b1",
+            id=BLOCK_ID,
             provider_id=PROVIDER_ID,
             start=datetime(2026, 3, 10, 8, 0),
             end=datetime(2026, 3, 10, 11, 0),
         )
         mock_get.return_value = old_block
         body = {
-            "id": "b1",
+            "id": BLOCK_ID,
             "provider_id": PROVIDER_ID,
             "start": "2026-03-10T09:00:00",
             "end": "2026-03-10T12:00:00",
@@ -1546,7 +1551,7 @@ class TestUpdateBlock:
         resp = result[-1]
         data, code = _parse(resp)
         assert code == HTTPStatus.OK
-        assert mock_get.mock_calls == [call(PROVIDER_ID, "b1")]
+        assert mock_get.mock_calls == [call(PROVIDER_ID, BLOCK_ID)]
         assert mock_del_effects.mock_calls == [call(PROVIDER_ID, old_block)]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
@@ -1568,7 +1573,7 @@ class TestUpdateBlock:
         )
         mock_group.return_value = [group_block]
         body = {
-            "id": "b1",
+            "id": BLOCK_ID,
             "provider_id": PROVIDER_ID,
             "start": "2026-03-10T09:00:00",
             "end": "2026-03-10T12:00:00",
@@ -1742,7 +1747,7 @@ class TestUpdateRecurringBlock:
     @patch(f"{MODULE}.save_recurring_block")
     def test_success(self, mock_save, mock_effects, mock_access):
         body = {
-            "id": "rb1",
+            "id": RB_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
@@ -1768,7 +1773,7 @@ class TestUpdateRecurringBlock:
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_weekly_schedule(self, mock_access):
-        body = {"id": "rb1", "provider_id": PROVIDER_ID}
+        body = {"id": RB_ID, "provider_id": PROVIDER_ID}
         handler = _make_handler(json_body=body)
         result = handler.update_recurring_block()
         data, code = _parse(result[0])
@@ -1791,7 +1796,7 @@ class TestUpdateRecurringBlock:
         )
         mock_group.return_value = [group_block]
         body = {
-            "id": "rb1",
+            "id": RB_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "group_id": "g1",
@@ -1819,14 +1824,14 @@ class TestUpdateRecurringBlock:
     def test_apply_to_group_skips_self(self, mock_group, mock_save, mock_effects, mock_access):
         """Group update skips the block being edited (same ID)."""
         same_block = RecurringBlock(
-            id="rb1",
+            id=RB_ID,
             provider_id=PROVIDER_ID,
             group_id="g1",
             weekly_schedule={"monday": [TimeWindow(dt.time(9, 0), dt.time(12, 0))]},
         )
         mock_group.return_value = [same_block]
         body = {
-            "id": "rb1",
+            "id": RB_ID,
             "provider_id": PROVIDER_ID,
             "effective_start": "2026-01-05",
             "group_id": "g1",
@@ -1849,7 +1854,7 @@ class TestUpdateRecurringBlock:
             JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)
         ]
         handler = _make_handler(
-            json_body={"id": "rb1", "provider_id": PROVIDER_ID, "weekly_schedule": {"m": []}}
+            json_body={"id": RB_ID, "provider_id": PROVIDER_ID, "weekly_schedule": {"m": []}}
         )
         result = handler.update_recurring_block()
         _, code = _parse(result[0])

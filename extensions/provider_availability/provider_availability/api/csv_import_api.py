@@ -186,6 +186,12 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         # the facility still active, and the facility name comes from Canvas.
         rounds_on = is_feature_on("facility_rounds")
         for rec in records:
+            # An import always creates new records with ids of their own, and has no
+            # facility block rows, so a block is always time off.
+            rec.pop("id", None)
+            if rec.get("kind") in ("block", "rblock"):
+                rec.pop("facility_id", None)
+                rec.pop("facility_name", None)
             if rec.get("kind") == "rule" and rec.get("facility_id"):
                 problem = check_round(rec, rounds_on)
                 if problem:
