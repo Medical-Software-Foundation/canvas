@@ -14,6 +14,8 @@ from canvas_sdk.caching.plugins import get_cache
 from appointment_reminders.models.config import CampaignConfigRecord
 
 
+DEFAULT_CONFIRM_REPLY_WINDOW_DAYS = 4
+
 # Known fields for backward compatibility filtering
 _CAMPAIGN_CONFIG_FIELDS = {
     "confirmation_enabled",
@@ -49,6 +51,9 @@ _CAMPAIGN_CONFIG_FIELDS = {
     "decline_task_team_id",
     "decline_task_due_days",
     "decline_task_due_time",
+    "confirm_reply_window_days",
+    "other_reply_task_enabled",
+    "other_reply_task_team_id",
 }
 
 _NOTE_TYPE_FIELDS = {
@@ -364,6 +369,24 @@ class CampaignConfig:
     decline_task_due_days: int | None = None
     decline_task_due_time: str = "23:59"
 
+    # A confirm reply (Y/YES/1/C) only confirms the patient's nearest upcoming
+    # appointment when an appointment SMS for *that* appointment was accepted by
+    # Twilio within this many days. Without it, any YES on the shared number --
+    # an answer to a portal invite, a reply to staff, a reply weeks after the
+    # last reminder -- confirmed whatever appointment happened to be next.
+    #
+    # 4 covers the default 3-day-out reminder: it is sent at the day-out send
+    # time, so a reply just before an appointment later that day lands a little
+    # over 3 days after it.
+    confirm_reply_window_days: int = DEFAULT_CONFIRM_REPLY_WINDOW_DAYS
+
+    # Open a follow-up task for a reply that is neither a confirm, a decline nor
+    # a consent keyword, instead of only logging it. Off by default so an
+    # existing install keeps its behavior. The task uses the decline task's due
+    # date rule; the team is its own setting ("" = unassigned).
+    other_reply_task_enabled: bool = False
+    other_reply_task_team_id: str = ""
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -400,6 +423,9 @@ class CampaignConfig:
             "decline_task_team_id": self.decline_task_team_id,
             "decline_task_due_days": self.decline_task_due_days,
             "decline_task_due_time": self.decline_task_due_time,
+            "confirm_reply_window_days": self.confirm_reply_window_days,
+            "other_reply_task_enabled": self.other_reply_task_enabled,
+            "other_reply_task_team_id": self.other_reply_task_team_id,
         }
 
     @classmethod
@@ -423,6 +449,18 @@ class CampaignConfig:
                 )
             except (TypeError, ValueError):
                 cleaned["decline_task_due_days"] = None
+
+        # A blank, unparseable or non-positive window falls back to the default
+        # rather than to 0, which would silently stop every confirm reply.
+        if "confirm_reply_window_days" in cleaned:
+            raw_window = cleaned["confirm_reply_window_days"]
+            try:
+                window = int(raw_window)
+            except (TypeError, ValueError):
+                window = 0
+            cleaned["confirm_reply_window_days"] = (
+                window if window > 0 else DEFAULT_CONFIRM_REPLY_WINDOW_DAYS
+            )
 
         # Accept the allowlists as a list or as the comma/newline-separated text
         # the admin textareas post, so a hand-edited record loads either way.
