@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin">
+<style>
+  {{ shared_css|safe }}
+
+  /* Config page overrides */
+  :root {
+    --space-medium: 24px;
+    --color-surface: var(--color-bg);
+  }
+  body {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* Card layout */
+  .card {
+    background: white;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-huge);
+    margin-bottom: var(--space-medium);
+  }
+  .card h3 {
+    margin: 0 0 var(--space-medium);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-caps);
+  }
+
+  /* Toggle rows */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-small) 0;
+    border-bottom: var(--border-width) solid var(--color-bg);
+    min-height: 44px;
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row.disabled .toggle-label,
+  .toggle-row.disabled .toggle-desc { color: var(--color-border); }
+  .toggle-label { color: var(--color-text); font-size: var(--font-size-label); }
+  .toggle-desc { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: var(--space-mini); }
+
+  /* Toggle CSS now in shared styles.py */
+
+  /* Banner CSS now in shared styles.py */
+
+  /* Banner CSS now in shared styles.py */
+</style>
+</head>
+<body>
+  <div class="page-header">
+    <div>
+      <p class="page-title">Visit Summary Configuration</p>
+      <p class="page-subtitle">Enable or disable AI-powered visit summary features.</p>
+    </div>
+  </div>
+
+  <div class="banner banner-error hidden" id="error-banner" role="alert" aria-live="assertive"></div>
+
+  <div class="card">
+    <h3>Feature Toggles</h3>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Previous Visit Summary</div>
+        <div class="toggle-desc">Show AI summary of last locked note in note tabs</div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle" role="switch" aria-checked="{% if config.enable_previous_visit %}true{% else %}false{% endif %}" aria-label="Previous Visit Summary" data-key="enable_previous_visit"></button>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Since Your Last Visit</div>
+        <div class="toggle-desc">Show interim clinical activity between visits</div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle" role="switch" aria-checked="{% if config.enable_since_last_visit %}true{% else %}false{% endif %}" aria-label="Since Your Last Visit" data-key="enable_since_last_visit"></button>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Generate AVS Button</div>
+        <div class="toggle-desc">Show "Generate AVS" button in note footer</div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle" role="switch" aria-checked="{% if config.enable_avs %}true{% else %}false{% endif %}" aria-label="Generate AVS Button" data-key="enable_avs" id="toggle-avs"></button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    var saveUrl = '{{ save_url }}';
+    var errorBanner = document.getElementById('error-banner');
+    var errorTimer = null;
+
+    function showError(msg) {
+      clearTimeout(errorTimer);
+      errorBanner.textContent = msg;
+      errorBanner.classList.remove('hidden');
+      errorTimer = setTimeout(function() {
+        errorBanner.classList.add('hidden');
+      }, 5000);
+    }
+
+    function clearError() {
+      errorBanner.classList.add('hidden');
+    }
+
+    function getState() {
+      var state = {};
+      document.querySelectorAll('.toggle[data-key]').forEach(function(btn) {
+        state[btn.getAttribute('data-key')] = btn.getAttribute('aria-checked') === 'true';
+      });
+      return state;
+    }
+
+    function saveConfig() {
+      var data = getState();
+      clearError();
+      fetch(saveUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }).then(function(resp) {
+        if (!resp.ok) {
+          showError('Error saving settings. Please try again.');
+        }
+      }).catch(function() {
+        showError('Network error. Please check your connection.');
+      });
+    }
+
+    document.querySelectorAll('.toggle[data-key]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var checked = btn.getAttribute('aria-checked') === 'true';
+        btn.setAttribute('aria-checked', checked ? 'false' : 'true');
+        btn.classList.add('saving');
+        saveConfig();
+        setTimeout(function() { btn.classList.remove('saving'); }, 300);
+      });
+    });
+  </script>
+</body>
+</html>
