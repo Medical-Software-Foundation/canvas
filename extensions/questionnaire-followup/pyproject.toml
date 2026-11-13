@@ -1,0 +1,41 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  # A floor, not a pin. 0.226.1 is the version this was built and validated
+  # against - handlers load cleanly in its sandbox - and nothing older is
+  # supported. It is deliberately not pinned exactly: an exact pin existed to
+  # stop two development machines drifting onto different SDKs, which stops
+  # being the right trade once the plugin is installed by other people.
+  "canvas[test-utils]>=0.226.1"
+]
+description = "Present the paired long-form questionnaire in the patient portal when a patient screens positive on a short one."
+license = "MIT"
+name = "questionnaire-followup"
+readme = "questionnaire_followup/README.md"
+requires-python = ">=3.11"
+version = "0.5.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["questionnaire_followup"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest-cov>=7.1.0",
+]
