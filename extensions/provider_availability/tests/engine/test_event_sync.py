@@ -1,6 +1,9 @@
 """Tests for provider_availability.engine.event_sync."""
 
 import datetime as dt
+import json
+from types import SimpleNamespace
+from django.db.models import Q
 from datetime import UTC, date, datetime
 from unittest.mock import MagicMock, call, patch
 from zoneinfo import ZoneInfo
@@ -118,7 +121,7 @@ class TestSyncProviderAvailability:
 
         assert mock_delete.mock_calls == [call(PROVIDER_ID)]
         assert mock_get_rules.mock_calls == [call(PROVIDER_ID)]
-        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert mock_build_events.mock_calls == [call(sample_rule, None)]
         assert result == [delete_effect, event_effect]
 
     @patch(f"{MODULE}._build_rule_events")
@@ -187,7 +190,7 @@ class TestSyncProviderAvailability:
 
         result = sync_provider_availability(PROVIDER_ID)
 
-        assert mock_build_events.mock_calls == [call(rule1), call(rule2)]
+        assert mock_build_events.mock_calls == [call(rule1, None), call(rule2, None)]
         assert result == [eff1, eff2]
 
     @patch(f"{MODULE}._build_rule_events")
@@ -234,7 +237,7 @@ class TestSyncProviderAvailability:
         result = sync_provider_availability(PROVIDER_ID)
 
         # Only the active rule should be built
-        assert mock_build_events.mock_calls == [call(active)]
+        assert mock_build_events.mock_calls == [call(active, None)]
         assert len(result) == 1
 
 
@@ -297,7 +300,7 @@ class TestSyncProviderAvailabilityGate:
 
         result = sync_provider_availability(PROVIDER_ID)
 
-        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert mock_build_events.mock_calls == [call(sample_rule, None)]
         assert result == [delete_effect, event_effect]
 
     @patch(f"{MODULE}._build_rule_events")
@@ -316,7 +319,7 @@ class TestSyncProviderAvailabilityGate:
 
         result = sync_provider_availability(PROVIDER_ID)
 
-        assert mock_build_events.mock_calls == [call(sample_rule)]
+        assert mock_build_events.mock_calls == [call(sample_rule, None)]
         assert result == [delete_effect, event_effect]
 
 
@@ -463,11 +466,14 @@ class TestBuildDeleteEffects:
 
             result = build_delete_effects(PROVIDER_ID)
 
-            # One bulk query across all the provider's Clinic calendars
+            # One bulk query across all the provider's Clinic calendars, for both
+            # plugin titles: Available and facility rounds.
+            from provider_availability.engine.event_sync import ROUND_TITLE_PREFIX
+
             assert mock_event_objects.filter.call_args_list == [
                 call(
+                    Q(title=AVAILABILITY_TITLE) | Q(title__startswith=ROUND_TITLE_PREFIX),
                     calendar__id__in=["cal-1", "cal-2"],
-                    title=AVAILABILITY_TITLE,
                     is_cancelled=False,
                 )
             ]
@@ -1408,6 +1414,18 @@ class TestBuildDeleteBlockEffects:
         assert first_call.kwargs["calendar__id__in"] == ["admin-cal-1"]
         assert first_call.kwargs["is_cancelled"] is False
         assert len(result) == 1
+
+    @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
+    @patch(f"{MODULE}.get_admin_calendars")
+    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    def test_time_range_fallback_keeps_a_round_full_block(self, _ids, mock_get_admin_cals, _tz, sample_block):
+        mock_get_admin_cals.return_value = [SimpleNamespace(id="admin-cal-1")]
+        same_times = QS([SimpleNamespace(id="evt-block", title="PTO"), SimpleNamespace(id="evt-full", title="Round full")])
+        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects, \
+             patch(f"{MODULE}._redraw_same_time_blocks", return_value=[]):
+            mock_event_objects.filter.return_value = same_times
+            result = build_delete_block_effects(PROVIDER_ID, sample_block)
+        assert [json.loads(e.payload)["data"]["event_id"] for e in result] == ["evt-block"]
 
     @patch(f"{MODULE}.get_admin_calendars")
     def test_no_block_deletes_all_block_titled(self, mock_get_admin_cals):

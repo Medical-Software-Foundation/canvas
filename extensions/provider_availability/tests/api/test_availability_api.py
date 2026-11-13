@@ -1054,11 +1054,12 @@ class TestUpdateRuleGroup:
 
 
 class TestDeleteRule:
+    @patch(f"{MODULE}.get_rule_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.delete_rule_by_id")
-    def test_success(self, mock_delete, mock_get_rules, mock_sync, mock_access):
+    def test_success(self, mock_delete, mock_get_rules, mock_sync, mock_access, _get_rule):
         handler = _make_handler(
             path_params={"provider_id": PROVIDER_ID, "rule_id": "r1"}
         )
@@ -1926,17 +1927,57 @@ class TestGetTimezone:
 
 
 class TestSetTimezone:
-    @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.set_practice_timezone")
-    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
-    def test_success(self, mock_set, mock_access):
-        handler = _make_handler(json_body={"timezone": "US/Eastern"})
-        result = handler.set_timezone()
-        resp = result[-1]
-        data, code = _parse(resp)
+    """Practice timezone: who moves with it, and Apply to all."""
+
+    def _run(self, body, own=None, practice="UTC", rules=("p1", "p2"), timezones_on=True):
+        handler = _make_handler(json_body=body)
+        mocks = {}
+        with patch(f"{MODULE}._check_write_access", return_value=None), \
+             patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"]), \
+             patch(f"{MODULE}.get_all_provider_timezones", return_value=dict(own or {})), \
+             patch(f"{MODULE}.get_practice_timezone", return_value=practice), \
+             patch(f"{MODULE}.get_all_rules", return_value=[MagicMock(provider_id=pid) for pid in rules]), \
+             patch(f"{MODULE}.get_all_blocks", return_value=[]), \
+             patch(f"{MODULE}.get_all_recurring_blocks", return_value=[]), \
+             patch(f"{MODULE}.is_feature_on", return_value=timezones_on), \
+             patch(f"{MODULE}.set_practice_timezone") as mocks["set"], \
+             patch(f"{MODULE}.clear_provider_timezone") as mocks["clear"], \
+             patch(f"{MODULE}.sync_provider_availability", side_effect=lambda pid: [f"sync-{pid}"]) as mocks["sync"], \
+             patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[]):
+            result = handler.set_timezone()
+        data, code = _parse(result[-1])
+        return data, code, result[:-1], mocks
+
+    def test_providers_on_the_practice_timezone_move_with_it(self):
+        data, code, effects, mocks = self._run({"timezone": "US/Pacific"}, own={"p2": "US/Eastern"})
         assert code == HTTPStatus.OK
-        assert data["timezone"] == "US/Eastern"
-        assert mock_set.mock_calls == [call("US/Eastern")]
+        assert (data["timezone"], data["cleared"], data["redrawn"]) == ("US/Pacific", 0, 1)
+        assert mocks["set"].mock_calls == [call("US/Pacific")]
+        assert mocks["clear"].mock_calls == []
+        # p2 keeps US/Eastern, so only p1's events are redrawn.
+        assert effects == ["sync-p1"]
+
+    def test_apply_to_all_clears_every_providers_own_timezone(self):
+        data, _, effects, mocks = self._run(
+            {"timezone": "US/Pacific", "apply_to_all": True}, own={"p1": "US/Pacific", "p2": "US/Eastern"}
+        )
+        assert data["message"] == "Practice timezone set to US/Pacific. All providers use it."
+        assert mocks["clear"].mock_calls == [call("p1"), call("p2")]
+        assert effects == ["sync-p1", "sync-p2"]
+
+    def test_apply_to_all_with_the_same_practice_timezone_redraws_only_who_changes(self):
+        # Practice is already Pacific; p1 was on Pacific already, p2 moves from Eastern.
+        data, _, effects, mocks = self._run(
+            {"timezone": "US/Pacific", "apply_to_all": True}, own={"p1": "US/Pacific", "p2": "US/Eastern"},
+            practice="US/Pacific",
+        )
+        assert mocks["clear"].mock_calls == [call("p1"), call("p2")]
+        assert effects == ["sync-p2"]
+
+    def test_with_provider_timezones_off_everyone_moves(self):
+        _, _, effects, mocks = self._run({"timezone": "US/Pacific"}, own={"p2": "US/Eastern"}, timezones_on=False)
+        assert mocks["clear"].mock_calls == []
+        assert effects == ["sync-p1", "sync-p2"]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])

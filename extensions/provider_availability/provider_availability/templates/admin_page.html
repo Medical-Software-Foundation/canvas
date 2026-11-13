@@ -138,15 +138,28 @@
         <!-- AVAILABLE form -->
         <div id="form-available">
           <div>
-            <div class="section-label">Who</div>
+            <div class="section-label" id="who-label">Who</div>
+            <div class="field round-switch-row" id="where-row">
+              <label>Where</label>
+              <div class="schedule-mode-toggle">
+                <button type="button" class="mode-btn active" id="where-clinic" onclick="setRoundWhere('clinic')">Clinic</button>
+                <button type="button" class="mode-btn" id="where-facility" onclick="setRoundWhere('facility')">Facility</button>
+              </div>
+              <span class="field-hint" id="where-hint">Bookable hours at one or more clinic locations.</span>
+            </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;">
               <div class="field">
                 <label>Providers <span class="req">*</span></label>
                 <div id="ms-provider" class="multi-select"></div>
               </div>
-              <div class="field">
+              <div class="field where-clinic-only">
                 <label>Locations</label>
                 <div id="ms-location" class="multi-select"></div>
+              </div>
+              <div class="field where-facility-only" style="display:none;">
+                <label>Facility <span class="req">*</span></label>
+                <div id="fp-round-facility"></div>
+                <span class="field-hint" id="round-facility-hint"></span>
               </div>
             </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;margin-top:14px;">
@@ -157,6 +170,16 @@
               <div class="field">
                 <label>Visit types</label>
                 <div id="ms-visit-type" class="multi-select"></div>
+              </div>
+            </div>
+            <div class="form-row where-facility-only" style="grid-template-columns:1fr 1fr;margin-top:14px;display:none;">
+              <div class="field">
+                <label>Visits per round</label>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <input type="number" id="round_max_visits" min="1" placeholder="No limit" class="num-input" style="width:110px;">
+                  <span class="unit-label">visits</span>
+                </div>
+                <span class="field-hint">Leave empty for no limit. When a round reaches its limit, the rest of its time is blocked.</span>
               </div>
             </div>
           </div>
@@ -316,18 +339,31 @@
         <!-- BLOCKED form -->
         <div id="form-blocked" style="display:none;">
           <div>
-            <div class="section-label">Who</div>
+            <div class="section-label" id="block-who-label">Who</div>
+            <div class="field round-switch-row" id="block-what-row">
+              <label>What</label>
+              <div class="schedule-mode-toggle">
+                <button type="button" class="mode-btn active" id="block-what-off" onclick="setBlockWhat('off')">Time off</button>
+                <button type="button" class="mode-btn" id="block-what-facility" onclick="setBlockWhat('facility')">Facility</button>
+              </div>
+              <span class="field-hint" id="block-what-hint">Time the provider can’t be booked.</span>
+            </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;">
               <div class="field">
                 <label>Providers <span class="req">*</span></label>
                 <div id="ms-block-provider" class="multi-select"></div>
               </div>
-              <div class="field">
+              <div class="field block-off-only">
                 <label>Locations</label>
                 <div id="ms-block-location" class="multi-select"></div>
               </div>
+              <div class="field block-facility-only" style="display:none;">
+                <label>Facility <span class="req">*</span></label>
+                <div id="fp-block-facility"></div>
+                <span class="field-hint" id="block-facility-hint"></span>
+              </div>
             </div>
-            <div class="form-row" style="grid-template-columns:1fr 1fr;margin-top:14px;">
+            <div class="form-row block-off-only" style="grid-template-columns:1fr 1fr;margin-top:14px;">
               <div class="field">
                 <label>Reason</label>
                 <canvas-input type="text" id="block_reason" placeholder="PTO, Lunch break, Admin time"></canvas-input>
@@ -337,7 +373,7 @@
 
           <!-- Block Schedule Mode Toggle -->
           <div id="block-type-selector" class="schedule-mode-block">
-            <div class="section-label">Block type</div>
+            <div class="section-label">Schedule</div>
             <div class="schedule-mode-toggle">
               <button type="button" class="mode-btn active" id="block-mode-single" onclick="setBlockMode('single')">Single event</button>
               <button type="button" class="mode-btn" id="block-mode-recurring" onclick="setBlockMode('recurring')">Recurring event</button>
@@ -432,7 +468,16 @@
           <input type="hidden" id="editing_hold_id" value="">
           <input type="hidden" id="editing_hold_group_id" value="">
           <div>
-            <div class="section-label">Who</div>
+            <div class="section-label">Who and where</div>
+            <div class="field round-switch-row">
+              <label>Hold type <span class="req">*</span></label>
+              <input type="hidden" id="hold_type_select" value="same_day">
+              <div class="schedule-mode-toggle" role="radiogroup" aria-label="Hold type">
+                <button type="button" class="mode-btn active" id="hold-type-same_day" onclick="setHoldType('same_day')">Same-day</button>
+                <button type="button" class="mode-btn" id="hold-type-next_day" onclick="setHoldType('next_day')">Next-day</button>
+              </div>
+              <span class="field-hint" id="hold-type-hint">Availability blocked until the day of.</span>
+            </div>
             <div class="form-row" style="grid-template-columns:1fr 1fr;">
               <div class="field">
                 <label>Providers <span class="req">*</span></label>
@@ -448,19 +493,10 @@
                 <label>Reason</label>
                 <canvas-input type="text" id="hold_reason" placeholder="Same-day slots, Walk-in reserve"></canvas-input>
               </div>
-              <div class="field">
-                <label>Hold type <span class="req">*</span></label>
-                <input type="hidden" id="hold_type_select" value="same_day">
-                <div class="schedule-mode-toggle" role="radiogroup" aria-label="Hold type">
-                  <button type="button" class="mode-btn active" id="hold-type-same_day" onclick="setHoldType('same_day')">Same-day</button>
-                  <button type="button" class="mode-btn" id="hold-type-next_day" onclick="setHoldType('next_day')">Next-day</button>
-                </div>
-                <span class="field-hint" id="hold-type-hint">Availability blocked until the day of.</span>
-              </div>
             </div>
           </div>
           <div>
-            <div class="section-label">Effective date range</div>
+            <div class="section-label">Schedule</div>
             <div class="form-row date-range-row">
               <div class="field" style="position:relative;">
                 <label>Start date <span class="req">*</span></label>
@@ -505,7 +541,7 @@
       <div class="set-list" id="set-list">
         <button type="button" class="set-row on" data-p="scheduling"><b>Scheduling</b><span>Features and rule defaults</span></button>
         <button type="button" class="set-row" data-p="access"><b>Access control</b><span>Admins, groups, and default access</span></button>
-        <button type="button" class="set-row" data-p="providers"><b>Providers</b><span>Schedulable roles and timezones</span></button>
+        <button type="button" class="set-row" data-p="providers"><b>Providers</b><span id="set-providers-sub">Schedulable roles and timezones</span></button>
         <button type="button" class="set-row" data-p="import"><b>Bulk import</b><span>Load rules from a spreadsheet</span></button>
       </div>
       <div class="set-detail">
@@ -530,44 +566,34 @@
         </section>
 
         <section class="set-page" id="set-p-access">
-          <div class="pg-head"><div class="pg-title">Access control</div><div class="pg-sub">Who can edit provider availability and change these settings.</div></div>
+          <div class="pg-head"><div class="pg-title">Access control</div><div class="pg-sub">Who can edit provider availability and change these settings. Providers can always manage their own availability.</div></div>
+          <div id="set-access-status"></div>
           <div class="blk first">
-            <h3>Who can do what</h3>
-            <table class="ax-tbl access-sum">
-              <tr><th>Who</th><th>Can edit</th></tr>
-              <tr><td>Admins <span class="sum-n" id="set-sum-admins"></span></td><td>Every provider, and Settings</td></tr>
-              <tr><td>Providers</td><td>Their own availability</td></tr>
-              <tr><td>Schedulers in an editing group</td><td id="set-how-group"></td></tr>
-              <tr><td>Everyone else</td><td id="set-how-else"></td></tr>
-            </table>
-            <div id="set-access-status"></div>
-          </div>
-          <div class="blk">
-            <div class="blk-h"><div><h3>Admins</h3><p class="blk-p">Can edit every provider and change Settings. Select Canvas teams, people, or both with <strong>Edit admins</strong>.</p></div><button type="button" class="btn" id="set-edit-admins">Edit admins</button></div>
+            <div class="blk-h"><div><h3>Admins</h3><p class="blk-p">Edit every provider and Settings. Select Canvas teams, people, or both with <strong>Edit admins</strong>.</p></div><button type="button" class="btn" id="set-edit-admins">Edit admins</button></div>
             <div id="set-admin-editor"></div>
             <div class="adm-lines" id="set-admin-members"></div>
             <div class="note" id="set-admin-note"></div>
           </div>
           <div class="blk">
-            <h3>Default access</h3>
-            <p class="blk-p">For staff who aren't admins and aren't schedulers in an editing group.</p>
-            <select class="input" id="set-default-access" style="max-width:560px">
-              <option value="full">Full access: Create, edit, and view availability for all providers</option>
-              <option value="view">View access: View availability for all providers without making changes</option>
-              <option value="none">No access: No access to other providers' availability</option>
-            </select>
-          </div>
-          <div class="blk">
-            <div class="blk-h"><div><h3>Editing groups</h3><p class="blk-p" id="set-groups-desc"></p></div><button type="button" class="btn btn-primary" id="set-new-group">+ New group</button></div>
-            <p class="callout">Providers can always manage their own availability. To let someone manage other providers too, add them as a scheduler in a group.</p>
+            <div class="blk-h"><div><h3>Editing groups</h3><p class="blk-p">Schedulers edit only their group’s providers.</p></div><button type="button" class="btn btn-primary" id="set-new-group">+ New group</button></div>
             <div id="set-group-editor"></div>
             <div class="glist" id="set-groups"></div>
             <div class="note" id="set-groups-loose"></div>
           </div>
+          <div class="blk">
+            <h3>Everyone else</h3>
+            <p class="blk-p">Staff who aren’t admins or in a group.</p>
+            <select class="input" id="set-default-access" style="max-width:320px">
+              <option value="full">Full access</option>
+              <option value="view">View only</option>
+              <option value="none">No access</option>
+            </select>
+            <span class="field-hint" id="set-default-hint" style="display:block;margin-top:6px"></span>
+          </div>
         </section>
 
         <section class="set-page" id="set-p-providers">
-          <div class="pg-head"><div class="pg-title">Providers</div><div class="pg-sub">Configure which staff can be scheduled and the timezone each provider works in.</div></div>
+          <div class="pg-head"><div class="pg-title">Providers</div><div class="pg-sub" id="set-providers-pg-sub">Configure which staff can be scheduled and the timezone each provider works in.</div></div>
           <div class="blk">
             <h3>Schedulable roles</h3>
             <p class="blk-p">Staff in a selected role get a Clinic calendar and appear in the provider pickers. Includes non-clinical roles, matched by role code.</p>
@@ -583,17 +609,23 @@
             </div>
           </div>
           <div class="blk">
-            <h3>Provider timezones</h3>
-            <p class="blk-p" id="set-tz-desc">Providers use the practice timezone unless a provider timezone is set.</p>
+            <h3 id="set-pv-title">Timezones and facilities</h3>
+            <p class="blk-p" id="set-tz-desc">Providers use the practice timezone unless one is set.</p>
             <div class="form-row" style="grid-template-columns:minmax(0,320px) max-content;justify-content:start;align-items:end;gap:12px;">
               <div class="field">
                 <label>Practice timezone</label>
-                <select class="input" id="bulk-tz-select"></select>
+                <select class="input" id="bulk-tz-select" onchange="savePracticeTimezone()"></select>
               </div>
               <button type="button" class="btn" onclick="applyBulkTimezone()" style="white-space:nowrap;">Apply to all</button>
             </div>
-            <div id="provider-tz-list" class="provider-tz-list" style="margin-top:16px">
-              <div class="empty-state">Loading providers...</div>
+            <div class="plist" id="provider-tz-list">
+              <div class="ptools"><input class="input" type="search" id="pv-search" placeholder="Search providers" oninput="filterProviderRows()"><span class="pcount" id="pv-count"></span></div>
+              <div class="pscroll">
+                <table class="settings-tz-table">
+                  <thead><tr><th>Provider</th><th class="tz-col">Timezone</th><th class="pf-col round-only">Facilities</th></tr></thead>
+                  <tbody id="pv-rows"><tr class="pv-none"><td colspan="3">Loading providers...</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -610,7 +642,7 @@
               <span id="bulk-file-name" class="bulk-file-name">No file chosen</span>
               <button type="button" id="bulk-validate-btn" class="bulk-btn bulk-btn-primary" disabled onclick="bulkUploadValidate()">Upload and validate</button>
             </div>
-            <p class="bulk-hint">Each row is one time window. Identify staff by their Canvas staff key. Save the file as CSV. Every row is validated before any data is saved. <a href="#" class="bulk-link" onclick="bulkDownloadTemplate();return false;">Download the CSV template</a></p>
+            <p class="bulk-hint">Each row is one time window. Identify staff by their Canvas staff key. Save the file as CSV. Every row is validated before any data is saved. <span class="round-only">Facility rounds use their own row type, with the facility name in its own column. </span><a href="#" class="bulk-link" onclick="bulkDownloadTemplate();return false;">Download the CSV template</a></p>
             <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
           </div>
 

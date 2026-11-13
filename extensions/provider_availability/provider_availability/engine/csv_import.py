@@ -3,8 +3,11 @@
 Parses a CSV of availability rows, validates each row structurally, and groups
 rows into ProviderAvailabilityRule / AdminBlock / RecurringBlock records.
 
-Three row types via the ``type`` column:
+Four row types via the ``type`` column:
 - ``rule``   a bookable availability window (weekly or daily)
+- ``round``  a facility round: a ``rule`` at a ``facility``, with an optional
+  ``max_visits``. It books at the provider's primary location, so it takes no
+  ``location``
 - ``block``  a one-off unavailable date or time range
 - ``rblock`` a recurring unavailable window (weekly or daily), optional hold
 
@@ -29,7 +32,7 @@ from typing import Any
 
 DAYS_OF_WEEK = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
-ROW_TYPES = ("rule", "block", "rblock")
+ROW_TYPES = ("rule", "round", "block", "rblock")
 VALID_FREQUENCIES = ("weekly", "daily")
 VALID_HOLD_TYPES = ("none", "same_day", "next_day")
 
@@ -56,6 +59,8 @@ TEMPLATE_HEADERS = (
     "effective_start",
     "effective_end",
     "group_key",
+    "facility",
+    "max_visits",
 )
 
 
@@ -242,6 +247,19 @@ def _validate_rule_row(row: dict[str, str]) -> list[str]:
     return errors
 
 
+def _validate_round_row(row: dict[str, str]) -> list[str]:
+    errors = _validate_rule_row(row)
+    facility = row.get("facility", "").strip()
+    if not facility:
+        errors.append("facility is required for a round row")
+    elif "|" in facility:
+        errors.append("facility must name one facility; add a row for each facility")
+    if row.get("location", "").strip():
+        errors.append("location must be empty for a round row; rounds book at the provider's primary location")
+    errors.extend(_validate_optional_int(row, "max_visits", 1))
+    return errors
+
+
 def _validate_block_row(row: dict[str, str]) -> list[str]:
     errors: list[str] = []
     block_date = row.get("date", "").strip()
@@ -286,6 +304,8 @@ def validate_row(row: dict[str, str]) -> list[str]:
 
     if row_type == "rule":
         return _validate_rule_row(row)
+    if row_type == "round":
+        return _validate_round_row(row)
     if row_type == "block":
         return _validate_block_row(row)
     return _validate_rblock_row(row)
@@ -387,6 +407,8 @@ def _rule_signature(
         freq,
         row.get("recurrence_interval", "").strip() or "1",
         row.get("hold_type", "").strip().lower() or "none",
+        row.get("facility", "").strip().lower(),
+        row.get("max_visits", "").strip(),
     )
 
 
@@ -399,6 +421,7 @@ def build_records(
     valid_staff_ids: set[str],
     location_map: dict[str, str],
     visit_type_map: dict[str, str],
+    facility_map: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[RowError]]:
     """Validate staff keys, resolve names to IDs, and group rows into records.
 
@@ -407,6 +430,10 @@ def build_records(
     model ``from_dict``, tagged with ``kind`` (``rule``|``block``|``rblock``)
     and the source row numbers. Rows with an unknown staff key or an
     unresolvable location/visit type are returned as errors instead.
+
+    A ``round`` row becomes a ``rule`` record with its facility fields set.
+    ``facility_map`` is None while facility rounds are off, and round rows are
+    then errors.
     """
     records: list[dict[str, Any]] = []
     errors: list[RowError] = []
@@ -427,9 +454,17 @@ def build_records(
         location_ids, loc_errs = _resolve_names(row.get("location", ""), location_map, "location")
         row_errors = list(loc_errs)
         visit_types: list[str] = []
-        if row_type == "rule":
+        if row_type in ("rule", "round"):
             visit_types, vt_errs = _resolve_names(row.get("visit_type", ""), visit_type_map, "visit_type")
             row_errors.extend(vt_errs)
+        facility_id = ""
+        if row_type == "round":
+            if facility_map is None:
+                row_errors.append("Facility rounds are turned off in Settings.")
+            else:
+                facility_ids, fac_errs = _resolve_names(row.get("facility", ""), facility_map, "facility")
+                row_errors.extend(fac_errs)
+                facility_id = facility_ids[0] if facility_ids else ""
         if row_errors:
             errors.append(RowError(vr.row_number, row_errors, row))
             continue
@@ -441,6 +476,13 @@ def build_records(
         sig = _rule_signature(row, provider_id, location_ids, visit_types)
         if sig not in grouped:
             grouped[sig] = _new_group(row_type, row, provider_id, location_ids, visit_types)
+            if row_type == "round":
+                max_visits = row.get("max_visits", "").strip()
+                grouped[sig].update({
+                    "facility_id": facility_id,
+                    "facility_name": row["facility"].strip(),
+                    "max_visits": int(max_visits) if max_visits else None,
+                })
         group = grouped[sig]
 
         window = _window(row)
@@ -465,7 +507,7 @@ def _new_group(
     interval_str = row.get("recurrence_interval", "").strip()
     interval = int(interval_str) if interval_str else 1
     group: dict[str, Any] = {
-        "kind": row_type,
+        "kind": "rule" if row_type == "round" else row_type,
         "source_rows": [],
         "provider_id": provider_id,
         "location_ids": location_ids,
@@ -478,7 +520,7 @@ def _new_group(
         "effective_end": _or_none(row.get("effective_end", "")),
         "is_active": True,
     }
-    if row_type == "rule":
+    if row_type in ("rule", "round"):
         group["visit_types"] = visit_types
         buffer_pre = row.get("buffer_pre", "").strip()
         buffer_post = row.get("buffer_post", "").strip()
@@ -548,13 +590,15 @@ def generate_template_csv() -> str:
     """Generate a CSV template with headers and one example of each row type."""
     examples = [
         ["rule", "11111111-1111-1111-1111-111111111111", "Main Clinic", "", "monday", "09:00", "12:00", "", "", "",
-         "", "0", "15", "24", "15", "weekly", "1", "2026-07-01", "", ""],
+         "", "0", "15", "24", "15", "weekly", "1", "2026-07-01", "", "", "", ""],
         ["rule", "11111111-1111-1111-1111-111111111111", "Main Clinic", "", "monday", "13:00", "17:00", "", "", "",
-         "", "0", "15", "24", "15", "weekly", "1", "2026-07-01", "", ""],
+         "", "0", "15", "24", "15", "weekly", "1", "2026-07-01", "", "", "", ""],
+        ["round", "11111111-1111-1111-1111-111111111111", "", "", "tuesday", "08:00", "12:00", "", "", "",
+         "", "0", "15", "24", "15", "weekly", "1", "2026-07-01", "", "", "Sunrise Terrace", "8"],
         ["block", "11111111-1111-1111-1111-111111111111", "", "", "", "", "", "true", "2026-07-04", "Independence Day",
-         "", "", "", "", "", "", "", "", "", ""],
+         "", "", "", "", "", "", "", "", "", "", "", ""],
         ["rblock", "11111111-1111-1111-1111-111111111111", "", "", "monday", "12:00", "13:00", "", "", "Lunch",
-         "none", "", "", "", "", "weekly", "1", "2026-07-01", "", ""],
+         "none", "", "", "", "", "weekly", "1", "2026-07-01", "", "", "", ""],
     ]
     header_line = ",".join(_csv_escape(h) for h in TEMPLATE_HEADERS)
     lines = [header_line]

@@ -5,7 +5,7 @@ from unittest.mock import call, patch
 
 import pytest
 
-from provider_availability.engine import settings
+from provider_availability.engine import facilities, settings
 from provider_availability.engine.models import ProviderAvailabilityRule
 from tests.api.test_availability_api import MODULE, _make_handler, _parse
 
@@ -23,6 +23,11 @@ STAFF = [
 ]
 
 
+FAC_A = "0d3c9f4e-5a2b-4c8d-9e1f-123456789abc"
+FAC_B = "11111111-2222-3333-4444-555555555555"
+FACILITIES = [{"id": FAC_A, "name": "Apple Valley Care"}, {"id": FAC_B, "name": "Pine Ridge Rehabilitation"}]
+
+
 def _handler(staff_id=ADMIN, json_body=None, path_params=None):
     return _make_handler(staff_id=staff_id, json_body=json_body, path_params=path_params, secrets=SECRETS)
 
@@ -31,7 +36,9 @@ def _handler(staff_id=ADMIN, json_body=None, path_params=None):
 def lookups():
     with patch(f"{MODULE}.get_staff_directory", return_value=STAFF), \
          patch(f"{MODULE}.get_teams", return_value=[{"id": TEAM, "name": "Admins"}]), \
-         patch(f"{MODULE}.get_active_locations", return_value=[{"id": "loc1", "name": "Boise"}]):
+         patch(f"{MODULE}.get_active_locations", return_value=[{"id": "loc1", "name": "Boise"}]), \
+         patch(f"{MODULE}.get_active_facilities", return_value=FACILITIES), \
+         patch("provider_availability.engine.facilities.get_active_facilities", return_value=FACILITIES):
         yield
 
 
@@ -47,6 +54,8 @@ class TestGetSettings:
         assert data["secret_admins"] == [ADMIN]
         assert data["teams"] == [{"id": TEAM, "name": "Admins"}]
         assert len(data["staff"]) == 4
+        assert data["facilities"] == FACILITIES
+        assert data["provider_facilities"] == {}
 
     def test_not_for_non_admins(self):
         data, code = _parse(_handler(staff_id=SCHED).get_settings()[0])
@@ -284,3 +293,95 @@ class TestSwitchedOffFeaturesRefuseNewData:
         data, code = _parse(_handler(json_body={"provider_id": PROV1, "timezone": "US/Pacific"}).set_provider_tz()[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "Provider timezones are turned off" in data["error"]
+
+
+class TestProviderFacilities:
+    @pytest.fixture(autouse=True)
+    def schedulable(self):
+        with patch(f"{MODULE}.get_schedulable_provider_ids", return_value={"prov-1"}):
+            yield
+
+    def test_saves_a_providers_facilities(self):
+        body = {"provider_id": "prov-1", "facility_ids": [FAC_B, FAC_A, FAC_B]}
+        data, code = _parse(_handler(json_body=body).put_provider_facilities()[0])
+        assert code == HTTPStatus.OK
+        assert data == {"provider_id": "prov-1", "facility_ids": [FAC_B, FAC_A]}
+        assert facilities.get_provider_facilities() == {"prov-1": [FAC_B, FAC_A]}
+
+    def test_an_empty_list_clears_them(self):
+        facilities.set_provider_facilities("prov-1", [FAC_A])
+        _, code = _parse(_handler(json_body={"provider_id": "prov-1", "facility_ids": []}).put_provider_facilities()[0])
+        assert code == HTTPStatus.OK
+        assert facilities.get_provider_facilities() == {}
+
+    def test_unknown_facility_is_a_400(self):
+        body = {"provider_id": "prov-1", "facility_ids": ["99999999-2222-3333-4444-555555555555"]}
+        data, code = _parse(_handler(json_body=body).put_provider_facilities()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert data["error"] == "Choose active facilities only."
+
+    def test_each_provider_is_saved_separately(self, settings_cache):
+        facilities.set_provider_facilities("prov-1", [FAC_A])
+        facilities.set_provider_facilities("prov-2", [FAC_B])
+        assert settings_cache.data["pa:provider_facilities:prov-1"] == [FAC_A]
+        assert settings_cache.data["pa:provider_facilities:prov-2"] == [FAC_B]
+        assert facilities.get_provider_facilities() == {"prov-1": [FAC_A], "prov-2": [FAC_B]}
+
+    def test_a_facility_made_inactive_drops_out_of_reads_and_saves(self, settings_cache):
+        gone = "22222222-3333-4444-5555-666666666666"
+        settings_cache.data["pa:provider_facilities:prov-1"] = [FAC_A, gone]
+        settings_cache.data["pa:provider_facilities_index"] = ["prov-1"]
+        assert facilities.get_provider_facilities() == {"prov-1": [FAC_A]}
+        # The page still holds the inactive id; saving with it succeeds and drops it.
+        body = {"provider_id": "prov-1", "facility_ids": [FAC_A, gone, FAC_B]}
+        data, code = _parse(_handler(json_body=body).put_provider_facilities()[0])
+        assert (code, data["facility_ids"]) == (HTTPStatus.OK, [FAC_A, FAC_B])
+
+    def test_facilities_saved_before_0_27_move_to_one_key_per_provider(self, settings_cache):
+        settings_cache.data["pa:provider_facilities"] = {"prov-1": [FAC_A], "prov-2": []}
+        assert facilities.get_provider_facilities() == {"prov-1": [FAC_A]}
+        assert "pa:provider_facilities" not in settings_cache.data
+        assert settings_cache.data["pa:provider_facilities_index"] == ["prov-1"]
+
+    def test_active_ids_passed_in_skip_the_lookup(self, settings_cache):
+        settings_cache.data["pa:provider_facilities:prov-1"] = [FAC_A, FAC_B]
+        settings_cache.data["pa:provider_facilities_index"] = ["prov-1"]
+        with patch("provider_availability.engine.facilities.get_active_facilities") as lookup:
+            assert facilities.get_provider_facilities({FAC_B}) == {"prov-1": [FAC_B]}
+        assert lookup.mock_calls == []
+
+    def test_facility_ids_must_be_a_list(self):
+        data, code = _parse(_handler(json_body={"provider_id": "prov-1", "facility_ids": FAC_A}).put_provider_facilities()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "list" in data["error"]
+
+    def test_provider_must_be_schedulable(self):
+        data, code = _parse(_handler(json_body={"provider_id": "someone", "facility_ids": []}).put_provider_facilities()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "provider" in data["error"]
+
+    def test_non_admin_cannot(self):
+        body = {"provider_id": "prov-1", "facility_ids": [FAC_A]}
+        _, code = _parse(_handler(staff_id=SCHED, json_body=body).put_provider_facilities()[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert facilities.get_provider_facilities() == {}
+
+    def test_suggestions(self):
+        rows = [{"id": FAC_A, "name": "Apple Valley Care", "patients": 22}]
+        with patch(f"{MODULE}.facility_suggestions", return_value=rows) as suggest:
+            data, code = _parse(_handler(path_params={"provider_id": "prov-1"}).get_facility_suggestions()[0])
+        assert code == HTTPStatus.OK
+        assert data == {"provider_id": "prov-1", "suggestions": rows}
+        assert suggest.mock_calls == [call("prov-1")]
+
+    def test_suggestions_need_a_schedulable_provider(self):
+        with patch(f"{MODULE}.facility_suggestions") as suggest:
+            _, code = _parse(_handler(path_params={"provider_id": "someone"}).get_facility_suggestions()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert suggest.mock_calls == []
+
+    def test_suggestions_are_for_admins(self):
+        with patch(f"{MODULE}.facility_suggestions") as suggest:
+            _, code = _parse(_handler(staff_id=SCHED, path_params={"provider_id": "prov-1"}).get_facility_suggestions()[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert suggest.mock_calls == []

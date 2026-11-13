@@ -153,12 +153,43 @@ class TestAffectedItems:
         with pytest.raises(ValueError):
             features.affected_items("rounding", NOW)
 
+    def test_facility_blocks_list_upcoming_ones_only(self, one_provider):
+        blocks = [
+            AdminBlock(provider_id=P1, start=dt.datetime(2026, 10, 16, 13), end=dt.datetime(2026, 10, 16, 16),
+                       facility_id="f1", facility_name="Riverstone"),
+            AdminBlock(provider_id=P1, start=dt.datetime(2026, 10, 1, 13), end=dt.datetime(2026, 10, 1, 16),
+                       facility_id="f1", facility_name="Riverstone"),
+            AdminBlock(provider_id=P1, start=dt.datetime(2026, 10, 20), end=dt.datetime(2026, 10, 20, 23, 59), reason="PTO"),
+        ]
+        recurring = [
+            RecurringBlock(provider_id=P1, weekly_schedule={"friday": []}, facility_id="f2", facility_name="Pine Ridge"),
+            RecurringBlock(provider_id=P1, weekly_schedule={"friday": []}, facility_id="f2", facility_name="Pine Ridge",
+                           effective_end=dt.date(2026, 10, 1)),
+            RecurringBlock(provider_id=P1, recurrence_frequency="daily", facility_id="f3", facility_name="Willow Bend"),
+        ]
+        with patch(f"{MOD}.get_blocks_for_provider", return_value=blocks), \
+             patch(f"{MOD}.get_recurring_blocks_for_provider", return_value=recurring):
+            result = features.affected_items("facility_blocks", NOW)
+        assert result["columns"] == ["Facility", "When"]
+        assert result["providers"][0]["rows"] == [
+            ["Riverstone", "Fri Oct 16, 1:00 PM – 4:00 PM"],
+            ["Pine Ridge", "Fri"],
+            ["Willow Bend", "Daily"],
+        ]
+
 
 class TestApply:
     def test_off_needs_a_valid_choice(self):
         with pytest.raises(ValueError, match="Choose one of"):
             features.apply_feature_change("buffers", False, "")
         assert settings.is_feature_on("buffers") is True
+
+    def test_facility_blocks_only_keep(self):
+        with pytest.raises(ValueError, match="Choose one of: keep"):
+            features.apply_feature_change("facility_blocks", False, "remove")
+        settings.set_feature("facility_blocks", True)
+        assert features.apply_feature_change("facility_blocks", False, "keep") == []
+        assert settings.is_feature_on("facility_blocks") is False
 
     def test_keep_changes_nothing_on_calendars(self, one_provider):
         assert features.apply_feature_change("buffers", False, "keep") == []

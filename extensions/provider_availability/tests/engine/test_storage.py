@@ -327,6 +327,19 @@ class TestTTLRefresh:
 
         assert call(SCHEDULABLE_SEEN_KEY, ["a", "b"], timeout_seconds=CACHE_TTL_SECONDS) in patch_cache.set.mock_calls
 
+    def test_refresh_renews_each_providers_facilities(self, patch_cache):
+        from provider_availability.engine.storage import PROVIDER_FACILITIES_INDEX_KEY, PROVIDER_FACILITIES_PREFIX
+
+        patch_cache._store[PROVIDER_FACILITIES_INDEX_KEY] = ["p1", "p2"]
+        patch_cache._store[f"{PROVIDER_FACILITIES_PREFIX}p1"] = ["f1"]
+
+        refresh_all_ttls()
+
+        sets = patch_cache.set.mock_calls
+        assert call(f"{PROVIDER_FACILITIES_PREFIX}p1", ["f1"], timeout_seconds=CACHE_TTL_SECONDS) in sets
+        assert call(PROVIDER_FACILITIES_INDEX_KEY, ["p1", "p2"], timeout_seconds=CACHE_TTL_SECONDS) in sets
+        assert not any(c.args[0] == f"{PROVIDER_FACILITIES_PREFIX}p2" for c in sets)
+
     def test_refresh_renews_the_synced_version(self, patch_cache):
         """If this lapsed, the next same-version redeploy would rebuild every event."""
         from provider_availability.engine.storage import SYNCED_VERSION_KEY, set_synced_version

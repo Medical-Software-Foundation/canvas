@@ -176,6 +176,18 @@ def test_validate_counts_blocks_and_rblocks():
 # -- commit ------------------------------------------------------------------
 
 
+def test_validate_denied_when_not_authorized():
+    handler = _handler()
+    _set_upload(handler, HEADER + "\n")
+    denied = [MagicMock()]
+    with patch(CSV_MODULE + "._check_write_access", return_value=denied), \
+         patch(CSV_MODULE + ".parse_csv") as parse:
+        result = handler.validate_upload()
+    assert result is denied
+    assert handler.request.form_data.mock_calls == []
+    assert parse.mock_calls == []
+
+
 def test_commit_denied_when_not_authorized():
     handler = _handler(json_body={"records": [{"kind": "rule"}]})
     denied = [MagicMock()]
@@ -346,3 +358,71 @@ def test_validate_non_utf8_file_is_a_clear_400():
         body, code = _parse(handler.validate_upload()[0])
     assert code == 400
     assert "UTF-8" in body["error"]
+
+
+# -- facility rounds ---------------------------------------------------------
+
+ROUND_HEADER = HEADER + ",facility,max_visits"
+FAC_ID = "0d3c9f4e-5a2b-4c8d-9e1f-123456789abc"
+_ROUND = dict(_RULE, facility_id=FAC_ID, facility_name="typed in the file", max_visits=6)
+
+
+def _round_csv():
+    return ROUND_HEADER + "\nround,1234567890,,,tuesday,08:00,12:00,,,,,,,,,weekly,1,2026-07-01,,,Sunrise Terrace,6\n"
+
+
+def test_validate_reads_round_rows_while_rounds_are_on():
+    from provider_availability.engine import settings
+
+    settings.set_feature("facility_rounds", True)
+    handler = _handler()
+    _set_upload(handler, _round_csv())
+    with _patch_lookups(), \
+         patch(CSV_MODULE + ".get_active_facilities", return_value=[{"id": FAC_ID, "name": "Sunrise Terrace"}]), \
+         patch(CSV_MODULE + ".check_rule_overlap", return_value=None):
+        body, _ = _parse(handler.validate_upload()[0])
+    assert (body["rule_count"], body["round_count"], body["error_count"]) == (1, 1, 0)
+    assert body["records"][0]["facility_id"] == FAC_ID
+
+
+def test_validate_rejects_round_rows_while_rounds_are_off():
+    handler = _handler()
+    _set_upload(handler, _round_csv())
+    with _patch_lookups(), patch(CSV_MODULE + ".get_active_facilities") as facilities:
+        body, _ = _parse(handler.validate_upload()[0])
+    assert body["record_count"] == 0
+    assert body["errors"][0]["errors"] == ["Facility rounds are turned off in Settings."]
+    assert facilities.mock_calls == []
+
+
+def test_commit_refuses_rounds_once_the_switch_is_off():
+    handler = _commit_handler([_ROUND])
+    with patch(CSV_MODULE + "._check_write_access", return_value=None), \
+         patch(CSV_MODULE + ".get_active_staff_ids", return_value={"prov-1"}), \
+         patch(CSV_MODULE + ".save_rule") as mock_save:
+        body, code = _parse(handler.commit_records()[-1])
+    assert code == 400
+    assert body["error"] == "Facility rounds are turned off in Settings. Upload the file again."
+    assert mock_save.mock_calls == []
+
+
+def test_commit_saves_a_round_with_the_canvas_name_and_recounts_it():
+    from provider_availability.engine import settings
+
+    settings.set_feature("facility_rounds", True)
+    handler = _commit_handler([dict(_ROUND)])
+    with patch(CSV_MODULE + "._check_write_access", return_value=None), \
+         patch(CSV_MODULE + ".get_active_staff_ids", return_value={"prov-1"}), \
+         patch(CSV_MODULE + ".get_all_rules", return_value=[]), \
+         patch("provider_availability.engine.facilities.active_facility_name", return_value="Sunrise Terrace"), \
+         patch(CSV_MODULE + ".save_rule") as mock_save, \
+         patch(CSV_MODULE + ".sync_provider_availability", return_value=[]), \
+         patch(CSV_MODULE + ".get_rules_for_provider", return_value=[]), \
+         patch(CSV_MODULE + ".build_provider_lead_time_effects", return_value=[]), \
+         patch(CSV_MODULE + ".build_recurring_blocks_resync_effects", return_value=[]), \
+         patch(CSV_MODULE + ".refresh_round_limits", return_value=["round-full"]) as refresh:
+        result = handler.commit_records()
+    (saved,) = [c.args[0] for c in mock_save.mock_calls]
+    assert (saved.facility_id, saved.facility_name, saved.max_visits) == (FAC_ID, "Sunrise Terrace", 6)
+    assert refresh.mock_calls == [call("prov-1")]
+    assert "round-full" in result

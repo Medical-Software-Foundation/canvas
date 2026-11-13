@@ -203,13 +203,14 @@ class TestUpdateRuleGroupBranches:
 
 
 class TestDeleteRuleBranches:
+    @patch(f"{MODULE}.get_rule_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=["lead-fx"])
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider")
     @patch(f"{MODULE}.delete_rule_by_id")
     def test_refreshes_lead_time_for_remaining_rule(
-        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_access
+        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_access, _get_rule
     ):
         mock_get_rules.return_value = [_lead_time_rule()]
         handler = _make_handler(
@@ -223,6 +224,7 @@ class TestDeleteRuleBranches:
         assert mock_delete.mock_calls == [call(PROVIDER_ID, "r1")]
         assert mock_lead.mock_calls == [call(PROVIDER_ID, mock_get_rules.return_value)]
 
+    @patch(f"{MODULE}.get_rule_by_id", return_value=None)
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
     @patch(f"{MODULE}.build_provider_lead_time_effects")
@@ -230,7 +232,7 @@ class TestDeleteRuleBranches:
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.delete_rule_by_id")
     def test_orphan_cleanup_when_no_remaining_lead_time(
-        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_del_orphans, mock_access
+        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_del_orphans, mock_access, _get_rule
     ):
         handler = _make_handler(
             path_params={"provider_id": PROVIDER_ID, "rule_id": "r1"}
@@ -1416,3 +1418,364 @@ class TestStartDateRequired:
 
         assert _validate_recurrence_payload({"effective_start": "10/05/2026"}) == "Start date must be YYYY-MM-DD"
         assert _validate_recurrence_payload({"effective_start": "2026-10-05"}) is None
+
+
+# ── facility rounds on save ────────────────────────────────────────────────
+
+
+ROUND_FACILITY_ID = "0d3c9f4e-5a2b-4c8d-9e1f-123456789abc"
+ROUND_BODY = {
+    "provider_id": PROVIDER_ID,
+    "weekly_schedule": {"tuesday": [{"start": "08:00", "end": "12:00"}]},
+    "facility_id": ROUND_FACILITY_ID,
+    "facility_name": "Typed by the browser",
+    "max_visits": 10,
+    "effective_start": "2026-11-03",
+}
+
+
+class TestRoundSave:
+    @patch(f"{MODULE}.is_feature_on", side_effect=lambda name: name != "facility_rounds")
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
+    def test_new_round_refused_while_the_switch_is_off(self, _resolve, _access, _feature):
+        handler = _make_handler(json_body=dict(ROUND_BODY))
+        with patch(f"{MODULE}.save_rule") as save:
+            result = handler.create_or_update_rule()
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert data["error"] == "Facility rounds are turned off in Settings."
+        assert save.mock_calls == []
+
+    @patch(f"{MODULE}.build_provider_lead_time_effects", return_value=[])
+    @patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"])
+    @patch(f"{MODULE}.check_rule_overlap", return_value=None)
+    @patch(f"{MODULE}.is_feature_on", return_value=True)
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
+    def test_round_saved_with_the_facility_name_from_canvas(self, _resolve, _access, _feature, _overlap, _sync, _lead):
+        handler = _make_handler(json_body=dict(ROUND_BODY))
+        with patch("provider_availability.engine.facilities.active_facility_name", return_value="Apple Valley Care"), \
+             patch(f"{MODULE}.get_rules_for_provider", return_value=[]), \
+             patch(f"{MODULE}.refresh_round_limits", return_value=["round-fx"]) as refresh, \
+             patch(f"{MODULE}.save_rule") as save:
+            result = handler.create_or_update_rule()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.CREATED
+        saved = save.call_args.args[0]
+        assert (saved.facility_id, saved.facility_name, saved.max_visits) == (ROUND_FACILITY_ID, "Apple Valley Care", 10)
+        assert data["rule"]["facility_name"] == "Apple Valley Care"
+        assert "sync-fx" in result
+        assert "round-fx" in result
+        assert refresh.mock_calls == [call(PROVIDER_ID)]
+
+    @patch(f"{MODULE}.is_feature_on", return_value=True)
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.resolve_provider_id", return_value=PROVIDER_ID)
+    def test_round_needs_an_active_facility(self, _resolve, _access, _feature):
+        handler = _make_handler(json_body=dict(ROUND_BODY))
+        with patch("provider_availability.engine.facilities.active_facility_name", return_value=None):
+            result = handler.create_or_update_rule()
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert data["error"] == "Choose an active facility for this round."
+
+    @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=[])
+    @patch(f"{MODULE}.lead_time_rules", return_value=[])
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.check_rule_overlap", return_value=None)
+    @patch(f"{MODULE}.is_feature_on", return_value=True)
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_group_update_copies_the_round_to_every_rule_in_the_group(
+        self, _access, _feature, _overlap, _sync, _lead, _del_lead
+    ):
+        sibling = ProviderAvailabilityRule(id="r2", provider_id=PROVIDER_ID_2, group_id="g1")
+        body = dict(ROUND_BODY, id="r1", group_id="g1", apply_to_group=True, max_visits=6)
+        handler = _make_handler(json_body=body)
+        with patch("provider_availability.engine.facilities.active_facility_name", return_value="Apple Valley Care"), \
+             patch(f"{MODULE}.get_rules_by_group", return_value=[sibling]), \
+             patch(f"{MODULE}.get_rule_by_id", return_value=None), \
+             patch(f"{MODULE}.get_rules_for_provider", return_value=[]), \
+             patch(f"{MODULE}.refresh_round_limits", return_value=[]) as refresh, \
+             patch(f"{MODULE}.save_rule") as save:
+            handler.update_rule_group()
+        saved = {r.id: r for r in (c.args[0] for c in save.call_args_list)}
+        assert (saved["r2"].facility_id, saved["r2"].facility_name, saved["r2"].max_visits) == (
+            ROUND_FACILITY_ID, "Apple Valley Care", 6,
+        )
+        assert sorted(c.args[0] for c in refresh.mock_calls) == sorted([PROVIDER_ID, PROVIDER_ID_2])
+
+    @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=[])
+    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.delete_rule_by_id")
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_deleting_a_round_clears_its_full_blocks(self, _access, _delete, _sync, _rules, _lead):
+        doomed = ProviderAvailabilityRule(id="r1", provider_id=PROVIDER_ID, facility_id=ROUND_FACILITY_ID)
+        handler = _make_handler(path_params={"provider_id": PROVIDER_ID, "rule_id": "r1"})
+        with patch(f"{MODULE}.get_rule_by_id", return_value=doomed), \
+             patch(f"{MODULE}.refresh_round_limits", return_value=["round-fx"]) as refresh:
+            result = handler.delete_rule()
+        assert "round-fx" in result
+        assert refresh.mock_calls == [call(PROVIDER_ID)]
+
+
+# ── Facility blocks ────────────────────────────────────────────────────────
+
+FACILITY_ID = "0d3c9f4e-5a2b-4c8d-9e1f-123456789abc"
+FACILITIES = "provider_availability.engine.facilities"
+
+
+@pytest.fixture
+def facility_blocks_on():
+    from provider_availability.engine.settings import set_feature
+
+    set_feature("facility_blocks", True)
+    with patch(f"{FACILITIES}.active_facility_name", return_value="Riverstone Assisted Living"):
+        yield
+
+
+@patch(f"{MODULE}._check_write_access", return_value=None)
+class TestFacilityBlocks:
+    def test_a_single_facility_block_is_titled_for_canvas_and_blocks_every_location(self, _access, facility_blocks_on):
+        body = {
+            "provider_id": PROVIDER_ID,
+            "start": "2026-03-10T13:00:00",
+            "end": "2026-03-10T16:00:00",
+            "reason": "PTO",
+            "location_ids": [LOCATION_ID],
+            "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=["evt"]) as draw:
+            result = _make_handler(json_body=body).create_block()
+        data, code = _parse(result[-1])
+        assert code == HTTPStatus.CREATED
+        saved = save.call_args.args[0]
+        assert (saved.reason, saved.location_ids, saved.facility_id, saved.facility_name) == (
+            "Riverstone Assisted Living Visit", [], FACILITY_ID, "Riverstone Assisted Living",
+        )
+        assert draw.mock_calls == [call(saved)]
+        assert data["block"]["facility_name"] == "Riverstone Assisted Living"
+
+    def test_multi_date_facility_blocks_carry_the_facility(self, _access, facility_blocks_on):
+        body = {"provider_id": PROVIDER_ID, "dates": ["2026-03-10", "2026-03-11"], "all_day": True, "facility_id": FACILITY_ID}
+        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+            _make_handler(json_body=body).create_block()
+        assert [(b.facility_id, b.reason) for b in (c.args[0] for c in save.mock_calls)] == [
+            (FACILITY_ID, "Riverstone Assisted Living Visit")
+        ] * 2
+
+    def test_no_new_facility_block_while_the_switch_is_off(self, _access):
+        body = {"provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00", "facility_id": FACILITY_ID}
+        with patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).create_block()
+        data, code = _parse(result[0])
+        assert (code, data["error"]) == (HTTPStatus.BAD_REQUEST, "Facility blocks are turned off in Settings.")
+        assert save.mock_calls == []
+
+    def test_a_saved_facility_block_can_be_edited_while_the_switch_is_off(self, _access):
+        old = AdminBlock(
+            id="b-1", provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 13), end=datetime(2026, 3, 10, 16),
+            reason="Old Name Visit", facility_id=FACILITY_ID, facility_name="Old Name",
+        )
+        body = {"id": "b-1", "provider_id": PROVIDER_ID, "start": "2026-03-10T14:00:00", "end": "2026-03-10T17:00:00", "facility_id": FACILITY_ID}
+        with patch(f"{MODULE}.get_block_by_id", return_value=old), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.build_block_event_effects", return_value=[]), \
+             patch(f"{FACILITIES}.active_facility_name", return_value=None), \
+             patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).update_block()
+        assert _parse(result[-1])[1] == HTTPStatus.OK
+        saved = save.call_args.args[0]
+        assert (saved.reason, saved.facility_name, saved.start) == ("Old Name Visit", "Old Name", datetime(2026, 3, 10, 14))
+
+    def test_a_group_edit_moves_every_block_to_the_facility(self, _access, facility_blocks_on):
+        other = AdminBlock(
+            id="b-2", provider_id=PROVIDER_ID_2, start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 12),
+            reason="PTO", location_ids=[LOCATION_ID], group_id="g-1",
+        )
+        body = {
+            "id": "b-1", "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00",
+            "group_id": "g-1", "apply_to_group": True, "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.get_blocks_by_group", return_value=[other]), \
+             patch(f"{MODULE}.get_block_by_id", return_value=None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.build_block_event_effects", return_value=[]), \
+             patch(f"{MODULE}.save_block"):
+            _make_handler(json_body=body).update_block()
+        assert (other.reason, other.facility_id, other.location_ids) == ("Riverstone Assisted Living Visit", FACILITY_ID, [])
+
+    def test_a_recurring_facility_block(self, _access, facility_blocks_on):
+        body = {
+            "provider_id": PROVIDER_ID,
+            "effective_start": "2026-01-05",
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]},
+            "location_ids": [LOCATION_ID],
+            "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.save_recurring_block") as save, patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[]):
+            result = _make_handler(json_body=body).create_recurring_block()
+        assert _parse(result[-1])[1] == HTTPStatus.CREATED
+        saved = save.call_args.args[0]
+        assert (saved.reason, saved.location_ids, saved.facility_name, saved.hold_type) == (
+            "Riverstone Assisted Living Visit", [], "Riverstone Assisted Living", "none",
+        )
+
+    def test_moving_a_time_off_block_to_a_facility_needs_the_switch(self, _access):
+        old = AdminBlock(id="b-1", provider_id=PROVIDER_ID, start=datetime(2026, 3, 10, 13), end=datetime(2026, 3, 10, 16), reason="PTO")
+        body = {"id": "b-1", "provider_id": PROVIDER_ID, "start": "2026-03-10T13:00:00", "end": "2026-03-10T16:00:00", "facility_id": FACILITY_ID}
+        with patch(f"{MODULE}.get_block_by_id", return_value=old), patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).update_block()
+        data, code = _parse(result[0])
+        assert (code, data["error"]) == (HTTPStatus.BAD_REQUEST, "Facility blocks are turned off in Settings.")
+        assert save.mock_calls == []
+
+    def test_no_new_recurring_facility_block_while_the_switch_is_off(self, _access):
+        body = {
+            "provider_id": PROVIDER_ID, "effective_start": "2026-01-05",
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.save_recurring_block") as save:
+            result = _make_handler(json_body=body).create_recurring_block()
+        data, code = _parse(result[0])
+        assert (code, data["error"]) == (HTTPStatus.BAD_REQUEST, "Facility blocks are turned off in Settings.")
+        assert save.mock_calls == []
+
+    def _group(self):
+        return [
+            AdminBlock(id=f"b-{i}", provider_id=PROVIDER_ID, start=datetime(2026, 3, 10 + i, 13), end=datetime(2026, 3, 10 + i, 16),
+                       reason="Old Name Visit", group_id="g-1", facility_id=FACILITY_ID, facility_name="Old Name")
+            for i in range(3)
+        ]
+
+    def test_editing_a_saved_facility_group_while_off_replaces_it_after_the_checks(self, _access):
+        group = self._group()
+        by_id = {b.id: b for b in group}
+        body = {
+            "provider_id": PROVIDER_ID, "dates": ["2026-03-10", "2026-03-12"], "all_day": False,
+            "start": "1970-01-01T14:00:00", "end": "1970-01-01T17:00:00", "group_id": "g-1",
+            "facility_id": FACILITY_ID, "replace_block_ids": [b.id for b in group],
+        }
+        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda pid, bid: by_id.get(bid)), \
+             patch(f"{FACILITIES}.active_facility_name", return_value=None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=["del"]) as dele, \
+             patch(f"{MODULE}.delete_block") as delete, \
+             patch(f"{MODULE}.build_block_event_effects", return_value=["new"]), \
+             patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).create_block()
+        assert _parse(result[-1])[1] == HTTPStatus.CREATED
+        assert result[:-1] == ["del"] * 3 + ["new"] * 2
+        assert delete.mock_calls == [call(PROVIDER_ID, b.id) for b in group]
+        assert dele.mock_calls == [call(PROVIDER_ID, b, skip_ids={"b-0", "b-1", "b-2"}) for b in group]
+        assert [c.args[0].reason for c in save.mock_calls] == ["Old Name Visit"] * 2
+
+    def test_a_refused_replacement_leaves_the_saved_blocks(self, _access):
+        group = self._group()
+        by_id = {b.id: b for b in group}
+        other = "11111111-2222-3333-4444-555555555555"
+        body = {
+            "provider_id": PROVIDER_ID, "dates": ["2026-03-10"], "all_day": True, "group_id": "g-1",
+            "facility_id": other, "replace_block_ids": [b.id for b in group],
+        }
+        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda pid, bid: by_id.get(bid)), \
+             patch(f"{MODULE}.delete_block") as delete, patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).create_block()
+        data, code = _parse(result[0])
+        assert (code, data["error"]) == (HTTPStatus.BAD_REQUEST, "Facility blocks are turned off in Settings.")
+        assert delete.mock_calls == [] and save.mock_calls == []
+
+    def test_a_bad_date_leaves_the_saved_blocks(self, _access, facility_blocks_on):
+        group = self._group()
+        body = {
+            "provider_id": PROVIDER_ID, "dates": ["2026-03-10", "2026-03-11"], "all_day": False,
+            "start": "1970-01-01T17:00:00", "end": "1970-01-01T14:00:00", "facility_id": FACILITY_ID,
+            "replace_block_ids": [b.id for b in group],
+        }
+        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda pid, bid: group[0]), \
+             patch(f"{MODULE}.delete_block") as delete, patch(f"{MODULE}.save_block") as save:
+            result = _make_handler(json_body=body).create_block()
+        assert _parse(result[0])[1] == HTTPStatus.BAD_REQUEST
+        assert delete.mock_calls == [] and save.mock_calls == []
+
+    def test_converting_a_saved_facility_block_to_recurring_while_off(self, _access):
+        old = self._group()[0]
+        body = {
+            "provider_id": PROVIDER_ID, "effective_start": "2026-01-05", "replace_block_id": old.id,
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.get_block_by_id", return_value=old), \
+             patch(f"{FACILITIES}.active_facility_name", return_value=None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.delete_block"), \
+             patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[]), \
+             patch(f"{MODULE}.save_recurring_block") as save:
+            result = _make_handler(json_body=body).create_recurring_block()
+        assert _parse(result[-1])[1] == HTTPStatus.CREATED
+        assert save.call_args.args[0].reason == "Old Name Visit"
+
+    def test_a_facility_block_sent_as_a_hold_saves_while_holds_are_off(self, _access, facility_blocks_on):
+        from provider_availability.engine.settings import set_feature
+
+        set_feature("holds", False)
+        body = {
+            "provider_id": PROVIDER_ID, "effective_start": "2026-01-05", "hold_type": "same_day",
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.save_recurring_block") as save, patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[]):
+            result = _make_handler(json_body=body).create_recurring_block()
+        assert _parse(result[-1])[1] == HTTPStatus.CREATED
+        assert save.call_args.args[0].hold_type == "none"
+
+    def test_a_recurring_facility_block_edit_needs_the_switch_for_a_new_facility(self, _access):
+        before = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, reason="PTO")
+        body = {
+            "id": "rb-1", "provider_id": PROVIDER_ID, "effective_start": "2026-01-05",
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.get_recurring_block_by_id", return_value=before), \
+             patch(f"{MODULE}.save_recurring_block") as save:
+            result = _make_handler(json_body=body).update_recurring_block()
+        data, code = _parse(result[0])
+        assert (code, data["error"]) == (HTTPStatus.BAD_REQUEST, "Facility blocks are turned off in Settings.")
+        assert save.mock_calls == []
+
+    def test_a_recurring_group_edit_moves_every_block_to_the_facility(self, _access, facility_blocks_on):
+        other = RecurringBlock(id="rb-2", provider_id=PROVIDER_ID_2, reason="PTO", location_ids=[LOCATION_ID], group_id="g-1", hold_type="same_day")
+        body = {
+            "id": "rb-1", "provider_id": PROVIDER_ID, "group_id": "g-1", "apply_to_group": True, "effective_start": "2026-01-05",
+            "weekly_schedule": {"friday": [{"start": "13:00", "end": "16:00"}]}, "facility_id": FACILITY_ID,
+        }
+        with patch(f"{MODULE}.get_recurring_blocks_by_group", return_value=[other]), \
+             patch(f"{MODULE}.get_recurring_block_by_id", return_value=None), \
+             patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[]), \
+             patch(f"{MODULE}.save_recurring_block"):
+            _make_handler(json_body=body).update_recurring_block()
+        assert (other.reason, other.facility_id, other.location_ids, other.hold_type) == (
+            "Riverstone Assisted Living Visit", FACILITY_ID, [], "none",
+        )
+
+
+class TestFacilityList:
+    FACS = [{"id": FACILITY_ID, "name": "Riverstone"}]
+
+    def test_nothing_sent_while_both_switches_are_off(self):
+        with patch(f"{MODULE}.get_active_facilities") as facs:
+            assert _make_handler()._round_facilities() == {"facilities": [], "by_provider": {}}
+        assert facs.mock_calls == []
+
+    def test_facility_blocks_on_sends_the_list_without_counting_patients(self):
+        from provider_availability.engine.settings import set_feature
+
+        set_feature("facility_blocks", True)
+        with patch(f"{MODULE}.get_active_facilities", return_value=self.FACS), \
+             patch(f"{MODULE}.facility_patient_counts") as counts, \
+             patch(f"{MODULE}.get_provider_facilities", return_value={}) as by_provider:
+            assert _make_handler()._round_facilities() == {"facilities": self.FACS, "by_provider": {}}
+        assert counts.mock_calls == []
+        assert by_provider.mock_calls == [call({FACILITY_ID})]
+
+    def test_patient_counts_come_on_request(self):
+        with patch(f"{MODULE}.facility_patient_counts", return_value={FACILITY_ID: 6}):
+            data, code = _parse(_make_handler().get_facility_patient_counts()[0])
+        assert (code, data) == (HTTPStatus.OK, {"counts": {FACILITY_ID: 6}})

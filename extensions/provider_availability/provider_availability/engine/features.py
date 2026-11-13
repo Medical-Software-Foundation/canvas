@@ -13,6 +13,11 @@ Choices per feature (``choice`` in ``apply_feature_change``):
 - overrides: "keep" (existing overrides keep applying; no new ones) or "stop"
   (those dates go back to regular hours)
 - provider_timezones: no choice; every provider moves to the practice timezone
+- facility_rounds: "keep" (saved rounds stay bookable; no new ones) or "remove"
+  (saved rounds come off calendars; the rules are kept, so turning the switch
+  back on draws them again)
+- facility_blocks: "keep" only. Saved facility blocks stay on calendars and can
+  still be edited or deleted; no new ones can be added
 
 Turning a feature back on needs no choice: the next sync or background run
 draws its events again, and overrides and timezones are re-synced at once.
@@ -45,13 +50,16 @@ from provider_availability.engine.event_sync import (
 )
 from provider_availability.engine.provider_resolver import get_provider_displays
 from provider_availability.engine.roles import get_schedulable_provider_ids
+from provider_availability.engine.round_limits import refresh_provider as refresh_round_limits
 from provider_availability.engine.settings import FEATURES, set_feature
 from provider_availability.engine.storage import (
     get_all_blocks,
     get_all_provider_timezones,
     get_all_recurring_blocks,
     get_all_rules,
+    get_blocks_for_provider,
     get_practice_timezone,
+    get_recurring_blocks_for_provider,
     get_rules_for_provider,
 )
 from provider_availability.engine.tz_utils import provider_tz, to_provider_naive
@@ -63,6 +71,8 @@ CHOICES = {
     "holds": ("keep", "remove"),
     "overrides": ("keep", "stop"),
     "provider_timezones": ("move",),
+    "facility_rounds": ("keep", "remove"),
+    "facility_blocks": ("keep",),
 }
 # Rows listed per feature in the affected-items table. The count is exact; the
 # list stops here so one request stays small on a large practice.
@@ -175,6 +185,32 @@ def _override_rows(provider_id: str, today: dt.date) -> list[list[str]]:
     return [r for _, r in sorted(rows, key=lambda pair: pair[0])]
 
 
+def _round_rows(provider_id: str) -> list[list[str]]:
+    """One row per saved facility round: where, when, and the visit limit."""
+    rows: list[list[str]] = []
+    for rule in get_rules_for_provider(provider_id):
+        if not rule.is_round or not rule.is_active:
+            continue
+        days = ", ".join(d.capitalize()[:3] for d in rule.weekly_schedule) if rule.recurrence_frequency != "daily" else "Daily"
+        limit = f"Up to {rule.max_visits}" if rule.max_visits else "No limit"
+        rows.append([rule.facility_name or "Facility", days, limit])
+    return rows
+
+
+def _facility_block_rows(provider_id: str, today: dt.date) -> list[list[str]]:
+    """One row per facility block still to come: the facility and when."""
+    rows: list[list[str]] = []
+    for block in get_blocks_for_provider(provider_id):
+        if block.facility_id and block.end.date() >= today:
+            when = _day(block.start.date()) + ("" if block.all_day else ", " + _span(block.start, block.end))
+            rows.append([block.facility_name or "Facility", when])
+    for rb in get_recurring_blocks_for_provider(provider_id):
+        if rb.facility_id and rb.is_active and (rb.effective_end is None or rb.effective_end >= today):
+            days = ", ".join(d.capitalize()[:3] for d in rb.weekly_schedule) if rb.recurrence_frequency != "daily" else "Daily"
+            rows.append([rb.facility_name or "Facility", days])
+    return rows
+
+
 def affected_items(feature: str, now: dt.datetime | None = None) -> dict[str, Any]:
     """What turning ``feature`` off would affect, grouped by provider.
 
@@ -192,6 +228,8 @@ def affected_items(feature: str, now: dt.datetime | None = None) -> dict[str, An
         "holds": ["Date", "Time", "Type"],
         "overrides": ["Date", "Change", "Reason"],
         "provider_timezones": ["Current timezone", "New timezone"],
+        "facility_rounds": ["Facility", "Days", "Visits per round"],
+        "facility_blocks": ["Facility", "When"],
     }[feature]
 
     by_provider: dict[str, list[list[str]]] = {}
@@ -204,6 +242,10 @@ def affected_items(feature: str, now: dt.datetime | None = None) -> dict[str, An
         for pid in _providers_with_schedules():
             if feature == "overrides":
                 rows = _override_rows(pid, to_provider_naive(now, pid).date())
+            elif feature == "facility_rounds":
+                rows = _round_rows(pid)
+            elif feature == "facility_blocks":
+                rows = _facility_block_rows(pid, to_provider_naive(now, pid).date())
             else:
                 rows = _event_rows(feature, pid, now)
             if rows:
@@ -293,6 +335,15 @@ def apply_feature_change(feature: str, on: bool, choice: str = "") -> list[Effec
     if feature == "provider_timezones":
         moved = [pid for pid, tz in get_all_provider_timezones().items() if tz]
         effects = _redraw_for_timezone_change(moved, lambda: set_feature(feature, on))
+    elif feature == "facility_rounds":
+        set_feature(feature, on, keep_existing_overrides=(choice != "remove"))
+        if on or choice == "remove":
+            # Rounds come back on, or come off: redraw every provider who has one.
+            with_rounds = sorted({r.provider_id for r in get_all_rules() if r.is_round})
+            effects = _resync_availability(with_rounds)
+            # "Round full" blocks go when rounds come off, and are recounted when they come back.
+            for pid in with_rounds:
+                effects.extend(refresh_round_limits(pid))
     elif feature == "overrides":
         set_feature(feature, on, keep_existing_overrides=(choice != "stop"))
         if on or choice == "stop":

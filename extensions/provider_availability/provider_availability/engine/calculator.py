@@ -11,6 +11,7 @@ Computes available time slots by:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
@@ -25,9 +26,9 @@ from provider_availability.engine.models import (
     date_in_pattern,
 )
 from provider_availability.engine.admin_calendar import own_calendars_q
-from provider_availability.engine.event_sync import AVAILABILITY_TITLE
+from provider_availability.engine.event_sync import AVAILABILITY_TITLE, ROUND_TITLE_PREFIX, round_location_ids
 from provider_availability.engine.provider_resolver import get_provider_display
-from provider_availability.engine.settings import applied_overrides
+from provider_availability.engine.settings import applied_overrides, rounds_drawn
 from provider_availability.engine.storage import get_blocks_for_provider, get_recurring_blocks_for_provider
 from provider_availability.engine.tz_utils import provider_now, to_provider_naive
 
@@ -218,6 +219,30 @@ def calculate_available_slots(
     return slots
 
 
+def bookable_rules(rules: list[ProviderAvailabilityRule]) -> list[ProviderAvailabilityRule]:
+    """The rules as booking sees them, matching what is on calendars.
+
+    Facility rounds are left out while they are switched off and removed. A round
+    saves no locations, and an empty list would match every location, so each round
+    gets its provider's primary location (event_sync.round_location_ids), read once
+    per provider.
+    """
+    drawn: bool | None = None
+    locations: dict[str, list[str]] = {}
+    result: list[ProviderAvailabilityRule] = []
+    for rule in rules:
+        if rule.is_round:
+            if drawn is None:
+                drawn = rounds_drawn()
+            if not drawn:
+                continue
+            if rule.provider_id not in locations:
+                locations[rule.provider_id] = round_location_ids(rule.provider_id)
+            rule = replace(rule, location_ids=locations[rule.provider_id])
+        result.append(rule)
+    return result
+
+
 def get_available_slots_for_provider(
     rules: list[ProviderAvailabilityRule],
     start_date: date,
@@ -238,7 +263,7 @@ def get_available_slots_for_provider(
     rblocks_cache: dict[str, list] = {}
     name_cache: dict[str, str] = {}
 
-    for rule in rules:
+    for rule in bookable_rules(rules):
         if location_id:
             if rule.location_ids and location_id not in rule.location_ids:
                 continue
@@ -306,9 +331,9 @@ def _get_schedule_event_blocks(
 
     Calendar titles are formatted as "{provider name}: {event type}",
     so we match by provider name prefix. The plugin's own Available
-    windows (on the Clinic calendar with title=AVAILABILITY_TITLE) are
-    the open baseline and must NOT be treated as blockers — exclude
-    those specifically. Any other event on a Clinic calendar (manual,
+    windows (on the Clinic calendar with title=AVAILABILITY_TITLE, or a
+    facility round's ROUND_TITLE_PREFIX title) are the open baseline and
+    must NOT be treated as blockers — exclude those specifically. Any other event on a Clinic calendar (manual,
     FHIR, Google sync, another plugin) is a real blocker. Pass
     provider_name to skip the per-call name lookup when computing many
     rules for the same provider.
@@ -333,8 +358,9 @@ def _get_schedule_event_blocks(
         starts_at__lt=end,
         is_cancelled=False,
     ).exclude(
-        calendar__title__startswith=provider_name + ": Clinic",
-        title=AVAILABILITY_TITLE,
+        # The plugin's own open time on the Clinic calendar: Available, and facility rounds.
+        Q(calendar__title__startswith=provider_name + ": Clinic")
+        & (Q(title=AVAILABILITY_TITLE) | Q(title__startswith=ROUND_TITLE_PREFIX)),
     )
     return [
         (to_provider_naive(s, provider_id), to_provider_naive(e, provider_id))

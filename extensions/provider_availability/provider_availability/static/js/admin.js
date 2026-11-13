@@ -12,16 +12,156 @@ const SVG_OVERRIDE = '<svg fill="currentColor" viewBox="0 0 24 24" stroke="none"
 const SVG_PLUS = '<svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M12 4v16m8-8H4"/></svg>';
 const SVG_X_SM = '<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M6 18L18 6M6 6l12 12"/></svg>';
 
-const TABLE_COLGROUP = '<colgroup><col class="col-when"><col class="col-hours"><col class="col-where"><col class="col-repeats"><col class="col-status"><col class="col-actions"></colgroup>';
-const TABLE_HEADER = '<thead><tr>' +
-  '<th><span class="th-inner"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>When</span></th>' +
-  '<th><span class="th-inner"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Hours</span></th>' +
-  '<th><span class="th-inner"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Reason</span></th>' +
-  '<th><span class="th-inner"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/><path d="M16 14l-4 0m4 3l-4 0"/></svg>Effective</span></th>' +
-  '<th><span class="th-inner"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Status</span></th>' +
-  '<th><span class="th-inner"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>Actions</span></th></tr></thead>';
-
 const SVG_CHEVRON_RIGHT = '<svg class="row-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>';
+
+const SVG_ROUND = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/></svg>';
+
+// Rule types in the order the card counts and rows use.
+const RULE_TYPES = [
+  { key: 'avail', label: 'Available', one: 'available', many: 'available', chip: 'chip-avail', svg: SVG_CHECK },
+  { key: 'over', label: 'Override', one: 'override', many: 'overrides', chip: 'chip-override', svg: SVG_OVERRIDE },
+  { key: 'round', label: 'Facility round', one: 'facility round', many: 'facility rounds', chip: 'chip-round', svg: SVG_ROUND },
+  { key: 'fblock', label: 'Facility block', one: 'facility block', many: 'facility blocks', chip: 'chip-fblock', svg: SVG_ROUND },
+  { key: 'block', label: 'Blocked', one: 'blocked', many: 'blocked', chip: 'chip-block', svg: SVG_X },
+  { key: 'hold', label: 'Hold', one: 'hold', many: 'holds', chip: 'chip-hold', svg: SVG_PAUSE },
+];
+const RULE_TYPE = {};
+RULE_TYPES.forEach(function(t) { RULE_TYPE[t.key] = t; });
+// Rows sort by type, then date.
+const RULE_ORDER = { avail: 1, round: 2, over: 3, fblock: 4, block: 5, hold: 6 };
+
+// Fixed column widths, so opening a row never moves the columns.
+const RULE_TABLE_HEAD = '<colgroup><col style="width:170px"><col style="width:180px"><col style="width:158px"><col>' +
+  '<col style="width:190px"><col style="width:114px"></colgroup>' +
+  '<thead><tr><th>Type</th><th>When</th><th>Hours</th><th>Details</th><th>Effective</th><th></th></tr></thead>';
+
+const DAY_PLURAL = { monday: 'Mondays', tuesday: 'Tuesdays', wednesday: 'Wednesdays', thursday: 'Thursdays', friday: 'Fridays', saturday: 'Saturdays', sunday: 'Sundays' };
+
+// "Wed, Nov 11, 2026"
+function fmtWeekdayDate(isoDate) {
+  if (!isoDate) return '';
+  var parts = isoDate.split('-');
+  var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// When a recurring rule runs: "Tuesdays", "Mon, Wed, Fri", "Every 2 weeks, Thursday",
+// "Daily", or the date for a one-day rule.
+function whenLabel(r, days) {
+  if (r.effective_start && r.effective_start === r.effective_end) return fmtWeekdayDate(r.effective_start);
+  if (r.recurrence_frequency === 'daily') return dailyDayLabel(r);
+  var iv = r.recurrence_interval || 1;
+  if (iv === 1) return days.length === 1 ? DAY_PLURAL[days[0]] : formatDayRange(days);
+  return 'Every ' + iv + ' weeks, ' + (days.length === 1 ? DAY_FULL[days[0]] : formatDayRange(days));
+}
+
+// The Effective column: one date, or a range on one line. Expired rows say when they ended.
+function effectiveHtml(start, end, expired) {
+  if (!start) return '<span class="col-empty">No start date</span>';
+  if (expired && end) return '<span class="eff-ended">Ended ' + fmtDate(end) + '</span>';
+  if (!end || end === start) return fmtDate(start);
+  var sameYear = start.slice(0, 4) === end.slice(0, 4);
+  var from = sameYear
+    ? new Date(start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : fmtDate(start);
+  return from + ' – ' + fmtDate(end);
+}
+
+// "15 min before, 10 min after, 2 hr lead time"
+function bufferText(r) {
+  var buf = r.buffer_minutes || {};
+  var lead = (r.booking_interval || {}).min_lead_hours || 0;
+  var parts = [];
+  if (buf.pre > 0 && paFeatureOn('buffers')) parts.push(buf.pre + ' min before');
+  if (buf.post > 0 && paFeatureOn('buffers')) parts.push(buf.post + ' min after');
+  if (lead > 0 && paFeatureOn('lead_time')) parts.push(lead + ' hr lead time');
+  return parts.join(', ');
+}
+
+// A facility block's details: not bookable, and how many patients the facility has.
+// The counts load once, the first time a facility block is drawn, then the list redraws.
+var _facilityPatientCounts = null;
+var _facilityPatientCountsLoading = false;
+
+async function loadFacilityPatientCounts() {
+  if (_facilityPatientCounts || _facilityPatientCountsLoading) return;
+  _facilityPatientCountsLoading = true;
+  var data = await apiCall('/facility-patient-counts');
+  _facilityPatientCountsLoading = false;
+  // A failed load leaves the Patients line out rather than retrying on every draw.
+  _facilityPatientCounts = (data && !data.error && data.counts) || {};
+  if (data && !data.error) renderAccordion();
+}
+
+function facilityBlockItems(b) {
+  var items = [['Booking', 'Not bookable']];
+  if (!_facilityPatientCounts) { loadFacilityPatientCounts(); return items; }
+  var n = _facilityPatientCounts[String(b.facility_id)];
+  if (typeof n === 'number') items.push(['Patients', n + ' at ' + (b.facility_name || facilityName(b.facility_id))]);
+  return items;
+}
+
+// The place, in full: the facility, one location, the first location and a count, or all locations.
+function placeHtml(names) {
+  if (!names.length) return '<span class="place"><span class="rule-where">All locations</span></span>';
+  var more = names.length > 1 ? '<span class="more"> + ' + (names.length - 1) + ' more</span>' : '';
+  return '<span class="place"><span class="rule-where">' + _escHtml(names[0]) + '</span>' + more + '</span>';
+}
+
+// One row: type, when, hours, place and reason, effective, actions. When it has
+// details, a row below it lists them and the row opens to show it.
+function ruleRowHtml(o) {
+  var t = RULE_TYPE[o.type];
+  var expandable = o.items.length > 0;
+  var reason = o.reason ? '<span class="why"><span class="dot">·</span>' + _escHtml(o.reason) + '</span>' : '';
+  var h = '<tr class="t-' + o.type + (expandable ? ' data-row' : '') + '"' + (expandable ? ' onclick="toggleRowDetail(this, event)"' : '') + '>';
+  h += '<td>' + (expandable ? SVG_CHEVRON_RIGHT : '<span class="chev-space"></span>') +
+    '<span class="type-chip ' + t.chip + '">' + t.svg + '</span>' + _escHtml(t.label) + '</td>';
+  h += '<td>' + _escHtml(o.when) + '</td>';
+  h += '<td>' + o.hours + '</td>';
+  h += '<td class="dcell"><div class="dline">' + o.place + reason + '</div></td>';
+  h += '<td class="eff">' + o.effective + '</td>';
+  h += '<td><div class="rule-acts"><button type="button" class="lnk-sm" onclick=\'' + o.edit + '\'>Edit</button>' +
+    '<button type="button" class="lnk-sm danger" onclick=\'' + o.del + '\'>Delete</button></div></td>';
+  h += '</tr>';
+  if (expandable) {
+    h += '<tr class="t-' + o.type + ' detail-row"><td colspan="3"></td><td colspan="3" class="x3"><dl>' +
+      o.items.map(function(it) { return '<dt>' + _escHtml(it[0]) + '</dt><dd>' + _escHtml(it[1]) + '</dd>'; }).join('') +
+      '</dl></td></tr>';
+  }
+  return h;
+}
+
+// A reason cut short by the column shows in full on hover and in the row's details.
+// A row whose only detail is that reason becomes expandable for it.
+function fitReasons() {
+  document.querySelectorAll('.provider-card:not(.collapsed) .rule-table tbody tr:not(.detail-row)').forEach(function(row) {
+    var why = row.querySelector('.why');
+    if (!why) return;
+    why.style.display = 'block';
+    var cut = why.scrollWidth > why.clientWidth + 1;
+    why.style.display = '';
+    var full = why.textContent.replace(/^·/, '');
+    why.classList.toggle('is-cut', cut);
+    why.title = cut ? full : '';
+    var det = row.nextElementSibling;
+    if (!det || !det.classList.contains('detail-row')) {
+      if (!cut) return;
+      row.insertAdjacentHTML('afterend', '<tr class="' + row.className + ' detail-row"><td colspan="3"></td><td colspan="3" class="x3"><dl></dl></td></tr>');
+      det = row.nextElementSibling;
+      row.classList.add('data-row');
+      row.setAttribute('onclick', 'toggleRowDetail(this, event)');
+      var space = row.querySelector('.chev-space');
+      if (space) space.outerHTML = SVG_CHEVRON_RIGHT;
+    }
+    var dl = det.querySelector('dl');
+    var have = dl.querySelector('[data-reason]');
+    if (cut && !have) dl.insertAdjacentHTML('afterbegin', '<dt data-reason>Reason</dt><dd data-reason>' + _escHtml(full) + '</dd>');
+    if (!cut && have) dl.querySelectorAll('[data-reason]').forEach(function(x) { x.remove(); });
+  });
+}
+window.addEventListener('resize', fitReasons);
+
 
 let _providers = [];
 let _locations = [];
@@ -678,11 +818,16 @@ function _renderBlockEntries() {
   if (!box) return;
   _blockEntries.sort(function(a, b) { return _blockEntryKey(a) < _blockEntryKey(b) ? -1 : 1; });
   box.style.display = _blockEntries.length ? '' : 'none';
+  // What each block is: the facility for a facility block, otherwise the reason.
+  var what = _blockWhat === 'facility'
+    ? facilityName((fpBlockFacility && fpBlockFacility.getValue()[0]) || '') || (_editingBlockFacility ? _editingBlockFacility.name : '')
+    : document.getElementById('block_reason').value;
   box.innerHTML = '<div class="block-entries-h">Blocks to save (' + _blockEntries.length + ')</div>' +
     _blockEntries.map(function(e, i) {
       var when = e.allDay ? 'All day' : fmtHHMM(e.start) + ' \u2013 ' + fmtHHMM(e.end) + ' ' + _blockTzShort(e.date);
       var day = new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
       return '<div class="block-entry"><span class="be-date">' + day + '</span><span class="be-when">' + when + '</span>' +
+        '<span class="be-what">' + _escHtml(what) + '</span>' +
         '<button type="button" class="lnk-sm danger be-x" aria-label="Remove ' + day + '" data-i="' + i + '">Remove</button></div>';
     }).join('');
   box.querySelectorAll('.be-x').forEach(function(x) {
@@ -728,10 +873,14 @@ function _blockEntryBatches(entries) {
   return Object.keys(batches).map(function(k) { return batches[k]; });
 }
 
-async function _postBlockEntries(pid, entries, reason, locationIds, groupId) {
+// replaceIds: saved blocks this save replaces. The first request carries them, and the
+// server removes them only once that request's checks pass.
+async function _postBlockEntries(pid, entries, reason, locationIds, groupId, facilityId, replaceIds) {
   var created = 0;
+  var replacing = (replaceIds || []).slice();
   for (const batch of _blockEntryBatches(entries)) {
-    const body = { provider_id: pid, dates: batch.dates, all_day: batch.allDay, reason: reason, location_ids: locationIds, group_id: groupId };
+    const body = { provider_id: pid, dates: batch.dates, all_day: batch.allDay, reason: reason, location_ids: locationIds, group_id: groupId, facility_id: facilityId || '', replace_block_ids: replacing };
+    replacing = [];
     if (!batch.allDay) {
       body.start = '1970-01-01T' + batch.start + ':00';
       body.end = '1970-01-01T' + batch.end + ':00';
@@ -1245,7 +1394,9 @@ function bulkRenderPreview(result) {
     summary.innerHTML =
       _bulkStat(result.total_rows, 'Rows', 'var(--text)') +
       _bulkStat(result.record_count, 'Records', '#2e7d32') +
-      _bulkStat(result.rule_count, 'Rules', 'var(--text)') +
+      // Rounds are rules too; they are counted on their own when the file has any.
+      _bulkStat((result.rule_count || 0) - (result.round_count || 0), 'Rules', 'var(--text)') +
+      (result.round_count ? _bulkStat(result.round_count, 'Rounds', 'var(--text)') : '') +
       _bulkStat(result.block_count, 'Blocks', 'var(--text)') +
       _bulkStat(result.rblock_count, 'Recurring', 'var(--text)') +
       _bulkStat(result.error_count, 'Errors', '#c62828');
@@ -1507,7 +1658,7 @@ function resolveLocationNames(locationIds) {
 
 function toggleRowDetail(dataRow, event) {
   // Ignore clicks on action chips
-  if (event && event.target.closest('.action-chip')) return;
+  if (event && event.target.closest('button, .action-chip')) return;
   var detailRow = dataRow.nextElementSibling;
   if (!detailRow || !detailRow.classList.contains('detail-row')) return;
 
@@ -1545,9 +1696,11 @@ function renderAccordion() {
   }
   var legendHtml = '<span class="av-legend">' +
     '<span class="legend-item"><span class="type-chip chip-avail">' + SVG_CHECK + '</span> Available</span>' +
+    (paFeatureOn('facility_rounds') ? '<span class="legend-item"><span class="type-chip chip-round">' + SVG_ROUND + '</span> Facility round</span>' : '') +
+    (paFeatureOn('facility_blocks') ? '<span class="legend-item"><span class="type-chip chip-fblock">' + SVG_ROUND + '</span> Facility block</span>' : '') +
     '<span class="legend-item"><span class="type-chip chip-block">' + SVG_X + '</span> Blocked</span>' +
-    '<span class="legend-item"><span class="type-chip chip-hold">' + SVG_PAUSE + '</span> Hold</span>' +
     '<span class="legend-item"><span class="type-chip chip-override">' + SVG_OVERRIDE + '</span> Override</span>' +
+    '<span class="legend-item"><span class="type-chip chip-hold">' + SVG_PAUSE + '</span> Hold</span>' +
     '</span>';
   var legendShown = false;
   function sectionHeading(title) {
@@ -1594,9 +1747,6 @@ function renderAccordion() {
     const name = p.provider_name || pid.slice(0, 8) + '...';
     const initials = getInitials(name);
     const avatarClass = AVATAR_CLASSES[idx % 3];
-    // Count Available rules (one row per rule). Counting weekdays would
-    // miss daily-frequency rules (which keep weekly_schedule empty), so
-    // a "Mon-Fri" rule and an "Every 2 days" rule both count as 1 here.
     // Hide expired rows unless asked for, and count only what is shown: a
     // count taken before filtering would read "3 available" above one row.
     const visibleRules = (p.rules || []).filter(r => _showExpired || !isExpiredRow(r));
@@ -1606,15 +1756,19 @@ function renderAccordion() {
     const visibleBlocks = (p.blocks || []).filter(b => _showExpired || !isExpiredBlock(b));
     const visibleOverrides = r => (r.date_overrides || []).filter(ovr => _showExpired || !isExpiredOverride(ovr));
 
-    const availableCount = visibleRules.length;
-    let overrideCount = 0;
-    let holdCount = 0;
-    visibleRules.forEach(r => { overrideCount += visibleOverrides(r).length; });
-    visibleRecurring.forEach(rb => {
-      if (rb.hold_type && rb.hold_type !== 'none') holdCount++;
+    // One count per rule, so a "Mon-Fri" rule and an "Every 2 days" rule both count as 1.
+    const counts = { avail: 0, over: 0, round: 0, fblock: 0, block: 0, hold: 0 };
+    visibleRules.forEach(r => {
+      if (r.facility_id) counts.round++; else counts.avail++;
+      counts.over += visibleOverrides(r).length;
     });
-    const pureBlockCount = visibleBlocks.length + visibleRecurring.filter(rb => !rb.hold_type || rb.hold_type === 'none').length;
-    const hasData = availableCount > 0 || pureBlockCount > 0 || holdCount > 0;
+    visibleRecurring.forEach(rb => {
+      if (rb.hold_type && rb.hold_type !== 'none') counts.hold++;
+      else if (rb.facility_id) counts.fblock++;
+      else counts.block++;
+    });
+    visibleBlocks.forEach(b => { if (b.facility_id) counts.fblock++; else counts.block++; });
+    const hasData = counts.avail + counts.round + counts.fblock + counts.block + counts.hold > 0;
 
     var readOnly = p.can_edit === false;
     html += '<div class="provider-card' + (readOnly ? ' read-only' : '') + '">';
@@ -1628,19 +1782,18 @@ function renderAccordion() {
     html += '<div class="provider-name-col">';
     html += '<span class="provider-name">' + _escHtml(name) + '</span>';
     if (!_viewTz) {
-      html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' \u00b7 practice default') + '</div>';
+      html += '<div class="provider-tz-subtitle">' + pTz + (pTzExplicit ? '' : ' · practice default') + '</div>';
     }
     html += '</div></div>';
-    html += '<div class="provider-chips">';
-    // Counts are one line of plain text; color lives in the expanded rows and the legend.
-    var counts = [];
-    if (availableCount > 0) counts.push(availableCount + ' available');
-    if (pureBlockCount > 0) counts.push(pureBlockCount + ' blocked');
-    if (holdCount > 0) counts.push(holdCount + (holdCount === 1 ? ' hold' : ' holds'));
-    if (overrideCount > 0) counts.push(overrideCount + (overrideCount === 1 ? ' override' : ' overrides'));
-    if (counts.length) html += '<span class="card-counts">' + counts.join(' \u00b7 ') + '</span>';
-    html += '</div>';
     html += '<div class="provider-header-right">';
+    // Counts sit by the buttons: a type icon and a number per type.
+    var countHtml = '';
+    RULE_TYPES.forEach(function(t) {
+      var n = counts[t.key];
+      if (!n) return;
+      countHtml += '<span class="card-count" title="' + n + ' ' + (n === 1 ? t.one : t.many) + '"><span class="type-chip ' + t.chip + '">' + t.svg + '</span><b>' + n + '</b></span>';
+    });
+    if (countHtml) html += '<span class="rule-counts">' + countHtml + '</span>';
     if (readOnly) html += '<span class="read-only-note">View only</span>';
     html += '<button class="btn btn-avail" onclick="event.stopPropagation();addForProvider(\'' + pid + '\',\'available\')">+ Available</button>';
     html += '<button class="btn btn-block-add" onclick="event.stopPropagation();addForProvider(\'' + pid + '\',\'blocked\')">+ Blocked</button>';
@@ -1652,285 +1805,121 @@ function renderAccordion() {
       html += '<br><button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="addForProvider(\'' + pid + '\',\'available\')">+ Add Availability</button>';
       html += '</div>';
     } else {
-      // Schedule table
-      html += '<table class="schedule-table">';
-      html += TABLE_COLGROUP;
-      html += TABLE_HEADER;
-      html += '<tbody>';
-
+      html += '<table class="rule-table">' + RULE_TABLE_HEAD + '<tbody>';
       var rows = [];
+      function hoursText(windows) {
+        return windows.map(w => fmtHHMMConverted(w.start, pTz) + ' – ' + fmtHHMMConverted(w.end, pTz)).join(', ');
+      }
 
-      // Available rules — expandable rows
+      // Available rules and facility rounds: one row per set of days with the same hours.
       visibleRules.forEach(r => {
-        const schedule = r.weekly_schedule || {};
-        const isExpired = isExpiredRow(r);
-        const reasonChipHtml = r.reason
-          ? '<div class="chip-group"><span class="detail-tag tag-avail">' + _escHtml(r.reason) + '</span></div>'
-          : '<span class="col-empty">\u2014</span>';
-
-        // Build repeats cell
-        let repeatsHtml = '';
-        if (r.effective_start && r.effective_end) {
-          if (r.effective_start === r.effective_end) {
-            repeatsHtml = '<span class="date-range">' + fmtDate(r.effective_start) + '</span>';
-          } else {
-            repeatsHtml = '<span class="date-range">' + fmtDateRange(r.effective_start, r.effective_end) + '</span>';
-          }
-        } else if (r.effective_start) {
-          repeatsHtml = '<span class="date-range">Since ' + fmtDate(r.effective_start) + '</span>';
-        } else {
-          repeatsHtml = '<span class="date-range" title="Edit to add a start date">No start date</span>';
-        }
-
-        // Build detail panel content
-        let detailHtml = '<div class="detail-panel">';
-        const vtNames = r.visit_type_names || [];
-        var metaCols = vtNames.length > 0 ? 5 : 4;
-        detailHtml += '<div class="detail-meta-grid" style="grid-template-columns:repeat(' + metaCols + ',1fr);">';
-        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Frequency</div><div class="detail-meta-value">' + frequencyLabel(r) + '</div></div>';
-        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (r.reason ? _escHtml(r.reason) : '\u2014') + '</div></div>';
-        var buf = r.buffer_minutes || {};
-        var booking = r.booking_interval || {};
-        var bufParts = [];
-        if (buf.pre > 0) bufParts.push('<span class="detail-tag tag-buffer">' + buf.pre + 'm Pre</span>');
-        if (buf.post > 0) bufParts.push('<span class="detail-tag tag-buffer">' + buf.post + 'm Post</span>');
-        if (booking.min_lead_hours > 0) bufParts.push('<span class="detail-tag tag-buffer">' + booking.min_lead_hours + 'h Lead</span>');
-        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Buffers</div><div class="detail-meta-value">' + (bufParts.length > 0 ? '<div class="chip-group">' + bufParts.join(' ') + '</div>' : '\u2014') + '</div></div>';
-        var locNames = resolveLocationNames(r.location_ids);
-        var locHtml = locNames.length > 0 ? '<div class="chip-group">' + locNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
-        detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + locHtml + '</div></div>';
-        if (vtNames.length > 0) {
-          detailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Visit Types</div><div class="detail-meta-value"><div class="chip-group">';
-          vtNames.forEach(function(vt) { detailHtml += '<span class="detail-tag tag-visit-type">' + _escHtml(vt) + '</span>'; });
-          detailHtml += '</div></div></div>';
-        }
-        detailHtml += '</div>';
-        detailHtml += '</div>';
-
-        // Group days by identical time windows — no splitting for overrides
-        // Daily-frequency rules: synthesize one group from time_windows.
-        var isDailyRule = r.recurrence_frequency === 'daily';
-        var groups;
-        if (isDailyRule) {
-          var dailyWins = r.time_windows || [];
-          groups = dailyWins.length > 0
-            ? [{ days: [], windows: dailyWins, dailyLabel: dailyDayLabel(r) }]
-            : [];
-        } else {
-          groups = groupDaysByWindows(schedule);
-        }
+        const isRound = !!r.facility_id;
+        const type = isRound ? 'round' : 'avail';
         const ruleJson = _escHtml(JSON.stringify(JSON.stringify(r)));
-
-        var rowHtml = '';
-
-        groups.forEach((group) => {
-          const dayLabel = group.dailyLabel || formatDayRange(group.days);
-          const timeStr = group.windows.map(w => fmtHHMMConverted(w.start, pTz) + ' \u2013 ' + fmtHHMMConverted(w.end, pTz)).join('<br>');
-
-          // Data row
-          rowHtml += '<tr class="row-available data-row" onclick="toggleRowDetail(this, event)">';
-          rowHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;">';
-          rowHtml += SVG_CHEVRON_RIGHT;
-          rowHtml += '<span class="type-chip chip-avail">' + SVG_CHECK + '</span>';
-          rowHtml += '<span class="day-text">' + dayLabel + '</span>';
-          rowHtml += '</div></div></td>';
-          rowHtml += '<td><div class="td-cell"><span class="time-text">' + timeStr + '</span></div></td>';
-          rowHtml += '<td><div class="td-cell">' + reasonChipHtml + '</div></td>';
-          rowHtml += '<td><div class="td-cell">' + repeatsHtml + '</div></td>';
-          rowHtml += '<td><div class="td-cell"><span class="badge ' + (isExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
-          rowHtml += '<td><div class="td-cell"><div class="row-actions">';
-          rowHtml += '<button class="action-chip action-chip-edit" onclick=\'editRule(' + ruleJson + ')\'>Edit</button>';
-          rowHtml += '<button class="action-chip action-chip-delete" onclick=\'deleteRuleDays("' + r.provider_id + '","' + r.id + '",' + JSON.stringify(group.days) + ',' + ruleJson + ')\'>Delete</button>';
-          rowHtml += '</div></div></td>';
-          rowHtml += '</tr>';
-          // Detail row
-          rowHtml += '<tr class="detail-row row-available"><td colspan="6">' + detailHtml + '</td></tr>';
-        });
-
-        // Fallback: rule with no active days
-        if (groups.length === 0) {
-          rowHtml += '<tr class="row-available data-row" onclick="toggleRowDetail(this, event)">';
-          rowHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;">' + SVG_CHEVRON_RIGHT + '<span class="type-chip chip-avail">' + SVG_CHECK + '</span><span class="day-text">No days</span></div></div></td>';
-          rowHtml += '<td><div class="td-cell"><span class="col-empty">\u2014</span></div></td>';
-          rowHtml += '<td><div class="td-cell">' + reasonChipHtml + '</div></td>';
-          rowHtml += '<td><div class="td-cell">' + repeatsHtml + '</div></td>';
-          rowHtml += '<td><div class="td-cell"><span class="badge ' + (isExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
-          rowHtml += '<td><div class="td-cell"><div class="row-actions">';
-          rowHtml += '<button class="action-chip action-chip-edit" onclick=\'editRule(' + ruleJson + ')\'>Edit</button>';
-          rowHtml += '<button class="action-chip action-chip-delete" onclick="confirmDeleteRule(\'' + r.provider_id + '\',\'' + r.id + '\')">Delete</button>';
-          rowHtml += '</div></div></td></tr>';
-          rowHtml += '<tr class="detail-row row-available"><td colspan="6">' + detailHtml + '</td></tr>';
+        const items = [];
+        if (isRound && r.max_visits) items.push(['Visits per round', 'Up to ' + r.max_visits]);
+        if (!isRound) {
+          var locNames = resolveLocationNames(r.location_ids);
+          if (locNames.length > 1) items.push(['Locations', locNames.join(', ')]);
         }
+        if ((r.visit_type_names || []).length) items.push(['Visit types', r.visit_type_names.join(', ')]);
+        var buffers = bufferText(r);
+        if (buffers) items.push(['Buffers', buffers]);
+        if (r.effective_end && r.effective_end !== r.effective_start) {
+          items.push(['Effective', fmtDate(r.effective_start) + ' to ' + fmtDate(r.effective_end)]);
+        }
+        const place = isRound ? placeHtml([r.facility_name || facilityName(r.facility_id)]) : placeHtml(resolveLocationNames(r.location_ids));
 
-        rows.push({ typeOrder: 1, sortKey: r.effective_start || '0000-00-00', html: rowHtml });
+        var groups = r.recurrence_frequency === 'daily'
+          ? ((r.time_windows || []).length ? [{ days: [], windows: r.time_windows }] : [])
+          : groupDaysByWindows(r.weekly_schedule || {});
+        var rowHtml = '';
+        groups.forEach(group => {
+          rowHtml += ruleRowHtml({
+            type: type, when: whenLabel(r, group.days), hours: hoursText(group.windows), place: place, reason: r.reason,
+            effective: effectiveHtml(r.effective_start, r.effective_end, isExpiredRow(r)), items: items,
+            edit: 'editRule(' + ruleJson + ')',
+            del: 'deleteRuleDays("' + r.provider_id + '","' + r.id + '",' + JSON.stringify(group.days) + ',' + ruleJson + ')',
+          });
+        });
+        if (groups.length === 0) {
+          rowHtml += ruleRowHtml({
+            type: type, when: 'No days', hours: '—', place: place, reason: r.reason,
+            effective: effectiveHtml(r.effective_start, r.effective_end, isExpiredRow(r)), items: items,
+            edit: 'editRule(' + ruleJson + ')',
+            del: 'confirmDeleteRule("' + r.provider_id + '","' + r.id + '")',
+          });
+        }
+        rows.push({ order: RULE_ORDER[type], sortKey: r.effective_start || '0000-00-00', html: rowHtml });
 
-        // Override rows pushed separately so they sort after ALL available rows
+        // Overrides change one date of the rule above.
         visibleOverrides(r).forEach(function(ovr) {
-          var ovrDateStr = fmtDate(ovr.date);
-          var ovrDateObj = new Date(ovr.date + 'T12:00:00');
-          var ovrDayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][ovrDateObj.getDay()];
-          var ovrHours = ovr.is_closed
-            ? 'Closed'
-            : ovr.time_windows.map(function(w) { return fmtHHMMConverted(w.start, pTz) + ' \u2013 ' + fmtHHMMConverted(w.end, pTz); }).join(', ');
-          var ovrReasonHtml = ovr.reason
-            ? '<span class="detail-tag tag-override">' + _escHtml(ovr.reason) + '</span>'
-            : '<span class="type-chip chip-override">Override</span>';
+          var ovrDay = DAYS[(new Date(ovr.date + 'T12:00:00').getDay() + 6) % 7];
+          var usual = r.recurrence_frequency === 'daily' ? (r.time_windows || []) : ((r.weekly_schedule || {})[ovrDay] || []);
+          var ovrItems = [['Changes', (r.reason || (isRound ? 'Facility round' : 'Availability')) + (usual.length ? ', usually ' + hoursText(usual) : '')]];
           var ovrJson = _escHtml(JSON.stringify(JSON.stringify(ovr)));
-          var ovrHtml = '<tr class="row-override">';
-          ovrHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;"><span style="visibility:hidden">' + SVG_CHEVRON_RIGHT + '</span><span class="type-chip chip-override">' + SVG_OVERRIDE + '</span><span class="day-text">' + ovrDayAbbr + '</span></div></div></td>';
-          ovrHtml += '<td><div class="td-cell"><span class="time-text">' + ovrHours + '</span></div></td>';
-          ovrHtml += '<td><div class="td-cell">' + ovrReasonHtml + '</div></td>';
-          ovrHtml += '<td><div class="td-cell"><span class="date-range">' + ovrDateStr + '</span></div></td>';
-          var ovrExpired = isExpiredOverride(ovr);
-          ovrHtml += '<td><div class="td-cell"><span class="badge ' + (ovrExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
-          ovrHtml += '<td><div class="td-cell"><div class="row-actions">';
-          ovrHtml += '<button class="action-chip action-chip-edit" onclick="editOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',' + ovrJson + ')">Edit</button>';
-          ovrHtml += '<button class="action-chip action-chip-delete" onclick="deleteOverrideFromAccordion(\'' + r.provider_id + '\',\'' + r.id + '\',\'' + ovr.date + '\')">Delete</button>';
-          ovrHtml += '</div></div></td>';
-          ovrHtml += '</tr>';
-          rows.push({ typeOrder: 1.5, sortKey: ovr.date, html: ovrHtml });
+          rows.push({ order: RULE_ORDER.over, sortKey: ovr.date, html: ruleRowHtml({
+            type: 'over', when: fmtWeekdayDate(ovr.date), hours: ovr.is_closed ? 'Closed' : hoursText(ovr.time_windows || []),
+            place: place, reason: ovr.reason, effective: effectiveHtml(ovr.date, ovr.date, isExpiredOverride(ovr)), items: ovrItems,
+            edit: 'editOverrideFromAccordion("' + r.provider_id + '","' + r.id + '",' + ovrJson + ')',
+            del: 'deleteOverrideFromAccordion("' + r.provider_id + '","' + r.id + '","' + ovr.date + '")',
+          }) });
         });
       });
 
       // One-off blocks
       visibleBlocks.forEach(b => {
-        const blockDateStr = (b.start || '').slice(0, 10);
-        const blockDateParts = blockDateStr.split('-');
-        const blockDateObj = new Date(Number(blockDateParts[0]), Number(blockDateParts[1]) - 1, Number(blockDateParts[2]));
-        const blockDayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][blockDateObj.getDay()];
-        const blockEffective = fmtDate(blockDateStr);
+        const day = (b.start || '').slice(0, 10);
         const viewTz = _viewTz || pTz;
-        const timeStr = convertIsoTime(b.start, pTz, viewTz) + ' \u2013 ' + convertIsoTime(b.end, pTz, viewTz);
         const blockJson = _escHtml(JSON.stringify(JSON.stringify(b)));
-        const blockReasonChip = b.reason
-          ? '<span class="detail-tag tag-block">' + _escHtml(b.reason) + '</span>'
-          : '<span class="col-empty">\u2014</span>';
-
-        // Detail panel
-        var bLocNames = resolveLocationNames(b.location_ids);
-        var bLocHtml = bLocNames.length > 0 ? '<div class="chip-group">' + bLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
-        var bDetailHtml = '<div class="detail-panel"><div class="detail-meta-grid">';
-        bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (b.reason ? _escHtml(b.reason) : '\u2014') + '</div></div>';
-        bDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + bLocHtml + '</div></div>';
-        bDetailHtml += '</div></div>';
-
-        const blockExpired = isExpiredBlock(b);
-
-        var rowHtml = '';
-        rowHtml += '<tr class="row-blocked data-row" onclick="toggleRowDetail(this, event)">';
-        rowHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;">';
-        rowHtml += SVG_CHEVRON_RIGHT;
-        rowHtml += '<span class="type-chip chip-block">' + SVG_X + '</span>';
-        rowHtml += '<span class="day-text">' + blockDayAbbr + '</span>';
-        rowHtml += '</div></div></td>';
-        rowHtml += '<td><div class="td-cell"><span class="time-text">' + timeStr + '</span></div></td>';
-        rowHtml += '<td><div class="td-cell">' + blockReasonChip + '</div></td>';
-        rowHtml += '<td><div class="td-cell"><span class="date-range">' + blockEffective + '</span></div></td>';
-        rowHtml += '<td><div class="td-cell"><span class="badge ' + (blockExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
-        rowHtml += '<td><div class="td-cell"><div class="row-actions">';
-        rowHtml += '<button class="action-chip action-chip-edit" onclick=\'editBlock(' + blockJson + ')\'>Edit</button>';
-        rowHtml += '<button class="action-chip action-chip-delete" onclick="confirmDeleteBlock(\'' + b.provider_id + '\',\'' + b.id + '\')">Delete</button>';
-        rowHtml += '</div></div></td>';
-        rowHtml += '</tr>';
-        rowHtml += '<tr class="detail-row row-blocked"><td colspan="6">' + bDetailHtml + '</td></tr>';
-
-        rows.push({ typeOrder: 3, sortKey: blockDateStr, html: rowHtml });
+        var locNames = resolveLocationNames(b.location_ids);
+        var fb = !!b.facility_id;
+        rows.push({ order: RULE_ORDER[fb ? 'fblock' : 'block'], sortKey: day, html: ruleRowHtml({
+          type: fb ? 'fblock' : 'block', when: fmtWeekdayDate(day),
+          hours: b.all_day ? 'All day' : convertIsoTime(b.start, pTz, viewTz) + ' – ' + convertIsoTime(b.end, pTz, viewTz),
+          place: fb ? placeHtml([b.facility_name || facilityName(b.facility_id)]) : placeHtml(locNames),
+          reason: fb ? '' : b.reason, effective: effectiveHtml(day, day, isExpiredBlock(b)),
+          items: fb ? facilityBlockItems(b) : (locNames.length > 1 ? [['Locations', locNames.join(', ')]] : []),
+          edit: 'editBlock(' + blockJson + ')',
+          del: 'confirmDeleteBlock("' + b.provider_id + '","' + b.id + '")',
+        }) });
       });
 
-      // Recurring blocks — expandable rows
+      // Recurring blocks and holds
       visibleRecurring.forEach(rb => {
-        const schedule = rb.weekly_schedule || {};
-        const isExpired = isExpiredRow(rb);
         const isHold = rb.hold_type && rb.hold_type !== 'none';
-        const holdLabels = { none: '', same_day: 'Same Day Hold', next_day: 'Next Day Hold' };
-        const holdLabel = holdLabels[rb.hold_type || 'none'] || '';
-
-        // Build repeats cell
-        let repeatsHtml = '';
-        if (rb.effective_start && rb.effective_end) {
-          if (rb.effective_start === rb.effective_end) {
-            repeatsHtml = '<span class="date-range">' + fmtDate(rb.effective_start) + '</span>';
-          } else {
-            repeatsHtml = '<span class="date-range">' + fmtDateRange(rb.effective_start, rb.effective_end) + '</span>';
-          }
-        } else if (rb.effective_start) {
-          repeatsHtml = '<span class="date-range">Since ' + fmtDate(rb.effective_start) + '</span>';
-        } else {
-          repeatsHtml = '<span class="date-range" title="Edit to add a start date">No start date</span>';
-        }
-
-        // Build inline chips: hold + reason
-        let rbChipsHtml = '';
-        if (holdLabel && rb.reason) {
-          rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + ': ' + _escHtml(rb.reason) + '</span>';
-        } else if (holdLabel) {
-          rbChipsHtml += '<span class="detail-tag tag-hold">' + holdLabel + '</span>';
-        } else if (rb.reason) {
-          rbChipsHtml += '<span class="detail-tag tag-block">' + _escHtml(rb.reason) + '</span>';
-        }
-        if (!rbChipsHtml) rbChipsHtml = '<span class="col-empty">\u2014</span>';
-        else rbChipsHtml = '<div class="chip-group">' + rbChipsHtml + '</div>';
-
-        // Detail panel
-        var rbReasonText = '';
-        if (holdLabel && rb.reason) rbReasonText = holdLabel + ': ' + rb.reason;
-        else if (holdLabel) rbReasonText = holdLabel;
-        else if (rb.reason) rbReasonText = rb.reason;
-        var rbLocNames = resolveLocationNames(rb.location_ids);
-        var rbLocHtml = rbLocNames.length > 0 ? '<div class="chip-group">' + rbLocNames.map(function(n) { return '<span class="detail-tag tag-location">' + _escHtml(n) + '</span>'; }).join('') + '</div>' : 'All';
-        var rbDetailHtml = '<div class="detail-panel"><div class="detail-meta-grid" style="grid-template-columns:repeat(3,1fr);">';
-        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Frequency</div><div class="detail-meta-value">' + frequencyLabel(rb) + '</div></div>';
-        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Reason</div><div class="detail-meta-value">' + (rbReasonText ? _escHtml(rbReasonText) : '\u2014') + '</div></div>';
-        rbDetailHtml += '<div class="detail-meta-item"><div class="detail-section-label">Locations</div><div class="detail-meta-value">' + rbLocHtml + '</div></div>';
-        rbDetailHtml += '</div></div>';
-
-        var isDailyBlock = rb.recurrence_frequency === 'daily';
-        var groups;
-        if (isDailyBlock) {
-          var dailyBlockWins = rb.time_windows || [];
-          groups = dailyBlockWins.length > 0
-            ? [{ days: [], windows: dailyBlockWins, dailyLabel: dailyDayLabel(rb) }]
-            : [];
-        } else {
-          groups = groupDaysByWindows(schedule);
-        }
+        const fb = !isHold && !!rb.facility_id;
+        const type = isHold ? 'hold' : (fb ? 'fblock' : 'block');
+        const holdLabel = { same_day: 'Same-day hold', next_day: 'Next-day hold' }[rb.hold_type] || '';
+        // Escaped where it is shown (ruleRowHtml).
+        const reason = isHold ? [holdLabel, rb.reason].filter(Boolean).join(': ') : (fb ? '' : rb.reason);
         const rbJson = _escHtml(JSON.stringify(JSON.stringify(rb)));
-
-        const rbRowClass = isHold ? 'row-hold' : 'row-blocked';
-
+        var locNames = resolveLocationNames(rb.location_ids);
+        var place = fb ? placeHtml([rb.facility_name || facilityName(rb.facility_id)]) : placeHtml(locNames);
+        var items = fb ? facilityBlockItems(rb) : (locNames.length > 1 ? [['Locations', locNames.join(', ')]] : []);
+        if (rb.effective_end && rb.effective_end !== rb.effective_start) {
+          items.push(['Effective', fmtDate(rb.effective_start) + ' to ' + fmtDate(rb.effective_end)]);
+        }
+        var groups = rb.recurrence_frequency === 'daily'
+          ? ((rb.time_windows || []).length ? [{ days: [], windows: rb.time_windows }] : [])
+          : groupDaysByWindows(rb.weekly_schedule || {});
         var rowHtml = '';
-        groups.forEach((group) => {
-          const dayLabel = group.dailyLabel || formatDayRange(group.days);
-          const timeStr = group.windows.map(w => fmtHHMMConverted(w.start, pTz) + ' \u2013 ' + fmtHHMMConverted(w.end, pTz)).join('<br>');
-
-          rowHtml += '<tr class="' + rbRowClass + ' data-row" onclick="toggleRowDetail(this, event)">';
-          rowHtml += '<td><div class="td-cell"><div style="display:flex;align-items:center;gap:6px;">';
-          rowHtml += SVG_CHEVRON_RIGHT;
-          rowHtml += '<span class="type-chip ' + (isHold ? 'chip-hold' : 'chip-block') + '">' + (isHold ? SVG_PAUSE : SVG_X) + '</span>';
-          rowHtml += '<span class="day-text">' + dayLabel + '</span>';
-          rowHtml += '</div></div></td>';
-          rowHtml += '<td><div class="td-cell"><span class="time-text">' + timeStr + '</span></div></td>';
-          rowHtml += '<td><div class="td-cell">' + rbChipsHtml + '</div></td>';
-          rowHtml += '<td><div class="td-cell">' + repeatsHtml + '</div></td>';
-          rowHtml += '<td><div class="td-cell"><span class="badge ' + (isExpired ? 'badge-expired">Expired' : 'badge-active">Active') + '</span></div></td>';
-          rowHtml += '<td><div class="td-cell"><div class="row-actions">';
-          if (isHold) {
-            rowHtml += '<button class="action-chip action-chip-edit" onclick=\'editHold(' + rbJson + ')\'>Edit</button>';
-            rowHtml += '<button class="action-chip action-chip-delete" onclick=\'deleteHold("' + rb.provider_id + '","' + rb.id + '")\'>Delete</button>';
-          } else {
-            rowHtml += '<button class="action-chip action-chip-edit" onclick=\'editRecurringBlock(' + rbJson + ')\'>Edit</button>';
-            rowHtml += '<button class="action-chip action-chip-delete" onclick=\'deleteRecurringBlockDays("' + rb.provider_id + '","' + rb.id + '",' + JSON.stringify(group.days) + ',' + rbJson + ')\'>Delete</button>';
-          }
-          rowHtml += '</div></div></td>';
-          rowHtml += '</tr>';
-          rowHtml += '<tr class="detail-row ' + rbRowClass + '"><td colspan="6">' + rbDetailHtml + '</td></tr>';
+        groups.forEach(group => {
+          rowHtml += ruleRowHtml({
+            type: type, when: whenLabel(rb, group.days), hours: hoursText(group.windows), place: place,
+            reason: reason, effective: effectiveHtml(rb.effective_start, rb.effective_end, isExpiredRow(rb)), items: items,
+            edit: (isHold ? 'editHold(' : 'editRecurringBlock(') + rbJson + ')',
+            del: isHold
+              ? 'deleteHold("' + rb.provider_id + '","' + rb.id + '")'
+              : 'deleteRecurringBlockDays("' + rb.provider_id + '","' + rb.id + '",' + JSON.stringify(group.days) + ',' + rbJson + ')',
+          });
         });
-
-        rows.push({ typeOrder: isHold ? 2 : 3, sortKey: rb.effective_start || '0000-00-00', html: rowHtml });
+        rows.push({ order: RULE_ORDER[type], sortKey: rb.effective_start || '0000-00-00', html: rowHtml });
       });
 
+      // By type, then by date.
       rows.sort(function(a, b) {
-        if (a.typeOrder !== b.typeOrder) return a.typeOrder - b.typeOrder;
+        if (a.order !== b.order) return a.order - b.order;
         return a.sortKey.localeCompare(b.sortKey);
       });
       rows.forEach(function(r) { html += r.html; });
@@ -1961,11 +1950,13 @@ function renderAccordion() {
     var anyCollapsed = container.querySelector('.provider-card.collapsed');
     ecBtn.textContent = anyCollapsed ? 'Expand all' : 'Collapse all';
   }
+  fitReasons();
   window.scrollTo(0, savedScroll);
 }
 
 function toggleCard(header) {
   header.closest('.provider-card').classList.toggle('collapsed');
+  fitReasons();
 }
 
 function toggleAllCards() {
@@ -1978,6 +1969,7 @@ function toggleAllCards() {
     else c.classList.remove('collapsed');
   });
   if (btn) btn.textContent = allExpanded ? 'Expand all' : 'Collapse all';
+  fitReasons();
 }
 
 function onFilterProviderChange() { renderAccordion(); }
@@ -2447,6 +2439,8 @@ function resetForm() {
   _clearDailyTimeWindows('rb-time-windows-rows');
 
   setScheduleMode('single');
+  resetRoundFields();
+  resetBlockWhat();
 
   // Reset block mode to single
   setBlockMode('single');
@@ -2492,6 +2486,7 @@ function editRule(ruleJson) {
   msProvider.setValue([r.provider_id]);
   msLocation.setValue(r.location_ids || []);
   msVisitType.setValue(r.visit_types || []);
+  fillRoundFields(r);
 
   document.getElementById('rule_reason').value = r.reason || '';
   document.getElementById('buffer_pre').value = (r.buffer_minutes || {}).pre || 0;
@@ -2570,8 +2565,9 @@ function editRecurringBlock(blockJson) {
   document.getElementById('editing_group_id').value = b.group_id || '';
   msBlockProvider.setValue([b.provider_id]);
   msBlockLocation.setValue(b.location_ids || []);
+  fillBlockWhat(b);
 
-  document.getElementById('block_reason').value = b.reason || '';
+  document.getElementById('block_reason').value = b.facility_id ? '' : (b.reason || '');
   document.getElementById('rb_effective_start').value = b.effective_start || '';
   document.getElementById('rb_effective_end').value = b.effective_end || '';
 
@@ -2620,8 +2616,9 @@ function editBlock(blockJson) {
   document.getElementById('editing_group_id').value = b.group_id || '';
   msBlockProvider.setValue([b.provider_id]);
   msBlockLocation.setValue(b.location_ids || []);
+  fillBlockWhat(b);
 
-  document.getElementById('block_reason').value = b.reason || '';
+  document.getElementById('block_reason').value = b.facility_id ? '' : (b.reason || '');
 
   // Populate date/time from block start/end ISO strings
   document.getElementById('block_date').value = (b.start || '').slice(0, 10);
@@ -2750,6 +2747,9 @@ async function saveRule() {
     if (!effectiveStart) { showMsg('Start date is required', 'error'); return; }
   }
 
+  const round = readRoundFields();
+  if (round.error) { showMsg(round.error, 'error'); return; }
+
   const editingId = document.getElementById('editing_rule_id').value;
   const groupId = document.getElementById('editing_group_id').value;
   const applyToGroup = document.getElementById('apply_to_group').checked && groupId;
@@ -2798,6 +2798,7 @@ async function saveRule() {
     recurrence_interval: recurrence.interval,
     time_windows: timeWindows,
   };
+  Object.assign(ruleBase, round.fields);
 
   if (editingId && providerIds.length === 1) {
     const rule = Object.assign({}, ruleBase, {
@@ -2847,6 +2848,8 @@ async function saveRule() {
 async function saveRecurringBlock() {
   const providerIds = msBlockProvider.getValue();
   if (providerIds.length === 0) { showMsg('Please select at least one provider', 'error'); return; }
+  const what = readBlockWhat();
+  if (what.error) { showMsg(what.error, 'error'); return; }
 
   let schedule = {};
   let hasValidationError = false;
@@ -2892,15 +2895,17 @@ async function saveRecurringBlock() {
   const holdType = 'none';
   if (!document.getElementById('rb_effective_start').value) { showMsg('Start date is required', 'error'); return; }
 
-  const locationIds = msBlockLocation.getValue();
+  const locationIds = what.locationIds;
+  const reason = what.facilityId ? '' : document.getElementById('block_reason').value;
 
   if (editingId && providerIds.length === 1) {
     const body = {
       id: editingId,
       provider_id: providerIds[0],
       weekly_schedule: schedule,
-      reason: document.getElementById('block_reason').value,
+      reason: reason,
       location_ids: locationIds,
+      facility_id: what.facilityId,
       effective_start: document.getElementById('rb_effective_start').value || null,
       effective_end: document.getElementById('rb_effective_end').value || null,
       is_active: true,
@@ -2927,8 +2932,9 @@ async function saveRecurringBlock() {
     const createBody = {
       provider_id: providerIds[0],
       weekly_schedule: schedule,
-      reason: document.getElementById('block_reason').value,
+      reason: reason,
       location_ids: locationIds,
+      facility_id: what.facilityId,
       effective_start: document.getElementById('rb_effective_start').value || null,
       effective_end: document.getElementById('rb_effective_end').value || null,
       is_active: true,
@@ -2957,8 +2963,9 @@ async function saveRecurringBlock() {
     const body = {
       provider_id: pid,
       weekly_schedule: schedule,
-      reason: document.getElementById('block_reason').value,
+      reason: reason,
       location_ids: locationIds,
+      facility_id: what.facilityId,
       effective_start: document.getElementById('rb_effective_start').value || null,
       effective_end: document.getElementById('rb_effective_end').value || null,
       is_active: true,
@@ -2988,6 +2995,8 @@ async function saveOneoffBlock() {
   const blockId = document.getElementById('editing_block_id').value;
   const providerIds = msBlockProvider.getValue();
   if (providerIds.length === 0) { showMsg('Please select at least one provider', 'error'); return; }
+  const what = readBlockWhat();
+  if (what.error) { showMsg(what.error, 'error'); return; }
 
   // Every block to save: the list, plus the row above when a date is filled in.
   const entries = _blockEntries.slice();
@@ -3000,10 +3009,10 @@ async function saveOneoffBlock() {
   const allDay = entries.length > 0 && entries[0].allDay;
   const startTime = entries.length > 0 ? entries[0].start : '';
   const endTime = entries.length > 0 ? entries[0].end : '';
-  const reason = document.getElementById('block_reason').value;
+  const reason = what.facilityId ? '' : document.getElementById('block_reason').value;
   const groupId = document.getElementById('editing_group_id').value;
   const applyToGroup = document.getElementById('apply_to_group').checked && groupId;
-  const locationIds = msBlockLocation.getValue();
+  const locationIds = what.locationIds;
 
   if (entries.length === 0) {
     showMsg('Select at least one date', 'error'); return;
@@ -3024,10 +3033,12 @@ async function saveOneoffBlock() {
         if (inGroup) groupProviderIds.push(p.provider_id);
       });
     }
-    // Per affected provider, gather the block ids that need to be removed
-    // before posting the fresh batch. We must NOT use the server's
-    // ?apply_to_group=true here because that flag is cross-provider and
-    // would wipe sibling providers' blocks unconditionally.
+    // Per affected provider, gather the block ids the fresh batch replaces.
+    // The server removes them in the same request that saves the new ones, after
+    // its checks pass, so a refused save leaves the old blocks in place. We must
+    // NOT use the server's ?apply_to_group=true here because that flag is
+    // cross-provider and would wipe sibling providers' blocks unconditionally.
+    var replaceIdsByProvider = {};
     for (const pid of groupProviderIds) {
       var blockIdsToDelete = [];
       if (groupId) {
@@ -3040,20 +3051,14 @@ async function saveOneoffBlock() {
       } else if (pid === providerIds[0]) {
         blockIdsToDelete.push(blockId);
       }
-      for (const bid of blockIdsToDelete) {
-        const delResp = await apiCall(
-          '/blocks/' + pid + '/' + bid + '?apply_to_group=false',
-          { method: 'DELETE' }
-        );
-        if (delResp && delResp.error) { showMsg(delResp.error, 'error'); return; }
-      }
+      replaceIdsByProvider[pid] = blockIdsToDelete;
     }
     const batchGroupId = _editingBlockGroup
       || groupId
       || (entries.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
     let totalCreated = 0;
     for (const pid of groupProviderIds) {
-      const res = await _postBlockEntries(pid, entries, reason, locationIds, batchGroupId);
+      const res = await _postBlockEntries(pid, entries, reason, locationIds, batchGroupId, what.facilityId, replaceIdsByProvider[pid]);
       totalCreated += res.created;
       if (res.error) { showMsg(res.error, 'error'); return; }
     }
@@ -3075,7 +3080,7 @@ async function saveOneoffBlock() {
     let errors = [];
     let saved = 0;
     for (const pid of providerIds) {
-      const res = await _postBlockEntries(pid, entries, reason, locationIds, newGroupId);
+      const res = await _postBlockEntries(pid, entries, reason, locationIds, newGroupId, what.facilityId);
       saved += res.created;
       if (res.error) errors.push(res.error);
     }
@@ -3109,6 +3114,7 @@ async function saveOneoffBlock() {
       end: end,
       reason: reason,
       location_ids: locationIds,
+      facility_id: what.facilityId,
       group_id: groupId || null,
       apply_to_group: !!applyToGroup,
       all_day: allDay,
@@ -3131,6 +3137,7 @@ async function saveOneoffBlock() {
       end: end,
       reason: reason,
       location_ids: locationIds,
+      facility_id: what.facilityId,
       group_id: groupId || null,
       replace_recurring_block_id: recurringBlockId,
       all_day: allDay,
@@ -3154,6 +3161,7 @@ async function saveOneoffBlock() {
       end: end,
       reason: reason,
       location_ids: locationIds,
+      facility_id: what.facilityId,
       group_id: newGroupId,
       all_day: allDay,
     };
@@ -3429,16 +3437,21 @@ async function renderSettingsPanel() {
   try {
     var tzData = await apiCall('/provider-timezones/all');
     var serverTzs = tzData.timezones || {};
+    // The server's list is the whole truth: anyone missing from it uses the practice timezone.
+    Object.keys(_providerTzMap).forEach(function(pid) {
+      if (!serverTzs[pid]) _providerTzMap[pid] = { timezone: _practiceTz, explicit: false };
+    });
     Object.keys(serverTzs).forEach(function(pid) {
       _providerTzMap[pid] = { timezone: serverTzs[pid], explicit: true };
     });
   } catch (e) {}
 
-  var container = document.getElementById('provider-tz-list');
-  if (!container) return;
+  var body = document.getElementById('pv-rows');
+  if (!body) return;
 
   if (_providers.length === 0) {
-    container.innerHTML = '<div class="empty-state">No providers found</div>';
+    body.innerHTML = '<tr class="pv-none"><td colspan="3">No providers found</td></tr>';
+    filterProviderRows();
     return;
   }
 
@@ -3448,23 +3461,41 @@ async function renderSettingsPanel() {
     return aLast.localeCompare(bLast);
   });
 
-  var html = '<table class="settings-tz-table"><thead><tr><th>Provider</th><th>Timezone</th></tr></thead><tbody>';
+  // One row per provider: timezone and facilities. A provider on the practice timezone reads gray.
+  var html = '';
   sortedProviders.forEach(function(p) {
     var entry = _providerTzMap[p.id];
     var isExplicit = entry && entry.explicit;
     var currentTz = isExplicit ? entry.timezone : '';
-    html += '<tr>';
-    html += '<td><strong>' + _escHtml(p.name || p.id) + '</strong></td>';
-    html += '<td><select class="input provider-tz-dropdown" data-provider-id="' + p.id + '" onchange="saveProviderTz(this)">';
-    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice timezone \u00b7 ' + _practiceTz + '</option>';
+    html += '<tr data-name="' + _escHtml((p.name || '').toLowerCase()) + '">';
+    html += '<td>' + _escHtml(p.name || p.id) + '</td>';
+    html += '<td class="tz-col"><select class="input provider-tz-dropdown' + (currentTz ? '' : ' tz-follows') + '" data-provider-id="' + _escHtml(p.id) + '" onchange="saveProviderTz(this)">';
+    html += '<option value=""' + (!currentTz ? ' selected' : '') + '>Practice timezone</option>';
     COMMON_TZS.forEach(function(tz) {
       html += '<option value="' + tz + '"' + (tz === currentTz ? ' selected' : '') + '>' + tz + '</option>';
     });
     html += '</select></td>';
+    html += '<td class="pf-col round-only"><div id="pf-pick-' + _escHtml(p.id) + '"></div></td>';
     html += '</tr>';
   });
-  html += '</tbody></table>';
-  container.innerHTML = html;
+  body.innerHTML = html + '<tr class="pv-none" style="display:none"><td colspan="3">No providers match.</td></tr>';
+  if (window.paDrawProviderFacilities) window.paDrawProviderFacilities();
+  filterProviderRows();
+}
+
+// Settings › Providers search: narrows the rows and keeps the count current.
+function filterProviderRows() {
+  var body = document.getElementById('pv-rows');
+  var input = document.getElementById('pv-search');
+  var count = document.getElementById('pv-count');
+  if (!body || !input || !count) return;
+  var q = input.value.trim().toLowerCase();
+  var rows = body.querySelectorAll('tr[data-name]');
+  var shown = 0;
+  rows.forEach(function(r) { var on = !q || r.dataset.name.indexOf(q) >= 0; r.style.display = on ? '' : 'none'; if (on) shown++; });
+  var none = body.querySelector('tr.pv-none');
+  if (none && rows.length) none.style.display = shown ? 'none' : '';
+  count.textContent = rows.length ? (q ? shown + ' of ' + rows.length + ' providers' : rows.length + ' providers') : '';
 }
 
 async function saveProviderTz(selectEl) {
@@ -3500,33 +3531,46 @@ async function saveProviderTz(selectEl) {
   }
 }
 
-async function applyBulkTimezone() {
-  var bulkSel = document.getElementById('bulk-tz-select');
-  if (!bulkSel || !bulkSel.value) return;
-  var tz = bulkSel.value;
-  var pids = _providers.map(function(p) { return p.id; });
-  if (pids.length === 0) { showMsg('No providers loaded', 'error'); return; }
-  if (!confirm('Set timezone to ' + tz + ' for all ' + pids.length + ' providers?')) return;
-  var data = await apiCall('/provider-timezones/bulk', {
-    method: 'PUT',
-    body: JSON.stringify({ provider_ids: pids, timezone: tz }),
-  });
-  if (data.error) {
-    showMsg(data.error, 'error');
-  } else {
-    showMsg(data.message || 'Timezones updated', 'success');
-    // Update local TZ map for ALL providers — no overview dependency
-    pids.forEach(function(pid) {
-      _providerTzMap[pid] = { timezone: tz, explicit: true };
-    });
-    // Also refresh overview for accordion display
-    try {
-      var ovData = await apiCall('/overview');
-      _overviewData = ovData.providers || [];
-      _syncProviderTzMapFromOverview();
-    } catch (e) {}
-    renderSettingsPanel();
+// The practice timezone dropdown saves on change. Providers who use the practice
+// timezone move with it; providers with their own timezone keep theirs.
+async function savePracticeTimezone() {
+  var sel = document.getElementById('bulk-tz-select');
+  if (!sel || !sel.value || sel.value === _practiceTz) return;
+  if (!confirm('Set the practice timezone to ' + sel.value + '? Providers who use the practice timezone move with it.')) {
+    sel.value = _practiceTz;
+    return;
   }
+  await _putPracticeTimezone(sel.value, false);
+}
+
+// Apply to all: every provider uses the practice timezone, and their own timezones are cleared.
+async function applyBulkTimezone() {
+  var sel = document.getElementById('bulk-tz-select');
+  if (!sel || !sel.value) return;
+  if (!confirm('Use ' + sel.value + ' for all providers? Each provider\'s own timezone is cleared.')) return;
+  await _putPracticeTimezone(sel.value, true);
+}
+
+async function _putPracticeTimezone(tz, applyToAll) {
+  var data = await apiCall('/timezone', {
+    method: 'PUT',
+    body: JSON.stringify({ timezone: tz, apply_to_all: applyToAll }),
+  });
+  var sel = document.getElementById('bulk-tz-select');
+  if (!data || data.error) {
+    showMsg((data && data.error) || 'The timezone was not saved.', 'error');
+    if (sel) sel.value = _practiceTz;
+    return;
+  }
+  showMsg(data.message || 'Timezone updated', 'success');
+  _practiceTz = data.timezone;
+  if (applyToAll) _providerTzMap = {};
+  try {
+    var ovData = await apiCall('/overview');
+    _overviewData = ovData.providers || [];
+    _syncProviderTzMapFromOverview();
+  } catch (e) {}
+  renderSettingsPanel();
 }
 
 /* ---------- Holds ---------- */
@@ -3731,6 +3775,301 @@ document.addEventListener('input', function(e) {
   if (e.target.id === 'hold_effective_end') syncDateFacade('hold_effective_end');
 });
 
+/* ---------- Facility rounds ---------- */
+
+// Active facilities and each provider's saved facilities, sent with the page
+// (AvailabilityAPI._round_facilities) and kept current by settings.js.
+function paFacilities() {
+  var f = (window.__PRELOADED__ && window.__PRELOADED__.facilities) || {};
+  return { facilities: f.facilities || [], by_provider: f.by_provider || {} };
+}
+
+function facilityName(id) {
+  var hit = paFacilities().facilities.find(function(f) { return String(f.id) === String(id); });
+  return hit ? hit.name : '';
+}
+
+// A searchable facility picker. Single mode picks one facility; multi mode picks
+// many, shows up to 3 chips, and a one-line summary beyond that. groups() returns
+// [[label, items]], items being {id, name, count?}, most likely facilities first.
+// Pickers share one set of page listeners, which act on the open ones only, so a
+// picker whose row is redrawn away leaves nothing behind.
+var _fpOpenPickers = new Set();
+document.addEventListener('mousedown', function(e) {
+  // Check the event's path, not root.contains(): selecting an option redraws the list, so the
+  // tapped element is already detached by the time this runs and would read as "outside".
+  var path = e.composedPath();
+  Array.from(_fpOpenPickers).forEach(function(p) { if (path.indexOf(p.root) < 0) p.close(); });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') Array.from(_fpOpenPickers).forEach(function(p) { p.close(); });
+});
+window.addEventListener('scroll', function() { _fpOpenPickers.forEach(function(p) { p.place(); }); }, true);
+window.addEventListener('resize', function() { _fpOpenPickers.forEach(function(p) { p.place(); }); });
+
+function FacilityPicker(hostId, opts) {
+  var host = document.getElementById(hostId);
+  var selected = [];
+  var query = '';
+  var shown = null;
+  host.innerHTML = '<div class="fp"><div class="fp-control"></div><div class="fp-list"></div></div>';
+  var root = host.firstChild;
+  var control = root.querySelector('.fp-control');
+  var list = root.querySelector('.fp-list');
+
+  function nameOf(id) {
+    var hit = opts.all().find(function(f) { return String(f.id) === String(id); });
+    return hit ? hit.name : '';
+  }
+
+  function changed() { if (opts.onChange) opts.onChange(selected.slice()); }
+
+  function drawControl() {
+    var isOpen = root.classList.contains('open');
+    var html = '';
+    if (opts.single) {
+      html = selected[0] && !isOpen ? '<span class="fp-single-val">' + _escHtml(nameOf(selected[0])) + '</span>' : '';
+    } else if (!isOpen && selected.length > 3) {
+      html = '<span class="fp-summary"><b>' + selected.length + ' facilities:</b> ' + _escHtml(nameOf(selected[0])) + ', ' +
+        _escHtml(nameOf(selected[1])) + ' + ' + (selected.length - 2) + ' more</span>';
+    } else if (!isOpen) {
+      html = selected.map(function(id) {
+        return '<span class="ms-chip">' + _escHtml(nameOf(id)) + ' <span class="ms-chip-remove" data-rm="' + _escHtml(id) + '">&times;</span></span>';
+      }).join('');
+    }
+    var showInput = isOpen || (opts.single ? !selected[0] : selected.length <= 3);
+    control.innerHTML = html + (showInput ? '<input placeholder="Search facilities..." value="' + _escHtml(query) + '">' : '');
+    var input = control.querySelector('input');
+    if (input) input.oninput = function() { query = this.value; drawList(); };
+    control.querySelectorAll('[data-rm]').forEach(function(x) {
+      x.onclick = function(e) {
+        e.stopPropagation();
+        selected.splice(selected.indexOf(x.dataset.rm), 1);
+        drawControl();
+        changed();
+        // The list is closed, so this is a finished change.
+        if (opts.onClose) opts.onClose(selected.slice());
+      };
+    });
+  }
+
+  function drawList() {
+    var q = query.trim().toLowerCase();
+    var gs = opts.groups();
+    if (!opts.single) {
+      // Checked facilities move to Selected right away, like the other pickers.
+      gs = gs.map(function(g) { return [g[0], g[1].filter(function(i) { return selected.indexOf(String(i.id)) < 0; })]; });
+      gs.unshift(['Selected (' + selected.length + ')', selected.map(function(id) { return { id: id, name: nameOf(id) }; }), true]);
+    }
+    var html = '';
+    gs.forEach(function(g) {
+      var items = g[1].filter(function(i) { return !q || i.name.toLowerCase().indexOf(q) >= 0; });
+      if (!items.length) return;
+      html += '<div class="fp-group">' + _escHtml(g[0]) + (g[2] ? '<button type="button" class="fp-clear" data-clear>Clear</button>' : '') + '</div>' +
+        items.map(function(i) {
+          var on = selected.indexOf(String(i.id)) >= 0;
+          return '<div class="fp-opt' + (on ? ' sel' : '') + '" data-id="' + _escHtml(i.id) + '">' +
+            (opts.single ? '' : '<input type="checkbox"' + (on ? ' checked' : '') + '>') + _escHtml(i.name) +
+            (i.count ? '<span class="fp-count">' + _escHtml(i.count) + '</span>' : '') + '</div>';
+        }).join('');
+    });
+    list.innerHTML = html || '<div class="fp-empty">No facilities match.</div>';
+    list.querySelectorAll('.fp-opt').forEach(function(o) {
+      o.onmousedown = function(e) {
+        e.preventDefault();
+        var id = o.dataset.id;
+        if (opts.single) { selected = [id]; query = ''; close(); changed(); return; }
+        var k = selected.indexOf(id);
+        if (k < 0) selected.push(id); else selected.splice(k, 1);
+        drawList();
+        changed();
+      };
+    });
+    var clr = list.querySelector('[data-clear]');
+    if (clr) clr.onmousedown = function(e) { e.preventDefault(); selected = []; drawList(); changed(); };
+  }
+
+  // The list floats over the page, so a scrolling container (Settings › Providers) can't cut it off.
+  function place() {
+    if (!root.classList.contains('open')) return;
+    var r = control.getBoundingClientRect(), room = window.innerHeight - r.bottom;
+    list.style.position = 'fixed'; list.style.left = r.left + 'px'; list.style.width = r.width + 'px'; list.style.right = 'auto';
+    if (room < 300 && r.top > room) { list.style.top = 'auto'; list.style.bottom = (window.innerHeight - r.top + 4) + 'px'; }
+    else { list.style.bottom = 'auto'; list.style.top = (r.bottom + 4) + 'px'; }
+  }
+  var self = { root: root, close: close, place: place };
+
+  function open() {
+    if (root.classList.contains('open') || root.classList.contains('fp-locked')) return;
+    shown = selected.slice();
+    root.classList.add('open');
+    _fpOpenPickers.add(self);
+    drawControl();
+    drawList();
+    place();
+    var i = control.querySelector('input');
+    if (i) i.focus();
+    if (opts.onOpen) opts.onOpen();
+  }
+  function close() {
+    var before = shown;
+    _fpOpenPickers.delete(self);
+    root.classList.remove('open');
+    query = '';
+    shown = null;
+    drawControl();
+    if (opts.onClose && before && before.join('|') !== selected.join('|')) opts.onClose(selected.slice());
+  }
+  control.onclick = open;
+  drawControl();
+
+  return {
+    getValue: function() { return selected.slice(); },
+    setValue: function(ids) { selected = (ids || []).map(String); drawControl(); },
+    // A saved round keeps its facility while rounds are switched off.
+    setLocked: function(locked) { root.classList.toggle('fp-locked', !!locked); },
+    // Redraw after the groups' data arrives.
+    redraw: function() { if (root.classList.contains('open')) drawList(); else drawControl(); },
+  };
+}
+
+var _roundWhere = 'clinic';
+var fpRoundFacility = null;
+// The edited round's own facility, so its name shows even when it isn't in the list
+// (made inactive since, or rounds switched off).
+var _editingRoundFacility = null;
+
+function _roundFacilityItems() { return _facilityItemsWith(_editingRoundFacility); }
+
+// A form's Facility list, plus the edited item's own facility when it isn't listed.
+function _facilityItemsWith(own) {
+  var list = paFacilities().facilities;
+  if (own && !list.some(function(f) { return String(f.id) === String(own.id); })) return list.concat([own]);
+  return list;
+}
+
+// The round form's Facility list: the selected providers' facilities first, then the rest.
+function _roundFacilityGroups() { return _facilityGroupsFor(msProvider); }
+
+// A Facility list for a form: its selected providers' facilities first, then the rest.
+function _facilityGroupsFor(ms) {
+  var data = paFacilities();
+  var mine = [];
+  (ms ? ms.getValue() : []).forEach(function(pid) {
+    (data.by_provider[pid] || []).forEach(function(id) { if (mine.indexOf(String(id)) < 0) mine.push(String(id)); });
+  });
+  var mineItems = mine.map(function(id) { return { id: id, name: facilityName(id) }; }).filter(function(i) { return i.name; });
+  var rest = data.facilities.filter(function(f) { return mine.indexOf(String(f.id)) < 0; });
+  if (!mineItems.length) return [['All facilities', rest]];
+  var label = ms.getValue().length === 1 ? 'Provider’s facilities' : 'Providers’ facilities';
+  return [[label, mineItems], ['All facilities', rest]];
+}
+
+function _updateRoundFacilityHint() { _updateFacilityHint('round-facility-hint', msProvider); }
+
+function _updateFacilityHint(hintId, ms) {
+  var hint = document.getElementById(hintId);
+  if (!hint) return;
+  var ids = ms ? ms.getValue() : [];
+  var names = _providers.filter(function(p) { return ids.indexOf(String(p.id)) >= 0; }).map(function(p) { return p.name; });
+  var lead = names.length === 1 ? _escHtml(names[0]) + '’s facilities are' : 'Each provider’s facilities are';
+  hint.innerHTML = lead + ' listed first. Set them in <b>Settings</b> › <b>Providers</b>.';
+}
+
+// Clinic availability books at the chosen locations. A facility round books at the
+// provider's primary location, and its visits are labeled with the facility.
+function setRoundWhere(where) {
+  _roundWhere = where === 'facility' ? 'facility' : 'clinic';
+  var fac = _roundWhere === 'facility';
+  document.getElementById('where-clinic').classList.toggle('active', !fac);
+  document.getElementById('where-facility').classList.toggle('active', fac);
+  document.querySelectorAll('.where-facility-only').forEach(function(e) { e.style.display = fac ? '' : 'none'; });
+  document.querySelectorAll('.where-clinic-only').forEach(function(e) { e.style.display = fac ? 'none' : ''; });
+  document.getElementById('where-hint').textContent = fac
+    ? 'A facility round: visits booked in it are labeled with the facility.'
+    : 'Bookable hours at one or more clinic locations.';
+  document.getElementById('who-label').textContent = paFeatureOn('facility_rounds') || fac ? 'Who and where' : 'Who';
+  _updateRoundFacilityHint();
+}
+
+function resetRoundFields() {
+  _editingRoundFacility = null;
+  if (fpRoundFacility) { fpRoundFacility.setValue([]); fpRoundFacility.setLocked(false); }
+  document.getElementById('round_max_visits').value = '';
+  document.getElementById('where-row').classList.remove('round-locked');
+  setRoundWhere('clinic');
+}
+
+function fillRoundFields(r) {
+  if (!r.facility_id) return;
+  _editingRoundFacility = { id: String(r.facility_id), name: r.facility_name || '' };
+  setRoundWhere('facility');
+  fpRoundFacility.setValue([r.facility_id]);
+  document.getElementById('round_max_visits').value = r.max_visits ? String(r.max_visits) : '';
+  // Editing a round can't turn it into clinic hours or move it while rounds are off.
+  document.getElementById('where-row').classList.add('round-locked');
+  fpRoundFacility.setLocked(!paFeatureOn('facility_rounds'));
+}
+
+// The round fields for the save payload, or an error message.
+function readRoundFields() {
+  if (_roundWhere !== 'facility') return { fields: { facility_id: '', max_visits: null } };
+  var facilityId = fpRoundFacility.getValue()[0] || '';
+  if (!facilityId) return { error: 'Choose a facility for this round' };
+  var raw = document.getElementById('round_max_visits').value.trim();
+  var maxVisits = raw ? parseInt(raw, 10) : null;
+  if (raw && !(maxVisits >= 1)) return { error: 'Visits per round must be a whole number of 1 or more' };
+  return { fields: { facility_id: facilityId, max_visits: maxVisits, location_ids: [] } };
+}
+
+// Blocked: time off, or a facility block. A facility block is the provider at a
+// facility: not bookable, and shown on Canvas's schedule as the facility's block.
+var _blockWhat = 'off';
+var fpBlockFacility = null;
+var _editingBlockFacility = null;
+
+function _blockFacilityItems() { return _facilityItemsWith(_editingBlockFacility); }
+
+function setBlockWhat(what) {
+  _blockWhat = what === 'facility' ? 'facility' : 'off';
+  var fac = _blockWhat === 'facility';
+  document.getElementById('block-what-off').classList.toggle('active', !fac);
+  document.getElementById('block-what-facility').classList.toggle('active', fac);
+  document.querySelectorAll('.block-facility-only').forEach(function(e) { e.style.display = fac ? '' : 'none'; });
+  document.querySelectorAll('.block-off-only').forEach(function(e) { e.style.display = fac ? 'none' : ''; });
+  document.getElementById('block-what-hint').textContent = fac
+    ? 'The provider is at the facility and can’t be booked. It shows on the schedule with the facility’s name, and selecting it lists the facility’s patients.'
+    : 'Time the provider can’t be booked.';
+  document.getElementById('block-who-label').textContent = paFeatureOn('facility_blocks') || fac ? 'Who and where' : 'Who';
+  _updateFacilityHint('block-facility-hint', msBlockProvider);
+  _renderBlockEntries();
+}
+
+function resetBlockWhat() {
+  _editingBlockFacility = null;
+  if (fpBlockFacility) { fpBlockFacility.setValue([]); fpBlockFacility.setLocked(false); }
+  document.getElementById('block-what-row').classList.remove('round-locked');
+  setBlockWhat('off');
+}
+
+function fillBlockWhat(b) {
+  if (!b.facility_id) return;
+  _editingBlockFacility = { id: String(b.facility_id), name: b.facility_name || '' };
+  setBlockWhat('facility');
+  fpBlockFacility.setValue([b.facility_id]);
+  // Editing a facility block can't turn it into time off, or move it while facility blocks are off.
+  document.getElementById('block-what-row').classList.add('round-locked');
+  fpBlockFacility.setLocked(!paFeatureOn('facility_blocks'));
+}
+
+// The facility fields for a block's save payload, or an error message.
+function readBlockWhat() {
+  if (_blockWhat !== 'facility') return { facilityId: '', locationIds: msBlockLocation.getValue() };
+  var facilityId = fpBlockFacility.getValue()[0] || '';
+  if (!facilityId) return { error: 'Choose a facility for this block' };
+  return { facilityId: facilityId, locationIds: [] };
+}
+
 /* ---------- Initialize ---------- */
 
 msProvider = new MultiSelect('ms-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id', summaryNoun: 'providers' });
@@ -3757,15 +4096,28 @@ msFilterProvider.updateChips = function() { _origUpdateChips(); renderAccordion(
 
 // Update editor TZ labels when provider selection changes
 var _origProvChips = msProvider.updateChips.bind(msProvider);
-msProvider.updateChips = function() { _origProvChips(); updateEditorTzLabels(); };
+msProvider.updateChips = function() { _origProvChips(); updateEditorTzLabels(); _updateRoundFacilityHint(); };
 var _origBlockProvChips = msBlockProvider.updateChips.bind(msBlockProvider);
-msBlockProvider.updateChips = function() { _origBlockProvChips(); updateEditorTzLabels(); };
+msBlockProvider.updateChips = function() { _origBlockProvChips(); updateEditorTzLabels(); _updateFacilityHint('block-facility-hint', msBlockProvider); };
 var _origHoldProvChips = msHoldProvider.updateChips.bind(msHoldProvider);
 msHoldProvider.updateChips = function() { _origHoldProvChips(); updateEditorTzLabels(); };
 
 initScheduleEditor();
 initRecurringBlockScheduleEditor();
 initHoldScheduleEditor();
+
+fpRoundFacility = FacilityPicker('fp-round-facility', {
+  single: true,
+  all: _roundFacilityItems,
+  groups: _roundFacilityGroups,
+});
+fpBlockFacility = FacilityPicker('fp-block-facility', {
+  single: true,
+  all: _blockFacilityItems,
+  groups: function() { return _facilityGroupsFor(msBlockProvider); },
+  onChange: function() { _renderBlockEntries(); },
+});
+document.getElementById('block_reason').addEventListener('input', function() { _renderBlockEntries(); });
 
 try {
   if (window.__PRELOADED__) {
@@ -3937,7 +4289,7 @@ function editableProviderItems(providers, items) {
 // A page-level class per switched-off feature; theme.css hides what goes with it,
 // so code that shows those sections later can't bring them back.
 function applyFeatureVisibility() {
-  ['buffers', 'lead_time', 'holds', 'overrides', 'provider_timezones'].forEach(function(name) {
+  ['buffers', 'lead_time', 'holds', 'overrides', 'provider_timezones', 'facility_rounds', 'facility_blocks'].forEach(function(name) {
     document.body.classList.toggle('feature-off-' + name, !paFeatureOn(name));
   });
   ['buffer_pre', 'buffer_post', 'min_lead_hours'].forEach(function(id) {

@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.25.1",
+    "plugin_version": "0.27.0",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {
@@ -10,7 +10,7 @@
                 "description": "REST API for querying availability and managing rules",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole", "Team"],
+                    "read": ["Appointment", "Calendar", "Event", "Facility", "NoteType", "PatientFacilityAddress", "PracticeLocation", "Staff", "StaffRole", "Team"],
                     "write": ["Calendar", "Event"]
                 }
             },
@@ -28,7 +28,7 @@
                 "description": "Staff-session API for bulk availability import from a CSV file",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Calendar", "Event", "NoteType", "PracticeLocation", "Staff", "StaffRole", "Team"],
+                    "read": ["Appointment", "Calendar", "Event", "Facility", "NoteType", "PracticeLocation", "Staff", "StaffRole", "Team"],
                     "write": ["Calendar", "Event"]
                 }
             },
@@ -111,6 +111,42 @@
                     "event": "",
                     "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
                     "write": ["Calendar", "Event"]
+                }
+            },
+            {
+                "class": "provider_availability.protocols.round_visits:OnRoundVisitCreated",
+                "description": "Labels a visit booked in a facility round with the facility, and blocks the round when it reaches its visit limit",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Appointment", "Calendar", "Event"]
+                }
+            },
+            {
+                "class": "provider_availability.protocols.round_visits:OnRoundVisitRescheduled",
+                "description": "Recounts facility rounds when a visit is rescheduled, and labels it in its new round",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Appointment", "Calendar", "Event"]
+                }
+            },
+            {
+                "class": "provider_availability.protocols.round_visits:OnRoundVisitCanceled",
+                "description": "Unblocks a full facility round when one of its visits is canceled",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Appointment", "Calendar", "Event"]
+                }
+            },
+            {
+                "class": "provider_availability.protocols.round_visits:OnRoundVisitRestored",
+                "description": "Recounts a facility round when a canceled visit in it is restored",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Appointment", "Calendar", "Event"]
                 }
             }
         ],

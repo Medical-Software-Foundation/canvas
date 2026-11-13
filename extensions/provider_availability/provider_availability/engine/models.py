@@ -185,6 +185,10 @@ class AdminBlock:
     effective_end: Optional[date] = None
     group_id: Optional[str] = None
     all_day: bool = False
+    # A facility block: the provider is at this facility and can't be booked.
+    # Its reason is "<facility name> Visit", the title Canvas shows as a facility block.
+    facility_id: str = ""
+    facility_name: str = ""
 
     @property
     def cache_key(self) -> str:
@@ -202,6 +206,8 @@ class AdminBlock:
             "effective_end": self.effective_end.isoformat() if self.effective_end else None,
             "group_id": self.group_id,
             "all_day": self.all_day,
+            "facility_id": self.facility_id,
+            "facility_name": self.facility_name,
         }
 
     @classmethod
@@ -230,6 +236,8 @@ class AdminBlock:
             effective_end=effective_end,
             group_id=data.get("group_id"),
             all_day=data.get("all_day", False),
+            facility_id=data.get("facility_id") or "",
+            facility_name=data.get("facility_name") or "",
         )
 
 
@@ -251,6 +259,8 @@ class RecurringBlock:
     recurrence_frequency: str = "weekly"  # "weekly" | "daily"
     recurrence_interval: int = 1
     time_windows: list[TimeWindow] = field(default_factory=list)
+    facility_id: str = ""  # a facility block; see AdminBlock
+    facility_name: str = ""
 
     @property
     def cache_key(self) -> str:
@@ -275,6 +285,8 @@ class RecurringBlock:
             "recurrence_frequency": self.recurrence_frequency,
             "recurrence_interval": self.recurrence_interval,
             "time_windows": [w.to_dict() for w in self.time_windows],
+            "facility_id": self.facility_id,
+            "facility_name": self.facility_name,
         }
 
     @classmethod
@@ -309,7 +321,20 @@ class RecurringBlock:
             recurrence_frequency=data.get("recurrence_frequency", "weekly"),
             recurrence_interval=data.get("recurrence_interval", 1),
             time_windows=time_windows,
+            facility_id=data.get("facility_id") or "",
+            facility_name=data.get("facility_name") or "",
         )
+
+
+def _visit_limit(value: Any) -> Optional[int]:
+    """A round's visit limit: a whole number above zero, or None for no limit."""
+    if value in (None, ""):
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
 
 
 @dataclass
@@ -334,10 +359,20 @@ class ProviderAvailabilityRule:
     recurrence_frequency: str = "weekly"  # "weekly" | "daily"
     recurrence_interval: int = 1
     time_windows: list[TimeWindow] = field(default_factory=list)
+    # A facility round: bookable hours spent at a facility rather than a clinic.
+    # The facility is named on the round's calendar events and labels the visits
+    # booked in it. max_visits caps visits per round; None means no limit.
+    facility_id: str = ""
+    facility_name: str = ""
+    max_visits: Optional[int] = None
 
     @property
     def cache_key(self) -> str:
         return f"pa:rules:{self.provider_id}:{self.id}"
+
+    @property
+    def is_round(self) -> bool:
+        return bool(self.facility_id)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -362,6 +397,9 @@ class ProviderAvailabilityRule:
             "recurrence_frequency": self.recurrence_frequency,
             "recurrence_interval": self.recurrence_interval,
             "time_windows": [w.to_dict() for w in self.time_windows],
+            "facility_id": self.facility_id,
+            "facility_name": self.facility_name,
+            "max_visits": self.max_visits,
         }
 
 
@@ -417,6 +455,9 @@ class ProviderAvailabilityRule:
             recurrence_frequency=data.get("recurrence_frequency", "weekly"),
             recurrence_interval=data.get("recurrence_interval", 1),
             time_windows=time_windows,
+            facility_id=str(data.get("facility_id") or ""),
+            facility_name=str(data.get("facility_name") or ""),
+            max_visits=_visit_limit(data.get("max_visits")),
         )
 
     @classmethod

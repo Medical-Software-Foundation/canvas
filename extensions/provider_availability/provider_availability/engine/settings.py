@@ -19,9 +19,11 @@ from provider_availability.engine.storage import (
     _get_cache,
 )
 
-# Feature switches. Every feature starts on, which is how the plugin behaved
-# before the switches existed.
-FEATURES = ("buffers", "lead_time", "holds", "overrides", "provider_timezones")
+# Feature switches. The original five start on, which is how the plugin behaved
+# before the switches existed. Facility rounds and facility blocks are new, so they
+# start off: a practice that upgrades sees no change until an admin turns them on.
+FEATURES = ("buffers", "lead_time", "holds", "overrides", "provider_timezones", "facility_rounds", "facility_blocks")
+_STARTS_OFF = ("facility_rounds", "facility_blocks")
 
 ACCESS_LEVELS = ("full", "view", "none")
 DEFAULT_ACCESS = "full"
@@ -35,11 +37,11 @@ _MAX_GROUP_NAME = 80
 def get_features() -> dict[str, bool]:
     """Every feature and whether it is on. Unknown stored keys are dropped."""
     stored = _get_cache().get(FEATURES_KEY) or {}
-    return {name: bool(stored.get(name, True)) for name in FEATURES}
+    return {name: bool(stored.get(name, name not in _STARTS_OFF)) for name in FEATURES}
 
 
 def is_feature_on(name: str) -> bool:
-    return get_features().get(name, True)
+    return get_features().get(name, name not in _STARTS_OFF)
 
 
 # Stored next to the switches: whether date overrides saved before the switch
@@ -56,8 +58,26 @@ def set_feature(name: str, on: bool, keep_existing_overrides: bool = True) -> di
     stored[name] = bool(on)
     if name == "overrides":
         stored[_KEEP_OVERRIDES] = bool(on) or bool(keep_existing_overrides)
+    if name == "facility_rounds":
+        # keep_existing_overrides doubles as "keep existing rounds" for this switch.
+        stored[_KEEP_ROUNDS] = bool(on) or bool(keep_existing_overrides)
     _get_cache().set(FEATURES_KEY, stored, timeout_seconds=CACHE_TTL_SECONDS)
     return get_features()
+
+
+_KEEP_ROUNDS = "facility_rounds_keep_existing"
+
+
+def rounds_drawn() -> bool:
+    """Whether saved facility rounds are on calendars.
+
+    True while the feature is on. With it off, true only if the admin chose to
+    keep the rounds that already existed when the switch was turned off.
+    """
+    stored = _get_cache().get(FEATURES_KEY) or {}
+    if stored.get("facility_rounds", False):
+        return True
+    return bool(stored.get(_KEEP_ROUNDS, False))
 
 
 def overrides_applied() -> bool:

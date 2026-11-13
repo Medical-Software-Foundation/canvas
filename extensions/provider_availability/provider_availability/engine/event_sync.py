@@ -36,7 +36,7 @@ from provider_availability.engine.models import (
     date_in_pattern,
 )
 from provider_availability.engine.roles import get_schedulable_provider_ids
-from provider_availability.engine.settings import applied_overrides, is_feature_on
+from provider_availability.engine.settings import applied_overrides, is_feature_on, rounds_drawn
 from provider_availability.engine.storage import (
     get_blocks_for_provider,
     get_event_ids,
@@ -73,6 +73,10 @@ DAY_TO_DAYS_OF_WEEK: dict[str, DaysOfWeek] = {
 EVENT_LAYOUT_VERSION = 3
 
 AVAILABILITY_TITLE = "Available"
+# Facility rounds are availability too, titled with the facility: "Facility round: Apple Valley Care".
+ROUND_TITLE_PREFIX = "Facility round: "
+# Admin calendar block over a facility round at its visit limit (engine/round_limits.py).
+ROUND_FULL_TITLE = "Round full"
 BLOCK_TITLE = "Block"
 LEAD_TIME_TITLE = "Lead Time"
 RECURRING_BLOCK_TITLE = "Recurring Block"
@@ -147,14 +151,21 @@ def sync_provider_availability(
 
     rules = get_rules_for_provider(provider_id)
     total_events = 0
+    # Read once per sync rather than once per rule.
+    drawn = rounds_drawn() if any(r.is_round for r in rules) else False
+    round_locations: list[str] | None = None
     for rule in rules:
         has_schedule = (
             rule.weekly_schedule
             if rule.recurrence_frequency != "daily"
             else bool(rule.time_windows)
         )
+        if rule.is_round and not drawn:
+            continue  # facility rounds are switched off and were removed from calendars
         if rule.is_active and has_schedule:
-            rule_effects = _build_rule_events(rule)
+            if rule.is_round and round_locations is None:
+                round_locations = round_location_ids(provider_id)
+            rule_effects = _build_rule_events(rule, round_locations)
             effects.extend(rule_effects)
             total_events += len(rule_effects)
 
@@ -178,8 +189,11 @@ def build_sync_effects(rule: ProviderAvailabilityRule) -> list[Effect]:
     return effects
 
 
-def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
+def _build_rule_events(rule: ProviderAvailabilityRule, round_locations: list[str] | None = None) -> list[Effect]:
     """Create Calendar + Event effects for a single rule (no deletion).
+
+    ``round_locations`` is the provider's round location when the caller already
+    looked it up; otherwise a round looks it up here.
 
     Creates a Clinic calendar per provider+location (if needed) and
     recurring Events (Weekly or Daily, with custom interval) that Canvas
@@ -195,9 +209,17 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
         if not rule.weekly_schedule:
             return effects
 
-    # If no locations specified, create events for ALL active locations
-    if rule.location_ids:
-        location_ids: list[str] = list(rule.location_ids)
+    title = round_title(rule) if rule.is_round else AVAILABILITY_TITLE
+
+    # A facility round books under the provider's primary practice location.
+    # Otherwise: the rule's locations, or every active location when it names none.
+    if rule.is_round:
+        location_ids: list[str] = round_locations if round_locations is not None else round_location_ids(rule.provider_id)
+        if not location_ids:
+            log.warning("_build_rule_events: round rule=%s has no location to book under, skipping", rule.id)
+            return effects
+    elif rule.location_ids:
+        location_ids = list(rule.location_ids)
     else:
         location_ids = [
             str(loc.id) for loc in PracticeLocation.objects.filter(active=True)
@@ -256,7 +278,7 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
                 recurrence_ends = to_utc(localize_naive(datetime.combine(range_end, window.end), tz))
                 event = EventEffect(
                     calendar_id=calendar_id,
-                    title=AVAILABILITY_TITLE,
+                    title=title,
                     starts_at=starts_at,
                     ends_at=ends_at,
                     recurrence_frequency=EventRecurrence.Daily,
@@ -276,7 +298,7 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
                     ends_at = to_utc(localize_naive(datetime.combine(ovr.date, ovr_window.end), tz))
                     event = EventEffect(
                         calendar_id=calendar_id,
-                        title=AVAILABILITY_TITLE,
+                        title=title,
                         starts_at=starts_at,
                         ends_at=ends_at,
                         allowed_note_types=note_types,
@@ -322,7 +344,7 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
 
                     event = EventEffect(
                         calendar_id=calendar_id,
-                        title=AVAILABILITY_TITLE,
+                        title=title,
                         starts_at=starts_at,
                         ends_at=ends_at,
                         recurrence_frequency=EventRecurrence.Weekly,
@@ -345,7 +367,7 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
 
                         event = EventEffect(
                             calendar_id=calendar_id,
-                            title=AVAILABILITY_TITLE,
+                            title=title,
                             starts_at=starts_at,
                             ends_at=ends_at,
                             recurrence_frequency=EventRecurrence.Weekly,
@@ -366,7 +388,7 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
                     ends_at = to_utc(localize_naive(datetime.combine(ovr.date, ovr_window.end), tz))
                     event = EventEffect(
                         calendar_id=calendar_id,
-                        title=AVAILABILITY_TITLE,
+                        title=title,
                         starts_at=starts_at,
                         ends_at=ends_at,
                         allowed_note_types=note_types,
@@ -379,6 +401,24 @@ def _build_rule_events(rule: ProviderAvailabilityRule) -> list[Effect]:
         rule.id, rule.recurrence_frequency, interval, range_start, range_end, event_count,
     )
     return effects
+
+
+def round_title(rule: ProviderAvailabilityRule) -> str:
+    """The calendar title for a facility round's events."""
+    return ROUND_TITLE_PREFIX + (rule.facility_name or "Facility")
+
+
+def round_location_ids(provider_id: str) -> list[str]:
+    """Where a provider's rounds book: their primary practice location.
+
+    Falls back to the first active location when the provider has none set, so a
+    round is still bookable; an instance with no active location returns [].
+    """
+    loc_id = Staff.objects.filter(id=provider_id).values_list("primary_practice_location__id", flat=True).first()
+    if loc_id:
+        return [str(loc_id)]
+    first = PracticeLocation.objects.filter(active=True).order_by("full_name").values_list("id", flat=True).first()
+    return [str(first)] if first else []
 
 
 def _compute_recurring_segments(
@@ -459,8 +499,8 @@ def build_delete_effects(provider_id: str) -> list[Effect]:
     now = datetime.now(UTC)
     # Single bulk query across all the provider's Clinic calendars.
     for evt in EventModel.objects.filter(
+        Q(title=AVAILABILITY_TITLE) | Q(title__startswith=ROUND_TITLE_PREFIX),
         calendar__id__in=cal_ids,
-        title=AVAILABILITY_TITLE,
         is_cancelled=False,
     ):
         # Preserve fully-past events for historical reporting. The boundary is
@@ -664,13 +704,14 @@ def build_delete_block_effects(
             # Match by converted UTC times across all the provider's Admin calendars.
             # One-off events only: a recurring block's series can start at the same time.
             one_off = Q(recurring_parent_event__isnull=True) & (Q(recurrence__isnull=True) | Q(recurrence=""))
+            # A "Round full" block can share the times; it belongs to the round, not this block.
             for evt_id in EventModel.objects.filter(
                 one_off,
                 calendar__id__in=cal_ids,
                 is_cancelled=False,
                 starts_at=block_start_utc,
                 ends_at=block_end_utc,
-            ).values_list("id", flat=True):
+            ).exclude(title=ROUND_FULL_TITLE).values_list("id", flat=True):
                 effects.append(EventEffect(event_id=str(evt_id)).delete())
             # Also match by title if time match found nothing (handles TZ edge cases)
             if not effects:

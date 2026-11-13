@@ -107,8 +107,7 @@ class TestCheckRuleOverlap:
 
             assert mock_get.mock_calls == [call("p1")]
             assert result is not None
-            assert "Monday" in result
-            assert "09:00-12:00" in result
+            assert result == "Overlaps existing availability on Mon: 9:00 AM \u2013 12:00 PM conflicts with 10:00 AM \u2013 2:00 PM."
 
     def test_non_overlapping_time_windows(self):
         existing = self._make_rule("existing", schedule={
@@ -212,7 +211,7 @@ class TestOverrideOverlap:
         morning, afternoon = _rule("am", 9, 12), _rule("pm", 13, 17)
         stretch = DateOverride(date=self.MONDAY, time_windows=[TimeWindow(start=time(9), end=time(17))])
         msg = check_override_overlap(morning, stretch, existing_rules=[morning, afternoon])
-        assert msg and "2026-12-07" in msg and "13:00-17:00" in msg
+        assert msg and "Mon, Dec 7, 2026" in msg and "1:00 PM \u2013 5:00 PM" in msg
 
     def test_override_inside_its_own_hours_is_fine(self):
         from provider_availability.engine.models import DateOverride
@@ -239,4 +238,55 @@ class TestOverrideOverlap:
         afternoon = _rule("pm", 13, 17, overrides=[early])
         new_morning = _rule("am", 10, 12)
         msg = check_rule_overlap(new_morning, existing_rules=[afternoon])
-        assert msg and "2026-12-07" in msg
+        assert msg and "Mon, Dec 7, 2026" in msg
+
+
+
+class TestEveryWeekdayIsChecked:
+    """Every weekday two rules share is checked and named, not only the first shared date."""
+
+    def _rule(self, rid, days, start, end, **kw):
+        from datetime import date, time
+        windows = {d: [TimeWindow(start=time(*start), end=time(*end))] for d in days}
+        return ProviderAvailabilityRule(id=rid, provider_id="p1", weekly_schedule=windows,
+                                        effective_start=kw.pop("effective_start", date(2026, 11, 11)), **kw)
+
+    def test_all_clashing_days_are_named(self):
+        saved = self._rule("saved", ["monday", "wednesday", "friday", "saturday", "sunday"], (9, 0), (17, 0),
+                           facility_id="fac-1", facility_name="Apple Valley Care")
+        new = self._rule("new", ["monday", "wednesday", "friday", "saturday", "sunday"], (9, 0), (17, 0))
+        assert check_rule_overlap(new, existing_rules=[saved]) == (
+            "Overlaps the facility round at Apple Valley Care on Mon, Wed, Fri, Sat, Sun: "
+            "9:00 AM \u2013 5:00 PM conflicts with 9:00 AM \u2013 5:00 PM."
+        )
+
+    def test_a_clash_on_a_later_weekday_is_caught(self):
+        # The first shared date is a Monday with no clash; Tuesday clashes.
+        from datetime import date, time
+        saved = ProviderAvailabilityRule(id="saved", provider_id="p1", effective_start=date(2026, 11, 16), weekly_schedule={
+            "monday": [TimeWindow(start=time(9, 0), end=time(10, 0))],
+            "tuesday": [TimeWindow(start=time(9, 0), end=time(17, 0))],
+        })
+        new = ProviderAvailabilityRule(id="new", provider_id="p1", effective_start=date(2026, 11, 16), weekly_schedule={
+            "monday": [TimeWindow(start=time(13, 0), end=time(14, 0))],
+            "tuesday": [TimeWindow(start=time(9, 0), end=time(12, 0))],
+        })
+        assert check_rule_overlap(new, existing_rules=[saved]) == (
+            "Overlaps existing availability on Tue: 9:00 AM \u2013 12:00 PM conflicts with 9:00 AM \u2013 5:00 PM."
+        )
+
+    def test_different_hours_per_day_are_listed_per_day(self):
+        from datetime import time
+        saved = self._rule("saved", ["monday"], (9, 0), (17, 0), reason="Office hours")
+        saved.weekly_schedule["tuesday"] = [TimeWindow(start=time(13, 0), end=time(15, 0))]
+        new = self._rule("new", ["monday", "tuesday"], (8, 0), (14, 0))
+        assert check_rule_overlap(new, existing_rules=[saved]) == (
+            "Overlaps availability \u201cOffice hours\u201d on Mon, Tue: Mon 8:00 AM \u2013 2:00 PM conflicts with "
+            "9:00 AM \u2013 5:00 PM; Tue 8:00 AM \u2013 2:00 PM conflicts with 1:00 PM \u2013 3:00 PM."
+        )
+
+    def test_biweekly_rules_on_alternating_weeks_still_pass(self):
+        from datetime import date
+        a = self._rule("a", ["monday"], (9, 0), (17, 0), recurrence_interval=2, effective_start=date(2026, 11, 16))
+        b = self._rule("b", ["monday"], (9, 0), (17, 0), recurrence_interval=2, effective_start=date(2026, 11, 23))
+        assert check_rule_overlap(a, existing_rules=[b]) is None

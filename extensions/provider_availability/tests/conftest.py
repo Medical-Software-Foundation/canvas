@@ -65,6 +65,10 @@ class QS(list):
     def order_by(self, *fields):
         return self
 
+    def exclude(self, **conditions):
+        """Drop rows whose attributes equal every condition (plain field names only)."""
+        return QS(o for o in self if not all(getattr(o, k, object()) == v for k, v in conditions.items()))
+
 
 PROVIDER_ID = "provider-uuid-123"
 LOCATION_ID = "location-uuid-456"
@@ -166,10 +170,14 @@ class FakeCache:
     def set(self, key, value, timeout_seconds=None):
         self.data[key] = value
 
+    def delete(self, key):
+        self.data.pop(key, None)
+
 
 @pytest.fixture(autouse=True)
 def settings_cache():
     """Practice settings start unsaved: every feature on, defaults at 0, no access config."""
     cache = FakeCache()
-    with patch("provider_availability.engine.settings._get_cache", return_value=cache):
+    with patch("provider_availability.engine.settings._get_cache", return_value=cache), \
+         patch("provider_availability.engine.facilities._get_cache", return_value=cache):
         yield cache

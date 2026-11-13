@@ -34,6 +34,7 @@ from provider_availability.engine.event_sync import (
     build_recurring_blocks_resync_effects,
     sync_provider_availability,
 )
+from provider_availability.engine.facilities import check_round, get_active_facilities
 from provider_availability.engine.lookups import (
     get_active_locations,
     get_active_staff_ids,
@@ -45,6 +46,8 @@ from provider_availability.engine.models import (
     RecurringBlock,
 )
 from provider_availability.engine.overlap import check_rule_overlap
+from provider_availability.engine.round_limits import refresh_provider as refresh_round_limits
+from provider_availability.engine.settings import is_feature_on
 from provider_availability.engine.storage import (
     get_all_rules,
     get_rules_for_provider,
@@ -88,6 +91,10 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/validate")
     def validate_upload(self) -> list[Response | Effect]:
         """Parse and validate an uploaded CSV, returning a preview of records."""
+        # Same check as commit: staff who can't load an import can't preview one.
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
         form_data = self.request.form_data()
         file_part = form_data.get("file")
         if file_part is None or not file_part.is_file():
@@ -112,9 +119,10 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         valid_staff_ids = get_active_staff_ids()
         location_map = _build_name_map(get_active_locations())
         visit_type_map = _build_name_map(get_scheduleable_visit_types())
+        facility_map = _build_name_map(get_active_facilities()) if is_feature_on("facility_rounds") else None
 
         records, resolution_errors = build_records(
-            parsed.valid_rows, valid_staff_ids, location_map, visit_type_map
+            parsed.valid_rows, valid_staff_ids, location_map, visit_type_map, facility_map
         )
 
         ok_records, overlap_errors = _split_overlapping(records)
@@ -122,6 +130,7 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         errors = self._collect_errors(parsed.error_rows, resolution_errors, overlap_errors)
 
         rule_count = sum(1 for r in ok_records if r["kind"] == "rule")
+        round_count = sum(1 for r in ok_records if r["kind"] == "rule" and r.get("facility_id"))
         block_count = sum(1 for r in ok_records if r["kind"] == "block")
         rblock_count = sum(1 for r in ok_records if r["kind"] == "rblock")
 
@@ -136,6 +145,7 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
                     "total_rows": parsed.total_rows,
                     "record_count": len(ok_records),
                     "rule_count": rule_count,
+                    "round_count": round_count,
                     "block_count": block_count,
                     "rblock_count": rblock_count,
                     "error_count": len(errors),
@@ -172,6 +182,14 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+        # Rounds are checked against Canvas again: the switch must still be on and
+        # the facility still active, and the facility name comes from Canvas.
+        rounds_on = is_feature_on("facility_rounds")
+        for rec in records:
+            if rec.get("kind") == "rule" and rec.get("facility_id"):
+                problem = check_round(rec, rounds_on)
+                if problem:
+                    return [JSONResponse({"error": f"{problem} Upload the file again."}, status_code=HTTPStatus.BAD_REQUEST)]
         try:
             _, overlap_errors = _split_overlapping(records)
         except (KeyError, TypeError, ValueError):
@@ -186,6 +204,7 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
 
         effects: list[Effect] = []
         providers_touched: set[str] = set()
+        providers_with_rounds: set[str] = set()
         new_rblocks: list[RecurringBlock] = []
         created = {"rule": 0, "block": 0, "rblock": 0}
         now = datetime.now(UTC).isoformat()
@@ -197,6 +216,8 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
                 rule = ProviderAvailabilityRule.from_dict(rec)
                 save_rule(rule)
                 providers_touched.add(rule.provider_id)
+                if rule.is_round:
+                    providers_with_rounds.add(rule.provider_id)
                 created["rule"] = created["rule"] + 1
             elif kind == "block":
                 block = AdminBlock.from_dict(rec)
@@ -216,6 +237,9 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         for pid in providers_touched:
             effects.extend(sync_provider_availability(pid))
             effects.extend(build_provider_lead_time_effects(pid, get_rules_for_provider(pid)))
+        # Visits already booked in the new rounds' hours can fill them.
+        for pid in providers_with_rounds:
+            effects.extend(refresh_round_limits(pid))
 
         log.info(
             "csv commit: %d rules, %d blocks, %d recurring blocks",

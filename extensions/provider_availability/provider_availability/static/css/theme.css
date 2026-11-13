@@ -277,9 +277,6 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .rs.ok { border-color: #bfe3c9; background: #f1faf4; color: #2e7d4f; }
 .rs.warn { border-color: #f1d9ad; background: #fdf6e9; color: #9a5b00; }
 /* Access control: the "Who can do what" summary, the scheduler callout, and the admin editor. */
-.access-sum { width: 100%; max-width: 640px; margin: 10px 0 12px; }
-.access-sum td:first-child { font-weight: 600; color: var(--ink); width: 45%; }
-.access-sum .sum-n { font-weight: 400; color: var(--muted); margin-left: 4px; }
 .callout { font-size: 13.5px; color: var(--ink); background: var(--field); border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 12px; margin: 0 0 12px; max-width: 70ch; }
 .adm-group-lbl { font-size: 12px; font-weight: 600; color: var(--muted); margin-right: 2px; align-self: center; }
 
@@ -335,11 +332,15 @@ canvas-input { --canvas-input-font-family: var(--font-family); }
 .grow-row .nm { font-weight: 600; color: var(--ink); }
 .grow-row .mt { font-size: 12.5px; color: var(--muted); }
 .grow-row .acts { margin-left: auto; display: flex; gap: 2px; }
-.grow-row .car { color: var(--muted); width: 12px; transition: transform .15s; }
-.grow-row.open .car { transform: rotate(90deg); }
-.gbody { display: none; padding: 2px 14px 12px 36px; }
-.gbody.open { display: block; }
-.gbody .lb { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 8px 0 4px; }
+.grow-row .row-chevron { width: 14px; height: 14px; color: var(--muted); transition: transform .15s; flex: none; }
+.grow-row.open .row-chevron { transform: rotate(90deg); }
+/* Closed by default; open shows schedulers and providers side by side. */
+.gbody { display: none; padding: 4px 14px 14px 38px; }
+.gbody.open { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+.gbody .lb { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 4px 0 4px; }
+.gbody .toks { margin-top: 0; }
+.gmore { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 3px 4px; }
+.pick-added { font-size: 12.5px; color: var(--accent); font-weight: 600; }
 .gedit { border: 1.5px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; background: #fff; }
 .pick-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .pick-tools .input { max-width: 260px; padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
@@ -378,7 +379,26 @@ details.how summary { cursor: pointer; color: var(--accent); font-weight: 600; f
 .feature-off-overrides #date-overrides-section { display: none !important; }
 .feature-off-buffers .setting-item[data-field="buffer_pre"], .feature-off-buffers .setting-item[data-field="buffer_post"] { display: none; }
 .feature-off-lead_time .setting-item[data-field="min_lead_hours"] { display: none; }
-.feature-off-provider_timezones #provider-tz-list { display: none; }
+/* Settings › Providers: one box with a search bar, then rows that scroll under a fixed header. */
+.plist { margin-top: 16px; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; overflow: hidden; }
+.ptools { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--rule); background: var(--field); }
+.ptools .input { max-width: 260px; padding-top: 4px; padding-bottom: 4px; font-size: 13px; background: #fff; }
+.ptools .pcount { margin-left: auto; font-size: 13px; color: var(--muted); }
+.pscroll { max-height: 360px; overflow: auto; }
+.pscroll table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pscroll th { position: sticky; top: 0; z-index: 2; background: #fff; text-align: left; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 10px 14px; border-bottom: 1.5px solid var(--rule); }
+.pscroll td { padding: 5px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.pscroll tr:last-child td { border-bottom: none; }
+.pscroll td:first-child { width: 22%; color: var(--ink); font-weight: 600; }
+.pscroll td.tz-col { width: 26%; }
+.pscroll .input { width: 100%; }
+.pscroll select.input { padding-top: 4px; padding-bottom: 4px; font-size: 13px; }
+.pscroll select.tz-follows { color: var(--muted); }
+.pscroll .fp-control { min-height: 32px; padding: 2px 6px; }
+.pscroll .fp-control input, .pscroll .fp-summary { font-size: 13px; }
+.pscroll tr.pv-none td { color: var(--muted); font-weight: 400; text-align: center; padding: 18px; }
+.feature-off-provider_timezones .tz-col { display: none; }
+.feature-off-provider_timezones.feature-off-facility_rounds #provider-tz-list { display: none; }
 
 @media (max-width: 900px) {
   .ax-head-in, .main { padding-left: 16px; padding-right: 16px; }
@@ -392,9 +412,10 @@ details.how summary { cursor: pointer; color: var(--accent); font-weight: 600; f
 .block-entry-actions { display: flex; align-items: center; gap: 14px; height: 40px; white-space: nowrap; align-self: end; }
 .block-entry-actions canvas-checkbox { font-size: 13.5px; font-family: inherit; }
 .block-entry-row .is-off { opacity: .45; }
-.block-entries { margin-top: 14px; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; max-width: 640px; }
+.block-entries { margin-top: 14px; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; max-width: 820px; }
 .block-entries-h { font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 12px; border-bottom: 1.5px solid var(--rule); }
-.block-entry { display: grid; grid-template-columns: 170px 1fr auto; align-items: center; gap: 12px; padding: 7px 12px; font-size: 13.5px; color: var(--ink); }
+.block-entry { display: grid; grid-template-columns: 170px 210px 1fr auto; align-items: center; gap: 12px; padding: 7px 12px; font-size: 13.5px; color: var(--ink); }
+.block-entry .be-what { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .block-entry + .block-entry { border-top: 1px solid var(--rule); }
 .block-entry .be-when { color: var(--body); }
 
@@ -443,3 +464,99 @@ canvas-input {
 .ovr-confirm { margin: 0 10px 10px; }
 /* Toggles inside a field keep their own width. */
 .field > .schedule-mode-toggle { align-self: flex-start; }
+
+/* Facility rounds. --round is a fifth type color next to available (blue), blocked (red),
+   hold (orange) and override (yellow); it has no Canvas source. */
+:root { --round: #6b4fbb; --round-bg: #f4f0fd; --round-border: #d8ccf3; }
+.chip-round { background: var(--round); color: #fff; }
+.chip-fblock { background: #767676; color: #fff; }
+.round-switch-row { margin-bottom: 14px; }
+.round-switch-row .field-hint { display: block; margin-top: 6px; }
+.feature-off-facility_rounds #where-row:not(.round-locked) { display: none !important; }
+#where-row.round-locked .schedule-mode-toggle { pointer-events: none; opacity: .7; }
+.feature-off-facility_blocks #block-what-row:not(.round-locked) { display: none !important; }
+#block-what-row.round-locked .schedule-mode-toggle { pointer-events: none; opacity: .7; }
+
+/* Searchable facility picker: single or multi, grouped list with the most likely facilities first */
+.fp { position: relative; }
+.fp-control { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 40px; box-sizing: border-box; padding: 5px 8px; background: var(--field); border: 1.5px solid var(--line); border-radius: 9px; cursor: text; }
+.fp.open .fp-control { background: #fff; border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(150, 211, 221, .2); }
+.fp.fp-locked .fp-control { cursor: default; opacity: .7; }
+.fp-control input { flex: 1 1 120px; min-width: 120px; border: 0; background: none; outline: none; font: inherit; font-size: 14px; color: var(--body); padding: 3px; }
+.fp-single-val { font-size: 14px; color: var(--ink); padding: 0 4px; }
+.fp-list { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; background: #fff; border: 1.5px solid var(--line); border-radius: 9px; box-shadow: 0 8px 24px rgba(13, 32, 60, .12); max-height: 280px; overflow: auto; padding: 4px 0; }
+.fp.open .fp-list { display: block; }
+.fp-group { display: flex; align-items: center; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 8px 12px 4px; }
+.fp-clear { margin-left: auto; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 2px 0; }
+.fp-opt { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 13.5px; color: var(--body); cursor: pointer; }
+.fp-opt:hover { background: var(--field); }
+.fp-opt input { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; pointer-events: none; }
+.fp-opt .fp-count { margin-left: auto; font-size: 12px; color: var(--muted); }
+.fp-opt.sel { color: var(--ink); font-weight: 600; }
+.fp-empty { padding: 8px 12px; font-size: 13px; color: var(--muted); }
+.fp-summary { font-size: 14px; color: var(--body); padding: 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.fp-summary b { color: var(--ink); font-weight: 600; }
+
+/* Override chip: a white triangle on yellow, like the other type chips. */
+.chip-override { background: var(--override); color: #fff; }
+
+/* Wider page, so a date range fits on one line. */
+.ax-head-in, .main { max-width: 1360px; }
+
+/* Rule counts on the right, before + Available */
+.provider-header-right { display: flex; align-items: center; margin-left: auto; }
+.rule-counts { display: inline-flex; align-items: center; gap: 12px; margin-right: 14px; }
+.rule-counts .card-count { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
+.rule-counts .card-count b { font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.rule-counts .type-chip { width: 22px; height: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.rule-counts .type-chip svg { width: 11px; height: 11px; }
+
+/* Rule rows on a provider card. Fixed columns, so opening a row never moves them. */
+.provider-card.collapsed .rule-table { display: none; }
+.rule-table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+.rule-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px; border-top: 1.5px solid var(--rule); }
+.rule-table td { padding: 10px 8px; color: var(--body); vertical-align: middle; }
+.rule-table th:first-child { padding-left: 14px; }
+.rule-table .type-chip { width: 22px; height: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; vertical-align: -3px; }
+.rule-table .type-chip svg { width: 11px; height: 11px; }
+.rule-table .row-chevron { width: 14px; height: 14px; margin-right: 4px; vertical-align: -2px; color: var(--muted); transition: transform .15s; }
+.rule-table .data-row { cursor: pointer; }
+.rule-table .data-row.expanded .row-chevron { transform: rotate(90deg); }
+.rule-table .chev-space { display: inline-block; width: 18px; }
+.rule-table tr:not(.detail-row) td:not(.dcell) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-table td.dcell { padding-right: 20px; }
+.rule-table .detail-row td { border-top: 0; border-bottom: 0; padding: 0 !important; }
+.rule-table .detail-row td.x3 { padding: 0 8px 12px !important; }
+.rule-table .x3 dl { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; margin: 0; font-size: 13px; padding-bottom: 4px; }
+.rule-table .x3 dt { color: var(--muted); }
+.rule-table .x3 dd { margin: 0; color: var(--body); }
+.rule-acts { display: flex; gap: 4px; justify-content: flex-end; }
+.eff-ended { color: var(--muted); }
+
+/* Details: the place always shows in full; a long reason is cut with an ellipsis,
+   gray after a place. An open row with a cut reason shows only the place. */
+.dline { display: flex; align-items: baseline; min-width: 0; }
+.dline .place { flex: 0 1 auto; }
+.rule-where { color: var(--ink); font-weight: 600; }
+.dline .more { font-weight: 400; color: var(--body); white-space: nowrap; }
+.dline .why { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dline .place ~ .why { color: var(--muted); }
+.dline .dot { color: var(--muted); padding: 0 6px; }
+.rule-table .data-row.expanded .why.is-cut { display: none; }
+
+/* Row tints and a left bar by type. Each cell paints the tint and overlaps the next
+   by 1px, so no seams show; an open row's details share its tint. */
+.rule-table tr.t-avail { --tint: var(--avail-bg); --bar: var(--avail); }
+.rule-table tr.t-round { --tint: var(--round-bg); --bar: var(--round); }
+.rule-table tr.t-over { --tint: var(--override-bg); --bar: var(--override); }
+.rule-table tr.t-block { --tint: var(--block-bg); --bar: var(--block); }
+.rule-table tr.t-hold { --tint: var(--hold-bg); --bar: var(--hold); }
+/* Facility block: neutral gray, like Canvas's own facility block on the schedule
+   (white with a #979797 border); darkened to #767676 so the white icon keeps 4.5:1 contrast. */
+.rule-table tr.t-fblock { --tint: #f4f4f5; --bar: #767676; }
+.rule-table tbody td { background: var(--tint); box-shadow: 1px 0 0 var(--tint); }
+.rule-table tbody td:first-child { border-left: 4px solid var(--bar); padding-left: 10px; }
+.rule-table tbody tr:not(.detail-row) td { border-top: 2px solid #fff; }
+
+/* Settings: the Facilities column shows only while facility rounds are on */
+.feature-off-facility_rounds .round-only { display: none !important; }

@@ -27,6 +27,11 @@ LAST_TTL_REFRESH_KEY = "pa:last_ttl_refresh"
 FEATURES_KEY = "pa:features"
 RULE_DEFAULTS_KEY = "pa:rule_defaults"
 ACCESS_KEY = "pa:access"
+# Before 0.27.0 every provider's facilities were one dict under this key; it is read
+# once and moved to one key per provider (engine.facilities).
+PROVIDER_FACILITIES_KEY = "pa:provider_facilities"
+PROVIDER_FACILITIES_PREFIX = "pa:provider_facilities:"
+PROVIDER_FACILITIES_INDEX_KEY = "pa:provider_facilities_index"
 CACHE_TTL_SECONDS = 14 * 24 * 60 * 60 - 3600  # 14 days minus 1 hour buffer
 TTL_REFRESH_INTERVAL_SECONDS = 6 * 60 * 60  # 6 hours between full TTL refreshes
 
@@ -501,11 +506,18 @@ def refresh_all_ttls() -> int:
     # would rebuild every event)
     for key in (
         SCHEDULABLE_ROLES_KEY, SCHEDULABLE_SEEN_KEY, EXPIRED_SNOOZE_KEY, SYNCED_VERSION_KEY,
-        FEATURES_KEY, RULE_DEFAULTS_KEY, ACCESS_KEY,
+        FEATURES_KEY, RULE_DEFAULTS_KEY, ACCESS_KEY, PROVIDER_FACILITIES_KEY, PROVIDER_FACILITIES_INDEX_KEY,
     ):
         val = cache.get(key)
         if val is not None:
             cache.set(key, val, timeout_seconds=CACHE_TTL_SECONDS)
+
+    # Refresh each provider's facilities
+    for pid in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []:
+        fac_key = f"{PROVIDER_FACILITIES_PREFIX}{pid}"
+        fac_data = cache.get(fac_key)
+        if fac_data is not None:
+            cache.set(fac_key, fac_data, timeout_seconds=CACHE_TTL_SECONDS)
 
     # Refresh provider timezones
     tz_index = _get_provider_tz_index()

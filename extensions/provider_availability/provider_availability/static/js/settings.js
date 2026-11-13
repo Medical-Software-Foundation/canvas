@@ -15,6 +15,18 @@
   var defaultsDirty = false;
 
   var FEATURES = [
+    { k: 'facility_rounds', name: 'Facility rounds',
+      descHtml: 'Adds the <b>Facility</b> option to Available. Round time shows on the schedule as open time, and visits booked in it get the facility as a label.',
+      title: 'Disable facility rounds', noun: 'facility rounds',
+      lead: 'The Facility option will be hidden, and new rounds can no longer be added.',
+      body: function (n) { return 'The Facility option will be hidden, and new rounds can no longer be added. ' + n + ' saved.'; },
+      choices: [['keep', 'Keep existing rounds bookable'], ['remove', 'Remove existing rounds from calendars; the rounds stay saved']] },
+    { k: 'facility_blocks', name: 'Facility blocks',
+      descHtml: 'Adds the <b>Facility</b> option to Blocked. The block shows on the schedule with the facility’s name, and selecting it lists the facility’s patients.',
+      title: 'Disable facility blocks', noun: 'upcoming facility blocks',
+      lead: 'The Facility option will be hidden, and new facility blocks can no longer be added.',
+      body: function (n) { return 'The Facility option will be hidden, and new facility blocks can no longer be added. ' + n + ' stay on provider calendars.'; },
+      choices: [['keep', 'Keep existing facility blocks; they can still be edited or deleted']] },
     { k: 'buffers', name: 'Appointment buffers', desc: 'Blocks time before and after new and rescheduled appointments. Existing appointments are not changed.',
       title: 'Disable appointment buffers', noun: 'buffers',
       lead: 'New appointments will no longer receive buffers.',
@@ -42,10 +54,13 @@
       choices: [['move', 'Move these providers to the practice timezone']] }
   ];
   var LEVELS = {
-    full: { short: 'Full access', loose: 'Editable by admins and by staff outside a group' },
-    view: { short: 'View access', loose: 'Editable by admins only' },
-    none: { short: 'No access', loose: 'Editable by admins only' }
+    full: { short: 'Full access', hint: 'Edit and view every provider.' },
+    view: { short: 'View only', hint: 'View every provider without making changes.' },
+    none: { short: 'No access', hint: 'No access to other providers’ availability.' }
   };
+  // Names shown per column in an open editing group before "+ N more".
+  var NAME_CAP = 8;
+  var CHEVRON = '<svg class="row-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>';
 
   function $(id) { return document.getElementById(id); }
   function esc(t) { return _escHtml(t == null ? '' : String(t)); }
@@ -72,8 +87,10 @@
     affectedCache = {};
     preloaded().features = data.features;
     preloaded().rule_defaults = data.rule_defaults;
+    preloaded().facilities = { facilities: data.facilities || [], by_provider: data.provider_facilities || {} };
     applyFeatureVisibility();
     drawFeatures();
+    drawProviderFacilities();
     if (!defaultsDirty) drawDefaults();
     drawAccess();
     drawGroups();
@@ -142,7 +159,8 @@
     var affOpen = $('set-aff') && !$('set-aff').hidden;
     el.innerHTML = FEATURES.map(function (f) {
       var on = state.features[f.k] !== false;
-      return '<label class="ax-switchrow"><span class="ax-sw-text"><b>' + esc(f.name) + '</b><div class="ax-help">' + esc(f.desc) + '</div>' +
+      // descHtml is fixed text written here, never data.
+      return '<label class="ax-switchrow"><span class="ax-sw-text"><b>' + esc(f.name) + '</b><div class="ax-help">' + (f.descHtml || esc(f.desc)) + '</div>' +
         (on ? '' : '<div class="feat-state">Disabled</div>') + '</span>' +
         '<span class="ax-sw"><input type="checkbox" data-k="' + f.k + '"' + (on && asking !== f.k ? ' checked' : '') + ' aria-label="' + esc(f.name) + '"><span class="ax-sw-track"></span></span></label>' +
         (asking === f.k ? askHtml(f) : '');
@@ -190,7 +208,75 @@
     drawFeatures();
     drawTzNote();
     showMsg(f.name + (on ? ' enabled' : ' disabled'), 'success');
-    if (k === 'provider_timezones' || k === 'overrides') { try { loadOverview(); } catch (e) {} }
+    if (k === 'facility_rounds' || k === 'facility_blocks') {
+      // The facility lists, and the patient counts facility blocks show, depend on these switches.
+      var fresh = await apiCall('/settings');
+      if (fresh && !fresh.error) preloaded().facilities = { facilities: fresh.facilities || [], by_provider: fresh.provider_facilities || {} };
+    }
+    if (k === 'provider_timezones' || k === 'overrides' || k === 'facility_rounds' || k === 'facility_blocks') { try { loadOverview(); } catch (e) {} }
+    if (k === 'facility_rounds') drawProviderFacilities();
+  }
+
+  // ── Provider facilities ───────────────────────────────────────────
+  // One facility picker per provider. Suggestions load when a picker first opens,
+  // and the provider's facilities save when it closes.
+  var suggestions = {};   // provider id -> [{id, name, count}], or 'loading'
+  var pfPickers = {};
+
+  function drawProviderFacilities() {
+    var on = state && state.features.facility_rounds !== false;
+    $('set-providers-sub').textContent = on ? 'Roles, timezones, and facilities' : 'Schedulable roles and timezones';
+    $('set-providers-pg-sub').textContent = on
+      ? 'Configure which staff can be scheduled, their timezones, and the facilities they round at.'
+      : 'Configure which staff can be scheduled and the timezone each provider works in.';
+    drawTzNote();
+    if (!on) return;
+    // Each provider's row in the Timezones and facilities table (admin.js renderSettingsPanel)
+    // has a cell for their facilities.
+    pfPickers = {};
+    (_providers || []).forEach(function (p) {
+      var pid = String(p.id);
+      if (!$('pf-pick-' + pid)) return;
+      var picker = FacilityPicker('pf-pick-' + pid, {
+        all: function () { return paFacilities().facilities; },
+        groups: function () { return pfGroups(pid); },
+        onOpen: function () { loadSuggestions(pid); },
+        onClose: function (ids) { saveProviderFacilities(pid, ids); }
+      });
+      picker.setValue(paFacilities().by_provider[pid] || []);
+      pfPickers[pid] = picker;
+    });
+  }
+
+  function pfGroups(pid) {
+    var all = paFacilities().facilities;
+    var sug = suggestions[pid];
+    // Until suggestions arrive, the list is every facility.
+    var top = (sug === 'loading' ? [] : sug || []).map(function (f) { return { id: f.id, name: f.name, count: f.patients + (f.patients === 1 ? ' patient' : ' patients') }; });
+    var topIds = top.map(function (f) { return String(f.id); });
+    var rest = all.filter(function (f) { return topIds.indexOf(String(f.id)) < 0; });
+    return top.length ? [['Suggested from patients’ facilities', top], ['All facilities', rest]] : [['All facilities', rest]];
+  }
+
+  async function loadSuggestions(pid) {
+    if (suggestions[pid]) return;
+    suggestions[pid] = 'loading';
+    var res = await apiCall('/settings/facility-suggestions/' + encodeURIComponent(pid));
+    suggestions[pid] = (res && !res.error && res.suggestions) || [];
+    if (pfPickers[pid]) pfPickers[pid].redraw();
+  }
+
+  async function saveProviderFacilities(pid, ids) {
+    var res = await apiCall('/settings/provider-facilities', { method: 'PUT', body: JSON.stringify({ provider_id: pid, facility_ids: ids }) });
+    if (!res || res.error) {
+      showMsg((res && res.error) || 'The facilities were not saved.', 'error');
+      if (pfPickers[pid]) pfPickers[pid].setValue(paFacilities().by_provider[pid] || []);
+      return;
+    }
+    var byProvider = Object.assign({}, paFacilities().by_provider);
+    if (res.facility_ids.length) byProvider[pid] = res.facility_ids; else delete byProvider[pid];
+    preloaded().facilities = { facilities: paFacilities().facilities, by_provider: byProvider };
+    showMsg('Facilities saved', 'success');
   }
 
   // ── New rule defaults ─────────────────────────────────────────────
@@ -242,9 +328,6 @@
     var admins = state.admins || [];
     var secretIds = state.secret_admins || [];
     var everyone = state.admins_from === 'everyone';
-    $('set-sum-admins').textContent = everyone ? '(everyone)' : '(' + admins.length + ')';
-    $('set-how-group').textContent = lv === 'full' ? 'Only their group\u2019s providers' : 'Their group\u2019s providers';
-    $('set-how-else').textContent = { full: 'Every provider', view: 'Nothing (can view every provider)', none: 'Nothing (cannot see other providers)' }[lv];
     var line = function (label, names) { return '<div class="adm-line"><b>' + label + ':</b> ' + (names.length ? esc(names.join(', ')) : 'None') + '</div>'; };
     $('set-admin-members').innerHTML = everyone ? '' :
       line('Teams', (a.admin_team_ids || []).map(teamName)) + line('People', (a.admin_staff_ids || []).map(staffName));
@@ -253,12 +336,12 @@
       ? 'No admins are selected, so every staff member is an admin. Select admins to limit who can change Settings.'
       : state.admins_from === 'secret'
         ? 'No admins are selected. Admins come from the allowed-staff-keys plugin secret: ' + secretNames + '.'
-        : plural(admins.length, 'person is an admin', 'people are admins') + (secretIds.length ? '. Always admins through the allowed-staff-keys plugin secret: ' + secretNames + '.' : '.');
+        : (secretIds.length ? 'Always admins through the allowed-staff-keys plugin secret: ' + secretNames + '.' : '');
     var limited = lv !== 'full' || (a.groups || []).length > 0;
     $('set-access-status').innerHTML = limited ? '' :
       '<div class="rs warn"><b>Every staff member can edit every provider.</b>Create an editing group or change default access to limit editing.</div>';
     $('set-default-access').value = lv;
-    $('set-groups-desc').textContent = 'Schedulers in a group can edit only that group\u2019s providers. Staff outside a group get the default access.';
+    $('set-default-hint').textContent = LEVELS[lv].hint;
   }
 
   async function saveAccess(body, message) {
@@ -268,7 +351,10 @@
     await open();
     return true;
   }
-  $('set-default-access').addEventListener('change', function () { saveAccess({ default_access: this.value }, 'Default access set to ' + LEVELS[this.value].short.toLowerCase()); });
+  $('set-default-access').addEventListener('change', function () {
+    $('set-default-hint').textContent = LEVELS[this.value].hint;
+    saveAccess({ default_access: this.value }, 'Everyone else set to ' + LEVELS[this.value].short.toLowerCase());
+  });
 
   // Admins: Canvas teams and people, picked together and saved together.
   function openAdminEditor() {
@@ -301,27 +387,38 @@
     var loose = providerList().filter(function (p) { return !grouped[p.id]; });
     var list = $('set-groups');
     list.style.display = groups.length ? '' : 'none';
+    // An open group lists schedulers and providers side by side, up to NAME_CAP names each.
+    function col(label, ids) {
+      var rest = ids.length - NAME_CAP;
+      return '<div class="gcol"><div class="lb">' + label + '</div><div class="toks">' +
+        (ids.map(function (id, i) { return '<span class="tok"' + (i >= NAME_CAP ? ' hidden' : '') + '>' + esc(staffName(id)) + '</span>'; }).join('') ||
+          '<span class="note" style="margin:0">None</span>') +
+        (rest > 0 ? '<button type="button" class="gmore">+ ' + rest + ' more</button>' : '') + '</div></div>';
+    }
     list.innerHTML = groups.map(function (g) {
       var open = openGroups[g.id];
-      var html = '<div class="grow-row' + (open ? ' open' : '') + '" data-id="' + esc(g.id) + '"><span class="car">▸</span><span class="nm">' + esc(g.name) + '</span>' +
+      var html = '<div class="grow-row' + (open ? ' open' : '') + '" data-id="' + esc(g.id) + '">' + CHEVRON + '<span class="nm">' + esc(g.name) + '</span>' +
         '<span class="mt">' + plural(g.schedulers.length, 'scheduler', 'schedulers') + ' · ' + plural(g.providers.length, 'provider', 'providers') + '</span>' +
         '<span class="acts"><button type="button" class="lnk-sm" data-edit="' + esc(g.id) + '">Edit</button><button type="button" class="lnk-sm danger" data-del="' + esc(g.id) + '">Delete</button></span></div>' +
-        '<div class="gbody' + (open ? ' open' : '') + '"><div class="lb">Schedulers</div><div class="toks" style="margin:0">' +
-        (g.schedulers.map(function (id) { return '<span class="tok">' + esc(staffName(id)) + '</span>'; }).join('') || '<span class="note" style="margin:0">None</span>') +
-        '</div><div class="lb">Providers</div><div class="toks" style="margin:0">' +
-        (g.providers.map(function (id) { return '<span class="tok">' + esc(staffName(id)) + '</span>'; }).join('') || '<span class="note" style="margin:0">None</span>') + '</div></div>';
+        '<div class="gbody' + (open ? ' open' : '') + '">' + col('Schedulers', g.schedulers) + col('Providers', g.providers) + '</div>';
       if (deletingGroup === g.id) {
         html += '<div class="ax-confirm"><div><div class="ax-cf-title">Delete ' + esc(g.name) + '?</div><p>Schedulers in this group will lose edit access to its providers.</p></div>' +
           '<button type="button" class="btn" data-del-cancel>Cancel</button><button type="button" class="btn btn-danger" data-del-ok="' + esc(g.id) + '">Delete</button></div>';
       }
       return html;
     }).join('');
+    // Who can edit providers outside a group follows Everyone else.
     var lv = state.access.default_access;
-    $('set-groups-loose').textContent = groups.length
-      ? (loose.length ? 'Not in a group: ' + loose.map(function (p) { return p.name; }).join(', ') + '. ' + LEVELS[lv].loose + '.' : '')
-      : 'No editing groups. Staff who are not admins receive ' + LEVELS[lv].short.toLowerCase() + '.';
+    var names = loose.slice(0, 2).map(function (p) { return p.name; }).join(', ') + (loose.length > 2 ? ' + ' + (loose.length - 2) + ' more' : '');
+    $('set-groups-loose').textContent = groups.length && loose.length
+      ? plural(loose.length, 'provider isn\u2019t', 'providers aren\u2019t') + ' in a group: ' + names + '. ' +
+        (lv === 'full' ? 'Only admins and staff who aren\u2019t in a group can edit them.' : 'Only admins can edit them.')
+      : '';
     list.querySelectorAll('.grow-row').forEach(function (r) {
       r.addEventListener('click', function (e) { if (e.target.closest('button')) return; openGroups[r.dataset.id] = !openGroups[r.dataset.id]; drawGroups(); });
+    });
+    list.querySelectorAll('.gmore').forEach(function (b) {
+      b.addEventListener('click', function () { b.parentElement.querySelectorAll('.tok[hidden]').forEach(function (t) { t.hidden = false; }); b.remove(); });
     });
     list.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { openEditor(b.dataset.edit); }); });
     list.querySelectorAll('[data-del]').forEach(function (b) { b.addEventListener('click', function () { deletingGroup = b.dataset.del; drawGroups(); }); });
@@ -345,7 +442,7 @@
       '<select class="input" data-loc="' + key + '"><option value="">Add everyone at…</option>' +
       locs.map(function (l) { return '<option value="' + esc(l.id) + '">' + esc(l.name) + '</option>'; }).join('') + '</select>' +
       '<button type="button" class="lnk-sm" data-clear="' + key + '">Clear</button>' +
-      '<span class="pick-count" data-count="' + key + '"></span></div>' +
+      '<span class="pick-count" data-count="' + key + '"></span><span class="pick-added" data-added="' + key + '"></span></div>' +
       '<div class="pick" data-pick="' + key + '">' + people.map(function (p) {
         return '<label class="ax-check" data-name="' + esc(p.name.toLowerCase()) + '" data-loc-id="' + esc(p.location_id || '') + '"><input type="checkbox" value="' + esc(p.id) + '"' +
           (chosen.indexOf(p.id) >= 0 ? ' checked' : '') + '>' + esc(p.name) + '</label>';
@@ -361,18 +458,21 @@
       var q = this.value.trim().toLowerCase();
       box.querySelectorAll('label').forEach(function (l) { l.style.display = !q || l.dataset.name.indexOf(q) >= 0 ? '' : 'none'; });
     });
+    var addedNote = document.querySelector('[data-added="' + key + '"]');
+    // A shortcut: selects everyone at the location, notes it, and resets so another location can be added.
     document.querySelector('[data-loc="' + key + '"]').addEventListener('change', function () {
       var loc = this.value;
       if (!loc) return;
+      var where = this.options[this.selectedIndex].text;
       var added = 0;
       box.querySelectorAll('label[data-loc-id="' + CSS.escape(loc) + '"] input').forEach(function (i) { if (!i.checked) { i.checked = true; added++; } });
-      showMsg('Added ' + plural(added, 'person', 'people') + ' at ' + this.options[this.selectedIndex].text, 'success');
-      // The location stays showing so it is clear who was added; Clear resets it.
+      addedNote.textContent = added ? 'Added ' + plural(added, 'person', 'people') + ' at ' + where : 'Everyone at ' + where + ' is already selected';
+      this.value = '';
       recount();
     });
     document.querySelector('[data-clear="' + key + '"]').addEventListener('click', function () {
       box.querySelectorAll('input:checked').forEach(function (i) { i.checked = false; });
-      document.querySelector('[data-loc="' + key + '"]').value = '';
+      addedNote.textContent = '';
       recount();
     });
     recount();
@@ -385,7 +485,7 @@
     (state.staff || []).forEach(function (s) { locById[s.id] = s.location_id; });
     var providers = providerList().map(function (p) { return { id: p.id, name: p.name, location_id: locById[p.id] || '' }; });
     $('set-group-editor').innerHTML = '<div class="gedit"><div class="ax-cf-title" style="margin-bottom:4px">' + (id ? 'Edit editing group' : 'New editing group') + '</div>' +
-      '<label class="ax-lbl" for="set-grp-name">Group name</label><input class="input" id="set-grp-name" placeholder="Orange County" value="' + esc(g.name) + '" style="max-width:360px">' +
+      '<label class="ax-lbl" for="set-grp-name">Group name</label><input class="input" id="set-grp-name" placeholder="Enter a group name" value="' + esc(g.name) + '" style="max-width:360px">' +
       '<label class="ax-lbl">Schedulers</label><div class="note" style="margin:-2px 0 8px">Staff who can manage the providers below. Providers already manage their own availability.</div>' + pickerHtml('sched', state.staff || [], g.schedulers) +
       '<label class="ax-lbl">Providers</label>' + pickerHtml('prov', providers, g.providers) +
       '<div class="save-row"><span class="status" id="set-grp-status"></span><button type="button" class="btn" id="set-grp-cancel">Cancel</button><button type="button" class="btn btn-primary" id="set-grp-save">Save group</button></div></div>';
@@ -413,14 +513,21 @@
   }
   $('set-new-group').addEventListener('click', function () { openEditor(''); });
 
-  // ── Providers: timezones note when the feature is off ─────────────
+  // ── Providers: the Timezones and facilities heading and note follow the switches ──
   function drawTzNote() {
     var desc = $('set-tz-desc');
     if (!desc || !state) return;
-    desc.textContent = state.features.provider_timezones === false
+    var rounds = state.features.facility_rounds !== false;
+    $('set-pv-title').textContent = rounds ? 'Timezones and facilities' : 'Timezones';
+    var tz = state.features.provider_timezones === false
       ? 'Provider timezones are turned off in Scheduling, so every provider uses the practice timezone.'
-      : 'Providers use the practice timezone unless a provider timezone is set.';
+      : 'Providers use the practice timezone unless one is set.';
+    // Fixed text written here, never data.
+    desc.innerHTML = esc(tz) + (rounds
+      ? ' Their facilities are listed first in the <b>Facility</b> list when adding a round, and suggestions come from the facilities on their patients’ charts.'
+      : '');
   }
+  window.paDrawProviderFacilities = drawProviderFacilities;
 
   // ── Bulk import: keep the step header in step with admin.js ───────
   if (typeof bulkShowStep === 'function') {

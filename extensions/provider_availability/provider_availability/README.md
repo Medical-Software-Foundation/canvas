@@ -42,23 +42,35 @@ Set in **Settings → Access control**. Any signed-in staff member can open the 
 1. **Admins** edit every provider and change Settings. Admins are the members of the Canvas teams and the people picked in Settings, plus anyone in the `allowed-staff-keys` secret, who is always an admin. With nobody in any of them, everyone is an admin. Settings refuses to save admins that leave out the person saving, so nobody can lock themselves out.
 2. **Every provider** can always edit their own availability.
 3. **Editing groups** are made in the app: a group's schedulers can edit only that group's providers (they can still view others unless default access is No access). The group form can add everyone at a primary practice location at once.
-4. **Everyone else** gets the **default access** level: Full access (view and edit every provider, the starting value), View access, or No access (only their own).
+4. **Everyone else** (staff who aren't admins or in a group) gets one level: Full access (view and edit every provider, the starting value), View only, or No access (only their own).
 
 A practice that restricted the plugin with the `allowed-staff-keys` secret starts at **No access** until someone saves a default access level, so staff the secret left out do not gain access when this version installs. Practice timezone, schedulable roles, bulk timezones and bulk import are admin only.
 
 ### Scheduling features
 
-**Settings → Scheduling** has a switch for each of appointment buffers, lead time, same-day and next-day holds, date overrides, and provider timezones. All start on. Turning one off stops new events at once and asks what to do with the ones already on calendars, with a "View affected items" list by provider:
+**Settings → Scheduling** has a switch for each of facility rounds, facility blocks, appointment buffers, lead time, same-day and next-day holds, date overrides, and provider timezones. Facility rounds and facility blocks start off; the rest start on. Turning one off stops new events at once and asks what to do with the ones already on calendars, with a "View affected items" list by provider:
 
 | Feature | Choices when turned off |
 |---------|-------------------------|
+| Facility rounds | Keep saved rounds bookable (no new ones), or remove them from calendars. The rounds stay saved, so turning the switch back on draws them again |
+| Facility blocks | Saved facility blocks stay on calendars and can still be edited or deleted; no new ones |
 | Appointment buffers | Keep each buffer until its appointment ends, or remove them now |
 | Lead time | Keep blocks until they expire (within a day), or remove them now |
 | Holds | Keep holds until they end, or remove them now. The Hold rule type is hidden |
 | Date overrides | Keep applying existing overrides (no new ones), or stop applying them (those dates go back to regular hours) |
 | Provider timezones | Every provider moves to the practice timezone and their events are redrawn |
 
-While a feature is off the API refuses new holds, new overrides and new provider timezones. **New rule defaults** (pre- and post-appointment buffer, minimum lead time) pre-fill the Add form; they start at 0.
+While a feature is off the API refuses new holds, new overrides, new provider timezones, new facility rounds and new facility blocks. **New rule defaults** (pre- and post-appointment buffer, minimum lead time) pre-fill the Add form; they start at 0.
+
+### Facility rounds and facility blocks
+
+For practices whose providers visit patients at facilities (assisted living, skilled nursing, memory care). Facilities come from Canvas's own facility list.
+
+- **Facility round**: bookable time at a facility. In the Add form, set **Where** to **Facility** on an Available rule. The round is drawn on the provider's Clinic calendar at their primary practice location, titled `Facility round: <facility>`. Visits booked inside a round's hours get the facility as an appointment label (when the visit has fewer than Canvas's 3 labels). **Visits per round** is optional: when a round reaches it, a `Round full` block covers the rest of that round, and it comes off when a visit is canceled or moved.
+- **Facility block**: time at a facility that isn't bookable. Set **What** to **Facility** on a Blocked rule. It is an Administrative event titled `<facility name> Visit`, which Canvas shows on the schedule as its facility block, with the facility's address and a link to its patient list. A facility block covers every location.
+- **Provider facilities**: **Settings → Providers → Timezones and facilities** sets the facilities each provider rounds at. They are listed first in the form's **Facility** list. Suggestions come from the facilities on the charts of the provider's patients (a visit in the last 365 days or upcoming).
+
+On Canvas's own schedule, round time looks like any other open time, so the facility shows only once a visit is booked, on its label. Canvas's booking window doesn't tell plugins which patient is being booked when it lists times, so it can't narrow times to the patient's facility; a custom schedule view can.
 
 ### Practice and provider timezones
 
@@ -117,14 +129,17 @@ Rows are keyed by `staff_key` (the Canvas Staff UUID), not NPI - so availability
 | `rule` | A bookable availability window | `day`, `start`, `end`, `location`, `visit_type`, buffer/booking columns |
 | `block` | A one-off unavailable date or range | `date`, `all_day`, `start`, `end`, `reason` |
 | `rblock` | A recurring unavailable window (incl. holds) | `day`, `start`, `end`, `reason`, `hold_type` |
+| `round` | A facility round (needs the Facility rounds switch on) | `facility`, `max_visits`, and the `rule` columns except `location` |
 
 ### Columns
 
 | Column | Applies to | Notes |
 |---|---|---|
-| `type` | all | `rule`, `block`, or `rblock` |
+| `type` | all | `rule`, `block`, `rblock`, or `round` |
 | `staff_key` | all | Canvas Staff UUID. Validated against active staff. Works for providers and non-provider staff. |
-| `location` | rule, block, rblock | Location name (not ID). Blank = all locations. `\|`-separate for multiple. |
+| `location` | rule, block, rblock | Location name (not ID). Blank = all locations. `\|`-separate for multiple. Must be blank on a round row: rounds book at the provider's primary location. |
+| `facility` | round | One active facility, by name |
+| `max_visits` | round | Optional visit limit, a whole number of 1 or more |
 | `visit_type` | rule | Visit-type name. Blank = all types. `\|`-separate for multiple. |
 | `day` | rule, rblock (weekly) | `monday`..`sunday`. Ignored when `recurrence_frequency=daily`. |
 | `start`, `end` | rule, rblock, timed block | `HH:MM` 24-hour; `start` must be before `end` |
@@ -181,6 +196,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | GET | `/providers/search` | Search providers by name/ID |
 | GET | `/locations` | List all active locations |
 | GET | `/visit-types` | List all scheduleable visit types |
+| GET | `/facility-patient-counts` | Patients per active facility, for a facility block's details |
 | GET | `/overview` | Aggregate overview of all providers with rules/blocks |
 | GET | `/rules` | List all rules |
 | GET | `/rules/<provider_id>` | Get rules for a specific provider |
@@ -217,6 +233,8 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | PUT | `/settings/features` | Turn a Scheduling feature on or off, with the keep/remove choice (admins only) |
 | GET | `/settings/affected/<feature>` | What turning a feature off would affect, by provider (admins only) |
 | PUT | `/settings/rule-defaults` | Save new rule defaults (admins only) |
+| PUT | `/settings/provider-facilities` | Save the facilities one provider rounds at (admins only) |
+| GET | `/settings/facility-suggestions/<provider_id>` | Facilities on the charts of a provider's patients, with patient counts (admins only) |
 | PUT | `/settings/access` | Set the admin teams and people (`admin_team_ids`, `admin_staff_ids`) and/or default access (admins only) |
 | POST | `/settings/groups` | Create an editing group (admins only) |
 | PUT | `/settings/groups/<group_id>` | Replace an editing group (admins only) |
@@ -259,14 +277,17 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 - Booking interval (min lead hours, slot granularity)
 - Buffer times (pre/post appointment minutes)
 - Effective date range, group ID for bulk edits
+- For a facility round: facility ID and name, and an optional visit limit
 
 **AdminBlock** - One-off time block when a provider is unavailable:
 - Start/end datetime, reason, location filter
 - Group ID for bulk edits
+- For a facility block: facility ID and name; the reason is `<facility name> Visit`
 
 **RecurringBlock** - Weekly or daily recurring block with optional hold:
 - Weekly schedule, reason, location filter, effective date range
 - Hold type: `none` (immediate block), `same_day` (releases day-of), `next_day` (releases day before)
+- For a facility block: facility ID and name, as on AdminBlock
 
 ## Calendar Integration
 
@@ -274,6 +295,8 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 - **Administrative calendars**: Events define when a provider is NOT available
 - Buffer and blocking events are placed on Administrative calendars
 - Hold blocks are dynamically created/released on a rolling 30-day window
+- Facility rounds are Clinic events titled `Facility round: <facility>`; a full round gets a `Round full` Administrative event
+- Facility blocks are Administrative events titled `<facility name> Visit`, which Canvas shows as its facility block
 
 ## Info
 

@@ -2,6 +2,7 @@
 
 from provider_availability.engine.csv_import import (
     ParseResult,
+    ValidRow,
     build_records,
     generate_template_csv,
     parse_csv,
@@ -36,7 +37,7 @@ def _rule_row(**over):
 
 def test_validate_row_rejects_unknown_type():
     assert validate_row({"type": "widget", "staff_key": "1"}) == [
-        "type must be one of: rule, block, rblock"
+        "type must be one of: rule, round, block, rblock"
     ]
 
 
@@ -427,6 +428,83 @@ def test_generate_template_csv_round_trips():
     template = generate_template_csv()
     result = parse_csv(template)
     assert result.error_rows == []
-    assert result.total_rows == 4
+    assert result.total_rows == 5
     kinds = {r.data["type"] for r in result.valid_rows}
-    assert kinds == {"rule", "block", "rblock"}
+    assert kinds == {"rule", "round", "block", "rblock"}
+
+
+# -- facility rounds ----------------------------------------------------------
+
+FACILITY_MAP = {"sunrise terrace": "fac-1", "apple valley care": "fac-2"}
+
+
+def _round_row(**over):
+    row = _rule_row(type="round", location="", facility="Sunrise Terrace", max_visits="8")
+    row.update(over)
+    return row
+
+
+def test_validate_round_row_valid_has_no_errors():
+    assert validate_row(_round_row()) == []
+
+
+def test_validate_round_row_needs_a_facility():
+    assert "facility is required for a round row" in validate_row(_round_row(facility=""))
+
+
+def test_validate_round_row_takes_no_location():
+    errors = validate_row(_round_row(location="Main Clinic"))
+    assert errors == ["location must be empty for a round row; rounds book at the provider's primary location"]
+
+
+def test_validate_round_row_max_visits_is_a_positive_whole_number():
+    assert validate_row(_round_row(max_visits="0")) == ["max_visits must be >= 1"]
+    assert validate_row(_round_row(max_visits="many")) == ["max_visits must be a whole number"]
+    assert validate_row(_round_row(max_visits="")) == []
+
+
+def test_build_round_becomes_a_rule_with_facility_fields():
+    rows = [ValidRow(2, _round_row()), ValidRow(3, _round_row(day="thursday"))]
+    records, errors = build_records(rows, VALID_STAFF, LOCATION_MAP, VISIT_MAP, FACILITY_MAP)
+    assert errors == []
+    (rec,) = records
+    assert rec["kind"] == "rule"
+    assert (rec["facility_id"], rec["facility_name"], rec["max_visits"]) == ("fac-1", "Sunrise Terrace", 8)
+    assert rec["location_ids"] == []
+    assert sorted(rec["weekly_schedule"]) == ["monday", "thursday"]
+    assert rec["source_rows"] == [2, 3]
+
+
+def test_build_round_without_a_limit():
+    records, _ = build_records([ValidRow(2, _round_row(max_visits=""))], VALID_STAFF, LOCATION_MAP, VISIT_MAP, FACILITY_MAP)
+    assert records[0]["max_visits"] is None
+
+
+def test_build_rounds_at_different_facilities_stay_separate():
+    rows = [ValidRow(2, _round_row()), ValidRow(3, _round_row(facility="Apple Valley Care", day="tuesday"))]
+    records, _ = build_records(rows, VALID_STAFF, LOCATION_MAP, VISIT_MAP, FACILITY_MAP)
+    assert sorted(r["facility_id"] for r in records) == ["fac-1", "fac-2"]
+
+
+def test_build_round_and_clinic_rule_stay_separate():
+    rows = [ValidRow(2, _round_row()), ValidRow(3, _rule_row(day="tuesday"))]
+    records, _ = build_records(rows, VALID_STAFF, LOCATION_MAP, VISIT_MAP, FACILITY_MAP)
+    assert sorted(r.get("facility_id", "") for r in records) == ["", "fac-1"]
+
+
+def test_build_round_unknown_facility_is_an_error():
+    records, errors = build_records([ValidRow(2, _round_row(facility="Sunrise Terace"))], VALID_STAFF, LOCATION_MAP, VISIT_MAP, FACILITY_MAP)
+    assert records == []
+    assert errors[0].errors == ["facility 'Sunrise Terace' not found"]
+
+
+def test_build_round_while_rounds_are_off_is_an_error():
+    records, errors = build_records([ValidRow(2, _round_row())], VALID_STAFF, LOCATION_MAP, VISIT_MAP)
+    assert records == []
+    assert errors[0].errors == ["Facility rounds are turned off in Settings."]
+
+
+def test_validate_round_row_takes_one_facility():
+    assert validate_row(_round_row(facility="Sunrise Terrace|Apple Valley Care")) == [
+        "facility must name one facility; add a row for each facility"
+    ]

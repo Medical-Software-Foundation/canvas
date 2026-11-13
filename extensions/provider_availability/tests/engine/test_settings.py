@@ -7,10 +7,13 @@ from provider_availability.engine.storage import ACCESS_KEY, FEATURES_KEY, RULE_
 
 
 class TestFeatures:
-    def test_every_feature_starts_on(self, settings_cache):
+    def test_original_features_start_on_and_facility_features_start_off(self, settings_cache):
         assert settings.get_features() == {
             "buffers": True, "lead_time": True, "holds": True, "overrides": True, "provider_timezones": True,
+            "facility_rounds": False, "facility_blocks": False,
         }
+        assert settings.is_feature_on("facility_rounds") is False
+        assert settings.is_feature_on("facility_blocks") is False
 
     def test_turning_one_off_keeps_the_rest(self, settings_cache):
         settings.set_feature("holds", False)

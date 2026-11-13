@@ -3,6 +3,8 @@
 import datetime as dt
 from datetime import date, datetime, timedelta
 import pytest
+from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 from provider_availability.engine.models import (
@@ -647,13 +649,19 @@ class TestGetAvailableSlotsForProvider:
                 now=datetime(2026, 3, 1, 0, 0),
             )
 
-            # Verify the exclude call now narrows to (Clinic AND Available),
-            # not the whole Clinic calendar.
-            exclude_kwargs = mock_evt.filter.return_value.exclude.call_args.kwargs
-            assert exclude_kwargs.get("title") == AVAILABILITY_TITLE
-            assert exclude_kwargs.get(
-                "calendar__title__startswith"
-            ) == "Dr. Jane Doe: Clinic"
+            # Verify the exclude narrows to the Clinic calendar AND the plugin's
+            # own titles (Available, facility rounds), not the whole Clinic calendar.
+            from provider_availability.engine.event_sync import ROUND_TITLE_PREFIX
+
+            (excluded,) = mock_evt.filter.return_value.exclude.call_args.args
+            assert excluded.connector == "AND"
+            calendar_part, titles_q = excluded.children
+            assert calendar_part == ("calendar__title__startswith", "Dr. Jane Doe: Clinic")
+            assert titles_q.connector == "OR"
+            assert sorted(titles_q.children) == sorted([
+                ("title", AVAILABILITY_TITLE),
+                ("title__startswith", ROUND_TITLE_PREFIX),
+            ])
 
     def test_foreign_event_on_clinic_calendar_blocks_slot(self):
         """A non-plugin event on a Clinic calendar (e.g. manual 'Lunch')
@@ -750,3 +758,57 @@ class TestRepeatingEventOccurrences:
         assert _occurrences(once, datetime(2026, 3, 9), datetime(2026, 3, 10)) == [
             (datetime(2026, 3, 9, 10), datetime(2026, 3, 9, 11))
         ]
+
+
+# ── Facility rounds in booking ────────────────────────────────────────
+
+def _round_rule(**over):
+    from provider_availability.engine.models import ProviderAvailabilityRule, TimeWindow
+    import datetime as _dt
+    fields: dict[str, Any] = dict(provider_id="prov-1", location_ids=[], facility_id="fac-1", facility_name="Apple Valley Care",
+                  weekly_schedule={"tuesday": [TimeWindow(start=_dt.time(8, 0), end=_dt.time(12, 0))]})
+    fields.update(over)
+    return ProviderAvailabilityRule(**fields)
+
+
+SLOT = SimpleNamespace(start=0)
+
+
+class TestBookableRules:
+    def test_rounds_get_the_providers_primary_location_once(self, settings_cache):
+        from provider_availability.engine import calculator, settings
+        settings.set_feature("facility_rounds", True)
+        clinic = _round_rule(facility_id="", facility_name="", location_ids=["loc-2"])
+        with patch("provider_availability.engine.calculator.round_location_ids", return_value=["loc-main"]) as locate:
+            rules = calculator.bookable_rules([_round_rule(), clinic, _round_rule(id="r2")])
+        assert [r.location_ids for r in rules] == [["loc-main"], ["loc-2"], ["loc-main"]]
+        assert locate.call_count == 1
+
+    def test_rounds_are_left_out_while_switched_off_and_removed(self, settings_cache):
+        from provider_availability.engine import calculator, settings
+        settings.set_feature("facility_rounds", True)
+        settings.set_feature("facility_rounds", False, keep_existing_overrides=False)
+        clinic = _round_rule(facility_id="", facility_name="", location_ids=["loc-2"])
+        with patch("provider_availability.engine.calculator.round_location_ids") as locate:
+            assert calculator.bookable_rules([_round_rule(), clinic]) == [clinic]
+        assert locate.mock_calls == []
+
+    def test_kept_rounds_stay_bookable_while_switched_off(self, settings_cache):
+        from provider_availability.engine import calculator, settings
+        settings.set_feature("facility_rounds", True)
+        settings.set_feature("facility_rounds", False, keep_existing_overrides=True)
+        with patch("provider_availability.engine.calculator.round_location_ids", return_value=["loc-main"]):
+            assert [r.location_ids for r in calculator.bookable_rules([_round_rule()])] == [["loc-main"]]
+
+    def test_a_round_is_not_offered_at_another_location(self, settings_cache):
+        from provider_availability.engine import calculator, settings
+        settings.set_feature("facility_rounds", True)
+        with patch("provider_availability.engine.calculator.round_location_ids", return_value=["loc-main"]), \
+             patch("provider_availability.engine.calculator.calculate_available_slots", return_value=[SLOT]) as calc, \
+             patch("provider_availability.engine.calculator.get_blocks_for_provider", return_value=[]), \
+             patch("provider_availability.engine.calculator.get_recurring_blocks_for_provider", return_value=[]), \
+             patch("provider_availability.engine.calculator.get_provider_display", return_value={"name": "Dr X"}):
+            import datetime as _dt
+            assert calculator.get_available_slots_for_provider([_round_rule()], _dt.date(2026, 11, 1), _dt.date(2026, 11, 30), location_id="loc-other") == []
+            assert calculator.get_available_slots_for_provider([_round_rule()], _dt.date(2026, 11, 1), _dt.date(2026, 11, 30), location_id="loc-main") == [SLOT]
+        assert calc.call_count == 1

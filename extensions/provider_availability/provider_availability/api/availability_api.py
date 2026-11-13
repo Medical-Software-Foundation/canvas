@@ -14,7 +14,18 @@ from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
+from provider_availability.engine.facilities import (
+    check_block_facility,
+    check_round,
+    facility_patient_counts,
+    facility_suggestions,
+    get_active_facilities,
+    get_provider_facilities,
+    set_provider_facilities,
+)
+from provider_availability.engine.round_limits import refresh_provider as refresh_round_limits
 from provider_availability.engine.calculator import (
+    bookable_rules,
     calculate_available_slots,
     get_available_slots_for_provider,
 )
@@ -46,6 +57,7 @@ from provider_availability.engine.settings import (
     get_features,
     is_feature_on,
     get_rule_defaults,
+    rounds_drawn,
     save_group,
     set_admins,
     set_default_access,
@@ -163,6 +175,11 @@ def _enrich_rules(rules: list[ProviderAvailabilityRule]) -> list[dict]:
 
 
 _VALID_RECURRENCE_FREQUENCIES = ("weekly", "daily")
+
+
+def _facility_list() -> list[dict[str, Any]]:
+    """Every active facility, for the Facility lists."""
+    return list(get_active_facilities())
 
 
 def _validate_recurrence_payload(body: dict) -> str | None:
@@ -436,6 +453,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             locations = []
         return [JSONResponse({"locations": locations, "count": len(locations)})]
 
+    @api.get("/facility-patient-counts")
+    def get_facility_patient_counts(self) -> list[Response | Effect]:
+        """How many patients each active facility has, for a facility block's details.
+
+        Asked for by the page only when a facility block is on screen.
+        """
+        return [JSONResponse({"counts": facility_patient_counts()})]
+
     @api.get("/visit-types")
     def list_visit_types(self) -> list[Response | Effect]:
         """Return scheduleable visit types for dropdown population."""
@@ -577,8 +602,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         location_id = params.get("location_id", "")
         visit_type = params.get("visit_type", "")
 
-        all_rules = get_all_rules()
         schedulable_ids = get_schedulable_provider_ids()
+        all_rules = bookable_rules([r for r in get_all_rules() if r.provider_id in schedulable_ids])
 
         # Group by provider
         providers_with_slots: dict[str, int] = {}
@@ -731,6 +756,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if rec_err:
             return [JSONResponse({"error": rec_err}, status_code=HTTPStatus.BAD_REQUEST)]
 
+        prior_round = get_rule_by_id(provider_id, str(body.get("id", ""))) if body.get("id") else None
+        round_err = check_round(
+            body,
+            is_feature_on("facility_rounds"),
+            prior_round.facility_id if prior_round else "",
+            prior_round.facility_name if prior_round else "",
+        )
+        if round_err:
+            return [JSONResponse({"error": round_err}, status_code=HTTPStatus.BAD_REQUEST)]
+
         rule = ProviderAvailabilityRule.from_dict(body)
 
         # Check for overlapping availability
@@ -748,6 +783,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         sync_effects = sync_provider_availability(provider_id)
         if rule.is_active and rule.booking_interval.min_lead_hours > 0:
             sync_effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
+        if rule.is_round or (prior_round is not None and prior_round.is_round):
+            # The round's hours or visit limit may have changed: recount its booked occurrences.
+            sync_effects.extend(refresh_round_limits(provider_id))
 
         return [
             *sync_effects,
@@ -793,6 +831,15 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if rec_err:
             return [JSONResponse({"error": rec_err}, status_code=HTTPStatus.BAD_REQUEST)]
 
+        round_err = check_round(
+            body,
+            is_feature_on("facility_rounds"),
+            existing.facility_id if existing else "",
+            existing.facility_name if existing else "",
+        )
+        if round_err:
+            return [JSONResponse({"error": round_err}, status_code=HTTPStatus.BAD_REQUEST)]
+
         rule = ProviderAvailabilityRule.from_dict(body)
 
         # Check for overlapping availability (exclude the rule being edited)
@@ -830,13 +877,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 gr.recurrence_frequency = rule.recurrence_frequency
                 gr.recurrence_interval = rule.recurrence_interval
                 gr.time_windows = list(rule.time_windows)
+                gr.facility_id = rule.facility_id
+                gr.facility_name = rule.facility_name
+                gr.max_visits = rule.max_visits
                 save_rule(gr)
                 providers_to_sync.add(gr.provider_id)
                 updated_count += 1
 
+        rounds_changed = rule.is_round or bool(existing and existing.is_round)
         all_effects: list[Effect] = []
         for pid in providers_to_sync:
             all_effects.extend(sync_provider_availability(pid))
+            if rounds_changed:
+                all_effects.extend(refresh_round_limits(pid))
             lead_rules = lead_time_rules(get_rules_for_provider(pid))
             if lead_rules:
                 all_effects.extend(build_provider_lead_time_effects(pid, lead_rules))
@@ -859,8 +912,12 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return denied
         rule_id = self.request.path_params["rule_id"]
 
+        doomed = get_rule_by_id(provider_id, rule_id)
         delete_rule_by_id(provider_id, rule_id)
         event_effects = sync_provider_availability(provider_id)
+        if doomed is not None and doomed.is_round:
+            # The round's "Round full" blocks go with it.
+            event_effects.extend(refresh_round_limits(provider_id))
 
         # Refresh lead time blocks for remaining rules, or clean up orphans
         lead_rules = lead_time_rules(get_rules_for_provider(provider_id))
@@ -1032,6 +1089,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
+        # Saved blocks this save replaces (an edited multi-date group). They are removed
+        # only after every check passes, and a facility they carry counts as already saved.
+        replaced = [
+            b for b in (get_block_by_id(provider_id, str(bid)) for bid in body.get("replace_block_ids") or []) if b
+        ]
+        replaced_rb = (
+            get_recurring_block_by_id(provider_id, body["replace_recurring_block_id"])
+            if body.get("replace_recurring_block_id") else None
+        )
+        own = next((b for b in [*replaced, replaced_rb] if b is not None and b.facility_id), None)
+        facility_err = check_block_facility(
+            body, is_feature_on("facility_blocks"), own.facility_id if own else "", own.facility_name if own else ""
+        )
+        if facility_err:
+            return [JSONResponse({"error": facility_err}, status_code=HTTPStatus.BAD_REQUEST)]
 
         all_day = bool(body.get("all_day", False))
         dates_payload = body.get("dates") or []
@@ -1069,8 +1141,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 import uuid as _uuid
                 group_id = str(_uuid.uuid4())
 
-            created_blocks: list[AdminBlock] = []
-            event_effects: list[Effect] = []
+            spans: list[tuple[datetime, datetime]] = []
             for d in parsed_dates:
                 if all_day:
                     # 00:00:00 -> 23:59:59 on the same day. Ending at next-day
@@ -1091,6 +1162,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                             status_code=HTTPStatus.BAD_REQUEST,
                         )
                     ]
+                spans.append((start_dt, end_dt))
+
+            event_effects: list[Effect] = self._replace_blocks(provider_id, replaced)
+            created_blocks: list[AdminBlock] = []
+            for start_dt, end_dt in spans:
                 block = AdminBlock(
                     provider_id=provider_id,
                     start=start_dt,
@@ -1099,6 +1175,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     location_ids=location_ids,
                     group_id=group_id,
                     all_day=all_day,
+                    facility_id=body["facility_id"],
+                    facility_name=body["facility_name"],
                 )
                 save_block(block)
                 created_blocks.append(block)
@@ -1150,18 +1228,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             location_ids=location_ids,
             group_id=existing_group_id,
             all_day=all_day,
+            facility_id=body["facility_id"],
+            facility_name=body["facility_name"],
         )
         save_block(block)
 
-        event_effects = []
+        event_effects = self._replace_blocks(provider_id, replaced)
 
         # If converting from a recurring block, delete old events BEFORE creating
         # the new single event — avoids same-time collision on the calendar.
         replace_rb_id = body.get("replace_recurring_block_id")
         if replace_rb_id:
-            old_rb = get_recurring_block_by_id(provider_id, replace_rb_id)
-            if old_rb:
-                event_effects.extend(build_delete_recurring_block_effects(provider_id, old_rb))
+            if replaced_rb:
+                event_effects.extend(build_delete_recurring_block_effects(provider_id, replaced_rb))
             delete_recurring_block(provider_id, replace_rb_id)
 
         event_effects.extend(build_block_event_effects(block))
@@ -1173,6 +1252,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 status_code=HTTPStatus.CREATED,
             ),
         ]
+
+    @staticmethod
+    def _replace_blocks(provider_id: str, replaced: list[AdminBlock]) -> list[Effect]:
+        """Remove the saved blocks a save replaces, with their calendar events."""
+        effects: list[Effect] = []
+        skip = {b.id for b in replaced}
+        for old in replaced:
+            effects.extend(build_delete_block_effects(provider_id, old, skip_ids=skip))
+            delete_block(provider_id, old.id)
+        return effects
 
     @api.put("/blocks")
     def update_block(self) -> list[Response | Effect]:
@@ -1211,6 +1300,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         # Delete old calendar event
         old_block = get_block_by_id(provider_id, block_id)
+        facility_err = check_block_facility(
+            body,
+            is_feature_on("facility_blocks"),
+            old_block.facility_id if old_block else "",
+            old_block.facility_name if old_block else "",
+        )
+        if facility_err:
+            return [JSONResponse({"error": facility_err}, status_code=HTTPStatus.BAD_REQUEST)]
         delete_effects: list[Effect] = []
         if old_block:
             delete_effects = build_delete_block_effects(provider_id, old_block)
@@ -1224,6 +1321,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             location_ids=body.get("location_ids", []),
             group_id=body.get("group_id"),
             all_day=bool(body.get("all_day", False)),
+            facility_id=body["facility_id"],
+            facility_name=body["facility_name"],
         )
         save_block(block)
 
@@ -1245,6 +1344,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 gb.start = block.start
                 gb.end = block.end
                 gb.reason = block.reason
+                gb.facility_id = block.facility_id
+                gb.facility_name = block.facility_name
+                if block.facility_id:
+                    gb.location_ids = []
                 save_block(gb)
                 all_effects.extend(build_block_event_effects(gb))
                 updated_count += 1
@@ -1348,6 +1451,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
+        # A facility block is never a hold, so its facility is checked first.
+        replaced_block = get_block_by_id(provider_id, body["replace_block_id"]) if body.get("replace_block_id") else None
+        facility_err = check_block_facility(
+            body,
+            is_feature_on("facility_blocks"),
+            replaced_block.facility_id if replaced_block else "",
+            replaced_block.facility_name if replaced_block else "",
+        )
+        if facility_err:
+            return [JSONResponse({"error": facility_err}, status_code=HTTPStatus.BAD_REQUEST)]
         if body.get("hold_type", "none") not in ("none", "", None) and not is_feature_on("holds"):
             return [JSONResponse({"error": "Holds are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
 
@@ -1384,9 +1497,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # recurring event on the same day/time and Canvas cancels that occurrence.
         replace_b_id = body.get("replace_block_id")
         if replace_b_id:
-            old_block = get_block_by_id(provider_id, replace_b_id)
-            if old_block:
-                event_effects.extend(build_delete_block_effects(provider_id, old_block))
+            if replaced_block:
+                event_effects.extend(build_delete_block_effects(provider_id, replaced_block))
             delete_block(provider_id, replace_b_id)
 
         event_effects.extend(build_recurring_block_sync_effects(block))
@@ -1409,8 +1521,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
         if denied:
             return denied
-        if body.get("hold_type", "none") not in ("none", "", None) and not is_feature_on("holds"):
-            return [JSONResponse({"error": "Holds are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
 
         if not block_id or not provider_id:
             return [
@@ -1434,8 +1544,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if rec_err:
             return [JSONResponse({"error": rec_err}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        block = RecurringBlock.from_dict(body)
         before = get_recurring_block_by_id(provider_id, block_id)
+        facility_err = check_block_facility(
+            body,
+            is_feature_on("facility_blocks"),
+            before.facility_id if before else "",
+            before.facility_name if before else "",
+        )
+        if facility_err:
+            return [JSONResponse({"error": facility_err}, status_code=HTTPStatus.BAD_REQUEST)]
+        # Checked after the facility: a facility block is never a hold.
+        if body.get("hold_type", "none") not in ("none", "", None) and not is_feature_on("holds"):
+            return [JSONResponse({"error": "Holds are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
+        block = RecurringBlock.from_dict(body)
         save_recurring_block(block)
         changed = [block]
         previous = [before] if before else []
@@ -1450,6 +1571,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 previous.append(RecurringBlock.from_dict(gb.to_dict()))
                 gb.weekly_schedule = block.weekly_schedule
                 gb.reason = block.reason
+                gb.facility_id = block.facility_id
+                gb.facility_name = block.facility_name
+                if block.facility_id:
+                    gb.location_ids = []
+                    gb.hold_type = "none"
                 gb.effective_start = block.effective_start
                 gb.effective_end = block.effective_end
                 gb.is_active = block.is_active
@@ -1504,7 +1630,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.put("/timezone")
     def set_timezone(self) -> list[Response | Effect]:
-        """Set the practice timezone and re-sync all rules and recurring blocks."""
+        """Set the practice timezone and redraw the calendars of providers who use it.
+
+        With ``apply_to_all`` true, every provider's own timezone is cleared too, so
+        all of them use the practice timezone. One-off block events are deleted under
+        each provider's old timezone and drawn again under the new one, as in
+        set_provider_tz, because their times are wall-clock times.
+        """
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
@@ -1517,16 +1649,50 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+        apply_to_all = body.get("apply_to_all") is True
+
+        own = get_all_provider_timezones()
+        cleared = sorted(own) if apply_to_all else []
+        all_blocks = get_all_blocks()
+        all_recurring = get_all_recurring_blocks()
+        scheduled = {r.provider_id for r in get_all_rules()} | {b.provider_id for b in all_blocks} | {
+            rb.provider_id for rb in all_recurring
+        }
+        # Providers on their own timezone keep it, unless it's being cleared or
+        # provider timezones are switched off (then everyone follows the practice).
+        follows_practice = apply_to_all or not is_feature_on("provider_timezones")
+        moving = {pid for pid in scheduled if follows_practice or pid not in own}
+        if tz_name == get_practice_timezone():
+            # Same practice timezone: only providers whose own timezone is cleared move.
+            moving = {pid for pid in moving if pid in cleared and own[pid] != tz_name}
+
+        provider_blocks = [b for b in all_blocks if b.provider_id in moving]
+        effects: list[Effect] = []
+        for blk in provider_blocks:
+            effects.extend(build_delete_block_effects(blk.provider_id, blk, keep_others=False))
 
         set_practice_timezone(tz_name)
-        log.info("set_timezone: changed to %s", tz_name)
+        for pid in cleared:
+            clear_provider_timezone(pid)
+        for pid in sorted(moving):
+            effects.extend(sync_provider_availability(pid))
+        effects.extend(build_recurring_blocks_resync_effects([rb for rb in all_recurring if rb.provider_id in moving]))
+        for blk in provider_blocks:
+            effects.extend(build_block_event_effects(blk))
 
-        return [
-            JSONResponse({
-                "message": f"Timezone set to {tz_name}",
-                "timezone": tz_name,
-            }),
-        ]
+        log.info(
+            "set_timezone: practice %s, %d own timezones cleared, %d providers redrawn, %d effects",
+            tz_name, len(cleared), len(moving), len(effects),
+        )
+        message = f"Practice timezone set to {tz_name}"
+        if apply_to_all:
+            message += ". All providers use it."
+        return [*effects, JSONResponse({
+            "message": message,
+            "timezone": tz_name,
+            "cleared": len(cleared),
+            "redrawn": len(moving),
+        })]
 
     # ── Schedulable roles ─────────────────────────────────────────────
 
@@ -1826,6 +1992,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         admins = admin_ids(self.secrets, config)
         staff = get_staff_directory()
         names = {s["id"]: s["name"] for s in staff}
+        facilities = _facility_list()
         from_settings = admin_ids({}, config)
         return [JSONResponse({
             "features": get_features(),
@@ -1837,6 +2004,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "teams": get_teams(),
             "staff": staff,
             "locations": get_active_locations(),
+            "facilities": facilities,
+            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}),
         })]
 
     @api.put("/settings/features")
@@ -1918,6 +2087,34 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return self._bad_request(str(exc))
         log.info("settings: access changed by %s: %s", _signed_in_staff_id(self.request), sorted(body.keys()))
         return [JSONResponse({"access": get_access_config()})]
+
+    @api.put("/settings/provider-facilities")
+    def put_provider_facilities(self) -> list[Response | Effect]:
+        """Replace the facilities one provider rounds at. They're listed first when adding a round."""
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        body = self.request.json()
+        provider_id = str(body.get("provider_id", "") or "")
+        if provider_id not in get_schedulable_provider_ids():
+            return self._bad_request("Choose a provider who can be scheduled")
+        try:
+            saved = set_provider_facilities(provider_id, body.get("facility_ids"))
+        except ValueError as exc:
+            return self._bad_request(str(exc))
+        log.info("settings: facilities for %s set to %d by %s", provider_id, len(saved), _signed_in_staff_id(self.request))
+        return [JSONResponse({"provider_id": provider_id, "facility_ids": saved})]
+
+    @api.get("/settings/facility-suggestions/<provider_id>")
+    def get_facility_suggestions(self) -> list[Response | Effect]:
+        """Facilities on the charts of a provider's patients, with patient counts."""
+        denied = _check_write_access(self.request, self.secrets, admin_only=True)
+        if denied:
+            return denied
+        provider_id = self.request.path_params["provider_id"]
+        if provider_id not in get_schedulable_provider_ids():
+            return self._bad_request("Choose a provider who can be scheduled")
+        return [JSONResponse({"provider_id": provider_id, "suggestions": facility_suggestions(provider_id)})]
 
     @api.post("/settings/groups")
     def post_group(self) -> list[Response | Effect]:
@@ -2010,7 +2207,21 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "access": access.summary(),
             "features": get_features(),
             "rule_defaults": get_rule_defaults(),
+            "facilities": self._round_facilities(),
         }
+
+    def _round_facilities(self) -> dict[str, Any]:
+        """Facilities for the round and facility block forms' Facility lists.
+
+        Sent while rounds are on, or off with saved rounds kept on calendars, so a
+        kept round's facility still shows when it is edited, and while facility
+        blocks are on. With facility blocks on, each facility carries its patient
+        count for the block's details.
+        """
+        if not is_feature_on("facility_blocks") and not is_feature_on("facility_rounds") and not rounds_drawn():
+            return {"facilities": [], "by_provider": {}}
+        facilities = _facility_list()
+        return {"facilities": facilities, "by_provider": get_provider_facilities({f["id"] for f in facilities})}
 
     @api.post("/form-action")
     def handle_form_action(self) -> list[Response | Effect]:
