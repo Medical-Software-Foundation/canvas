@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Co-sign Note</title>
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-surface: #f8fafc;
+      --color-border: #e2e8f0;
+      --color-text: #0f172a;
+      --color-text-muted: #64748b;
+      --color-text-subtle: #94a3b8;
+      --color-primary: #1d4ed8;
+      --color-primary-hover: #1e40af;
+      --color-success: #15803d;
+      --color-success-bg: #f0fdf4;
+      --color-success-border: #86efac;
+      --color-amber: #b45309;
+      --color-amber-bg: #fffbeb;
+      --color-amber-border: #fcd34d;
+      --color-danger: #b91c1c;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      color: var(--color-text);
+      background: var(--color-bg);
+      margin: 0;
+      padding: 28px 32px;
+      max-width: 680px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .status-pill.approved {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border: 1px solid var(--color-success-border);
+    }
+    .status-pill.pending {
+      background: var(--color-amber-bg);
+      color: var(--color-amber);
+      border: 1px solid var(--color-amber-border);
+    }
+    .status-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .meta-card {
+      margin-top: 20px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+    .meta-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 0.875rem;
+    }
+    .meta-row + .meta-row {
+      border-top: 1px solid var(--color-border);
+    }
+    .meta-label {
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+    .meta-value {
+      color: var(--color-text);
+      word-break: break-all;
+    }
+    .meta-value.mono {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.78rem;
+      color: var(--color-text-muted);
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-muted);
+      margin: 0 0 12px;
+    }
+
+    .timeline {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 24px;
+      position: relative;
+    }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--color-border);
+    }
+    .timeline-item {
+      position: relative;
+      padding-left: 28px;
+      padding-bottom: 16px;
+    }
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 6px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      border: 2px solid var(--color-bg);
+      box-shadow: 0 0 0 2px var(--color-primary);
+    }
+    .timeline-meta {
+      font-size: 0.78rem;
+      color: var(--color-text-muted);
+      margin-bottom: 4px;
+    }
+    .timeline-meta strong {
+      color: var(--color-text);
+      font-weight: 600;
+    }
+    .timeline-text {
+      font-size: 0.9rem;
+      color: var(--color-text);
+      white-space: pre-wrap;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+    }
+
+    .empty {
+      font-size: 0.85rem;
+      color: var(--color-text-subtle);
+      font-style: italic;
+      padding: 8px 0;
+    }
+
+    .field {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+      color: var(--color-text);
+    }
+    .helper {
+      font-size: 0.78rem;
+      color: var(--color-text-muted);
+      margin-bottom: 8px;
+    }
+    select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: var(--color-text);
+      background: var(--color-bg);
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    textarea#additional {
+      min-height: 70px;
+    }
+    select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 9px 18px;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      transition: background 120ms ease, transform 80ms ease;
+    }
+    button.primary {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    button.primary:hover:not(:disabled) {
+      background: var(--color-primary-hover);
+    }
+    button.primary:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+    button.primary:disabled {
+      background: var(--color-text-subtle);
+      cursor: not-allowed;
+    }
+
+    .msg {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .msg.err { color: var(--color-danger); }
+    .msg.ok { color: var(--color-success); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Supervisor Co-sign</h1>
+    <span class="status-pill {% if approved %}approved{% else %}pending{% endif %}">
+      {% if approved %}Co-signed{% else %}Pending review{% endif %}
+    </span>
+  </div>
+
+  <div class="meta-card">
+    <div class="meta-row">
+      <span class="meta-label">Patient</span>
+      <span class="meta-value">{{ patient_name }}</span>
+    </div>
+    <div class="meta-row">
+      <span class="meta-label">Note date</span>
+      <span class="meta-value">{{ note_date }}</span>
+    </div>
+    <div class="meta-row">
+      <span class="meta-label">Supervisee</span>
+      <span class="meta-value">{{ supervisee_name }}</span>
+    </div>
+    {% if approved %}
+    <div class="meta-row">
+      <span class="meta-label">Reviewed by</span>
+      <span class="meta-value">{{ supervisor_name }} · {{ cosigned_on }}</span>
+    </div>
+    {% endif %}
+    <div class="meta-row">
+      <span class="meta-label">Note ID</span>
+      <span class="meta-value mono">{{ note_id }}</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Attestation log</h2>
+  {% if addendum_entries %}
+  <ul class="timeline">
+    {% for entry in addendum_entries %}
+    <li class="timeline-item">
+      <div class="timeline-meta">
+        <strong>{{ entry.supervisor_name|default:"Supervisor" }}</strong> · {{ entry.created_at }}
+      </div>
+      <div class="timeline-text">{{ entry.text }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No attestations recorded for this note.</p>
+  {% endif %}
+
+  {% if not approved %}
+  <h2 class="section-title">New attestation</h2>
+
+  <div class="field">
+    <label for="template">Attestation template</label>
+    <p class="helper">Pick a template to auto-fill, or choose Custom to write your own. You can edit the text below before signing.</p>
+    <select id="template" onchange="onTemplateChange()">
+      {% for tpl in templates %}
+      <option value="{{ tpl.key }}" data-text="{{ tpl.text }}">{{ tpl.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="attestation">Attestation text</label>
+    <textarea id="attestation" placeholder="Attestation language..."></textarea>
+  </div>
+
+  <div class="field">
+    <label for="additional">Additional comments (optional)</label>
+    <p class="helper">Any extra notes will be appended below the attestation.</p>
+    <textarea id="additional" placeholder="e.g., follow-up reminders, teaching notes..."></textarea>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="approveBtn" onclick="submitCosign()">Approve &amp; Co-sign</button>
+    <span class="msg" id="statusMsg"></span>
+  </div>
+  {% endif %}
+
+  <script>
+    function onTemplateChange() {
+      const select = document.getElementById("template");
+      const opt = select.options[select.selectedIndex];
+      const txt = opt.getAttribute("data-text") || "";
+      document.getElementById("attestation").value = txt;
+    }
+    // Initialize on load
+    if (document.getElementById("template")) {
+      onTemplateChange();
+    }
+
+    async function submitCosign() {
+      const btn = document.getElementById("approveBtn");
+      const msg = document.getElementById("statusMsg");
+      const template = document.getElementById("template").value;
+      const attestation = document.getElementById("attestation").value.trim();
+      const additional = document.getElementById("additional").value.trim();
+
+      if (!attestation) {
+        msg.textContent = "Attestation text is required.";
+        msg.className = "msg err";
+        return;
+      }
+
+      btn.disabled = true;
+      msg.textContent = "Submitting...";
+      msg.className = "msg";
+
+      try {
+        const resp = await fetch(`/plugin-io/api/supervisor_cosign/cosign/{{ note_id }}/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            template: template,
+            attestation_text: attestation,
+            additional_comments: additional,
+          }),
+        });
+        if (resp.ok) {
+          msg.textContent = "Co-sign recorded. Refresh the chart to update the button.";
+          msg.className = "msg ok";
+        } else {
+          let errorMsg = `Error (HTTP ${resp.status})`;
+          try {
+            const data = await resp.json();
+            errorMsg = data.error || errorMsg;
+          } catch (e) {
+            try {
+              const txt = await resp.text();
+              if (txt) errorMsg = txt.slice(0, 300);
+            } catch (e2) {}
+          }
+          msg.textContent = errorMsg;
+          msg.className = "msg err";
+          btn.disabled = false;
+        }
+      } catch (err) {
+        msg.textContent = `Request failed: ${err && err.message ? err.message : err}`;
+        msg.className = "msg err";
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
