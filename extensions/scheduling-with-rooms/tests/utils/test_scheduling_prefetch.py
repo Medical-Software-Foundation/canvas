@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from scheduling_with_rooms.models.staff_slot_config import prefetch_concurrent_limits
 from scheduling_with_rooms.utils.scheduling_logic import (
+    HoldWindow,
     _get_blocking_appointments,
     build_month_slot_counts,
     prefetch_blocking_appointments,
@@ -82,8 +83,8 @@ def _appointments(rows):
 
 def test_prefetch_appointments_groups_by_staff_and_converts_to_local():
     rows = [
-        ("s1", datetime.datetime(2026, 5, 7, 18, 0, tzinfo=UTC), 30),
-        ("s2", datetime.datetime(2026, 5, 7, 19, 0, tzinfo=UTC), 60),
+        (1, "s1", datetime.datetime(2026, 5, 7, 18, 0, tzinfo=UTC), 30, 10, None),
+        (2, "s2", datetime.datetime(2026, 5, 7, 19, 0, tzinfo=UTC), 60, 11, None),
     ]
     patcher, mock = _appointments(rows)
     try:
@@ -101,6 +102,27 @@ def test_prefetch_appointments_groups_by_staff_and_converts_to_local():
         assert result["s2"] == [
             (datetime.datetime(2026, 5, 7, 15, 0), datetime.datetime(2026, 5, 7, 16, 0))
         ]
+        assert mock.objects.filter.call_count == 1
+    finally:
+        patcher.stop()
+
+
+def test_prefetch_appointments_marks_imported_holds_and_dedupes_join_rows():
+    start = datetime.datetime(2026, 5, 7, 18, 0, tzinfo=UTC)
+    rows = [
+        (1, "s1", start, 30, None, "gcal-sync"),
+        (1, "s1", start, 30, None, "other-system"),
+        (2, "s1", start, 30, 10, None),
+    ]
+    patcher, mock = _appointments(rows)
+    try:
+        result = prefetch_blocking_appointments(
+            ["s1"], datetime.datetime(2026, 5, 1), datetime.datetime(2026, 6, 1)
+        )
+
+        assert len(result["s1"]) == 2
+        assert isinstance(result["s1"][0], HoldWindow)
+        assert not isinstance(result["s1"][1], HoldWindow)
         assert mock.objects.filter.call_count == 1
     finally:
         patcher.stop()
@@ -134,8 +156,8 @@ def test_prefetch_appointments_widens_the_window_for_utc_offset():
 
 def test_prefetch_appointments_skips_rows_missing_start_or_duration():
     rows = [
-        ("s1", None, 30),
-        ("s1", datetime.datetime(2026, 5, 7, 18, 0, tzinfo=UTC), None),
+        (1, "s1", None, 30, 10, None),
+        (2, "s1", datetime.datetime(2026, 5, 7, 18, 0, tzinfo=UTC), None, 10, None),
     ]
     patcher, _ = _appointments(rows)
     try:

@@ -12,6 +12,7 @@ import pytest
 
 from scheduling_with_rooms.utils.scheduling_logic import (
     SLOT_STEP_MINUTES,
+    HoldWindow,
     _count_overlaps,
     _generate_time_slots_from_windows,
     _get_blocking_appointments,
@@ -170,9 +171,10 @@ def test_get_blocking_appointments_includes_only_overlapping():
         "scheduling_with_rooms.utils.scheduling_logic.Appointment"
     ) as mock_appt:
         mock_appt.objects.filter.return_value.exclude.return_value.values_list.return_value = [
-            (appt_start, 30, "booked"),
-            (far_appt_start, 30, "booked"),  # overlapping window check filters out
-            (None, 30, "booked"),  # missing start dropped
+            (1, "p1", appt_start, 30, 10, None),
+            # The overlapping-window check filters this one out.
+            (2, "p1", far_appt_start, 30, 10, None),
+            (3, "p1", None, 30, 10, None),  # missing start dropped
         ]
         day_start = datetime.datetime(2026, 5, 7, 8, 0)
         day_end = datetime.datetime(2026, 5, 7, 18, 0)
@@ -188,7 +190,7 @@ def test_get_blocking_appointments_no_calendar_tz():
         "scheduling_with_rooms.utils.scheduling_logic.Appointment"
     ) as mock_appt:
         mock_appt.objects.filter.return_value.exclude.return_value.values_list.return_value = [
-            (appt_start, 30, "booked"),
+            (1, "p1", appt_start, 30, 10, None),
         ]
         day_start = datetime.datetime(2026, 5, 7, 8, 0)
         day_end = datetime.datetime(2026, 5, 7, 18, 0)
@@ -204,7 +206,7 @@ def test_get_blocking_appointments_naive_starts():
         "scheduling_with_rooms.utils.scheduling_logic.Appointment"
     ) as mock_appt:
         mock_appt.objects.filter.return_value.exclude.return_value.values_list.return_value = [
-            (naive_start, 30, "booked"),
+            (1, "p1", naive_start, 30, 10, None),
         ]
         day_start = datetime.datetime(2026, 5, 7, 8, 0)
         day_end = datetime.datetime(2026, 5, 7, 18, 0)
@@ -282,6 +284,76 @@ def test_build_plain_slots_concurrent_limit_two():
         result = build_plain_slots("p1", "loc", "2026-05-07", 30)
         # Concurrent limit is 2, only 1 booking → both slots available
         assert len(result) == 2
+
+
+def test_build_plain_slots_imported_hold_is_a_hard_block_above_limit_one():
+    """An imported calendar hold closes its slot even when the limit allows overlap."""
+    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 10, 0))]
+    booked = [
+        HoldWindow(
+            (datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 9, 30))
+        )
+    ]
+    with patch(
+        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
+        return_value=win,
+    ), patch(
+        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
+        return_value=booked,
+    ), patch(
+        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
+        return_value=[],
+    ), patch(
+        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
+        return_value=4,
+    ):
+        result = build_plain_slots("p1", "loc", "2026-05-07", 30)
+        # Only the 9:30 slot survives; a plain booking here would leave both open.
+        assert [slot["start"] for slot in result] == ["2026-05-07T09:30:00"]
+
+
+def test_get_blocking_appointments_marks_patientless_gcal_holds():
+    start = datetime.datetime(2026, 5, 7, 10, 0, tzinfo=datetime.UTC)
+    with patch(
+        "scheduling_with_rooms.utils.scheduling_logic.Appointment"
+    ) as mock_appt:
+        mock_appt.objects.filter.return_value.exclude.return_value.values_list.return_value = [
+            (1, "p1", start, 60, None, "gcal-sync"),  # imported hold
+            (2, "p1", start, 60, 10, None),  # patient visit
+            (3, "p1", start, 60, None, None),  # room/admin event, no identifier
+            (4, "p1", start, 60, None, "other-system"),  # other identifier
+            (5, "p1", start, 60, 11, "gcal-sync"),  # has a patient: not a hold
+        ]
+        day_start = datetime.datetime(2026, 5, 7, 8, 0)
+        day_end = datetime.datetime(2026, 5, 7, 18, 0)
+        result = _get_blocking_appointments("p1", day_start, day_end, "UTC")
+
+    assert len(result) == 5
+    assert [isinstance(w, HoldWindow) for w in result] == [True, False, False, False, False]
+
+
+def test_get_blocking_appointments_counts_multi_identifier_appointment_once():
+    start = datetime.datetime(2026, 5, 7, 10, 0, tzinfo=datetime.UTC)
+    with patch(
+        "scheduling_with_rooms.utils.scheduling_logic.Appointment"
+    ) as mock_appt:
+        # The identifier join returns one row per identifier.
+        mock_appt.objects.filter.return_value.exclude.return_value.values_list.return_value = [
+            (1, "p1", start, 60, None, "other-system"),
+            (1, "p1", start, 60, None, "gcal-sync"),
+            (2, "p1", start, 60, 10, "a"),
+            (2, "p1", start, 60, 10, "b"),
+        ]
+        result = _get_blocking_appointments(
+            "p1",
+            datetime.datetime(2026, 5, 7, 8, 0),
+            datetime.datetime(2026, 5, 7, 18, 0),
+            "UTC",
+        )
+
+    assert len(result) == 2
+    assert isinstance(result[0], HoldWindow)
+    assert not isinstance(result[1], HoldWindow)
 
 
 # build_all_provider_slots ----------------------------------------------
@@ -426,6 +498,39 @@ def test_build_all_room_slots_with_allowed_keys():
         # 9-11 window with 60-min appt + step=duration → 2 slots (9, 10).
         assert len(result) == 1
         assert len(result[0]["slots"]) == 2
+
+
+def test_build_all_room_slots_imported_hold_carves_the_window_but_room_bookings_count():
+    rr = MagicMock()
+    rr.id = "r1"
+    rr.full_name = "Exam 1"
+
+    win = [(datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 12, 0))]
+    hold = HoldWindow(
+        (datetime.datetime(2026, 5, 7, 9, 0), datetime.datetime(2026, 5, 7, 10, 0))
+    )
+    room_booking = (datetime.datetime(2026, 5, 7, 10, 0), datetime.datetime(2026, 5, 7, 11, 0))
+
+    with patch(
+        "scheduling_with_rooms.utils.scheduling_logic.get_availability_windows",
+        return_value=win,
+    ), patch(
+        "scheduling_with_rooms.utils.scheduling_logic.get_blocking_calendar_events",
+        return_value=[],
+    ), patch(
+        "scheduling_with_rooms.utils.scheduling_logic._get_blocking_appointments",
+        return_value=[hold, room_booking],
+    ), patch(
+        "scheduling_with_rooms.utils.scheduling_logic.get_concurrent_limit",
+        return_value=2,
+    ):
+        result = build_all_room_slots("2026-05-07", 60, room_staff=[rr])
+
+    # 9:00 is carved out by the hold; 10:00 has one room booking under a limit of 2.
+    assert [slot["start"] for slot in result[0]["slots"]] == [
+        "2026-05-07T10:00:00",
+        "2026-05-07T11:00:00",
+    ]
 
 
 def test_build_all_room_slots_empty_after_subtract():

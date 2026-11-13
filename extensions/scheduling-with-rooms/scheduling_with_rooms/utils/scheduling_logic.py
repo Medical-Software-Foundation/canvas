@@ -31,6 +31,58 @@ _NON_BLOCKING_STATUSES = (
 # How often a provider slot may start within an availability window.
 SLOT_STEP_MINUTES = 30
 
+# External-identifier systems whose patient-less appointments are calendar
+# holds imported from a provider's outside calendar (``gcal_sync`` stamps
+# ``gcal-sync``). Such a hold means "the provider is busy", so it closes the
+# slot outright instead of using up one unit of the concurrent-slot limit.
+# Keyed on the identifier rather than the note type so this plugin's own
+# room events, which are also patient-less schedule events, stay counted
+# against each room's capacity.
+HARD_BLOCK_EXTERNAL_SYSTEMS = frozenset({"gcal-sync"})
+
+
+class HoldWindow(tuple):
+    """A ``(start, end)`` window for an imported calendar hold.
+
+    Behaves exactly like the plain ``(start, end)`` tuples in a booked list,
+    so capacity counting and every existing caller are unchanged; the slot
+    builders pick these out with :func:`_hold_windows` and treat them as hard
+    blocks.
+    """
+
+
+def _hold_windows(
+    booked: list[tuple[datetime.datetime, datetime.datetime]],
+) -> list[tuple[datetime.datetime, datetime.datetime]]:
+    """The imported-calendar holds in a booked list (see :class:`HoldWindow`)."""
+    return [window for window in booked if isinstance(window, HoldWindow)]
+
+
+def _merge_appointment_rows(rows) -> list[tuple[Any, Any, Any, bool]]:
+    """Collapse joined appointment rows to one ``(staff, start, duration, is_hold)`` each.
+
+    ``rows`` are ``(id, staff, start, duration, patient, external_system)``.
+    Reading the external identifier through the join yields one row per
+    identifier, so an appointment with several identifiers would otherwise be
+    counted several times against capacity.
+    """
+    merged: dict[Any, list[Any]] = {}
+    for appt_id, staff, start, duration, patient, system in rows:
+        is_hold = patient is None and system in HARD_BLOCK_EXTERNAL_SYSTEMS
+        entry = merged.get(appt_id)
+        if entry is None:
+            merged[appt_id] = [staff, start, duration, is_hold]
+        elif is_hold:
+            entry[3] = True
+    return [(e[0], e[1], e[2], e[3]) for e in merged.values()]
+
+
+def _window(
+    local_start: datetime.datetime, duration: int, is_hold: bool
+) -> tuple[datetime.datetime, datetime.datetime]:
+    end = local_start + datetime.timedelta(minutes=duration)
+    return HoldWindow((local_start, end)) if is_hold else (local_start, end)
+
 
 def _count_overlaps(
     slot_start: datetime.datetime,
@@ -140,19 +192,26 @@ def prefetch_blocking_appointments(
             start_time__gte=range_start - _UTC_OFFSET_BUFFER,
         )
         .exclude(status__in=_NON_BLOCKING_STATUSES)
-        .values_list("provider__id", "start_time", "duration_minutes")
+        .values_list(
+            "id",
+            "provider__id",
+            "start_time",
+            "duration_minutes",
+            "patient",
+            "external_identifiers__system",
+        )
     )
 
     tz = ZoneInfo(calendar_tz) if calendar_tz else None
     by_staff: dict[str, list[tuple[datetime.datetime, datetime.datetime]]] = {
         staff_id: [] for staff_id in ids
     }
-    for staff_id, start, duration in rows:
+    for staff_id, start, duration, is_hold in _merge_appointment_rows(rows):
         if not start or not duration:
             continue
         local_start = _to_calendar_local(start, tz)
         by_staff.setdefault(str(staff_id), []).append(
-            (local_start, local_start + datetime.timedelta(minutes=duration))
+            _window(local_start, duration, is_hold)
         )
 
     log.info(
@@ -183,6 +242,9 @@ def _get_blocking_appointments(
     Uses a blacklist approach: all appointments block EXCEPT explicitly
     non-blocking statuses (cancelled, noshowed).
 
+    Imported calendar holds come back as :class:`HoldWindow` entries, which
+    the slot builders treat as hard blocks rather than capacity.
+
     ``booked_cache`` — from :func:`prefetch_blocking_appointments` — replaces
     the query with an in-memory filter, for callers sweeping many days.
     """
@@ -200,18 +262,25 @@ def _get_blocking_appointments(
             start_time__gte=day_start - _UTC_OFFSET_BUFFER,
         )
         .exclude(status__in=_NON_BLOCKING_STATUSES)
-        .values_list("start_time", "duration_minutes", "status")
+        .values_list(
+            "id",
+            "provider__id",
+            "start_time",
+            "duration_minutes",
+            "patient",
+            "external_identifiers__system",
+        )
     )
 
     tz = ZoneInfo(calendar_tz) if calendar_tz else None
 
     result: list[tuple[datetime.datetime, datetime.datetime]] = []
-    for start, duration, _status in appts:
+    for _staff, start, duration, is_hold in _merge_appointment_rows(appts):
         if start and duration:
             local_start = _to_calendar_local(start, tz)
-            end = local_start + datetime.timedelta(minutes=duration)
-            if end > day_start and local_start < day_end:
-                result.append((local_start, end))
+            window = _window(local_start, duration, is_hold)
+            if window[1] > day_start and local_start < day_end:
+                result.append(window)
     return result
 
 
@@ -258,10 +327,13 @@ def build_plain_slots(
     booked = _get_blocking_appointments(
         provider_id, day_start, day_end, calendar_tz, booked_cache=booked_cache
     )
+    # Administrative calendar events and imported calendar holds both mean
+    # the provider is busy: either one closes the slot whatever the
+    # concurrent limit is.
     hard_blocks = get_blocking_calendar_events(
         provider_id, date, calendar_tz,
         staff_cache=staff_cache, calendar_cache=calendar_cache,
-    )
+    ) + _hold_windows(booked)
     concurrent_limit = get_concurrent_limit(provider_id, cache=limit_cache)
     log.info(
         "slots: provider=%s, date=%s, %d candidate slots, %d booked, %d hard blocks, concurrent_limit=%d",
@@ -510,6 +582,18 @@ def build_all_room_slots(
         hard_blocks = get_blocking_calendar_events(
             rr_id, date, calendar_tz,
             staff_cache=staff_cache, calendar_cache=calendar_cache,
+        )
+        # An imported calendar hold on the room's own calendar is a hard block
+        # too. Room bookings themselves carry no external identifier, so they
+        # stay capacity-counted below.
+        hard_blocks = hard_blocks + _hold_windows(
+            _get_blocking_appointments(
+                rr_id,
+                min(w[0] for w in windows),
+                max(w[1] for w in windows),
+                calendar_tz,
+                booked_cache=booked_cache,
+            )
         )
         # Subtract hard blocks from the room's window, then start each free
         # sub-window's first slot at the earliest available time inside it
