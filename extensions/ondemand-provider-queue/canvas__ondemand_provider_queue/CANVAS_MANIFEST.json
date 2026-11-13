@@ -1,0 +1,119 @@
+{
+    "sdk_version": "0.260.0",
+    "plugin_version": "0.8.0",
+    "name": "canvas__ondemand_provider_queue",
+    "description": "A live queue for on-demand visits. An outside system adds patients with an API key; staff see who is waiting, assign a provider, start the visit (which creates the note), pause and resume. Locking the note completes the entry. Entries are stored in Canvas custom data, one row each, so two providers can't claim the same patient. Off until QUEUE_ENABLED is true.",
+    "components": {
+        "handlers": [
+            {
+                "class": "canvas__ondemand_provider_queue.handlers.queue_api:QueueIntakeAPI",
+                "description": "POST /intake/queue-request: adds a patient to the queue. Requires Authorization: Bearer <QUEUE_API_KEY>.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient"],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas__ondemand_provider_queue.handlers.queue_api:QueueAPI",
+                "description": "Staff-only routes for the queue screen: list, assign, start, pause, resume, and optional demo tools.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff"],
+                    "write": ["Note"]
+                }
+            },
+            {
+                "class": "canvas__ondemand_provider_queue.handlers.websocket:QueueWebSocket",
+                "description": "Live update channel for open queue screens. Signed-in staff only.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "canvas__ondemand_provider_queue.handlers.note_locked:CompleteOnNoteLock",
+                "description": "Completes the queue entry whose visit note was locked.",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": ["Note"],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "canvas__ondemand_provider_queue.applications.queue_app:ProviderQueueApp",
+                "name": "Provider Queue",
+                "description": "Live queue of patients waiting for an on-demand visit.",
+                "icon": "assets/icon.png",
+                "scope": "global"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "canvas__ondemand_provider_queue",
+        "access": "read_write"
+    },
+    "variables": [
+        {"name": "QUEUE_ENABLED", "sensitive": false, "default": "false"},
+        {"name": "QUEUE_API_KEY", "sensitive": true},
+        {"name": "QUEUE_STAFF_IDS", "sensitive": false, "default": ""},
+        {"name": "DEFAULT_NOTE_TYPE_ID", "sensitive": false, "default": ""},
+        {"name": "DEFAULT_PRACTICE_LOCATION_ID", "sensitive": false, "default": ""},
+        {"name": "DEMO_MODE_ENABLED", "sensitive": false, "default": "false"},
+        {"name": "DEMO_PATIENT_IDS", "sensitive": false, "default": ""},
+        {"name": "QUEUE_STORAGE", "sensitive": false, "default": "canvas"},
+        {"name": "AWS_ACCESS_KEY", "sensitive": true},
+        {"name": "AWS_SECRET_KEY", "sensitive": true},
+        {"name": "S3_BUCKET", "sensitive": false, "default": ""},
+        {"name": "S3_REGION", "sensitive": false, "default": ""},
+        {"name": "S3_OBJECT_KEY", "sensitive": false, "default": "ondemand-provider-queue/queue.json"}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md",
+    "catalog": {
+        "title": "On-Demand Provider Queue",
+        "kind": "plugin",
+        "category": "Scheduling",
+        "surfaces": ["Waffle", "Background"],
+        "keywords": ["queue", "on-demand", "urgent-care", "telehealth", "virtual-visits", "triage", "waiting-room", "real-time"],
+        "screenshots": [
+            {
+                "path": "catalog/82-1-queue-empty.png",
+                "caption": "Empty queue",
+                "alt": "The Provider Queue screen with no patients waiting."
+            },
+            {
+                "path": "catalog/82-2-patient-added.png",
+                "caption": "Patient added",
+                "alt": "A demo patient appears in the queue as awaiting assignment."
+            },
+            {
+                "path": "catalog/82-3-assigned-to-provider.png",
+                "caption": "Assigned to a provider",
+                "alt": "Assigning a provider moves the entry to Waiting for Provider."
+            },
+            {
+                "path": "catalog/82-4-visit-started.png",
+                "caption": "Visit started",
+                "alt": "Start Visit creates the note and the entry shows In Progress with a Pause button."
+            },
+            {
+                "path": "catalog/82-5-visit-paused.png",
+                "caption": "Visit paused",
+                "alt": "A paused visit shows Paused with a Resume button."
+            }
+        ],
+        "setup_guide": "catalog/SETUP.md",
+        "setup_instructions": "catalog/SETUP-AGENT.md"
+    }
+}
