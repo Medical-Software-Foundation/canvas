@@ -41,6 +41,7 @@ class FakeNote:
         self.id = note_id
         self.title = title
         self.modified = None
+        self.datetime_of_service = None
         self.note_type_version = None
 
 
@@ -402,6 +403,33 @@ def test_open_notes_lists(make_request):
     data = _body(resp)
     assert data["notes"][0]["id"] == "note-1"
     assert data["notes"][0]["title"] == "Office Visit"
+    assert data["notes"][0]["datetime_of_service"] is None
+
+
+def test_open_notes_reports_date_of_service(make_request):
+    from datetime import datetime, timezone
+
+    note = FakeNote("note-1", title="Annual Visit")
+    note.datetime_of_service = datetime(2026, 10, 12, 16, 30, tzinfo=timezone.utc)
+    handler = _route(OpenNotesAPI, make_request(query={"patient_id": "pat-1"}))
+    with patch.object(favorites_api, "_open_notes_for_patient", return_value=[note]):
+        [resp] = handler.get()
+    assert _body(resp)["notes"][0]["datetime_of_service"] == "2026-10-12T16:30:00+00:00"
+
+
+def test_booked_appointment_notes_are_insert_targets():
+    # A booked (not yet checked in) appointment note is writable, so orders can
+    # be staged into it ahead of the visit.
+    assert favorites_api.NoteStates.BOOKED in favorites_api.OPEN_NOTE_STATES
+    # Closed states stay excluded.
+    for state in (
+        favorites_api.NoteStates.LOCKED,
+        favorites_api.NoteStates.SIGNED,
+        favorites_api.NoteStates.DELETED,
+        favorites_api.NoteStates.CANCELLED,
+        favorites_api.NoteStates.NOSHOW,
+    ):
+        assert state not in favorites_api.OPEN_NOTE_STATES
 
 
 # --- InsertFavoriteAPI ---
@@ -467,8 +495,12 @@ def test_insert_multiple_favorites(make_request, make_staff, make_partner):
     data = _body(result[0])
     assert len(data["inserted"]) == 2
     assert data["skipped"] == []
-    assert result[1:] == ["EFFECT", "EFFECT"]  # one effect per favorite
-    assert cmd_cls.call_count == 2
+    # Same lab partner and provider: combined into one order (one requisition).
+    assert data["order_count"] == 1
+    assert result[1:] == ["EFFECT"]
+    assert cmd_cls.call_count == 1
+    _, kwargs = cmd_cls.call_args
+    assert kwargs["tests_order_codes"] == ["001", "002"]
 
 
 def test_insert_mixed_valid_and_stale(make_request, make_staff, make_partner):
@@ -908,26 +940,50 @@ def test_open_notes_helper_non_uuid_returns_empty():
     assert list(favorites_api._open_notes_for_patient("not-a-uuid")) == []
 
 
-def test_open_notes_helper_builds_filtered_queryset():
-    patient = MagicMock()
-    note_qs = MagicMock()
-    note_qs.select_related.return_value.order_by.return_value = ["NOTE_QS"]
-    with patch.object(favorites_api.Patient.objects, "get", return_value=patient), \
-         patch.object(favorites_api.CurrentNoteStateEvent, "objects") as states, \
-         patch.object(favorites_api.Note, "objects") as notes:
-        states.filter.return_value.values_list.return_value = [1, 2]
-        notes.filter.return_value = note_qs
-        result = favorites_api._open_notes_for_patient("11111111-1111-1111-1111-111111111111")
-    assert result == ["NOTE_QS"]
-    assert notes.filter.call_args.kwargs["patient"] is patient
-    # The open-note state filter is the safety gate (no staging into locked/signed notes).
-    assert states.filter.call_args.kwargs["state__in"] == favorites_api.OPEN_NOTE_STATES
-    # Only encounter and chart review notes are insert targets - messages/letters,
-    # which never lock, are excluded by category.
-    assert (
-        notes.filter.call_args.kwargs["note_type_version__category__in"]
-        == favorites_api.INSERT_TARGET_CATEGORIES
-    )
+def _note_in_state(patient, category, state):
+    """Create a note of the given note type category whose current state is `state`."""
+    from canvas_sdk.test_utils.factories import NoteFactory, NoteTypeFactory
+
+    note = NoteFactory.create(patient=patient, note_type_version=NoteTypeFactory.create(category=category))
+    # The SDK reads the current state from a view over the state change events;
+    # in the test database it is a plain table, so set the row directly.
+    favorites_api.CurrentNoteStateEvent.objects.update_or_create(note=note, defaults={"state": state})
+    return note
+
+
+def test_open_notes_helper_filters_by_category_and_state():
+    from canvas_sdk.test_utils.factories import PatientFactory
+
+    Cat = favorites_api.NoteTypeCategories
+    St = favorites_api.NoteStates
+    patient = PatientFactory.create()
+    other_patient = PatientFactory.create()
+
+    open_visit = _note_in_state(patient, Cat.ENCOUNTER, St.NEW)
+    checked_in = _note_in_state(patient, Cat.ENCOUNTER, St.CONVERTED)
+    open_review = _note_in_state(patient, Cat.REVIEW, St.NEW)
+    booked_appointment = _note_in_state(patient, Cat.APPOINTMENT, St.BOOKED)
+    booked_encounter = _note_in_state(patient, Cat.ENCOUNTER, St.BOOKED)
+    excluded = [
+        _note_in_state(patient, Cat.ENCOUNTER, St.LOCKED),
+        _note_in_state(patient, Cat.APPOINTMENT, St.SCHEDULING),
+        _note_in_state(patient, Cat.APPOINTMENT, St.CANCELLED),
+        _note_in_state(patient, Cat.APPOINTMENT, St.NOSHOW),
+        _note_in_state(patient, Cat.MESSAGE, St.NEW),
+        _note_in_state(patient, Cat.LETTER, St.NEW),
+        _note_in_state(other_patient, Cat.APPOINTMENT, St.BOOKED),
+    ]
+
+    result = {n.dbid for n in favorites_api._open_notes_for_patient(str(patient.id))}
+
+    assert result == {
+        open_visit.dbid,
+        checked_in.dbid,
+        open_review.dbid,
+        booked_appointment.dbid,
+        booked_encounter.dbid,
+    }
+    assert not result & {n.dbid for n in excluded}
 
 
 # --- CreateChartReviewAPI ---
@@ -1067,3 +1123,140 @@ def test_create_review_skips_all_does_not_create_note(make_request, make_staff):
     assert data["chart_review_created"] is False
     assert len(data["skipped"]) == 1
     note_cls.assert_not_called()
+
+
+# --- Combining favorites into one order ---
+
+def _fav(staff, partner, codes, **extra):
+    payload = {
+        "name": extra.pop("name", "Fav " + "+".join(codes)),
+        "lab_partner_id": str(partner.id),
+        "lab_partner_name": partner.name,
+        "tests": [{"order_code": c, "order_name": c, "cpt_code": ""} for c in codes],
+    }
+    payload.update(extra)
+    return FavoritesService().create_favorite(payload, str(staff.id))
+
+
+def _insert(make_request, staff, favorite_ids):
+    body = {"favorite_ids": favorite_ids, "patient_id": "pat-1", "note_uuid": "note-1"}
+    handler = _route(InsertFavoriteAPI, make_request(staff_id=str(staff.id), body=body))
+    fake_cmd = MagicMock()
+    fake_cmd.originate.return_value = "EFFECT"
+    with patch.object(favorites_api, "_open_notes_for_patient", return_value=[FakeNote("note-1")]), \
+         patch.object(favorites_api, "LabOrderCommand", return_value=fake_cmd) as cmd_cls:
+        result = handler.post()
+    return _body(result[0]), result[1:], [call.kwargs for call in cmd_cls.call_args_list]
+
+
+def test_combined_order_merges_tests_diagnoses_fasting_and_comments(make_request, make_staff, make_partner):
+    staff = make_staff()
+    partner = make_partner(tests=[("322000", "CMP"), ("005009", "CBC"), ("303756", "Lipid"), ("004259", "TSH")])
+    cmp_cbc = _fav(staff, partner, ["322000", "005009"], diagnosis_codes=["Z00.00"], fasting_required=True, comment="Fasting 8h")
+    lipid = _fav(staff, partner, ["303756", "005009"], diagnosis_codes=["Z00.00", "E78.5"], comment="Annual")
+    tsh = _fav(staff, partner, ["004259"], comment="Fasting 8h")
+
+    data, effects, calls = _insert(make_request, staff, [cmp_cbc["id"], lipid["id"], tsh["id"]])
+
+    assert data["order_count"] == 1
+    assert len(data["inserted"]) == 3
+    assert effects == ["EFFECT"]
+    [kwargs] = calls
+    assert kwargs["note_uuid"] == "note-1"
+    assert kwargs["lab_partner"] == str(partner.id)
+    # The CBC shared by two favorites is ordered once; selection order is kept.
+    assert kwargs["tests_order_codes"] == ["322000", "005009", "303756", "004259"]
+    assert kwargs["diagnosis_codes"] == ["Z00.00", "E78.5"]
+    assert kwargs["fasting_required"] is True
+    assert kwargs["comment"] == "Fasting 8h; Annual"
+    assert kwargs["ordering_provider_key"] == str(staff.id)
+
+
+def test_different_lab_partners_stay_separate_orders(make_request, make_staff, make_partner):
+    staff = make_staff()
+    labcorp = make_partner(name="LabCorp", tests=[("322000", "CMP")])
+    quest = make_partner(name="Quest", tests=[("10231", "CMP")])
+    a = _fav(staff, labcorp, ["322000"])
+    b = _fav(staff, quest, ["10231"])
+
+    data, effects, calls = _insert(make_request, staff, [a["id"], b["id"]])
+
+    assert data["order_count"] == 2
+    assert [c["lab_partner"] for c in calls] == [str(labcorp.id), str(quest.id)]
+
+
+def test_different_ordering_providers_stay_separate_orders(make_request, make_staff, make_partner):
+    staff = make_staff()
+    other = make_staff(first_name="Order", last_name="Doc", npi_number="1234567890")
+    partner = make_partner(tests=[("001", "Glucose"), ("002", "Lipid"), ("003", "TSH")])
+    mine = _fav(staff, partner, ["001"])
+    theirs = _fav(staff, partner, ["002"], ordering_provider_key=str(other.id), ordering_provider_name="Order Doc")
+    mine_again = _fav(staff, partner, ["003"])
+
+    data, effects, calls = _insert(make_request, staff, [mine["id"], theirs["id"], mine_again["id"]])
+
+    assert data["order_count"] == 2
+    assert [(c["ordering_provider_key"], c["tests_order_codes"]) for c in calls] == [
+        (str(staff.id), ["001", "003"]),
+        (str(other.id), ["002"]),
+    ]
+
+
+def test_comment_over_limit_starts_a_separate_order(make_request, make_staff, make_partner):
+    staff = make_staff()
+    partner = make_partner(tests=[("001", "Glucose"), ("002", "Lipid"), ("003", "TSH")])
+    long_a = "A" * 70
+    long_b = "B" * 70  # "A...; B..." would be 142 characters, over the 128 limit
+    a = _fav(staff, partner, ["001"], comment=long_a)
+    b = _fav(staff, partner, ["002"], comment=long_b)
+    c = _fav(staff, partner, ["003"])  # no comment, so it joins the first order
+
+    data, effects, calls = _insert(make_request, staff, [a["id"], b["id"], c["id"]])
+
+    assert data["order_count"] == 2
+    assert [(k["tests_order_codes"], k["comment"]) for k in calls] == [
+        (["001", "003"], long_a),
+        (["002"], long_b),
+    ]
+    assert all(len(k["comment"]) <= favorites_api.LAB_ORDER_COMMENT_MAX_LENGTH for k in calls)
+
+
+def test_skipped_favorite_does_not_block_combining_the_rest(make_request, make_staff, make_partner):
+    staff = make_staff()
+    partner = make_partner(tests=[("001", "Glucose"), ("002", "Lipid")])
+    a = _fav(staff, partner, ["001"])
+    stale = _fav(staff, partner, ["999"])
+    b = _fav(staff, partner, ["002"])
+
+    data, effects, calls = _insert(make_request, staff, [a["id"], stale["id"], b["id"]])
+
+    assert data["order_count"] == 1
+    assert [s["favorite_id"] for s in data["skipped"]] == [stale["id"]]
+    assert calls[0]["tests_order_codes"] == ["001", "002"]
+
+
+def test_create_review_combines_favorites(make_request, make_staff, make_partner):
+    staff = make_staff()
+    partner = make_partner(tests=[("001", "Glucose"), ("002", "Lipid")])
+    a = _fav(staff, partner, ["001"])
+    b = _fav(staff, partner, ["002"])
+    pid = "11111111-1111-1111-1111-111111111111"
+    body = {"favorite_ids": [a["id"], b["id"]], "patient_id": pid}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+
+    fake_cmd = MagicMock()
+    fake_cmd.originate.return_value = "ORDER_EFFECT"
+    fake_note = MagicMock()
+    fake_note.create.return_value = "NOTE_EFFECT"
+    with patch.object(favorites_api, "Patient") as P, \
+         patch.object(favorites_api, "chart_review_note_type_id", return_value="review-type-id"), \
+         patch.object(favorites_api, "default_practice_location_id", return_value="loc-id"), \
+         patch.object(favorites_api, "NoteEffect", return_value=fake_note), \
+         patch.object(favorites_api, "LabOrderCommand", return_value=fake_cmd) as cmd_cls:
+        P.objects.filter.return_value.exists.return_value = True
+        result = handler.post()
+
+    data = _body(result[0])
+    assert data["order_count"] == 1
+    assert result[1:] == ["NOTE_EFFECT", "ORDER_EFFECT"]
+    assert cmd_cls.call_args.kwargs["tests_order_codes"] == ["001", "002"]
