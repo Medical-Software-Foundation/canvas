@@ -1,88 +1,50 @@
-# CMS138v6 - Preventive Care and Screening: Tobacco Use: Screening and Cessation Intervention
+# CMS138v15 Preventive Care and Screening: Tobacco Use: Screening and Cessation Intervention
 
-## Target Population
+A Canvas SDK plugin that implements [CMS138v15](https://ecqi.healthit.gov/ecqm/ec/2027/cms0138v15) for the 2027 performance period. The measurement period is the year ending now.
 
-Patients aged 18 years and older who have either:
+## Initial population
 
-- Had at least one eligible preventive visit in the measurement period, or
-- Had at least two other eligible encounters (office visit, home health,
-  occupational/speech/hearing evaluation, psych visit, ophthalmologic services,
-  or health & behavioral assessments) in the measurement period.
+- Patients 12 or older at the start of the measurement period.
+- At least two qualifying visits, or one preventive visit, during the period.
+- Patients in hospice are excluded.
 
-This protocol is a three-population CQM:
+This is a three-population measure:
 
-- **Population 1**: was the patient screened for tobacco use within 24 months?
-- **Population 2**: if identified as a tobacco user, did the patient receive a
-  cessation intervention (counseling or pharmacotherapy)?
+- **Population 1**: was the patient screened for tobacco use during the measurement period?
+- **Population 2**: if the most recent screening identified a tobacco user, did the patient receive a cessation intervention during the period or the six months before it?
 - **Population 3**: composite of Populations 1 and 2.
 
-## Recommendations
+## Data
 
-| Patient state                              | Card status      | Recommendation(s)                                       |
-| ------------------------------------------ | ---------------- | ------------------------------------------------------- |
-| Under 18                                   | `not_applicable` | (none)                                                  |
-| No eligible visits                         | (no card)        | (none)                                                  |
-| Eligible, current tobacco user, no Rx      | `due`            | `instruct` (cessation counseling) and `prescribe`       |
-| Eligible, no screening on record           | `due`            | `interview` (tobacco use questionnaire)                 |
-| Screened non-user                          | `satisfied`      | (none)                                                  |
-| Tobacco user with counseling on file       | `satisfied`      | (none)                                                  |
-| Tobacco user with cessation Rx on file     | `satisfied`      | (none)                                                  |
+- Screenings are committed questionnaires coded in the Tobacco Use Screening value set; the result is the answer's response option code. Only the most recent screening in the period decides tobacco use status.
+- Counseling is an instruction or procedure coded in the Tobacco Use Cessation Counseling value set, or a tobacco abuse counseling diagnosis (Z71.6) starting in the window.
+- Pharmacotherapy is a cessation medication starting in the window.
 
-## Importance
+## Card
 
-The USPSTF gives tobacco screening and brief cessation intervention a Grade A
-recommendation. Tobacco users who stop using tobacco lower their risk for heart
-disease, lung disease, and stroke. This protocol surfaces gaps in either the
-screening step or the follow-up intervention step.
+| Patient state | Status | Recommendations |
+| --- | --- | --- |
+| Not in the initial population, or in hospice | `not_applicable` | none |
+| No screening in the period | `due` | complete tobacco use questionnaire (`interview`) |
+| Most recent screening: non-user | `satisfied` | none |
+| Tobacco user with an intervention in the window | `satisfied` | none |
+| Tobacco user without an intervention | `due` | cessation counseling (`instruct`) and cessation medication (`prescribe`) |
 
-## Source
+Recommendations open blank commands: the home-app GraphQL layer drops the `context` an SDK recommendation carries, so the clinician picks from the unfiltered instruction, medication, or questionnaire list.
 
-Ported from `canvas_workflow_kit.builtin_cqms.cms138v6_preventive_care_and_screening_tobacco_use_screening_and_cessation_intervention.ClinicalQualityMeasure138v6`.
+## Value sets
 
-Measure spec: https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS138v6.html
+All value sets come from `canvas_sdk.value_set.v2027`, which ships in the SDK release containing [canvas-plugins#2003](https://github.com/canvas-medical/canvas-plugins/pull/2003).
 
-## Gaps
+## Shared code
 
-The legacy workflow-kit protocol has direct access to in-memory record sets
-(`patient.instructions`, `patient.interviews`, etc.) whose schema does not have
-a clean 1:1 mapping in the Canvas SDK. The following gaps were introduced
-during the port:
+`protocols/ecqm_common.py` and `tests/records.py` are identical copies shared with the other eCQM plugins, since plugins cannot import from one another. A test fails when the copies drift.
 
-- The legacy `add_prescribe_recommendation` /
-  `add_instruction_recommendation` / `add_interview_recommendation`
-  helpers built a `command.filter.coding` payload that constrained the
-  downstream command's picker to codes in the value set. The home-app
-  GraphQL layer at
-  [`home-app/api/graphql/protocol/types.py:99-105`](../../../api/graphql/protocol/types.py)
-  distinguishes SDK recommendations from legacy ones by the absence of
-  the legacy `rank` field and emits `ProtocolCommand(type=<command>)`
-  with empty `fields`, bypassing the `_resolve_<command>` resolvers
-  (e.g. `_resolve_instruct` at line 248, `_resolve_interview` at line
-  174) that would otherwise turn `command.filter.coding` into populated
-  fields. Anything passed as `context=` to
-  `ProtocolCard.add_recommendation` is silently dropped at this layer.
-  The recommendations therefore open blank prescribe / instruct /
-  interview commands; the clinician picks from the unfiltered medication,
-  instruction, or questionnaire list. Closing this gap requires updating
-  the home-app GraphQL resolver to populate `ProtocolCommand.fields`
-  from the SDK recommendation's `context` (or to dispatch through the
-  same `_resolve_<command>` resolvers as legacy CQMs do).
-- The `MedicalReason` denominator-exception path (the
-  `assessment_not_performed` / `counseling_not_performed` /
-  `medication_not_ordered` `cached_property` methods in the legacy source) is
-  commented out in the original workflow kit and is **not ported**.
-- `events.HEALTH_MAINTENANCE` does not exist in the SDK. The protocol
-  responds to `PATIENT_CREATED`, `PATIENT_UPDATED`, `CONDITION_CREATED`,
-  `MEDICATION_LIST_ITEM_CREATED`, `BILLING_LINE_ITEM_CREATED`,
-  `INTERVIEW_CREATED`, `INSTRUCTION_CREATED`, and `INSTRUCTION_UPDATED`
-  instead, which collectively cover the relevant data-change paths.
-- The legacy `HealthBehavioralAssessmentIndividual`,
-  `HealthAndBehavioralAssessmentInitial`, and
-  `HealthAndBehavioralAssessmentReassessment` value sets only exist in
-  `canvas_workflow_kit.value_set.v2018`; the SDK distribution does not ship
-  them. They are re-declared inline in
-  `protocols/cms138v6_tobacco_screening_and_cessation.py` (single CPT code
-  each).
-- The `TobaccoUser` and `TobaccoNonUser` value sets only exist in the SDK's
-  `v2026.no_qdm_category_assigned`; the legacy protocol used the v2018
-  versions. The codes are equivalent SNOMED CT concepts.
+## Tests
+
+Tests build real records in the SDK's test database through `pytest-canvas`:
+
+```bash
+CP=/path/to/canvas-plugins
+uv run --frozen --project $CP --with-editable $CP --with-editable $CP/pytest-canvas pytest tests -q
+```

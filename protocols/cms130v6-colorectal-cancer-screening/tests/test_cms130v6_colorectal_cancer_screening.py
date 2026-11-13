@@ -1,270 +1,129 @@
-"""Tests for the CMS130v6 Colorectal Cancer Screening plugin.
+"""CMS130v15 colorectal cancer screening, against real records."""
 
-These tests focus on pure-logic checks: Meta configuration, the supplemental
-value set, the look-back interval table, and the age-range / colon-exclusion
-helpers driven by a stubbed Patient. Database-backed behavior (Condition,
-LabValue, ReferralReport, ImagingReport queries) is exercised by integration
-tests in the Canvas runtime, not here.
-"""
+from __future__ import annotations
 
-from datetime import date
-from unittest.mock import patch
+import hashlib
+from pathlib import Path
 
-import arrow
 import pytest
+from canvas_sdk.value_set.v2027.condition import HospiceDiagnosis, MalignantNeoplasmOfColon
+from canvas_sdk.value_set.v2027.diagnostic_study import CtColonography
+from canvas_sdk.value_set.v2027.encounter import OfficeVisit
+from canvas_sdk.value_set.v2027.laboratory_test import FecalOccultBloodTestFobt, SdnaFitTest
+from canvas_sdk.value_set.v2027.procedure import Colonoscopy, TotalColectomy
 
-from protocols.cms130v6_colorectal_cancer_screening import (
-    SCREENING_INTERVALS,
-    CMS130v6CtColonography,
-    ClinicalQualityMeasure130v6,
-)
+from protocols.cms130v6_colorectal_cancer_screening import ClinicalQualityMeasure130v6
 
+from . import records
 
-class _StubPatient:
-    """Minimal Patient stand-in exposing the attributes the protocol reads."""
-
-    def __init__(self, birth_date: date, first_name: str = "Nat", id: str = "patient-1") -> None:
-        self.birth_date = birth_date
-        self.first_name = first_name
-        self.id = id
-
-    def age_at(self, time: arrow.Arrow) -> float:
-        """Mirror the SDK Patient.age_at implementation closely enough for tests."""
-        birth = arrow.get(self.birth_date)
-        if birth.date() >= time.date():
-            return 0.0
-        age = time.datetime.year - birth.datetime.year
-        if time.datetime.month < birth.datetime.month or (
-            time.datetime.month == birth.datetime.month
-            and time.datetime.day < birth.datetime.day
-        ):
-            age -= 1
-        return float(age)
+PROTOCOLS = Path(__file__).parents[2]
 
 
-def _make_protocol(
-    *,
-    birth_date: date,
-    now: arrow.Arrow,
-    has_exclusion: bool = False,
-) -> ClinicalQualityMeasure130v6:
-    """Build a protocol instance with a stub patient and a mocked exclusion lookup."""
-    protocol = ClinicalQualityMeasure130v6.__new__(ClinicalQualityMeasure130v6)
-    protocol.now = now
-    patient = _StubPatient(birth_date=birth_date)
-    # Pre-seed the memoized patient so accessing self.patient doesn't hit the ORM.
-    protocol._patient = patient
-    protocol.had_colon_exclusion = lambda: has_exclusion  # type: ignore[method-assign]
-    return protocol
+def first(value_set, system: str) -> str:  # noqa: ANN001
+    return sorted(getattr(value_set, system))[0]
 
 
-def test_meta_description() -> None:
-    """The Meta description should match the upstream measure language."""
-    assert ClinicalQualityMeasure130v6.Meta.description == (
-        "Adults 50-75 years of age who have not had appropriate "
-        "screening for colorectal cancer."
-    )
+def eligible(birth_date: str = "1970-01-01"):  # noqa: ANN201
+    """A patient with an office visit in the measurement period."""
+    who = records.patient(birth_date)
+    records.visit(who, first(OfficeVisit, "CPT"), "2027-01-10")
+    return who
 
 
-def test_meta_information() -> None:
-    """The Meta information URL should point at the eCQI specification page."""
-    assert ClinicalQualityMeasure130v6.Meta.information == (
-        "https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS130v6.html"
-    )
+def card(who) -> dict:  # noqa: ANN001
+    return records.card(records.build(ClinicalQualityMeasure130v6, who).compute())
 
 
-def test_meta_version() -> None:
-    """The Meta version should be preserved from the legacy CQM."""
-    assert ClinicalQualityMeasure130v6.Meta.version == "2020-02-24v1"
-
-
-def test_meta_identifiers() -> None:
-    """The identifiers list should contain only CMS130v6."""
-    assert ClinicalQualityMeasure130v6.Meta.identifiers == ["CMS130v6"]
-
-
-def test_meta_types() -> None:
-    """The measure should be tagged as a CQM."""
-    assert ClinicalQualityMeasure130v6.Meta.types == ["CQM"]
-
-
-def test_meta_authors() -> None:
-    """The authors should match the legacy CQM."""
-    assert ClinicalQualityMeasure130v6.Meta.authors == [
-        "National Committee for Quality Assurance"
-    ]
-
-
-def test_age_range_constants() -> None:
-    """Age range should be 50-75 inclusive."""
-    assert ClinicalQualityMeasure130v6.AGE_RANGE_START == 50
-    assert ClinicalQualityMeasure130v6.AGE_RANGE_END == 75
-
-
-def test_protocol_key() -> None:
-    """The protocol_key surfaces CMS130v6 to the runtime."""
-    assert ClinicalQualityMeasure130v6.PROTOCOL_KEY == "CMS130v6"
-
-
-def test_screening_intervals_match_specification() -> None:
-    """Look-back windows should match the eCQM specification."""
-    assert SCREENING_INTERVALS == {
-        "FOBT": 365,
-        "FIT-DNA": 1096,
-        "Flexible sigmoidoscopy": 1826,
-        "CT Colonography": 1826,
-        "Colonoscopy": 3652,
-    }
-
-
-def test_cms130v6_ct_colonography_loinc_supplement() -> None:
-    """The supplemental value set should only include the LOINC 79101-2 code."""
-    assert CMS130v6CtColonography.LOINC == {"79101-2"}
-    assert CMS130v6CtColonography.values == {"LOINC": {"79101-2"}}
-
-
-def test_cms130v6_ct_colonography_combines_with_v2022() -> None:
-    """The supplemental value set should compose with the v2022 CtColonography via | operator."""
-    from canvas_sdk.value_set.v2022.diagnostic_study import CtColonography
-
-    combined = CtColonography | CMS130v6CtColonography
-    combined_values = combined.values
-    assert "79101-2" in combined_values["LOINC"]
-
-
-def test_in_age_range_below_minimum() -> None:
-    """A 49-year-old patient should not be in the age range."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1969, 1, 1), now=now)
-    assert protocol.in_age_range() is False
-
-
-def test_in_age_range_at_minimum() -> None:
-    """A 50-year-old patient should be in the age range."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1968, 8, 22), now=now)
-    assert protocol.in_age_range() is True
-
-
-def test_in_age_range_at_maximum() -> None:
-    """A 75-year-old patient should be in the age range."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1943, 8, 23), now=now)
-    assert protocol.in_age_range() is True
-
-
-def test_in_age_range_above_maximum() -> None:
-    """A 76-year-old patient should not be in the age range."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1942, 8, 22), now=now)
-    assert protocol.in_age_range() is False
-
-
-def test_first_due_in_returns_none_when_already_eligible() -> None:
-    """A patient already 50+ should yield None from first_due_in()."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1968, 8, 22), now=now)
-    assert protocol.first_due_in() is None
-
-
-def test_first_due_in_returns_days_for_younger_patient() -> None:
-    """A patient turning 50 in N days should yield N from first_due_in()."""
-    now = arrow.get("2018-08-23 12:00:00")
-    # Birthday 2018-08-30 + 50 years comparison: shift by 50 from 1968-08-30 = 2018-08-30.
-    protocol = _make_protocol(birth_date=date(1968, 8, 30), now=now)
-    due = protocol.first_due_in()
-    assert due is not None
-    # The legacy test asserted 6, plus or minus a day for the timezone-naive
-    # comparison; allow a small window so the test is not brittle.
-    assert 5 <= due <= 7
-
-
-def test_first_due_in_returns_none_when_exclusion_present() -> None:
-    """An under-50 patient with a colon exclusion should still yield None."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(
-        birth_date=date(1968, 8, 30),
-        now=now,
-        has_exclusion=True,
-    )
-    assert protocol.first_due_in() is None
-
-
-def test_in_denominator_requires_age_range() -> None:
-    """An under-50 patient is never in the denominator regardless of other state."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1980, 1, 1), now=now)
-    assert protocol.in_denominator() is False
-
-
-def test_in_denominator_requires_no_exclusion() -> None:
-    """A 50-75 year old with a colon exclusion should not be in the denominator."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(
-        birth_date=date(1960, 1, 1),
-        now=now,
-        has_exclusion=True,
-    )
-    assert protocol.in_denominator() is False
-
-
-def test_in_denominator_includes_eligible_patient() -> None:
-    """A 50-75 year old without exclusions should be in the denominator."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1960, 1, 1), now=now)
-    assert protocol.in_denominator() is True
-
-
-def test_compute_returns_not_applicable_for_underage_patient() -> None:
-    """An under-50 patient's protocol card should be NOT_APPLICABLE."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1980, 1, 1), now=now)
-    with patch.object(
-        ClinicalQualityMeasure130v6,
-        "_last_exam",
-        new=None,
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-
-
-def test_compute_returns_due_card_when_no_recent_exam() -> None:
-    """An eligible patient with no qualifying exam should yield a DUE card."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1960, 1, 1), now=now)
-    with patch.object(
-        ClinicalQualityMeasure130v6,
-        "_last_exam",
-        new=None,
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-
-
-def test_compute_returns_satisfied_card_when_recent_exam_present() -> None:
-    """An eligible patient with a recent qualifying exam should yield a SATISFIED card."""
-    now = arrow.get("2018-08-23 12:00:00")
-    protocol = _make_protocol(birth_date=date(1960, 1, 1), now=now)
-    exam = {"date": "2018-08-05", "what": "FOBT", "days": SCREENING_INTERVALS["FOBT"]}
-    with patch.object(
-        ClinicalQualityMeasure130v6,
-        "_last_exam",
-        new=exam,
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
+def test_meta_identifies_v15() -> None:
+    """The measure reports the 2027 version."""
+    assert ClinicalQualityMeasure130v6.Meta.identifiers == ["CMS130v15"]
 
 
 @pytest.mark.parametrize(
-    "exam_type,expected_days",
-    [
-        ("FOBT", 365),
-        ("FIT-DNA", 1096),
-        ("Flexible sigmoidoscopy", 1826),
-        ("CT Colonography", 1826),
-        ("Colonoscopy", 3652),
-    ],
+    ("birth_date", "applies"),
+    [("1981-06-15", True), ("1981-06-16", False), ("1951-06-16", True), ("1951-06-15", False)],
 )
-def test_each_exam_type_has_expected_window(exam_type: str, expected_days: int) -> None:
-    """Every screening exam type should have its specification-defined window."""
-    assert SCREENING_INTERVALS[exam_type] == expected_days
+def test_age_range_is_46_to_75(birth_date: str, applies: bool) -> None:
+    """46 and 75 at the end of the period are in; 45 and 76 are out."""
+    protocol = records.build(ClinicalQualityMeasure130v6, eligible(birth_date))
+    assert protocol.in_initial_population() is applies
+
+
+def test_no_screening_is_due() -> None:
+    """Without a screening the patient is due."""
+    assert card(eligible())["status"] == "due"
+
+
+@pytest.mark.parametrize(("when", "expected"), [("2026-07-01", "satisfied"), ("2026-05-01", "due")])
+def test_fobt_counts_only_in_the_period(when: str, expected: str) -> None:
+    """An FOBT with any result counts during the period, not before it."""
+    who = eligible()
+    records.lab(who, records.LOINC, first(FecalOccultBloodTestFobt, "LOINC"), "Negative", when)
+    assert card(who)["status"] == expected
+
+
+@pytest.mark.parametrize(("when", "expected"), [("2024-07-01", "satisfied"), ("2024-05-01", "due")])
+def test_sdna_fit_counts_for_two_years_before(when: str, expected: str) -> None:
+    """An sDNA FIT test counts during the period or the two years before it."""
+    who = eligible()
+    records.lab(who, records.LOINC, first(SdnaFitTest, "LOINC"), "Negative", when)
+    assert card(who)["status"] == expected
+
+
+def test_lab_without_a_result_does_not_count() -> None:
+    """An FOBT with no result value does not count."""
+    who = eligible()
+    records.lab(who, records.LOINC, first(FecalOccultBloodTestFobt, "LOINC"), "", "2027-01-01")
+    assert card(who)["status"] == "due"
+
+
+@pytest.mark.parametrize(("when", "expected"), [("2017-07-01", "satisfied"), ("2017-05-01", "due")])
+def test_colonoscopy_counts_for_nine_years_before(when: str, expected: str) -> None:
+    """A colonoscopy referral report counts during the period or the nine years before it."""
+    who = eligible()
+    records.referral_report(who, records.SNOMEDCT, first(Colonoscopy, "SNOMEDCT"), when)
+    assert card(who)["status"] == expected
+
+
+def test_ct_colonography_imaging_report_counts() -> None:
+    """A CT colonography imaging report in the window satisfies."""
+    who = eligible()
+    records.imaging_report(who, records.LOINC, first(CtColonography, "LOINC"), "2024-01-01")
+    assert card(who)["status"] == "satisfied"
+
+
+def test_card_reports_the_screening_that_lasts_longest() -> None:
+    """A recent FOBT and an older colonoscopy: the colonoscopy sets when screening is next due."""
+    who = eligible()
+    records.lab(who, records.LOINC, first(FecalOccultBloodTestFobt, "LOINC"), "Negative", "2027-05-01")
+    records.procedure(who, records.SNOMEDCT, first(Colonoscopy, "SNOMEDCT"), "2022-06-15")
+    assert "colonoscopy" in card(who)["narrative"]
+
+
+def test_resolved_colon_cancer_still_excludes() -> None:
+    """A history of colorectal cancer excludes even after it resolves."""
+    who = eligible()
+    records.condition(
+        who, records.ICD10, first(MalignantNeoplasmOfColon, "ICD10CM"), onset="2015-01-01", resolved="2016-01-01"
+    )
+    assert card(who)["status"] == "not_applicable"
+
+
+def test_total_colectomy_excludes() -> None:
+    """A total colectomy procedure excludes."""
+    who = eligible()
+    records.procedure(who, records.SNOMEDCT, first(TotalColectomy, "SNOMEDCT"), "2010-01-01")
+    assert card(who)["status"] == "not_applicable"
+
+
+def test_hospice_excludes() -> None:
+    """The shared hospice exclusion applies."""
+    who = eligible()
+    records.condition(who, records.SNOMEDCT, first(HospiceDiagnosis, "SNOMEDCT"))
+    assert card(who)["status"] == "not_applicable"
+
+
+def test_ecqm_common_matches_the_other_plugins() -> None:
+    """This plugin's copy of the shared module matches every other copy."""
+    copies = sorted(PROTOCOLS.glob("*/protocols/ecqm_common.py"))
+    assert len({hashlib.sha256(path.read_bytes()).hexdigest() for path in copies}) == 1

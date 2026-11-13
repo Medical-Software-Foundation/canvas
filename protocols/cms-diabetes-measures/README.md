@@ -1,70 +1,42 @@
 # cms-diabetes-measures
 
-Bundle of four CMS Clinical Quality Measures for adult diabetes care, ported from the legacy
-`workflow_sdk_loader.builtin_cqms` package to the Canvas SDK plugin layout.
+Diabetes clinical quality measures for the 2027 performance period, as Canvas SDK protocols. The measurement period is the year ending now.
 
 ## Included protocols
 
 | Class | Identifier | Title |
-|---|---|---|
-| `ClinicalQualityMeasure122v6` | CMS122v6 | Diabetes: Hemoglobin HbA1c Poor Control (>9%) |
-| `ClinicalQualityMeasure123v6` | CMS123v6 | Diabetes: Foot Exam |
-| `ClinicalQualityMeasure131v6` | CMS131v6 | Diabetes: Eye Exam |
-| `ClinicalQualityMeasure134v6` | CMS134v6 | Diabetes: Medical Attention for Nephropathy |
+| --- | --- | --- |
+| `ClinicalQualityMeasure122v6` | [CMS122v15](https://ecqi.healthit.gov/ecqm/ec/2027/cms0122v15) | Diabetes: Glycemic Status Assessment Greater Than 9% |
+| `ClinicalQualityMeasure131v6` | [CMS131v15](https://ecqi.healthit.gov/ecqm/ec/2027/cms0131v15) | Diabetes: Eye Exam |
+| `ClinicalQualityMeasure951v5` | [CMS951v5](https://ecqi.healthit.gov/ecqm/ec/2027/cms0951v5) | Kidney Health Evaluation |
 
-The four protocols share an abstract base, `DiabetesQualityMeasure`, in
-`protocols/diabetes_quality_measure.py`. All four measures apply to non-hospice patients
-aged 18-75 with an active diabetes diagnosis during the measurement period.
+CMS122 and CMS131 share `DiabetesQualityMeasure` (`protocols/diabetes_quality_measure.py`): patients 18-75 at the end of the period with diabetes overlapping it and a qualifying visit during it. CMS951 takes patients 18-85 at the start of the period with diabetes active at its start and an outpatient visit during it.
 
-## Behavior
+## Measures
 
-Each protocol responds to a relevant data-change event, recomputes its denominator and
-numerator over the most recent year, and emits a `ProtocolCard` effect describing whether
-the patient is `SATISFIED`, `DUE`, or `NOT_APPLICABLE`. When a measure is unsatisfied the
-card includes a recommendation (e.g. "Order HbA1c", "Conduct comprehensive foot exam",
-"Refer for retinal examination", "Order a urine microalbumin test") that the clinician can
-act on directly from the card.
+- **CMS122v15** (inverse measure): the most recent HbA1c or glucose management indicator in the period is above 9.0%, has no result, or is missing. A numeric result wins over a more recent result without one; several numeric results on the most recent day take the lowest. A satisfied card means the patient is not in poor control. Due cards recommend ordering an HbA1c.
+- **CMS131v15**: a retinal or dilated eye exam (referral reports and procedures) in the period, or in the year before it without diabetic retinopathy; an autonomous eye exam with a result; retinopathy severity findings for both eyes; or "no apparent retinopathy" findings in the year before. Autonomous exams and findings are coded questionnaire answers or observations. Bilateral anophthalmos excludes.
+- **CMS951v5**: an eGFR and a urine albumin-creatinine ratio in the period, where a urine albumin and a urine creatinine within four days of each other also count. Only numeric results count (including comparator values such as `<3`). CKD stage 5 or end-stage renal disease excludes.
 
-## Notes on the port
+## Exclusions
 
-- The legacy `compute_results() -> ProtocolResult` flow is replaced by
-  `compute() -> list[Effect]` returning a single `ProtocolCard` effect per invocation.
-- The legacy `ExternallyAwareClinicalQualityMeasure` mixin used by CMS122v6 and CMS131v6
-  has no SDK equivalent. Those classes now inherit only from the in-plugin
-  `DiabetesQualityMeasure` base. External-data awareness can be added by overriding the
-  numerator/denominator methods.
-- Value sets that exist in `canvas_sdk.value_set.v2022` are reused directly. Value sets
-  that did not survive the migration (`VisualExamOfFoot`, `SensoryExamOfFoot`,
-  `PulseExamOfFoot`, the amputation laterality sets, `AceInhibitors`, and
-  `CMS134v6Dialysis`) are reproduced as in-plugin `ValueSet` subclasses with the original
-  codes copied verbatim from `canvas_workflow_kit.value_set.v2018`,
-  `medication_class_path2018`, and `specials`.
-- `FundusPhotography` from CMS131v6 is reproduced in
-  `protocols/cms131v6_diabetes_eye_exam.py` (single CPT code 92250).
-- CMS123v6's numerator (three SNOMED foot-exam findings within the year) is preserved
-  via `canvas_sdk.v1.data.questionnaire.Interview`. The legacy
-  `patient.interviews.find_question_response(VisualExamOfFoot)` is rewritten as
-  `Interview.objects.for_patient(...).committed().filter(interview_responses__response_option__code__in=codes, ...)`,
-  which matches the same semantics: an interview qualifies when any
-  `InterviewQuestionResponse` row points at a `ResponseOption` whose `code` is in the
-  value set. The SDK's `Interview` queryset has no `find(value_set)` shortcut, so the
-  value set is flattened to its code values inline.
-- CMS134v6's "instruction" check (DialysisEducation) reads
-  `canvas_sdk.v1.data.instruction.Instruction`, filtering on the related
-  `note.datetime_of_service` to match the legacy `noteTimestamp` semantics. All
-  six numerator pathways (dialysis referral, ACE inhibitor active medication,
-  dismissing condition, kidney transplant, dialysis-education instruction, urine
-  protein lab) are preserved.
+`protocols/ecqm_common.py` implements the eCQM shared libraries HospiceQDM 7.0, PalliativeCareQDM 6.0, and AdvancedIllnessandFrailtyQDM 11.0, and documents how QDM data types map to Canvas records. CMS951 applies hospice and palliative care only; CMS122 and CMS131 apply all of them. Two spec criteria have no Canvas data to read: an inpatient discharge to hospice and a frailty device order.
+
+Encounters match billing line items on both CPT and HCPCS codes directly, because `BillingLineItem.find()` reads only the `HCPCS` attribute while eCQM value sets carry `HCPCSLEVELII`.
+
+## Value sets
+
+All value sets come from `canvas_sdk.value_set.v2027`, which ships in the SDK release containing [canvas-plugins#2003](https://github.com/canvas-medical/canvas-plugins/pull/2003).
+
+## Shared code
+
+`protocols/ecqm_common.py` and `tests/records.py` are identical copies shared with `cms125v6-breast-cancer-screening`, `cms130v6-colorectal-cancer-screening`, and `cms138v6-...`, since plugins cannot import from one another. A test fails when the copies drift.
 
 ## Tests
 
-`tests/test_cms122v6.py` through `tests/test_cms134v6.py` exercise each protocol with
-unit-level mocking of the SDK ORM querysets (`Condition.objects`, `Medication.objects`,
-`LabReport.objects`, `ReferralReport.objects`). `tests/test_patient_resolution.py` resolves
-patients from real rows in the SDK's SQLite test database through `pytest-canvas`, which
-ships in the SDK's `test-utils` extra. Run with:
+Tests build real records in the SDK's test database through `pytest-canvas`:
 
 ```bash
-PYTHONPATH=/path/to/canvas-plugins \
-  uv run --project /path/to/canvas-plugins --extra test-utils pytest tests/ -v
+CP=/path/to/canvas-plugins
+uv run --frozen --project $CP --with-editable $CP --with-editable $CP/pytest-canvas pytest tests -q
 ```

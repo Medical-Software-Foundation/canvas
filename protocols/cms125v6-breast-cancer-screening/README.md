@@ -1,38 +1,43 @@
-# CMS125v6 Breast Cancer Screening
+# CMS125v15 Breast Cancer Screening
 
-A Canvas SDK plugin that implements [CMS125v6](https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS125v6.html), the eCQM for breast cancer screening.
+A Canvas SDK plugin that implements [CMS125v15](https://ecqi.healthit.gov/ecqm/ec/2027/cms0125v15), the eCQM for breast cancer screening in the 2027 performance period. The measurement period is the year ending now.
 
 ## What it does
 
-For every applicable event (`condition_*`, `imaging_report_*`, `patient_*`, `billing_line_item_*`), the plugin recomputes whether the patient is due for a screening mammogram and emits a protocol card.
+On each billing line item, condition, imaging report, instruction, interview, medication, or patient event, the plugin recomputes whether the patient is due for a screening mammogram and emits a protocol card.
 
-### Population
+### Initial population
 
-- Women aged 51–74 at the end of the measurement period.
+- Women 42-74 years of age at the end of the measurement period.
+- A qualifying visit during the period (office, telephone, virtual, home health, annual wellness, or preventive care visit).
 
-### Exclusions (denominator)
+### Exclusions
 
-- Bilateral mastectomy.
-- Two unilateral mastectomies.
-- One unilateral mastectomy plus a Status-Post-Left-Mastectomy or Status-Post-Right-Mastectomy diagnosis.
+- A bilateral mastectomy (procedure or history diagnosis).
+- Evidence of both a right and a left mastectomy, each side shown by a status-post diagnosis or a unilateral mastectomy procedure for that side. A unilateral mastectomy coded without a side does not count toward either side, because Canvas procedures carry no body site.
+- Hospice, palliative care, age 66+ living long term in a nursing home, or age 66+ with frailty and an advanced illness or dementia medication (`protocols/ecqm_common.py`).
 
 ### Numerator
 
-- One or more mammograms (or breast tomosynthesis) in the measurement period or the 15 months prior to it.
+- A mammogram (imaging report) from October 1 two years before the period through its end: 27 months in all.
 
-### Recommendation
+### Card
 
-If the patient is in the denominator but not the numerator the plugin emits an `Instruct` recommendation titled "Discuss breast cancer screening and order imaging as appropriate".
+Due patients get an `Instruct` recommendation, "Discuss breast cancer screening and order imaging as appropriate". Satisfied cards name the most recent mammogram.
 
 ## Value sets
 
-This plugin depends on the SDK value sets `BilateralMastectomy`, `StatusPostLeftMastectomy`, `StatusPostRightMastectomy`, and `Mammography` from `canvas_sdk.value_set.v2022`. The combined `UnilateralMastectomy` value set and the `CMS125v6Tomography` LOINC code are defined inline in `protocols/cms125v6_breast_cancer_screening.py` because the SDK only ships the laterality-split versions.
+All value sets come from `canvas_sdk.value_set.v2027`, which ships in the SDK release containing [canvas-plugins#2003](https://github.com/canvas-medical/canvas-plugins/pull/2003).
+
+## Shared code
+
+`protocols/ecqm_common.py` and `tests/records.py` are identical copies shared with the other eCQM plugins (`cms-diabetes-measures`, `cms130v6-colorectal-cancer-screening`, `cms138v6-...`), since plugins cannot import from one another. A test fails when the copies drift.
 
 ## Tests
 
-Unit tests live in `tests/`. They exercise the protocol logic by injecting fake `patient`, `conditions`, and `imaging_reports` collections. `tests/test_patient_resolution.py` resolves patients from real rows in the SDK's SQLite test database through `pytest-canvas`, which ships in the SDK's `test-utils` extra.
+Tests build real records in the SDK's test database through `pytest-canvas`:
 
 ```bash
-PYTHONPATH=/path/to/canvas-plugins \
-  uv run --project /path/to/canvas-plugins --extra test-utils pytest tests/ -v
+CP=/path/to/canvas-plugins
+uv run --frozen --project $CP --with-editable $CP --with-editable $CP/pytest-canvas pytest tests -q
 ```

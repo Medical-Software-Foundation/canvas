@@ -10,18 +10,14 @@ from canvas_sdk.events import Event, EventType
 from canvas_sdk.test_utils.factories import PatientFactory
 from canvas_sdk.v1.data.condition import Condition
 from protocols.cms122v6_diabetes_hemoglobin_a1c_poor_control import ClinicalQualityMeasure122v6
-from protocols.cms123v6_diabetes_foot_exam import ClinicalQualityMeasure123v6
 from protocols.cms131v6_diabetes_eye_exam import ClinicalQualityMeasure131v6
-from protocols.cms134v6_diabetes_medical_attention_for_nephropathy import (
-    ClinicalQualityMeasure134v6,
-)
+from protocols.cms951v5_kidney_health_evaluation import ClinicalQualityMeasure951v5
 
 MISSING_ID = "00000000000000000000000000000000"
 PROTOCOLS = (
     ClinicalQualityMeasure122v6,
-    ClinicalQualityMeasure123v6,
     ClinicalQualityMeasure131v6,
-    ClinicalQualityMeasure134v6,
+    ClinicalQualityMeasure951v5,
 )
 
 

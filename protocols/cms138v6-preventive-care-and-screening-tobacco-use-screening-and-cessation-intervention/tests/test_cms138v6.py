@@ -1,653 +1,155 @@
-"""Tests for the CMS138v6 - Tobacco Screening and Cessation Intervention plugin."""
+"""CMS138v15 tobacco screening and cessation intervention, against real records."""
 
-import json
-from datetime import date, datetime, timezone
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
 
-import arrow
+import hashlib
+from pathlib import Path
 
-from canvas_sdk.effects.protocol_card import ProtocolCard
-from canvas_generated.messages.events_pb2 import Event as EventRequest
-from canvas_sdk.events import Event, EventType
-from canvas_sdk.value_set.v2026.no_qdm_category_assigned import TobaccoNonUser, TobaccoUser
-from protocols.cms138v6_tobacco_screening_and_cessation import (
-    ClinicalQualityMeasure138v6,
-    HealthAndBehavioralAssessmentInitial,
-    HealthAndBehavioralAssessmentReassessment,
-    HealthBehavioralAssessmentIndividual,
+import pytest
+from canvas_sdk.value_set.v2027.assessment import TobaccoUseScreening
+from canvas_sdk.value_set.v2027.condition import HospiceDiagnosis
+from canvas_sdk.value_set.v2027.encounter import (
+    AnnualWellnessVisit,
+    OfficeVisit,
+    TelephoneVisits,
 )
-from protocols.helper_population import Population
+from canvas_sdk.value_set.v2027.intervention import TobaccoUseCessationCounseling
+from canvas_sdk.value_set.v2027.medication import TobaccoUseCessationPharmacotherapy
+from canvas_sdk.value_set.v2027.no_qdm_category_assigned import TobaccoNonUser, TobaccoUser
+
+from protocols.cms138v6_tobacco_screening_and_cessation import ClinicalQualityMeasure138v6
+
+from . import records
+
+PROTOCOLS = Path(__file__).parents[2]
+SCREENING = sorted(TobaccoUseScreening.LOINC)[0]
+USER = sorted(TobaccoUser.SNOMEDCT)[0]
+NON_USER = sorted(TobaccoNonUser.SNOMEDCT)[0]
 
 
-PROTOCOL_MODULE = "protocols.cms138v6_tobacco_screening_and_cessation"
+def first(value_set, system: str) -> str:  # noqa: ANN001
+    return sorted(getattr(value_set, system))[0]
 
 
-def _make_protocol(
-    *,
-    patient_id: str = "patient-id",
-    now: arrow.Arrow | None = None,
-    event_type: int | None = None,
-) -> ClinicalQualityMeasure138v6:
-    """Build a CMS138v6 protocol primed with ``patient_id``."""
-    event = MagicMock()
-    event.type = event_type if event_type is not None else EventType.PATIENT_UPDATED
-    event.target = MagicMock()
-    event.target.id = patient_id
-    event.context = {}
-    protocol = ClinicalQualityMeasure138v6(event=event)
-    protocol._patient_id = patient_id
-    if now is not None:
-        protocol.now = now
-    return protocol
+def eligible(birth_date: str = "1980-01-01"):  # noqa: ANN201
+    """A patient with an annual wellness visit (a preventive visit) in the period."""
+    who = records.patient(birth_date)
+    records.visit(who, first(AnnualWellnessVisit, "HCPCSLEVELII"), "2027-01-10")
+    return who
 
 
-def _fake_patient(
-    *,
-    first_name: str = "Jenny",
-    birth_date: date | None = None,
-    patient_id: str = "patient-id",
-    dbid: int = 42,
-) -> MagicMock:
-    """Build a Patient mock the protocol can call ``age_at`` on."""
-    patient = MagicMock()
-    patient.id = patient_id
-    patient.dbid = dbid
-    patient.first_name = first_name
-    patient.birth_date = birth_date or date(1980, 1, 1)
-    real_birth = arrow.get(patient.birth_date)
-    patient.age_at = lambda when, real_birth=real_birth: max(
-        0, when.year - real_birth.year - (1 if (when.month, when.day) < (real_birth.month, real_birth.day) else 0)
+def screen(who, result: str, when: str) -> None:  # noqa: ANN001
+    records.questionnaire_answer(who, SCREENING, "72166-2", result, when)
+
+
+def card(who) -> dict:  # noqa: ANN001
+    return records.card(records.build(ClinicalQualityMeasure138v6, who).compute())
+
+
+def test_meta_identifies_v15() -> None:
+    """The measure reports the 2027 version."""
+    assert ClinicalQualityMeasure138v6.Meta.identifiers == ["CMS138v15"]
+
+
+@pytest.mark.parametrize(("birth_date", "applies"), [("2014-06-15", True), ("2014-06-16", False)])
+def test_patients_12_and_older_at_the_start(birth_date: str, applies: bool) -> None:
+    """12 at the start of the period is in; 11 is out."""
+    protocol = records.build(ClinicalQualityMeasure138v6, eligible(birth_date))
+    assert protocol.in_initial_population() is applies
+
+
+def test_two_qualifying_visits_or_one_preventive_visit() -> None:
+    """Two non-preventive visits qualify; one does not."""
+    one, two = records.patient(), records.patient()
+    records.visit(one, first(OfficeVisit, "CPT"), "2027-01-10")
+    records.visit(two, first(OfficeVisit, "CPT"), "2027-01-10")
+    records.visit(two, first(TelephoneVisits, "CPT"), "2027-03-10")
+    assert not records.build(ClinicalQualityMeasure138v6, one).in_initial_population()
+    assert records.build(ClinicalQualityMeasure138v6, two).in_initial_population()
+
+
+def test_unscreened_patient_is_due_for_screening() -> None:
+    """No screening in the period: screen for tobacco use."""
+    result = card(eligible())
+    assert result["status"] == "due"
+    assert "screened" in result["narrative"]
+
+
+def test_screening_counts_only_within_the_period() -> None:
+    """A screening from 13 months ago leaves the patient due for screening."""
+    who = eligible()
+    screen(who, NON_USER, "2026-05-01")
+    assert "screened" in card(who)["narrative"]
+
+
+def test_non_user_is_satisfied() -> None:
+    """A non-user screening in the period satisfies."""
+    who = eligible()
+    screen(who, NON_USER, "2027-02-01")
+    assert card(who)["status"] == "satisfied"
+
+
+def test_most_recent_screening_decides_status() -> None:
+    """A non-user screening after a user screening makes the patient a non-user."""
+    who = eligible()
+    screen(who, USER, "2026-08-01")
+    screen(who, NON_USER, "2027-02-01")
+    assert card(who)["status"] == "satisfied"
+
+
+def test_user_without_intervention_is_due() -> None:
+    """A tobacco user without counseling or medication needs an intervention."""
+    who = eligible()
+    screen(who, USER, "2027-02-01")
+    result = card(who)
+    assert result["status"] == "due"
+    assert "intervention is indicated" in result["narrative"]
+
+
+def test_counseling_before_the_screening_counts() -> None:
+    """v15 counts counseling in the six months before the period, before the screening."""
+    who = eligible()
+    records.instruction(
+        who, records.SNOMEDCT, first(TobaccoUseCessationCounseling, "SNOMEDCT"), "2026-02-01"
     )
-    return patient
+    screen(who, USER, "2027-02-01")
+    assert card(who)["status"] == "satisfied"
 
 
-# ---------------------------------------------------------------------------
-# Meta and class configuration
-# ---------------------------------------------------------------------------
-
-
-def test_meta_identifiers() -> None:
-    """Identifier preserved from the legacy CQM."""
-    assert ClinicalQualityMeasure138v6.Meta.identifiers == ["CMS138v6"]
-
-
-def test_meta_types() -> None:
-    """Type preserved from the legacy CQM."""
-    assert ClinicalQualityMeasure138v6.Meta.types == ["CQM"]
-
-
-def test_meta_version() -> None:
-    """Version preserved from the legacy CQM."""
-    assert ClinicalQualityMeasure138v6.Meta.version == "2022-01-31v1"
-
-
-def test_meta_description() -> None:
-    """Description preserved from the legacy CQM."""
-    assert ClinicalQualityMeasure138v6.Meta.description == (
-        "Patients aged 18 years and older who have not been screened for "
-        "tobacco use OR who have not received tobacco cessation intervention "
-        "if identified as a tobacco user."
+def test_counseling_earlier_than_six_months_before_does_not_count() -> None:
+    """Counseling more than six months before the period does not count."""
+    who = eligible()
+    records.instruction(
+        who, records.SNOMEDCT, first(TobaccoUseCessationCounseling, "SNOMEDCT"), "2025-11-01"
     )
+    screen(who, USER, "2027-02-01")
+    assert card(who)["status"] == "due"
 
 
-def test_meta_information() -> None:
-    """Information URL preserved from the legacy CQM."""
-    assert ClinicalQualityMeasure138v6.Meta.information == (
-        "https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS138v6.html"
-    )
+def test_tobacco_abuse_counseling_diagnosis_counts() -> None:
+    """A Z71.6 diagnosis starting in the window is counseling."""
+    who = eligible()
+    records.condition(who, records.ICD10, "Z716", onset="2027-03-01")
+    screen(who, USER, "2027-02-01")
+    assert card(who)["status"] == "satisfied"
 
 
-def test_meta_default_permission_flags() -> None:
-    """Default permission flags include each recommendable command type."""
-    flags = ClinicalQualityMeasure138v6.Meta.default_permission_flags
-    assert flags == {
-        "protocols:actions:CMS138v6:instruct": True,
-        "protocols:actions:CMS138v6:interview": True,
-        "protocols:actions:CMS138v6:prescribe": True,
-    }
+def test_cessation_medication_counts() -> None:
+    """A cessation medication started in the window is an intervention."""
+    who = eligible()
+    records.medication(who, first(TobaccoUseCessationPharmacotherapy, "RXNORM"), "2027-03-01")
+    screen(who, USER, "2027-02-01")
+    assert card(who)["status"] == "satisfied"
 
 
-def test_responds_to_expected_events() -> None:
-    """Protocol responds to the SDK substitutes for HEALTH_MAINTENANCE."""
-    for name in (
-        EventType.Name(EventType.PATIENT_CREATED),
-        EventType.Name(EventType.PATIENT_UPDATED),
-        EventType.Name(EventType.CONDITION_CREATED),
-        EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
-        EventType.Name(EventType.BILLING_LINE_ITEM_CREATED),
-        EventType.Name(EventType.INTERVIEW_CREATED),
-        EventType.Name(EventType.INTERVIEW_UPDATED),
-        EventType.Name(EventType.INSTRUCTION_CREATED),
-        EventType.Name(EventType.INSTRUCTION_UPDATED),
-    ):
-        assert name in ClinicalQualityMeasure138v6.RESPONDS_TO
+def test_hospice_excludes() -> None:
+    """Patients in hospice are excluded."""
+    who = eligible()
+    records.condition(who, records.SNOMEDCT, first(HospiceDiagnosis, "SNOMEDCT"))
+    assert card(who)["status"] == "not_applicable"
 
 
-def test_three_populations_initialized() -> None:
-    """Each instance owns three Population trackers."""
-    protocol = _make_protocol()
-    assert set(protocol._populations) == {"population 1", "population 2", "population 3"}
-    assert all(isinstance(p, Population) for p in protocol._populations.values())
-
-
-# ---------------------------------------------------------------------------
-# Ported value sets
-# ---------------------------------------------------------------------------
-
-
-def test_health_behavioral_assessment_value_sets_carry_expected_cpt_codes() -> None:
-    """Three ported value sets preserve their single CPT code each."""
-    assert HealthBehavioralAssessmentIndividual.CPT == {"96152"}
-    assert HealthAndBehavioralAssessmentInitial.CPT == {"96150"}
-    assert HealthAndBehavioralAssessmentReassessment.CPT == {"96151"}
-
-
-# ---------------------------------------------------------------------------
-# Patient resolution
-# ---------------------------------------------------------------------------
-
-
-def _real_event_protocol(event_type: int, target: str, context: dict) -> ClinicalQualityMeasure138v6:
-    return ClinicalQualityMeasure138v6(
-        event=Event(EventRequest(type=event_type, target=target, context=json.dumps(context)))
-    )
-
-
-# ---------------------------------------------------------------------------
-# tobacco_use_screening_user / tobacco_use_screening_non_user
-# ---------------------------------------------------------------------------
-
-
-USER_CODE = next(iter(TobaccoUser.values["SNOMEDCT"]))
-NON_USER_CODE = next(iter(TobaccoNonUser.values["SNOMEDCT"]))
-
-
-def _fake_screening(created: str, response_code: str) -> MagicMock:
-    """Interview mock whose responses filter matches only ``response_code``."""
-    interview = MagicMock()
-    interview.created = arrow.get(created).datetime
-
-    def filter_responses(response_option__code__in: set[str]) -> MagicMock:
-        result = MagicMock()
-        result.exists.return_value = response_code in response_option__code__in
-        return result
-
-    interview.interview_responses.filter.side_effect = filter_responses
-    return interview
-
-
-def test_latest_screening_fetches_only_the_newest_interview() -> None:
-    """Only the newest screening is read, so an older positive one can't count."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    protocol._patient = _fake_patient()
-    newest = _fake_screening("2019-03-25", NON_USER_CODE)
-    with patch(f"{PROTOCOL_MODULE}.Interview") as interview_cls:
-        ordered = (
-            interview_cls.objects.for_patient.return_value.committed.return_value
-            .filter.return_value.order_by.return_value.distinct.return_value
-        )
-        ordered.__getitem__.return_value = [newest]
-        assert protocol.latest_screening is newest
-        assert protocol.latest_screening is newest
-    ordered.__getitem__.assert_called_once_with(slice(None, 1))
-    interview_cls.objects.for_patient.return_value.committed.return_value.filter.return_value.order_by.assert_called_once_with(
-        "-created"
-    )
-
-
-def test_screening_non_user_when_latest_screening_is_negative() -> None:
-    """A negative latest screening means non-user, regardless of older screenings."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    protocol._latest_screenings = [_fake_screening("2019-03-25", NON_USER_CODE)]
-    assert protocol.tobacco_use_screening_user is None
-    assert protocol.tobacco_use_screening_non_user == arrow.get("2019-03-25")
-
-
-def test_screening_user_when_latest_screening_is_positive() -> None:
-    """A positive latest screening means current tobacco user."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    protocol._latest_screenings = [_fake_screening("2019-03-25", USER_CODE)]
-    assert protocol.tobacco_use_screening_user == arrow.get("2019-03-25")
-    assert protocol.tobacco_use_screening_non_user is None
-
-
-def test_screening_status_none_without_screenings() -> None:
-    """No screenings in the lookback means neither status."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    protocol._latest_screenings = []
-    assert protocol.tobacco_use_screening_user is None
-    assert protocol.tobacco_use_screening_non_user is None
-
-
-# ---------------------------------------------------------------------------
-# in_initial_population
-# ---------------------------------------------------------------------------
-
-
-def test_in_initial_population_requires_age_18() -> None:
-    """Patient under 18 is excluded even with eligible visits."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    young = _fake_patient(birth_date=date(2010, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=young),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=5),
-    ):
-        assert protocol.in_initial_population() is False
-        assert all(
-            not p.in_initial_population for p in protocol._populations.values()
-        )
-
-
-def test_in_initial_population_true_with_preventive_visit() -> None:
-    """Adult with a preventive visit is in the initial population."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-    ):
-        assert protocol.in_initial_population() is True
-        assert all(p.in_initial_population for p in protocol._populations.values())
-
-
-def test_in_initial_population_true_with_two_other_visits() -> None:
-    """Adult with at least two other eligible visits is in the initial population."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=False),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=2),
-    ):
-        assert protocol.in_initial_population() is True
-
-
-def test_in_initial_population_false_with_one_other_visit() -> None:
-    """A single non-preventive visit is not enough."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=False),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=1),
-    ):
-        assert protocol.in_initial_population() is False
-
-
-# ---------------------------------------------------------------------------
-# Denominator and numerator
-# ---------------------------------------------------------------------------
-
-
-def test_in_denominator_population_2_drops_when_not_tobacco_user() -> None:
-    """Population 2 leaves the denominator when no positive screening exists."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None
-        ),
-    ):
-        assert protocol.in_denominator() is True
-        assert protocol._populations["population 1"].in_denominator is True
-        assert protocol._populations["population 2"].in_denominator is False
-        assert protocol._populations["population 3"].in_denominator is True
-
-
-def test_in_numerator_population_1_false_without_any_screening() -> None:
-    """Population 1 fails numerator when there is no screening of either kind."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=False
-        ),
-    ):
-        protocol.in_denominator()
-        protocol.in_numerator()
-        assert protocol._populations["population 1"].in_numerator is False
-        assert protocol._populations["population 3"].in_numerator is False
-
-
-def test_in_numerator_population_3_true_for_non_user() -> None:
-    """A patient screened as a non-user satisfies Population 3."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get("2019-02-05")
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=screen_date
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=False
-        ),
-    ):
-        protocol.in_denominator()
-        protocol.in_numerator()
-        assert protocol._populations["population 1"].in_numerator is True
-        assert protocol._populations["population 3"].in_numerator is True
-
-
-def test_in_numerator_population_2_true_when_intervention_present() -> None:
-    """A tobacco user with an intervention satisfies Population 2."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get("2019-02-05")
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=True
-        ),
-    ):
-        protocol.in_denominator()
-        protocol.in_numerator()
-        assert protocol._populations["population 2"].in_numerator is True
-        assert protocol._populations["population 3"].in_numerator is True
-
-
-def test_in_numerator_population_2_false_when_user_without_intervention() -> None:
-    """A tobacco user without an intervention fails Population 2 and 3."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get("2019-02-05")
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=False
-        ),
-    ):
-        protocol.in_denominator()
-        protocol.in_numerator()
-        assert protocol._populations["population 2"].in_numerator is False
-        assert protocol._populations["population 3"].in_numerator is False
-
-
-# ---------------------------------------------------------------------------
-# tobacco_cessation_intervention_counseling
-# ---------------------------------------------------------------------------
-
-
-def test_counseling_returns_none_when_no_positive_screening() -> None:
-    """Without a tobacco-user screening there is no counseling lookup."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    with patch.object(
-        ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None
-    ):
-        assert protocol.tobacco_cessation_intervention_counseling is None
-
-
-def test_counseling_returns_instruction_datetime_when_found() -> None:
-    """A matching Instruction returns its note datetime_of_service as an arrow."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
-    counseling_at = datetime(2019, 2, 10, tzinfo=timezone.utc)
-    instruction = MagicMock()
-    instruction.note.datetime_of_service = counseling_at
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch(f"{PROTOCOL_MODULE}.Instruction") as instruction_cls,
-    ):
-        instruction_cls.objects.for_patient.return_value.committed.return_value.find.return_value.filter.return_value.order_by.return_value.first.return_value = instruction
-        assert protocol.tobacco_cessation_intervention_counseling == arrow.get(counseling_at)
-
-
-def test_counseling_returns_none_when_no_instruction_in_window() -> None:
-    """An empty queryset yields None even after a positive screening."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch(f"{PROTOCOL_MODULE}.Instruction") as instruction_cls,
-    ):
-        instruction_cls.objects.for_patient.return_value.committed.return_value.find.return_value.filter.return_value.order_by.return_value.first.return_value = None
-        assert protocol.tobacco_cessation_intervention_counseling is None
-
-
-# ---------------------------------------------------------------------------
-# compute()
-# ---------------------------------------------------------------------------
-
-
-def test_compute_under_18_returns_not_applicable_card() -> None:
-    """Patients under 18 receive a single not_applicable card."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    young = _fake_patient(birth_date=date(2010, 4, 1))
-    with patch.object(ClinicalQualityMeasure138v6, "patient", new=young):
-        effects = protocol.compute()
-    assert len(effects) == 1
-    assert ProtocolCard.Status.NOT_APPLICABLE.value in effects[0].payload
-
-
-def test_compute_not_in_denominator_returns_no_effects() -> None:
-    """No visits => no protocol card emitted."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=False),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-    ):
-        effects = protocol.compute()
-    assert effects == []
-
-
-def test_compute_emits_due_card_for_unscreened_adult_with_visit() -> None:
-    """Adult with eligible visit but no screening gets a 'due' interview recommendation."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_counseling",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_medication",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=False
-        ),
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-    payload = effects[0].payload
-    assert ProtocolCard.Status.DUE.value in payload
-    assert "screened for tobacco use" in payload
-    assert "interview" in payload
-
-
-def test_compute_emits_due_card_for_tobacco_user_without_intervention() -> None:
-    """Tobacco user without intervention => due card with instruct and prescribe."""
-    protocol = _make_protocol(now=arrow.get("2019-04-01"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get("2019-02-05")
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_counseling",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_medication",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=False
-        ),
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-    payload = effects[0].payload
-    assert ProtocolCard.Status.DUE.value in payload
-    assert "current tobacco user" in payload
-    assert "instruct" in payload
-    assert "prescribe" in payload
-
-
-def test_compute_emits_satisfied_card_for_non_user() -> None:
-    """A patient screened as a non-user yields a satisfied card."""
-    protocol = _make_protocol(now=arrow.get("2019-03-17"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    non_user_at = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_use_screening_non_user",
-            new=non_user_at,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_counseling",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_medication",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=False
-        ),
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-    payload = effects[0].payload
-    assert ProtocolCard.Status.SATISFIED.value in payload
-    assert "is not a smoker" in payload
-
-
-def test_compute_emits_satisfied_card_for_counseling() -> None:
-    """A tobacco user with cessation counseling yields a satisfied card."""
-    protocol = _make_protocol(now=arrow.get("2019-03-17"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
-    counseling_at = arrow.get(datetime(2019, 2, 6, tzinfo=timezone.utc))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_counseling",
-            new=counseling_at,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_medication",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=True
-        ),
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-    payload = effects[0].payload
-    assert ProtocolCard.Status.SATISFIED.value in payload
-    assert "smoking cessation counseling" in payload
-
-
-def test_compute_emits_satisfied_card_for_medication() -> None:
-    """A tobacco user with cessation medication yields a satisfied card."""
-    protocol = _make_protocol(now=arrow.get("2019-03-30"))
-    adult = _fake_patient(birth_date=date(1980, 1, 1))
-    screen_date = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
-    med_at = arrow.get(datetime(2019, 3, 27, tzinfo=timezone.utc))
-    with (
-        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
-        patch.object(ClinicalQualityMeasure138v6, "has_preventive_visit", return_value=True),
-        patch.object(ClinicalQualityMeasure138v6, "count_eligible_visits", return_value=0),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_use_screening_non_user", new=None
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_counseling",
-            new=None,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6,
-            "tobacco_cessation_intervention_medication",
-            new=med_at,
-        ),
-        patch.object(
-            ClinicalQualityMeasure138v6, "tobacco_cessation_intervention", new=True
-        ),
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
-    payload = effects[0].payload
-    assert ProtocolCard.Status.SATISFIED.value in payload
-    assert "cessation medication" in payload
+def test_ecqm_common_matches_the_other_plugins() -> None:
+    """This plugin's copy of the shared module matches every other copy."""
+    copies = sorted(PROTOCOLS.glob("*/protocols/ecqm_common.py"))
+    assert len({hashlib.sha256(path.read_bytes()).hexdigest() for path in copies}) == 1

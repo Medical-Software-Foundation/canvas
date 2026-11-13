@@ -1,132 +1,97 @@
-"""Tests for the CMS131v6 diabetic eye-exam protocol."""
+"""CMS131v15 diabetic eye exam, against real records."""
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
-import arrow
-import pytest
+from canvas_sdk.value_set.v2027.communication import (
+    AutonomousEyeExamResultOrFinding,
+    DiabeticRetinopathySeverityLevel,
+)
+from canvas_sdk.value_set.v2027.condition import Diabetes, DiabeticRetinopathy
+from canvas_sdk.value_set.v2027.encounter import OfficeVisit
+from canvas_sdk.value_set.v2027.physical_exam import RetinalOrDilatedEyeExam
 
 from protocols.cms131v6_diabetes_eye_exam import (
-    FundusPhotography,
+    AUTONOMOUS_EYE_EXAM,
+    BILATERAL_ANOPHTHALMOS,
+    LEFT_EYE_SEVERITY,
+    NO_APPARENT_RETINOPATHY,
+    RIGHT_EYE_SEVERITY,
     ClinicalQualityMeasure131v6,
 )
 
+from . import records
 
-@pytest.fixture
-def patient() -> SimpleNamespace:
-    """Eligible adult patient stub with a derived ``age_at``."""
-    p = SimpleNamespace(
-        id="patient-1",
-        first_name="Dohav",
-        birth_date=arrow.get("1980-01-01").date(),
+RETINAL_EXAM = sorted(RetinalOrDilatedEyeExam.SNOMEDCT)[0]
+
+
+def eligible():  # noqa: ANN201
+    """A patient with diabetes and an office visit in the measurement period."""
+    who = records.patient()
+    records.condition(who, records.ICD10, sorted(Diabetes.ICD10CM)[0])
+    records.visit(who, sorted(OfficeVisit.CPT)[0], "2027-01-10")
+    return who
+
+
+def status(who) -> str:  # noqa: ANN001
+    return records.card(records.build(ClinicalQualityMeasure131v6, who).compute())["status"]
+
+
+def first(value_set, system: str) -> str:  # noqa: ANN001
+    return sorted(getattr(value_set, system))[0]
+
+
+def test_no_exam_is_due() -> None:
+    """Without any qualifying exam or finding the patient is due."""
+    assert status(eligible()) == "due"
+
+
+def test_exam_in_the_period_satisfies() -> None:
+    """A retinal exam referral report in the period satisfies."""
+    who = eligible()
+    records.referral_report(who, records.SNOMEDCT, RETINAL_EXAM, "2027-02-01")
+    assert status(who) == "satisfied"
+
+
+def test_prior_year_exam_satisfies_only_without_retinopathy() -> None:
+    """An exam in the year before counts when the patient has no diabetic retinopathy."""
+    without, with_retinopathy = eligible(), eligible()
+    for who in (without, with_retinopathy):
+        records.referral_report(who, records.SNOMEDCT, RETINAL_EXAM, "2026-03-01")
+    records.condition(with_retinopathy, records.ICD10, first(DiabeticRetinopathy, "ICD10CM"))
+    assert status(without) == "satisfied"
+    assert status(with_retinopathy) == "due"
+
+
+def test_autonomous_eye_exam_satisfies() -> None:
+    """An AI eye exam in the period with a result in the value set satisfies."""
+    who = eligible()
+    records.observation(
+        who, AUTONOMOUS_EYE_EXAM, first(AutonomousEyeExamResultOrFinding, "LOINC"), "2027-02-01"
     )
-    p.age_at = lambda when: (when.date() - p.birth_date).days / 365.0
-    return p
+    assert status(who) == "satisfied"
 
 
-@pytest.fixture
-def protocol(patient) -> ClinicalQualityMeasure131v6:
-    """Build a protocol instance without invoking __init__'s event plumbing."""
-    proto = ClinicalQualityMeasure131v6.__new__(ClinicalQualityMeasure131v6)
-    proto.event = MagicMock()
-    proto.secrets = {}
-    proto.environment = {}
-    proto._patient_id = patient.id
-    proto.now = arrow.get("2018-08-23T00:00:00Z")
-    proto._patient = patient
-    return proto
+def test_severity_in_one_eye_needs_a_clear_prior_finding_for_the_other() -> None:
+    """A left-eye severity finding satisfies with a prior 'no apparent retinopathy' right eye."""
+    alone, paired = eligible(), eligible()
+    severity = sorted(DiabeticRetinopathySeverityLevel.LOINC - {NO_APPARENT_RETINOPATHY})[0]
+    for who in (alone, paired):
+        records.observation(who, LEFT_EYE_SEVERITY, severity, "2027-02-01")
+    records.observation(paired, RIGHT_EYE_SEVERITY, NO_APPARENT_RETINOPATHY, "2026-02-01")
+    assert status(alone) == "due"
+    assert status(paired) == "satisfied"
 
 
-def test_meta_metadata() -> None:
-    """Description and identifier copy through from the legacy class."""
-    assert (
-        "Patients 18-75 years of age with diabetes who have not had a retinal or "
-        "dilated eye exam by an eye care professional."
-        == ClinicalQualityMeasure131v6.Meta.description
-    )
-    assert ClinicalQualityMeasure131v6.Meta.identifiers == ["CMS131v6"]
+def test_clear_findings_for_both_eyes_in_the_prior_year_satisfy() -> None:
+    """'No apparent retinopathy' for both eyes in the year before the period satisfies."""
+    who = eligible()
+    records.observation(who, LEFT_EYE_SEVERITY, NO_APPARENT_RETINOPATHY, "2026-02-01")
+    records.observation(who, RIGHT_EYE_SEVERITY, NO_APPARENT_RETINOPATHY, "2026-02-01")
+    assert status(who) == "satisfied"
 
 
-def test_fundus_photography_cpt_code() -> None:
-    """CPT 92250 is preserved on the helper value set."""
-    assert FundusPhotography.CPT == {"92250"}
-
-
-def test_in_numerator_returns_false_when_no_reports(protocol) -> None:
-    """No retinal exam reports in either period -> not in numerator."""
-    with patch.object(protocol, "_retinal_reports_in", return_value=[]):
-        assert protocol.in_numerator() is False
-
-
-def test_in_numerator_returns_true_with_in_period_exam(protocol) -> None:
-    """An in-period exam satisfies regardless of finding."""
-    report = SimpleNamespace(
-        original_date=arrow.get("2018-08-22").date(),
-        codings=SimpleNamespace(all=lambda: []),
-    )
-
-    def reports_in(start, end):  # noqa: ANN001
-        if start == protocol.timeframe.start:
-            return [report]
-        return []
-
-    with patch.object(protocol, "_retinal_reports_in", side_effect=reports_in):
-        assert protocol.in_numerator() is True
-        assert protocol._in_period is True
-
-
-def test_in_numerator_prior_period_requires_negative_finding(protocol) -> None:
-    """A prior-period exam with a non-negative finding does *not* satisfy."""
-    abnormal = SimpleNamespace(
-        original_date=arrow.get("2017-02-22").date(),
-        codings=SimpleNamespace(
-            all=lambda: [SimpleNamespace(name="Findings", display="Retinopathy", code="other")],
-        ),
-    )
-
-    def reports_in(start, end):  # noqa: ANN001
-        if start == protocol.timeframe.start:
-            return []
-        return [abnormal]
-
-    with patch.object(protocol, "_retinal_reports_in", side_effect=reports_in):
-        assert protocol.in_numerator() is False
-        assert protocol._in_period is False
-        assert protocol._on_date == arrow.get("2017-02-22")
-
-
-def test_in_numerator_prior_period_with_negative_finding_passes(protocol) -> None:
-    """A prior-period exam with SNOMED 721103006 (no diabetic eye disease) satisfies."""
-    negative = SimpleNamespace(
-        original_date=arrow.get("2017-02-22").date(),
-        codings=SimpleNamespace(
-            all=lambda: [SimpleNamespace(name="Findings", display="", code="721103006")],
-        ),
-    )
-
-    def reports_in(start, end):  # noqa: ANN001
-        if start == protocol.timeframe.start:
-            return []
-        return [negative]
-
-    with patch.object(protocol, "_retinal_reports_in", side_effect=reports_in):
-        assert protocol.in_numerator() is True
-
-
-def test_compute_not_applicable_without_diabetes(protocol) -> None:
-    """No denominator -> NOT_APPLICABLE."""
-    with patch.object(protocol, "in_denominator", return_value=False):
-        effects = protocol.compute()
-    assert len(effects) == 1
-
-
-def test_compute_due_emits_recommendations(protocol) -> None:
-    """Unsatisfied -> DUE card with both perform and refer recommendations."""
-    with (
-        patch.object(protocol, "in_denominator", return_value=True),
-        patch.object(protocol, "in_numerator", return_value=False),
-    ):
-        effects = protocol.compute()
-    assert len(effects) == 1
+def test_bilateral_absence_of_eyes_excludes() -> None:
+    """Anophthalmos of both eyes takes the patient out of the denominator."""
+    who = eligible()
+    records.condition(who, records.SNOMEDCT, BILATERAL_ANOPHTHALMOS)
+    assert status(who) == "not_applicable"
