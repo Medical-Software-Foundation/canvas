@@ -3,7 +3,7 @@ from hmac import compare_digest
 from uuid import uuid4
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.calendar import Calendar, CalendarType, Event
+from canvas_sdk.effects.calendar import Calendar, CalendarType, Event, EventRecurrence
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPI
 from canvas_sdk.handlers.simple_api.api import post
@@ -83,7 +83,9 @@ class ProvisionAvailabilityAPI(SimpleAPI):
                             skipped += 1
                             continue
 
-                        # Force mode: end all active events first
+                        # Force mode: end all active events first. An update replaces
+                        # the event's recurrence with what it sends, so the daily rule
+                        # goes along with the new end date to end the series.
                         for event in active_events:
                             log.info(
                                 f"[ProvisionAPI] Force ending event {event.id} "
@@ -95,6 +97,8 @@ class ProvisionAvailabilityAPI(SimpleAPI):
                                     title=event.title,
                                     starts_at=event.starts_at,
                                     ends_at=event.ends_at,
+                                    recurrence_frequency=EventRecurrence.Daily,
+                                    recurrence_interval=1,
                                     recurrence_ends_at=now,
                                 ).update()
                             )

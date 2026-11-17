@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+import json
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import MagicMock, call, patch
 from zoneinfo import ZoneInfo
 
@@ -539,6 +540,58 @@ class TestDeactivationDatetimeValues:
                         kwargs = mock_event_class.call_args[1]
                         assert kwargs["recurrence_ends_at"] == frozen_now
                         assert len(effects) == 1
+
+    def test_deactivation_keeps_the_daily_rule(
+        self, mock_secrets: dict[str, str]
+    ) -> None:
+        """Verify the update ends the daily series rather than removing its recurrence.
+
+        An update replaces the event's recurrence with what it sends, so the
+        effect has to carry the daily rule along with the new end date.
+        """
+        frozen_now = datetime(2026, 7, 20, 15, 45, 0, tzinfo=UTC)
+
+        mock_event = MagicMock()
+        mock_event.target.id = "staff-123"
+
+        mock_staff = MagicMock()
+        mock_staff.id = "jsmith"
+        mock_staff.full_name = "Dr. Jane Smith"
+        mock_staff.top_role_abbreviation = "MD"
+
+        mock_calendar = MagicMock()
+        mock_existing_event = MagicMock()
+        mock_existing_event.id = "event-456"
+        mock_existing_event.title = "Available"
+        mock_existing_event.starts_at = datetime(2026, 1, 1, 8, 0, tzinfo=UTC)
+        mock_existing_event.ends_at = datetime(2026, 1, 2, 3, 59, tzinfo=UTC)
+        mock_queryset = MagicMock()
+        mock_queryset.exists.return_value = True
+        mock_queryset.__iter__ = lambda self: iter([mock_existing_event])
+        mock_calendar.events.filter.return_value = mock_queryset
+
+        with (
+            patch(
+                "open_availability.protocols.open_availability.Staff.objects"
+            ) as mock_staff_objects,
+            patch(
+                "open_availability.protocols.open_availability.CalendarModel.objects"
+            ) as mock_calendar_objects,
+            patch("open_availability.protocols.open_availability.datetime") as mock_dt,
+        ):
+            mock_dt.now.return_value = frozen_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+            mock_staff_objects.get.return_value = mock_staff
+            mock_calendar_objects.get.return_value = mock_calendar
+
+            handler = OpenAvailabilityOnDeactivation(event=mock_event)
+            handler.secrets = mock_secrets
+
+            [effect] = handler.compute()
+
+        data = json.loads(effect.payload)["data"]
+        assert data["recurrence"] == "FREQ=DAILY;INTERVAL=1"
+        assert data["recurrence_ends_at"] == frozen_now.isoformat()
 
 
 class TestOpenAvailabilityOnActivation:
