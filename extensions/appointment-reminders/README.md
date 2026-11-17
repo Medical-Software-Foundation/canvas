@@ -222,7 +222,7 @@ The cron runs every 5 minutes, but most ticks do no work and no longer pay for a
 
 A reminder interval of **a day or more** is *date-relative*: it fires at the configured **send time** on the target date, so it can only fire inside a `GRACE_MINUTES` window once per day. A reminder interval **under a day**, and **every** telehealth interval regardless of size, is *time-relative*: it fires once the appointment is that many minutes away, which can happen on any tick.
 
-**Which appointments are scanned.** Booked visits (unconfirmed, attempted, confirmed) get both campaigns. Checked-in visits (arrived, roomed) get the telehealth join message but no reminder: staff often mark a video visit Arrived from the schedule dropdown hours before it starts, and before v0.20.1 that silently dropped the join link (PLUGIN-526). Canceled, no-showed and exited visits get neither.
+**Which appointments are scanned.** Booked visits (unconfirmed, attempted, confirmed) get both campaigns. Checked-in visits (arrived, roomed) get the telehealth join message but no reminder: staff often mark a video visit Arrived from the schedule dropdown hours before it starts, and before v0.21.2 that silently dropped the join link (PLUGIN-526). Canceled, no-showed and exited visits get neither.
 
 So before querying anything, the scheduler asks whether any configured interval could fire right now, in any timezone a patient can resolve to (see *Patient timezone*). With only day-out intervals configured — a single daily reminder, the common case — that is true on 70 of the 288 ticks a day and the rest return immediately without touching the appointment table. Configure any short reminder interval, or enable telehealth, and every tick scans as before.
 
