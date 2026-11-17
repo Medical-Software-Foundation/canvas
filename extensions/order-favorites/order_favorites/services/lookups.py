@@ -43,11 +43,16 @@ def normalize_icd10(code: str) -> str:
 
 
 def _get(client: Any, path: str) -> dict[str, Any]:
+    """The JSON object a lookup service answers. Anything but a 2xx answer holding a JSON object raises
+    LookupFailed, so an outage never reads as "no matches"."""
     try:
-        body = client.get_json(path).json()
+        response = client.get_json(path)
+        body = response.json()
     except (RequestException, ValueError) as exc:
         raise LookupFailed(str(exc)) from exc
-    return body if isinstance(body, dict) else {}
+    if response.status_code >= 400 or not isinstance(body, dict):
+        raise LookupFailed(f"answered {response.status_code}")
+    return body
 
 
 def search_medications(query: str) -> list[dict[str, Any]]:
@@ -119,29 +124,27 @@ def find_diagnosis(code: str) -> dict[str, str] | None:
 
 
 IMAGING_SEARCH_LIMIT = 25  # what Canvas's Imaging Order command asks science for
+# An imaging center's fields: (stored name, science contact key, label in messages).
 CENTER_FIELDS = (
-    ("first_name", "firstName"),
-    ("last_name", "lastName"),
-    ("specialty", "specialty"),
-    ("practice_name", "practiceName"),
-    ("business_fax", "businessFax"),
-    ("business_phone", "businessPhone"),
-    ("business_address", "businessAddress"),
-    ("notes", "notes"),
+    ("first_name", "firstName", "Imaging center first name"),
+    ("last_name", "lastName", "Imaging center last name"),
+    ("specialty", "specialty", "Imaging center specialty"),
+    ("practice_name", "practiceName", "Imaging center practice name"),
+    ("business_fax", "businessFax", "Imaging center fax"),
+    ("business_phone", "businessPhone", "Imaging center phone"),
+    ("business_address", "businessAddress", "Imaging center address"),
+    ("notes", "notes", "Imaging center notes"),
 )
+# Marks, in a check_image cache, that science already failed in this request.
+SCIENCE_DOWN = ("", "")
 
 
 def _science_results(path: str) -> list[dict[str, Any]]:
-    """The results list of a science search. Anything but a 2xx answer with a results list raises
-    LookupFailed, so an outage never reads as "no matches"."""
-    try:
-        response = science_http.get_json(path)
-        body = response.json()
-    except (RequestException, ValueError) as exc:
-        raise LookupFailed(str(exc)) from exc
-    if response.status_code >= 400 or not isinstance(body, dict) or not isinstance(body.get("results"), list):
-        raise LookupFailed(f"science answered {response.status_code}")
-    return [row for row in body["results"] if isinstance(row, dict)]
+    """The results list of a science search. A missing results list raises LookupFailed, like an outage."""
+    results = _get(science_http, path).get("results")
+    if not isinstance(results, list):
+        raise LookupFailed("science answered without results")
+    return [row for row in results if isinstance(row, dict)]
 
 
 def _imaging_rows(query: str) -> list[dict[str, str]]:
@@ -176,21 +179,28 @@ def check_image(
     blank or a different study.
 
     Canvas takes the first result of an imaging search for the code. It resolves when that first
-    result has this code, and this code system when one is given. Raises LookupFailed when science
-    doesn't answer. cache, when given, holds answers already fetched in the same request, so a code
-    is searched once however many favorites use it.
+    result has this code (ignoring case), and this code system when one is given; the study's own
+    code is what comes back. Raises LookupFailed when science doesn't answer. cache, when given,
+    holds answers already fetched in the same request, so a code is searched once however many
+    favorites use it, and after one failure the rest of the request fails without waiting on science.
     """
     image_code = (image_code or "").strip()
     if not image_code:
         return None
     if cache is not None:
+        if SCIENCE_DOWN in cache:
+            raise LookupFailed("science didn't answer earlier in this request")
         key = (image_code, code_system)
         if key not in cache:
-            cache[key] = check_image(image_code, code_system)
+            try:
+                cache[key] = check_image(image_code, code_system)
+            except LookupFailed:
+                cache[SCIENCE_DOWN] = None
+                raise
         return cache[key]
     rows = _imaging_rows(image_code)
     first = rows[0] if rows else None
-    if first is None or first["code"] != image_code or not first["name"]:
+    if first is None or first["code"].casefold() != image_code.casefold() or not first["name"]:
         return None
     if code_system and first["code_system"] != code_system:
         return None
@@ -203,7 +213,7 @@ def search_imaging_centers(query: str) -> list[dict[str, str]]:
     path = "/contacts/?" + urlencode({"search": query, "job_title__icontains": "radiology"})
     results = []
     for row in _science_results(path):
-        center = {field: str(row.get(source) or "").strip() for field, source in CENTER_FIELDS}
+        center = {field: str(row.get(source) or "").strip() for field, source, _label in CENTER_FIELDS}
         if center["practice_name"] or center["last_name"]:
             results.append(center)
         if len(results) >= MAX_RESULTS:

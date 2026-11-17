@@ -228,7 +228,7 @@ def test_icd10_display() -> None:
 
 def test_diagnosis_search_keeps_one_row_per_code() -> None:
     payload = {"results": [{"icd10_code": "E119", "icd10_text": "Type 2 diabetes mellitus without complications"}, {"icd10_code": "E119", "icd10_text": "dup"}, {"icd10_code": "E1122", "icd10_text": "With CKD"}]}
-    with patch.object(lookups.science_http, "get_json", return_value=SimpleNamespace(json=lambda: payload)):
+    with patch.object(lookups.science_http, "get_json", return_value=SimpleNamespace(status_code=200, json=lambda: payload)):
         assert lookups.search_diagnoses("type 2") == [
             {"code": "E119", "text": "Type 2 diabetes mellitus without complications"},
             {"code": "E1122", "text": "With CKD"},
@@ -246,7 +246,7 @@ def test_medication_search_keeps_only_units_that_can_be_prescribed() -> None:
         {"representative_ndc": "1", "erx_ncpdp_script_quantity_qualifier_code": "C1", "clinical_quantity_description": "tablet"},
         {"representative_ndc": "", "erx_ncpdp_script_quantity_qualifier_code": "C2", "clinical_quantity_description": "broken"},
     ]}]}
-    with patch.object(lookups.ontologies_http, "get_json", return_value=SimpleNamespace(json=lambda: payload)):
+    with patch.object(lookups.ontologies_http, "get_json", return_value=SimpleNamespace(status_code=200, json=lambda: payload)):
         [med] = lookups.search_medications("drug")
     assert med["fdb_code"] == "9"
     assert [u["description"] for u in med["units"]] == ["tablet"]

@@ -20,10 +20,11 @@ from typing import Any
 from django.db.models import Q
 
 from order_favorites.models import Favorite, HiddenFavorite
+from canvas_sdk.commands import ImagingOrderCommand
 from canvas_sdk.v1.data import LabPartner, LabPartnerTest
 
 from order_favorites.services.catalog import parse_uuid, check_tests, provider_dict, usable_provider
-from order_favorites.services.lookups import ICD10_CODE, LookupFailed, check_image, icd10_display, normalize_icd10
+from order_favorites.services.lookups import CENTER_FIELDS, ICD10_CODE, check_image, icd10_display, normalize_icd10
 
 MAX_NAME = 120
 MAX_SIG = 1000
@@ -35,17 +36,7 @@ MAX_DIAGNOSES = 12
 MAX_SET_ITEMS = 30
 ORDER_KINDS = ("rx", "lab", "imaging")
 # The values of ImagingOrderCommand.Priority, by what may be typed for them.
-PRIORITIES = {"routine": "Routine", "urgent": "Urgent", "stat": "STAT"}
-CENTER_FIELDS = (
-    ("first_name", "Imaging center first name"),
-    ("last_name", "Imaging center last name"),
-    ("specialty", "Imaging center specialty"),
-    ("practice_name", "Imaging center practice name"),
-    ("business_fax", "Imaging center fax"),
-    ("business_phone", "Imaging center phone"),
-    ("business_address", "Imaging center address"),
-    ("notes", "Imaging center notes"),
-)
+PRIORITIES = {priority.value.lower(): priority.value for priority in ImagingOrderCommand.Priority}
 
 
 class Invalid(ValueError):
@@ -153,7 +144,7 @@ def _imaging_center(body: dict[str, Any]) -> dict[str, str] | None:
         return None
     if not isinstance(center, dict):
         raise Invalid("Select the imaging center from the search list.")
-    cleaned = {field: _text(center, field, MAX_CENTER_FIELD, label, required=False) for field, label in CENTER_FIELDS}
+    cleaned = {field: _text(center, field, MAX_CENTER_FIELD, label, required=False) for field, _source, label in CENTER_FIELDS}
     if not cleaned["practice_name"] and not cleaned["last_name"]:
         raise Invalid("The imaging center needs a practice name or a last name. Select it from the search list.")
     return cleaned
@@ -164,10 +155,7 @@ def _imaging_details(body: dict[str, Any], image_cache: dict[tuple[str, str], An
     image_cache shares study checks across the favorites of one request."""
     image_code = _text(body, "image_code", 64, "Study")
     code_system = _text(body, "image_code_system", 100, "Study", required=False)
-    try:
-        study = check_image(image_code, code_system, image_cache)
-    except LookupFailed:
-        raise Invalid("Canvas's imaging search didn't answer, so the study couldn't be checked. Try again.") from None
+    study = check_image(image_code, code_system, image_cache)
     if study is None:
         name = _text(body, "image_name", 300, "Study", required=False) or image_code
         raise Invalid(f"Canvas's imaging search doesn't find {name} first for its code, so the order would come out blank or as another study. Select the study from the search list again.")
@@ -257,7 +245,8 @@ def clean_favorite(
     """(kind, name, details) from a request body. Raises Invalid with a message for the user.
 
     owner and shared say whose set it will be, which decides what an order set may include.
-    image_cache shares imaging study checks across the rows of one import.
+    image_cache shares imaging study checks across the rows of one import. Raises LookupFailed when
+    Canvas's imaging search doesn't answer, so callers can tell an outage from a bad request.
     """
     kind = kind or str(body.get("kind") or "")
     if kind not in ("rx", "lab", "imaging", "set"):

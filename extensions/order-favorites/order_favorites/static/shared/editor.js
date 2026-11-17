@@ -89,7 +89,7 @@
       var imgBits = [];
       if (f.priority) { imgBits.push(esc(f.priority)); }
       if (f.diagnoses.length) { imgBits.push(plural(f.diagnoses.length, "indication", "indications")); }
-      if (f.imaging_center) { imgBits.push(esc(f.imaging_center.practice_name)); }
+      if (f.imaging_center) { imgBits.push(esc(centerName(f.imaging_center))); }
       return '<div class="cs"><div class="cs-1">' + esc(f.image_name) + "</div>" + (imgBits.length ? '<div class="cs-2">' + imgBits.join(" · ") + "</div>" : "") + "</div>";
     }
     var bits = [esc(f.lab_partner_name), plural(f.tests.length, "test", "tests")];

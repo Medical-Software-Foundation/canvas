@@ -207,6 +207,6 @@ def check_csv(text: str) -> dict[str, Any]:
         except Invalid as exc:
             row["reason"] = str(exc)
         except LookupFailed:
-            row["reason"] = "Canvas's medication or diagnosis search didn't answer. Try again."
+            row["reason"] = "Canvas's medication, diagnosis, or imaging search didn't answer. Try again."
         rows.append(row)
     return {"rows": rows, "error": ""}

@@ -39,6 +39,7 @@ CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
 KIND_TITLES = {"rx": "Prescription", "lab": "Lab", "imaging": "Imaging"}
 KIND_NAMES = {"rx": "prescriptions", "lab": "labs", "imaging": "imaging"}
 MIN_QUERY = 2
+IMAGING_DOWN = "Canvas's imaging search didn't answer, so the study couldn't be checked. Try again."
 
 
 def _error(message: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST) -> list[Response | Effect]:
@@ -225,6 +226,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             kind, name, details = clean_favorite(self._body(), owner=me, shared=False)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         if not _kind_enabled(kind):
             return _error("Your practice doesn't use this order type.")
         favorite = Favorite.objects.create(kind=kind, name=name, details=details, shared=False, owner_id=me)
@@ -246,6 +249,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             _kind, favorite.name, favorite.details = clean_favorite(self._body(), favorite.kind, owner=me, shared=False)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         favorite.save()
         return _ok({"favorite": favorite_json(favorite, me)})
 
@@ -356,6 +361,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             kind, name, details = clean_favorite(self._body(), owner=me, shared=True)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         favorite = Favorite.objects.create(kind=kind, name=name, details=details, shared=True, owner_id=me)
         return _ok({"favorite": favorite_json(favorite, me)}, HTTPStatus.CREATED)
 
@@ -374,6 +381,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             _kind, favorite.name, favorite.details = clean_favorite(self._body(), favorite.kind, owner=favorite.owner_id, shared=True)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         favorite.save()
         return _ok({"favorite": favorite_json(favorite, self._me())})
 

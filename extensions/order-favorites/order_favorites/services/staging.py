@@ -28,11 +28,7 @@ from order_favorites.models import Favorite
 from order_favorites.services.catalog import check_tests, usable_provider
 from order_favorites.services.lookups import LookupFailed, check_image
 
-PRIORITIES = {
-    "Routine": ImagingOrderCommand.Priority.ROUTINE,
-    "Urgent": ImagingOrderCommand.Priority.URGENT,
-    "STAT": ImagingOrderCommand.Priority.STAT,
-}
+PRIORITIES = {priority.value: priority for priority in ImagingOrderCommand.Priority}
 
 
 def _note_provider_id(note: Note) -> str | None:

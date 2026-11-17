@@ -156,8 +156,20 @@ def test_study_canvas_wouldnt_pick_first_cant_be_saved(studies: list[dict[str, A
 @pytest.mark.parametrize("failure", [RequestException("down"), None])
 def test_save_is_refused_when_science_doesnt_answer(failure: Exception | None) -> None:
     side = failure if failure is not None else science([CHEST], status=502)
-    with patch.object(lookups.science_http, "get_json", side_effect=side), pytest.raises(Invalid, match="imaging search didn't answer"):
+    with patch.object(lookups.science_http, "get_json", side_effect=side), pytest.raises(lookups.LookupFailed):
         clean_favorite(imaging_body())
+
+
+@pytest.mark.parametrize("route", ["create_favorite", "update_favorite", "admin_create", "admin_update"])
+def test_saving_while_science_is_down_answers_503_not_400(route: str, imaging_on: None, make_staff: Any) -> None:
+    me = make_staff()
+    FavoritesAdmin.objects.create(staff_id=me.dbid)
+    existing = favorite(me, kind="imaging", name="Chest", details=imaging_details(), shared=route == "admin_update")
+    api = make_api(me, body=imaging_body(), path={"favorite_id": str(existing.dbid)})
+    with patch.object(lookups.science_http, "get_json", side_effect=RequestException("down")):
+        status, body = reply(getattr(api, route)())
+    assert status == 503
+    assert "imaging search didn't answer" in body["error"]
 
 
 def test_panel_refuses_to_save_an_unresolvable_study(imaging_on: None, make_staff: Any) -> None:
@@ -445,3 +457,44 @@ def test_import_searches_science_once_per_study(chest_first: Any) -> None:
     rows = check_csv(text)["rows"]
     assert all(r["ok"] for r in rows)
     assert len(chest_first.paths) == 1
+
+
+def test_after_science_fails_once_the_rest_of_the_request_does_not_wait_on_it() -> None:
+    calls: list[str] = []
+
+    def down(path: str) -> Any:
+        calls.append(path)
+        raise RequestException("timeout")
+
+    cache: dict[tuple[str, str], Any] = {}
+    with patch.object(lookups.science_http, "get_json", side_effect=down):
+        for code in ("71046", "70450", "71046"):
+            with pytest.raises(lookups.LookupFailed):
+                lookups.check_image(code, "CPT", cache)
+    assert len(calls) == 1
+
+
+def test_image_code_matches_science_ignoring_case_and_keeps_science_code() -> None:
+    study = {"name": "US breast bilateral", "code_system": "CPT", "code": "76641-RT"}
+    with patch.object(lookups.science_http, "get_json", side_effect=science([study])):
+        assert lookups.check_image(" 76641-rt ") == study
+
+
+@pytest.mark.parametrize("answer", [SimpleNamespace(status_code=500, json=lambda: {"detail": "error"}), SimpleNamespace(status_code=200, json=lambda: ["not", "an", "object"])])
+def test_diagnosis_search_error_is_an_outage_not_no_matches(answer: Any) -> None:
+    with patch.object(lookups.science_http, "get_json", return_value=answer), pytest.raises(lookups.LookupFailed):
+        lookups.search_diagnoses("cough")
+
+
+def test_import_reports_a_diagnosis_outage_instead_of_a_bad_code() -> None:
+    studies = science([CHEST])
+
+    def condition_search_down(path: str) -> Any:
+        if path.startswith("/search/condition/"):
+            return SimpleNamespace(status_code=502, json=dict)
+        return studies(path)
+
+    with patch.object(lookups.science_http, "get_json", side_effect=condition_search_down):
+        [row] = check_csv("type,name,details\nimaging,Chest,71046|R05.9\n")["rows"]
+    assert not row["ok"]
+    assert "didn't answer" in row["reason"]
