@@ -3,11 +3,14 @@
 Public endpoint (Twilio cannot present a Canvas session); its security is the
 ``X-Twilio-Signature`` HMAC verified in ``authenticate()`` — fail closed. On a
 verified reply:
-  - "Y" → set the patient's nearest upcoming appointment to CONFIRMED
+  - "Y" → set the patient's nearest upcoming appointment to CONFIRMED, but only
+    if an appointment SMS for it went out within ``confirm_reply_window_days``;
+    otherwise the "Y" is treated as an unrecognized reply
   - "N" → open an ops Task to follow up (distinguishes decline from no-response)
   - a Twilio opt-out keyword → clear SMS consent on the number that texted in
   - a Twilio opt-in keyword → restore it
-  - anything else → logged only (no action)
+  - anything else → logged, plus a follow-up Task when
+    ``other_reply_task_enabled`` is on
 Consent is classified separately from appointment intent because Twilio's
 keyword set overlaps ours: YES is both an opt-in and a confirm, and both halves
 are actioned. CANCEL is an opt-out only — Twilio publishes it as an unsubscribe
@@ -19,7 +22,7 @@ sender's number and their own reply text — which for an unresolved sender mean
 a number belonging to nobody on file, retained so staff can follow it up.
 """
 import zoneinfo
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from datetime import time as dt_time
 from http import HTTPStatus
 from typing import Any
@@ -35,6 +38,7 @@ from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.team import Team
 from logger import log
 
+from appointment_reminders.models.delivery import NotificationDelivery
 from appointment_reminders.services.claims import INBOUND, claim_store
 from appointment_reminders.services.config import load_config, parse_hhmm
 from appointment_reminders.services.consent import sms_consent_effect
@@ -51,6 +55,16 @@ from appointment_reminders.services.twilio_inbound import (
 )
 
 _BOOKED_STATUSES = ["unconfirmed", "attempted", "confirmed"]
+
+# Outbound campaigns about an upcoming appointment, so the ones a confirm reply
+# can be answering. See _appointment_sms_sent_recently.
+_REPLYABLE_CAMPAIGNS = ["reminder", "telehealth", "confirmation"]
+
+# Most recent sent-SMS rows read when several charts share the sending number.
+_SHARED_NUMBER_ROW_LIMIT = 50
+
+# Longest stretch of the patient's reply quoted in a follow-up task title.
+_TASK_QUOTE_LIMIT = 120
 
 # Saturday and Sunday, per date.weekday()
 _WEEKEND = (5, 6)
@@ -182,8 +196,20 @@ class TwilioInboundAPI(SimpleAPI):
                     "chart already agrees, no write"
                 )
 
+        # Read at most once per reply, and only on the paths that need it, so a
+        # STOP or START stays free of a config query.
+        config = None
+
         if intent == "confirm":
-            if appointment is not None:
+            config = load_config()
+            # A confirm only counts as an answer to an appointment SMS we sent.
+            # The number also carries other traffic (portal invites, staff
+            # messages), and a YES to one of those must not confirm whichever
+            # appointment happens to be next. No recent appointment SMS means
+            # the reply is handled exactly like any other unrecognized text.
+            if appointment is not None and self._appointment_sms_sent_recently(
+                patient, appointment, config.confirm_reply_window_days
+            ):
                 appt_effect = Appointment(instance_id=str(appointment.id))
                 appt_effect.status = AppointmentProgressStatus.CONFIRMED
                 effects.append(appt_effect.update())
@@ -193,16 +219,19 @@ class TwilioInboundAPI(SimpleAPI):
                     f"for patient {patient.id}"
                 )
             else:
-                status = "confirmed_no_appointment"
+                status = "unrecognized"
+                log.info(
+                    f"[inbound] Patient {patient.id} sent a confirm reply with no "
+                    "appointment SMS in the confirm window; not confirming"
+                )
         elif intent == "decline":
-            # One read for both task settings; still only on this branch, so
-            # every other reply path stays free of a config query.
-            task_config = load_config()
+            # One read for both task settings.
+            config = load_config()
             effects.append(
                 AddTask(
                     patient_id=str(patient.id),
-                    team_id=self._decline_task_team_id(task_config),
-                    due=self._decline_task_due(task_config),
+                    team_id=self._decline_task_team_id(config),
+                    due=self._decline_task_due(config),
                     title=(
                         "Patient declined an appointment reminder via SMS — "
                         "follow up to reschedule or cancel."
@@ -214,13 +243,31 @@ class TwilioInboundAPI(SimpleAPI):
             status = "declined"
             log.info(f"[inbound] Patient {patient.id} declined; opened follow-up task")
 
+        # A reply nobody acted on. A bare consent keyword (STOP, START, ...) is
+        # not one: Twilio has handled it and the consent write above mirrors
+        # it. A YES that could not confirm is one, even though it also opted
+        # the patient back in, because the patient was answering something.
+        needs_review = status == "unrecognized" and (
+            not consent or intent == "confirm"
+        )
+        if needs_review:
+            if config is None:
+                config = load_config()
+            if config.other_reply_task_enabled:
+                effects.append(self._other_reply_task(patient, body, config))
+                log.info(
+                    f"[inbound] Patient {patient.id} sent an unrecognized reply; "
+                    "opened follow-up task"
+                )
+
         # One audit row per reply, so a keyword that carries both a consent
         # change and an appointment intent (CANCEL, YES) records both rather
-        # than losing one to the other.
+        # than losing one to the other. A YES that could not confirm records
+        # "opted_in+unrecognized", so the unconfirmed reply stays visible.
         parts = []
         if consent:
             parts.append("opted_in" if consent == "opt_in" else "opted_out")
-        if status != "unrecognized":
+        if status != "unrecognized" or needs_review:
             parts.append(status)
         status = "+".join(parts) or "unrecognized"
 
@@ -295,16 +342,70 @@ class TwilioInboundAPI(SimpleAPI):
         Takes the config rather than loading it, so the decline branch pays for
         one read shared with the due-date lookup.
         """
-        team_id = (getattr(config, "decline_task_team_id", "") or "").strip()
+        return self._existing_team_id(
+            getattr(config, "decline_task_team_id", ""), "decline-task"
+        )
+
+    def _existing_team_id(self, team_id: str | None, purpose: str) -> str | None:
+        """``team_id`` if it names a team that still exists, else None."""
+        team_id = (team_id or "").strip()
         if not team_id:
             return None
         if not Team.objects.filter(id=team_id).exists():
             log.warning(
-                f"[inbound] Configured decline-task team {team_id} no longer "
+                f"[inbound] Configured {purpose} team {team_id} no longer "
                 "exists; creating the task unassigned"
             )
             return None
         return team_id
+
+    def _other_reply_task(self, patient: Patient, body: str, config: Any) -> Effect:
+        """Follow-up task for a reply the plugin could not act on.
+
+        Same shape as the decline task (team check, business-day due date), with
+        its own team. The reply is quoted in the title because that is what
+        staff need to triage it, and the task lives on the patient's chart, the
+        same place the reply already shows in the patient panel's history.
+        """
+        quoted = " ".join((body or "").split())
+        if len(quoted) > _TASK_QUOTE_LIMIT:
+            quoted = quoted[: _TASK_QUOTE_LIMIT - 1] + "…"
+        return AddTask(
+            patient_id=str(patient.id),
+            team_id=self._existing_team_id(
+                getattr(config, "other_reply_task_team_id", ""), "other-reply-task"
+            ),
+            due=self._decline_task_due(config),
+            title=f'Patient replied by SMS — review and follow up: "{quoted}"',
+            status=TaskStatus.OPEN,
+            labels=["sms-reply"],
+        ).apply()
+
+    def _appointment_sms_sent_recently(
+        self, patient: Patient, appointment: AppointmentModel, window_days: int
+    ) -> bool:
+        """Whether an appointment SMS for ``appointment`` went out recently.
+
+        True when Twilio accepted a reminder, telehealth-join or booking SMS
+        for this appointment within ``window_days``. Those are the messages that
+        can ask a patient to reply; a no-show or cancellation message is about
+        an appointment that is no longer upcoming, so it cannot be what a
+        confirm for the next one answers.
+
+        One indexed ``EXISTS``: the patient filter rides the
+        ``(patient, -created_at)`` index, which narrows to this patient's few
+        rows before the rest of the predicate is checked. ``patient_id`` is the
+        FK column, which holds the patient's ``dbid``, so no join is needed.
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=window_days)
+        return NotificationDelivery.objects.filter(
+            patient_id=patient.dbid,
+            appointment_id=str(appointment.id),
+            campaign_type__in=_REPLYABLE_CAMPAIGNS,
+            channel="sms",
+            status="accepted",
+            created_at__gte=cutoff,
+        ).exists()
 
     def _resolve_patient(self, from_number: str) -> Patient | None:
         """Find the patient who owns ``from_number`` (E.164), or None.
@@ -326,14 +427,16 @@ class TwilioInboundAPI(SimpleAPI):
 
         The Python pass stays: it confirms the exact normalized match, so a
         suffix collision between two different numbers cannot resolve wrongly.
+        When more than one chart matches exactly, ``_pick_shared_number_patient``
+        decides which one the reply belongs to.
         """
         digits = "".join(c for c in (from_number or "") if c.isdigit())
         if len(digits) < 10:
             return None
         suffix = digits[-10:]
         # Deliberately uncapped. After a 10-digit suffix match, more than one
-        # hit means genuinely duplicated patient records — a data-quality
-        # problem the caller should see rather than have silently truncated.
+        # hit means charts that genuinely share the number (family members, or
+        # duplicated records), and every one of them must be weighed.
         candidates = (
             Patient.objects.filter(
                 telecom__system="phone", telecom__value__endswith=suffix
@@ -341,14 +444,89 @@ class TwilioInboundAPI(SimpleAPI):
             .prefetch_related("telecom")
             .distinct()
         )
-        for patient in candidates:
-            for contact in patient.telecom.all():
-                if (
-                    contact.system == "phone"
-                    and _normalize_phone(contact.value) == from_number
-                ):
-                    return patient
-        return None
+        matches = [
+            patient
+            for patient in candidates
+            if any(
+                contact.system == "phone"
+                and _normalize_phone(contact.value) == from_number
+                for contact in patient.telecom.all()
+            )
+        ]
+        if len(matches) <= 1:
+            return matches[0] if matches else None
+        return self._pick_shared_number_patient(matches, from_number)
+
+    def _pick_shared_number_patient(
+        self, matches: list[Patient], from_number: str
+    ) -> Patient:
+        """Choose among several charts that carry the same phone number.
+
+        Family members often share one number, and the reply belongs to the
+        chart we texted, not whichever chart the lookup happened to return
+        first. Using this plugin's own sent-SMS rows to that number:
+
+        1. If exactly one chart has an upcoming booked appointment that a
+           reminder, telehealth or booking SMS was about within the confirm
+           window, that chart — it is the one with something to reply to.
+        2. Otherwise the chart we most recently texted at this number.
+        3. With no sent rows at all, the first match, as before.
+
+        Only reached when more than one chart matches, so the single-chart path
+        pays no extra query.
+        """
+        by_dbid = {patient.dbid: patient for patient in matches}
+        # Newest first, capped: only the latest sends to this number matter.
+        sent = list(
+            NotificationDelivery.objects.filter(
+                patient_id__in=list(by_dbid),
+                recipient=from_number,
+                channel="sms",
+                status="accepted",
+            )
+            .order_by("-created_at")
+            .values_list("patient_id", "appointment_id", "campaign_type", "created_at")[
+                :_SHARED_NUMBER_ROW_LIMIT
+            ]
+        )
+        if not sent:
+            log.warning(
+                f"[inbound] {len(matches)} charts share the sending number and "
+                f"none was texted by this plugin; using patient {matches[0].id}"
+            )
+            return matches[0]
+
+        window_days = load_config().confirm_reply_window_days
+        cutoff = datetime.now(UTC) - timedelta(days=window_days)
+        reminded = {
+            str(appointment_id): patient_dbid
+            for patient_dbid, appointment_id, campaign, created_at in sent
+            if appointment_id
+            and campaign in _REPLYABLE_CAMPAIGNS
+            and created_at >= cutoff
+        }
+        if reminded:
+            upcoming = AppointmentModel.objects.filter(
+                id__in=list(reminded),
+                start_time__gte=datetime.now(timezone.utc),
+                status__in=_BOOKED_STATUSES,
+            ).values_list("id", flat=True)
+            with_upcoming = {reminded[str(appointment_id)] for appointment_id in upcoming}
+            if len(with_upcoming) == 1:
+                chosen = by_dbid[with_upcoming.pop()]
+                log.info(
+                    f"[inbound] {len(matches)} charts share the sending number; "
+                    f"using patient {chosen.id}, the only one with a reminded "
+                    "upcoming appointment"
+                )
+                return chosen
+
+        chosen = by_dbid[sent[0][0]]
+        log.info(
+            f"[inbound] {len(matches)} charts share the sending number; "
+            f"using patient {chosen.id}, the one most recently texted"
+        )
+        return chosen
 
     def _nearest_upcoming_appointment(self, patient: Patient) -> AppointmentModel | None:
         """Return the patient's soonest upcoming booked appointment, or None."""

@@ -1250,6 +1250,23 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                         </div>
                         <p id="decline_task_due_note" style="color:var(--text-soft);font-size:12px;margin:6px 0 0;">Without a due date the task sorts nowhere and is easy to lose in a large queue.</p>
                     </div>
+                    <div class="form-group" style="max-width:520px;">
+                        <label class="channel-toggle" style="font-weight:600;">
+                            <input type="checkbox" id="other_reply_task_enabled" onchange="updateOtherReplyUI()">
+                            <span class="channel-check"></span>
+                            Create a task for other replies
+                        </label>
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">A reply that is not a confirm, a decline or STOP/START (for example a question, or a YES to a text that was not an appointment reminder) opens a task instead of only being logged. Uses the due date above.</p>
+                        <div id="other_reply_task_fields" style="display:none;margin:8px 0 0 4px;">
+                            <label for="other_reply_task_team_id">Team for other replies</label>
+                            <select id="other_reply_task_team_id"><option value="">Unassigned</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="max-width:520px;">
+                        <label for="confirm_reply_window_days">Confirm window (days)</label>
+                        <input type="number" id="confirm_reply_window_days" min="1" max="60" value="4" style="width:90px;">
+                        <p style="color:var(--text-soft);font-size:12px;margin:4px 0 0;">A Y/YES/1/C reply confirms the next appointment only if a reminder, telehealth or booking text for that appointment was sent within this many days. Otherwise it is treated as an other reply.</p>
+                    </div>
                 </div>
             </div>
             <!-- end task routing -->
@@ -1690,11 +1707,47 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             document.getElementById('decline_task_due_time').value =
                 config.decline_task_due_time || '23:59';
             updateDueDateUI();
+            savedOtherReplyTaskTeamId = config.other_reply_task_team_id || '';
+            document.getElementById('other_reply_task_enabled').checked =
+                !!config.other_reply_task_enabled;
+            document.getElementById('confirm_reply_window_days').value =
+                String(config.confirm_reply_window_days || 4);
+            updateOtherReplyUI();
             loadTeams();
             updateTestingModeUI();
         }
 
         var savedDeclineTaskTeamId = '';
+        var savedOtherReplyTaskTeamId = '';
+
+        function updateOtherReplyUI() {
+            document.getElementById('other_reply_task_fields').style.display =
+                document.getElementById('other_reply_task_enabled').checked ? 'block' : 'none';
+        }
+
+        // Fill one team <select>. Returns true when the saved team is missing.
+        function fillTeamSelect(select, teams, savedId) {
+            select.innerHTML = '<option value="">Unassigned</option>';
+            teams.forEach(function(team) {
+                var opt = document.createElement('option');
+                opt.value = team.id;
+                opt.textContent = team.name;
+                select.appendChild(opt);
+            });
+            // A configured team that no longer exists must not look like
+            // "Unassigned" — the saved value would then be silently dropped
+            // the next time someone hits Save.
+            var missing = !!savedId &&
+                !teams.some(function(x) { return x.id === savedId; });
+            if (missing) {
+                var stale = document.createElement('option');
+                stale.value = savedId;
+                stale.textContent = 'Team no longer exists (' + savedId + ')';
+                select.appendChild(stale);
+            }
+            select.value = savedId;
+            return missing;
+        }
 
         async function loadTeams() {
             var select = document.getElementById('decline_task_team_id');
@@ -1702,29 +1755,17 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
             try {
                 var resp = await fetch('/plugin-io/api/appointment_reminders/admin/teams');
                 var teams = await resp.json();
-                select.innerHTML = '<option value="">Unassigned</option>';
-                teams.forEach(function(team) {
-                    var opt = document.createElement('option');
-                    opt.value = team.id;
-                    opt.textContent = team.name;
-                    select.appendChild(opt);
-                });
-                // A configured team that no longer exists must not look like
-                // "Unassigned" — the saved value would then be silently dropped
-                // the next time someone hits Save.
-                if (savedDeclineTaskTeamId &&
-                    !teams.some(function(x) { return x.id === savedDeclineTaskTeamId; })) {
-                    var stale = document.createElement('option');
-                    stale.value = savedDeclineTaskTeamId;
-                    stale.textContent = 'Team no longer exists (' + savedDeclineTaskTeamId + ')';
-                    select.appendChild(stale);
-                    note.textContent = 'The configured team was not found. Pick another, or tasks will be created unassigned.';
+                var declineMissing = fillTeamSelect(select, teams, savedDeclineTaskTeamId);
+                var otherMissing = fillTeamSelect(
+                    document.getElementById('other_reply_task_team_id'),
+                    teams, savedOtherReplyTaskTeamId);
+                if (declineMissing || otherMissing) {
+                    note.textContent = 'A configured team was not found. Pick another, or tasks will be created unassigned.';
                 } else {
                     note.textContent = teams.length
                         ? 'Teams are configured in Canvas settings.'
                         : 'No teams found on this instance. Tasks will be created unassigned.';
                 }
-                select.value = savedDeclineTaskTeamId;
             } catch (e) {
                 note.textContent = 'Could not load teams.';
             }
@@ -2550,6 +2591,9 @@ class NotificationAPI(StaffSessionAuthMixin, SimpleAPI):
                     ? parseInt(document.getElementById('decline_task_due_days').value, 10)
                     : null,
                 decline_task_due_time: document.getElementById('decline_task_due_time').value || '23:59',
+                other_reply_task_enabled: document.getElementById('other_reply_task_enabled').checked,
+                other_reply_task_team_id: document.getElementById('other_reply_task_team_id').value,
+                confirm_reply_window_days: parseInt(document.getElementById('confirm_reply_window_days').value, 10) || 4,
                 testing_mode: document.getElementById('testing_mode').checked,
                 testing_mode_patients: splitLines('testing_mode_patients'),
                 testing_mode_recipients: splitLines('testing_mode_recipients'),
