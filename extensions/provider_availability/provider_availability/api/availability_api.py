@@ -85,6 +85,7 @@ from provider_availability.engine.storage import (
 )
 from provider_availability.api._auth import is_authorized
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
+from provider_availability.protocols.appointment_buffer import reconcile_buffers_for_provider
 from provider_availability.engine.provider_resolver import (
     get_provider_displays,
     resolve_provider_id,
@@ -718,6 +719,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         sync_effects = sync_provider_availability(provider_id)
         if rule.is_active and rule.booking_interval.min_lead_hours > 0:
             sync_effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
+        sync_effects.extend(reconcile_buffers_for_provider(provider_id))
 
         return [
             *sync_effects,
@@ -809,6 +811,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 all_effects.extend(build_provider_lead_time_effects(pid, lead_rules))
             else:
                 all_effects.extend(delete_provider_lead_time_events(pid))
+            all_effects.extend(reconcile_buffers_for_provider(pid))
 
         return [
             *all_effects,
@@ -835,6 +838,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             event_effects.extend(build_provider_lead_time_effects(provider_id, lead_rules))
         else:
             event_effects.extend(delete_provider_lead_time_events(provider_id))
+        event_effects.extend(reconcile_buffers_for_provider(provider_id))
 
         return [
             *event_effects,
@@ -858,6 +862,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         event_effects = build_delete_effects(provider_id)
 
         count = delete_rules_for_provider(provider_id)
+        event_effects.extend(reconcile_buffers_for_provider(provider_id))
 
         return [
             *event_effects,
@@ -929,6 +934,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         effects.extend(build_recurring_blocks_resync_effects(
             [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id and rb.is_active]
         ))
+        # An override changes which hours a rule covers, and so its buffers.
+        effects.extend(reconcile_buffers_for_provider(provider_id))
         return [*effects, JSONResponse({"message": "Override saved"})]
 
     @api.delete("/rules/<provider_id>/<rule_id>/overrides/<override_date>")
@@ -955,6 +962,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         effects.extend(build_recurring_blocks_resync_effects(
             [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id and rb.is_active]
         ))
+        effects.extend(reconcile_buffers_for_provider(provider_id))
         return [*effects, JSONResponse({"message": "Override removed"})]
 
     # ── Admin Block CRUD ───────────────────────────────────────────────
@@ -1173,8 +1181,30 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        # Delete old calendar event
         old_block = get_block_by_id(provider_id, block_id)
+        group_id = body.get("group_id")
+        apply_to_group = bool(body.get("apply_to_group", False))
+        edited_date = (old_block.start if old_block else start_dt).date()
+        new_date = start_dt.date()
+        date_moved = new_date != edited_date
+        group_blocks = (
+            get_blocks_by_group(group_id) if group_id and (apply_to_group or date_moved) else []
+        )
+
+        # A date in a group holds one block per provider. Moving this block
+        # onto a date the provider already has in the group would leave two.
+        if date_moved and any(
+            gb.id != block_id and gb.provider_id == provider_id and gb.start.date() == new_date
+            for gb in group_blocks
+        ):
+            return [
+                JSONResponse(
+                    {"error": f"This group already has a block on {new_date.isoformat()}. Edit that date instead."},
+                    status_code=HTTPStatus.CONFLICT,
+                )
+            ]
+
+        # Delete old calendar event
         delete_effects: list[Effect] = []
         if old_block:
             delete_effects = build_delete_block_effects(provider_id, old_block)
@@ -1186,7 +1216,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             end=end_dt,
             reason=body.get("reason", ""),
             location_ids=body.get("location_ids", []),
-            group_id=body.get("group_id"),
+            group_id=group_id,
             all_day=bool(body.get("all_day", False)),
         )
         save_block(block)
@@ -1196,11 +1226,23 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         all_effects = delete_effects + create_effects
 
         updated_count = 1
-        apply_to_group = body.get("apply_to_group", False)
+        skipped_count = 0
         if apply_to_group and block.group_id:
-            group_blocks = get_blocks_by_group(block.group_id)
+            # Only the other providers' blocks on the edited date follow this
+            # edit (time, reason and, if it moved, the date). Their other dates
+            # are never added, removed or rewritten. A provider who already has
+            # a group block on the new date is skipped, so no date ends up
+            # with two blocks for one provider.
+            taken = {
+                (gb.provider_id, gb.start.date())
+                for gb in group_blocks
+                if gb.start.date() != edited_date
+            }
             for gb in group_blocks:
-                if gb.id == block.id:
+                if gb.id == block.id or gb.provider_id == provider_id or gb.start.date() != edited_date:
+                    continue
+                if date_moved and (gb.provider_id, new_date) in taken:
+                    skipped_count += 1
                     continue
                 old_effects = build_delete_block_effects(
                     gb.provider_id, gb, skip_ids={g.id for g in group_blocks}
@@ -1213,10 +1255,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 all_effects.extend(build_block_event_effects(gb))
                 updated_count += 1
 
+        message = f"Updated {updated_count} block(s)"
+        if skipped_count:
+            message += (
+                f"; {skipped_count} other provider(s) already had a block on"
+                f" {new_date.isoformat()} and were left as they were"
+            )
         return [
             *all_effects,
             JSONResponse(
-                {"message": f"Updated {updated_count} block(s)", "block": block.to_dict()},
+                {"message": message, "block": block.to_dict()},
             ),
         ]
 

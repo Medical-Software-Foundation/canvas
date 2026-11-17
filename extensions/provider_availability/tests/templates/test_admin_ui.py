@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from provider_availability.templates.admin_ui import render_admin_page
 
 
@@ -77,3 +79,28 @@ class TestRenderAdminPage:
         assert 'id="expired-panel"' in html
         assert 'onclick="removeExpired()"' in html
         assert "showAllProviders" not in html
+
+
+class TestStatusMessageLayout:
+    """A save shows its message once, and the queue-dates help reads as one line."""
+
+    _STATIC = Path(__file__).parent.parent.parent / "provider_availability" / "static"
+
+    def test_page_has_one_status_message_container(self):
+        html = render_admin_page(None)
+        assert html.count('id="status-msg"') == 1
+        assert "status-msg-bottom" not in html
+
+    def test_message_code_writes_only_the_top_container(self):
+        js = (self._STATIC / "js" / "admin.js").read_text()
+        css = (self._STATIC / "css" / "admin.css").read_text()
+        assert "status-msg-bottom" not in js
+        assert "status-msg-bottom" not in css
+
+    def test_add_date_help_is_one_inline_run(self):
+        """.field is a flex column: a bare <strong> child becomes its own line."""
+        html = render_admin_page(None)
+        start = html.index("Add the date above and click")
+        assert html[start - len("<span>") : start] == "<span>"
+        help_text = html[start : html.index("</span>", start)]
+        assert "<strong>Add date</strong>" in help_text

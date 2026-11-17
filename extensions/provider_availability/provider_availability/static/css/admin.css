@@ -602,8 +602,6 @@ body {
 .alert-dismiss { background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 0 0 12px; color: inherit; opacity: 0.6; }
 .alert-dismiss:hover { opacity: 1; }
 #status-msg { transition: opacity 0.3s; }
-#status-msg-bottom { position: fixed; bottom: 0; left: 0; right: 0; z-index: 999; padding: 0 16px; transition: opacity 0.3s; }
-#status-msg-bottom .alert { margin-bottom: 0; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
 
 /* Group banner */
 .group-banner { background: rgba(33,133,208,0.08); border: 1.5px solid var(--teal-dim); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 14px; display: flex; align-items: center; gap: 10px; color: var(--text-body); }

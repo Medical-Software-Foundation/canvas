@@ -34,6 +34,7 @@ from provider_availability.engine.event_sync import (
     build_recurring_blocks_resync_effects,
     sync_provider_availability,
 )
+from provider_availability.protocols.appointment_buffer import reconcile_buffers_for_provider
 from provider_availability.engine.lookups import (
     get_active_locations,
     get_active_staff_ids,
@@ -216,6 +217,8 @@ class CSVImportAPI(StaffSessionAuthMixin, SimpleAPI):
         for pid in providers_touched:
             effects.extend(sync_provider_availability(pid))
             effects.extend(build_provider_lead_time_effects(pid, get_rules_for_provider(pid)))
+            # Imported rules can set buffers, so draw them for upcoming visits.
+            effects.extend(reconcile_buffers_for_provider(pid))
 
         log.info(
             "csv commit: %d rules, %d blocks, %d recurring blocks",

@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from django.db.models import Q
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event as EventEffect
 from canvas_sdk.events import EventType
@@ -51,6 +53,9 @@ from provider_availability.engine.storage import get_rules_for_provider
 from provider_availability.engine.tz_utils import to_provider_naive
 
 BUFFER_TITLE = "Buffer"
+
+# Appointments in these states hold no time, so they keep no buffers.
+INACTIVE_STATUSES = (AppointmentProgressStatus.CANCELLED, AppointmentProgressStatus.NOSHOWED)
 
 
 def _buffer_horizon(now: datetime) -> datetime:
@@ -87,6 +92,29 @@ class OnAppointmentCanceled(BaseProtocol):
 
     def compute(self) -> list[Effect]:
         return _on_appointment_canceled(self.event.target.id)
+
+
+class OnAppointmentNoShowed(BaseProtocol):
+    """Remove buffer events when an appointment is marked a no-show."""
+
+    RESPONDS_TO = EventType.Name(EventType.APPOINTMENT_NO_SHOWED)
+
+    def compute(self) -> list[Effect]:
+        return _on_appointment_status_change(self.event.target.id)
+
+
+class OnAppointmentUpdated(BaseProtocol):
+    """Remove buffer events when an update cancels an appointment or marks it a no-show.
+
+    Changing only the status (GraphQL ``updateAppointment``, as the schedule
+    uses) was seen on a live instance to leave every Buffer event in place, so
+    the status change is acted on here as well as on the cancel event.
+    """
+
+    RESPONDS_TO = EventType.Name(EventType.APPOINTMENT_UPDATED)
+
+    def compute(self) -> list[Effect]:
+        return _on_appointment_status_change(self.event.target.id)
 
 
 class OnAppointmentRestored(BaseProtocol):
@@ -132,7 +160,9 @@ def _windows_on(rule: ProviderAvailabilityRule, day: date) -> list[TimeWindow]:
 
 
 def _covering_rules(
-    appt: Appointment, provider_id: str
+    appt: Appointment,
+    provider_id: str,
+    rules: list[ProviderAvailabilityRule] | None = None,
 ) -> list[ProviderAvailabilityRule]:
     """The provider's rules that actually govern this appointment.
 
@@ -147,6 +177,9 @@ def _covering_rules(
     rule stores visit types as NoteType UUID strings, so they are compared with
     the appointment's ``note_type.id`` (the UUID), not its integer
     ``note_type_id``.
+
+    Pass ``rules`` (the provider's rules, read once) when checking many
+    appointments, so storage is not read again for each one.
     """
     local_start = to_provider_naive(appt.start_time, provider_id)
     local_date = local_start.date()
@@ -155,7 +188,7 @@ def _covering_rules(
     appt_visit_type = str(appt.note_type.id) if appt.note_type else ""
 
     covering: list[ProviderAvailabilityRule] = []
-    for rule in get_rules_for_provider(provider_id):
+    for rule in rules if rules is not None else get_rules_for_provider(provider_id):
         if not rule.is_active:
             continue
         if rule.effective_start and local_date < rule.effective_start:
@@ -190,7 +223,11 @@ def _covering_rules(
     return covering
 
 
-def _buffer_minutes(appt: Appointment, provider_id: str) -> tuple[int, int]:
+def _buffer_minutes(
+    appt: Appointment,
+    provider_id: str,
+    rules: list[ProviderAvailabilityRule] | None = None,
+) -> tuple[int, int]:
     """The (pre, post) buffer minutes for this appointment's own rule.
 
     Padding follows the rule covering where the appointment actually sits, so
@@ -203,7 +240,7 @@ def _buffer_minutes(appt: Appointment, provider_id: str) -> tuple[int, int]:
     least deterministic. Where no rule covers the appointment there is no
     configured padding to apply.
     """
-    covering = _covering_rules(appt, provider_id)
+    covering = _covering_rules(appt, provider_id, rules)
     if not covering:
         log.info("BUFFER: no rule covers appt %s, drawing no padding", appt.id)
         return 0, 0
@@ -288,7 +325,7 @@ def _neighbor_buffer_spans(
             start_time__lte=end + timedelta(days=1),
         )
         .exclude(id=appt.id)
-        .exclude(status=AppointmentProgressStatus.CANCELLED)
+        .exclude(status__in=INACTIVE_STATUSES)
         .exclude(note_type__category=NoteTypeCategories.SCHEDULE_EVENT)
         .select_related("location")
     )
@@ -335,7 +372,7 @@ def _unclaimed(
 
 def _create_buffer_effects(appt: Appointment) -> list[Effect]:
     """Draw the pre/post buffer events for this one appointment."""
-    if not appt.provider or appt.status == AppointmentProgressStatus.CANCELLED:
+    if not appt.provider or appt.status in INACTIVE_STATUSES:
         return []
     if not _is_visit(appt):
         return []
@@ -415,13 +452,39 @@ def _on_appointment_created(appointment_id: str) -> list[Effect]:
 
 
 def _on_appointment_canceled(appointment_id: str) -> list[Effect]:
-    """Remove the cancelled appointment's own buffers and nothing else."""
+    """Remove the cancelled appointment's buffers, and any others nobody needs.
+
+    A delete-only reconcile of the provider rather than a position match on
+    this one appointment: it already keeps the buffers a neighbouring visit
+    still needs, and it also clears anything an earlier missed cancel left.
+    """
     appt = _load_appointment(appointment_id)
-    if appt is None:
+    if appt is None or not appt.provider:
         return []
 
-    effects = _delete_buffer_effects(appt)
+    effects = reconcile_buffers_for_provider(
+        str(appt.provider.id), draw=False, ignore_appointment_id=appt.id
+    )
     log.info("BUFFER: canceled appt %s, %d buffers removed", appointment_id, len(effects))
+    return effects
+
+
+def _on_appointment_status_change(appointment_id: str) -> list[Effect]:
+    """Clear buffers no one needs once an appointment is cancelled or a no-show.
+
+    Runs on APPOINTMENT_UPDATED and APPOINTMENT_NO_SHOWED. Only deletes: the
+    same cancel can arrive on more than one event at once, and two handlers
+    drawing in parallel would stack duplicate buffers. Any other update returns
+    nothing, so ordinary edits never trigger a provider-wide read.
+    """
+    appt = _load_appointment(appointment_id)
+    if appt is None or not appt.provider or appt.status not in INACTIVE_STATUSES:
+        return []
+
+    effects = reconcile_buffers_for_provider(
+        str(appt.provider.id), draw=False, ignore_appointment_id=appt.id
+    )
+    log.info("BUFFER: appt %s now %s, %d buffers removed", appointment_id, appt.status, len(effects))
     return effects
 
 
@@ -477,3 +540,150 @@ def _on_appointment_restored(appointment_id: str) -> list[Effect]:
     effects = _create_buffer_effects(appt)
     log.info("BUFFER: restored appt %s, %d effects", appointment_id, len(effects))
     return effects
+
+
+# Most stale Buffer events one rule save deletes. Each delete is a small effect,
+# but an instance that ran an older build can hold tens of thousands of stranded
+# holds; the rest go on the next rule save for that provider.
+MAX_BUFFER_DELETES_PER_RECONCILE = 5000
+
+
+def reconcile_buffers_for_provider(
+    provider_id: str, draw: bool = True, ignore_appointment_id: str | None = None
+) -> list[Effect]:
+    """Bring a provider's future Buffer events in line with their current rules.
+
+    Appointment events keep buffers right as bookings come and go, but editing a
+    rule changes no appointment, so removing or shrinking a rule's buffer (or
+    deleting the rule) used to leave its Buffer events in place, blocking time
+    that should be bookable. Rule changes call this instead.
+
+    It works out the buffers every upcoming visit should have under the rules as
+    they are now, then deletes only the Buffer events nobody needs and creates
+    only the missing ones. Events that are already right are not touched, so a
+    rule save that changes nothing about buffers emits nothing, and running it
+    twice gives the same result. Past buffers are left alone.
+
+    ``draw=False`` only deletes. Appointment cancels use it, since a cancel never
+    needs a new buffer and two handlers drawing for the same change would stack
+    duplicates. It also means a buffer that is the wrong size for its visit
+    (only possible if a rule changed without a reconcile) is removed on a
+    cancel and redrawn by the next rule save, not right away.
+
+    ``ignore_appointment_id`` is treated as wanting no buffers whatever its
+    stored status, so a cancel event read before the status is visible still
+    clears that appointment's buffers.
+    """
+    calendar_ids = [
+        cal.id
+        for cal in get_admin_calendars(provider_id, resolve_provider_name(provider_id))
+    ]
+    now = datetime.now(UTC)
+    existing: list[tuple[str, datetime, datetime]] = []
+    if calendar_ids:
+        existing = [
+            (str(eid), _to_utc(starts), _to_utc(ends))
+            for eid, starts, ends in EventModel.objects.filter(
+                # "Buffer", or a legacy "Buffer:<appointment id>" from an earlier build.
+                Q(title=BUFFER_TITLE) | Q(title__startswith=f"{BUFFER_TITLE}:"),
+                calendar__id__in=calendar_ids,
+                is_cancelled=False,
+                ends_at__gt=now,
+            ).values_list("id", "starts_at", "ends_at")
+        ]
+
+    rules = get_rules_for_provider(provider_id)
+    wanted: list[tuple[datetime, datetime]] = []  # every span still needed
+    to_draw: list[tuple[datetime, datetime]] = []  # spans of upcoming visits, may be drawn
+    if any(r.is_active and (r.buffer_minutes.pre or r.buffer_minutes.post) for r in rules):
+        wanted, to_draw = _wanted_buffer_spans(provider_id, rules, now, ignore_appointment_id)
+
+    # Match existing events to wanted spans one for one, so two appointments
+    # that each want the identical span keep two events, as booking draws them.
+    remaining = list(wanted)
+    doomed: list[str] = []
+    for eid, starts, ends in existing:
+        if (starts, ends) in remaining:
+            remaining.remove((starts, ends))
+        else:
+            doomed.append(eid)
+    missing = [span for span in remaining if span in to_draw] if draw else []
+
+    effects: list[Effect] = [
+        EventEffect(event_id=eid).delete() for eid in doomed[:MAX_BUFFER_DELETES_PER_RECONCILE]
+    ]
+    if missing:
+        calendar_id, calendar_effects = get_admin_calendar_id(
+            provider_id, provider_name=resolve_provider_name(provider_id)
+        )
+        if calendar_id:
+            effects.extend(calendar_effects)
+            effects.extend(
+                EventEffect(
+                    calendar_id=calendar_id, title=BUFFER_TITLE, starts_at=starts, ends_at=ends
+                ).create()
+                for starts, ends in missing
+            )
+        else:
+            log.warning("BUFFER: could not resolve Admin calendar for provider %s", provider_id)
+
+    log.info(
+        "BUFFER: reconciled provider %s, %d stale removed (%d over the cap left), %d drawn",
+        provider_id,
+        min(len(doomed), MAX_BUFFER_DELETES_PER_RECONCILE),
+        max(len(doomed) - MAX_BUFFER_DELETES_PER_RECONCILE, 0),
+        len(missing),
+    )
+    return effects
+
+
+def _wanted_buffer_spans(
+    provider_id: str,
+    rules: list[ProviderAvailabilityRule],
+    now: datetime,
+    ignore_appointment_id: str | None = None,
+) -> tuple[list[tuple[datetime, datetime]], list[tuple[datetime, datetime]]]:
+    """The buffer spans the provider's visits need under ``rules``.
+
+    Returns (wanted, drawable). ``wanted`` also holds the post-buffer of a visit
+    already under way, which is kept but never redrawn, matching booking, which
+    draws nothing for a visit that has started. ``drawable`` covers visits that
+    start from now up to the same horizon booking uses.
+    """
+    horizon = _buffer_horizon(now)
+    visits = (
+        Appointment.objects.filter(
+            provider__id=provider_id,
+            patient__isnull=False,
+            entered_in_error__isnull=True,
+            start_time__gte=now - timedelta(days=1),
+            start_time__lte=horizon,
+        )
+        .exclude(status__in=INACTIVE_STATUSES)
+        .exclude(note_type__category=NoteTypeCategories.SCHEDULE_EVENT)
+        .select_related("location", "note_type")
+    )
+    visits = list(visits)
+    # An appointment that was rescheduled has a replacement pointing back at it
+    # (by row number), and its buffers moved to the replacement.
+    replaced = {v.appointment_rescheduled_from_id for v in visits if v.appointment_rescheduled_from_id}
+
+    wanted: list[tuple[datetime, datetime]] = []
+    drawable: list[tuple[datetime, datetime]] = []
+    for visit in visits:
+        if visit.dbid in replaced or (ignore_appointment_id and str(visit.id) == str(ignore_appointment_id)):
+            continue
+        pre, post = _buffer_minutes(visit, provider_id, rules)
+        start, end = (_to_utc(t) for t in _appointment_window(visit))
+        spans = []
+        if pre > 0:
+            spans.append((start - timedelta(minutes=pre), start))
+        if post > 0:
+            spans.append((end, end + timedelta(minutes=post)))
+        for span in spans:
+            if span[1] <= now:
+                continue
+            wanted.append(span)
+            if start >= now:
+                drawable.append(span)
+    return wanted, drawable
