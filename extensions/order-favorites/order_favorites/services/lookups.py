@@ -167,17 +167,27 @@ def search_imaging(query: str) -> list[dict[str, str]]:
     return results
 
 
-def check_image(image_code: str, code_system: str = "") -> dict[str, str] | None:
+def check_image(
+    image_code: str,
+    code_system: str = "",
+    cache: dict[tuple[str, str], dict[str, str] | None] | None = None,
+) -> dict[str, str] | None:
     """The study Canvas will put in the Image field for this image code, or None when that would be
     blank or a different study.
 
     Canvas takes the first result of an imaging search for the code. It resolves when that first
     result has this code, and this code system when one is given. Raises LookupFailed when science
-    doesn't answer.
+    doesn't answer. cache, when given, holds answers already fetched in the same request, so a code
+    is searched once however many favorites use it.
     """
     image_code = (image_code or "").strip()
     if not image_code:
         return None
+    if cache is not None:
+        key = (image_code, code_system)
+        if key not in cache:
+            cache[key] = check_image(image_code, code_system)
+        return cache[key]
     rows = _imaging_rows(image_code)
     first = rows[0] if rows else None
     if first is None or first["code"] != image_code or not first["name"]:

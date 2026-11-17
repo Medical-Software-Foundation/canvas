@@ -90,11 +90,11 @@ def _imaging_effect(favorite: Favorite, note: Note, adder_id: str) -> Effect:
     ).originate()
 
 
-def _imaging_skip(favorite: Favorite) -> str | None:
+def _imaging_skip(favorite: Favorite, image_cache: dict[tuple[str, str], Any]) -> str | None:
     """Why an imaging favorite can't be added, or None when it can."""
     d = favorite.details
     try:
-        study = check_image(d.get("image_code") or "", d.get("image_code_system") or "")
+        study = check_image(d.get("image_code") or "", d.get("image_code_system") or "", image_cache)
     except LookupFailed:
         return "image_check"
     return None if study is not None else "image"
@@ -105,6 +105,7 @@ def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[di
     added: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     effects: list[Effect] = []
+    image_cache: dict[tuple[str, str], Any] = {}
     for favorite in favorites:
         entry = {"id": favorite.dbid, "name": favorite.name, "kind": favorite.kind, "shared": favorite.shared}
         if favorite.kind == "rx":
@@ -112,7 +113,7 @@ def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[di
             added.append(entry)
             continue
         if favorite.kind == "imaging":
-            reason = _imaging_skip(favorite)
+            reason = _imaging_skip(favorite, image_cache)
             if reason is not None:
                 skipped.append({**entry, "reason": reason, "image": favorite.details.get("image_name", "")})
                 continue

@@ -127,7 +127,9 @@ def test_practice_imaging_favorite_keeps_no_ordering_provider(chest_first: Any, 
         ({"additional_details": "x" * 1025}, "Additional details can be at most 1024 characters."),
         ({"comment": "x" * 1025}, "Comment can be at most 1024 characters."),
         ({"imaging_center": "Main Imaging"}, "Select the imaging center from the search list."),
-        ({"imaging_center": {**CENTER, "practice_name": ""}}, "Imaging center practice name is required."),
+        ({"imaging_center": {**CENTER, "practice_name": ""}}, "The imaging center needs a practice name or a last name. Select it from the search list."),
+        ({"diagnoses": 5}, "Select indications from the search list."),
+        ({"diagnoses": {"code": "R059"}}, "Select indications from the search list."),
         ({"imaging_center": {**CENTER, "notes": "x" * 513}}, "Imaging center notes can be at most 512 characters."),
         ({"ordering_provider_id": "not-staff"}, "must be active staff with an NPI"),
     ],
@@ -414,3 +416,32 @@ def test_check_image_treats_a_non_json_science_answer_as_down() -> None:
 
     with patch.object(lookups.science_http, "get_json", return_value=SimpleNamespace(status_code=502, json=not_json)), pytest.raises(lookups.LookupFailed):
         lookups.check_image("71046")
+
+
+def test_imaging_center_with_only_a_last_name_saves(chest_first: Any) -> None:
+    center = {**CENTER, "practice_name": "", "last_name": "Rivera"}
+    _k, _n, details = clean_favorite(imaging_body(imaging_center=center))
+    assert details["imaging_center"]["last_name"] == "Rivera"
+    assert details["imaging_center"]["practice_name"] == ""
+
+
+@pytest.mark.parametrize("body", [{"kind": "set", "name": "S", "items": 7}, {"kind": "lab", "name": "L", "lab_partner_id": "x", "tests": "CBC"}])
+def test_non_list_items_and_tests_are_refused_not_crashed(body: dict[str, Any]) -> None:
+    with pytest.raises(Invalid):
+        clean_favorite(body, owner=1)
+
+
+def test_adding_favorites_with_the_same_study_searches_science_once(imaging_on: None, chest_first: Any, make_staff: Any, make_note: Any) -> None:
+    me = make_staff()
+    ids = [favorite(me, kind="imaging", name=f"Chest {n}", details=imaging_details()).dbid for n in range(3)]
+    _s, body, results = add(me, make_note(), ids)
+    assert len(body["added"]) == 3
+    assert len(effects_of(results, "ORIGINATE_IMAGING_ORDER_COMMAND")) == 3
+    assert len(chest_first.paths) == 1
+
+
+def test_import_searches_science_once_per_study(chest_first: Any) -> None:
+    text = "type,name,details\n" + "".join(f"imaging,Chest {n},71046\n" for n in range(5))
+    rows = check_csv(text)["rows"]
+    assert all(r["ok"] for r in rows)
+    assert len(chest_first.paths) == 1

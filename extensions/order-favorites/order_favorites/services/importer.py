@@ -189,6 +189,7 @@ def check_csv(text: str) -> dict[str, Any]:
         return {"rows": [], "error": f"Import at most {MAX_ROWS} rows at a time."}
 
     cache: dict[str, Any] = {}
+    image_cache: dict[tuple[str, str], Any] = {}
     rows = []
     for number, line in enumerate(lines[1:], start=2):
         cells = split_line(line)
@@ -201,7 +202,7 @@ def check_csv(text: str) -> dict[str, Any]:
                 raise Invalid("Type must be rx, lab, or imaging.")
             body = BUILDERS[kind](details, cache)
             body["name"] = name
-            kind, name, clean = clean_favorite(body, kind)
+            kind, name, clean = clean_favorite(body, kind, image_cache=image_cache)
             row.update(ok=True, summary=summary(kind, clean), favorite={"kind": kind, "name": name, "details": clean})
         except Invalid as exc:
             row["reason"] = str(exc)

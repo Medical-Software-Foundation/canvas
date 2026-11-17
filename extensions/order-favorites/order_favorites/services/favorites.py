@@ -111,10 +111,20 @@ def _rx_details(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _list(body: dict[str, Any], key: str, message: str) -> list[Any]:
+    """body[key] when it is a list, [] when it is missing or empty. Anything else raises Invalid(message)."""
+    value = body.get(key)
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        raise Invalid(message)
+    return value
+
+
 def _diagnoses(body: dict[str, Any], owner: str, word: str) -> list[dict[str, str]]:
     """The ICD-10 codes in body["diagnoses"], undotted and each once. owner and word name them in errors."""
     diagnoses: list[dict[str, str]] = []
-    for dx in body.get("diagnoses") or []:
+    for dx in _list(body, "diagnoses", f"Select {word} from the search list."):
         code = normalize_icd10(str((dx or {}).get("code") or "")) if isinstance(dx, dict) else ""
         if not ICD10_CODE.match(code):
             raise Invalid(f"{icd10_display(code) or 'A diagnosis'} isn't an ICD-10 code. Select {word} from the search list.")
@@ -143,15 +153,19 @@ def _imaging_center(body: dict[str, Any]) -> dict[str, str] | None:
         return None
     if not isinstance(center, dict):
         raise Invalid("Select the imaging center from the search list.")
-    return {field: _text(center, field, MAX_CENTER_FIELD, label, required=field == "practice_name") for field, label in CENTER_FIELDS}
+    cleaned = {field: _text(center, field, MAX_CENTER_FIELD, label, required=False) for field, label in CENTER_FIELDS}
+    if not cleaned["practice_name"] and not cleaned["last_name"]:
+        raise Invalid("The imaging center needs a practice name or a last name. Select it from the search list.")
+    return cleaned
 
 
-def _imaging_details(body: dict[str, Any]) -> dict[str, Any]:
-    """The study must still be what Canvas puts in the Image field for its code (see lookups.check_image)."""
+def _imaging_details(body: dict[str, Any], image_cache: dict[tuple[str, str], Any] | None = None) -> dict[str, Any]:
+    """The study must still be what Canvas puts in the Image field for its code (see lookups.check_image).
+    image_cache shares study checks across the favorites of one request."""
     image_code = _text(body, "image_code", 64, "Study")
     code_system = _text(body, "image_code_system", 100, "Study", required=False)
     try:
-        study = check_image(image_code, code_system)
+        study = check_image(image_code, code_system, image_cache)
     except LookupFailed:
         raise Invalid("Canvas's imaging search didn't answer, so the study couldn't be checked. Try again.") from None
     if study is None:
@@ -181,7 +195,7 @@ def _imaging_details(body: dict[str, Any]) -> dict[str, Any]:
 def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
     partner_id = _text(body, "lab_partner_id", 64, "Lab partner")
     codes: list[str] = []
-    for test in body.get("tests") or []:
+    for test in _list(body, "tests", "Select tests from the search list."):
         code = str((test or {}).get("code") or "").strip() if isinstance(test, dict) else ""
         if code and code not in codes:
             codes.append(code)
@@ -212,7 +226,7 @@ def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
 
 def _set_details(body: dict[str, Any], owner: int | None, shared: bool) -> dict[str, Any]:
     ids: list[int] = []
-    for value in body.get("items") or []:
+    for value in _list(body, "items", "Select favorites from the list."):
         try:
             dbid = int(str(value))
         except (TypeError, ValueError):
@@ -233,11 +247,17 @@ def _set_details(body: dict[str, Any], owner: int | None, shared: bool) -> dict[
 
 
 def clean_favorite(
-    body: dict[str, Any], kind: str | None = None, *, owner: int | None = None, shared: bool = False
+    body: dict[str, Any],
+    kind: str | None = None,
+    *,
+    owner: int | None = None,
+    shared: bool = False,
+    image_cache: dict[tuple[str, str], Any] | None = None,
 ) -> tuple[str, str, dict[str, Any]]:
     """(kind, name, details) from a request body. Raises Invalid with a message for the user.
 
     owner and shared say whose set it will be, which decides what an order set may include.
+    image_cache shares imaging study checks across the rows of one import.
     """
     kind = kind or str(body.get("kind") or "")
     if kind not in ("rx", "lab", "imaging", "set"):
@@ -250,7 +270,7 @@ def clean_favorite(
     elif kind == "lab":
         details = _lab_details(body)
     else:
-        details = _imaging_details(body)
+        details = _imaging_details(body, image_cache)
     if kind in ("lab", "imaging") and shared:
         # A saved ordering provider would name one clinician on everyone's orders, and results go
         # back to them, so only personal lab and imaging favorites keep one.
