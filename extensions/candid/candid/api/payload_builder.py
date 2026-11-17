@@ -588,6 +588,10 @@ def _subscriber_payload(coverage: ClaimCoverage) -> dict | None:
         subscriber["date_of_birth"] = str(coverage.subscriber_dob)
     if coverage.subscriber_group:
         subscriber["insurance_card"]["group_number"] = coverage.subscriber_group
+    # The claim coverage Typecode (Medicare Secondary Payer reason, X12 element 1336)
+    # maps one-to-one onto Candid's insurance_type; blank means none is needed.
+    if coverage.payer_typecode:
+        subscriber["insurance_card"]["insurance_type"] = coverage.payer_typecode
     plan_name = getattr(coverage.coverage, "plan", None) if coverage.coverage else None
     if plan_name:
         subscriber["insurance_card"]["plan_name"] = plan_name

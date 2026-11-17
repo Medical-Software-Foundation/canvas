@@ -444,6 +444,7 @@ def _full_claim_for_payload() -> MagicMock:
     primary.subscriber_number = "MEM123"
     primary.payer_id = "PAYER1"
     primary.payer_name = "Blue Cross"
+    primary.payer_typecode = ""
     primary.subscriber_dob = date(1990, 1, 1)
     primary.subscriber_group = ""
     primary.subscriber_addr1 = "200 Oak Ave"
@@ -1125,6 +1126,41 @@ def test_subscribers_primary_and_secondary_with_optional_fields() -> None:
     assert "date_of_birth" not in ss
     assert "plan_name" not in ss["insurance_card"]
     assert "address" not in ss
+
+
+def test_subscriber_omits_insurance_type_when_typecode_blank() -> None:
+    claim = _full_claim_for_payload()
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert "insurance_type" not in payload["subscriber_primary"]["insurance_card"]
+
+
+@pytest.mark.parametrize("typecode", ["12", "13", "14", "15", "41", "42", "43", "47"])
+def test_subscriber_sends_typecode_as_insurance_type(typecode: str) -> None:
+    claim = _full_claim_for_payload()
+    claim.coverages.active.return_value[0].payer_typecode = typecode
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert payload["subscriber_primary"]["insurance_card"]["insurance_type"] == typecode
+
+
+def test_medicare_secondary_carries_typecode_on_secondary_card_only() -> None:
+    claim = _full_claim_for_payload()
+    primary = claim.coverages.active.return_value[0]
+    secondary = _subscriber_coverage("cov-secondary", "Secondary")
+    secondary.payer_id = "MEDICARE"
+    secondary.payer_typecode = "12"
+    claim.coverages.active.return_value = [primary, secondary]
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert "insurance_type" not in payload["subscriber_primary"]["insurance_card"]
+    assert payload["subscriber_secondary"]["insurance_card"]["insurance_type"] == "12"
 
 
 def test_incomplete_primary_subscriber_errors_for_insurance_pay() -> None:
