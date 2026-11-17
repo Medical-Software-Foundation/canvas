@@ -1,5 +1,6 @@
 """Comprehensive tests for provider_scheduling availability_web_app."""
 
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import Mock, patch
@@ -461,3 +462,49 @@ def test_index_handles_empty_events() -> None:
         context = call_args[0][1]
 
         assert context["events"] == []
+
+
+def test_index_sends_event_times_with_their_offset() -> None:
+    """Test that event times reach the page as instants with an offset.
+
+    The page reads a date and time without an offset as browser-local time, so a
+    stored UTC time must carry its offset to show in the edit form as entered.
+    """
+    dummy_context = {"method": "GET", "path": "/app/availability-app"}
+    app = AvailabilityWebApp(event=DummyEvent(context=dummy_context))  # type: ignore[arg-type]
+    app.request = DummyRequest()
+
+    event = Mock()
+    event.id = "event-1"
+    event.title = "Available"
+    event.calendar.title = "Dr. Smith: Clinic"
+    event.allowed_note_types.all.return_value = []
+    event.starts_at = datetime(2026, 8, 24, 16, 0, tzinfo=UTC)
+    event.ends_at = datetime(2026, 8, 24, 17, 0, tzinfo=UTC)
+    event.recurrence = "RRULE:FREQ=WEEKLY;UNTIL=20260829T065959Z;BYDAY=MO"
+    event.recurrence_ends_at = datetime(2026, 8, 29, 6, 59, 59, tzinfo=UTC)
+
+    with (
+        patch("provider_scheduling.handlers.availability_web_app.Staff") as mock_staff_class,
+        patch("provider_scheduling.handlers.availability_web_app.PracticeLocation") as mock_location_class,
+        patch("provider_scheduling.handlers.availability_web_app.NoteType") as mock_note_type_class,
+        patch("provider_scheduling.handlers.availability_web_app.Event") as mock_event_class,
+        patch("provider_scheduling.handlers.availability_web_app.render_to_string") as mock_render,
+    ):
+        mock_filter_result = Mock()
+        mock_filter_result.distinct.return_value = []
+        mock_staff_class.objects.filter.return_value = mock_filter_result
+        mock_location_class.objects.filter.return_value = []
+        mock_note_type_class.objects.filter.return_value = []
+        mock_event_class.objects.all.return_value = [event]
+
+        mock_render.return_value = "<html>Test</html>"
+
+        app.index()
+
+        context = mock_render.call_args[0][1]
+        [sent] = context["events"]
+
+        assert sent["startTime"] == "2026-08-24T16:00:00+00:00"
+        assert sent["endTime"] == "2026-08-24T17:00:00+00:00"
+        assert sent["recurrence"]["endDate"] == "2026-08-29T06:59:59+00:00"
