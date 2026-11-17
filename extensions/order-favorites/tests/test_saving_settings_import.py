@@ -127,7 +127,7 @@ def test_at_least_one_order_type_stays_enabled(admin: Any, make_note: Any) -> No
     status, body = reply(make_api(admin, body={"rx_enabled": False}).admin_settings())
     assert (status, body["title"]) == (200, "Lab Order Favorites")
     status, body = reply(make_api(admin, body={"lab_enabled": False}).admin_settings())
-    assert (status, body["error"]) == (400, "At least one of prescriptions or labs must stay on.")
+    assert (status, body["error"]) == (400, "At least one of prescriptions, labs, or imaging must stay on.")
 
 
 def test_disabled_order_type_disappears_from_the_panel(admin: Any, make_note: Any) -> None:
@@ -192,7 +192,7 @@ def test_check_csv_reports_each_row(make_partner: Any) -> None:
     assert rows[3]["ok"] and rows[3]["summary"] == "Generic Lab · 1 test · E55.9"
     assert rows[4]["reason"] == "Generic Lab has no test with the code or name NOT-A-TEST."
     assert rows[5]["reason"] == "The medication is missing."
-    assert rows[6]["reason"] == "Type must be rx or lab."
+    assert rows[6]["reason"] == "Type must be rx, lab, or imaging."
 
 
 def test_check_csv_refuses_a_wrong_header_and_a_unit_the_drug_doesnt_use() -> None:

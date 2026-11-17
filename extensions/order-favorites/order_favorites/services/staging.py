@@ -1,15 +1,17 @@
-"""Turn chosen favorites into staged prescribe and lab order commands in one note.
+"""Turn chosen favorites into staged prescribe, lab order, and imaging order commands in one note.
 
 Who is named on the order:
   - Prescriptions: no prescriber is sent, so Canvas applies its own rule, as in its Prescribe command:
     the person adding when their role is in the practice's prescriber roles, otherwise blank for the
     prescriber to fill in before signing.
-  - Lab orders: a personal favorite's saved ordering provider if still active with a usable NPI,
-    otherwise the note's provider on the same terms, otherwise the person adding.
-Either can be changed in the command before it is signed.
+  - Lab and imaging orders: a personal favorite's saved ordering provider if still active with a
+    usable NPI, otherwise the note's provider on the same terms, otherwise the person adding.
+Any of them can be changed in the command before it is signed.
 
 A lab favorite whose partner is inactive or whose tests the lab no longer offers is skipped whole,
-never added as a partial order.
+never added as a partial order. An imaging favorite is skipped whole when Canvas's imaging search no
+longer leads from its code to its study, since Canvas would then leave the Image field blank or fill
+in another study, and also when that search doesn't answer.
 """
 
 from __future__ import annotations
@@ -17,13 +19,20 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from canvas_sdk.commands import LabOrderCommand, PrescribeCommand
-from canvas_sdk.commands.constants import ClinicalQuantity
+from canvas_sdk.commands import ImagingOrderCommand, LabOrderCommand, PrescribeCommand
+from canvas_sdk.commands.constants import ClinicalQuantity, ServiceProvider
 from canvas_sdk.effects import Effect
 from canvas_sdk.v1.data import Note
 
 from order_favorites.models import Favorite
 from order_favorites.services.catalog import check_tests, usable_provider
+from order_favorites.services.lookups import LookupFailed, check_image
+
+PRIORITIES = {
+    "Routine": ImagingOrderCommand.Priority.ROUTINE,
+    "Urgent": ImagingOrderCommand.Priority.URGENT,
+    "STAT": ImagingOrderCommand.Priority.STAT,
+}
 
 
 def _note_provider_id(note: Note) -> str | None:
@@ -59,6 +68,38 @@ def _rx_effect(favorite: Favorite, note: Note) -> Effect:
     ).originate()
 
 
+def _imaging_effect(favorite: Favorite, note: Note, adder_id: str) -> Effect:
+    """Fields left blank on the favorite are left out of the command, for whoever signs to fill in.
+    ImagingOrderCommand can't send an explicit service_provider=None, so it is only passed when set."""
+    d = favorite.details
+    optional: dict[str, Any] = {}
+    if d.get("priority") in PRIORITIES:
+        optional["priority"] = PRIORITIES[d["priority"]]
+    if d.get("additional_details"):
+        optional["additional_details"] = d["additional_details"]
+    if d.get("comment"):
+        optional["comment"] = d["comment"]
+    if d.get("imaging_center"):
+        optional["service_provider"] = ServiceProvider(**d["imaging_center"])
+    return ImagingOrderCommand(
+        note_uuid=str(note.id),
+        image_code=d["image_code"],
+        diagnosis_codes=[dx["code"] for dx in d.get("diagnoses", [])],
+        ordering_provider_key=ordering_provider_for(favorite, note, adder_id),
+        **optional,
+    ).originate()
+
+
+def _imaging_skip(favorite: Favorite) -> str | None:
+    """Why an imaging favorite can't be added, or None when it can."""
+    d = favorite.details
+    try:
+        study = check_image(d.get("image_code") or "", d.get("image_code_system") or "")
+    except LookupFailed:
+        return "image_check"
+    return None if study is not None else "image"
+
+
 def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Effect]]:
     """Returns (added, skipped, effects). skipped entries carry a reason the panel can explain."""
     added: list[dict[str, Any]] = []
@@ -70,7 +111,16 @@ def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[di
             effects.append(_rx_effect(favorite, note))
             added.append(entry)
             continue
+        if favorite.kind == "imaging":
+            reason = _imaging_skip(favorite)
+            if reason is not None:
+                skipped.append({**entry, "reason": reason, "image": favorite.details.get("image_name", "")})
+                continue
+            effects.append(_imaging_effect(favorite, note, adder_id))
+            added.append(entry)
+            continue
 
+        # What's left is a lab favorite: expand_sets passes only order kinds.
         d = favorite.details
         codes = [t["code"] for t in d.get("tests", [])]
         check = check_tests(d.get("lab_partner_id", ""), codes)

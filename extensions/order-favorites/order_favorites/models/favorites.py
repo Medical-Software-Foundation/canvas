@@ -19,9 +19,9 @@ class CustomStaff(Staff, ModelExtension):
 
 
 class Favorite(CustomModel):
-    """A saved prescription or lab order that can be added to a note in one click.
+    """A saved prescription, lab order, or imaging order that can be added to a note in one click.
 
-    kind is "rx" or "lab". shared=True makes it a practice favorite: everyone can use it and only
+    kind is "rx", "lab", "imaging", or "set" (an order set). shared=True makes it a practice favorite: everyone can use it and only
     favorites admins change it. shared=False is a personal favorite: only its owner sees and
     changes it.
 
@@ -31,6 +31,13 @@ class Favorite(CustomModel):
            ncpdp_quantity_qualifier_code, refills, pharmacy_ncpdp_id, pharmacy_name
       lab: lab_partner_id, lab_partner_name, tests [{code, name}], diagnoses [{code, text}],
            ordering_provider_id, ordering_provider_name, comment, fasting
+      imaging: image_code (sent as the order's image code), image_name, image_code_system,
+           diagnoses [{code, text}] (the indications, ICD-10 without the dot),
+           priority ("Routine", "Urgent", "STAT", or blank), additional_details, comment,
+           ordering_provider_id, ordering_provider_name,
+           imaging_center (None, or {first_name, last_name, specialty, practice_name,
+           business_fax, business_phone, business_address, notes})
+      set: items [favorite dbid, ...]
     """
 
     kind = TextField()

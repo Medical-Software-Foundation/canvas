@@ -124,7 +124,7 @@ def test_turning_sets_off_is_a_setting_of_its_own(make_staff: Any) -> None:
     admin = make_staff()
     FavoritesAdmin.objects.create(staff_id=admin.dbid)
     status, body = reply(make_api(admin, body={"set_enabled": False}).admin_settings())
-    assert (status, body["settings"]) == (200, {"rx_enabled": True, "lab_enabled": True, "set_enabled": False})
+    assert (status, body["settings"]) == (200, {"rx_enabled": True, "lab_enabled": True, "imaging_enabled": False, "set_enabled": False})
 
 
 # ---------- Change: the patient's other open notes ----------

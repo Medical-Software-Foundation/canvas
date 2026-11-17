@@ -212,15 +212,18 @@ body{display:flex;flex-direction:column;min-height:0;font-family:"DM Sans",-appl
 /* Four tabs in the narrow panel */
 #tabs.four button{padding:5px 2px;font-size:12.5px}
 #tabs.four .ti{margin-right:3px}
+/* Five tabs (with Imaging) don't fit the narrow panel with their icons */
+#tabs.five .ti{display:none}
 .kb.set{background:#e9f5ee;color:#2e7d4f}
 .pp-seg button[data-tab="set"] .ti{color:#2e7d4f}
+.pp-seg button[data-tab="imaging"] .ti{color:#a8551c}
 .pc-kind{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#5e7a8a}
 .pc-kind svg{width:13px;height:13px}
-.pc-kind.rx{color:#6b3fb5}.pc-kind.lab{color:#1565c0}.pc-kind.set{color:#2e7d4f}
+.pc-kind.rx{color:#6b3fb5}.pc-kind.lab{color:#1565c0}.pc-kind.set{color:#2e7d4f}.pc-kind.imaging{color:#a8551c}
 .set-list{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;color:#2c4155}
 .set-list li{display:flex;align-items:center;gap:6px;padding:2px 0}
 .set-list li svg{width:13px;height:13px;flex-shrink:0}
-.set-list li.rx svg{color:#6b3fb5}.set-list li.lab svg{color:#1565c0}
+.set-list li.rx svg{color:#6b3fb5}.set-list li.lab svg{color:#1565c0}.set-list li.imaging svg{color:#a8551c}
 .set-list li.gone{color:#9a5b00}
 .grp-h{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:10px 0 8px 4px}
 .grp-h:first-child{margin-top:0}
