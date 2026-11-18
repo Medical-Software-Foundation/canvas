@@ -4,7 +4,7 @@ Building them per rule or per hold block made each one delete the others' events
 """
 
 import datetime as dt
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, call, patch
 from zoneinfo import ZoneInfo
 
@@ -276,10 +276,18 @@ class TestSameTimeOneOffBlocks:
         return AdminBlock(id=block_id, provider_id=PROVIDER_ID, reason=reason,
                           start=datetime(2026, 10, 19, 11, 0), end=datetime(2026, 10, 19, 11, 30))
 
-    @patch(f"{MODULE}.build_block_event_effects", side_effect=lambda b: [f"draw-{b.id}"])
+    def _events(self):
+        from tests.conftest import FakeEvents
+
+        starts = datetime(2026, 10, 19, 11, 0, tzinfo=TZ).astimezone(UTC)
+        ends = datetime(2026, 10, 19, 11, 30, tzinfo=TZ).astimezone(UTC)
+        return FakeEvents([{"id": e, "calendar": "admin-cal-1", "title": t, "starts_at": starts, "ends_at": ends}
+                           for e, t in (("e1", "Lunch"), ("e2", "Meeting"))])
+
+    @patch(f"{MODULE}.build_block_event_effects", side_effect=lambda b, memo=None: [f"draw-{b.id}"])
     @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
     @patch(f"{MODULE}.provider_tz", return_value=TZ)
-    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    @patch(f"{MODULE}.get_event_ids_many", return_value={})
     def test_deleting_one_redraws_the_other(self, mock_ids, mock_tz, mock_cals, mock_draw):
         from provider_availability.engine.event_sync import build_delete_block_effects
 
@@ -287,24 +295,22 @@ class TestSameTimeOneOffBlocks:
         later = self._block("b3", "Later")
         later.end = datetime(2026, 10, 19, 12, 0)
         with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, meeting, later]), \
-             patch(f"{MODULE}.EventModel.objects") as mock_events:
-            mock_events.filter.return_value = QS([MagicMock(id="e1"), MagicMock(id="e2")])
+             patch(f"{MODULE}.EventModel.objects", self._events()):
             result = build_delete_block_effects(PROVIDER_ID, lunch)
 
-        assert mock_draw.mock_calls == [call(meeting)]
+        assert [c.args[0] for c in mock_draw.mock_calls] == [meeting]
         assert result[-1] == "draw-b2"
 
     @patch(f"{MODULE}.build_block_event_effects")
     @patch(f"{MODULE}.get_admin_calendars", return_value=[MagicMock(id="admin-cal-1")])
     @patch(f"{MODULE}.provider_tz", return_value=TZ)
-    @patch(f"{MODULE}.get_event_ids", return_value=[])
+    @patch(f"{MODULE}.get_event_ids_many", return_value={})
     def test_bulk_callers_skip_the_redraw(self, mock_ids, mock_tz, mock_cals, mock_draw):
         from provider_availability.engine.event_sync import build_delete_block_effects
 
         lunch, meeting = self._block("b1", "Lunch"), self._block("b2", "Meeting")
         with patch(f"{MODULE}.get_blocks_for_provider", return_value=[lunch, meeting]), \
-             patch(f"{MODULE}.EventModel.objects") as mock_events:
-            mock_events.filter.return_value = QS([MagicMock(id="e1")])
+             patch(f"{MODULE}.EventModel.objects", self._events()):
             build_delete_block_effects(PROVIDER_ID, lunch, keep_others=False)
         assert mock_draw.mock_calls == []
 

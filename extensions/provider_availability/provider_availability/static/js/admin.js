@@ -886,7 +886,7 @@ async function _postBlockEntries(providerIds, entries, reason, locationIds, grou
   };
   if (replace.recurringBlockId) body.replace_recurring_block_id = replace.recurringBlockId;
   const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
-  if (data.error) return { error: data.error, created: 0 };
+  if (data.error) return { error: data.error, status: data._status, created: 0 };
   return { created: data.blocks ? data.blocks.length : entries.length * providerIds.length };
 }
 
@@ -1475,7 +1475,9 @@ async function apiCall(path, opts = {}) {
       if (text && text.toLowerCase().includes('credentials are invalid')) {
         return { error: 'Your session has expired. Please log back in to Canvas in a new tab, then return here to continue. Your unsaved changes are still on screen.' };
       }
-      try { return JSON.parse(text); } catch (e) { return { error: text || ('HTTP ' + resp.status) }; }
+      // The status rides along on error bodies, so callers can tell a refusal (403) from other errors.
+      try { var body = JSON.parse(text); if (body && typeof body === 'object') body._status = resp.status; return body; }
+      catch (e) { return { error: text || ('HTTP ' + resp.status), _status: resp.status }; }
     }
     return resp.json();
   } catch (fetchErr) {
@@ -3050,7 +3052,8 @@ async function saveOneoffBlock() {
         var row = _overviewData.find(function(p) { return String(p.provider_id) === String(pid); });
         return !row || row.can_edit !== false;
       };
-      var siblingLocked = editable(groupProviderIds[0]) && groupProviderIds.slice(1).some(function(pid) { return !editable(pid); });
+      var siblingLocked = res.status === 403 && editable(groupProviderIds[0]) &&
+        groupProviderIds.slice(1).some(function(pid) { return !editable(pid); });
       showMsg(siblingLocked ? 'You can’t edit every provider in this group. Clear the checkbox at the top to change only this provider.' : res.error, 'error');
       return;
     }
@@ -3921,12 +3924,14 @@ function FacilityPicker(hostId, opts) {
 
   return {
     getValue: function() { return selected.slice(); },
-    setValue: function(ids) { selected = (ids || []).map(String); drawControl(); },
+    setValue: function(ids) { selected = (ids || []).map(String); drawControl(); if (root.classList.contains('open')) drawList(); },
     // A saved round keeps its facility while rounds are switched off.
     setLocked: function(locked) { root.classList.toggle('fp-locked', !!locked); },
     // Close the list if it's open, which saves a changed selection (onClose).
     closeIfOpen: function() { if (root.classList.contains('open')) close(); },
     isOpen: function() { return root.classList.contains('open'); },
+    // What was selected when the list opened, or null while it's closed.
+    openedWith: function() { return shown ? shown.slice() : null; },
     // Redraw after the groups' data arrives.
     redraw: function() { if (root.classList.contains('open')) drawList(); else drawControl(); },
   };

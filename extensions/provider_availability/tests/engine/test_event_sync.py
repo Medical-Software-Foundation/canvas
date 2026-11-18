@@ -23,6 +23,7 @@ from provider_availability.engine.models import (
     TimeWindow,
 )
 from provider_availability.engine.event_sync import (
+    build_delete_blocks_effects,
     AVAILABILITY_TITLE,
     BLOCK_TITLE,
     LEAD_TIME_TITLE,
@@ -1382,131 +1383,116 @@ class TestBuildBlockEventEffects:
 
 
 class TestBuildDeleteBlockEffects:
-    @patch(f"{MODULE}.get_event_ids")
-    def test_stored_ids_used(self, mock_get_ids, sample_block):
-        mock_get_ids.return_value = ["evt-1", "evt-2"]
+    """One delete implementation: build_delete_block_effects wraps build_delete_blocks_effects."""
 
-        result = build_delete_block_effects(PROVIDER_ID, sample_block)
+    def _block(self, bid, day, start=9, end=10, reason="PTO", provider=PROVIDER_ID):
+        from provider_availability.engine.models import AdminBlock
 
-        assert mock_get_ids.mock_calls == [call(sample_block.id)]
-        assert len(result) == 2
+        return AdminBlock(id=bid, provider_id=provider, reason=reason,
+                          start=datetime(2026, 3, day, start), end=datetime(2026, 3, day, end))
 
-    @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_time_range_fallback(self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block):
-        mock_get_ids.return_value = []
+    def _event(self, eid, day, start=9, end=10, title="PTO", cal="cal-1"):
+        return {"id": eid, "calendar": cal, "title": title,
+                "starts_at": datetime(2026, 3, day, start, tzinfo=UTC), "ends_at": datetime(2026, 3, day, end, tzinfo=UTC)}
 
-        mock_cal = MagicMock()
-        mock_cal.id = "admin-cal-1"
-        mock_get_admin_cals.return_value = [mock_cal]
+    def _run(self, call, events, saved=(), stored=None, cals=("cal-1",)):
+        from tests.conftest import FakeEvents
 
-        mock_evt = MagicMock()
-        mock_evt.id = "evt-found-1"
+        fake = FakeEvents(events)
+        with patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC")), \
+             patch(f"{MODULE}.get_event_ids_many", return_value=stored or {}), \
+             patch(f"{MODULE}.get_admin_calendars", return_value=[SimpleNamespace(id=c) for c in cals]) as cal_lookup, \
+             patch(f"{MODULE}.get_blocks_for_provider", return_value=list(saved)) as saved_read, \
+             patch(f"{MODULE}.build_block_event_effects", side_effect=lambda b, memo=None: [f"draw-{b.id}"]), \
+             patch(f"{MODULE}.EventModel.objects", fake):
+            effects = call()
+        deleted = [e.payload for e in effects if not isinstance(e, str)]
+        return effects, deleted, fake, cal_lookup, saved_read
 
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = QS([mock_evt])
+    def _ids(self, effects):
+        import json
 
-            result = build_delete_block_effects(PROVIDER_ID, sample_block)
+        return sorted(json.loads(e.payload)["data"]["event_id"] for e in effects if not isinstance(e, str))
 
-        assert mock_event_objects.filter.call_count >= 1
-        first_call = mock_event_objects.filter.call_args_list[0]
-        assert first_call.kwargs["calendar__id__in"] == ["admin-cal-1"]
-        assert first_call.kwargs["is_cancelled"] is False
-        assert len(result) == 1
+    def test_stored_ids_are_used_without_queries(self):
+        b = self._block("b1", 10)
+        effects, _, fake, cals, _ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, b), [], stored={"b1": ["s1", "s2"]})
+        assert self._ids(effects) == ["s1", "s2"]
+        assert fake.queries == 0 and cals.mock_calls == []
 
-    @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids", return_value=[])
-    def test_time_range_fallback_keeps_a_round_full_block(self, _ids, mock_get_admin_cals, _tz, sample_block):
-        mock_get_admin_cals.return_value = [SimpleNamespace(id="admin-cal-1")]
-        same_times = QS([SimpleNamespace(id="evt-block", title="PTO"), SimpleNamespace(id="evt-full", title="Round full")])
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects, \
-             patch(f"{MODULE}._redraw_same_time_blocks", return_value=[]):
-            mock_event_objects.filter.return_value = same_times
-            result = build_delete_block_effects(PROVIDER_ID, sample_block)
-        assert [json.loads(e.payload)["data"]["event_id"] for e in result] == ["evt-block"]
+    def test_exact_times_match_and_a_round_full_block_is_kept(self):
+        events = [self._event("e1", 10), self._event("full", 10, title="Round full"), self._event("other", 10, 11, 12)]
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, self._block("b1", 10)), events)
+        assert self._ids(effects) == ["e1"]
 
-    @patch(f"{MODULE}.get_admin_calendars")
-    def test_no_block_deletes_all_block_titled(self, mock_get_admin_cals):
-        mock_cal = MagicMock()
-        mock_cal.id = "admin-cal-1"
-        mock_get_admin_cals.return_value = [mock_cal]
+    def test_every_admin_calendar_is_searched(self):
+        events = [self._event("e1", 10, cal="cal-1"), self._event("e2", 10, cal="cal-2")]
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, self._block("b1", 10)), events, cals=("cal-1", "cal-2"))
+        assert self._ids(effects) == ["e1", "e2"]
 
-        mock_evt = MagicMock()
-        mock_evt.id = "evt-block-1"
+    def test_title_on_the_date_when_times_dont_match(self):
+        events = [self._event("t1", 10, 8, 9), self._event("t-other-day", 11, 8, 9)]
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, self._block("b1", 10)), events)
+        assert self._ids(effects) == ["t1"]
 
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = QS([mock_evt])
+    def test_a_block_without_a_reason_matches_blocked(self):
+        events = [self._event("t1", 10, 8, 9, title="Blocked")]
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, self._block("b1", 10, reason="")), events)
+        assert self._ids(effects) == ["t1"]
 
-            result = build_delete_block_effects(PROVIDER_ID, block=None)
+    def test_nothing_found_returns_nothing(self):
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, self._block("b1", 10)), [])
+        assert effects == []
 
-        assert mock_event_objects.filter.call_args == call(
-            calendar__id__in=["admin-cal-1"],
-            title=BLOCK_TITLE,
-            is_cancelled=False,
-        )
-        assert len(result) == 1
+    def test_no_admin_calendars_returns_nothing(self):
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, self._block("b1", 10)), [self._event("e1", 10)], cals=())
+        assert effects == []
 
-    @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_no_events_found_returns_empty(self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block):
-        mock_get_ids.return_value = []
-        mock_get_admin_cals.return_value = []
+    def test_other_blocks_at_the_same_times_are_redrawn(self):
+        b = self._block("b1", 10)
+        twin, far = self._block("twin", 10, reason="Meeting"), self._block("far", 12)
+        effects, *_ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, b), [self._event("e1", 10)], saved=[b, twin, far])
+        assert [e for e in effects if isinstance(e, str)] == ["draw-twin"]
 
-        result = build_delete_block_effects(PROVIDER_ID, sample_block)
+    def test_keep_others_false_skips_the_redraw(self):
+        b, twin = self._block("b1", 10), self._block("twin", 10)
+        effects, _, _, _, saved_read = self._run(
+            lambda: build_delete_block_effects(PROVIDER_ID, b, keep_others=False), [self._event("e1", 10)], saved=[b, twin])
+        assert [e for e in effects if isinstance(e, str)] == [] and saved_read.mock_calls == []
 
-        assert result == []
+    def test_the_block_is_read_under_the_provider_id_passed(self):
+        b = self._block("b1", 10, provider="other-form")
+        _, _, _, cals, _ = self._run(lambda: build_delete_block_effects(PROVIDER_ID, b), [self._event("e1", 10)])
+        assert cals.mock_calls == [call(PROVIDER_ID)]
 
-    @patch(f"{MODULE}.get_admin_calendars")
-    def test_no_block_no_calendars_returns_empty(self, mock_get_admin_cals):
-        mock_get_admin_cals.return_value = []
+    def test_many_blocks_one_calendar_lookup_one_time_query_one_saved_read(self):
+        blocks = [self._block(f"b{d}", d) for d in (10, 11, 12)]
+        events = [self._event(f"e{d}", d) for d in (10, 11, 12)]
+        effects, _, fake, cals, saved_read = self._run(lambda: build_delete_blocks_effects(blocks), events, saved=blocks)
+        assert self._ids(effects) == ["e10", "e11", "e12"]
+        assert (fake.queries, len(cals.mock_calls), len(saved_read.mock_calls)) == (1, 1, 1)
 
-        result = build_delete_block_effects(PROVIDER_ID, block=None)
+    def test_two_blocks_with_the_same_reason_and_day_both_redraw_their_twins(self):
+        morning, afternoon = self._block("m", 10, 9, 10), self._block("a", 10, 14, 15)
+        twin_m, twin_a = self._block("tm", 10, 9, 10, reason="X"), self._block("ta", 10, 14, 15, reason="X")
+        events = [self._event("t1", 10, 8, 9), self._event("t2", 10, 13, 14)]  # title matches only
+        effects, *_ = self._run(lambda: build_delete_blocks_effects([morning, afternoon]), events,
+                                saved=[morning, afternoon, twin_m, twin_a])
+        assert sorted(e for e in effects if isinstance(e, str)) == ["draw-ta", "draw-tm"]
 
-        assert result == []
+    def test_the_same_block_twice_is_deleted_once(self):
+        b = self._block("b1", 10)
+        effects, *_ = self._run(lambda: build_delete_blocks_effects([b, b]), [self._event("e1", 10)])
+        assert self._ids(effects) == ["e1"]
 
-    @patch(f"{MODULE}.provider_tz", return_value=ZoneInfo("UTC"))
-    @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
-    def test_time_range_fallback_multiple_calendars(
-        self, mock_get_ids, mock_get_admin_cals, mock_tz, sample_block
-    ):
-        """When stored IDs are empty, searches across multiple admin calendars."""
-        mock_get_ids.return_value = []
+    def test_without_a_block_every_block_titled_event_is_deleted(self):
+        from tests.conftest import FakeEvents
 
-        mock_cal1 = MagicMock()
-        mock_cal1.id = "admin-cal-1"
-        mock_cal2 = MagicMock()
-        mock_cal2.id = "admin-cal-2"
-        mock_get_admin_cals.return_value = [mock_cal1, mock_cal2]
-
-        mock_evt1 = MagicMock()
-        mock_evt1.id = "evt-1"
-        mock_evt2 = MagicMock()
-        mock_evt2.id = "evt-2"
-
-        with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.return_value = QS([mock_evt1, mock_evt2])
-
-            result = build_delete_block_effects(PROVIDER_ID, sample_block)
-
-        # One bulk query spanning both admin calendars
-        assert len(result) == 2
-        assert mock_event_objects.filter.call_count == 1
-        assert mock_event_objects.filter.call_args.kwargs["calendar__id__in"] == [
-            "admin-cal-1",
-            "admin-cal-2",
-        ]
-
-
-# NOTE: delete_all_plugin_events() was removed (it destroyed non-plugin events
-# on shared calendars). Reconciliation is now per-entity; see
-# tests/protocols/test_staff_lifecycle.py for the non-destructive install path.
-
-
-# ── delete_all_lead_time_events ───────────────────────────────────────
+        fake = FakeEvents([{"id": "x", "calendar": "cal-1", "title": BLOCK_TITLE, "starts_at": datetime(2026, 3, 1, tzinfo=UTC),
+                            "ends_at": datetime(2026, 3, 1, 1, tzinfo=UTC)}])
+        with patch(f"{MODULE}.get_admin_calendars", return_value=[SimpleNamespace(id="cal-1")]), \
+             patch(f"{MODULE}.EventModel.objects", fake):
+            assert len(build_delete_block_effects(PROVIDER_ID)) == 1
 
 
 class TestDeleteAllLeadTimeEvents:
@@ -1888,7 +1874,7 @@ class TestBuildRecurringBlockSyncEffects:
 
 class TestBuildDeleteRecurringBlockEffects:
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
+    @patch(f"{MODULE}.get_event_ids_many")
     def test_fallback_to_title_match(
         self, mock_get_ids, mock_get_admin_cals, sample_recurring_block
     ):
@@ -1940,7 +1926,7 @@ class TestBuildDeleteRecurringBlockEffects:
         assert len(result) == 1
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
+    @patch(f"{MODULE}.get_event_ids_many")
     def test_no_events_returns_empty(
         self, mock_get_ids, mock_get_admin_cals, sample_recurring_block
     ):
@@ -1954,7 +1940,7 @@ class TestBuildDeleteRecurringBlockEffects:
         assert result == []
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
+    @patch(f"{MODULE}.get_event_ids_many")
     def test_fallback_block_with_empty_reason(
         self, mock_get_ids, mock_get_admin_cals
     ):
@@ -1975,7 +1961,7 @@ class TestBuildDeleteRecurringBlockEffects:
         assert result == []
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
+    @patch(f"{MODULE}.get_event_ids_many")
     def test_fallback_block_with_empty_reason_searches_blocked_and_legacy(
         self, mock_get_ids, mock_get_admin_cals
     ):
@@ -2018,7 +2004,7 @@ class TestBuildDeleteRecurringBlockEffects:
         assert result == []
 
     @patch(f"{MODULE}.get_admin_calendars")
-    @patch(f"{MODULE}.get_event_ids")
+    @patch(f"{MODULE}.get_event_ids_many")
     def test_fallback_multiple_calendars(
         self, mock_get_ids, mock_get_admin_cals, sample_recurring_block
     ):
@@ -3262,58 +3248,3 @@ def test_shared_lookups_check_a_shared_name_once_per_provider():
     assert len(shared.mock_calls) == 1
 
 
-class TestBuildDeleteBlocksEffects:
-    """Batched deletes: same events as one call per block, a fixed number of queries per provider."""
-
-    def _blocks(self):
-        from provider_availability.engine.models import AdminBlock
-
-        return [
-            AdminBlock(id=f"b{d}", provider_id="p1", start=datetime(2026, 3, d, 9), end=datetime(2026, 3, d, 10), reason="PTO")
-            for d in (10, 11, 12)
-        ]
-
-    def _run(self, blocks, time_rows, title_rows=(), saved=(), stored=None):
-        from provider_availability.engine import event_sync
-
-        qs = MagicMock()
-        qs.exclude.return_value.values_list.return_value = list(time_rows)
-        title_qs = MagicMock()
-        title_qs.values_list.return_value = list(title_rows)
-        with patch.object(event_sync, "provider_tz", return_value=ZoneInfo("UTC")), \
-             patch.object(event_sync, "get_event_ids", side_effect=lambda bid: (stored or {}).get(bid, [])), \
-             patch.object(event_sync, "get_admin_calendars", return_value=[MagicMock(id="cal")]) as cals, \
-             patch.object(event_sync, "get_blocks_for_provider", return_value=list(saved)) as saved_read, \
-             patch.object(event_sync, "build_block_event_effects", return_value=["redraw"]) as redraw, \
-             patch.object(event_sync.EventModel.objects, "filter", side_effect=[qs, title_qs]) as events:
-            effects = event_sync.build_delete_blocks_effects(blocks)
-        return effects, cals, saved_read, redraw, events
-
-    def test_one_calendar_lookup_and_one_time_query_for_every_block(self):
-        utc = lambda d, h: datetime(2026, 3, d, h, tzinfo=UTC)
-        rows = [(f"e{d}", utc(d, 9), utc(d, 10)) for d in (10, 11, 12)]
-        effects, cals, saved_read, _, events = self._run(self._blocks(), rows)
-        assert len(effects) == 3
-        assert len(cals.mock_calls) == 1 and len(events.mock_calls) == 1 and len(saved_read.mock_calls) == 1
-
-    def test_title_match_only_for_blocks_the_time_match_missed(self):
-        utc = lambda d, h: datetime(2026, 3, d, h, tzinfo=UTC)
-        rows = [("e10", utc(10, 9), utc(10, 10))]
-        title_rows = [("t11", "PTO", utc(11, 8)), ("t99", "PTO", utc(20, 8))]
-        effects, _, _, _, events = self._run(self._blocks(), rows, title_rows)
-        assert len(effects) == 2 and len(events.mock_calls) == 2
-
-    def test_other_saved_blocks_at_the_same_times_are_redrawn(self):
-        from provider_availability.engine.models import AdminBlock
-
-        utc = lambda d, h: datetime(2026, 3, d, h, tzinfo=UTC)
-        rows = [(f"e{d}", utc(d, 9), utc(d, 10)) for d in (10, 11, 12)]
-        twin = AdminBlock(id="other", provider_id="p1", start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 10))
-        elsewhere = AdminBlock(id="far", provider_id="p1", start=datetime(2026, 3, 20, 9), end=datetime(2026, 3, 20, 10))
-        effects, _, _, redraw, _ = self._run(self._blocks(), rows, saved=[*self._blocks(), twin, elsewhere])
-        assert [c.args[0].id for c in redraw.mock_calls] == ["other"]
-        assert effects.count("redraw") == 1
-
-    def test_stored_event_ids_skip_the_queries(self):
-        effects, cals, _, _, events = self._run(self._blocks(), [], stored={"b10": ["s1"], "b11": ["s2"], "b12": ["s3"]})
-        assert len(effects) == 3 and cals.mock_calls == [] and events.mock_calls == []

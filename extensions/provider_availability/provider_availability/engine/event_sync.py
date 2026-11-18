@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
@@ -39,7 +40,7 @@ from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.settings import applied_overrides, is_feature_on, rounds_drawn
 from provider_availability.engine.storage import (
     get_blocks_for_provider,
-    get_event_ids,
+    get_event_ids_many,
     get_recurring_blocks_for_provider,
     get_rules_for_provider,
 )
@@ -663,24 +664,12 @@ def build_block_event_effects(block: AdminBlock, lookups: dict[Any, Any] | None 
     return effects
 
 
-def _redraw_same_time_blocks(provider_id: str, block: AdminBlock, skip_ids: set[str]) -> list[Effect]:
-    """Redraw the provider's other one-off blocks with exactly this block's start and end."""
-    tz = provider_tz(provider_id)
-
-    def span(b: AdminBlock) -> tuple[datetime, datetime]:
-        return (
-            to_utc(b.start if b.start.tzinfo is not None else localize_naive(b.start, tz)),
-            to_utc(b.end if b.end.tzinfo is not None else localize_naive(b.end, tz)),
-        )
-
-    target = span(block)
-    effects: list[Effect] = []
-    for other in get_blocks_for_provider(provider_id):
-        if other.id == block.id or other.id in skip_ids:
-            continue
-        if span(other) == target:
-            effects.extend(build_block_event_effects(other))
-    return effects
+def _block_span(block: AdminBlock, tz: Any) -> tuple[datetime, datetime]:
+    """A block's start and end in UTC, reading naive times in the provider's timezone."""
+    return (
+        to_utc(block.start if block.start.tzinfo is not None else localize_naive(block.start, tz)),
+        to_utc(block.end if block.end.tzinfo is not None else localize_naive(block.end, tz)),
+    )
 
 
 def build_delete_block_effects(
@@ -691,86 +680,53 @@ def build_delete_block_effects(
 ) -> list[Effect]:
     """Delete admin block events from the provider's Administrative calendars.
 
-    If a specific block is given, first try stored event IDs, then fall back to
-    time-range matching (with TZ conversion). Also matches by title (reason).
-    Otherwise, delete all block-titled events.
-
-    Events are matched by time, not by block, so the provider's other one-off
-    blocks with the exact same start and end lose theirs too; with
-    ``keep_others`` they are redrawn, except the blocks in ``skip_ids`` (ones
-    the caller is deleting or redrawing itself). Callers that delete and
-    redraw all of a provider's blocks pass ``keep_others=False``.
+    With a block, this is build_delete_blocks_effects for that one block, read
+    under ``provider_id``. Without one, every block-titled event is deleted.
     """
+    if block is not None:
+        if block.provider_id != provider_id:
+            block = replace(block, provider_id=provider_id)
+        return build_delete_blocks_effects([block], skip_ids, keep_others=keep_others)
+
     effects: list[Effect] = []
-
-    if block:
-        # Try stored event IDs first
-        stored_ids = get_event_ids(block.id)
-        if stored_ids:
-            for eid in stored_ids:
-                effects.append(EventEffect(event_id=eid).delete())
-            log.info("build_delete_block_effects: block=%s, deleted %d events by stored IDs", block.id, len(effects))
-            return effects
-
-        # Fall back to time-range matching — convert block times to UTC for comparison
-        tz = provider_tz(provider_id)
-        block_start_utc = to_utc(block.start if block.start.tzinfo is not None else localize_naive(block.start, tz))
-        block_end_utc = to_utc(block.end if block.end.tzinfo is not None else localize_naive(block.end, tz))
-        block_title = block.reason if block.reason else "Blocked"
-
-        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-        if cal_ids:
-            # Match by converted UTC times across all the provider's Admin calendars.
-            # One-off events only: a recurring block's series can start at the same time.
-            one_off = Q(recurring_parent_event__isnull=True) & (Q(recurrence__isnull=True) | Q(recurrence=""))
-            # A "Round full" block can share the times; it belongs to the round, not this block.
-            for evt_id in EventModel.objects.filter(
-                one_off,
-                calendar__id__in=cal_ids,
-                is_cancelled=False,
-                starts_at=block_start_utc,
-                ends_at=block_end_utc,
-            ).exclude(title=ROUND_FULL_TITLE).values_list("id", flat=True):
-                effects.append(EventEffect(event_id=str(evt_id)).delete())
-            # Also match by title if time match found nothing (handles TZ edge cases)
-            if not effects:
-                for evt_id in EventModel.objects.filter(
-                    one_off,
-                    calendar__id__in=cal_ids,
-                    is_cancelled=False,
-                    title=block_title,
-                    starts_at__date=block_start_utc.date(),
-                ).values_list("id", flat=True):
-                    effects.append(EventEffect(event_id=str(evt_id)).delete())
-        if keep_others and effects:
-            effects.extend(_redraw_same_time_blocks(provider_id, block, skip_ids or set()))
-    else:
-        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-        if cal_ids:
-            for evt_id in EventModel.objects.filter(
-                calendar__id__in=cal_ids,
-                title=BLOCK_TITLE,
-                is_cancelled=False,
-            ).values_list("id", flat=True):
-                effects.append(EventEffect(event_id=str(evt_id)).delete())
-
+    cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+    if cal_ids:
+        for evt_id in EventModel.objects.filter(
+            calendar__id__in=cal_ids,
+            title=BLOCK_TITLE,
+            is_cancelled=False,
+        ).values_list("id", flat=True):
+            effects.append(EventEffect(event_id=str(evt_id)).delete())
     if effects:
         log.info("build_delete_block_effects: provider=%s, %d delete effects", provider_id, len(effects))
     return effects
 
 
 def build_delete_blocks_effects(
-    blocks: list[AdminBlock], skip_ids: set[str] | None = None, lookups: dict[Any, Any] | None = None
+    blocks: list[AdminBlock],
+    skip_ids: set[str] | None = None,
+    lookups: dict[Any, Any] | None = None,
+    keep_others: bool = True,
 ) -> list[Effect]:
-    """Delete the events of several one-off blocks, with a fixed number of queries per provider.
+    """Delete the events of one or more one-off blocks.
 
-    Matches the same events as build_delete_block_effects called once per block
-    (stored ids, then exact start and end, then title and date), and redraws the
-    provider's other blocks at the same times, except those in ``skip_ids``.
-    For each provider: one calendar lookup, one time-match query, at most one
-    title-match query, and one read of their saved blocks.
+    Each block's events are found by its stored event ids if it has any, then by
+    its exact start and end in UTC across the provider's Administrative calendars
+    (one-off events only, never a "Round full" block), then, when that finds
+    nothing, by its title on its start date. Events are matched by time, not by
+    block, so the provider's other saved blocks at a matched block's exact times
+    lose theirs too; with ``keep_others`` they are redrawn, except the blocks
+    being deleted and those in ``skip_ids``.
+
+    For each provider: one calendar lookup, one time-match query, one read of
+    saved blocks, and one title query per block the time match missed (rare).
     """
-    skip = set(skip_ids or set()) | {b.id for b in blocks}
+    unique: dict[tuple[str, str], AdminBlock] = {}
+    for b in blocks:
+        unique.setdefault((b.provider_id, b.id), b)
+    if not unique:
+        return []
+    skip = set(skip_ids or set()) | {b.id for b in unique.values()}
     memo: dict[Any, Any] = lookups if lookups is not None else {}
     effects: list[Effect] = []
     seen_events: set[str] = set()
@@ -780,25 +736,20 @@ def build_delete_blocks_effects(
             seen_events.add(event_id)
             effects.append(EventEffect(event_id=event_id).delete())
 
+    stored = get_event_ids_many([b.id for b in unique.values()])
     by_provider: dict[str, list[AdminBlock]] = {}
-    for b in blocks:
+    for b in unique.values():
         by_provider.setdefault(b.provider_id, []).append(b)
     one_off = Q(recurring_parent_event__isnull=True) & (Q(recurrence__isnull=True) | Q(recurrence=""))
 
     for provider_id, provider_blocks in by_provider.items():
-        tz = provider_tz(provider_id)
-
-        def span(b: AdminBlock) -> tuple[datetime, datetime]:
-            return (
-                to_utc(b.start if b.start.tzinfo is not None else localize_naive(b.start, tz)),
-                to_utc(b.end if b.end.tzinfo is not None else localize_naive(b.end, tz)),
-            )
-
+        if ("tz", provider_id) not in memo:
+            memo[("tz", provider_id)] = provider_tz(provider_id)
+        tz = memo[("tz", provider_id)]
         unmatched: list[AdminBlock] = []
         for b in provider_blocks:
-            stored = get_event_ids(b.id)
-            if stored:
-                for eid in stored:
+            if stored.get(b.id):
+                for eid in stored[b.id]:
                     delete(eid)
             else:
                 unmatched.append(b)
@@ -806,51 +757,46 @@ def build_delete_blocks_effects(
             continue
 
         cal_ids = [c.id for c in get_admin_calendars(provider_id)]
-        matched: list[AdminBlock] = []
-        if cal_ids:
-            spans = {b.id: span(b) for b in unmatched}
-            rows = EventModel.objects.filter(
-                one_off,
-                calendar__id__in=cal_ids,
-                is_cancelled=False,
-                starts_at__in=sorted({s for s, _ in spans.values()}),
-            ).exclude(title=ROUND_FULL_TITLE).values_list("id", "starts_at", "ends_at")
-            by_span: dict[tuple[datetime, datetime], list[str]] = {}
-            for eid, starts_at, ends_at in rows:
-                by_span.setdefault((starts_at, ends_at), []).append(str(eid))
-            no_time_match: list[AdminBlock] = []
-            for b in unmatched:
-                ids = by_span.get(spans[b.id], [])
-                for eid in ids:
-                    delete(eid)
-                (matched if ids else no_time_match).append(b)
-            # Title and date when the time match found nothing (handles TZ edge cases).
-            if no_time_match:
-                wanted = {(b.reason or "Blocked", spans[b.id][0].date()): b for b in no_time_match}
-                title_rows = EventModel.objects.filter(
-                    one_off,
-                    calendar__id__in=cal_ids,
-                    is_cancelled=False,
-                    title__in=sorted({t for t, _ in wanted}),
-                    starts_at__date__in=sorted({d for _, d in wanted}),
-                ).values_list("id", "title", "starts_at")
-                for eid, title, starts_at in title_rows:
-                    hit = wanted.get((title, starts_at.date()))
-                    if hit:
-                        delete(str(eid))
-                        if hit not in matched:
-                            matched.append(hit)
+        if not cal_ids:
+            continue
+        spans = {b.id: _block_span(b, tz) for b in unmatched}
+        by_span: dict[tuple[datetime, datetime], list[str]] = {}
+        for eid, starts_at, ends_at in EventModel.objects.filter(
+            one_off,
+            calendar__id__in=cal_ids,
+            is_cancelled=False,
+            starts_at__in=sorted({s for s, _ in spans.values()}),
+        ).exclude(title=ROUND_FULL_TITLE).values_list("id", "starts_at", "ends_at"):
+            by_span.setdefault((starts_at, ends_at), []).append(str(eid))
 
-        # Events are matched by time, so other saved blocks at a matched block's exact
-        # times lost theirs too: redraw them.
-        if matched:
-            targets = {span(b) for b in matched}
+        matched: list[AdminBlock] = []
+        for b in unmatched:
+            ids = by_span.get(spans[b.id], [])
+            if not ids:
+                # Title on the start date, for timezone edge cases. The database decides
+                # the date, as it always has.
+                ids = [
+                    str(e) for e in EventModel.objects.filter(
+                        one_off,
+                        calendar__id__in=cal_ids,
+                        is_cancelled=False,
+                        title=b.reason or "Blocked",
+                        starts_at__date=spans[b.id][0].date(),
+                    ).values_list("id", flat=True)
+                ]
+            for eid in ids:
+                delete(eid)
+            if ids:
+                matched.append(b)
+
+        if keep_others and matched:
+            targets = {spans[b.id] for b in matched}
             for other in get_blocks_for_provider(provider_id):
-                if other.id not in skip and span(other) in targets:
+                if other.id not in skip and _block_span(other, tz) in targets:
                     effects.extend(build_block_event_effects(other, memo))
 
     if effects:
-        log.info("build_delete_blocks_effects: %d blocks, %d effects", len(blocks), len(effects))
+        log.info("build_delete_blocks_effects: %d blocks, %d effects", len(unique), len(effects))
     return effects
 
 

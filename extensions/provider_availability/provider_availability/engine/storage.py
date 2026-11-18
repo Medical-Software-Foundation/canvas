@@ -156,6 +156,15 @@ def get_event_ids(rule_id: str) -> list[str]:
     return list(data) if data else []
 
 
+def get_event_ids_many(item_ids: list[str]) -> dict[str, list[str]]:
+    """Stored Canvas Event UUIDs for several items, in one read. Items with none are left out."""
+    if not item_ids:
+        return {}
+    stored = _get_cache().get_many([f"{EVENT_IDS_PREFIX}{i}" for i in item_ids]) or {}
+    # get_many can return keys with the cache's own prefix in front, so key by what follows ours.
+    return {str(k).split(EVENT_IDS_PREFIX, 1)[-1]: list(v) for k, v in stored.items() if v}
+
+
 def delete_event_ids(rule_id: str) -> None:
     """Remove stored Canvas Event UUIDs for a rule."""
     cache = _get_cache()
@@ -224,7 +233,10 @@ def save_blocks(blocks: list[AdminBlock]) -> None:
         cache.set(block.cache_key, block.to_dict(), timeout_seconds=CACHE_TTL_SECONDS)
     index = _get_block_index()
     known = set(index)
-    index.extend(b.cache_key for b in blocks if b.cache_key not in known)
+    for block in blocks:
+        if block.cache_key not in known:
+            known.add(block.cache_key)
+            index.append(block.cache_key)
     cache.set(BLOCK_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
 
 

@@ -42,6 +42,11 @@ VISIT_TYPE_ID = "visit-type-uuid-789"
 
 MODULE = "provider_availability.api.availability_api"
 
+def _saved(mock):
+    """Every block passed to a batched save or delete mock, in call order."""
+    return [b for c in mock.mock_calls for b in c.args[0]]
+
+
 # Saved ids are UUIDs; the save routes refuse anything else.
 RULE_ID = "0a1b2c3d-0000-4000-8000-000000000001"
 BLOCK_ID = "0a1b2c3d-0000-4000-8000-000000000002"
@@ -361,7 +366,7 @@ class TestOverrideResyncBranches:
 class TestCreateBlockBranches:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.save_blocks")
     def test_multi_date_timed_applies_time_of_day(
         self, mock_save, mock_effects, mock_access
     ):
@@ -382,7 +387,7 @@ class TestCreateBlockBranches:
         assert data["blocks"][0]["start"] == "2026-07-06T09:00:00"
         assert data["blocks"][0]["end"] == "2026-07-06T11:00:00"
         assert data["blocks"][1]["start"] == "2026-07-07T09:00:00"
-        assert len(mock_save.mock_calls) == 2
+        assert len(_saved(mock_save)) == 2
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_multi_date_timed_missing_start_end_errors(self, mock_access):
@@ -1567,9 +1572,9 @@ class TestFacilityBlocks:
 
     def test_multi_date_facility_blocks_carry_the_facility(self, _access, facility_blocks_on):
         body = {"provider_id": PROVIDER_ID, "dates": ["2026-03-10", "2026-03-11"], "all_day": True, "facility_id": FACILITY_ID}
-        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+        with patch(f"{MODULE}.save_blocks") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
-        assert [(b.facility_id, b.reason) for b in (c.args[0] for c in save.mock_calls)] == [
+        assert [(b.facility_id, b.reason) for b in _saved(save)] == [
             (FACILITY_ID, "Riverstone Assisted Living Visit")
         ] * 2
 
@@ -1667,16 +1672,16 @@ class TestFacilityBlocks:
         }
         with patch(f"{MODULE}.get_block_by_id", side_effect=lambda pid, bid: by_id.get(bid)), \
              patch(f"{FACILITIES}.active_facility_name", return_value=None), \
-             patch(f"{MODULE}.build_delete_block_effects", return_value=["del"]) as dele, \
-             patch(f"{MODULE}.delete_block") as delete, \
+             patch(f"{MODULE}.build_delete_blocks_effects", return_value=["del"]) as dele, \
+             patch(f"{MODULE}.delete_blocks") as delete, \
              patch(f"{MODULE}.build_block_event_effects", return_value=["new"]), \
-             patch(f"{MODULE}.save_block") as save:
+             patch(f"{MODULE}.save_blocks") as save:
             result = _make_handler(json_body=body).create_block()
         assert _parse(result[-1])[1] == HTTPStatus.CREATED
-        assert result[:-1] == ["del"] * 3 + ["new"] * 2
-        assert delete.mock_calls == [call(PROVIDER_ID, b.id) for b in group]
-        assert dele.mock_calls == [call(PROVIDER_ID, b, skip_ids={b.id for b in group}) for b in group]
-        assert [c.args[0].reason for c in save.mock_calls] == ["Old Name Visit"] * 2
+        assert result[:-1] == ["del"] + ["new"] * 2
+        assert [(b.provider_id, b.id) for b in _saved(delete)] == [(PROVIDER_ID, b.id) for b in group]
+        assert [b.id for b in _saved(dele)] == [b.id for b in group]
+        assert [b.reason for b in _saved(save)] == ["Old Name Visit"] * 2
 
     def test_a_refused_replacement_leaves_the_saved_blocks(self, _access):
         group = self._group()
@@ -1837,10 +1842,10 @@ class TestReplaceAndGroupLocations:
                 {"date": "2026-03-10", "all_day": True, "start": "", "end": ""},
             ],
         }
-        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+        with patch(f"{MODULE}.save_blocks") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             result = _make_handler(json_body=body).create_block()
         data, code = _parse(result[-1])
-        saved = [c.args[0] for c in save.mock_calls]
+        saved = _saved(save)
         assert code == HTTPStatus.CREATED
         assert [(b.start, b.end, b.all_day) for b in saved] == [
             (datetime(2026, 3, 10, 0, 0), datetime(2026, 3, 10, 23, 59, 59), True),
@@ -1877,8 +1882,8 @@ class TestReplaceAndGroupLocations:
 
         body = {"provider_id": PROVIDER_ID, "start": "2026-03-10T09:00:00", "end": "2026-03-10T10:00:00", "replace_block_ids": [BLOCK_ID]}
         with patch(f"{MODULE}.get_block_by_id", return_value=old), \
-             patch(f"{MODULE}.build_delete_block_effects", side_effect=delete_events), \
-             patch(f"{MODULE}.delete_block", side_effect=lambda *a: order.append("delete block")), \
+             patch(f"{MODULE}.build_delete_blocks_effects", side_effect=delete_events), \
+             patch(f"{MODULE}.delete_blocks", side_effect=lambda *a: order.append("delete block")), \
              patch(f"{MODULE}.save_block", side_effect=lambda b: order.append("save")), \
              patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
@@ -1941,9 +1946,9 @@ class TestManyProvidersInOneRequest:
 
     def test_every_provider_gets_every_date_in_one_group(self, access):
         body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES}
-        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+        with patch(f"{MODULE}.save_blocks") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             result = _make_handler(json_body=body).create_block()
-        saved = [c.args[0] for c in save.mock_calls]
+        saved = _saved(save)
         assert _parse(result[-1])[1] == HTTPStatus.CREATED
         assert [(b.provider_id, b.start.day) for b in saved] == [(self.P1, 10), (self.P1, 11), (self.P2, 10), (self.P2, 11)]
         assert len({b.group_id for b in saved}) == 1 and saved[0].group_id
@@ -1952,9 +1957,9 @@ class TestManyProvidersInOneRequest:
     def test_the_same_provider_dashed_and_undashed_gets_one_set(self, access):
         dashed = "0a1b2c3d-0000-4000-8000-00000000a002"
         body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2, dashed], "entries": self.ENTRIES}
-        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+        with patch(f"{MODULE}.save_blocks") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
-        assert len(save.mock_calls) == 4
+        assert len(_saved(save)) == 4
 
     def test_a_malformed_provider_id_is_refused_before_anything(self, access):
         body = {"provider_id": self.P1, "provider_ids": [self.P1, "abc"], "entries": self.ENTRIES}
@@ -1976,7 +1981,7 @@ class TestManyProvidersInOneRequest:
 
     def test_one_lookups_dict_is_shared_across_the_save(self, access):
         body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES}
-        with patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]) as draw:
+        with patch(f"{MODULE}.save_blocks"), patch(f"{MODULE}.build_block_event_effects", return_value=[]) as draw:
             _make_handler(json_body=body).create_block()
         memos = {id(c.args[1]) for c in draw.mock_calls}
         assert len(draw.mock_calls) == 4 and len(memos) == 1
@@ -1996,13 +2001,13 @@ class TestManyProvidersInOneRequest:
                 "replace_blocks": [{"provider_id": self.P1, "id": BLOCK_ID}, {"provider_id": self.P2, "id": BLOCK_ID_2},
                                    {"provider_id": "0a1b2c3d00004000800000000000ffff", "id": BLOCK_ID}]}
         with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: found.get((p, b))) as lookup, \
-             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
-             patch(f"{MODULE}.delete_block") as delete, \
-             patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+             patch(f"{MODULE}.build_delete_blocks_effects", return_value=[]), \
+             patch(f"{MODULE}.delete_blocks") as delete, \
+             patch(f"{MODULE}.save_blocks"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
         # One lookup per block, under its own provider; a provider outside the save is ignored.
         assert lookup.mock_calls == [call(self.P1, BLOCK_ID), call(self.P2, BLOCK_ID_2)]
-        assert delete.mock_calls == [call(self.P1, BLOCK_ID), call(self.P2, BLOCK_ID_2)]
+        assert [(b.provider_id, b.id) for b in _saved(delete)] == [(self.P1, BLOCK_ID), (self.P2, BLOCK_ID_2)]
 
     def test_provider_ids_must_be_a_list_with_dates(self, access):
         bad: list[dict[str, Any]] = [{"provider_ids": PROVIDER_ID_2, "entries": self.ENTRIES}, {"provider_ids": [PROVIDER_ID_2]}, {"provider_ids": [5], "entries": self.ENTRIES}]
@@ -2021,11 +2026,11 @@ class TestManyProvidersInOneRequest:
         with patch(f"{MODULE}.get_recurring_block_by_id", return_value=rb), \
              patch(f"{MODULE}.build_delete_recurring_block_effects", return_value=["del-rb"]), \
              patch(f"{MODULE}.delete_recurring_block") as delete_rb, \
-             patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+             patch(f"{MODULE}.save_blocks") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             result = _make_handler(json_body=body).create_block()
         assert "del-rb" in result
         assert delete_rb.mock_calls == [call(PROVIDER_ID, RB_ID)]
-        assert len(save.mock_calls) == 2
+        assert len(_saved(save)) == 2
 
     def test_a_recurring_group_leaving_a_facility_takes_the_hold_setting(self, access):
         other = RecurringBlock(id=RB_ID_2, provider_id=PROVIDER_ID_2, reason="Riverstone Visit", group_id="g-1",
@@ -2064,22 +2069,22 @@ class TestReplaceLookups:
         old_b = AdminBlock(id=BLOCK_ID_2, provider_id=self.P2, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10))
         body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES, "replace_block_ids": [BLOCK_ID_2]}
         with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: old_b if p == self.P2 else None), \
-             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
-             patch(f"{MODULE}.delete_block") as delete, \
-             patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+             patch(f"{MODULE}.build_delete_blocks_effects", return_value=[]), \
+             patch(f"{MODULE}.delete_blocks") as delete, \
+             patch(f"{MODULE}.save_blocks"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
-        assert delete.mock_calls == [call(self.P2, BLOCK_ID_2)]
+        assert [(b.provider_id, b.id) for b in _saved(delete)] == [(self.P2, BLOCK_ID_2)]
 
     def test_a_block_saved_under_the_dashed_id_is_found(self, _access):
         old = AdminBlock(id=BLOCK_ID, provider_id=self.P1_DASHED, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10))
         body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES,
                 "replace_blocks": [{"provider_id": self.P1_DASHED, "id": BLOCK_ID}]}
         with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: old if p == self.P1_DASHED else None), \
-             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
-             patch(f"{MODULE}.delete_block") as delete, \
-             patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+             patch(f"{MODULE}.build_delete_blocks_effects", return_value=[]), \
+             patch(f"{MODULE}.delete_blocks") as delete, \
+             patch(f"{MODULE}.save_blocks"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
-        assert delete.mock_calls == [call(self.P1_DASHED, BLOCK_ID)]
+        assert [(b.provider_id, b.id) for b in _saved(delete)] == [(self.P1_DASHED, BLOCK_ID)]
 
 
 def test_a_scheduler_grouped_only_with_themselves_sees_no_counts():

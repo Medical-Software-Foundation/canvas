@@ -36,6 +36,11 @@ VISIT_TYPE_ID = "visit-type-uuid-789"
 
 MODULE = "provider_availability.api.availability_api"
 
+def _saved(mock):
+    """Every block passed to a batched save or delete mock, in call order."""
+    return [b for c in mock.mock_calls for b in c.args[0]]
+
+
 # Saved ids are UUIDs; the save routes refuse anything else.
 RULE_ID = "0a1b2c3d-0000-4000-8000-000000000001"
 BLOCK_ID = "0a1b2c3d-0000-4000-8000-000000000002"
@@ -1387,7 +1392,7 @@ class TestCreateBlock:
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.save_blocks")
     def test_multi_date_all_day_creates_one_block_per_date(
         self, mock_save, mock_effects, mock_access
     ):
@@ -1416,12 +1421,12 @@ class TestCreateBlock:
         # event doesn't spill into the next day.
         assert data["blocks"][0]["start"] == "2026-07-04T00:00:00"
         assert data["blocks"][0]["end"] == "2026-07-04T23:59:59"
-        assert len(mock_save.mock_calls) == 3
+        assert len(_saved(mock_save)) == 3
         assert len(mock_effects.mock_calls) == 3
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.save_blocks")
     def test_single_date_all_day_no_group_id(
         self, mock_save, mock_effects, mock_access
     ):
@@ -1441,7 +1446,7 @@ class TestCreateBlock:
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.build_block_event_effects", return_value=[])
-    @patch(f"{MODULE}.save_block")
+    @patch(f"{MODULE}.save_blocks")
     def test_all_day_block_stays_within_same_day(
         self, mock_save, mock_effects, mock_access
     ):
@@ -1459,7 +1464,7 @@ class TestCreateBlock:
         handler = _make_handler(json_body=body)
         handler.create_block()
 
-        saved_block = mock_save.call_args.args[0]
+        saved_block = _saved(mock_save)[0]
         assert saved_block.start == datetime(2026, 7, 4, 0, 0, 0)
         assert saved_block.end == datetime(2026, 7, 4, 23, 59, 59)
         assert saved_block.end.date() == saved_block.start.date()  # no carry-over

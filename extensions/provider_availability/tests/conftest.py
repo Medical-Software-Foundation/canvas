@@ -184,3 +184,52 @@ def settings_cache():
     with patch("provider_availability.engine.settings._get_cache", return_value=cache), \
          patch("provider_availability.engine.facilities._get_cache", return_value=cache):
         yield cache
+
+
+class FakeEvents:
+    """A stand-in for Event.objects that applies the filters block deletes use.
+
+    Supports calendar__id__in, is_cancelled, starts_at, starts_at__in, ends_at,
+    title, title__in and starts_at__date (Q arguments are ignored), then
+    .exclude(title=...) and .values_list(...). ``queries`` counts filter() calls.
+    """
+
+    def __init__(self, events):
+        self.events = list(events)
+        self.queries = 0
+
+    def filter(self, *q, **kw):
+        self.queries += 1
+        rows = [e for e in self.events if self._match(e, kw)]
+        return _FakeEventRows(rows)
+
+    @staticmethod
+    def _match(e, kw):
+        for key, value in kw.items():
+            if key == "calendar__id__in" and e["calendar"] not in value:
+                return False
+            if key == "is_cancelled" and e.get("is_cancelled", False) != value:
+                return False
+            if key == "starts_at" and e["starts_at"] != value:
+                return False
+            if key == "starts_at__in" and e["starts_at"] not in value:
+                return False
+            if key == "ends_at" and e["ends_at"] != value:
+                return False
+            if key == "title" and e["title"] != value:
+                return False
+            if key == "title__in" and e["title"] not in value:
+                return False
+            if key == "starts_at__date" and e["starts_at"].date() != value:
+                return False
+        return True
+
+
+class _FakeEventRows(list):
+    def exclude(self, **kw):
+        return _FakeEventRows(e for e in self if not all(e.get(k) == v for k, v in kw.items()))
+
+    def values_list(self, *fields, flat=False):
+        if flat:
+            return [e[fields[0]] for e in self]
+        return [tuple(e[f] for f in fields) for e in self]

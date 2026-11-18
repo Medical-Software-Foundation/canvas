@@ -275,8 +275,14 @@
     if (pfPickers[pid]) pfPickers[pid].redraw();
   }
 
+  // Each provider's newest save wins: a response that arrives after a later save was sent is ignored.
+  var saveSeq = {};
+
   async function saveProviderFacilities(pid, ids) {
+    var seq = (saveSeq[pid] || 0) + 1;
+    saveSeq[pid] = seq;
     var res = await apiCall('/settings/provider-facilities', { method: 'PUT', body: JSON.stringify({ provider_id: pid, facility_ids: ids }) });
+    if (saveSeq[pid] !== seq) return;
     if (!res || res.error) {
       showMsg((res && res.error) || 'The facilities were not saved.', 'error');
       if (pfPickers[pid]) pfPickers[pid].setValue(paFacilities().by_provider[pid] || []);
@@ -285,8 +291,19 @@
     var byProvider = Object.assign({}, paFacilities().by_provider);
     if (res.facility_ids.length) byProvider[pid] = res.facility_ids; else delete byProvider[pid];
     preloaded().facilities = { facilities: paFacilities().facilities, by_provider: byProvider };
-    // The row may have been rebuilt while this saved, showing the list from before; show what saved.
-    if (pfPickers[pid] && !pfPickers[pid].isOpen()) pfPickers[pid].setValue(res.facility_ids);
+    // The row may have been rebuilt while this saved, showing the list from before; show what
+    // saved. If it was reopened since, apply the changes made there on top of what saved.
+    var picker = pfPickers[pid];
+    if (picker) {
+      var opened = picker.openedWith();
+      var next = res.facility_ids.slice();
+      if (opened) {
+        var now = picker.getValue();
+        now.forEach(function (id) { if (opened.indexOf(id) < 0 && next.indexOf(id) < 0) next.push(id); });
+        next = next.filter(function (id) { return !(opened.indexOf(id) >= 0 && now.indexOf(id) < 0); });
+      }
+      picker.setValue(next);
+    }
     showMsg('Facilities saved', 'success');
   }
 

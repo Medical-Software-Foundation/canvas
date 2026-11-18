@@ -1315,7 +1315,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         )
         # Replaced blocks go first: their events are matched by time, and a new block
         # already saved at the same time would be redrawn alongside its own events.
-        event_effects = self._replace_blocks(provider_id, replaced)
+        # Each replaced block is removed under the provider id it was found under.
+        event_effects = build_delete_blocks_effects(replaced)
+        delete_blocks(replaced)
         save_block(block)
 
         # If converting from a recurring block, delete old events BEFORE creating
@@ -1335,16 +1337,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 status_code=HTTPStatus.CREATED,
             ),
         ]
-
-    @staticmethod
-    def _replace_blocks(provider_id: str, replaced: list[AdminBlock]) -> list[Effect]:
-        """Remove the saved blocks a save replaces, with their calendar events."""
-        effects: list[Effect] = []
-        skip = {b.id for b in replaced}
-        for old in replaced:
-            effects.extend(build_delete_block_effects(provider_id, old, skip_ids=skip))
-            delete_block(provider_id, old.id)
-        return effects
 
     @api.put("/blocks")
     def update_block(self) -> list[Response | Effect]:
@@ -2096,13 +2088,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         staff = get_staff_directory()
         names = {s["id"]: s["name"] for s in staff}
         facilities = _facility_list()
-        # Whose saved facilities to read. A failed role lookup still loads Settings,
-        # reading the saved list's own index instead (as the page load does for providers).
-        try:
-            schedulable_ids: set[str] = get_schedulable_provider_ids()
-        except Exception:
-            log.exception("get_settings: schedulable providers could not be read")
-            schedulable_ids = set()
+        # Whose saved facilities to read: the schedulable providers. A failure here is left
+        # to raise, so it reaches monitoring instead of quietly showing fewer facilities.
+        schedulable_ids = get_schedulable_provider_ids()
         from_settings = admin_ids({}, config)
         return [JSONResponse({
             "features": get_features(),
