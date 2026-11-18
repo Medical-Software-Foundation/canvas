@@ -3044,9 +3044,14 @@ async function saveOneoffBlock() {
       || (entries.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
     const res = await _postBlockEntries(groupProviderIds, entries, reason, locationIds, batchGroupId, what.facilityId, { blocks: replaceBlocks });
     if (res.error) {
-      // A refusal for a provider the user can't edit points at the checkbox that leaves them out.
-      var refused = groupProviderIds.length > 1 && /Access denied/.test(res.error);
-      showMsg(refused ? 'You can’t edit every provider in this group. Clear the checkbox at the top to change only this provider.' : res.error, 'error');
+      // When this provider can be edited but another in the group can't, the fix is the
+      // checkbox that leaves the others out; any other refusal shows the server's message.
+      var editable = function(pid) {
+        var row = _overviewData.find(function(p) { return String(p.provider_id) === String(pid); });
+        return !row || row.can_edit !== false;
+      };
+      var siblingLocked = editable(groupProviderIds[0]) && groupProviderIds.slice(1).some(function(pid) { return !editable(pid); });
+      showMsg(siblingLocked ? 'You can’t edit every provider in this group. Clear the checkbox at the top to change only this provider.' : res.error, 'error');
       return;
     }
     showMsg(res.created + ' block(s) saved', 'success');
@@ -3463,8 +3468,8 @@ async function renderSettingsPanel() {
     html += '<td class="pf-col round-only"><div id="pf-pick-' + _escHtml(p.id) + '"></div></td>';
     html += '</tr>';
   });
-  // Close any open facility picker first, so its picks save before its row is replaced.
-  Array.from(_fpOpenPickers).forEach(function(p) { p.close(); });
+  // The provider facility pickers save open picks before their rows are replaced (settings.js).
+  if (window.paFlushProviderPickers) window.paFlushProviderPickers();
   body.innerHTML = html + '<tr class="pv-none" style="display:none"><td colspan="3">No providers match.</td></tr>';
   if (window.paDrawProviderFacilities) window.paDrawProviderFacilities();
   filterProviderRows();
@@ -3919,6 +3924,9 @@ function FacilityPicker(hostId, opts) {
     setValue: function(ids) { selected = (ids || []).map(String); drawControl(); },
     // A saved round keeps its facility while rounds are switched off.
     setLocked: function(locked) { root.classList.toggle('fp-locked', !!locked); },
+    // Close the list if it's open, which saves a changed selection (onClose).
+    closeIfOpen: function() { if (root.classList.contains('open')) close(); },
+    isOpen: function() { return root.classList.contains('open'); },
     // Redraw after the groups' data arrives.
     redraw: function() { if (root.classList.contains('open')) drawList(); else drawControl(); },
   };

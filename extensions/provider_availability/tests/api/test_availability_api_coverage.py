@@ -2051,3 +2051,39 @@ def test_can_view_others():
     assert Access("s", False, {"p"}, "none").can_view_others() is True
     assert Access("s", True, None, "none").can_view_others() is True
     assert Access("", True, None, "full").can_view_others() is False
+
+
+@patch(f"{MODULE}._check_write_access", return_value=None)
+class TestReplaceLookups:
+    P1 = "0a1b2c3d00004000800000000000a001"
+    P1_DASHED = "0a1b2c3d-0000-4000-8000-00000000a001"
+    P2 = "0a1b2c3d00004000800000000000a002"
+    ENTRIES = [{"date": "2026-03-10", "all_day": True}]
+
+    def test_old_shape_finds_a_siblings_block_under_its_provider(self, _access):
+        old_b = AdminBlock(id=BLOCK_ID_2, provider_id=self.P2, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10))
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES, "replace_block_ids": [BLOCK_ID_2]}
+        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: old_b if p == self.P2 else None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.delete_block") as delete, \
+             patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+            _make_handler(json_body=body).create_block()
+        assert delete.mock_calls == [call(self.P2, BLOCK_ID_2)]
+
+    def test_a_block_saved_under_the_dashed_id_is_found(self, _access):
+        old = AdminBlock(id=BLOCK_ID, provider_id=self.P1_DASHED, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10))
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES,
+                "replace_blocks": [{"provider_id": self.P1_DASHED, "id": BLOCK_ID}]}
+        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: old if p == self.P1_DASHED else None), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.delete_block") as delete, \
+             patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+            _make_handler(json_body=body).create_block()
+        assert delete.mock_calls == [call(self.P1_DASHED, BLOCK_ID)]
+
+
+def test_a_scheduler_grouped_only_with_themselves_sees_no_counts():
+    from provider_availability.engine.access import Access
+
+    assert Access("s", False, {"s"}, "none").can_view_others() is False
+    assert Access("s", False, {"s", "p"}, "none").can_view_others() is True

@@ -109,7 +109,7 @@ class Access:
     def can_view_others(self) -> bool:
         """Whether this staff member can see providers other than themselves."""
         return bool(self.staff_id) and (
-            self.is_admin or bool(self.group_providers) or self.default_access != "none"
+            self.is_admin or bool((self.group_providers or set()) - {self.staff_id}) or self.default_access != "none"
         )
 
     def can_view(self, provider_id: str) -> bool:

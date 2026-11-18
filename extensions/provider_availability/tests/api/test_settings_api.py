@@ -44,6 +44,12 @@ def lookups():
 
 
 class TestGetSettings:
+    def test_settings_still_load_when_the_role_lookup_fails(self):
+        with patch(f"{MODULE}.get_schedulable_provider_ids", side_effect=RuntimeError("roles")):
+            data, code = _parse(_handler().get_settings()[0])
+        assert code == HTTPStatus.OK
+        assert data["provider_facilities"] == {}
+
     def test_admin_gets_everything(self):
         data, code = _parse(_handler().get_settings()[0])
         assert code == HTTPStatus.OK

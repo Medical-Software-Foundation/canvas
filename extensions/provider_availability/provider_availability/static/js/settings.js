@@ -233,8 +233,7 @@
     if (!on) return;
     // Each provider's row in the Timezones and facilities table (admin.js renderSettingsPanel)
     // has a cell for their facilities.
-    // Close any open picker first, so its picks save before it is rebuilt.
-    Array.from(_fpOpenPickers).forEach(function (op) { op.close(); });
+    flushProviderPickers();
     pfPickers = {};
     (_providers || []).forEach(function (p) {
       var pid = String(p.id);
@@ -249,6 +248,14 @@
       pfPickers[pid] = picker;
     });
   }
+
+  // Close any open provider facility picker, which saves its picks, before the pickers
+  // or their rows are rebuilt. Only these pickers: an open round or block form's
+  // Facility picker is left alone.
+  function flushProviderPickers() {
+    Object.keys(pfPickers).forEach(function (pid) { pfPickers[pid].closeIfOpen(); });
+  }
+  window.paFlushProviderPickers = flushProviderPickers;
 
   function pfGroups(pid) {
     var all = paFacilities().facilities;
@@ -278,6 +285,8 @@
     var byProvider = Object.assign({}, paFacilities().by_provider);
     if (res.facility_ids.length) byProvider[pid] = res.facility_ids; else delete byProvider[pid];
     preloaded().facilities = { facilities: paFacilities().facilities, by_provider: byProvider };
+    // The row may have been rebuilt while this saved, showing the list from before; show what saved.
+    if (pfPickers[pid] && !pfPickers[pid].isOpen()) pfPickers[pid].setValue(res.facility_ids);
     showMsg('Facilities saved', 'success');
   }
 

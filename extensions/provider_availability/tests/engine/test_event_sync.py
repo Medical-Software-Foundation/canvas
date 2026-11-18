@@ -3242,3 +3242,21 @@ def test_shared_lookups_find_each_providers_calendar_once():
     assert (len(tz.mock_calls), len(name.mock_calls), len(cal.mock_calls)) == (1, 1, 1)
     assert effects.count("make-cal") == 1
     assert len(effects) == 4
+
+
+def test_shared_lookups_check_a_shared_name_once_per_provider():
+    from provider_availability.engine import event_sync
+    from provider_availability.engine.models import AdminBlock
+
+    blocks = [
+        AdminBlock(provider_id="p1", start=datetime(2026, 3, d, 9), end=datetime(2026, 3, d, 10), location_ids=["l1", "l2"])
+        for d in (10, 11)
+    ]
+    with patch.object(event_sync, "provider_tz", return_value=ZoneInfo("UTC")), \
+         patch.object(event_sync, "resolve_provider_name", return_value="Pat One"), \
+         patch.object(event_sync, "name_is_shared", return_value=False) as shared, \
+         patch.object(event_sync, "get_admin_calendar_id", return_value=("cal", [])):
+        lookups: dict = {}
+        for b in blocks:
+            event_sync.build_block_event_effects(b, lookups)
+    assert len(shared.mock_calls) == 1

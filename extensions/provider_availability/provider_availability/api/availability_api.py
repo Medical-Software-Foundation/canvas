@@ -1103,8 +1103,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         With dates or entries, ``provider_ids`` saves the same blocks for several
         providers in this one request, and ``replace_blocks`` ([{provider_id, id}])
         names saved blocks it replaces. Every check runs and every calendar change
-        is built before any saved block is touched, so a failure leaves everything
-        as it was.
+        is built before any saved block is touched, so a refused save, or an error
+        while building the calendar changes, leaves everything as it was. The saves
+        themselves are separate writes to the plugin cache, which has no all-or-none
+        write, so a cache error partway through them can still leave a partial save.
         """
         body = self.request.json()
         bad_id = _id_error(body)
@@ -1138,13 +1140,17 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Saved blocks this save replaces (an edited multi-date group), found under any of
         # the providers. They are removed only after every check passes, and a facility
         # they carry counts as already saved.
+        # replace_blocks names each block's provider, so each is one lookup (under the id
+        # as sent, then the form used in this save). replace_block_ids, the older shape,
+        # gives ids only, so each is looked for under every provider in the save.
         replaced: list[AdminBlock] = []
-        wanted: list[tuple[str, str]] = [(provider_id, str(bid)) for bid in body.get("replace_block_ids") or []]
+        wanted: list[tuple[list[str], str]] = [(providers, str(bid)) for bid in body.get("replace_block_ids") or []]
         for item in body.get("replace_blocks") or []:
-            if isinstance(item, dict) and _canonical_id(str(item.get("provider_id", ""))) in by_canonical:
-                wanted.append((by_canonical[_canonical_id(str(item["provider_id"]))], str(item.get("id", ""))))
-        for pid, bid in wanted:
-            found = get_block_by_id(pid, bid)
+            sent = str(item.get("provider_id", "")) if isinstance(item, dict) else ""
+            if sent and _canonical_id(sent) in by_canonical:
+                wanted.append((list(dict.fromkeys([sent, by_canonical[_canonical_id(sent)]])), str(item.get("id", ""))))
+        for candidates, bid in wanted:
+            found = next((b for b in (get_block_by_id(pid, bid) for pid in candidates) if b), None)
             if found and found.id not in {b.id for b in replaced}:
                 replaced.append(found)
         replaced_rb = (
@@ -2092,6 +2098,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         staff = get_staff_directory()
         names = {s["id"]: s["name"] for s in staff}
         facilities = _facility_list()
+        # Whose saved facilities to read. A failed role lookup still loads Settings,
+        # reading the saved list's own index instead (as the page load does for providers).
+        try:
+            schedulable_ids: set[str] = get_schedulable_provider_ids()
+        except Exception:
+            log.exception("get_settings: schedulable providers could not be read")
+            schedulable_ids = set()
         from_settings = admin_ids({}, config)
         return [JSONResponse({
             "features": get_features(),
@@ -2104,7 +2117,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "staff": staff,
             "locations": get_active_locations(),
             "facilities": facilities,
-            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}, get_schedulable_provider_ids()),
+            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}, schedulable_ids),
         })]
 
     @api.put("/settings/features")

@@ -198,8 +198,9 @@ def get_provider_facilities(
 def refresh_provider_facility_ttls(provider_ids: list[str]) -> None:
     """Keep saved facilities from expiring, for these providers and everyone in the index.
 
-    Each key is read right before it is written back, and a key cleared in the
-    meantime is left cleared, so a Settings save during the refresh isn't undone.
+    Each key is read right before it is written back, and a key already cleared is
+    left cleared. The plugin cache has no compare-and-set, so a Settings save that
+    lands between the read and the write for that one provider is written over.
     """
     cache = _get_cache()
     pids = {str(p) for p in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []} | {str(p) for p in provider_ids}

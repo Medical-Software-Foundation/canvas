@@ -630,7 +630,11 @@ def build_block_event_effects(block: AdminBlock, lookups: dict[Any, Any] | None 
     if ("name", block.provider_id) not in memo:
         memo[("name", block.provider_id)] = resolve_provider_name(block.provider_id)
     provider_name = memo[("name", block.provider_id)]  # resolve once, reuse per location
-    shared = name_is_shared(block.provider_id) if len(location_ids) > 1 else None  # once, not per location
+    shared: bool | None = None
+    if len(location_ids) > 1:  # once, not per location
+        if ("shared", block.provider_id) not in memo:
+            memo[("shared", block.provider_id)] = name_is_shared(block.provider_id)
+        shared = memo[("shared", block.provider_id)]
     for loc_id in location_ids:
         cal_key = ("cal", block.provider_id, loc_id)
         cal_effects: list[Effect] = []
