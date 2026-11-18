@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-from canvas_sdk.value_set.v2022.condition import Asthma
+from canvas_sdk.value_set.v2027.condition import Asthma
 
 from protocols.ccp005v1_asthma import Ccp005v1
 

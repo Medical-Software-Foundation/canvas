@@ -14,7 +14,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.protocols import ClinicalQualityMeasure
 from canvas_sdk.v1.data.condition import Condition
 from canvas_sdk.v1.data.patient import Patient
-from canvas_sdk.value_set.v2022.condition import DiagnosisOfHypertension
+from canvas_sdk.value_set.v2027.condition import DiagnosisOfHypertension
 
 
 class Ccp003v1(ClinicalQualityMeasure):
