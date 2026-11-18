@@ -31,7 +31,7 @@ All value sets come from `canvas_sdk.value_set.v2027`, which ships in the SDK re
 
 ## Shared code
 
-`protocols/ecqm_common.py` and `tests/records.py` are identical copies shared with the other eCQM plugins (`cms-diabetes-measures`, `cms130v6-colorectal-cancer-screening`, `cms138v6-...`), since plugins cannot import from one another. A test fails when the copies drift.
+`protocols/ecqm_common.py` and `tests/records.py` are identical copies shared with the other eCQM plugins (`cms122v6-diabetes-hemoglobin-a1c-poor-control`, `cms131v6-diabetes-eye-exam`, `cms951v5-kidney-health-evaluation`, `cms130v6-colorectal-cancer-screening`, `cms138v6-...`), since plugins cannot import from one another. A test fails when the copies drift.
 
 ## Tests
 

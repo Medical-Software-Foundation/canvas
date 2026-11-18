@@ -9,16 +9,10 @@ from canvas_generated.messages.events_pb2 import Event as EventRequest
 from canvas_sdk.events import Event, EventType
 from canvas_sdk.test_utils.factories import PatientFactory
 from canvas_sdk.v1.data.condition import Condition
-from protocols.cms122v6_diabetes_hemoglobin_a1c_poor_control import ClinicalQualityMeasure122v6
 from protocols.cms131v6_diabetes_eye_exam import ClinicalQualityMeasure131v6
-from protocols.cms951v5_kidney_health_evaluation import ClinicalQualityMeasure951v5
 
 MISSING_ID = "00000000000000000000000000000000"
-PROTOCOLS = (
-    ClinicalQualityMeasure122v6,
-    ClinicalQualityMeasure131v6,
-    ClinicalQualityMeasure951v5,
-)
+PROTOCOLS = (ClinicalQualityMeasure131v6,)
 
 
 def _protocol(
@@ -44,9 +38,7 @@ def test_record_events_resolve_the_targets_patient() -> None:
         notes="",
         surgical=False,
     )
-    protocol = _protocol(
-        ClinicalQualityMeasure122v6, EventType.CONDITION_CREATED, str(condition.id)
-    )
+    protocol = _protocol(ClinicalQualityMeasure131v6, EventType.CONDITION_CREATED, str(condition.id))
     assert protocol.patient_id_from_target() == str(patient.id)
 
 
@@ -71,5 +63,5 @@ def test_sdk_maps_every_record_event_the_protocol_responds_to(
 def test_patient_events_resolve_from_the_target() -> None:
     """Patient events target the patient itself."""
     patient = PatientFactory.create()
-    protocol = _protocol(ClinicalQualityMeasure122v6, EventType.PATIENT_UPDATED, str(patient.id))
+    protocol = _protocol(ClinicalQualityMeasure131v6, EventType.PATIENT_UPDATED, str(patient.id))
     assert protocol.patient_id_from_target() == str(patient.id)

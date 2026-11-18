@@ -1,5 +1,6 @@
 """
-Abstract base class shared by the diabetes quality measures in this plugin.
+Abstract base class for the diabetes quality measures. Plugins cannot import from one
+another, so an identical copy lives in each diabetes eCQM plugin.
 
 Subclasses set ``QUALIFYING_VISIT_CODES`` and implement ``in_numerator`` plus
 ``compute()``. The initial population is a patient 18-75 years of age at the end of the
