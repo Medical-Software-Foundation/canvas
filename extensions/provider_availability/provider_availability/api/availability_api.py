@@ -33,6 +33,7 @@ from provider_availability.engine.csv_import import generate_template_csv
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_block_effects,
+    build_delete_blocks_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
     build_provider_lead_time_effects,
@@ -85,6 +86,7 @@ from provider_availability.engine.overlap import check_override_overlap, check_r
 from provider_availability.engine.storage import (
     clear_provider_timezone,
     delete_block,
+    delete_blocks,
     delete_recurring_block,
     delete_rule_by_id,
     delete_rules_for_provider,
@@ -105,6 +107,7 @@ from provider_availability.engine.storage import (
     get_rules_for_provider,
     get_schedulable_roles,
     save_block,
+    save_blocks,
     save_recurring_block,
     save_rule,
     set_practice_timezone,
@@ -1234,10 +1237,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
             # Build every calendar change first. Nothing saved is touched until all of it
             # succeeds, so an error here leaves the old blocks and their events in place.
-            event_effects: list[Effect] = []
-            skip = {b.id for b in replaced}
-            for old in replaced:
-                event_effects.extend(build_delete_block_effects(old.provider_id, old, skip_ids=skip))
+            lookups: dict[Any, Any] = {}
+            event_effects: list[Effect] = build_delete_blocks_effects(replaced, lookups=lookups)
             if replaced_rb:
                 event_effects.extend(build_delete_recurring_block_effects(provider_id, replaced_rb))
             created_blocks = [
@@ -1255,16 +1256,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 for pid in providers
                 for start_dt, end_dt, slot_all_day in spans
             ]
-            lookups: dict[Any, Any] = {}
             for block in created_blocks:
                 event_effects.extend(build_block_event_effects(block, lookups))
 
-            for old in replaced:
-                delete_block(old.provider_id, old.id)
+            delete_blocks(replaced)
             if replaced_rb:
                 delete_recurring_block(provider_id, replaced_rb.id)
-            for block in created_blocks:
-                save_block(block)
+            save_blocks(created_blocks)
 
             return [
                 *event_effects,

@@ -451,3 +451,18 @@ class TestProviderTimezone:
         clear_provider_timezone("nonexistent")
         result = get_all_provider_timezones()
         assert result == {}
+
+
+def test_save_and_delete_blocks_write_the_index_once(patch_cache):
+    from provider_availability.engine.models import AdminBlock
+    from provider_availability.engine.storage import BLOCK_INDEX_KEY, delete_blocks, get_blocks_for_provider, save_blocks
+
+    blocks = [AdminBlock(id=f"b{d}", provider_id="p1", start=datetime(2026, 3, d, 9), end=datetime(2026, 3, d, 10)) for d in (10, 11, 12)]
+    patch_cache.set.reset_mock()
+    save_blocks(blocks)
+    assert [c.args[0] for c in patch_cache.set.mock_calls].count(BLOCK_INDEX_KEY) == 1
+    assert sorted(b.id for b in get_blocks_for_provider("p1")) == ["b10", "b11", "b12"]
+    patch_cache.set.reset_mock()
+    delete_blocks(blocks[:2])
+    assert [c.args[0] for c in patch_cache.set.mock_calls].count(BLOCK_INDEX_KEY) == 1
+    assert [b.id for b in get_blocks_for_provider("p1")] == ["b12"]

@@ -215,6 +215,33 @@ def get_all_blocks() -> list[AdminBlock]:
     return blocks
 
 
+def save_blocks(blocks: list[AdminBlock]) -> None:
+    """Save several admin blocks, updating the block index once."""
+    if not blocks:
+        return
+    cache = _get_cache()
+    for block in blocks:
+        cache.set(block.cache_key, block.to_dict(), timeout_seconds=CACHE_TTL_SECONDS)
+    index = _get_block_index()
+    known = set(index)
+    index.extend(b.cache_key for b in blocks if b.cache_key not in known)
+    cache.set(BLOCK_INDEX_KEY, index, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def delete_blocks(blocks: list[AdminBlock]) -> None:
+    """Delete several admin blocks, updating the block index once."""
+    if not blocks:
+        return
+    cache = _get_cache()
+    keys = {b.cache_key for b in blocks}
+    for key in keys:
+        cache.delete(key)
+    index = _get_block_index()
+    kept = [k for k in index if k not in keys]
+    if len(kept) != len(index):
+        cache.set(BLOCK_INDEX_KEY, kept, timeout_seconds=CACHE_TTL_SECONDS)
+
+
 def delete_block(provider_id: str, block_id: str) -> bool:
     """Delete a specific admin block from cache."""
     cache = _get_cache()

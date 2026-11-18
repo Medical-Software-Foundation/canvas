@@ -3260,3 +3260,60 @@ def test_shared_lookups_check_a_shared_name_once_per_provider():
         for b in blocks:
             event_sync.build_block_event_effects(b, lookups)
     assert len(shared.mock_calls) == 1
+
+
+class TestBuildDeleteBlocksEffects:
+    """Batched deletes: same events as one call per block, a fixed number of queries per provider."""
+
+    def _blocks(self):
+        from provider_availability.engine.models import AdminBlock
+
+        return [
+            AdminBlock(id=f"b{d}", provider_id="p1", start=datetime(2026, 3, d, 9), end=datetime(2026, 3, d, 10), reason="PTO")
+            for d in (10, 11, 12)
+        ]
+
+    def _run(self, blocks, time_rows, title_rows=(), saved=(), stored=None):
+        from provider_availability.engine import event_sync
+
+        qs = MagicMock()
+        qs.exclude.return_value.values_list.return_value = list(time_rows)
+        title_qs = MagicMock()
+        title_qs.values_list.return_value = list(title_rows)
+        with patch.object(event_sync, "provider_tz", return_value=ZoneInfo("UTC")), \
+             patch.object(event_sync, "get_event_ids", side_effect=lambda bid: (stored or {}).get(bid, [])), \
+             patch.object(event_sync, "get_admin_calendars", return_value=[MagicMock(id="cal")]) as cals, \
+             patch.object(event_sync, "get_blocks_for_provider", return_value=list(saved)) as saved_read, \
+             patch.object(event_sync, "build_block_event_effects", return_value=["redraw"]) as redraw, \
+             patch.object(event_sync.EventModel.objects, "filter", side_effect=[qs, title_qs]) as events:
+            effects = event_sync.build_delete_blocks_effects(blocks)
+        return effects, cals, saved_read, redraw, events
+
+    def test_one_calendar_lookup_and_one_time_query_for_every_block(self):
+        utc = lambda d, h: datetime(2026, 3, d, h, tzinfo=UTC)
+        rows = [(f"e{d}", utc(d, 9), utc(d, 10)) for d in (10, 11, 12)]
+        effects, cals, saved_read, _, events = self._run(self._blocks(), rows)
+        assert len(effects) == 3
+        assert len(cals.mock_calls) == 1 and len(events.mock_calls) == 1 and len(saved_read.mock_calls) == 1
+
+    def test_title_match_only_for_blocks_the_time_match_missed(self):
+        utc = lambda d, h: datetime(2026, 3, d, h, tzinfo=UTC)
+        rows = [("e10", utc(10, 9), utc(10, 10))]
+        title_rows = [("t11", "PTO", utc(11, 8)), ("t99", "PTO", utc(20, 8))]
+        effects, _, _, _, events = self._run(self._blocks(), rows, title_rows)
+        assert len(effects) == 2 and len(events.mock_calls) == 2
+
+    def test_other_saved_blocks_at_the_same_times_are_redrawn(self):
+        from provider_availability.engine.models import AdminBlock
+
+        utc = lambda d, h: datetime(2026, 3, d, h, tzinfo=UTC)
+        rows = [(f"e{d}", utc(d, 9), utc(d, 10)) for d in (10, 11, 12)]
+        twin = AdminBlock(id="other", provider_id="p1", start=datetime(2026, 3, 10, 9), end=datetime(2026, 3, 10, 10))
+        elsewhere = AdminBlock(id="far", provider_id="p1", start=datetime(2026, 3, 20, 9), end=datetime(2026, 3, 20, 10))
+        effects, _, _, redraw, _ = self._run(self._blocks(), rows, saved=[*self._blocks(), twin, elsewhere])
+        assert [c.args[0].id for c in redraw.mock_calls] == ["other"]
+        assert effects.count("redraw") == 1
+
+    def test_stored_event_ids_skip_the_queries(self):
+        effects, cals, _, _, events = self._run(self._blocks(), [], stored={"b10": ["s1"], "b11": ["s2"], "b12": ["s3"]})
+        assert len(effects) == 3 and cals.mock_calls == [] and events.mock_calls == []
