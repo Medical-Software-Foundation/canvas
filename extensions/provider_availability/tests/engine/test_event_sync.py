@@ -3224,3 +3224,21 @@ class TestBuildDeleteRecurringBlockHoldCleanup:
 
         assert mock_event_model.objects.filter.call_count == 2
         assert len(result) == 2
+
+
+def test_shared_lookups_find_each_providers_calendar_once():
+    from provider_availability.engine import event_sync
+    from provider_availability.engine.models import AdminBlock
+
+    blocks = [
+        AdminBlock(provider_id="p1", start=datetime(2026, 3, d, 9), end=datetime(2026, 3, d, 10), reason="PTO")
+        for d in (10, 11, 12)
+    ]
+    with patch.object(event_sync, "provider_tz", return_value=ZoneInfo("UTC")) as tz, \
+         patch.object(event_sync, "resolve_provider_name", return_value="Pat One") as name, \
+         patch.object(event_sync, "get_admin_calendar_id", return_value=("cal-1", ["make-cal"])) as cal:
+        lookups: dict = {}
+        effects = [e for b in blocks for e in event_sync.build_block_event_effects(b, lookups)]
+    assert (len(tz.mock_calls), len(name.mock_calls), len(cal.mock_calls)) == (1, 1, 1)
+    assert effects.count("make-cal") == 1
+    assert len(effects) == 4

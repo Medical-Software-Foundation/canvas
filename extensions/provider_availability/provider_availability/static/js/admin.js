@@ -871,14 +871,15 @@ function _resetBlockEntries() {
 }
 
 // One request saves every date, with its own times, for every provider listed, so
-// either all of it saves or none does. replace: { blockIds, recurringBlockId } for
-// saved blocks this save replaces; the server removes them only once its checks pass.
+// either all of it saves or none does. replace: { blocks: [{provider_id, id}],
+// recurringBlockId } for saved blocks this save replaces; the server removes them
+// only once its checks pass.
 async function _postBlockEntries(providerIds, entries, reason, locationIds, groupId, facilityId, replace) {
   replace = replace || {};
   const body = {
     provider_id: providerIds[0], provider_ids: providerIds.slice(),
     reason: reason, location_ids: locationIds, group_id: groupId, facility_id: facilityId || '',
-    replace_block_ids: (replace.blockIds || []).slice(),
+    replace_blocks: (replace.blocks || []).slice(),
     entries: entries.map(function(e) {
       return { date: e.date, all_day: !!e.allDay, start: e.allDay ? '' : e.start + ':00', end: e.allDay ? '' : e.end + ':00' };
     }),
@@ -3023,7 +3024,7 @@ async function saveOneoffBlock() {
     // The block ids the fresh batch replaces, for every affected provider. One request
     // saves them all: the server checks every provider first and removes the old blocks
     // only once its checks pass, so a refused save leaves the group as it was.
-    var replaceIds = [];
+    var replaceBlocks = [];
     for (const pid of groupProviderIds) {
       var blockIdsToDelete = [];
       if (groupId) {
@@ -3036,13 +3037,18 @@ async function saveOneoffBlock() {
       } else if (pid === providerIds[0]) {
         blockIdsToDelete.push(blockId);
       }
-      replaceIds = replaceIds.concat(blockIdsToDelete);
+      blockIdsToDelete.forEach(function(id) { replaceBlocks.push({ provider_id: pid, id: id }); });
     }
     const batchGroupId = _editingBlockGroup
       || groupId
       || (entries.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
-    const res = await _postBlockEntries(groupProviderIds, entries, reason, locationIds, batchGroupId, what.facilityId, { blockIds: replaceIds });
-    if (res.error) { showMsg(res.error, 'error'); return; }
+    const res = await _postBlockEntries(groupProviderIds, entries, reason, locationIds, batchGroupId, what.facilityId, { blocks: replaceBlocks });
+    if (res.error) {
+      // A refusal for a provider the user can't edit points at the checkbox that leaves them out.
+      var refused = groupProviderIds.length > 1 && /Access denied/.test(res.error);
+      showMsg(refused ? 'You can’t edit every provider in this group. Clear the checkbox at the top to change only this provider.' : res.error, 'error');
+      return;
+    }
     showMsg(res.created + ' block(s) saved', 'success');
     _editingBlockGroup = null;
     _resetBlockEntries();
@@ -3457,6 +3463,8 @@ async function renderSettingsPanel() {
     html += '<td class="pf-col round-only"><div id="pf-pick-' + _escHtml(p.id) + '"></div></td>';
     html += '</tr>';
   });
+  // Close any open facility picker first, so its picks save before its row is replaced.
+  Array.from(_fpOpenPickers).forEach(function(p) { p.close(); });
   body.innerHTML = html + '<tr class="pv-none" style="display:none"><td colspan="3">No providers match.</td></tr>';
   if (window.paDrawProviderFacilities) window.paDrawProviderFacilities();
   filterProviderRows();

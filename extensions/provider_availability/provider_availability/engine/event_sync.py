@@ -599,17 +599,24 @@ def _get_calendar_id(
 # ── Admin block → Calendar Event sync ────────────────────────────────
 
 
-def build_block_event_effects(block: AdminBlock) -> list[Effect]:
+def build_block_event_effects(block: AdminBlock, lookups: dict[Any, Any] | None = None) -> list[Effect]:
     """Create Administrative calendar events for a one-off admin block.
 
     Creates per-location Admin calendar events when the block has location_ids,
     or a single provider-level event when no locations are specified.
+
+    Pass the same ``lookups`` dict when building many blocks in one request: each
+    provider's timezone, name and calendars are then looked up once, and a calendar
+    that has to be created is created once.
     """
     effects: list[Effect] = []
     title = block.reason if block.reason else "Blocked"
+    memo: dict[Any, Any] = lookups if lookups is not None else {}
 
     # Localize to provider TZ if naive, then convert to UTC.
-    tz = provider_tz(block.provider_id)
+    if ("tz", block.provider_id) not in memo:
+        memo[("tz", block.provider_id)] = provider_tz(block.provider_id)
+    tz = memo[("tz", block.provider_id)]
     starts_at = to_utc(block.start if block.start.tzinfo is not None else localize_naive(block.start, tz))
     ends_at = to_utc(block.end if block.end.tzinfo is not None else localize_naive(block.end, tz))
 
@@ -620,10 +627,18 @@ def build_block_event_effects(block: AdminBlock) -> list[Effect]:
     else:
         location_ids = [None]  # provider-level (no location)
 
-    provider_name = resolve_provider_name(block.provider_id)  # resolve once, reuse per location
+    if ("name", block.provider_id) not in memo:
+        memo[("name", block.provider_id)] = resolve_provider_name(block.provider_id)
+    provider_name = memo[("name", block.provider_id)]  # resolve once, reuse per location
     shared = name_is_shared(block.provider_id) if len(location_ids) > 1 else None  # once, not per location
     for loc_id in location_ids:
-        calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name, shared)
+        cal_key = ("cal", block.provider_id, loc_id)
+        cal_effects: list[Effect] = []
+        if cal_key in memo:
+            calendar_id = memo[cal_key]
+        else:
+            calendar_id, cal_effects = get_admin_calendar_id(block.provider_id, loc_id, provider_name, shared)
+            memo[cal_key] = calendar_id
         if not calendar_id:
             log.warning("build_block_event_effects: no Admin calendar for provider %s location=%s", block.provider_id, loc_id)
             continue

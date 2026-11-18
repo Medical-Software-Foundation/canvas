@@ -38,7 +38,8 @@ def lookups():
          patch(f"{MODULE}.get_teams", return_value=[{"id": TEAM, "name": "Admins"}]), \
          patch(f"{MODULE}.get_active_locations", return_value=[{"id": "loc1", "name": "Boise"}]), \
          patch(f"{MODULE}.get_active_facilities", return_value=FACILITIES), \
-         patch("provider_availability.engine.facilities.get_active_facilities", return_value=FACILITIES):
+         patch("provider_availability.engine.facilities.get_active_facilities", return_value=FACILITIES), \
+         patch(f"{MODULE}.get_schedulable_provider_ids", return_value=set()):
         yield
 
 

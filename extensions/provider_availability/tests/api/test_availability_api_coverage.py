@@ -1935,37 +1935,74 @@ class TestReplaceAndGroupLocations:
 
 @patch(f"{MODULE}._check_write_access", return_value=None)
 class TestManyProvidersInOneRequest:
+    P1 = "0a1b2c3d00004000800000000000a001"
+    P2 = "0a1b2c3d00004000800000000000a002"
     ENTRIES = [{"date": "2026-03-10", "all_day": True}, {"date": "2026-03-11", "all_day": False, "start": "09:00:00", "end": "10:00:00"}]
 
     def test_every_provider_gets_every_date_in_one_group(self, access):
-        body = {"provider_id": PROVIDER_ID, "provider_ids": [PROVIDER_ID, PROVIDER_ID_2], "entries": self.ENTRIES}
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES}
         with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             result = _make_handler(json_body=body).create_block()
         saved = [c.args[0] for c in save.mock_calls]
         assert _parse(result[-1])[1] == HTTPStatus.CREATED
-        assert [(b.provider_id, b.start.day) for b in saved] == [(PROVIDER_ID, 10), (PROVIDER_ID, 11), (PROVIDER_ID_2, 10), (PROVIDER_ID_2, 11)]
+        assert [(b.provider_id, b.start.day) for b in saved] == [(self.P1, 10), (self.P1, 11), (self.P2, 10), (self.P2, 11)]
         assert len({b.group_id for b in saved}) == 1 and saved[0].group_id
-        assert access.call_args.args[2] == [PROVIDER_ID, PROVIDER_ID_2]
+        assert access.call_args.args[2] == [self.P1, self.P2]
+
+    def test_the_same_provider_dashed_and_undashed_gets_one_set(self, access):
+        dashed = "0a1b2c3d-0000-4000-8000-00000000a002"
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2, dashed], "entries": self.ENTRIES}
+        with patch(f"{MODULE}.save_block") as save, patch(f"{MODULE}.build_block_event_effects", return_value=[]):
+            _make_handler(json_body=body).create_block()
+        assert len(save.mock_calls) == 4
+
+    def test_a_malformed_provider_id_is_refused_before_anything(self, access):
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, "abc"], "entries": self.ENTRIES}
+        with patch(f"{MODULE}.save_block") as save:
+            data, code = _parse(_make_handler(json_body=body).create_block()[0])
+        assert code == HTTPStatus.BAD_REQUEST and save.mock_calls == []
+
+    def test_an_error_building_events_leaves_saved_blocks_alone(self, access):
+        old = AdminBlock(id=BLOCK_ID, provider_id=self.P1, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10))
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES,
+                "replace_blocks": [{"provider_id": self.P1, "id": BLOCK_ID}]}
+        with patch(f"{MODULE}.get_block_by_id", return_value=old), \
+             patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
+             patch(f"{MODULE}.build_block_event_effects", side_effect=[[], [], RuntimeError("calendar lookup failed")]), \
+             patch(f"{MODULE}.delete_block") as delete, patch(f"{MODULE}.save_block") as save:
+            with pytest.raises(RuntimeError):
+                _make_handler(json_body=body).create_block()
+        assert delete.mock_calls == [] and save.mock_calls == []
+
+    def test_one_lookups_dict_is_shared_across_the_save(self, access):
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES}
+        with patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]) as draw:
+            _make_handler(json_body=body).create_block()
+        memos = {id(c.args[1]) for c in draw.mock_calls}
+        assert len(draw.mock_calls) == 4 and len(memos) == 1
 
     def test_a_provider_the_user_cant_edit_saves_nothing(self, access):
         access.return_value = ["denied"]
-        body = {"provider_id": PROVIDER_ID, "provider_ids": [PROVIDER_ID, PROVIDER_ID_2], "entries": self.ENTRIES, "replace_block_ids": [BLOCK_ID]}
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES, "replace_block_ids": [BLOCK_ID]}
         with patch(f"{MODULE}.delete_block") as delete, patch(f"{MODULE}.save_block") as save:
             assert _make_handler(json_body=body).create_block() == ["denied"]
         assert delete.mock_calls == [] and save.mock_calls == []
 
     def test_replaced_blocks_are_found_under_each_provider(self, access):
-        old_a = AdminBlock(id=BLOCK_ID, provider_id=PROVIDER_ID, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10), group_id="g")
-        old_b = AdminBlock(id=BLOCK_ID_2, provider_id=PROVIDER_ID_2, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10), group_id="g")
-        found = {(PROVIDER_ID, BLOCK_ID): old_a, (PROVIDER_ID_2, BLOCK_ID_2): old_b}
-        body = {"provider_id": PROVIDER_ID, "provider_ids": [PROVIDER_ID, PROVIDER_ID_2], "entries": self.ENTRIES,
-                "group_id": "g", "replace_block_ids": [BLOCK_ID, BLOCK_ID_2]}
-        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: found.get((p, b))), \
+        old_a = AdminBlock(id=BLOCK_ID, provider_id=self.P1, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10), group_id="g")
+        old_b = AdminBlock(id=BLOCK_ID_2, provider_id=self.P2, start=datetime(2026, 3, 9, 9), end=datetime(2026, 3, 9, 10), group_id="g")
+        found = {(self.P1, BLOCK_ID): old_a, (self.P2, BLOCK_ID_2): old_b}
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES, "group_id": "g",
+                "replace_blocks": [{"provider_id": self.P1, "id": BLOCK_ID}, {"provider_id": self.P2, "id": BLOCK_ID_2},
+                                   {"provider_id": "0a1b2c3d00004000800000000000ffff", "id": BLOCK_ID}]}
+        with patch(f"{MODULE}.get_block_by_id", side_effect=lambda p, b: found.get((p, b))) as lookup, \
              patch(f"{MODULE}.build_delete_block_effects", return_value=[]), \
              patch(f"{MODULE}.delete_block") as delete, \
              patch(f"{MODULE}.save_block"), patch(f"{MODULE}.build_block_event_effects", return_value=[]):
             _make_handler(json_body=body).create_block()
-        assert delete.mock_calls == [call(PROVIDER_ID, BLOCK_ID), call(PROVIDER_ID_2, BLOCK_ID_2)]
+        # One lookup per block, under its own provider; a provider outside the save is ignored.
+        assert lookup.mock_calls == [call(self.P1, BLOCK_ID), call(self.P2, BLOCK_ID_2)]
+        assert delete.mock_calls == [call(self.P1, BLOCK_ID), call(self.P2, BLOCK_ID_2)]
 
     def test_provider_ids_must_be_a_list_with_dates(self, access):
         bad: list[dict[str, Any]] = [{"provider_ids": PROVIDER_ID_2, "entries": self.ENTRIES}, {"provider_ids": [PROVIDER_ID_2]}, {"provider_ids": [5], "entries": self.ENTRIES}]
@@ -1974,7 +2011,7 @@ class TestManyProvidersInOneRequest:
             assert code == HTTPStatus.BAD_REQUEST
 
     def test_a_recurring_block_is_replaced_for_one_provider_only(self, access):
-        body = {"provider_id": PROVIDER_ID, "provider_ids": [PROVIDER_ID, PROVIDER_ID_2], "entries": self.ENTRIES, "replace_recurring_block_id": RB_ID}
+        body = {"provider_id": self.P1, "provider_ids": [self.P1, self.P2], "entries": self.ENTRIES, "replace_recurring_block_id": RB_ID}
         data, code = _parse(_make_handler(json_body=body).create_block()[0])
         assert code == HTTPStatus.BAD_REQUEST
 
@@ -2010,6 +2047,7 @@ def test_can_view_others():
 
     assert Access("s", False, None, "view").can_view_others() is True
     assert Access("s", False, None, "none").can_view_others() is False
-    assert Access("s", False, set(), "none").can_view_others() is True
+    assert Access("s", False, set(), "none").can_view_others() is False  # a group with no providers
+    assert Access("s", False, {"p"}, "none").can_view_others() is True
     assert Access("s", True, None, "none").can_view_others() is True
     assert Access("", True, None, "full").can_view_others() is False

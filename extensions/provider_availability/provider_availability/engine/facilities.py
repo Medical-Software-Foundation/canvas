@@ -196,10 +196,18 @@ def get_provider_facilities(
 
 
 def refresh_provider_facility_ttls(provider_ids: list[str]) -> None:
-    """Keep saved facilities from expiring, for these providers and everyone in the index."""
+    """Keep saved facilities from expiring, for these providers and everyone in the index.
+
+    Each key is read right before it is written back, and a key cleared in the
+    meantime is left cleared, so a Settings save during the refresh isn't undone.
+    """
     cache = _get_cache()
-    for pid, ids in _stored_facilities(set(provider_ids)).items():
-        cache.set(f"{PROVIDER_FACILITIES_PREFIX}{pid}", ids, timeout_seconds=CACHE_TTL_SECONDS)
+    pids = {str(p) for p in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []} | {str(p) for p in provider_ids}
+    for pid in sorted(pids):
+        key = f"{PROVIDER_FACILITIES_PREFIX}{pid}"
+        value = cache.get(key)
+        if value:
+            cache.set(key, value, timeout_seconds=CACHE_TTL_SECONDS)
 
 
 def set_provider_facilities(provider_id: str, facility_ids: Any) -> list[str]:

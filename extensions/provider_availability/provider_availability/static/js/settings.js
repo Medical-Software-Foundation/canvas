@@ -233,6 +233,8 @@
     if (!on) return;
     // Each provider's row in the Timezones and facilities table (admin.js renderSettingsPanel)
     // has a cell for their facilities.
+    // Close any open picker first, so its picks save before it is rebuilt.
+    Array.from(_fpOpenPickers).forEach(function (op) { op.close(); });
     pfPickers = {};
     (_providers || []).forEach(function (p) {
       var pid = String(p.id);

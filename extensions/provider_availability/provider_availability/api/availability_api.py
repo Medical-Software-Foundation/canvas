@@ -63,6 +63,7 @@ from provider_availability.engine.settings import (
     set_default_access,
     set_rule_defaults,
 )
+from provider_availability.api._auth import _canonical_id
 from provider_availability.api._auth import current_staff_id as _signed_in_staff_id
 from provider_availability.engine.storage import clear_my_view, get_my_view, set_my_view
 from provider_availability.engine.expired import expired_summary, list_expired, remove_expired, snooze_expired
@@ -1100,8 +1101,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
           → one AdminBlock per date, sharing a group_id when there are several.
 
         With dates or entries, ``provider_ids`` saves the same blocks for several
-        providers in this one request: every provider is checked first, so either
-        all of them save or none do.
+        providers in this one request, and ``replace_blocks`` ([{provider_id, id}])
+        names saved blocks it replaces. Every check runs and every calendar change
+        is built before any saved block is touched, so a failure leaves everything
+        as it was.
         """
         body = self.request.json()
         bad_id = _id_error(body)
@@ -1118,11 +1121,15 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             ]
         many = body.get("provider_ids")
         if many is not None and (
-            not isinstance(many, list) or not many or not all(isinstance(p, str) and p for p in many)
+            not isinstance(many, list) or not many or not all(is_uuid(p) for p in [provider_id, *many])
             or not (body.get("entries") or body.get("dates"))
         ):
             return [JSONResponse({"error": "provider_ids must be a list of providers, with dates or entries"}, status_code=HTTPStatus.BAD_REQUEST)]
-        providers: list[str] = list(dict.fromkeys([provider_id, *(many or [])]))
+        # One entry per provider, matching dashed and undashed forms of the same id.
+        by_canonical: dict[str, str] = {}
+        for pid in [provider_id, *(many or [])]:
+            by_canonical.setdefault(_canonical_id(pid), pid)
+        providers: list[str] = list(by_canonical.values())
         denied = _check_write_access(self.request, self.secrets, providers)
         if denied:
             return denied
@@ -1132,9 +1139,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # the providers. They are removed only after every check passes, and a facility
         # they carry counts as already saved.
         replaced: list[AdminBlock] = []
-        for bid in body.get("replace_block_ids") or []:
-            found = next((b for b in (get_block_by_id(pid, str(bid)) for pid in providers) if b), None)
-            if found:
+        wanted: list[tuple[str, str]] = [(provider_id, str(bid)) for bid in body.get("replace_block_ids") or []]
+        for item in body.get("replace_blocks") or []:
+            if isinstance(item, dict) and _canonical_id(str(item.get("provider_id", ""))) in by_canonical:
+                wanted.append((by_canonical[_canonical_id(str(item["provider_id"]))], str(item.get("id", ""))))
+        for pid, bid in wanted:
+            found = get_block_by_id(pid, bid)
+            if found and found.id not in {b.id for b in replaced}:
                 replaced.append(found)
         replaced_rb = (
             get_recurring_block_by_id(provider_id, body["replace_recurring_block_id"])
@@ -1215,15 +1226,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 import uuid as _uuid
                 group_id = str(_uuid.uuid4())
 
+            # Build every calendar change first. Nothing saved is touched until all of it
+            # succeeds, so an error here leaves the old blocks and their events in place.
             event_effects: list[Effect] = []
-            for pid in providers:
-                event_effects.extend(self._replace_blocks(pid, [b for b in replaced if b.provider_id == pid]))
+            skip = {b.id for b in replaced}
+            for old in replaced:
+                event_effects.extend(build_delete_block_effects(old.provider_id, old, skip_ids=skip))
             if replaced_rb:
                 event_effects.extend(build_delete_recurring_block_effects(provider_id, replaced_rb))
-                delete_recurring_block(provider_id, replaced_rb.id)
-            created_blocks: list[AdminBlock] = []
-            for pid, (start_dt, end_dt, slot_all_day) in ((p, sp) for p in providers for sp in spans):
-                block = AdminBlock(
+            created_blocks = [
+                AdminBlock(
                     provider_id=pid,
                     start=start_dt,
                     end=end_dt,
@@ -1234,9 +1246,19 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     facility_id=body["facility_id"],
                     facility_name=body["facility_name"],
                 )
+                for pid in providers
+                for start_dt, end_dt, slot_all_day in spans
+            ]
+            lookups: dict[Any, Any] = {}
+            for block in created_blocks:
+                event_effects.extend(build_block_event_effects(block, lookups))
+
+            for old in replaced:
+                delete_block(old.provider_id, old.id)
+            if replaced_rb:
+                delete_recurring_block(provider_id, replaced_rb.id)
+            for block in created_blocks:
                 save_block(block)
-                created_blocks.append(block)
-                event_effects.extend(build_block_event_effects(block))
 
             return [
                 *event_effects,
@@ -2082,7 +2104,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "staff": staff,
             "locations": get_active_locations(),
             "facilities": facilities,
-            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}, {str(s["id"]) for s in staff}),
+            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}, get_schedulable_provider_ids()),
         })]
 
     @api.put("/settings/features")
