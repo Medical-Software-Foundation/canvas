@@ -11,7 +11,6 @@ from canvas_sdk.v1.data.patient import PatientFacilityAddress
 from django.db.models import Count
 
 from provider_availability.engine.models import is_uuid
-from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.storage import (
     CACHE_TTL_SECONDS,
     PROVIDER_FACILITIES_INDEX_KEY,
@@ -143,9 +142,9 @@ def facility_patient_counts() -> dict[str, int]:
 
 
 # Each provider's facilities live under their own key, so two saves for different
-# providers can't overwrite each other. Reads go by the schedulable providers plus an
-# index of who has saved any; the index is a hint, so an entry lost to two saves at
-# once hides nothing.
+# providers can't overwrite each other. Reads go by the providers the caller already
+# has plus an index of who has saved any; the index is a hint, so an entry lost to two
+# saves at once hides nothing for a provider the caller passes.
 
 
 def _move_legacy_provider_facilities() -> None:
@@ -163,38 +162,44 @@ def _move_legacy_provider_facilities() -> None:
     cache.delete(PROVIDER_FACILITIES_KEY)
 
 
-def get_provider_facilities(active_ids: set[str] | None = None) -> dict[str, list[str]]:
-    """The facility ids saved for each provider in Settings, keyed by provider id.
-
-    Facilities made inactive since they were saved are left out. Pass the active
-    ids when the caller already has them, to save a query.
-    """
-    _move_legacy_provider_facilities()
+def _stored_facilities(provider_ids: set[str]) -> dict[str, list[str]]:
+    """Saved facility ids for these providers plus everyone in the index, in one read."""
     cache = _get_cache()
-    pids = sorted({str(p) for p in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []} | get_schedulable_provider_ids())
+    pids = sorted({str(p) for p in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []} | set(provider_ids))
     if not pids:
         return {}
-    keys = [f"{PROVIDER_FACILITIES_PREFIX}{pid}" for pid in pids]
-    stored = cache.get_many(keys) or {}
+    stored = cache.get_many([f"{PROVIDER_FACILITIES_PREFIX}{pid}" for pid in pids]) or {}
+    # get_many can return keys with the cache's own prefix in front, so key by what follows ours.
+    return {str(k).split(PROVIDER_FACILITIES_PREFIX, 1)[-1]: [str(f) for f in v or []] for k, v in stored.items()}
+
+
+def get_provider_facilities(
+    active_ids: set[str] | None = None, provider_ids: set[str] | None = None
+) -> dict[str, list[str]]:
+    """The facility ids saved for each provider in Settings, keyed by provider id.
+
+    Reads the providers passed in plus the index. Facilities made inactive since
+    they were saved are left out. Pass the active ids when the caller already has
+    them, to save a query.
+    """
+    _move_legacy_provider_facilities()
+    stored = _stored_facilities(provider_ids or set())
+    if not stored:
+        return {}
     active = active_ids if active_ids is not None else {f["id"] for f in get_active_facilities()}
     result: dict[str, list[str]] = {}
-    for pid, key in zip(pids, keys):
-        # get_many can return the keys with the cache's own prefix, so match on the end.
-        value = next((v for k, v in stored.items() if str(k).endswith(key)), None)
-        ids = [str(f) for f in value or [] if str(f) in active]
-        if ids:
-            result[pid] = ids
+    for pid, ids in stored.items():
+        kept = [f for f in ids if f in active]
+        if kept:
+            result[pid] = kept
     return result
 
 
 def refresh_provider_facility_ttls(provider_ids: list[str]) -> None:
-    """Keep each schedulable provider's facilities from expiring, whether or not the index lists them."""
+    """Keep saved facilities from expiring, for these providers and everyone in the index."""
     cache = _get_cache()
-    for pid in provider_ids:
-        key = f"{PROVIDER_FACILITIES_PREFIX}{pid}"
-        value = cache.get(key)
-        if value is not None:
-            cache.set(key, value, timeout_seconds=CACHE_TTL_SECONDS)
+    for pid, ids in _stored_facilities(set(provider_ids)).items():
+        cache.set(f"{PROVIDER_FACILITIES_PREFIX}{pid}", ids, timeout_seconds=CACHE_TTL_SECONDS)
 
 
 def set_provider_facilities(provider_id: str, facility_ids: Any) -> list[str]:

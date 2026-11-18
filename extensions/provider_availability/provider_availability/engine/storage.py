@@ -512,12 +512,8 @@ def refresh_all_ttls() -> int:
         if val is not None:
             cache.set(key, val, timeout_seconds=CACHE_TTL_SECONDS)
 
-    # Refresh each provider's facilities
-    for pid in cache.get(PROVIDER_FACILITIES_INDEX_KEY) or []:
-        fac_key = f"{PROVIDER_FACILITIES_PREFIX}{pid}"
-        fac_data = cache.get(fac_key)
-        if fac_data is not None:
-            cache.set(fac_key, fac_data, timeout_seconds=CACHE_TTL_SECONDS)
+    # Each provider's saved facilities are refreshed by the background job
+    # (engine.facilities.refresh_provider_facility_ttls), which knows who is schedulable.
 
     # Refresh provider timezones
     tz_index = _get_provider_tz_index()

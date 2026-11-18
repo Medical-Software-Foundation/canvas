@@ -22,11 +22,11 @@ restricted the plugin with the ``allowed-staff-keys`` secret: there it is
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
 
 from canvas_sdk.v1.data.team import Team
 
 from provider_availability.api._auth import _canonical_id
+from provider_availability.engine.models import is_uuid
 from provider_availability.engine.settings import get_access_config
 
 
@@ -39,13 +39,7 @@ def team_member_ids(team_ids: list[str] | str) -> set[str]:
     """Canonical staff ids of the members of the given Canvas teams. Unknown team ids add nobody."""
     # A malformed id would raise a ValidationError inside the query, which the
     # sandbox gives no way to catch, so it is screened out here instead.
-    valid: list[str] = []
-    for team_id in [team_ids] if isinstance(team_ids, str) else team_ids:
-        try:
-            UUID(team_id)
-        except (ValueError, TypeError, AttributeError):
-            continue
-        valid.append(team_id)
+    valid = [t for t in ([team_ids] if isinstance(team_ids, str) else team_ids) if is_uuid(t)]
     if not valid:
         return set()
     members = Team.objects.filter(id__in=valid).values_list("members__id", flat=True)
@@ -111,6 +105,12 @@ class Access:
         if self.group_providers is not None:
             return pid in self.group_providers
         return self.default_access == "full"
+
+    def can_view_others(self) -> bool:
+        """Whether this staff member can see providers other than themselves."""
+        return bool(self.staff_id) and (
+            self.is_admin or self.group_providers is not None or self.default_access != "none"
+        )
 
     def can_view(self, provider_id: str) -> bool:
         if self.can_edit(provider_id):

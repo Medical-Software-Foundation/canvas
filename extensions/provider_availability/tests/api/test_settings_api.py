@@ -38,8 +38,7 @@ def lookups():
          patch(f"{MODULE}.get_teams", return_value=[{"id": TEAM, "name": "Admins"}]), \
          patch(f"{MODULE}.get_active_locations", return_value=[{"id": "loc1", "name": "Boise"}]), \
          patch(f"{MODULE}.get_active_facilities", return_value=FACILITIES), \
-         patch("provider_availability.engine.facilities.get_active_facilities", return_value=FACILITIES), \
-         patch("provider_availability.engine.facilities.get_schedulable_provider_ids", return_value=set()):
+         patch("provider_availability.engine.facilities.get_active_facilities", return_value=FACILITIES):
         yield
 
 
@@ -299,8 +298,7 @@ class TestSwitchedOffFeaturesRefuseNewData:
 class TestProviderFacilities:
     @pytest.fixture(autouse=True)
     def schedulable(self):
-        with patch(f"{MODULE}.get_schedulable_provider_ids", return_value={"prov-1"}), \
-             patch("provider_availability.engine.facilities.get_schedulable_provider_ids", return_value={"prov-1"}):
+        with patch(f"{MODULE}.get_schedulable_provider_ids", return_value={"prov-1"}):
             yield
 
     def test_saves_a_providers_facilities(self):
@@ -345,17 +343,25 @@ class TestProviderFacilities:
         assert "pa:provider_facilities" not in settings_cache.data
         assert settings_cache.data["pa:provider_facilities_index"] == ["prov-1"]
 
-    def test_a_provider_missing_from_the_index_is_still_read(self, settings_cache):
+    def test_a_provider_missing_from_the_index_is_still_read_when_passed(self, settings_cache):
         # Two saves at once can each write the index without the other's provider.
         settings_cache.data["pa:provider_facilities:prov-1"] = [FAC_A]
         settings_cache.data["pa:provider_facilities_index"] = []
-        assert facilities.get_provider_facilities() == {"prov-1": [FAC_A]}
+        assert facilities.get_provider_facilities(provider_ids={"prov-1"}) == {"prov-1": [FAC_A]}
+        assert facilities.get_provider_facilities() == {}
 
-    def test_the_background_refresh_keeps_every_providers_facilities(self, settings_cache):
+    def test_the_background_refresh_keeps_passed_and_indexed_providers_facilities(self, settings_cache):
         settings_cache.data["pa:provider_facilities:prov-1"] = [FAC_A]
+        settings_cache.data["pa:provider_facilities:prov-3"] = [FAC_B]
+        settings_cache.data["pa:provider_facilities_index"] = ["prov-3"]
         with patch.object(settings_cache, "set", wraps=settings_cache.set) as sets:
             facilities.refresh_provider_facility_ttls(["prov-1", "prov-2"])
-        assert [c.args[0] for c in sets.mock_calls] == ["pa:provider_facilities:prov-1"]
+        assert sorted(c.args[0] for c in sets.mock_calls) == ["pa:provider_facilities:prov-1", "pa:provider_facilities:prov-3"]
+
+    def test_prefixed_keys_from_the_cache_are_read(self, settings_cache):
+        settings_cache.data["pa:provider_facilities_index"] = ["prov-1"]
+        with patch.object(settings_cache, "get_many", return_value={"myplugin:pa:provider_facilities:prov-1": [FAC_A]}):
+            assert facilities.get_provider_facilities() == {"prov-1": [FAC_A]}
 
     def test_active_ids_passed_in_skip_the_lookup(self, settings_cache):
         settings_cache.data["pa:provider_facilities:prov-1"] = [FAC_A, FAC_B]

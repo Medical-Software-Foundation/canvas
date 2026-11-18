@@ -870,20 +870,23 @@ function _resetBlockEntries() {
   _renderBlockEntries();
 }
 
-// One request per provider with every date and its times, so either all of them
-// save or none do. replaceIds: saved blocks this save replaces; the server removes
-// them only once the request's checks pass.
-async function _postBlockEntries(pid, entries, reason, locationIds, groupId, facilityId, replaceIds) {
+// One request saves every date, with its own times, for every provider listed, so
+// either all of it saves or none does. replace: { blockIds, recurringBlockId } for
+// saved blocks this save replaces; the server removes them only once its checks pass.
+async function _postBlockEntries(providerIds, entries, reason, locationIds, groupId, facilityId, replace) {
+  replace = replace || {};
   const body = {
-    provider_id: pid, reason: reason, location_ids: locationIds, group_id: groupId,
-    facility_id: facilityId || '', replace_block_ids: (replaceIds || []).slice(),
+    provider_id: providerIds[0], provider_ids: providerIds.slice(),
+    reason: reason, location_ids: locationIds, group_id: groupId, facility_id: facilityId || '',
+    replace_block_ids: (replace.blockIds || []).slice(),
     entries: entries.map(function(e) {
       return { date: e.date, all_day: !!e.allDay, start: e.allDay ? '' : e.start + ':00', end: e.allDay ? '' : e.end + ':00' };
     }),
   };
+  if (replace.recurringBlockId) body.replace_recurring_block_id = replace.recurringBlockId;
   const data = await apiCall('/blocks', { method: 'POST', body: JSON.stringify(body) });
   if (data.error) return { error: data.error, created: 0 };
-  return { created: data.blocks ? data.blocks.length : entries.length };
+  return { created: data.blocks ? data.blocks.length : entries.length * providerIds.length };
 }
 
 function getInitials(name) {
@@ -3017,22 +3020,10 @@ async function saveOneoffBlock() {
         if (inGroup) groupProviderIds.push(p.provider_id);
       });
     }
-    // Per affected provider, gather the block ids the fresh batch replaces.
-    // The server removes them in the same request that saves the new ones, after
-    // its checks pass, so a refused save leaves the old blocks in place. We must
-    // NOT use the server's ?apply_to_group=true here because that flag is
-    // cross-provider and would wipe sibling providers' blocks unconditionally.
-    // Each provider saves in its own request, so check up front that every one can be
-    // edited; otherwise a refusal partway through would leave the group half changed.
-    var locked = groupProviderIds.filter(function(pid) {
-      var p = _providers.find(function(x) { return String(x.id) === String(pid); });
-      return !p || p.can_edit === false;
-    });
-    if (locked.length) {
-      showMsg('You can’t edit every provider in this group. Clear the checkbox at the top to change only this provider.', 'error');
-      return;
-    }
-    var replaceIdsByProvider = {};
+    // The block ids the fresh batch replaces, for every affected provider. One request
+    // saves them all: the server checks every provider first and removes the old blocks
+    // only once its checks pass, so a refused save leaves the group as it was.
+    var replaceIds = [];
     for (const pid of groupProviderIds) {
       var blockIdsToDelete = [];
       if (groupId) {
@@ -3045,18 +3036,14 @@ async function saveOneoffBlock() {
       } else if (pid === providerIds[0]) {
         blockIdsToDelete.push(blockId);
       }
-      replaceIdsByProvider[pid] = blockIdsToDelete;
+      replaceIds = replaceIds.concat(blockIdsToDelete);
     }
     const batchGroupId = _editingBlockGroup
       || groupId
       || (entries.length > 1 || groupProviderIds.length > 1 ? crypto.randomUUID() : null);
-    let totalCreated = 0;
-    for (const pid of groupProviderIds) {
-      const res = await _postBlockEntries(pid, entries, reason, locationIds, batchGroupId, what.facilityId, replaceIdsByProvider[pid]);
-      totalCreated += res.created;
-      if (res.error) { showMsg(res.error, 'error'); return; }
-    }
-    showMsg(totalCreated + ' block(s) saved', 'success');
+    const res = await _postBlockEntries(groupProviderIds, entries, reason, locationIds, batchGroupId, what.facilityId, { blockIds: replaceIds });
+    if (res.error) { showMsg(res.error, 'error'); return; }
+    showMsg(res.created + ' block(s) saved', 'success');
     _editingBlockGroup = null;
     _resetBlockEntries();
     _skipDirtyCheck = true;
@@ -3068,24 +3055,22 @@ async function saveOneoffBlock() {
   // Multi-date or all-day batch path: use new dates[] payload to fan out server-side.
   const isBatch = entries.length > 1 || allDay;
   if (isBatch && !blockId) {
-    // Per provider, one request per set of times, all sharing one group id so
-    // the blocks edit together later.
+    // One request for every provider and date, sharing one group id so the blocks
+    // edit together later. Converting a recurring block replaces it in the same request.
     const newGroupId = providerIds.length > 1 || entries.length > 1 ? crypto.randomUUID() : null;
-    let errors = [];
-    let saved = 0;
-    for (const pid of providerIds) {
-      const res = await _postBlockEntries(pid, entries, reason, locationIds, newGroupId, what.facilityId);
-      saved += res.created;
-      if (res.error) errors.push(res.error);
+    const fromRecurring = document.getElementById('editing_recurring_block_id').value;
+    if (fromRecurring && providerIds.length > 1) {
+      showMsg('A recurring block can be changed to single events for one provider at a time', 'error');
+      return;
     }
+    const res = await _postBlockEntries(providerIds, entries, reason, locationIds, newGroupId, what.facilityId,
+      { recurringBlockId: fromRecurring });
+    if (res.error) { showMsg(res.error, 'error'); return; }
     _resetBlockEntries();
-    if (errors.length > 0) showMsg(errors.join('; '), 'error');
-    else {
-      showMsg(saved + ' block(s) created', 'success');
-      _skipDirtyCheck = true;
-      await loadOverview();
-      showTab('availability');
-    }
+    showMsg(fromRecurring ? 'Block converted to single events' : res.created + ' block(s) created', 'success');
+    _skipDirtyCheck = true;
+    await loadOverview();
+    showTab('availability');
     return;
   }
 
@@ -3912,9 +3897,11 @@ function FacilityPicker(hostId, opts) {
     query = '';
     shown = null;
     drawControl();
-    // A picker redrawn off the page (Settings rebuilds its rows) saves nothing: the
-    // new picker in its place shows the saved list, and an old selection would overwrite it.
-    if (opts.onClose && root.isConnected && before && before.join('|') !== selected.join('|')) opts.onClose(selected.slice());
+    var changedNow = before && before.join('|') !== selected.join('|');
+    // A picker redrawn off the page (Settings rebuilds its rows) saves nothing: the new
+    // picker in its place shows the saved list, and an old selection would overwrite it.
+    if (changedNow && opts.onClose && !root.isConnected) { showMsg('Facilities weren’t saved. Select them again.', 'error'); return; }
+    if (changedNow && opts.onClose) opts.onClose(selected.slice());
   }
   control.onclick = open;
   drawControl();

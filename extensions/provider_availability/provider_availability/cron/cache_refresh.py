@@ -65,8 +65,10 @@ class CacheRefreshTask(CronTask):
             log_job_failure("schedulable_staff")
             schedulable = None
         effects = _ensure_provider_calendars(schedulable) if schedulable is not None else []
-        if ttls_due and schedulable is not None:
-            refresh_provider_facility_ttls([str(s.id) for s in schedulable])
+        if ttls_due:
+            # Saved facilities for everyone schedulable and everyone in the index; when the
+            # staff lookup failed, the index alone.
+            refresh_provider_facility_ttls([str(s.id) for s in schedulable] if schedulable is not None else [])
 
         # Who is bookable changes outside the plugin too: a role edited on a
         # staff record, someone activated or deactivated, or the Provider role

@@ -474,9 +474,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         facility blocks are on, for staff who can view other providers' availability;
         anyone else gets no counts and the details leave the line out.
         """
-        access = _access(self.request, self.secrets)
-        can_view_others = access.is_admin or access.group_providers is not None or access.default_access != "none"
-        if not is_feature_on("facility_blocks") or not access.staff_id or not can_view_others:
+        if not is_feature_on("facility_blocks") or not _access(self.request, self.secrets).can_view_others():
             return [JSONResponse({"counts": {}})]
         return [JSONResponse({"counts": facility_patient_counts()})]
 
@@ -1100,6 +1098,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         - Dates sharing times: { provider_id, dates: [...], all_day, start, end, ... }
         - Dates with their own times: { provider_id, entries: [{date, all_day, start, end}], ... }
           → one AdminBlock per date, sharing a group_id when there are several.
+
+        With dates or entries, ``provider_ids`` saves the same blocks for several
+        providers in this one request: every provider is checked first, so either
+        all of them save or none do.
         """
         body = self.request.json()
         bad_id = _id_error(body)
@@ -1114,14 +1116,26 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
-        denied = _check_write_access(self.request, self.secrets, [provider_id])
+        many = body.get("provider_ids")
+        if many is not None and (
+            not isinstance(many, list) or not many or not all(isinstance(p, str) and p for p in many)
+            or not (body.get("entries") or body.get("dates"))
+        ):
+            return [JSONResponse({"error": "provider_ids must be a list of providers, with dates or entries"}, status_code=HTTPStatus.BAD_REQUEST)]
+        providers: list[str] = list(dict.fromkeys([provider_id, *(many or [])]))
+        denied = _check_write_access(self.request, self.secrets, providers)
         if denied:
             return denied
-        # Saved blocks this save replaces (an edited multi-date group). They are removed
-        # only after every check passes, and a facility they carry counts as already saved.
-        replaced = [
-            b for b in (get_block_by_id(provider_id, str(bid)) for bid in body.get("replace_block_ids") or []) if b
-        ]
+        if len(providers) > 1 and body.get("replace_recurring_block_id"):
+            return [JSONResponse({"error": "A recurring block is replaced for one provider at a time"}, status_code=HTTPStatus.BAD_REQUEST)]
+        # Saved blocks this save replaces (an edited multi-date group), found under any of
+        # the providers. They are removed only after every check passes, and a facility
+        # they carry counts as already saved.
+        replaced: list[AdminBlock] = []
+        for bid in body.get("replace_block_ids") or []:
+            found = next((b for b in (get_block_by_id(pid, str(bid)) for pid in providers) if b), None)
+            if found:
+                replaced.append(found)
         replaced_rb = (
             get_recurring_block_by_id(provider_id, body["replace_recurring_block_id"])
             if body.get("replace_recurring_block_id") else None
@@ -1194,18 +1208,23 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     spans.append((start_dt, end_dt, slot_all_day))
             spans.sort()
 
-            # Use a shared group_id when fanning out to multiple dates so the
-            # frontend can manage them as a unit.
+            # Use a shared group_id when fanning out to several dates or providers so
+            # the frontend can manage them as a unit.
             group_id = existing_group_id
-            if len(spans) > 1 and not group_id:
+            if (len(spans) > 1 or len(providers) > 1) and not group_id:
                 import uuid as _uuid
                 group_id = str(_uuid.uuid4())
 
-            event_effects: list[Effect] = self._replace_blocks(provider_id, replaced)
+            event_effects: list[Effect] = []
+            for pid in providers:
+                event_effects.extend(self._replace_blocks(pid, [b for b in replaced if b.provider_id == pid]))
+            if replaced_rb:
+                event_effects.extend(build_delete_recurring_block_effects(provider_id, replaced_rb))
+                delete_recurring_block(provider_id, replaced_rb.id)
             created_blocks: list[AdminBlock] = []
-            for start_dt, end_dt, slot_all_day in spans:
+            for pid, (start_dt, end_dt, slot_all_day) in ((p, sp) for p in providers for sp in spans):
                 block = AdminBlock(
-                    provider_id=provider_id,
+                    provider_id=pid,
                     start=start_dt,
                     end=end_dt,
                     reason=reason,
@@ -1630,7 +1649,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     gb.location_ids = []
                     gb.hold_type = "none"
                 elif was_facility:
+                    # Leaving a facility: take the edited block's locations and hold setting,
+                    # which the facility block had cleared.
                     gb.location_ids = list(block.location_ids)
+                    gb.hold_type = block.hold_type
                 gb.effective_start = block.effective_start
                 gb.effective_end = block.effective_end
                 gb.is_active = block.is_active
@@ -2060,7 +2082,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "staff": staff,
             "locations": get_active_locations(),
             "facilities": facilities,
-            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}),
+            "provider_facilities": get_provider_facilities({f["id"] for f in facilities}, {str(s["id"]) for s in staff}),
         })]
 
     @api.put("/settings/features")
@@ -2262,10 +2284,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "access": access.summary(),
             "features": get_features(),
             "rule_defaults": get_rule_defaults(),
-            "facilities": self._round_facilities(),
+            "facilities": self._round_facilities({str(p["id"]) for p in providers}),
         }
 
-    def _round_facilities(self) -> dict[str, Any]:
+    def _round_facilities(self, provider_ids: set[str] | None = None) -> dict[str, Any]:
         """Facilities for the round and facility block forms' Facility lists.
 
         Sent while rounds are on, or off with saved rounds kept on calendars, so a
@@ -2275,7 +2297,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if not is_feature_on("facility_blocks") and not is_feature_on("facility_rounds") and not rounds_drawn():
             return {"facilities": [], "by_provider": {}}
         facilities = _facility_list()
-        return {"facilities": facilities, "by_provider": get_provider_facilities({f["id"] for f in facilities})}
+        return {
+            "facilities": facilities,
+            "by_provider": get_provider_facilities({f["id"] for f in facilities}, provider_ids),
+        }
 
     @api.post("/form-action")
     def handle_form_action(self) -> list[Response | Effect]:
