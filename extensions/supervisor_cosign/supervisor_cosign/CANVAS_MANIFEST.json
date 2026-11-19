@@ -1,0 +1,128 @@
+{
+    "sdk_version": "0.235.0",
+    "plugin_version": "0.10.1",
+    "name": "supervisor_cosign",
+    "description": "Supervisor co-signature workflow. Uses the note's supervising provider, falling back to Canvas's native Staff.default_supervising_provider; when a supervisee's note locks, creates a co-sign task for the supervisor and exposes a Co-sign button with approve + addendum. Includes a supervisor summary page and a configurable note-type filter.",
+    "components": {
+        "applications": [
+            {
+                "class": "supervisor_cosign.applications.cosign_summary_app:CoSignSummaryApp",
+                "name": "Co-sign Summary",
+                "description": "Co-sign status across your supervisees, with inline attestation.",
+                "scope": "provider_menu_item",
+                "icon": "assets/cosign-summary-icon.png",
+                "menu_position": "top",
+                "menu_order": 130
+            }
+        ],
+        "commands": [
+            {
+                "name": "Attestation Review",
+                "label": "Attestation Review",
+                "schema_key": "attestation_review",
+                "section": "plan"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "supervisor_cosign.protocols.note_lock_handler:NoteLockHandler",
+                "description": "Samples locked notes and creates co-sign tasks for supervisors",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": [
+                        "Note",
+                        "NoteStateChangeEvent",
+                        "NoteType",
+                        "Patient",
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.protocols.cosign_footer:CoSignFooterConfiguration",
+                "description": "Hides the native footer state buttons for the supervisor on a note awaiting their co-sign",
+                "data_access": {
+                    "event": "NOTE_FOOTER__GET_CONFIGURATION",
+                    "read": [
+                        "CurrentNoteStateEvent",
+                        "Note",
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.protocols.cosign_button:CoSignButton",
+                "description": "Footer Co-sign button for the supervisor on a note awaiting their co-sign",
+                "data_access": {
+                    "event": "SHOW_NOTE_FOOTER_BUTTON",
+                    "read": [
+                        "CurrentNoteStateEvent",
+                        "Note",
+                        "Patient",
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.protocols.cosign_footer:CoSignAmendButton",
+                "description": "Footer Amend/Unlock button replacing the hidden native one for that supervisor",
+                "data_access": {
+                    "event": "SHOW_NOTE_FOOTER_BUTTON",
+                    "read": [
+                        "CurrentNoteStateEvent",
+                        "Note",
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.api.handlers:SupervisorCoSignAPI",
+                "description": "Admin config, co-sign submission, and compliance report endpoints",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "supervisor_cosign.api.summary:SupervisorCoSignSummaryAPI",
+                "description": "Co-sign summary page, its assets, and its scoped JSON feed.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "CurrentNoteStateEvent",
+                        "Note",
+                        "NoteType",
+                        "Patient",
+                        "Staff"
+                    ],
+                    "write": []
+                }
+            }
+        ]
+    },
+    "custom_data": {
+        "namespace": "supervisor__cosign",
+        "access": "read_write"
+    },
+    "secrets": [
+        "SAMPLE_PERCENTAGE",
+        "COSIGN_NOTE_TYPE_CODES",
+        "COSIGN_CREATE_TASKS",
+        "COSIGN_REOPEN_ON_AMEND",
+        "COSIGN_OVERSIGHT_STAFF_IDS",
+        "namespace_read_access_key",
+        "namespace_read_write_access_key"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
