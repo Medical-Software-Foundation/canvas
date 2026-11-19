@@ -1,0 +1,43 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.5",
+    "name": "canvas_theme_kit_demo",
+    "description": "Reference consumer for canvas_theme_kit. Renders a page whose first paint already carries the published design tokens, read at render time from the shared custom-data namespace.",
+    "url_permissions": [],
+    "custom_data": {
+        "namespace": "canvas_theme_kit__themes",
+        "access": "read"
+    },
+    "components": {
+        "applications": [
+            {
+                "class": "canvas_theme_kit_demo.applications.demo_app:ThemeKitDemoApp",
+                "name": "Theme Kit Demo",
+                "description": "A page styled entirely by tokens published from Theme Kit.",
+                "scope": "provider_menu_item",
+                "icon": "assets/theme-kit-icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "canvas_theme_kit_demo.handlers.demo_page:DemoPage",
+                "description": "Serves the token-styled demo page and a diagnostic view of what it read."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "namespace_read_access_key",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "Apache-2.0",
+    "diagram": false,
+    "readme": "./README.md"
+}
