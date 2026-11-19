@@ -1,18 +1,22 @@
 """Check and import practice favorites from CSV.
 
-One row per favorite, prescriptions and labs in the same file:
+One row per favorite, prescriptions, labs, and imaging in the same file:
 
     type,name,details
     rx,Atorvastatin 20 mg · 90 day,atorvastatin 20 mg tablet|Take 1 tablet by mouth at bedtime|90|90|tablet|3
     lab,Vitamin D check,Generic Lab|Vitamin D 25-OH|E55.9|no|
+    imaging,Chest x-ray,71046|R05.9|Routine||
 
 details is split on "|":
-    rx:  medication | sig | days supply | quantity | unit | refills | pharmacy NCPDP id
-         (only the medication is required; leave the others empty to fill in on the command)
-    lab: lab partner | tests | diagnoses (optional) | fasting yes/no (optional) | comment (optional)
-Several tests or diagnoses are separated with ";". A medication is matched by its exact FDB name or
-FDB code, a test by its order code or exact name. Nothing is guessed: an ambiguous or unknown value
-fails the row with the reason.
+    rx:      medication | sig | days supply | quantity | unit | refills | pharmacy NCPDP id
+             (only the medication is required; leave the others empty to fill in on the command)
+    lab:     lab partner | tests | diagnoses (optional) | fasting yes/no (optional) | comment (optional)
+    imaging: study code | indications (optional) | priority Routine, Urgent, or STAT (optional) |
+             additional details (optional) | comment (optional)
+Several tests, diagnoses, or indications are separated with ";". A medication is matched by its
+exact FDB name or FDB code, a test by its order code or exact name, and a study by its exact code,
+which must be the first match in Canvas's imaging search. Nothing is guessed: an ambiguous or
+unknown value fails the row with the reason. An imaging center is added in the editor after import.
 
 The sandbox has no csv module, so lines are split by hand (carried over from lab_order_favorites).
 Quoted values may contain commas; a value can't span lines.
@@ -33,6 +37,7 @@ TEMPLATE = (
     "type,name,details\n"
     "rx,Example prescription,medication name|sig (optional)|days supply (optional)|quantity (optional)|unit (optional)|refills (optional)|pharmacy NCPDP id (optional)\n"
     "lab,Example lab,lab partner|test code or name; another test|ICD-10 code; another code|yes or no|comment\n"
+    "imaging,Example imaging,study code|ICD-10 code; another code|Routine, Urgent, or STAT|additional details|comment\n"
 )
 
 
@@ -103,6 +108,17 @@ def _rx_body(details: str, cache: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _diagnoses(value: str, cache: dict[str, Any]) -> list[dict[str, str]]:
+    diagnoses = []
+    for code in _multi(value):
+        if code not in cache:
+            cache[code] = find_diagnosis(code)
+        if cache[code] is None:
+            raise Invalid(f"{code} isn't an ICD-10 code.")
+        diagnoses.append(cache[code])
+    return diagnoses
+
+
 def _lab_body(details: str, cache: dict[str, Any]) -> dict[str, Any]:
     partner_value, tests_value, dx_value, fasting_value, comment = _parts(details, 5)[:5]
     partner, reason = resolve_partner(partner_value)
@@ -116,13 +132,7 @@ def _lab_body(details: str, cache: dict[str, Any]) -> dict[str, Any]:
         problems.append(f"{partner.name} has no test with the code or name {', '.join(missing)}.")
     if problems:
         raise Invalid(" ".join(problems))
-    diagnoses = []
-    for code in _multi(dx_value):
-        if code not in cache:
-            cache[code] = find_diagnosis(code)
-        if cache[code] is None:
-            raise Invalid(f"{code} isn't an ICD-10 code.")
-        diagnoses.append(cache[code])
+    diagnoses = _diagnoses(dx_value, cache)
     fasting = fasting_value.strip().lower()
     if fasting not in TRUE_VALUES | FALSE_VALUES:
         raise Invalid("Fasting must be yes or no.")
@@ -135,9 +145,31 @@ def _lab_body(details: str, cache: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _imaging_body(details: str, cache: dict[str, Any]) -> dict[str, Any]:
+    """The study is checked against Canvas's imaging search when the row is cleaned."""
+    code, dx_value, priority, additional, comment = _parts(details, 5)[:5]
+    if not code:
+        raise Invalid("The study code is missing.")
+    return {
+        "image_code": code,
+        "diagnoses": _diagnoses(dx_value, cache),
+        "priority": priority,
+        "additional_details": additional,
+        "comment": comment,
+    }
+
+
+BUILDERS = {"rx": _rx_body, "lab": _lab_body, "imaging": _imaging_body}
+
+
 def summary(kind: str, details: dict[str, Any]) -> str:
     if kind == "rx":
         return str(details["medication"]) + (f" · {details['days_supply']} days" if details["days_supply"] else "")
+    if kind == "imaging":
+        bits = [str(details["image_name"])] + ([details["priority"]] if details["priority"] else [])
+        if details["diagnoses"]:
+            bits.append(", ".join(icd10_display(d["code"]) for d in details["diagnoses"]))
+        return " · ".join(bits)
     count = len(details["tests"])
     text = f"{details['lab_partner_name']} · {count} test{'' if count == 1 else 's'}"
     if details["diagnoses"]:
@@ -157,6 +189,7 @@ def check_csv(text: str) -> dict[str, Any]:
         return {"rows": [], "error": f"Import at most {MAX_ROWS} rows at a time."}
 
     cache: dict[str, Any] = {}
+    image_cache: dict[tuple[str, str], Any] = {}
     rows = []
     for number, line in enumerate(lines[1:], start=2):
         cells = split_line(line)
@@ -165,15 +198,15 @@ def check_csv(text: str) -> dict[str, Any]:
         kind, name, details = cells[0].strip().lower(), cells[1].strip(), ",".join(cells[2:]).strip()
         row: dict[str, Any] = {"row": number, "name": name or "(no name)", "ok": False, "reason": "", "summary": ""}
         try:
-            if kind not in ("rx", "lab"):
-                raise Invalid("Type must be rx or lab.")
-            body = _rx_body(details, cache) if kind == "rx" else _lab_body(details, cache)
+            if kind not in BUILDERS:
+                raise Invalid("Type must be rx, lab, or imaging.")
+            body = BUILDERS[kind](details, cache)
             body["name"] = name
-            kind, name, clean = clean_favorite(body, kind)
+            kind, name, clean = clean_favorite(body, kind, image_cache=image_cache)
             row.update(ok=True, summary=summary(kind, clean), favorite={"kind": kind, "name": name, "details": clean})
         except Invalid as exc:
             row["reason"] = str(exc)
         except LookupFailed:
-            row["reason"] = "Canvas's medication or diagnosis search didn't answer. Try again."
+            row["reason"] = "Canvas's medication, diagnosis, or imaging search didn't answer. Try again."
         rows.append(row)
     return {"rows": rows, "error": ""}

@@ -28,6 +28,7 @@
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
     rx: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="8" width="19" height="8" rx="4" transform="rotate(-45 12 12)"/><path d="M8.5 8.5l7 7"/></svg>',
     lab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/></svg>',
+    imaging: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 7v10M8.5 9.5h7M8 12.5h8M8.5 15.5h7"/></svg>',
     sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2" fill="#fff"/><circle cx="15" cy="17" r="2.2" fill="#fff"/></svg>',
     back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>',
     open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>',
@@ -47,8 +48,19 @@
   function useFavorites(list) { known = {}; (list || []).forEach(function (f) { known[f.id] = f; }); }
   function setMembers(f) { return (f.items || []).map(function (id) { return known[id]; }).filter(Boolean); }
   function setCounts(f) {
-    var m = setMembers(f), rx = m.filter(function (x) { return x.kind === "rx"; }).length, lab = m.length - rx;
-    return [rx ? plural(rx, "prescription", "prescriptions") : "", lab ? plural(lab, "lab", "labs") : ""].filter(Boolean).join(" · ") || "No orders available";
+    var m = setMembers(f);
+    var n = function (kind) { return m.filter(function (x) { return x.kind === kind; }).length; };
+    var rx = n("rx"), lab = n("lab"), img = n("imaging");
+    return [rx ? plural(rx, "prescription", "prescriptions") : "", lab ? plural(lab, "lab", "labs") : "", img ? plural(img, "imaging order", "imaging orders") : ""].filter(Boolean).join(" · ") || "No orders available";
+  }
+  // The word for an order type, as in "New lab favorite".
+  var KIND_WORD = { rx: "prescription", lab: "lab", imaging: "imaging", set: "order set" };
+  function kindWord(kind) { return KIND_WORD[kind] || ""; }
+  // Who receives an imaging order, as the Imaging Order command names it: "Pat Lee (Main Imaging), Radiology".
+  function centerName(c) {
+    if (!c) { return ""; }
+    var person = [c.first_name, c.last_name].filter(Boolean).join(" ");
+    return (person ? person + (c.practice_name ? " (" + c.practice_name + ")" : "") : c.practice_name) + (c.specialty ? ", " + c.specialty : "");
   }
 
   // Shared lookups, loaded once per page.
@@ -73,6 +85,13 @@
       if (has(f.refills)) { rxBits.push(plural(+f.refills, "refill", "refills")); }
       return '<div class="cs"><div class="cs-1">' + esc(f.sig || f.medication) + '</div><div class="cs-2">' + (rxBits.length ? rxBits.join(" · ") : esc(f.sig ? f.medication : "Sig and amounts filled in on the order")) + "</div></div>";
     }
+    if (f.kind === "imaging") {
+      var imgBits = [];
+      if (f.priority) { imgBits.push(esc(f.priority)); }
+      if (f.diagnoses.length) { imgBits.push(plural(f.diagnoses.length, "indication", "indications")); }
+      if (f.imaging_center) { imgBits.push(esc(centerName(f.imaging_center))); }
+      return '<div class="cs"><div class="cs-1">' + esc(f.image_name) + "</div>" + (imgBits.length ? '<div class="cs-2">' + imgBits.join(" · ") + "</div>" : "") + "</div>";
+    }
     var bits = [esc(f.lab_partner_name), plural(f.tests.length, "test", "tests")];
     if (f.fasting) { bits.push("Fasting"); }
     if (f.diagnoses.length) { bits.push(plural(f.diagnoses.length, "diagnosis", "diagnoses")); }
@@ -91,6 +110,14 @@
       if (rxSupply(f).length) { r += row("Supply", rxSupply(f).join(" · ")); }
       if (has(f.refills)) { r += row("Refills", esc(f.refills)); }
       if (f.pharmacy_name) { r += row("Pharmacy", esc(f.pharmacy_name)); }
+    } else if (f.kind === "imaging") {
+      r += row("Study", (f.stale && f.stale.length ? '<span class="bad">' + esc(f.image_name) + " · imaging search no longer finds it</span>" : esc(f.image_name)) + (f.image_code ? ' <span class="muted">' + esc(f.image_code) + "</span>" : ""));
+      if (f.priority) { r += row("Priority", esc(f.priority)); }
+      if (f.diagnoses.length) { r += row("Indications", '<ul class="fd-list">' + f.diagnoses.map(function (d) { return '<li><b class="code">' + esc(icd(d.code)) + "</b> " + esc(d.text) + "</li>"; }).join("") + "</ul>"); }
+      if (f.imaging_center) { r += row("Center", esc(centerName(f.imaging_center))); }
+      if (f.ordering_provider_name) { r += row("Provider", esc(f.ordering_provider_name)); }
+      if (f.additional_details) { r += row("Details", esc(f.additional_details)); }
+      if (f.comment) { r += row("Comment", esc(f.comment)); }
     } else {
       var stale = f.stale || [];
       r += row("Lab", esc(f.lab_partner_name));
@@ -106,6 +133,7 @@
     var parts = [f.name];
     if (f.kind === "set") { setMembers(f).forEach(function (x) { parts.push(x.name); }); return parts.join(" ").toLowerCase(); }
     if (f.kind === "rx") { parts.push(f.medication, f.sig, f.pharmacy_name); }
+    else if (f.kind === "imaging") { parts.push(f.image_name, f.image_code, f.priority, centerName(f.imaging_center)); f.diagnoses.forEach(function (d) { parts.push(d.code, icd(d.code), d.text); }); }
     else { parts.push(f.lab_partner_name); f.tests.forEach(function (t) { parts.push(t.name, t.code); }); f.diagnoses.forEach(function (d) { parts.push(d.code, icd(d.code), d.text); }); }
     return parts.join(" ").toLowerCase();
   }
@@ -179,17 +207,23 @@
   // value: a favorite (or a blank one). Returns {payload(), dirty(), el}. onChange is called on every edit.
   function blank(kind) {
     if (kind === "set") { return { kind: "set", name: "", items: [] }; }
+    if (kind === "imaging") { return { kind: "imaging", name: "", image_code: "", image_name: "", image_code_system: "", diagnoses: [], priority: "", additional_details: "", comment: "", ordering_provider_id: "", ordering_provider_name: "", imaging_center: null }; }
     return kind === "rx"
       ? { kind: "rx", name: "", fdb_code: "", medication: "", sig: "", days_supply: "", quantity: "", unit: "", representative_ndc: "", ncpdp_quantity_qualifier_code: "", refills: "", pharmacy_ncpdp_id: "", pharmacy_name: "" }
       : { kind: "lab", name: "", lab_partner_id: "", lab_partner_name: "", tests: [], diagnoses: [], ordering_provider_id: "", ordering_provider_name: "", comment: "", fasting: false, stale: [] };
   }
 
+  var SNAPSHOT_KEYS = {
+    rx: ["name", "fdb_code", "sig", "days_supply", "quantity", "representative_ndc", "refills", "pharmacy_ncpdp_id"],
+    lab: ["name", "lab_partner_id", "tests", "diagnoses", "ordering_provider_id", "comment", "fasting"],
+    imaging: ["name", "image_code", "diagnoses", "priority", "additional_details", "comment", "ordering_provider_id", "imaging_center"]
+  };
   function snapshot(f) {
-    var keys = f.kind === "rx"
-      ? ["name", "fdb_code", "sig", "days_supply", "quantity", "representative_ndc", "refills", "pharmacy_ncpdp_id"]
-      : ["name", "lab_partner_id", "tests", "diagnoses", "ordering_provider_id", "comment", "fasting"];
     var o = {};
-    keys.forEach(function (k) { var v = f[k]; o[k] = Array.isArray(v) ? v.map(function (x) { return x.code; }).join("|") : String(v == null ? "" : v); });
+    SNAPSHOT_KEYS[f.kind].forEach(function (k) {
+      var v = f[k];
+      o[k] = Array.isArray(v) ? v.map(function (x) { return x.code; }).join("|") : v && typeof v === "object" ? JSON.stringify(v) : String(v == null ? "" : v);
+    });
     return JSON.stringify(o);
   }
 
@@ -208,6 +242,14 @@
       h += '<div class="grid amounts"><div><label for="fDays">Days supply</label><input id="fDays" type="number" min="1" max="365"></div><div><label for="fQty">Quantity</label><input id="fQty" type="number" min="0" step="any"></div>' +
         '<div><label for="fUnit">Unit</label><select id="fUnit"></select></div><div><label for="fRef">Refills</label><input id="fRef" type="number" min="0" max="99"></div></div>';
       h += '<label>Default pharmacy</label><div class="cb" id="pPharm"></div><div class="hint" id="phClear"></div>';
+    } else if (f.kind === "imaging") {
+      h += '<label>Study</label><div class="cb" id="pImg"></div><div class="warn" id="imgWarn" hidden></div><div class="hint">Saved only when Canvas\'s imaging search finds this study first for its code, so the order never comes out blank.</div>';
+      h += '<label>Indications</label><div class="cb" id="pDx"></div>';
+      h += '<label for="fPri">Priority</label><select id="fPri"><option value="">Select on the order</option><option>Routine</option><option>Urgent</option><option>STAT</option></select>';
+      h += '<label for="fDetails">Additional details</label><textarea id="fDetails" maxlength="1024"></textarea>';
+      h += '<label>Imaging center</label><div class="cb" id="pCenter"></div><div class="hint" id="ctrClear"></div>';
+      if (!opts.practice) { h += '<label for="fProv">Ordering provider</label><select id="fProv"><option value="">The note\'s provider, or whoever adds it</option></select>'; }
+      h += '<label for="fComment">Comment</label><input id="fComment" maxlength="1024">';
     } else {
       h += '<label for="fLab">Lab partner</label><select id="fLab"><option value="">Loading…</option></select>';
       h += '<label>Tests</label><div class="cb" id="pTests"></div><div class="warn" id="staleWarn" hidden></div>';
@@ -222,6 +264,29 @@
     var changed = function () { if (opts.onChange) { opts.onChange(); } };
     $("#fName").value = f.name;
     $("#fName").addEventListener("input", function () { f.name = this.value; changed(); });
+    // Diagnoses (lab) and indications (imaging) are both ICD-10 codes from the same search.
+    var dxPicker = function () {
+      return new Picker($("#pDx"), {
+        multi: true, min: 2, placeholder: "Search ICD-10 code or name", foot: "Check as many as you need",
+        find: function (q) { return q.length < 2 ? [] : api("GET", "/lookup/diagnoses?q=" + encodeURIComponent(q)).then(function (d) { return d.results; }); },
+        key: function (d) { return d.code; }, row: function (d) { return '<span class="code">' + esc(icd(d.code)) + "</span>" + esc(d.text); },
+        selected: function () { return f.diagnoses; },
+        pick: function (d) { var i = f.diagnoses.map(function (x) { return x.code; }).indexOf(d.code); if (i >= 0) { f.diagnoses.splice(i, 1); } else { f.diagnoses.push({ code: d.code, text: d.text }); } changed(); },
+        remove: function (i) { f.diagnoses.splice(i, 1); changed(); }
+      });
+    };
+    var providerSelect = function () {
+      if (!$("#fProv")) { return; }
+      once("providers", "/lookup/providers").then(function (list) {
+        var sel = $("#fProv");
+        var all = list.slice();
+        if (f.ordering_provider_id && !all.some(function (p) { return p.id === f.ordering_provider_id; })) { all.unshift({ id: f.ordering_provider_id, name: (f.ordering_provider_name || "Saved provider") + " (no longer available)" }); }
+        // Several staff can share a name, so the NPI tells them apart.
+        sel.innerHTML += all.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === f.ordering_provider_id ? " selected" : "") + ">" + esc(p.name) + (p.npi ? " · NPI " + esc(p.npi) : "") + "</option>"; }).join("");
+        sel.onchange = function () { f.ordering_provider_id = sel.value; changed(); };
+      }).catch(function () { /* the provider stays as saved */ });
+    };
+    var comment = function () { $("#fComment").value = f.comment; $("#fComment").addEventListener("input", function () { f.comment = this.value; changed(); }); };
 
     if (f.kind === "rx") {
       var fillUnits = function () {
@@ -259,6 +324,39 @@
       });
       drawPharmClear();
       $("#phClear").addEventListener("click", function (e) { if (e.target.id === "phX") { f.pharmacy_ncpdp_id = ""; f.pharmacy_name = ""; $("#pPharm input").value = ""; drawPharmClear(); changed(); } });
+    } else if (f.kind === "imaging") {
+      new Picker($("#pImg"), {
+        placeholder: "Search imaging studies", min: 2,
+        find: function (q) { return q.length < 2 ? [] : api("GET", "/lookup/imaging?q=" + encodeURIComponent(q)).then(function (d) { return d.results; }); },
+        key: function (s) { return s.code_system + ":" + s.code; },
+        row: function (s) { return esc(s.name) + ' <span class="muted">' + esc(s.code_system ? s.code_system + ": " + s.code : s.code) + "</span>"; },
+        selected: function () { return f.image_code ? [{ code: f.image_code, code_system: f.image_code_system, name: f.image_name }] : []; },
+        shown: function () { return f.image_name; },
+        pick: function (s) { f.image_code = s.code; f.image_code_system = s.code_system; f.image_name = s.name; $("#imgWarn").hidden = true; changed(); }
+      });
+      if (f.stale && f.stale.length) {
+        $("#imgWarn").hidden = false;
+        $("#imgWarn").textContent = "Canvas's imaging search no longer finds " + (f.image_name || "this study") + " first for its code, so it was skipped when last added. Select the study from the search list again.";
+      }
+      dxPicker();
+      $("#fPri").value = f.priority || "";
+      $("#fPri").addEventListener("change", function () { f.priority = this.value; changed(); });
+      $("#fDetails").value = f.additional_details || "";
+      $("#fDetails").addEventListener("input", function () { f.additional_details = this.value; changed(); });
+      var drawCenterClear = function () { $("#ctrClear").innerHTML = f.imaging_center ? '<a class="linkish" id="ctrX">Remove imaging center</a>' : "Optional. Without one, the center is chosen on the order."; };
+      new Picker($("#pCenter"), {
+        placeholder: "Search imaging centers (optional)", min: 2,
+        find: function (q) { return q.length < 2 ? [] : api("GET", "/lookup/imaging-centers?q=" + encodeURIComponent(q)).then(function (d) { return d.results; }); },
+        key: function (c) { return centerName(c) + "|" + (c.business_address || ""); },
+        row: function (c) { return "<b>" + esc(centerName(c)) + "</b>" + (c.business_address ? " · " + esc(c.business_address) : ""); },
+        selected: function () { return f.imaging_center ? [f.imaging_center] : []; },
+        shown: function () { return centerName(f.imaging_center); },
+        pick: function (c) { f.imaging_center = c; drawCenterClear(); changed(); }
+      });
+      drawCenterClear();
+      $("#ctrClear").addEventListener("click", function (e) { if (e.target.id === "ctrX") { f.imaging_center = null; $("#pCenter input").value = ""; drawCenterClear(); changed(); } });
+      providerSelect();
+      comment();
     } else {
       var stale = (f.stale || []).slice();
       var drawStale = function () {
@@ -276,14 +374,7 @@
         remove: function (i) { f.tests.splice(i, 1); drawStale(); changed(); }
       });
       drawStale();
-      new Picker($("#pDx"), {
-        multi: true, min: 2, placeholder: "Search ICD-10 code or name", foot: "Check as many as you need",
-        find: function (q) { return q.length < 2 ? [] : api("GET", "/lookup/diagnoses?q=" + encodeURIComponent(q)).then(function (d) { return d.results; }); },
-        key: function (d) { return d.code; }, row: function (d) { return '<span class="code">' + esc(icd(d.code)) + "</span>" + esc(d.text); },
-        selected: function () { return f.diagnoses; },
-        pick: function (d) { var i = f.diagnoses.map(function (x) { return x.code; }).indexOf(d.code); if (i >= 0) { f.diagnoses.splice(i, 1); } else { f.diagnoses.push({ code: d.code, text: d.text }); } changed(); },
-        remove: function (i) { f.diagnoses.splice(i, 1); changed(); }
-      });
+      dxPicker();
       once("partners", "/lookup/lab-partners").then(function (partners) {
         var sel = $("#fLab");
         var opts2 = partners.slice();
@@ -296,15 +387,8 @@
           f.tests = []; stale = []; tests.drawSelected(); drawStale(); changed();
         };
       }).catch(function () { $("#fLab").innerHTML = '<option value="">Couldn\'t load lab partners</option>'; });
-      if ($("#fProv")) once("providers", "/lookup/providers").then(function (list) {
-        var sel = $("#fProv");
-        var all = list.slice();
-        if (f.ordering_provider_id && !all.some(function (p) { return p.id === f.ordering_provider_id; })) { all.unshift({ id: f.ordering_provider_id, name: (f.ordering_provider_name || "Saved provider") + " (no longer available)" }); }
-        // Several staff can share a name, so the NPI tells them apart.
-        sel.innerHTML += all.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === f.ordering_provider_id ? " selected" : "") + ">" + esc(p.name) + (p.npi ? " · NPI " + esc(p.npi) : "") + "</option>"; }).join("");
-        sel.onchange = function () { f.ordering_provider_id = sel.value; changed(); };
-      }).catch(function () { /* the provider stays as saved */ });
-      $("#fComment").value = f.comment; $("#fComment").addEventListener("input", function () { f.comment = this.value; changed(); });
+      providerSelect();
+      comment();
       $("#fFast").checked = !!f.fasting; $("#fFast").addEventListener("change", function () { f.fasting = this.checked; changed(); });
     }
     return {
@@ -324,9 +408,9 @@
     var f = { kind: "set", name: value.name || "", items: (value.items || []).slice() };
     var base = opts.baseline || value;
     var start = JSON.stringify({ kind: "set", name: base.name || "", items: (base.items || []).slice() });
-    var pool = (opts.favorites || []).filter(function (x) { return (x.kind === "rx" || x.kind === "lab") && (!opts.practice || x.shared) && (!x.hidden || f.items.indexOf(x.id) >= 0); });
+    var pool = (opts.favorites || []).filter(function (x) { return x.kind !== "set" && (!opts.practice || x.shared) && (!x.hidden || f.items.indexOf(x.id) >= 0); });
     if (opts.practice) { f.items = f.items.filter(function (id) { return pool.some(function (x) { return x.id === id; }); }); }
-    var groups = [["rx", "Prescriptions"], ["lab", "Labs"]].filter(function (g) { return !opts.kinds || opts.kinds.indexOf(g[0]) >= 0; });
+    var groups = [["rx", "Prescriptions"], ["lab", "Labs"], ["imaging", "Imaging"]].filter(function (g) { return !opts.kinds || opts.kinds.indexOf(g[0]) >= 0; });
     var h = "";
     if (opts.note) { h += '<div class="note">' + esc(opts.note) + "</div>"; }
     h += '<label for="fName">Name</label><input id="fName" maxlength="120" placeholder="e.g. Diabetes visit">';
@@ -384,6 +468,6 @@
     };
   }
 
-  window.OF = { API: API, api: api, esc: esc, icd: icd, I: I, compact: compact, details: details, searchText: searchText, blank: blank, Editor: Editor, SetEditor: SetEditor, Guard: Guard, plural: plural, useFavorites: useFavorites, setMembers: setMembers };
+  window.OF = { API: API, api: api, esc: esc, icd: icd, I: I, compact: compact, details: details, searchText: searchText, blank: blank, Editor: Editor, SetEditor: SetEditor, Guard: Guard, plural: plural, useFavorites: useFavorites, setMembers: setMembers, kindWord: kindWord };
 })();
 {% endverbatim %}

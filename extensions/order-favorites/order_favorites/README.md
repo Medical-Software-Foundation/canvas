@@ -1,11 +1,12 @@
 # Order Favorites
 
-Saved prescriptions, lab orders, and order sets that staff add to a note in one action.
+Saved prescriptions, lab orders, imaging orders, and order sets that staff add to a note in one action.
 
 ## What it does
 
-- **Order Favorites button.** Every open visit or chart review note has an Order Favorites button in its header. It opens a panel on the right with All, Rx, Labs, and Sets tabs. Staff pick favorites and order sets, see what they picked in the footer, and add them all at once. Orders go into the note whose button was clicked; **Change** in the footer picks another open visit or chart review note of the same patient instead, and an open icon jumps to that note in the chart. Orders are staged for review and signing.
-- **Order sets.** An order set is several prescription and lab favorites that are added together, such as a diabetes visit. Sets point to the favorites rather than copying them, so editing a favorite changes it in every set; a deleted favorite drops out. A practice set can only include practice favorites. If a favorite is picked both on its own and in a set, it is added once.
+- **Order Favorites button.** Every open visit or chart review note has an Order Favorites button in its header. It opens a panel on the right with All, Rx, Labs, Imaging, and Sets tabs (Imaging once an admin turns it on). Staff pick favorites and order sets, see what they picked in the footer, and add them all at once. Orders go into the note whose button was clicked; **Change** in the footer picks another open visit or chart review note of the same patient instead, and an open icon jumps to that note in the chart. Orders are staged for review and signing.
+- **Imaging favorites.** An imaging favorite saves the study, indications, priority, additional details, comment, an optional imaging center, and, for personal favorites, an ordering provider.
+- **Order sets.** An order set is several prescription, lab, and imaging favorites that are added together, such as a diabetes visit. Sets point to the favorites rather than copying them, so editing a favorite changes it in every set; a deleted favorite drops out. A practice set can only include practice favorites. If a favorite is picked both on its own and in a set, it is added once.
 - **Practice and personal favorites.** Practice favorites are shared with everyone. Anyone can save personal favorites from the panel, copy a practice favorite to make their own version, or hide practice favorites they don't use.
 - **Order Favorites in the app drawer.** Everyone gets an Order Favorites icon in the app drawer with a **My favorites** tab, to create, edit, copy, and hide favorites without opening a note. Favorites admins also get tabs to manage practice favorites, choose which order types the practice uses, manage the admin list, and import practice favorites from CSV.
 
@@ -13,7 +14,7 @@ Replaces the `prescription-favorites` and `lab_order_favorites` plugins.
 
 ## Problem it solves
 
-Staff re-enter the same prescriptions and lab orders visit after visit: the same medication, sig, quantity, and refills, or the same lab partner, tests, and diagnoses. Each one is a separate command filled in by hand. Order Favorites saves them once and adds any number of them, or a whole order set, to the note in one click, staged so the prescriber still reviews and signs.
+Staff re-enter the same prescriptions, lab orders, and imaging orders visit after visit: the same medication, sig, quantity, and refills, the same lab partner, tests, and diagnoses, or the same study and indications. Each one is a separate command filled in by hand. Order Favorites saves them once and adds any number of them, or a whole order set, to the note in one click, staged so the prescriber still reviews and signs.
 
 ## Who it's for
 
@@ -40,35 +41,41 @@ Needs a Canvas release with per-user app drawer icons (1.364 or later).
 ## Configuration options
 
 - **`FIRST_ADMIN` variable:** login email of the first favorites admin (see How to install).
-- **Order types** (admin app → Settings): prescriptions, labs, and order sets can each be turned off. At least one of prescriptions or labs stays on.
+- **Order types** (admin app → Settings): prescriptions, labs, imaging, and order sets can each be turned on or off. Imaging starts off. At least one of prescriptions, labs, or imaging stays on.
 - **Admins** (admin app → Settings): add or remove favorites admins. There is always at least one.
 - **Import** (admin app → Settings): load practice favorites from a CSV file (see Import format).
 
 ## Who is named on the order
 
 - **Prescriptions:** the same as Canvas's Prescribe command. The person adding is the prescriber when their role is in the practice's prescriber roles. Otherwise the prescriber is left blank, and the prescriber fills it in before signing.
-- **Lab orders:** a personal favorite's saved ordering provider, if one is saved and still active with an NPI, then the note's provider, then the person adding. Practice lab favorites don't save an ordering provider, since it would name one clinician on everyone's lab orders and the results would go back to them.
+- **Lab and imaging orders:** a personal favorite's saved ordering provider, if one is saved and still active with an NPI, then the note's provider, then the person adding. Practice lab and imaging favorites don't save an ordering provider, since it would name one clinician on everyone's orders and the results would go back to them.
 
-Both can be changed in the command before it is signed.
+Any of them can be changed in the command before it is signed.
 
 ## Lab favorites that go out of date
 
 Each time a lab favorite is added, its lab partner and every test code are checked against the instance's live lab catalog. If the partner is inactive or any test is no longer offered, the whole favorite is skipped with a message and nothing partial is added. Admins see "Needs fixing" next to those favorites in the admin app.
 
+## Imaging favorites that go out of date
+
+Canvas fills an imaging order's Image field by searching its imaging studies for the order's code and taking the first match. With no match the field is left blank, and a loose match can name another study. So an imaging favorite is saved only when that search finds its own study first, and it is checked again each time it is added. If the check fails, or the search doesn't answer, the favorite is skipped with a message and no imaging order is added. A favorite skipped because the search no longer finds its study shows "Needs fixing" in the admin app until it is re-saved with a study from the search list, or until a later add finds the study again.
+
 ## Import format
 
-One row per favorite. Prescriptions and labs can be in the same file. Import is at the bottom of the admin app's Settings tab, where you can also download the template.
+One row per favorite. Prescriptions, labs, and imaging can be in the same file. Import is at the bottom of the admin app's Settings tab, where you can also download the template.
 
 ```
 type,name,details
 rx,Atorvastatin 20 mg · 90 day,atorvastatin 20 mg tablet|Take 1 tablet by mouth at bedtime|90|90|tablet|3
 lab,Vitamin D check,Generic Lab|Vitamin D 25-OH|E55.9|no|
+imaging,Chest x-ray,71046|R05.9|Routine||
 ```
 
 - **rx details:** medication | sig | days supply | quantity | unit | refills | pharmacy NCPDP id (optional)
 - **lab details:** lab partner | tests | diagnoses (optional) | fasting yes/no (optional) | comment (optional)
+- **imaging details:** study code | indications (optional) | priority Routine, Urgent, or STAT (optional) | additional details (optional) | comment (optional)
 
-Separate several tests or diagnoses with `;`. A medication must match its exact name in the medication search, or its FDB code. A test matches its order code or exact name. Rows with an unknown or ambiguous value are listed with the reason and not imported.
+Separate several tests, diagnoses, or indications with `;`. A medication must match its exact name in the medication search, or its FDB code. A test matches its order code or exact name. A study code must be the first match for that code in the imaging search. Add an imaging center in the editor after importing. Rows with an unknown or ambiguous value are listed with the reason and not imported.
 
 ## Patient access
 

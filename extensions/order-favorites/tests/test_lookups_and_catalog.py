@@ -106,7 +106,7 @@ def test_find_medication_needs_an_exact_single_match() -> None:
 
 def test_find_diagnosis_matches_the_exact_code() -> None:
     payload = {"results": [{"icd10_code": "E559", "icd10_text": "Vitamin D deficiency, unspecified"}, {"icd10_code": "E5590", "icd10_text": "other"}]}
-    with patch.object(lookups.science_http, "get_json", return_value=SimpleNamespace(json=lambda: payload)):
+    with patch.object(lookups.science_http, "get_json", return_value=SimpleNamespace(status_code=200, json=lambda: payload)):
         assert lookups.find_diagnosis("E55.9") == {"code": "E559", "text": "Vitamin D deficiency, unspecified"}
         assert lookups.find_diagnosis("E55.91") is None
     assert lookups.find_diagnosis("vitamin") is None

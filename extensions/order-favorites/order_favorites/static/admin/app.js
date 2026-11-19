@@ -1,5 +1,6 @@
 {% verbatim %}
-/* Order Favorites app in the app drawer. Tabs: Prescriptions, Labs, and (for favorites admins) Settings with
+/* Order Favorites app in the app drawer. Tabs: Prescriptions, Labs, Imaging, Order sets (each when the practice
+   uses it), and (for favorites admins) Settings with
    import. Each order-type tab lists your own favorites and the practice's (All is grouped Mine, then Practice),
    with an eye on each practice favorite to hide or show it in your chart panel. Admins edit practice favorites
    here and choose Personal or Practice on New. Layout follows mockups/order-favorites-tab-options.html,
@@ -33,8 +34,10 @@
   // While a favorite form is open from a set, the set's own unsaved changes count too.
   function dirty() { return !!(edit && edit.editor && edit.editor.dirty()) || !!(sub && sub.setDirty); }
   function guarded(go) { if (guard && dirty()) { guard.run(go); } else { go(); } }
-  function noun() { return tab === "rx" ? "prescriptions" : tab === "lab" ? "labs" : "order sets"; }
-  function kindWord() { return tab === "rx" ? "prescription" : tab === "lab" ? "lab" : "order set"; }
+  var NOUN = { rx: "prescriptions", lab: "labs", imaging: "imaging", set: "order sets" };
+  var TAB_LABEL = { rx: "Prescriptions", lab: "Labs", imaging: "Imaging", set: "Order sets" };
+  function noun() { return NOUN[tab]; }
+  function kindWord() { return OF.kindWord(tab); }
 
   function load() {
     return OF.api("GET", "/panel/data").then(function (m) {
@@ -58,7 +61,7 @@
 
   // ---------- frame ----------
   function render() {
-    var tabs = listTabs().map(function (k) { return '<button class="' + (tab === k ? "on" : "") + '" data-adtab="' + k + '">' + (k === "rx" ? "Prescriptions" : k === "lab" ? "Labs" : "Order sets") + "</button>"; }).join("");
+    var tabs = listTabs().map(function (k) { return '<button class="' + (tab === k ? "on" : "") + '" data-adtab="' + k + '">' + TAB_LABEL[k] + "</button>"; }).join("");
     if (isAdmin()) { tabs += '<button class="' + (tab === "settings" ? "on" : "") + '" data-adtab="settings">Settings</button>'; }
     app.innerHTML = '<header class="ax-head"><div class="ax-title">' + esc(mine.title) + '</div><p class="ax-sub">Your favorites and the practice\'s. Add them to a note from the Order Favorites button in the note.</p><nav class="ax-tabs">' + tabs + '</nav></header><div class="ax-main" id="main"></div>';
     if (tab === "settings") { renderSettings(); } else { renderSplit(); }
@@ -79,7 +82,9 @@
   function rowHtml(f) {
     var sub = f.kind === "set"
       ? (OF.setMembers(f).length ? OF.plural(OF.setMembers(f).length, "order", "orders") + " · " + OF.setMembers(f).map(function (x) { return esc(x.name); }).join(", ") : "None of its favorites are available")
-      : f.kind === "rx" ? esc(f.sig || f.medication) : esc(f.lab_partner_name) + " · " + OF.plural(f.tests.length, "test", "tests");
+      : f.kind === "rx" ? esc(f.sig || f.medication)
+      : f.kind === "imaging" ? esc(f.image_name) + (f.priority ? " · " + esc(f.priority) : "")
+      : esc(f.lab_partner_name) + " · " + OF.plural(f.tests.length, "test", "tests");
     var flag = f.stale && f.stale.length && (f.mine || isAdmin()) ? '<span class="ax-flag">Needs fixing</span>' : "";
     // The eye only applies to practice favorites: it hides or shows them in your own chart panel.
     var eye = f.shared
@@ -157,7 +162,7 @@
     renderSub();
   }
   function renderSub() {
-    var word = sub.kind === "rx" ? "prescription" : "lab";
+    var word = OF.kindWord(sub.kind);
     $("#detail").innerHTML = '<div class="ax-dhead"><div><div class="ax-dcode">New ' + word + ' favorite</div><div class="ax-dmeta">For the order set <b>' + esc(sub.draft.name || "Untitled") + "</b> · " +
       (sub.practice ? "saved as a practice favorite, since this is a practice order set, and added to the set." : "saved as your personal favorite and added to the set.") + "</div></div></div>" +
       '<div id="guardSlot" hidden></div><div class="ed" style="margin-top:16px" id="form"></div><div class="ax-err" id="err" role="alert"></div>' +
@@ -222,7 +227,7 @@
     var good = checked ? imp.rows.filter(function (r) { return r.ok; }).length : 0;
     var h = (imp.done ? '<div class="rs ok">' + esc(imp.done) + "</div>" : "") + '<ol class="ax-steps"><li class="' + (checked ? "done" : "on") + '">Paste or upload</li><li class="' + (checked ? "on" : "") + '">Check rows</li><li>Import</li></ol>' +
       '<label class="ax-lbl" style="margin-top:0" for="csv">CSV</label><textarea class="ax-ta" id="csv" rows="8" style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px" placeholder="type,name,details">' + esc(imp.text) + "</textarea>" +
-      '<p class="ax-help">One row per favorite. Prescriptions and labs can share a file. Everything imported becomes a practice favorite. Download the template for the column format. Order sets aren\'t imported: make them on the Order sets tab after importing their favorites.</p>' +
+      '<p class="ax-help">One row per favorite. Prescriptions, labs, and imaging can share a file. Everything imported becomes a practice favorite. Download the template for the column format. Order sets aren\'t imported: make them on the Order sets tab after importing their favorites.</p>' +
       '<div class="ax-imp-row"><button class="ax-btn" id="tpl">Download template</button><label class="ax-btn" style="display:inline-block">Upload file<input type="file" id="file" accept=".csv,text/csv" hidden></label><span class="grow"></span><button class="ax-btn primary" id="check">Check rows</button></div>' +
       '<div class="ax-err">' + esc(imp.error) + "</div>";
     if (checked) {
@@ -245,7 +250,7 @@
     OF.api("POST", "/admin/import", { csv: imp.text }).then(function (d) {
       var msg = "Imported " + OF.plural(d.imported, "practice favorite", "practice favorites") + "." + (d.skipped ? " " + OF.plural(d.skipped, "row was", "rows were") + " skipped." : "");
       toast(msg);
-      // Stay on Settings; the new favorites show on the Prescriptions and Labs tabs.
+      // Stay on Settings; the new favorites show on their order type's tab.
       imp = { text: "", rows: null, error: "", done: msg };
       return load();
     }).catch(function (e) { imp.error = e.message; renderImport(); });
@@ -254,12 +259,19 @@
   // ---------- settings ----------
   function renderSettings() {
     var s = data.settings, only = data.admins.length === 1;
+    var types = [["rx", "Prescriptions", "prescriptions"], ["lab", "Labs", "labs"], ["imaging", "Imaging", "imaging"]];
+    var on = types.filter(function (t) { return s[t[0] + "_enabled"]; });
+    var off = types.filter(function (t) { return !s[t[0] + "_enabled"]; });
+    var words = function (list) { var w = list.map(function (t) { return t[2]; }); return w.length < 2 ? w.join("") : w.slice(0, -1).join(", ") + (w.length > 2 ? "," : "") + " and " + w[w.length - 1]; };
     var h = '<div class="ax-sec"><h3>Available order types</h3><p>Choose what your practice can use. Turning something off hides it for everyone, but saved favorites and sets are kept if it\'s turned back on.</p>' +
-      '<label class="ax-check"><input type="checkbox" data-set="rx_enabled"' + (s.rx_enabled ? " checked" : "") + (s.rx_enabled && !s.lab_enabled ? " disabled" : "") + "> Prescriptions</label>" +
-      '<label class="ax-check" style="margin-top:8px"><input type="checkbox" data-set="lab_enabled"' + (s.lab_enabled ? " checked" : "") + (s.lab_enabled && !s.rx_enabled ? " disabled" : "") + "> Labs</label>" +
+      types.map(function (t, i) {
+        var checked = !!s[t[0] + "_enabled"];
+        // The last order type that is on can't be turned off.
+        return '<label class="ax-check"' + (i ? ' style="margin-top:8px"' : "") + '><input type="checkbox" data-set="' + t[0] + '_enabled"' + (checked ? " checked" : "") + (checked && on.length === 1 ? " disabled" : "") + "> " + t[1] + "</label>";
+      }).join("") +
       '<label class="ax-check" style="margin-top:8px"><input type="checkbox" data-set="set_enabled"' + (s.set_enabled ? " checked" : "") + '> Order sets <span class="ax-help" style="display:inline;margin-left:4px">(several favorites added together)</span></label>' +
-      '<p class="ax-help ax-info">' + I.info + " At least one of prescriptions or labs must stay on. Order sets can be turned off on their own.</p>" +
-      ((!s.rx_enabled || !s.lab_enabled) && s.set_enabled ? '<p class="ax-warn">With ' + (s.rx_enabled ? "labs" : "prescriptions") + " off, order sets add only their " + (s.rx_enabled ? "prescriptions" : "labs") + ". Sets with nothing left to add are hidden.</p>" : "") + "</div>";
+      '<p class="ax-help ax-info">' + I.info + " At least one of prescriptions, labs, or imaging must stay on. Order sets can be turned off on their own.</p>" +
+      (off.length && s.set_enabled ? '<p class="ax-warn">With ' + words(off) + " off, order sets add only their " + words(on) + ". Sets with nothing left to add are hidden.</p>" : "") + "</div>";
     h += '<div class="ax-sec"><h3>Admins</h3><p>Admins manage practice favorites, practice order sets, and these settings.</p><table class="ax-tbl"><tr><th>Name</th><th>Email</th><th></th></tr>';
     data.admins.forEach(function (a) {
       if (removeAsk === a.id) {

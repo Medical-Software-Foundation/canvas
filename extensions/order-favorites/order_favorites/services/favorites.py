@@ -3,9 +3,10 @@
 clean_favorite turns a request body into (kind, name, details) or an error message. It runs before
 every save, from the chart panel, the admin app, and import, so all three accept exactly the same
 orders. Lab tests are checked against the live catalog on save; a lab favorite that later goes
-stale is flagged in lists and skipped when someone tries to add it.
+stale is flagged in lists and skipped when someone tries to add it. An imaging study is checked
+against Canvas's imaging search on save and again each time it is added (see lookups.check_image).
 
-An order set (kind "set") is a named list of prescription and lab favorites that are added together.
+An order set (kind "set") is a named list of prescription, lab, and imaging favorites that are added together.
 It points to the favorites rather than copying them, so editing a favorite changes it in every set,
 and a deleted favorite simply drops out. A practice set may only include practice favorites; a
 personal set may include its owner's own favorites and practice favorites.
@@ -19,18 +20,23 @@ from typing import Any
 from django.db.models import Q
 
 from order_favorites.models import Favorite, HiddenFavorite
+from canvas_sdk.commands import ImagingOrderCommand
 from canvas_sdk.v1.data import LabPartner, LabPartnerTest
 
 from order_favorites.services.catalog import parse_uuid, check_tests, provider_dict, usable_provider
-from order_favorites.services.lookups import ICD10_CODE, icd10_display, normalize_icd10
+from order_favorites.services.lookups import CENTER_FIELDS, ICD10_CODE, check_image, icd10_display, normalize_icd10
 
 MAX_NAME = 120
 MAX_SIG = 1000
 MAX_COMMENT = 500
+MAX_IMAGING_TEXT = 1024  # ImagingOrderCommand's limit for additional details and comment
+MAX_CENTER_FIELD = 512  # ServiceProvider's limit for each field
 MAX_TESTS = 50
 MAX_DIAGNOSES = 12
 MAX_SET_ITEMS = 30
-ORDER_KINDS = ("rx", "lab")
+ORDER_KINDS = ("rx", "lab", "imaging")
+# The values of ImagingOrderCommand.Priority, by what may be typed for them.
+PRIORITIES = {priority.value.lower(): priority.value for priority in ImagingOrderCommand.Priority}
 
 
 class Invalid(ValueError):
@@ -96,10 +102,88 @@ def _rx_details(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _list(body: dict[str, Any], key: str, message: str) -> list[Any]:
+    """body[key] when it is a list, [] when it is missing or empty. Anything else raises Invalid(message)."""
+    value = body.get(key)
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        raise Invalid(message)
+    return value
+
+
+def _diagnoses(body: dict[str, Any], owner: str, word: str) -> list[dict[str, str]]:
+    """The ICD-10 codes in body["diagnoses"], undotted and each once. owner and word name them in errors."""
+    diagnoses: list[dict[str, str]] = []
+    for dx in _list(body, "diagnoses", f"Select {word} from the search list."):
+        code = normalize_icd10(str((dx or {}).get("code") or "")) if isinstance(dx, dict) else ""
+        if not ICD10_CODE.match(code):
+            raise Invalid(f"{icd10_display(code) or 'A diagnosis'} isn't an ICD-10 code. Select {word} from the search list.")
+        if code not in {d["code"] for d in diagnoses}:
+            diagnoses.append({"code": code, "text": str(dx.get("text") or "")[:300]})
+    if len(diagnoses) > MAX_DIAGNOSES:
+        raise Invalid(f"{owner} can have at most {MAX_DIAGNOSES} {word}.")
+    return diagnoses
+
+
+def _ordering_provider(body: dict[str, Any]) -> tuple[str, str]:
+    """(id, name) of the saved ordering provider, or two blanks."""
+    provider_id = str(body.get("ordering_provider_id") or "").strip()
+    if not provider_id:
+        return "", ""
+    provider = usable_provider(provider_id)
+    if provider is None:
+        raise Invalid("The ordering provider must be active staff with an NPI.")
+    return provider_id, provider_dict(provider)["name"]
+
+
+def _imaging_center(body: dict[str, Any]) -> dict[str, str] | None:
+    """The imaging center as the fields of Canvas's ServiceProvider, or None when none is set."""
+    center = body.get("imaging_center")
+    if center in (None, "", {}):
+        return None
+    if not isinstance(center, dict):
+        raise Invalid("Select the imaging center from the search list.")
+    cleaned = {field: _text(center, field, MAX_CENTER_FIELD, label, required=False) for field, _source, label in CENTER_FIELDS}
+    if not cleaned["practice_name"] and not cleaned["last_name"]:
+        raise Invalid("The imaging center needs a practice name or a last name. Select it from the search list.")
+    return cleaned
+
+
+def _imaging_details(body: dict[str, Any], image_cache: dict[tuple[str, str], Any] | None = None) -> dict[str, Any]:
+    """The study must still be what Canvas puts in the Image field for its code (see lookups.check_image).
+    image_cache shares study checks across the favorites of one request."""
+    image_code = _text(body, "image_code", 64, "Study")
+    code_system = _text(body, "image_code_system", 100, "Study", required=False)
+    study = check_image(image_code, code_system, image_cache)
+    if study is None:
+        name = _text(body, "image_name", 300, "Study", required=False) or image_code
+        raise Invalid(f"Canvas's imaging search doesn't find {name} first for its code, so the order would come out blank or as another study. Select the study from the search list again.")
+
+    priority_value = str(body.get("priority") or "").strip()
+    priority = PRIORITIES.get(priority_value.lower(), None) if priority_value else ""
+    if priority is None:
+        raise Invalid("Priority must be Routine, Urgent, or STAT.")
+
+    provider_id, provider_name = _ordering_provider(body)
+    return {
+        "image_code": study["code"],
+        "image_name": study["name"],
+        "image_code_system": study["code_system"],
+        "diagnoses": _diagnoses(body, "An imaging favorite", "indications"),
+        "priority": priority,
+        "additional_details": _text(body, "additional_details", MAX_IMAGING_TEXT, "Additional details", required=False),
+        "comment": _text(body, "comment", MAX_IMAGING_TEXT, "Comment", required=False),
+        "ordering_provider_id": provider_id,
+        "ordering_provider_name": provider_name,
+        "imaging_center": _imaging_center(body),
+    }
+
+
 def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
     partner_id = _text(body, "lab_partner_id", 64, "Lab partner")
     codes: list[str] = []
-    for test in body.get("tests") or []:
+    for test in _list(body, "tests", "Select tests from the search list."):
         code = str((test or {}).get("code") or "").strip() if isinstance(test, dict) else ""
         if code and code not in codes:
             codes.append(code)
@@ -114,24 +198,8 @@ def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
         raise Invalid(f"{check['partner_name']} doesn't offer {', '.join(check['stale'])}. Remove it and add its replacement.")
     names = {t["code"]: str(t.get("name") or "") for t in body.get("tests") or [] if isinstance(t, dict)}
 
-    diagnoses: list[dict[str, str]] = []
-    for dx in body.get("diagnoses") or []:
-        code = normalize_icd10(str((dx or {}).get("code") or "")) if isinstance(dx, dict) else ""
-        if not ICD10_CODE.match(code):
-            raise Invalid(f"{icd10_display(code) or 'A diagnosis'} isn't an ICD-10 code. Select diagnoses from the search list.")
-        if code not in {d["code"] for d in diagnoses}:
-            diagnoses.append({"code": code, "text": str(dx.get("text") or "")[:300]})
-    if len(diagnoses) > MAX_DIAGNOSES:
-        raise Invalid(f"A lab favorite can have at most {MAX_DIAGNOSES} diagnoses.")
-
-    provider_id = str(body.get("ordering_provider_id") or "").strip()
-    provider_name = ""
-    if provider_id:
-        provider = usable_provider(provider_id)
-        if provider is None:
-            raise Invalid("The ordering provider must be active staff with an NPI.")
-        provider_name = provider_dict(provider)["name"]
-
+    diagnoses = _diagnoses(body, "A lab favorite", "diagnoses")
+    provider_id, provider_name = _ordering_provider(body)
     return {
         "lab_partner_id": partner_id,
         "lab_partner_name": check["partner_name"],
@@ -146,7 +214,7 @@ def _lab_details(body: dict[str, Any]) -> dict[str, Any]:
 
 def _set_details(body: dict[str, Any], owner: int | None, shared: bool) -> dict[str, Any]:
     ids: list[int] = []
-    for value in body.get("items") or []:
+    for value in _list(body, "items", "Select favorites from the list."):
         try:
             dbid = int(str(value))
         except (TypeError, ValueError):
@@ -167,22 +235,34 @@ def _set_details(body: dict[str, Any], owner: int | None, shared: bool) -> dict[
 
 
 def clean_favorite(
-    body: dict[str, Any], kind: str | None = None, *, owner: int | None = None, shared: bool = False
+    body: dict[str, Any],
+    kind: str | None = None,
+    *,
+    owner: int | None = None,
+    shared: bool = False,
+    image_cache: dict[tuple[str, str], Any] | None = None,
 ) -> tuple[str, str, dict[str, Any]]:
     """(kind, name, details) from a request body. Raises Invalid with a message for the user.
 
     owner and shared say whose set it will be, which decides what an order set may include.
+    image_cache shares imaging study checks across the rows of one import. Raises LookupFailed when
+    Canvas's imaging search doesn't answer, so callers can tell an outage from a bad request.
     """
     kind = kind or str(body.get("kind") or "")
-    if kind not in ("rx", "lab", "set"):
-        raise Invalid("Choose prescription, lab, or order set.")
+    if kind not in ("rx", "lab", "imaging", "set"):
+        raise Invalid("Choose prescription, lab, imaging, or order set.")
     name = _text(body, "name", MAX_NAME, "Name")
     if kind == "set":
         return kind, name, _set_details(body, owner, shared)
-    details = _rx_details(body) if kind == "rx" else _lab_details(body)
-    if kind == "lab" and shared:
-        # A saved ordering provider would name one clinician on everyone's lab orders, and results go
-        # back to them, so only personal lab favorites keep one.
+    if kind == "rx":
+        details = _rx_details(body)
+    elif kind == "lab":
+        details = _lab_details(body)
+    else:
+        details = _imaging_details(body, image_cache)
+    if kind in ("lab", "imaging") and shared:
+        # A saved ordering provider would name one clinician on everyone's orders, and results go
+        # back to them, so only personal lab and imaging favorites keep one.
         details["ordering_provider_id"] = details["ordering_provider_name"] = ""
     return kind, name, details
 
@@ -206,10 +286,14 @@ def expand_sets(chosen: list[Favorite], usable: dict[int, Favorite]) -> list[Fav
 
 def stale_map(favorites: list[Favorite]) -> dict[int, list[str]]:
     """For each lab favorite, the test codes the lab no longer offers (all of them if the partner is
-    gone or inactive). Two queries for the whole list."""
+    gone or inactive), and for each imaging favorite last skipped because the imaging search no longer
+    leads to its study, its image code. Two queries for the whole list."""
+    result: dict[int, list[str]] = {
+        f.dbid: [f.details.get("image_code") or ""] for f in favorites if f.kind == "imaging" and f.details.get("unresolved")
+    }
     labs = [f for f in favorites if f.kind == "lab"]
     if not labs:
-        return {}
+        return result
     partner_ids = {str(f.details.get("lab_partner_id", "")) for f in labs}
     valid_ids = [p for p in partner_ids if parse_uuid(p) is not None]
     active = {str(pid) for pid in LabPartner.objects.filter(id__in=valid_ids, active=True).values_list("id", flat=True)}
@@ -220,7 +304,6 @@ def stale_map(favorites: list[Favorite]) -> dict[int, list[str]]:
             "lab_partner__id", "order_code"
         )
     }
-    result: dict[int, list[str]] = {}
     for favorite in labs:
         pid = str(favorite.details.get("lab_partner_id", ""))
         tests = [t["code"] for t in favorite.details.get("tests", [])]

@@ -36,12 +36,10 @@ from order_favorites.services.staging import stage
 API_BASE = "/plugin-io/api/order_favorites"
 # Changes on every plugin load, so browsers fetch fresh scripts and styles after an update.
 CACHE_BUST = str(int(datetime.now(UTC).timestamp()))
-TITLES = {
-    ("rx", "lab"): "Prescription and Lab Order Favorites",
-    ("rx",): "Prescription Favorites",
-    ("lab",): "Lab Order Favorites",
-}
+KIND_TITLES = {"rx": "Prescription", "lab": "Lab", "imaging": "Imaging"}
+KIND_NAMES = {"rx": "prescriptions", "lab": "labs", "imaging": "imaging"}
 MIN_QUERY = 2
+IMAGING_DOWN = "Canvas's imaging search didn't answer, so the study couldn't be checked. Try again."
 
 
 def _error(message: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST) -> list[Response | Effect]:
@@ -53,7 +51,18 @@ def _ok(data: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> list[Respon
 
 
 def _title(kinds: list[str]) -> str:
-    return TITLES[tuple(kinds)]
+    """"Prescription and Lab Order Favorites", "Prescription, Lab, and Imaging Order Favorites", or
+    "Prescription Favorites" when prescriptions are the only order type."""
+    if kinds == ["rx"]:
+        return "Prescription Favorites"
+    names = [KIND_TITLES[kind] for kind in kinds]
+    joined = names[0] if len(names) == 1 else " and ".join(names) if len(names) == 2 else ", ".join(names[:-1]) + ", and " + names[-1]
+    return f"{joined} Order Favorites"
+
+
+def _settings_json() -> dict[str, bool]:
+    kinds = access.enabled_kinds()
+    return {**{f"{kind}_enabled": kind in kinds for kind in access.KINDS}, "set_enabled": access.sets_enabled()}
 
 
 def _list_kinds() -> list[str]:
@@ -217,6 +226,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             kind, name, details = clean_favorite(self._body(), owner=me, shared=False)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         if not _kind_enabled(kind):
             return _error("Your practice doesn't use this order type.")
         favorite = Favorite.objects.create(kind=kind, name=name, details=details, shared=False, owner_id=me)
@@ -238,6 +249,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             _kind, favorite.name, favorite.details = clean_favorite(self._body(), favorite.kind, owner=me, shared=False)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         favorite.save()
         return _ok({"favorite": favorite_json(favorite, me)})
 
@@ -285,6 +298,14 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
     def diagnoses(self) -> list[Response | Effect]:
         return self._search(lookups.search_diagnoses)
 
+    @api.get("/lookup/imaging")
+    def imaging(self) -> list[Response | Effect]:
+        return self._search(lookups.search_imaging)
+
+    @api.get("/lookup/imaging-centers")
+    def imaging_centers(self) -> list[Response | Effect]:
+        return self._search(lookups.search_imaging_centers)
+
     @api.get("/lookup/lab-partners")
     def lab_partners(self) -> list[Response | Effect]:
         return _ok({"results": catalog.active_partners()})
@@ -324,7 +345,7 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
         return _ok(
             {
                 "title": _title(kinds),
-                "settings": {"rx_enabled": "rx" in kinds, "lab_enabled": "lab" in kinds, "set_enabled": access.sets_enabled()},
+                "settings": _settings_json(),
                 "admins": self._admins_json(me),
                 "favorites": [favorite_json(f, me, None, stale.get(f.dbid)) for f in practice],
                 "template": TEMPLATE,
@@ -340,6 +361,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             kind, name, details = clean_favorite(self._body(), owner=me, shared=True)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         favorite = Favorite.objects.create(kind=kind, name=name, details=details, shared=True, owner_id=me)
         return _ok({"favorite": favorite_json(favorite, me)}, HTTPStatus.CREATED)
 
@@ -358,6 +381,8 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
             _kind, favorite.name, favorite.details = clean_favorite(self._body(), favorite.kind, owner=favorite.owner_id, shared=True)
         except Invalid as exc:
             return _error(str(exc))
+        except lookups.LookupFailed:
+            return _error(IMAGING_DOWN, HTTPStatus.SERVICE_UNAVAILABLE)
         favorite.save()
         return _ok({"favorite": favorite_json(favorite, self._me())})
 
@@ -377,16 +402,14 @@ class OrderFavoritesAPI(StaffSessionAuthMixin, SimpleAPI):
         if not self._admin():
             return _error("Only favorites admins can do this.", HTTPStatus.FORBIDDEN)
         body = self._body()
-        current = access.enabled_kinds()
-        rx = bool(body["rx_enabled"]) if "rx_enabled" in body else "rx" in current
-        lab = bool(body["lab_enabled"]) if "lab_enabled" in body else "lab" in current
-        sets = bool(body["set_enabled"]) if "set_enabled" in body else access.sets_enabled()
-        if not rx and not lab:
-            return _error("At least one of prescriptions or labs must stay on.")
-        access.set_setting("rx_enabled", rx)
-        access.set_setting("lab_enabled", lab)
-        access.set_setting("set_enabled", sets)
-        return _ok({"settings": {"rx_enabled": rx, "lab_enabled": lab, "set_enabled": sets}, "title": _title(access.enabled_kinds())})
+        current = _settings_json()
+        wanted = {key: bool(body[key]) if key in body else on for key, on in current.items()}
+        if not any(wanted[f"{kind}_enabled"] for kind in access.KINDS):
+            names = [KIND_NAMES[kind] for kind in access.KINDS]
+            return _error(f"At least one of {', '.join(names[:-1])}, or {names[-1]} must stay on.")
+        for key, on in wanted.items():
+            access.set_setting(key, on)
+        return _ok({"settings": _settings_json(), "title": _title(access.enabled_kinds())})
 
     @api.get("/admin/staff")
     def admin_staff(self) -> list[Response | Effect]:

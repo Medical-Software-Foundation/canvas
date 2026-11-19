@@ -1,9 +1,15 @@
-"""Searches against Canvas's medication, pharmacy, and diagnosis services.
+"""Searches against Canvas's medication, pharmacy, diagnosis, and imaging services.
 
 Medication search uses FDB through ontologies (carried over from prescription-favorites), pharmacy
 search uses the pharmacy service, and diagnosis search uses the same science endpoint as Canvas's
 Diagnose command. Science returns ICD-10 codes without the dot (E119); codes are stored that way,
-which Canvas accepts for lab orders, and shown with the dot (E11.9).
+which Canvas accepts for lab and imaging orders, and shown with the dot (E11.9).
+
+Imaging study and imaging center searches use the same science endpoints as Canvas's Imaging Order
+command. When an imaging order arrives with an image code, Canvas searches imaging studies for that
+code and fills the Image field from the FIRST result, or leaves it blank when there is none.
+check_image runs that same search, so an imaging favorite is only saved or added when its code
+still leads to its own study.
 
 A failed request raises LookupFailed so the API can answer 503 instead of an empty list that looks
 like "no matches".
@@ -37,11 +43,16 @@ def normalize_icd10(code: str) -> str:
 
 
 def _get(client: Any, path: str) -> dict[str, Any]:
+    """The JSON object a lookup service answers. Anything but a 2xx answer holding a JSON object raises
+    LookupFailed, so an outage never reads as "no matches"."""
     try:
-        body = client.get_json(path).json()
+        response = client.get_json(path)
+        body = response.json()
     except (RequestException, ValueError) as exc:
         raise LookupFailed(str(exc)) from exc
-    return body if isinstance(body, dict) else {}
+    if response.status_code >= 400 or not isinstance(body, dict):
+        raise LookupFailed(f"answered {response.status_code}")
+    return body
 
 
 def search_medications(query: str) -> list[dict[str, Any]]:
@@ -110,6 +121,104 @@ def find_diagnosis(code: str) -> dict[str, str] | None:
         if row["code"] == code:
             return row
     return None
+
+
+IMAGING_SEARCH_LIMIT = 25  # what Canvas's Imaging Order command asks science for
+# An imaging center's fields: (stored name, science contact key, label in messages).
+CENTER_FIELDS = (
+    ("first_name", "firstName", "Imaging center first name"),
+    ("last_name", "lastName", "Imaging center last name"),
+    ("specialty", "specialty", "Imaging center specialty"),
+    ("practice_name", "practiceName", "Imaging center practice name"),
+    ("business_fax", "businessFax", "Imaging center fax"),
+    ("business_phone", "businessPhone", "Imaging center phone"),
+    ("business_address", "businessAddress", "Imaging center address"),
+    ("notes", "notes", "Imaging center notes"),
+)
+# Marks, in a check_image cache, that science already failed in this request.
+SCIENCE_DOWN = ("", "")
+
+
+def _science_results(path: str) -> list[dict[str, Any]]:
+    """The results list of a science search. A missing results list raises LookupFailed, like an outage."""
+    results = _get(science_http, path).get("results")
+    if not isinstance(results, list):
+        raise LookupFailed("science answered without results")
+    return [row for row in results if isinstance(row, dict)]
+
+
+def _imaging_rows(query: str) -> list[dict[str, str]]:
+    path = "/parse-templates/imaging-reports/?" + urlencode({"query": query, "limit": IMAGING_SEARCH_LIMIT})
+    return [
+        {"code": str(row.get("code") or "").strip(), "code_system": str(row.get("code_system") or "").strip(), "name": str(row.get("name") or "").strip()}
+        for row in _science_results(path)
+    ]
+
+
+def search_imaging(query: str) -> list[dict[str, str]]:
+    """Imaging studies matching a code or words, as [{code, code_system, name}], one row per study."""
+    seen: set[tuple[str, str]] = set()
+    results = []
+    for row in _imaging_rows(query):
+        key = (row["code_system"], row["code"])
+        if not row["code"] or not row["name"] or key in seen:
+            continue
+        seen.add(key)
+        results.append(row)
+        if len(results) >= MAX_RESULTS:
+            break
+    return results
+
+
+def check_image(
+    image_code: str,
+    code_system: str = "",
+    cache: dict[tuple[str, str], dict[str, str] | None] | None = None,
+) -> dict[str, str] | None:
+    """The study Canvas will put in the Image field for this image code, or None when that would be
+    blank or a different study.
+
+    Canvas takes the first result of an imaging search for the code. It resolves when that first
+    result has this code (ignoring case), and this code system when one is given; the study's own
+    code is what comes back. Raises LookupFailed when science doesn't answer. cache, when given,
+    holds answers already fetched in the same request, so a code is searched once however many
+    favorites use it, and after one failure the rest of the request fails without waiting on science.
+    """
+    image_code = (image_code or "").strip()
+    if not image_code:
+        return None
+    if cache is not None:
+        if SCIENCE_DOWN in cache:
+            raise LookupFailed("science didn't answer earlier in this request")
+        key = (image_code, code_system)
+        if key not in cache:
+            try:
+                cache[key] = check_image(image_code, code_system)
+            except LookupFailed:
+                cache[SCIENCE_DOWN] = None
+                raise
+        return cache[key]
+    rows = _imaging_rows(image_code)
+    first = rows[0] if rows else None
+    if first is None or first["code"].casefold() != image_code.casefold() or not first["name"]:
+        return None
+    if code_system and first["code_system"] != code_system:
+        return None
+    return first
+
+
+def search_imaging_centers(query: str) -> list[dict[str, str]]:
+    """Radiology centers matching a name, as the fields of an order's imaging center. Searched the
+    same way as the Imaging Order command's Imaging center field, without its service-area zip codes."""
+    path = "/contacts/?" + urlencode({"search": query, "job_title__icontains": "radiology"})
+    results = []
+    for row in _science_results(path):
+        center = {field: str(row.get(source) or "").strip() for field, source, _label in CENTER_FIELDS}
+        if center["practice_name"] or center["last_name"]:
+            results.append(center)
+        if len(results) >= MAX_RESULTS:
+            break
+    return results
 
 
 def find_medication(value: str) -> tuple[dict[str, Any] | None, str]:

@@ -55,23 +55,24 @@
     });
   }
   function counts() {
-    var n = { rx: 0, lab: 0, set: 0 };
+    var n = { rx: 0, lab: 0, imaging: 0, set: 0 };
     selected.forEach(function (id) { var f = byId(id); if (f) { n[f.kind]++; } });
     return n;
   }
-  var TAB = { all: ["All", "all"], rx: ["Rx", "rx"], lab: ["Labs", "lab"], set: ["Sets", "set"] };
+  var TAB = { all: ["All", "all"], rx: ["Rx", "rx"], lab: ["Labs", "lab"], imaging: ["Imaging", "imaging"], set: ["Sets", "set"] };
+  var KIND_TAG = { rx: "Rx", lab: "Lab", imaging: "Imaging", set: "Order set" };
   function tabsHtml() {
     var t = types();
     if (t.length < 2) { return ""; }
     var n = counts();
     var shown = ["all"].concat(t);
-    return '<div class="pp-seg' + (shown.length > 3 ? " four" : "") + '" id="tabs">' + shown.map(function (k) {
+    return '<div class="pp-seg' + (shown.length > 3 ? " four" : "") + (shown.length > 4 ? " five" : "") + '" id="tabs">' + shown.map(function (k) {
       var c = k === "all" ? selected.length : n[k];
       return '<button class="' + (tab === k ? "on" : "") + '" data-tab="' + k + '"><span class="ti">' + I[TAB[k][1]] + "</span>" + TAB[k][0] + (c ? '<span class="cnt">' + c + "</span>" : "") + "</button>";
     }).join("") + "</div>";
   }
   function chev(f) { var open = !!expanded[f.id]; return '<button class="pc-exp' + (open ? " open" : "") + '" data-exp="' + f.id + '" title="' + (open ? "Show less" : "Show details") + '" aria-expanded="' + open + '">' + I.chev + "</button>"; }
-  function kindTag(f) { return tab === "all" ? '<span class="pc-kind ' + f.kind + '">' + I[f.kind] + (f.kind === "rx" ? "Rx" : f.kind === "lab" ? "Lab" : "Order set") + "</span>" : ""; }
+  function kindTag(f) { return tab === "all" ? '<span class="pc-kind ' + f.kind + '">' + I[f.kind] + KIND_TAG[f.kind] + "</span>" : ""; }
   // The expand arrow at the top right, and in the All tab the Rx / Lab / Order set tag at the bottom right.
   function side(f) { return '<div class="pc-side">' + chev(f) + kindTag(f) + "</div>"; }
   function card(f) {
@@ -82,8 +83,9 @@
   }
 
   // ---------- use favorites ----------
-  var GROUPS = [["set", "Order sets"], ["rx", "Prescriptions"], ["lab", "Labs"]];
-  function searchWord() { return tab === "all" ? "favorites" : tab === "rx" ? "prescriptions" : tab === "lab" ? "labs" : "order sets"; }
+  var GROUPS = [["set", "Order sets"], ["rx", "Prescriptions"], ["lab", "Labs"], ["imaging", "Imaging"]];
+  var SEARCH_WORD = { all: "favorites", rx: "prescriptions", lab: "labs", imaging: "imaging", set: "order sets" };
+  function searchWord() { return SEARCH_WORD[tab]; }
   function renderUse() {
     var h = '<div class="pp-band"><div class="pp-head"><h2>' + esc(data.title) + '</h2><button class="pp-icon" id="gear" title="Manage favorites" aria-label="Manage favorites">' + I.sliders + "</button></div>" +
       tabsHtml() +
@@ -180,7 +182,7 @@
       '</div><div class="pp-content">' + result;
     if (newMenu) {
       h += '<div class="ed"><label>What do you want to make?</label><div class="row new-menu">' + types().map(function (k) {
-        return '<button class="pp-btn' + (k === "set" ? " pp-primary" : "") + '" data-make="' + k + '">' + (k === "rx" ? "Prescription favorite" : k === "lab" ? "Lab favorite" : "Order set (several favorites at once)") + "</button>";
+        return '<button class="pp-btn' + (k === "set" ? " pp-primary" : "") + '" data-make="' + k + '">' + (k === "rx" ? "Prescription favorite" : k === "lab" ? "Lab favorite" : k === "imaging" ? "Imaging favorite" : "Order set (several favorites at once)") + "</button>";
       }).join("") + "</div></div>";
     }
     if (mFilter === "hidden") {
@@ -208,7 +210,7 @@
     var isSet = value.kind === "set";
     edit = { id: opts.id || null, kind: value.kind, practice: false, value: value, note: opts.note };
     $("#edBack").innerHTML = I.back;
-    $("#edTitle").textContent = (opts.id ? "Edit " : "New ") + (isSet ? "order set" : (value.kind === "rx" ? "prescription" : "lab") + " favorite");
+    $("#edTitle").textContent = (opts.id ? "Edit " : "New ") + (isSet ? "order set" : OF.kindWord(value.kind) + " favorite");
     $("#edErr").textContent = "";
     guard.clear();
     // Admins choose Personal or Practice for a new order set; everything else saved here is personal.
@@ -224,7 +226,7 @@
     parent.value = parent.editor.payload();
     parent.justAdded = null;
     edit = { id: null, kind: kind, practice: parent.practice, value: OF.blank(kind), forSet: parent };
-    $("#edTitle").textContent = "New " + (kind === "rx" ? "prescription" : "lab") + " favorite";
+    $("#edTitle").textContent = "New " + OF.kindWord(kind) + " favorite";
     $("#edErr").textContent = "";
     guard.clear();
     drawEditor();
@@ -294,7 +296,13 @@
       result = "";
       if (d.added.length) { result += '<div class="rs ok">' + d.added.length + " added to " + esc(d.note.title) + ": " + d.added.map(function (f) { return esc(f.name); }).join(", ") + "</div>"; }
       d.skipped.forEach(function (s) {
-        var why = s.reason === "partner" ? esc(s.lab || "Its lab") + " isn't an active lab partner any more." : esc(s.lab) + " no longer offers " + esc(s.stale.join(", ")) + ".";
+        if (s.reason === "image_check") {
+          result += '<div class="rs warn"><b>' + esc(s.name) + "</b> wasn't added: Canvas's imaging search didn't answer, so its study couldn't be checked. Try again.</div>";
+          return;
+        }
+        var why = s.reason === "partner" ? esc(s.lab || "Its lab") + " isn't an active lab partner any more."
+          : s.reason === "image" ? "Canvas's imaging search no longer finds " + esc(s.image || "its study") + " first for its code, so the order would come out blank or as another study."
+          : esc(s.lab) + " no longer offers " + esc(s.stale.join(", ")) + ".";
         var fix = !s.shared ? '<a data-edit="' + s.id + '">Fix it now</a>'
           : data.is_admin ? '<a href="' + esc(adminUrl(s.id)) + '" target="_blank" rel="noopener">Fix it in the Order Favorites app</a>'
           : "Ask a favorites admin to update it, or copy it in Manage and fix your copy.";

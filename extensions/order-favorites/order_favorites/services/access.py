@@ -21,9 +21,10 @@ from canvas_sdk.v1.data import Staff
 
 from order_favorites.models import FavoritesAdmin, PracticeSetting
 
-KINDS = ("rx", "lab")
+KINDS = ("rx", "lab", "imaging")
 ROOT_STAFF_KEY = "4150cd20de8a470aa570a852859ac87e"
-SETTING_DEFAULTS: dict[str, Any] = {"rx_enabled": True, "lab_enabled": True, "set_enabled": True}
+# Imaging starts off, so a practice sees it only once an admin turns it on.
+SETTING_DEFAULTS: dict[str, Any] = {"rx_enabled": True, "lab_enabled": True, "imaging_enabled": False, "set_enabled": True}
 
 
 def first_admin_email(secrets: dict[str, Any] | None) -> str:
@@ -85,13 +86,14 @@ def set_setting(key: str, value: Any) -> None:
 
 
 def enabled_kinds() -> list[str]:
-    """The order types the practice uses. Never empty: with both switched off, both count as on."""
+    """The order types the practice uses. Never empty: with all of them switched off, prescriptions
+    and labs count as on."""
     kinds = [kind for kind in KINDS if get_setting(f"{kind}_enabled")]
-    return kinds or list(KINDS)
+    return kinds or ["rx", "lab"]
 
 
 def sets_enabled() -> bool:
-    """Order sets can be switched off on their own, separately from prescriptions and labs."""
+    """Order sets can be switched off on their own, separately from the order types."""
     return bool(get_setting("set_enabled"))
 
 
