@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Charting Admin</title>
+<link rel="stylesheet" type="text/css" href="https://s3-us-west-2.amazonaws.com/canvas-pcp-assets/fonts/488830/FC462E716C3760D7A.css">
+<link rel="stylesheet" type="text/css" href="/plugin-io/api/charting_tools/static/semantic.min.css">
+<link rel="stylesheet" type="text/css" href="/plugin-io/api/charting_tools/static/canvas-overrides.css?v={{ styles_version }}">
+</head>
+<body>
+<div class="nt-page">
+  <div class="nt-page-head">
+    <h2 class="ui header">
+      Charting Admin
+      <div class="sub header" id="page-subtitle"></div>
+    </h2>
+    <div class="nt-transfer">
+      <button class="ui basic button" id="download-btn" title="Download every template, quickpick, order set, and rule, to upload in another environment">Download all</button>
+      <button class="ui basic button" id="upload-btn" title="Upload a file downloaded from another environment">Upload</button>
+      <input type="file" id="upload-file" accept=".json,application/json" hidden>
+    </div>
+  </div>
+  <div class="ui secondary pointing menu" id="kind-tabs"></div>
+  <div class="ui stackable grid">
+    <div class="four wide column">
+      <button class="ui fluid primary button" id="new-btn">New</button>
+      <div class="ui fluid vertical menu nt-list" id="template-list"></div>
+    </div>
+    <div class="twelve wide column">
+      <div class="ui segment" id="editor">
+        <div class="nt-empty">Select one or create a new one.</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var BASE = "/plugin-io/api/charting_tools";
+  var SUBTITLES = {
+    template: "Ready-made sets of commands clinicians add to a note in one step.",
+    quickpick: "One pre-filled order clinicians add in one click.",
+    order_set: "A diagnosis-driven bundle of assessments, orders, and procedures.",
+    rule: "Adds or suggests commands when the note meets your conditions."
+  };
+  var catalog = [];
+  var catalogByKey = {};
+  var kinds = [];
+  var kindByKey = {};
+  var activeKind = "template";
+  var scribeEnabled = false;
+  var questionnaireOptions = {};
+  var noteTypeOptions = [];
+  var templates = [];
+  var current = null;
+  var uid = 0;
+  var lookups = {};
+  var questionForms = {};
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "text") node.textContent = attrs[k];
+      else if (k === "className") node.className = attrs[k];
+      else if (k.indexOf("on") === 0) node.addEventListener(k.slice(2), attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+
+  // Semantic's checkbox without its jQuery module: the real input sits under
+  // the label, and the label's "for" makes the whole control clickable.
+  function checkbox(labelText, checked, onChange, options) {
+    options = options || {};
+    var id = "nt-cb-" + (uid += 1);
+    var input = el("input", { type: "checkbox", id: id, className: "hidden" });
+    input.checked = !!checked;
+    input.disabled = !!options.disabled;
+    input.addEventListener("change", function () { onChange(input.checked); });
+    return el("div", {
+      className: "ui " + (options.toggle ? "toggle " : "") + "checkbox" + (options.disabled ? " disabled" : "")
+    }, [input, el("label", { "for": id, text: labelText })]);
+  }
+
+  function request(method, path, body) {
+    var opts = { method: method, credentials: "same-origin", headers: {} };
+    // Every change is sent as JSON: the plugin refuses changes that aren't,
+    // which another site can't send without the browser's CORS check.
+    if (method !== "GET") opts.headers["Content-Type"] = "application/json";
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    return fetch(BASE + path, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok) throw new Error(data.error || ("Request failed (" + r.status + ")"));
+        return data;
+      });
+    });
+  }
+
+  // Cached GET for lookups that don't depend on what is typed.
+  function lookup(path) {
+    if (!lookups[path]) {
+      lookups[path] = request("GET", path).then(function (data) { return data.results || []; });
+    }
+    return lookups[path];
+  }
+
+  function showMessage(text, kind) {
+    var msg = document.getElementById("msg");
+    if (!msg) return;
+    msg.className = "ui " + (kind === "error" ? "negative" : "positive") + " message";
+    msg.textContent = text;
+  }
+
+  function noun(kind) { return (kindByKey[kind] || {}).label || "Template"; }
+
+  // ── Kind tabs and list ───────────────────────────────────────────
+
+  function renderTabs() {
+    var tabs = document.getElementById("kind-tabs");
+    tabs.innerHTML = "";
+    kinds.forEach(function (k) {
+      var count = templates.filter(function (t) { return t.kind === k.kind; }).length;
+      tabs.appendChild(el("a", {
+        className: "item" + (k.kind === activeKind ? " active" : ""),
+        onclick: function () {
+          if (activeKind === k.kind) return;
+          activeKind = k.kind;
+          current = null;
+          renderAll();
+        }
+      }, [document.createTextNode(k.label + "s "), el("div", { className: "ui mini label", text: String(count) })]));
+    });
+    document.getElementById("page-subtitle").textContent = SUBTITLES[activeKind];
+    document.getElementById("new-btn").textContent = "New " + noun(activeKind).toLowerCase();
+  }
+
+  function renderList() {
+    var list = document.getElementById("template-list");
+    list.innerHTML = "";
+    var shown = templates.filter(function (t) { return t.kind === activeKind; });
+    if (!shown.length) {
+      list.appendChild(el("div", { className: "item", text: "None yet." }));
+      return;
+    }
+    shown.forEach(function (t) {
+      var selected = current && current.id === t.id;
+      list.appendChild(el("div", { className: "item nt-list-row" + (selected ? " active" : "") }, [
+        el("a", { className: "nt-list-name", href: "#", onclick: function (e) {
+          e.preventDefault();
+          edit(JSON.parse(JSON.stringify(t)));
+        } }, [
+          document.createTextNode(t.name),
+          el("div", {
+            className: "ui mini " + (t.active ? "" : "basic ") + "label",
+            text: t.active ? String(t.kind === "rule" ? ((t.rule || {}).conditions || []).length : t.commands.length) : "Off"
+          })
+        ]),
+        copyButton(t)
+      ]));
+    });
+  }
+
+  // Two overlapping pages, drawn inline so no icon font is needed.
+  var COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+    '<rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+    '<path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+
+  function copyButton(template) {
+    var button = el("button", {
+      type: "button",
+      className: "nt-copy",
+      title: "Make a copy",
+      "aria-label": "Make a copy of " + template.name,
+      onclick: function () { duplicate(template); }
+    });
+    button.innerHTML = COPY_ICON;
+    return button;
+  }
+
+  function copyName(name) {
+    var base = name + " (copy)";
+    var taken = templates.map(function (t) { return t.name.toLowerCase(); });
+    var candidate = base;
+    for (var n = 2; taken.indexOf(candidate.toLowerCase()) !== -1; n += 1) {
+      candidate = name + " (copy " + n + ")";
+    }
+    return candidate;
+  }
+
+  // An unsaved copy to rename and save. Note types stay with the original,
+  // since each note type belongs to one template.
+  function duplicate(template) {
+    var copy = JSON.parse(JSON.stringify(template));
+    copy.id = null;
+    copy.name = copyName(template.name);
+    copy.note_types = [];
+    delete copy.autoOpen;
+    edit(copy);
+    showMessage("This is a copy. Rename it if you like, then save it.", "ok");
+    var nameInput = document.querySelector(".nt-name input");
+    if (nameInput) { nameInput.focus(); nameInput.select(); }
+  }
+
+  function renderAll() {
+    renderTabs();
+    renderList();
+    renderEditor();
+  }
+
+  // ── Typeahead search ─────────────────────────────────────────────
+
+  function typeahead(placeholder, pathFor, onPick) {
+    var input = el("input", { type: "text", placeholder: placeholder, autocomplete: "off" });
+    var results = el("div", { className: "ui vertical menu nt-results" });
+    var note = el("div", { className: "nt-hint" });
+    var timer = null;
+    var seq = 0;
+
+    function close() { results.innerHTML = ""; results.style.display = "none"; }
+    close();
+
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      note.textContent = "";
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(function () {
+        var mine = (seq += 1);
+        request("GET", pathFor() + (pathFor().indexOf("?") === -1 ? "?" : "&") + "q=" + encodeURIComponent(q))
+          .then(function (data) {
+            if (mine !== seq) return;
+            var rows = data.results || [];
+            results.innerHTML = "";
+            if (data.degraded) note.textContent = "That search is unavailable right now.";
+            if (!rows.length) { close(); if (!data.degraded) note.textContent = "No matches."; return; }
+            rows.forEach(function (row) {
+              results.appendChild(el("a", {
+                className: "item",
+                text: row.code && row.display ? row.code + "  " + row.display : (row.display || row.code || ""),
+                onmousedown: function (e) {
+                  e.preventDefault();
+                  close();
+                  input.value = "";
+                  onPick(row);
+                }
+              }));
+            });
+            results.style.display = "block";
+          })
+          .catch(function (err) { if (mine === seq) { close(); note.textContent = err.message; } });
+      }, 250);
+    });
+    input.addEventListener("blur", function () { setTimeout(close, 150); });
+    return el("div", { className: "nt-typeahead" }, [input, results, note]);
+  }
+
+  function chosenLabel(text, onClear) {
+    return el("div", { className: "ui basic label nt-chosen" }, [
+      document.createTextNode(text),
+      el("a", { className: "nt-clear", href: "#", text: "\u00d7", "aria-label": "Remove " + text, title: "Remove",
+        onclick: function (e) { e.preventDefault(); onClear(); } })
+    ]);
+  }
+
+  // ── Command forms ────────────────────────────────────────────────
+
+  function setField(cmd, key, value) {
+    cmd.fields = cmd.fields || {};
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) {
+      delete cmd.fields[key];
+    } else {
+      cmd.fields[key] = value;
+    }
+  }
+
+  function selectInput(options, value, onChange, blankText) {
+    var select = el("select", { className: "ui dropdown", onchange: function () { onChange(select.value); } });
+    select.appendChild(el("option", { value: "", text: blankText || "Not set" }));
+    options.forEach(function (o) {
+      var opt = el("option", { value: String(o.value), text: o.label });
+      if (String(o.value) === String(value === undefined ? "" : value)) opt.selected = true;
+      select.appendChild(opt);
+    });
+    return select;
+  }
+
+  function formField(cmd, spec) {
+    var f = cmd.fields || {};
+    var value = f[spec.key];
+    var input;
+
+    if (spec.type === "text" || spec.type === "number") {
+      input = el("input", { type: spec.type, value: value === undefined ? "" : String(value) });
+      if (spec.max_length) input.setAttribute("maxlength", String(spec.max_length));
+      if (spec.min !== undefined) input.setAttribute("min", String(spec.min));
+      if (spec.step) input.setAttribute("step", spec.step);
+      input.addEventListener("input", function () { setField(cmd, spec.key, input.value.trim()); });
+    } else if (spec.type === "textarea") {
+      input = el("textarea", { rows: "2" });
+      input.value = value || "";
+      input.addEventListener("input", function () { setField(cmd, spec.key, input.value.trim()); });
+    } else if (spec.type === "checkbox") {
+      return el("div", { className: "field nt-field nt-check" }, [
+        checkbox(spec.label, !!value, function (checked) { setField(cmd, spec.key, checked || undefined); })
+      ]);
+    } else if (spec.type === "select") {
+      input = selectInput(spec.choices, value, function (v) { setField(cmd, spec.key, v); });
+    } else if (spec.type === "search") {
+      input = value
+        ? chosenLabel(value.display || value.code || "", function () {
+            setField(cmd, spec.key, undefined);
+            if (spec.key === "medication") setField(cmd, "type_to_dispense", undefined);
+            renderEditor();
+          })
+        : typeahead("Search", function () { return spec.route; }, function (row) {
+            setField(cmd, spec.key, row);
+            if (spec.key === "medication") setField(cmd, "type_to_dispense", undefined);
+            renderEditor();
+          });
+    } else if (spec.type === "dme_item") {
+      // A product from the formulary, or free text; the order takes one or the other.
+      var item = value || {};
+      var mode = item.free_text !== undefined && !item.product ? "free_text" : "product";
+      var switcher = el("div", { className: "ui mini basic buttons nt-item-mode" }, [
+        ["product", "From the formulary"], ["free_text", "Free text"]
+      ].map(function (pair) {
+        return el("button", {
+          type: "button", className: "ui button" + (mode === pair[0] ? " active" : ""), text: pair[1],
+          onclick: function () {
+            if (mode === pair[0]) return;
+            setField(cmd, spec.key, pair[0] === "free_text" ? { free_text: "" } : undefined);
+            renderEditor();
+          }
+        });
+      }));
+      var body;
+      if (mode === "free_text") {
+        body = el("input", { type: "text", value: item.free_text || "", placeholder: "Describe the item" });
+        if (spec.max_length) body.setAttribute("maxlength", String(spec.max_length));
+        body.addEventListener("input", function () { setField(cmd, spec.key, { free_text: body.value }); });
+      } else if (item.product) {
+        body = chosenLabel(item.product.display || item.product.code || "", function () {
+          setField(cmd, spec.key, undefined);
+          renderEditor();
+        });
+      } else {
+        body = typeahead("Search products by name or code", function () { return spec.route; }, function (row) {
+          setField(cmd, spec.key, { product: row });
+          renderEditor();
+        });
+      }
+      input = el("div", { className: "nt-dme-item" }, [switcher, body]);
+    } else if (spec.type === "multisearch") {
+      var partner = f[spec.depends_on];
+      if (spec.depends_on && !partner) {
+        input = el("div", { className: "nt-hint", text: "Choose a lab partner first." });
+      } else {
+        var chosen = value || [];
+        input = el("div", {}, [
+          el("div", { className: "nt-chips" }, chosen.map(function (item, i) {
+            return chosenLabel(item.display || item.code, function () {
+              chosen.splice(i, 1);
+              setField(cmd, spec.key, chosen.slice());
+              renderEditor();
+            });
+          })),
+          typeahead("Search tests", function () { return spec.route + "/" + encodeURIComponent(partner.id); }, function (row) {
+            if (chosen.some(function (c) { return c.code === row.code; })) return;
+            setField(cmd, spec.key, chosen.concat([{ code: row.code, display: row.display }]));
+            renderEditor();
+          })
+        ]);
+      }
+    } else if (spec.type === "lab_variants") {
+      return labVariantsField(cmd, spec);
+    } else if (spec.type === "lab_partner") {
+      input = el("select", { className: "ui dropdown" }, [el("option", { value: "", text: "Loading..." })]);
+      lookup("/search/lab-partners").then(function (rows) {
+        var replacement = selectInput(rows.map(function (r) { return { value: r.id, label: r.display }; }),
+          value ? value.id : "", function (id) {
+            var match = rows.filter(function (r) { return r.id === id; })[0];
+            setField(cmd, spec.key, match ? { id: match.id, display: match.display } : undefined);
+            setField(cmd, "tests", undefined);
+            renderEditor();
+          }, rows.length ? "Not set" : "No lab partners");
+        input.replaceWith(replacement);
+      });
+    } else if (spec.type === "note_type") {
+      input = selectInput(noteTypeOptions.map(function (n) { return { value: n.unique_identifier, label: n.name }; }),
+        value ? value.unique_identifier : "", function (id) {
+          var match = noteTypeOptions.filter(function (n) { return n.unique_identifier === id; })[0];
+          setField(cmd, spec.key, match ? { unique_identifier: match.unique_identifier, name: match.name } : undefined);
+        });
+    } else if (spec.type === "assignee") {
+      input = el("select", { className: "ui dropdown" }, [el("option", { value: "", text: "Loading..." })]);
+      lookup("/search/assignees").then(function (rows) {
+        var options = [{ value: "unassigned:", label: "Unassigned" }].concat(rows.map(function (r) {
+          return { value: r.to + ":" + r.id, label: (r.to === "team" ? "Team: " : "") + r.display };
+        }));
+        var currentValue = value ? value.to + ":" + (value.id === undefined ? "" : value.id) : "";
+        var replacement = selectInput(options, currentValue, function (v) {
+          if (!v) { setField(cmd, spec.key, undefined); return; }
+          var parts = v.split(":");
+          var match = options.filter(function (o) { return o.value === v; })[0];
+          setField(cmd, spec.key, parts[0] === "unassigned"
+            ? { to: "unassigned", display: "Unassigned" }
+            : { to: parts[0], id: Number(parts[1]), display: match ? match.label : "" });
+        });
+        input.replaceWith(replacement);
+      });
+    } else if (spec.type === "dispense") {
+      var med = f[spec.depends_on];
+      var quantities = (med && med.clinical_quantities) || [];
+      if (!med) {
+        input = el("div", { className: "nt-hint", text: "Choose a medication first." });
+      } else {
+        var dispenseKey = function (q) { return q.representative_ndc + "|" + q.ncpdp_quantity_qualifier_code; };
+        input = selectInput(quantities.map(function (q) { return { value: dispenseKey(q), label: q.display || q.representative_ndc }; }),
+          value ? dispenseKey(value) : "", function (v) {
+            var match = quantities.filter(function (q) { return dispenseKey(q) === v; })[0];
+            setField(cmd, spec.key, match);
+          }, quantities.length ? "Not set" : "No dispensable quantities");
+      }
+    }
+    var wide = WIDE_TYPES.indexOf(spec.type) !== -1;
+    return el("div", { className: "field nt-field" + (wide ? " nt-wide" : "") }, [
+      el("label", { className: "nt-caption", text: spec.label }),
+      input
+    ]);
+  }
+
+  // Open unless the admin closed it in this page.
+  function detailsOpen(cmd) {
+    return cmd.detailsOpen !== false;
+  }
+
+  // Long fields take the form's full width; short ones share a row.
+  var WIDE_TYPES = ["textarea", "search", "multisearch", "lab_variants"];
+
+  // A lab order's partners, each with its own tests. Lab orders saved before
+  // this carry lab_partner/tests; they show as the first row.
+  function labRows(cmd) {
+    var f = cmd.fields = cmd.fields || {};
+    if (!Array.isArray(f.labs)) {
+      f.labs = f.lab_partner ? [{ lab_partner: f.lab_partner, tests: f.tests || [] }] : [];
+      delete f.lab_partner;
+      delete f.tests;
+    }
+    return f.labs;
+  }
+
+  function labVariantsField(cmd, spec) {
+    var labs = labRows(cmd);
+    if (current.kind === "quickpick") return labPerPartnerField(cmd, spec, labs);
+    if (!labs.length) labs.push({ lab_partner: null, tests: [] });
+    var variant = labs[0];
+    var partnerSelect = el("select", { className: "ui dropdown" }, [el("option", { value: "", text: "Loading..." })]);
+    lookup("/search/lab-partners").then(function (partners) {
+      partnerSelect.replaceWith(selectInput(partners.map(function (p) { return { value: p.id, label: p.display }; }),
+        variant.lab_partner ? variant.lab_partner.id : "", function (id) {
+          var match = partners.filter(function (p) { return p.id === id; })[0];
+          variant.lab_partner = match ? { id: match.id, display: match.display } : null;
+          variant.tests = [];
+          renderEditor();
+        }, partners.length ? "Choose a lab partner" : "No lab partners"));
+    });
+    return el("div", { className: "field nt-field nt-wide" }, [
+      el("label", { className: "nt-caption", text: "Lab partner and tests" }),
+      el("div", { className: "nt-labs" }, [labRow(variant, partnerSelect, spec)])
+    ]);
+  }
+
+  function labTests(variant, spec) {
+    return el("div", {}, [
+      el("div", { className: "nt-chips" }, (variant.tests || []).map(function (t, k) {
+        return chosenLabel(t.display || t.code, function () { variant.tests.splice(k, 1); renderEditor(); });
+      })),
+      typeahead("Search " + (variant.lab_partner.display || "this lab") + "'s tests", function () {
+        return spec.route + "/" + encodeURIComponent(variant.lab_partner.id);
+      }, function (row) {
+        variant.tests = variant.tests || [];
+        if (variant.tests.some(function (t) { return t.code === row.code; })) return;
+        variant.tests.push({ code: row.code, display: row.display });
+        renderEditor();
+      })
+    ]);
+  }
+
+  function labRow(variant, partnerNode, spec) {
+    return el("div", { className: "nt-lab-row" }, [
+      el("div", { className: "nt-lab-partner" }, [partnerNode]),
+      el("div", { className: "nt-lab-tests" }, [
+        variant.lab_partner ? labTests(variant, spec) : el("div", { className: "nt-hint", text: "Choose a lab partner to search its tests." })
+      ])
+    ]);
+  }
+
+  // Quickpicks: one row per lab partner set up on the instance. A lab left
+  // without tests isn't offered for this quickpick.
+  function labPerPartnerField(cmd, spec, labs) {
+    var box = el("div", { className: "nt-labs" }, [el("div", { className: "nt-hint", text: "Loading lab partners..." })]);
+    lookup("/search/lab-partners").then(function (partners) {
+      box.innerHTML = "";
+      if (!partners.length) {
+        box.appendChild(el("div", { className: "nt-hint", text: "No lab partners are set up on this instance." }));
+        return;
+      }
+      partners.forEach(function (p) {
+        var variant = labs.filter(function (v) { return v.lab_partner && v.lab_partner.id === p.id; })[0];
+        if (!variant) {
+          variant = { lab_partner: { id: p.id, display: p.display }, tests: [] };
+          labs.push(variant);
+        }
+        box.appendChild(labRow(variant, el("div", { className: "nt-lab-name", text: p.display }), spec));
+      });
+    });
+    return el("div", { className: "field nt-field nt-wide" }, [
+      el("label", { className: "nt-caption", text: "Tests for each lab" }),
+      el("div", { className: "nt-hint", text: "Set the tests for each lab you use. In the panel, clinicians choose a lab and get that lab's tests; labs left empty aren't offered." }),
+      box
+    ]);
+  }
+
+
+  function filledCount(cmd) {
+    return Object.keys(cmd.fields || {}).length;
+  }
+
+  // ── Questionnaires and carry forward ─────────────────────────────
+
+  function questionnaireKey(q) {
+    return q ? q.code_system + "|" + q.code : "";
+  }
+
+  function questionnairePicker(cmd) {
+    if (!catalogByKey[cmd.schema_key].questionnaire_use_case) return null;
+    var options = questionnaireOptions[cmd.schema_key] || [];
+    var chosen = questionnaireKey(cmd.questionnaire);
+    var picker = el("select", { className: "ui dropdown nt-questionnaire", "aria-label": "Questionnaire", onchange: function () {
+      var match = options.filter(function (q) { return questionnaireKey(q) === picker.value; })[0];
+      cmd.questionnaire = match ? { code_system: match.code_system, code: match.code, name: match.name } : undefined;
+      cmd.answers = {};
+      renderEditor();
+    } });
+    picker.appendChild(el("option", { value: "", text: options.length ? "Choose a questionnaire" : "No active questionnaires for this command" }));
+    var found = false;
+    options.forEach(function (q) {
+      var opt = el("option", { value: questionnaireKey(q), text: q.name });
+      if (questionnaireKey(q) === chosen) { opt.selected = true; found = true; }
+      picker.appendChild(opt);
+    });
+    if (chosen && !found) {
+      // Saved choice that is no longer active: keep it visible so the admin can see what to replace.
+      var stale = el("option", { value: chosen, text: (cmd.questionnaire.name || cmd.questionnaire.code) + " (no longer active)" });
+      stale.selected = true;
+      picker.appendChild(stale);
+    }
+    if (!picker.value || !found) picker.classList.add("nt-missing");
+    return picker;
+  }
+
+  var CARRY_FORWARD_TEXT = {
+    all: "Carries forward from the last encounter, per this questionnaire's Canvas setting",
+    same: "Carries forward within the same encounter only, per this questionnaire's Canvas setting",
+    off: "Doesn't carry forward: this questionnaire's Canvas setting is off"
+  };
+
+  function carryForwardControl(cmd) {
+    // Carry forward belongs to note templates; quickpicks and order sets start fresh.
+    if (current.kind !== "template") return null;
+    var entry = catalogByKey[cmd.schema_key];
+    if (entry.questionnaire_use_case) {
+      // Canvas applies the questionnaire's own setting when the command is inserted.
+      var chosen = questionnaireKey(cmd.questionnaire);
+      var match = (questionnaireOptions[cmd.schema_key] || []).filter(function (q) {
+        return questionnaireKey(q) === chosen;
+      })[0];
+      if (Object.keys(cmd.answers || {}).length) {
+        return checkbox("Pre-filled answers are used instead of this questionnaire's Canvas carry forward",
+          false, function () {}, { toggle: true, disabled: true });
+      }
+      var text = match
+        ? CARRY_FORWARD_TEXT[match.carry_forward] || CARRY_FORWARD_TEXT.off
+        : "Carry forward follows the chosen questionnaire's Canvas setting";
+      return checkbox(text, !!match && match.carry_forward === "all", function () {}, { toggle: true, disabled: true });
+    }
+    if (!entry.carry_forward_supported) return null;
+    return checkbox("Carry forward from last encounter", cmd.carry_forward, function (checked) {
+      cmd.carry_forward = checked;
+    }, { toggle: true });
+  }
+
+  // ── Questionnaire answers ────────────────────────────────────────
+
+  function questionFormKey(cmd) {
+    return cmd.questionnaire ? cmd.schema_key + "|" + questionnaireKey(cmd.questionnaire) : "";
+  }
+
+  // The chosen questionnaire's questions, loaded once per questionnaire.
+  function questionsFor(cmd) {
+    var key = questionFormKey(cmd);
+    if (!key) return null;
+    if (!questionForms[key]) {
+      questionForms[key] = { loading: true };
+      request("GET", "/questionnaire-questions?schema_key=" + encodeURIComponent(cmd.schema_key) +
+        "&code_system=" + encodeURIComponent(cmd.questionnaire.code_system) +
+        "&code=" + encodeURIComponent(cmd.questionnaire.code))
+        .then(function (data) { questionForms[key] = { questions: data.questions || [] }; })
+        .catch(function (err) { questionForms[key] = { error: err.message }; })
+        .then(renderEditor);
+    }
+    return questionForms[key];
+  }
+
+  function setAnswer(cmd, key, value) {
+    cmd.answers = cmd.answers || {};
+    if (value === undefined || value === "" || (Array.isArray(value) && !value.length)) {
+      delete cmd.answers[key];
+    } else {
+      cmd.answers[key] = value;
+    }
+  }
+
+  function answerField(cmd, q) {
+    var value = (cmd.answers || {})[q.key];
+    var input;
+    var wide = q.type === "TXT" || q.type === "MULT";
+    if (q.type === "TXT") {
+      input = el("textarea", { rows: "2" });
+      input.value = value || "";
+      input.addEventListener("input", function () { setAnswer(cmd, q.key, input.value.trim()); });
+    } else if (q.type === "INT" || q.type === "DATE") {
+      input = el("input", { type: q.type === "INT" ? "number" : "date", value: value === undefined ? "" : String(value) });
+      input.addEventListener("input", function () {
+        setAnswer(cmd, q.key, input.value === "" ? undefined : (q.type === "INT" ? Number(input.value) : input.value));
+      });
+    } else if (q.type === "SING") {
+      input = selectInput(q.options.map(function (o) { return { value: o.key, label: o.label }; }), value,
+        function (v) { setAnswer(cmd, q.key, v || undefined); });
+    } else if (q.type === "MULT") {
+      var picked = (value || []).slice();
+      input = el("div", { className: "nt-options" }, q.options.map(function (o) {
+        return checkbox(o.label, picked.indexOf(o.key) !== -1, function (checked) {
+          picked = picked.filter(function (k) { return k !== o.key; });
+          if (checked) picked.push(o.key);
+          setAnswer(cmd, q.key, picked.slice());
+        });
+      }));
+    }
+    return el("div", { className: "field nt-field" + (wide ? " nt-wide" : "") }, [
+      el("label", { className: "nt-caption", text: q.label }),
+      input
+    ]);
+  }
+
+  function answerForm(cmd) {
+    var state = questionsFor(cmd);
+    if (!state) return [el("div", { className: "nt-hint nt-wide", text: "Choose a questionnaire to pre-fill its answers." })];
+    if (state.loading) return [el("div", { className: "nt-hint nt-wide", text: "Loading questions..." })];
+    if (state.error) return [el("div", { className: "nt-hint nt-wide", text: state.error })];
+    if (!state.questions.length) return [el("div", { className: "nt-hint nt-wide", text: "This questionnaire has no questions to pre-fill." })];
+    return [el("div", { className: "nt-hint nt-wide", text: "Answers left blank stay blank. Any pre-filled answer replaces this questionnaire's Canvas carry forward." })]
+      .concat(state.questions.map(function (q) { return answerField(cmd, q); }));
+  }
+
+  function toggleLink(text, onClick) {
+    return el("a", { className: "nt-prompt-toggle", href: "#", text: text, onclick: function (e) { e.preventDefault(); onClick(); } });
+  }
+
+  function commandRow(cmd, index, list) {
+    list = Array.isArray(list) ? list : current.commands;
+    var allowed = kindByKey[current.kind].commands;
+    var select = el("select", { className: "ui dropdown nt-command-type", "aria-label": "Command", onchange: function () {
+      cmd.schema_key = select.value;
+      if (!catalogByKey[cmd.schema_key].carry_forward_supported) cmd.carry_forward = false;
+      delete cmd.questionnaire;
+      cmd.fields = {};
+      cmd.answers = {};
+      delete cmd.detailsOpen;
+      renderEditor();
+    } });
+    catalog.forEach(function (c) {
+      if (allowed.indexOf(c.schema_key) === -1) return;
+      var opt = el("option", { value: c.schema_key, text: c.label });
+      if (c.schema_key === cmd.schema_key) opt.selected = true;
+      select.appendChild(opt);
+    });
+
+    var move = function (delta) {
+      return function () {
+        var target = index + delta;
+        if (target < 0 || target >= list.length) return;
+        var item = list.splice(index, 1)[0];
+        list.splice(target, 0, item);
+        renderEditor();
+      };
+    };
+    var last = index === list.length - 1;
+    var form = catalogByKey[cmd.schema_key].form || [];
+    var isQuestionnaire = !!catalogByKey[cmd.schema_key].questionnaire_use_case;
+
+    // Open/closed state lives only in the page; payload() sends values alone.
+    var links = el("div", { className: "nt-links" });
+    if (form.length || isQuestionnaire) {
+      var count = isQuestionnaire ? Object.keys(cmd.answers || {}).length : filledCount(cmd);
+      links.appendChild(toggleLink(
+        detailsOpen(cmd) ? "Hide details" : (count ? "Show details (" + count + " filled)" : "Show details"),
+        function () { cmd.detailsOpen = !detailsOpen(cmd); renderEditor(); }
+      ));
+    }
+    if (scribeEnabled) {
+      var hasPrompt = !!(cmd.scribe_prompt || "").trim();
+      links.appendChild(toggleLink(
+        cmd.promptOpen ? "Hide scribe prompt" : (hasPrompt ? "Edit scribe prompt" : "Add scribe prompt"),
+        function () { cmd.promptOpen = !cmd.promptOpen; renderEditor(); }
+      ));
+    }
+
+    var body = [el("div", { className: "field nt-command-options" }, [carryForwardControl(cmd), links])];
+    if (detailsOpen(cmd) && (form.length || isQuestionnaire)) {
+      body.push(el("div", { className: "nt-details" },
+        isQuestionnaire ? answerForm(cmd) : form.map(function (spec) { return formField(cmd, spec); })));
+    }
+    if (scribeEnabled) {
+      if (cmd.promptOpen) {
+        var prompt = el("textarea", {
+          rows: "2",
+          placeholder: "Instructions for the scribe when it fills this command",
+          oninput: function () { cmd.scribe_prompt = prompt.value; }
+        });
+        prompt.value = cmd.scribe_prompt || "";
+        body.push(el("div", { className: "field" }, [el("label", { text: "Scribe prompt" }), prompt]));
+      } else if ((cmd.scribe_prompt || "").trim()) {
+        body.push(el("div", { className: "nt-prompt-preview", text: cmd.scribe_prompt }));
+      }
+    }
+
+    var single = kindByKey[current.kind].max_commands === 1;
+    var section = catalogByKey[cmd.schema_key].section || "internal";
+    return el("div", { className: "nt-command nt-sec-" + section }, [
+      el("div", { className: "ui top attached secondary segment nt-command-head" }, [
+        single ? null : el("span", { className: "nt-command-number", text: String(index + 1) }),
+        select,
+        questionnairePicker(cmd),
+        single ? null : el("div", { className: "ui mini basic buttons" }, [
+          el("button", { className: "ui button" + (index === 0 ? " disabled" : ""), title: "Move up", text: "Up", onclick: move(-1) }),
+          el("button", { className: "ui button" + (last ? " disabled" : ""), title: "Move down", text: "Down", onclick: move(1) })
+        ]),
+        el("button", { className: "ui mini basic red button", text: "Remove", onclick: function () {
+          list.splice(index, 1);
+          renderEditor();
+        } })
+      ]),
+      el("div", { className: "ui bottom attached segment nt-command-body" }, body)
+    ]);
+  }
+
+  // ── Diagnoses (quickpicks and order sets) ────────────────────────
+
+  function diagnosisSection() {
+    var sources = current.diagnosis_sources = current.diagnosis_sources || [];
+    var pills = sources.map(function (src, i) {
+      return el("div", { className: "ui basic label nt-chosen nt-dx" }, [
+        el("b", { text: src.code }),
+        document.createTextNode(" " + (src.display || "") + " "),
+        el("a", {
+          className: "nt-dx-scope", href: "#",
+          text: src.include_children ? "and everything under it" : "this code only",
+          title: "Click to switch",
+          onclick: function (e) { e.preventDefault(); src.include_children = !src.include_children; renderEditor(); }
+        }),
+        el("a", { className: "nt-clear", href: "#", text: "\u00d7", "aria-label": "Remove " + src.code, title: "Remove", onclick: function (e) {
+          e.preventDefault(); sources.splice(i, 1); renderEditor();
+        } })
+      ]);
+    });
+    return el("div", {}, [
+      el("h4", { className: "ui dividing header", text: "Suggest it for these diagnoses" }),
+      el("div", { className: "nt-hint", text: "It's listed first when one of these is charted. A code like N18 can include everything under it; click to switch." }),
+      el("div", { className: "nt-chips" }, pills),
+      el("div", { className: "field" }, [
+        typeahead("Add a diagnosis by code or name", function () { return "/search/umls-icd10"; }, function (row) {
+          if (sources.some(function (s) { return s.code === row.code; })) return;
+          sources.push({ code: row.code, display: row.display, include_children: row.code.indexOf(".") === -1 });
+          renderEditor();
+        })
+      ])
+    ]);
+  }
+
+  // ── Filter tags (quickpicks and order sets) ──────────────────────
+
+  // Every tag in use, with how many quickpicks and order sets carry it.
+  function tagUsage() {
+    var byKey = {};
+    templates.forEach(function (t) {
+      if (current && t.id === current.id) return;
+      (t.tags || []).forEach(function (tag) {
+        var key = tag.toLowerCase();
+        if (!byKey[key]) byKey[key] = { tag: tag, count: 0 };
+        byKey[key].count += 1;
+      });
+    });
+    return Object.keys(byKey).map(function (k) { return byKey[k]; })
+      .sort(function (a, b) { return b.count - a.count || a.tag.localeCompare(b.tag); });
+  }
+
+  // Search existing tags first; offer to create one only when nothing matches exactly.
+  function tagPicker(tags) {
+    var input = el("input", { type: "text", maxlength: "40", autocomplete: "off",
+      placeholder: "Search tags, or type a new one", "aria-label": "Add a tag" });
+    var menu = el("div", { className: "ui vertical menu nt-results", role: "listbox" });
+    menu.style.display = "none";
+    var options = [];
+    var highlighted = 0;
+
+    function has(tag) {
+      return tags.some(function (t) { return t.toLowerCase() === tag.toLowerCase(); });
+    }
+
+    function pick(option) {
+      if (!option) return;
+      if (!has(option.tag)) tags.push(option.tag);
+      renderEditor();
+    }
+
+    function draw() {
+      var typed = input.value.replace(/\s+/g, " ").trim();
+      var q = typed.toLowerCase();
+      var existing = tagUsage().filter(function (u) {
+        return !has(u.tag) && (!q || u.tag.toLowerCase().indexOf(q) !== -1);
+      });
+      // Tags that start with what's typed come before ones that merely contain it.
+      existing.sort(function (a, b) {
+        var sa = a.tag.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+        var sb = b.tag.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+        return sa - sb;
+      });
+      options = existing.slice(0, 8).map(function (u) { return { tag: u.tag, count: u.count }; });
+      var exact = tagUsage().some(function (u) { return u.tag.toLowerCase() === q; }) || has(typed);
+      if (typed && !exact) options.push({ tag: typed, create: true });
+      highlighted = 0;
+
+      menu.innerHTML = "";
+      if (!options.length) {
+        menu.appendChild(el("div", { className: "item nt-muted", text: typed ? "Already added." : "No tags yet. Type one to create it." }));
+      }
+      options.forEach(function (option, i) {
+        var row = el("a", {
+          className: "item" + (option.create ? " nt-create" : "") + (i === highlighted ? " active" : ""),
+          role: "option",
+          onmousedown: function (e) { e.preventDefault(); pick(option); }
+        }, option.create
+          ? [document.createTextNode("Create new tag “" + option.tag + "”")]
+          : [document.createTextNode(option.tag), el("span", { className: "nt-owner",
+              text: "used " + option.count + (option.count === 1 ? " time" : " times") })]);
+        if (option.create && options.length > 1) {
+          menu.appendChild(el("div", { className: "item nt-muted nt-divider-label", text: "Not what you need?" }));
+        }
+        menu.appendChild(row);
+      });
+      menu.style.display = "block";
+    }
+
+    function move(delta) {
+      if (!options.length) return;
+      highlighted = (highlighted + delta + options.length) % options.length;
+      var rows = menu.querySelectorAll("a.item");
+      for (var i = 0; i < rows.length; i++) rows[i].classList.toggle("active", i === highlighted);
+    }
+
+    input.addEventListener("focus", draw);
+    input.addEventListener("input", draw);
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+      else if (e.key === "Enter") { e.preventDefault(); pick(options[highlighted]); }
+      else if (e.key === "Escape") { menu.style.display = "none"; }
+    });
+    input.addEventListener("blur", function () { setTimeout(function () { menu.style.display = "none"; }, 150); });
+    return el("div", { className: "nt-typeahead" }, [input, menu]);
+  }
+
+  function tagsSection() {
+    var tags = current.tags = current.tags || [];
+    return el("div", {}, [
+      el("h4", { className: "ui dividing header", text: "Filter tags" }),
+      el("div", { className: "nt-hint", text: "Clinicians can filter by these tags in the panel. Pick an existing tag when one fits, so items group together." }),
+      el("div", { className: "nt-chips" }, tags.map(function (tag, i) {
+        return chosenLabel(tag, function () { tags.splice(i, 1); renderEditor(); });
+      })),
+      el("div", { className: "field" }, [tagPicker(tags)])
+    ]);
+  }
+
+  // ── Delivery ─────────────────────────────────────────────────────
+
+  function noteTypeOwners() {
+    // Note types already assigned to another active template.
+    var owners = {};
+    templates.forEach(function (t) {
+      if (t.kind !== "template" || !t.active || (current && t.id === current.id)) return;
+      (t.note_types || []).forEach(function (nt) { owners[nt.unique_identifier] = t.name; });
+    });
+    return owners;
+  }
+
+  // A large toggle answering "where does this show up?"
+  function choiceTile(title, description, on, onChange) {
+    return el("button", {
+      type: "button",
+      className: "nt-choice" + (on ? " is-on" : ""),
+      "aria-pressed": on ? "true" : "false",
+      onclick: function () { onChange(!on); }
+    }, [
+      el("span", { className: "nt-choice-box", "aria-hidden": "true" }),
+      el("span", { className: "nt-choice-text" }, [
+        el("span", { className: "nt-choice-title", text: title }),
+        el("span", { className: "nt-choice-desc", text: description })
+      ])
+    ]);
+  }
+
+  // Search-and-pick for note types, with types another template uses shown as taken.
+  // ``chosen`` is edited in place. ``owners`` names the template already
+  // inserted for a note type, which a template can't share; rules pass {}.
+  function noteTypePicker(chosen, owners, hint) {
+    var input = el("input", { type: "text", placeholder: chosen.length ? "Add another note type" : "Choose note types", autocomplete: "off" });
+    var menu = el("div", { className: "ui vertical menu nt-results" });
+    menu.style.display = "none";
+
+    function draw() {
+      var q = input.value.trim().toLowerCase();
+      var taken = {};
+      chosen.forEach(function (nt) { taken[nt.unique_identifier] = true; });
+      var rows = noteTypeOptions.filter(function (nt) {
+        return !taken[nt.unique_identifier] && (!q || nt.name.toLowerCase().indexOf(q) !== -1);
+      });
+      menu.innerHTML = "";
+      if (!rows.length) {
+        menu.appendChild(el("div", { className: "item nt-muted", text: q ? "No note types match." : "Every note type is chosen." }));
+      }
+      rows.forEach(function (nt) {
+        var owner = owners[nt.unique_identifier];
+        menu.appendChild(el("a", {
+          className: "item" + (owner ? " disabled" : ""),
+          onmousedown: function (e) {
+            e.preventDefault();
+            if (owner) return;
+            chosen.push({ unique_identifier: nt.unique_identifier, name: nt.name });
+            renderEditor();
+          }
+        }, [
+          document.createTextNode(nt.name),
+          owner ? el("span", { className: "nt-owner", text: "Used by " + owner }) : null
+        ]));
+      });
+      menu.style.display = "block";
+    }
+    input.addEventListener("focus", draw);
+    input.addEventListener("input", draw);
+    input.addEventListener("blur", function () { setTimeout(function () { menu.style.display = "none"; }, 150); });
+
+    return el("div", { className: "nt-picker" }, [
+      el("div", { className: "nt-chips" }, chosen.map(function (nt, i) {
+        return chosenLabel(nt.name || "Note type", function () { chosen.splice(i, 1); renderEditor(); });
+      })),
+      el("div", { className: "nt-typeahead" }, [input, menu]),
+      el("div", { className: "nt-hint", text: hint })
+    ]);
+  }
+
+  function usageSection() {
+    var tiles = [
+      choiceTile("When they type \"/\"", "Pick it from the / menu while writing a note.",
+        current.show_in_menu !== false, function (on) { current.show_in_menu = on; renderEditor(); })
+    ];
+    var extra = null;
+    if (current.kind === "template") {
+      // On while note types are chosen, or once the admin turns it on to choose some.
+      var autoOn = !!(current.note_types && current.note_types.length) || !!current.autoOpen;
+      tiles.push(choiceTile("In new notes", "Added automatically to notes of the types you choose.",
+        autoOn, function (on) {
+          current.autoOpen = on;
+          if (!on) current.note_types = [];
+          renderEditor();
+        }));
+      if (autoOn) extra = noteTypeOptions.length
+        ? noteTypePicker(current.note_types = current.note_types || [], noteTypeOwners(),
+            "Added once per note, when a visit of the type is booked or someone starts a note of the type.")
+        : el("div", { className: "ui message", text: "There are no note types to choose from." });
+    } else {
+      tiles.push(choiceTile("On Assess and Diagnose", "Listed in a panel on those commands, matched to the diagnosis.",
+        !!current.show_in_panel, function (on) { current.show_in_panel = on; renderEditor(); }));
+    }
+    return el("div", { className: "nt-usage" }, [
+      el("h4", { className: "ui dividing header", text: "Where it shows up" }),
+      el("div", { className: "nt-choices" }, tiles),
+      extra
+    ]);
+  }
+
+  var SECTION_LABELS = [
+    ["subjective", "Subjective"], ["objective", "Objective"], ["assessment", "Assessment"],
+    ["plan", "Plan"], ["procedures", "Procedures"], ["history", "History"]
+  ];
+
+  // Nothing is added until a command is chosen, grouped by note section.
+  function commandAdder(kind, list) {
+    list = list || current.commands;
+    var select = el("select", { className: "ui dropdown nt-adder", "aria-label": "Add a command", onchange: function () {
+      if (!select.value) return;
+      list.push({ schema_key: select.value, carry_forward: false, scribe_prompt: "", fields: {} });
+      renderEditor();
+    } });
+    select.appendChild(el("option", { value: "", text: kind.max_commands === 1 ? "Choose a command" : "Add a command" }));
+    SECTION_LABELS.forEach(function (pair) {
+      var keys = kind.commands.filter(function (key) { return (catalogByKey[key] || {}).section === pair[0]; });
+      if (!keys.length) return;
+      select.appendChild(el("optgroup", { label: pair[1] }, keys.map(function (key) {
+        return el("option", { value: key, text: catalogByKey[key].label });
+      })));
+    });
+    return el("div", { className: "field nt-adder-field" }, [select]);
+  }
+
+  // ── Rules ────────────────────────────────────────────────────────
+
+  var QUESTIONNAIRE_KINDS = [
+    ["questionnaire", "Questionnaire"], ["ros", "Review of systems"],
+    ["exam", "Physical exam"], ["structuredAssessment", "Structured assessment"]
+  ];
+
+  // Every active questionnaire, with the command type it belongs to.
+  function allQuestionnaires() {
+    var out = [];
+    QUESTIONNAIRE_KINDS.forEach(function (pair) {
+      (questionnaireOptions[pair[0]] || []).forEach(function (q) {
+        out.push({ schema_key: pair[0], kind_label: pair[1], code_system: q.code_system, code: q.code, name: q.name });
+      });
+    });
+    return out;
+  }
+
+  function questionnaireChooser(condition, onChange) {
+    var list = allQuestionnaires();
+    var chosen = condition.questionnaire ? condition.questionnaire.schema_key + "|" + questionnaireKey(condition.questionnaire) : "";
+    var select = el("select", { className: "ui dropdown", "aria-label": "Questionnaire", onchange: function () {
+      var match = list.filter(function (q) { return q.schema_key + "|" + questionnaireKey(q) === select.value; })[0];
+      condition.questionnaire = match ? { schema_key: match.schema_key, code_system: match.code_system, code: match.code, name: match.name } : null;
+      onChange();
+    } });
+    select.appendChild(el("option", { value: "", text: list.length ? "Choose a questionnaire" : "No active questionnaires" }));
+    QUESTIONNAIRE_KINDS.forEach(function (pair) {
+      var group = list.filter(function (q) { return q.schema_key === pair[0]; });
+      if (!group.length) return;
+      select.appendChild(el("optgroup", { label: pair[1] }, group.map(function (q) {
+        var opt = el("option", { value: q.schema_key + "|" + questionnaireKey(q), text: q.name });
+        if (opt.value === chosen) opt.selected = true;
+        return opt;
+      })));
+    });
+    return select;
+  }
+
+  function diagnosisChips(sources) {
+    return el("div", {}, [
+      el("div", { className: "nt-chips" }, sources.map(function (src, i) {
+        return el("div", { className: "ui basic label nt-chosen nt-dx" }, [
+          el("b", { text: src.code }),
+          document.createTextNode(" " + (src.display || "") + " "),
+          el("a", { className: "nt-dx-scope", href: "#", title: "Click to switch",
+            text: src.include_children ? "and everything under it" : "this code only",
+            onclick: function (e) { e.preventDefault(); src.include_children = !src.include_children; renderEditor(); } }),
+          el("a", { className: "nt-clear", href: "#", text: "×", "aria-label": "Remove " + src.code, title: "Remove",
+            onclick: function (e) { e.preventDefault(); sources.splice(i, 1); renderEditor(); } })
+        ]);
+      })),
+      typeahead("Add a diagnosis by code or name", function () { return "/search/umls-icd10"; }, function (row) {
+        if (sources.some(function (s) { return s.code === row.code; })) return;
+        sources.push({ code: row.code, display: row.display, include_children: row.code.indexOf(".") === -1 });
+        renderEditor();
+      })
+    ]);
+  }
+
+  var CONDITION_TYPES = [
+    ["diagnosis", "The note has a diagnosis"],
+    ["active_condition", "The patient has an active condition"],
+    ["note_type", "The note type"],
+    ["score", "A questionnaire score"],
+    ["answer", "A questionnaire answer"],
+    ["metadata", "Patient, appointment, or note information"]
+  ];
+
+  var METADATA_SOURCES = [
+    { value: "patient", label: "Patient" },
+    { value: "appointment", label: "Appointment" },
+    { value: "note", label: "Note" }
+  ];
+
+  var METADATA_OPS = [
+    { value: "equals", label: "is" },
+    { value: "any_of", label: "is any of" },
+    { value: "present", label: "has any value" },
+    { value: "absent", label: "isn't set" }
+  ];
+
+  function metadataBody(condition) {
+    condition.source = condition.source || "patient";
+    condition.op = condition.op || "equals";
+    condition.values = condition.values || [];
+    var listId = "nt-keys-" + (uid += 1);
+    var datalist = el("datalist", { id: listId });
+    lookupKeys(condition.source).then(function (keys) {
+      keys.forEach(function (k) { datalist.appendChild(el("option", { value: k })); });
+    });
+    var source = selectInput(METADATA_SOURCES, condition.source, function (v) {
+      condition.source = v || "patient"; renderEditor();
+    }, "Patient");
+    var key = el("input", { type: "text", list: listId, placeholder: "e.g. visit_reason", value: condition.key || "" });
+    key.addEventListener("input", function () { condition.key = key.value.trim(); });
+    var op = selectInput(METADATA_OPS, condition.op, function (v) { condition.op = v || "equals"; renderEditor(); }, "is");
+    var parts = [
+      el("div", { className: "nt-inline" }, [
+        el("div", { className: "field" }, [el("label", { className: "nt-caption", text: "Information about the" }), source]),
+        el("div", { className: "field nt-grow" }, [el("label", { className: "nt-caption", text: "Field (key)" }), key, datalist]),
+        el("div", { className: "field" }, [el("label", { className: "nt-caption", text: "Check" }), op])
+      ])
+    ];
+    if (condition.op === "equals" || condition.op === "any_of") {
+      var value = el("input", { type: "text", value: condition.values.join(condition.op === "any_of" ? ", " : ""),
+        placeholder: condition.op === "any_of" ? "e.g. new patient, transfer" : "e.g. new patient" });
+      value.addEventListener("input", function () {
+        condition.values = condition.op === "any_of"
+          ? value.value.split(",").map(function (v) { return v.trim(); }).filter(Boolean)
+          : [value.value.trim()].filter(Boolean);
+      });
+      parts.push(el("div", { className: "field" }, [
+        el("label", { className: "nt-caption", text: condition.op === "any_of" ? "Values (separate with commas)" : "Value" }), value
+      ]));
+    }
+    parts.push(el("div", { className: "nt-hint", text: condition.source === "appointment"
+      ? "Uses the note's appointment, including fields filled in on the scheduling form. Matching ignores capitals and extra spaces."
+      : "Matching ignores capitals and extra spaces." }));
+    return parts;
+  }
+
+  function lookupKeys(source) {
+    var path = "/metadata-keys?source=" + encodeURIComponent(source);
+    if (!lookups[path]) {
+      lookups[path] = request("GET", path).then(function (data) { return data.keys || []; }).catch(function () { return []; });
+    }
+    return lookups[path];
+  }
+
+  function conditionBody(condition) {
+    if (condition.type === "metadata") return metadataBody(condition);
+    if (condition.type === "diagnosis") {
+      condition.sources = condition.sources || [];
+      return [
+        el("div", { className: "nt-hint", text: "Counts diagnoses from Diagnose, Assess, Change Diagnosis (the new diagnosis), and Assess Coding Gap (unless refuted)." }),
+        diagnosisChips(condition.sources)
+      ];
+    }
+    if (condition.type === "note_type") {
+      return [noteTypePicker(condition.note_types = condition.note_types || [], {},
+        "Any of these. A visit note counts as its appointment's note type from the moment it's booked, and is checked again if the visit type changes.")];
+    }
+    if (condition.type === "active_condition") {
+      condition.sources = condition.sources || [];
+      return [
+        el("div", { className: "nt-hint", text: "Counts the patient's active conditions on their problem list, from any note. Resolved and surgical history don't count." }),
+        diagnosisChips(condition.sources)
+      ];
+    }
+    var parts = [el("div", { className: "field" }, [
+      el("label", { className: "nt-caption", text: "Questionnaire" }),
+      questionnaireChooser(condition, function () { condition.question = null; condition.options = []; renderEditor(); })
+    ])];
+    if (condition.type === "score") {
+      var op = selectInput([
+        { value: ">=", label: "is at least" }, { value: ">", label: "is more than" },
+        { value: "=", label: "equals" }, { value: "<=", label: "is at most" }, { value: "<", label: "is less than" }
+      ], condition.op || ">=", function (v) { condition.op = v || ">="; }, "is at least");
+      if (!condition.op) condition.op = ">=";
+      var value = el("input", { type: "number", step: "any", value: condition.value === undefined ? "" : String(condition.value) });
+      value.addEventListener("input", function () { condition.value = value.value; });
+      parts.push(el("div", { className: "nt-inline" }, [
+        el("div", { className: "field" }, [el("label", { className: "nt-caption", text: "Score" }), op]),
+        el("div", { className: "field" }, [el("label", { className: "nt-caption", text: "Value" }), value])
+      ]));
+      parts.push(el("div", { className: "nt-hint", text: "The score adds up the values of the chosen answers, while the questionnaire is still being filled in." }));
+      return parts;
+    }
+    // answer
+    if (!condition.questionnaire) return parts;
+    var state = questionsFor({ schema_key: condition.questionnaire.schema_key, questionnaire: condition.questionnaire });
+    if (!state || state.loading) { parts.push(el("div", { className: "nt-hint", text: "Loading questions..." })); return parts; }
+    if (state.error) { parts.push(el("div", { className: "nt-hint", text: state.error })); return parts; }
+    var choices = state.questions.filter(function (q) { return q.type === "SING" || q.type === "MULT"; });
+    var question = selectInput(choices.map(function (q) { return { value: q.key, label: q.label }; }),
+      condition.question ? condition.question.key : "", function (v) {
+        var match = choices.filter(function (q) { return q.key === v; })[0];
+        condition.question = match ? { key: match.key, label: match.label } : null;
+        condition.options = [];
+        renderEditor();
+      }, choices.length ? "Choose a question" : "No multiple-choice questions");
+    parts.push(el("div", { className: "field" }, [el("label", { className: "nt-caption", text: "Question" }), question]));
+    var chosenQuestion = condition.question && choices.filter(function (q) { return q.key === condition.question.key; })[0];
+    if (chosenQuestion) {
+      condition.options = condition.options || [];
+      var keys = condition.options.map(function (o) { return o.key; });
+      parts.push(el("div", { className: "field" }, [
+        el("label", { className: "nt-caption", text: "Answered with any of" }),
+        el("div", { className: "nt-options" }, chosenQuestion.options.map(function (o) {
+          return checkbox(o.label, keys.indexOf(o.key) !== -1, function (checked) {
+            condition.options = condition.options.filter(function (x) { return x.key !== o.key; });
+            if (checked) condition.options.push({ key: o.key, label: o.label });
+          });
+        }))
+      ]));
+    }
+    return parts;
+  }
+
+  function conditionRow(condition, index, conditions) {
+    var type = el("select", { className: "ui dropdown nt-command-type", "aria-label": "What to check", onchange: function () {
+      conditions[index] = { type: type.value };
+      renderEditor();
+    } });
+    CONDITION_TYPES.forEach(function (pair) {
+      var opt = el("option", { value: pair[0], text: pair[1] });
+      if (pair[0] === condition.type) opt.selected = true;
+      type.appendChild(opt);
+    });
+    return el("div", { className: "nt-command nt-logic nt-condition" }, [
+      el("div", { className: "ui top attached secondary segment nt-command-head" }, [
+        type,
+        el("button", { className: "ui mini basic red button", text: "Remove", onclick: function () {
+          conditions.splice(index, 1); renderEditor();
+        } })
+      ]),
+      el("div", { className: "ui bottom attached segment nt-command-body" }, conditionBody(condition))
+    ]);
+  }
+
+  function ruleSection() {
+    var rule = current.rule = current.rule || {};
+    rule.match = rule.match || "all";
+    rule.conditions = rule.conditions || [];
+    rule.action = rule.action || { mode: "suggest" };
+
+    var match = selectInput([
+      { value: "all", label: "all of these are true" }, { value: "any", label: "any of these is true" }
+    ], rule.match, function (v) { rule.match = v || "all"; renderEditor(); }, "all of these are true");
+
+    var actions = ruleActions(rule);
+
+    return el("div", {}, [
+      el("h4", { className: "ui dividing header", text: "When" }),
+      el("div", { className: "nt-inline nt-when" }, [el("span", { text: "Run this rule when" }), match]),
+      el("div", { className: "nt-hint", text: "Checked when the note is created or its visit is booked, and again whenever the note's questionnaires, diagnoses, or metadata, or the patient's conditions, change." }),
+      el("div", { className: "nt-commands nt-conditions" }, rule.conditions.reduce(function (rows, c, i) {
+        // "and" / "or" between conditions, following the all/any choice above.
+        if (i) rows.push(el("div", { className: "nt-join", text: rule.match === "any" ? "or" : "and" }));
+        rows.push(conditionRow(c, i, rule.conditions));
+        return rows;
+      }, [])),
+      el("button", { className: "ui basic button", text: "Add a condition", onclick: function () {
+        rule.conditions.push({ type: "diagnosis", sources: [] });
+        renderEditor();
+      } }),
+      el("h4", { className: "ui dividing header", text: "Then" }),
+      el("div", { className: "nt-hint", text: "Actions run in this order. Updating or removing only touches commands that haven't been committed." }),
+      el("div", { className: "nt-commands nt-steps" }, actions.map(function (a, i) { return actionRow(a, i, actions); })),
+      el("div", { className: "field nt-adder-field" }, [actionAdder(actions)])
+    ]);
+  }
+
+  // Rules saved before actions existed hold their commands at the top level.
+  function ruleActions(rule) {
+    if (!Array.isArray(rule.actions)) {
+      rule.actions = [{ type: "add", mode: (rule.action || {}).mode === "insert" ? "insert" : "suggest", commands: current.commands || [] }];
+      current.commands = [];
+    }
+    return rule.actions;
+  }
+
+  var ACTION_TYPES = [
+    ["add", "Add commands"],
+    ["update", "Update a command on the note"],
+    ["delete", "Remove a command from the note"]
+  ];
+
+  function actionAdder(actions) {
+    var select = el("select", { className: "ui dropdown nt-adder", "aria-label": "Add an action", onchange: function () {
+      if (!select.value) return;
+      actions.push(select.value === "add" ? { type: "add", mode: "suggest", commands: [] } : { type: select.value, target: {} });
+      renderEditor();
+    } });
+    select.appendChild(el("option", { value: "", text: "Add an action" }));
+    ACTION_TYPES.forEach(function (pair) { select.appendChild(el("option", { value: pair[0], text: pair[1] })); });
+    return select;
+  }
+
+  // Which command an update or remove action acts on.
+  function targetChooser(action) {
+    var target = action.target = action.target || {};
+    var type = el("select", { className: "ui dropdown", "aria-label": "Command", onchange: function () {
+      action.target = { schema_key: type.value || undefined };
+      action.fields = {};
+      action.answers = {};
+      renderEditor();
+    } });
+    type.appendChild(el("option", { value: "", text: "Choose a command" }));
+    SECTION_LABELS.forEach(function (pair) {
+      var keys = Object.keys(catalogByKey).filter(function (k) { return catalogByKey[k].section === pair[0]; });
+      if (!keys.length) return;
+      type.appendChild(el("optgroup", { label: pair[1] }, keys.map(function (k) {
+        var opt = el("option", { value: k, text: catalogByKey[k].label });
+        if (k === target.schema_key) opt.selected = true;
+        return opt;
+      })));
+    });
+    var parts = [el("div", { className: "field" }, [el("label", { className: "nt-caption", text: "Command" }), type])];
+    if (target.schema_key && catalogByKey[target.schema_key].questionnaire_use_case) {
+      var picker = questionnairePicker({ schema_key: target.schema_key, questionnaire: target.questionnaire });
+      picker.addEventListener("change", function () {
+        var options = questionnaireOptions[target.schema_key] || [];
+        var match = options.filter(function (q) { return questionnaireKey(q) === picker.value; })[0];
+        target.questionnaire = match ? { code_system: match.code_system, code: match.code, name: match.name } : undefined;
+        action.answers = {};
+        renderEditor();
+      });
+      parts.push(el("div", { className: "field nt-grow" }, [el("label", { className: "nt-caption", text: "Questionnaire" }), picker]));
+    }
+    return el("div", { className: "nt-inline" }, parts);
+  }
+
+  function actionBody(action) {
+    if (action.type === "add") {
+      action.commands = action.commands || [];
+      return [
+        action.commands.length
+          ? el("div", { className: "nt-commands" }, action.commands.map(function (c, i) { return commandRow(c, i, action.commands); }))
+          : null,
+        commandAdder(kindByKey.rule, action.commands),
+        el("div", { className: "nt-choices nt-rule-mode" }, [
+          choiceTile("Suggest on a protocol card", "Shows as a protocol card on the patient's chart. The clinician clicks Add on the card to add it.",
+            action.mode !== "insert", function () { action.mode = "suggest"; renderEditor(); }),
+          choiceTile("Add to the note automatically", "Goes straight into the note, once, as soon as the conditions are met.",
+            action.mode === "insert", function () { action.mode = "insert"; renderEditor(); })
+        ])
+      ];
+    }
+    var parts = [targetChooser(action)];
+    var key = action.target && action.target.schema_key;
+    if (action.type === "delete") {
+      parts.push(el("div", { className: "nt-hint", text: "Removes that command from the note if it hasn't been committed. Committed commands stay." }));
+      return parts;
+    }
+    if (!key) return parts;
+    // Update: the same form as building the command; only what's filled in changes.
+    var shim = { schema_key: key, fields: action.fields = action.fields || {},
+      questionnaire: action.target.questionnaire, answers: action.answers = action.answers || {} };
+    var isQuestionnaire = !!catalogByKey[key].questionnaire_use_case;
+    var form = catalogByKey[key].form || [];
+    if (!isQuestionnaire && !form.length) {
+      parts.push(el("div", { className: "nt-hint", text: "This command has no fields the rule can set yet." }));
+      return parts;
+    }
+    parts.push(el("div", { className: "nt-hint", text: "Only what you fill in changes; the rest of the command stays as the clinician left it." }));
+    parts.push(el("div", { className: "nt-details" },
+      isQuestionnaire ? answerForm(shim) : form.map(function (spec) { return formField(shim, spec); })));
+    return parts;
+  }
+
+  function actionRow(action, index, actions) {
+    var type = el("select", { className: "ui dropdown nt-command-type", "aria-label": "Action", onchange: function () {
+      actions[index] = type.value === "add" ? { type: "add", mode: "suggest", commands: [] } : { type: type.value, target: {} };
+      renderEditor();
+    } });
+    ACTION_TYPES.forEach(function (pair) {
+      var opt = el("option", { value: pair[0], text: pair[1] });
+      if (pair[0] === action.type) opt.selected = true;
+      type.appendChild(opt);
+    });
+    var move = function (delta) {
+      return function () {
+        var to = index + delta;
+        if (to < 0 || to >= actions.length) return;
+        actions.splice(to, 0, actions.splice(index, 1)[0]);
+        renderEditor();
+      };
+    };
+    return el("div", { className: "nt-command nt-logic nt-action nt-action-" + action.type }, [
+      el("div", { className: "ui top attached secondary segment nt-command-head" }, [
+        el("span", { className: "nt-command-number", text: String(index + 1) }),
+        type,
+        el("div", { className: "ui mini basic buttons" }, [
+          el("button", { className: "ui button" + (index === 0 ? " disabled" : ""), text: "Up", onclick: move(-1) }),
+          el("button", { className: "ui button" + (index === actions.length - 1 ? " disabled" : ""), text: "Down", onclick: move(1) })
+        ]),
+        el("button", { className: "ui mini basic red button", text: "Remove", onclick: function () {
+          actions.splice(index, 1); renderEditor();
+        } })
+      ]),
+      el("div", { className: "ui bottom attached segment nt-command-body" }, actionBody(action))
+    ]);
+  }
+
+  // ── Editor ───────────────────────────────────────────────────────
+
+  function renderEditor() {
+    var editor = document.getElementById("editor");
+    editor.innerHTML = "";
+    if (!current) {
+      editor.appendChild(el("div", { className: "nt-empty", text: "Choose one on the left, or start a new one." }));
+      return;
+    }
+    var kind = kindByKey[current.kind];
+    var label = noun(current.kind);
+
+    var placeholders = { template: "e.g. Acute visit", quickpick: "e.g. Lipid panel", order_set: "e.g. CKD workup", rule: "e.g. Positive PHQ-2" };
+    var name = el("input", { type: "text", maxlength: "80", placeholder: placeholders[current.kind] || "",
+      oninput: function () { current.name = name.value; } });
+    name.value = current.name || "";
+    var on = current.active !== false;
+
+    var rows = current.commands.length
+      ? el("div", { className: "nt-commands" }, current.commands.map(function (c, i) { return commandRow(c, i, current.commands); }))
+      : null;
+    var canAdd = current.commands.length < kind.max_commands;
+
+    editor.appendChild(el("div", { className: "ui form" }, [
+      el("div", { className: "nt-top" }, [
+        el("div", { className: "field nt-name" }, [
+          el("label", { text: "Name" }),
+          name,
+          el("div", { className: "nt-hint", text: current.kind === "rule"
+            ? (!((current.rule || {}).actions || [{ type: "add", mode: ((current.rule || {}).action || {}).mode }])
+                .some(function (a) { return a.type === "add" && a.mode !== "insert"; })
+              ? "Only admins see this name; the rule acts without a card."
+              : "Clinicians see this name as the protocol card's title.")
+            : "Clinicians see this name when they add it to a note." })
+        ]),
+        el("div", { className: "nt-status" }, [
+          checkbox(on ? "On" : "Off", on, function (checked) { current.active = checked; renderEditor(); }, { toggle: true }),
+          el("div", { className: "nt-hint", text: on ? "Clinicians can use it." : "Hidden everywhere." })
+        ])
+      ]),
+      current.kind === "rule" ? ruleSection() : usageSection(),
+      current.kind !== "rule" && kind.uses_diagnoses ? diagnosisSection() : null,
+      current.kind !== "rule" && kind.uses_diagnoses ? tagsSection() : null,
+      current.kind !== "rule" ? el("h4", { className: "ui dividing header", text: kind.max_commands === 1 ? "Command" : "Commands" }) : null,
+      current.kind !== "rule" ? rows : null,
+      current.kind !== "rule" && canAdd ? commandAdder(kind) : null,
+      el("div", { className: "ui divider" }),
+      el("div", {}, [
+        el("button", { className: "ui primary button", text: current.id ? "Save changes" : "Create " + label.toLowerCase(), onclick: save }),
+        current.id ? el("button", { className: "ui basic button", text: "Duplicate", onclick: function () {
+          duplicate(templates.filter(function (t) { return t.id === current.id; })[0] || current);
+        } }) : null,
+        current.id ? el("button", { className: "ui basic red right floated button", text: "Delete " + label.toLowerCase(), onclick: remove }) : null
+      ]),
+      el("div", { id: "msg", className: "ui hidden message" })
+    ]));
+  }
+
+  function edit(template) {
+    current = template;
+    renderList();
+    renderEditor();
+  }
+
+  function payload() {
+    if (current.kind === "rule") {
+      var rule = JSON.parse(JSON.stringify(current.rule || {}));
+      rule.actions = ruleActions(current.rule || {}).map(function (a) {
+        return a.type === "add" ? { type: "add", mode: a.mode, commands: commandPayload(a.commands) }
+          : { type: a.type, target: a.target || {}, fields: a.fields || {}, answers: a.answers || {} };
+      });
+      return { kind: "rule", name: (current.name || "").trim(), active: current.active !== false, rule: rule };
+    }
+    return {
+      kind: current.kind,
+      name: (current.name || "").trim(),
+      active: current.active !== false,
+      show_in_menu: current.show_in_menu !== false,
+      show_in_panel: !!current.show_in_panel,
+      note_types: current.note_types || [],
+      diagnosis_sources: current.diagnosis_sources || [],
+      tags: current.tags || [],
+      commands: commandPayload()
+    };
+  }
+
+  function commandPayload(list) {
+    return (list || current.commands).map(function (c) {
+      var item = {
+        schema_key: c.schema_key,
+        carry_forward: !!c.carry_forward,
+        scribe_prompt: c.scribe_prompt || "",
+        fields: c.fields || {}
+      };
+      if (c.questionnaire) item.questionnaire = c.questionnaire;
+      if (c.questionnaire && c.answers) item.answers = c.answers;
+      return item;
+    });
+  }
+
+  function save() {
+    var call = current.id
+      ? request("PUT", "/templates/" + encodeURIComponent(current.id), payload())
+      : request("POST", "/templates", payload());
+    call.then(function (saved) {
+      return loadTemplates().then(function () {
+        edit(JSON.parse(JSON.stringify(saved)));
+        renderTabs();
+        showMessage(saved.kind === "rule"
+          ? "Saved. The rule checks notes from now on."
+          : "Saved. The \"/\" menu picks up changes the next time a note loads.", "ok");
+      });
+    }).catch(function (err) { showMessage(err.message, "error"); });
+  }
+
+  function remove() {
+    if (!window.confirm("Delete \"" + current.name + "\"?")) return;
+    request("DELETE", "/templates/" + encodeURIComponent(current.id)).then(function () {
+      current = null;
+      return loadTemplates();
+    }).then(renderAll).catch(function (err) { showMessage(err.message, "error"); });
+  }
+
+  function loadTemplates() {
+    return request("GET", "/templates").then(function (data) {
+      templates = data.templates || [];
+      renderList();
+    });
+  }
+
+  document.getElementById("new-btn").addEventListener("click", function () {
+    edit({
+      id: null, kind: activeKind, name: "", active: true, show_in_menu: true,
+      show_in_panel: activeKind !== "template" && activeKind !== "rule", note_types: [], diagnosis_sources: [], commands: [],
+      rule: activeKind === "rule" ? { match: "all", conditions: [{ type: "diagnosis", sources: [] }],
+        actions: [{ type: "add", mode: "suggest", commands: [] }] } : undefined
+    });
+  });
+
+  // ── Moving between environments ──────────────────────────────────
+
+  document.getElementById("download-btn").addEventListener("click", function () {
+    var button = this;
+    button.classList.add("loading");
+    request("GET", "/export").then(function (doc) {
+      var blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+      var link = el("a", { href: URL.createObjectURL(blob) });
+      link.download = "charting-admin-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }).catch(function (err) {
+      showTransfer([el("div", { className: "ui negative message", text: "Could not download: " + err.message })]);
+    }).then(function () { button.classList.remove("loading"); });
+  });
+
+  var uploadInput = document.getElementById("upload-file");
+  document.getElementById("upload-btn").addEventListener("click", function () { uploadInput.value = ""; uploadInput.click(); });
+  uploadInput.addEventListener("change", function () {
+    var file = uploadInput.files && uploadInput.files[0];
+    if (!file) return;
+    file.text().then(function (text) {
+      var doc;
+      try { doc = JSON.parse(text); } catch (e) { throw new Error("That file isn't valid JSON."); }
+      return request("POST", "/import", { "export": doc, apply: false }).then(function (preview) {
+        showPreview(doc, preview, file.name);
+      });
+    }).catch(function (err) {
+      showTransfer([el("div", { className: "ui negative message", text: "Could not read the upload: " + err.message })]);
+    });
+  });
+
+  function showTransfer(children) {
+    current = null;
+    var editor = document.getElementById("editor");
+    editor.innerHTML = "";
+    children.forEach(function (c) { if (c) editor.appendChild(c); });
+  }
+
+  var KIND_NOUNS = { template: "Note template", quickpick: "Quickpick", order_set: "Order set", rule: "Rule" };
+
+  function transferRows(items, action) {
+    var rows = items.filter(function (i) { return i.action === action; });
+    if (!rows.length) return null;
+    var titles = { create: "Will be added", update: "Will replace the one already here", skip: "Can't be uploaded" };
+    return el("div", { className: "nt-transfer-group nt-transfer-" + action }, [
+      el("h4", { className: "ui header", text: titles[action] + " (" + rows.length + ")" }),
+      el("div", { className: "ui relaxed list" }, rows.map(function (r) {
+        var notes = (r.problems || []).map(function (p) { return el("div", { className: "nt-transfer-problem", text: p }); })
+          .concat((r.warnings || []).map(function (w) { return el("div", { className: "nt-transfer-warning", text: w }); }));
+        return el("div", { className: "item" }, [
+          el("div", { className: "content" }, [
+            el("div", { className: "header" }, [
+              document.createTextNode(r.name || "(no name)"),
+              el("span", { className: "nt-transfer-kind", text: KIND_NOUNS[r.kind] || r.kind })
+            ])
+          ].concat(notes))
+        ]);
+      }))
+    ]);
+  }
+
+  function showPreview(doc, preview, fileName) {
+    var counts = preview.counts || {};
+    var ready = (counts.create || 0) + (counts.update || 0);
+    var upload = el("button", { className: "ui primary button", text: ready ? "Upload " + ready + (ready === 1 ? " item" : " items") : "Nothing to upload" });
+    upload.disabled = !ready;
+    upload.addEventListener("click", function () {
+      upload.classList.add("loading");
+      upload.disabled = true;
+      request("POST", "/import", { "export": doc, apply: true }).then(function (result) {
+        return loadTemplates().then(function () {
+          renderAll();
+          var done = (result.counts.create || 0) + (result.counts.update || 0);
+          showTransfer([
+            el("div", { className: "ui positive message", text: "Uploaded " + done + (done === 1 ? " item" : " items") + " from " + fileName + "." }),
+            transferRows(result.items, "skip")
+          ]);
+        });
+      }).catch(function (err) {
+        upload.classList.remove("loading");
+        upload.disabled = false;
+        showTransfer([el("div", { className: "ui negative message", text: "Upload failed: " + err.message })]);
+      });
+    });
+    showTransfer([
+      el("h3", { className: "ui header", text: "Upload " + fileName }),
+      el("div", { className: "nt-hint", text: "Items are matched to ones here by name and kind. Nothing is saved until you upload. Each item keeps the on/off state it had where it was downloaded." }),
+      transferRows(preview.items, "create"),
+      transferRows(preview.items, "update"),
+      transferRows(preview.items, "skip"),
+      el("div", { className: "nt-transfer-actions" }, [
+        upload,
+        el("button", { className: "ui basic button", text: "Cancel", onclick: function () { showTransfer([el("div", { className: "nt-empty", text: "Select one or create a new one." })]); } })
+      ])
+    ]);
+  }
+
+  request("GET", "/config").then(function (cfg) {
+    catalog = cfg.commands || [];
+    catalog.forEach(function (c) { catalogByKey[c.schema_key] = c; });
+    kinds = cfg.kinds || [];
+    kinds.forEach(function (k) { kindByKey[k.kind] = k; });
+    scribeEnabled = !!cfg.scribe_enabled;
+    questionnaireOptions = cfg.questionnaires || {};
+    noteTypeOptions = cfg.note_types || [];
+    return loadTemplates();
+  }).then(renderAll).catch(function (err) {
+    var editor = document.getElementById("editor");
+    editor.innerHTML = "";
+    editor.appendChild(el("div", { className: "ui negative message", text: "Could not load: " + err.message }));
+  });
+})();
+</script>
+</body>
+</html>

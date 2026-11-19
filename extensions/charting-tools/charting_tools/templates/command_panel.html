@@ -1,0 +1,599 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* A gray block with tab-style add actions, so the panel reads like the
+         other blocks in a note. ASCII only: the command frame
+         does not always decode this markup as UTF-8. */
+      html, body { margin: 0; padding: 0; }
+      body {
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1f2937;
+        background: transparent;
+      }
+      * { box-sizing: border-box; }
+      .block { border: 1px solid #e5e7eb; border-radius: 6px; background: #f3f4f6; }
+      .tabs { display: flex; flex-wrap: wrap; align-items: stretch; gap: 2px; padding: 0 8px 0 12px; }
+      .tabs .lead {
+        align-self: center; margin-right: 8px; font-size: 11px; font-weight: 600;
+        letter-spacing: .08em; text-transform: uppercase; color: #6b7280; white-space: nowrap;
+      }
+      .tab {
+        font: inherit; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+        background: none; padding: 9px 10px 7px; font-size: 13px; color: #374151; cursor: pointer;
+      }
+      .tab:hover { background: #e5e7eb; }
+      .tab.active { border-bottom-color: #2563eb; color: #1d4ed8; font-weight: 600; }
+      .tab::before { content: "+ "; color: #9ca3af; }
+      .tab.active::before { color: #2563eb; }
+      /* One-click commands, right after the tabs past a short divider, like the
+         note's own "Add history" bar. */
+      .quick-adds { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-left: 4px;
+        align-self: center; }
+      .quick-adds::before { content: ""; width: 1px; height: 20px; background: #d1d5db; margin-right: 6px; }
+      .tabs:not(:has(.tab)) .quick-adds { margin-left: 0; }
+      .tabs:not(:has(.tab)) .quick-adds::before { display: none; }
+      /* + Plan with a caret for more options. ASCII only, so the caret is a CSS triangle. */
+      .quick-split { position: relative; display: inline-flex; align-items: center; }
+      .quick-caret { font: inherit; background: none; border: 0; border-radius: 4px; padding: 6px 5px; cursor: pointer; }
+      .quick-caret::after { content: ""; display: inline-block; border: 4px solid transparent; border-top-color: #6b7280; transform: translateY(2px); }
+      .quick-caret:hover { background: #e5e7eb; }
+      .quick-menu { display: flex; gap: 4px; padding: 4px 8px 6px; border-top: 1px solid #e5e7eb; background: #fff; }
+      .quick-menu[hidden] { display: none; }
+      .quick-menu button { display: block; text-align: left; font: inherit; font-size: 13px; background: none;
+        border: 0; border-radius: 4px; padding: 6px 8px; cursor: pointer; color: #1f2937; }
+      .quick-menu button:hover:not(:disabled) { background: #f3f4f6; }
+      .quick { font: inherit; font-size: 13px; color: #374151; background: none; border: 0;
+        border-radius: 4px; padding: 6px 8px; cursor: pointer; }
+      .quick::before { content: "+ "; color: #9ca3af; }
+      .quick:hover:not(:disabled) { background: #e5e7eb; }
+      .quick:disabled { opacity: 1; cursor: default; }
+      .quick.done { color: #15803d; background: none; border: 0; }
+      .quick.done::before { content: ""; }
+      .quick.failed { color: #b91c1c; background: none; border: 0; }
+      .tab:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid #bfdbfe; }
+      .pane { display: none; border-top: 1px solid #e5e7eb; background: #fff; border-radius: 0 0 6px 6px; }
+      .pane.show { display: block; }
+      .filter { padding: 10px 12px 8px; border-bottom: 1px solid #f0f1f3; border-radius: 0; }
+      .filter-label { font-weight: 600; margin-right: 6px; }
+      .filter-hint { color: #9ca3af; font-size: 12px; }
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+        border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer;
+        font-size: 12px; user-select: none;
+      }
+      .chip.on { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+      .chip input { margin: 0; }
+      .filter-title { font-weight: 600; margin-bottom: 6px; }
+      .filter-row { display: flex; align-items: flex-start; gap: 10px; margin-top: 6px; }
+      .filter-row .filter-label { flex: none; width: 64px; padding-top: 5px; font-weight: 400; color: #6b7280; }
+      .filter-row .chips { margin-top: 0; }
+      .lab-select { font: inherit; font-size: 12px; padding: 4px 7px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; }
+      .showing { margin-top: 8px; font-size: 12px; color: #374151; background: #eff6ff;
+        border-radius: 4px; padding: 5px 8px; }
+      .list { max-height: 320px; overflow-y: auto; }
+      .group { padding: 8px 12px 10px; border-top: 1px solid #f0f1f3; }
+      .group:first-child { border-top: 0; }
+      .group-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; font-weight: 600; }
+      .group-head .count { font-weight: 400; color: #9ca3af; font-size: 12px; }
+      .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+      .pill {
+        font-size: 12px; padding: 4px 12px; border: 1px solid #d1d5db; border-radius: 999px;
+        background: #fff; color: #1f2937; white-space: nowrap;
+      }
+      .pill:hover:not(:disabled) { border-color: #93c5fd; background: #f8fafc; }
+      .pill[aria-pressed="true"] { border-color: #2563eb; background: #2563eb; color: #fff; }
+      .pill[aria-pressed="true"]:hover { background: #1d4ed8; }
+      .pill.added, .pill.added:disabled { opacity: 1; color: #9ca3af; background: #f3f4f6; border-color: #e5e7eb; }
+      .empty { color: #9ca3af; font-style: italic; padding: 10px 12px; margin: 0; }
+      .footer {
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+        border-top: 1px solid #e5e7eb; background: #f9fafb; border-radius: 0 0 6px 6px;
+      }
+      .footer .all { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+      .footer .spacer { flex: 1; }
+      .footer .picked { color: #6b7280; font-size: 12px; }
+      button {
+        font: inherit; font-size: 12px; padding: 5px 12px; border-radius: 4px;
+        border: 1px solid #d1d5db; background: #fff; cursor: pointer; white-space: nowrap;
+      }
+      button:disabled { opacity: .55; cursor: default; }
+      button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+      button.primary:hover:not(:disabled) { background: #1d4ed8; }
+      button.done { background: #16a34a; border-color: #16a34a; color: #fff; }
+      button.failed { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+      .set-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid #f0f1f3; }
+      .set-row:first-child { border-top: 0; }
+      .set-row .name { flex: 1; }
+      .set-row .name b { font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div class="block">
+      <div class="tabs" role="tablist">
+        <span class="lead">Add orders</span>
+        {% if show_quickpicks %}<button type="button" class="tab" data-tab="quickpick" role="tab">Quickpicks</button>{% endif %}
+        {% if show_order_sets %}<button type="button" class="tab" data-tab="order_set" role="tab">Order sets</button>{% endif %}
+        <span class="quick-adds">
+          <span class="quick-split">
+            <button type="button" class="quick" data-command="plan">Plan</button><button type="button" class="quick-caret" aria-label="More Plan options" aria-haspopup="true" aria-expanded="false"></button>
+          </span>
+          <button type="button" class="quick" data-command="refer">Refer</button>
+          <button type="button" class="quick" data-command="labOrder">Lab</button>
+          <button type="button" class="quick" data-command="imagingOrder">Image</button>
+          <button type="button" class="quick" data-command="orderDme">DME</button>
+          <button type="button" class="quick" data-command="prescribe">Prescribe</button>
+          <button type="button" class="quick" data-command="instruct">Instruct</button>
+          <button type="button" class="quick" data-command="perform">Procedure</button>
+        </span>
+      </div>
+      <!-- + Plan's options: a row of its own, so the frame grows to show it. -->
+      <div class="quick-menu" role="menu" hidden>
+        <button type="button" role="menuitem" id="plan-carry-forward">Carry forward the last plan for this diagnosis</button>
+      </div>
+      <div class="filter pane" id="filter"></div>
+      <div class="pane" id="pane-quickpick">
+        <div class="list" id="qp-list"><p class="empty">Loading...</p></div>
+        <div class="footer">
+          <label class="all"><input type="checkbox" id="select-all" /> Select all shown</label>
+          <span class="spacer"></span>
+          <span class="picked" id="picked"></span>
+          <button type="button" class="primary" id="add-orders" disabled>Add orders</button>
+        </div>
+      </div>
+      <div class="pane" id="pane-order_set">
+        <div class="list" id="os-list"><p class="empty">Loading...</p></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var CATALOG_URL = "{{ catalog_url|escapejs }}";
+        var APPLY_URL = "{{ apply_url|escapejs }}";
+        var QUICK_ADD_URL = "{{ quick_add_url|escapejs }}";
+        var TOKEN = "{{ token|escapejs }}";
+
+        var data = null;
+        var failed = false;
+        var active = null;
+        var chosenConditions = {};
+        var chosenTags = {};
+        var labPartner = null;
+        var picked = {};
+
+        // Every call is a POST carrying the token and its parameters as JSON in
+        // a text/plain body: a "simple" request, so no CORS preflight, and the
+        // token stays out of URLs.
+        function post(base, params) {
+          var body = { token: TOKEN };
+          Object.keys(params || {}).forEach(function (k) { body[k] = params[k]; });
+          return fetch(base, { method: "POST", body: JSON.stringify(body) });
+        }
+
+        function el(tag, attrs, children) {
+          var node = document.createElement(tag);
+          Object.keys(attrs || {}).forEach(function (k) {
+            if (k === "text") node.textContent = attrs[k];
+            else if (k === "className") node.className = attrs[k];
+            else node.setAttribute(k, attrs[k]);
+          });
+          (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+          return node;
+        }
+
+        // Loads the catalog, and reloads it whenever the panel is reopened or the
+        // page regains focus, so a quickpick added from another command's panel
+        // or the "/" menu shows as already added.
+        function load() {
+          var first = !data;
+          post(CATALOG_URL)
+            .then(function (r) {
+              // The note is no longer open (or the panel's token has run out): hide.
+              if (r.status === 409 || r.status === 401) { closePanel(); return null; }
+              return r.ok ? r.json() : null;
+            })
+            .then(function (body) {
+              if (closed) return;
+              if (!body || !body.items) {
+                if (first) { failed = true; draw(); }
+                return;
+              }
+              data = body;
+              failed = false;
+              // Start on the patient's preferred lab (their "preferred_lab"
+              // metadata), unless a lab has already been chosen here.
+              if (first && !labPartner && body.preferred_lab_partner) labPartner = body.preferred_lab_partner;
+              // Start filtered to the diagnosis this command is charting.
+              if (first && body.charted_icd10) chosenConditions[body.charted_icd10] = true;
+              data.items.forEach(function (i) { if (i.added) delete picked[i.id]; });
+              hideEmptyTabs();
+              draw();
+            })
+            .catch(function () { if (first) { failed = true; draw(); } });
+        }
+
+        // Hides the whole panel: the note isn't open for charting any more.
+        var closed = false;
+        function closePanel() {
+          closed = true;
+          document.querySelector(".block").style.display = "none";
+        }
+
+        // A tab whose kind has nothing left (removed since the panel was attached)
+        // is hidden. The quick-add buttons stay.
+        function hideEmptyTabs() {
+          var tabs = document.querySelectorAll(".tab");
+          for (var i = 0; i < tabs.length; i++) {
+            var kind = tabs[i].getAttribute("data-tab");
+            var any = data.items.some(function (item) { return item.kind === kind; });
+            tabs[i].style.display = any ? "" : "none";
+            if (!any && active === kind) {
+              active = null;
+              tabs[i].classList.remove("active");
+              document.getElementById("pane-" + kind).classList.remove("show");
+            }
+          }
+        }
+
+        // The note's diagnoses that at least one item of this kind is tagged for.
+        // A diagnosis nothing is tagged for isn't offered as a filter.
+        function taggedConditions(kind) {
+          return (data.conditions || []).filter(function (c) {
+            return data.items.some(function (i) { return i.kind === kind && i.conditions.indexOf(c.code) !== -1; });
+          });
+        }
+
+        // Chosen diagnoses that still apply to the open tab.
+        function conditionCodes() {
+          var offered = taggedConditions(active || "quickpick").map(function (c) { return c.code; });
+          return Object.keys(chosenConditions).filter(function (c) { return chosenConditions[c] && offered.indexOf(c) !== -1; });
+        }
+
+        function labelFor(code) {
+          var match = (data.conditions || []).filter(function (c) { return c.code === code; })[0];
+          return match ? match.label : code;
+        }
+
+        // Every lab partner the lab quickpicks are set up for.
+        function labPartners() {
+          var seen = {};
+          var out = [];
+          data.items.forEach(function (item) {
+            (item.lab_partners || []).forEach(function (p) {
+              if (!seen[p.id]) { seen[p.id] = { id: p.id, display: p.display || p.id, count: 0 }; out.push(seen[p.id]); }
+              seen[p.id].count += 1;
+            });
+          });
+          return out;
+        }
+
+        function isLab(item) {
+          return item.group === "labs" || (item.lab_partners || []).length > 0;
+        }
+
+        function chosen(map) {
+          return Object.keys(map).filter(function (k) { return map[k]; });
+        }
+
+        // The items of one kind after the filters. Tags: at least one chosen
+        // tag. Conditions: made for one of the chosen diagnoses (only tagged
+        // diagnoses are offered, so this always has something to show). Lab quickpicks show only once a lab is chosen, and
+        // only those with tests for that lab.
+        function filtered(kind) {
+          var tags = chosen(chosenTags);
+          var codes = conditionCodes();
+          var items = data.items.filter(function (item) {
+            if (item.kind !== kind) return false;
+            if (tags.length && !(item.tags || []).some(function (t) { return tags.indexOf(t) !== -1; })) return false;
+            if (kind === "quickpick" && isLab(item)) {
+              if (!labPartner) return false;
+              if (!(item.lab_partners || []).some(function (p) { return p.id === labPartner; })) return false;
+            }
+            return true;
+          });
+          var matched = codes.length
+            ? items.filter(function (item) { return item.conditions.some(function (c) { return codes.indexOf(c) !== -1; }); })
+            : items;
+          return { items: matched.length ? matched : items };
+        }
+
+        function visibleQuickpicks() {
+          return filtered("quickpick").items;
+        }
+
+        function chipRow(label, values, map, labelOf) {
+          var chips = el("div", { className: "chips" });
+          values.forEach(function (value) {
+            var on = !!map[value];
+            var input = el("input", { type: "checkbox" });
+            input.checked = on;
+            input.addEventListener("change", function () { map[value] = input.checked; draw(); });
+            chips.appendChild(el("label", { className: "chip" + (on ? " on" : "") }, [input, document.createTextNode(labelOf(value))]));
+          });
+          return el("div", { className: "filter-row" }, [el("span", { className: "filter-label", text: label }), chips]);
+        }
+
+        function tagsFor(kind) {
+          var seen = {};
+          var out = [];
+          data.items.forEach(function (item) {
+            if (item.kind !== kind) return;
+            (item.tags || []).forEach(function (t) { if (!seen[t]) { seen[t] = true; out.push(t); } });
+          });
+          return out.sort();
+        }
+
+        function drawFilter() {
+          var box = document.getElementById("filter");
+          box.innerHTML = "";
+          box.classList.toggle("show", !!active);
+          if (!active) return;
+          box.appendChild(el("div", { className: "filter-title", text: "Filter" }));
+
+          var conditions = taggedConditions(active);
+          if (conditions.length) {
+            box.appendChild(chipRow("Condition", conditions.map(function (c) { return c.code; }), chosenConditions, function (code) {
+              var label = labelFor(code);
+              return label === code ? code : label + " (" + code + ")";
+            }));
+          }
+
+          var tags = tagsFor(active);
+          if (tags.length) box.appendChild(chipRow("Tags", tags, chosenTags, function (t) { return t; }));
+
+          var partners = labPartners();
+          if (active === "quickpick" && partners.length) {
+            var select = el("select", { className: "lab-select", "aria-label": "Lab" });
+            select.appendChild(el("option", { value: "", text: "Choose a lab" }));
+            partners.forEach(function (p) {
+              var opt = el("option", { value: p.id, text: p.display });
+              if (p.id === labPartner) opt.selected = true;
+              select.appendChild(opt);
+            });
+            select.addEventListener("change", function () {
+              labPartner = select.value || null;
+              // A pick at one lab doesn't carry to another lab's tests.
+              data.items.forEach(function (i) { if (isLab(i)) delete picked[i.id]; });
+              draw();
+            });
+            box.appendChild(el("div", { className: "filter-row" }, [el("span", { className: "filter-label", text: "Lab" }), select]));
+          }
+
+          var hasLabs = active === "quickpick" && data.items.some(function (i) { return i.kind === "quickpick" && isLab(i); });
+          if (hasLabs && !labPartner) {
+            box.appendChild(el("div", { className: "showing", text: "Choose a lab to see lab orders." }));
+          }
+          // Nothing to filter by: no filter section at all.
+          if (box.childNodes.length === 1) box.classList.remove("show");
+        }
+
+
+        function drawQuickpicks() {
+          var list = document.getElementById("qp-list");
+          list.innerHTML = "";
+          var shown = visibleQuickpicks();
+          var byGroup = {};
+          shown.forEach(function (item) { (byGroup[item.group] = byGroup[item.group] || []).push(item); });
+          var any = false;
+          (data.groups || []).forEach(function (g) {
+            var items = byGroup[g.key];
+            if (!items || !items.length) return;
+            any = true;
+            var count = items.filter(function (i) { return picked[i.id]; }).length;
+            var pills = el("div", { className: "pills" });
+            items.forEach(function (item) {
+              var on = !!picked[item.id] && !item.added;
+              var pill = el("button", {
+                type: "button",
+                className: "pill" + (item.added ? " added" : ""),
+                text: item.name
+              });
+              pill.setAttribute("aria-pressed", on ? "true" : "false");
+              pill.disabled = !!item.added;
+              if (item.added) pill.title = "Already added";
+              pill.addEventListener("click", function () { picked[item.id] = !on; draw(); });
+              pills.appendChild(pill);
+            });
+            list.appendChild(el("div", { className: "group" }, [
+              el("div", { className: "group-head" }, [
+                el("span", { text: g.label }),
+                count ? el("span", { className: "count", text: count + " selected" }) : null
+              ]),
+              pills
+            ]));
+          });
+          if (!any) {
+            list.appendChild(el("p", {
+              className: "empty",
+              text: data.items.some(function (i) { return i.kind === "quickpick"; })
+                ? "No quickpicks match the filter."
+                : "No quickpicks yet."
+            }));
+          }
+
+          var selectable = shown.filter(function (i) { return !i.added; });
+          var pickedShown = selectable.filter(function (i) { return picked[i.id]; });
+          var all = document.getElementById("select-all");
+          all.checked = selectable.length > 0 && pickedShown.length === selectable.length;
+          all.indeterminate = pickedShown.length > 0 && pickedShown.length < selectable.length;
+          all.disabled = !selectable.length;
+          document.getElementById("picked").textContent = pickedShown.length
+            ? pickedShown.length + " selected"
+            : selectable.length + " available";
+          var add = document.getElementById("add-orders");
+          if (!add.classList.contains("done")) add.disabled = !pickedShown.length;
+        }
+
+        function drawOrderSets() {
+          var list = document.getElementById("os-list");
+          list.innerHTML = "";
+          var all = data.items.filter(function (i) { return i.kind === "order_set"; });
+          var sets = filtered("order_set").items.slice();
+          sets.sort(function (a, b) { return (b.diagnosis_match ? 1 : 0) - (a.diagnosis_match ? 1 : 0); });
+          if (!sets.length) {
+            list.appendChild(el("p", { className: "empty", text: all.length ? "No order sets match the filter." : "No order sets yet." }));
+            return;
+          }
+          sets.forEach(function (item) {
+            var add = el("button", { type: "button", className: "primary", text: "Add" });
+            add.addEventListener("click", function () { apply([item.id], add, "Added"); });
+            var meta = item.command_count + (item.command_count === 1 ? " command" : " commands") +
+              (item.diagnoses.length ? " - " + item.diagnoses.join(", ") : "");
+            list.appendChild(el("div", { className: "set-row" }, [
+              el("div", { className: "name" }, [
+                el("b", { text: item.name }),
+                el("div", { className: "meta", text: (item.diagnosis_match ? "Matches this diagnosis - " : "") + meta })
+              ]),
+              add
+            ]));
+          });
+        }
+
+        function draw() {
+          if (failed) {
+            document.getElementById("qp-list").innerHTML = '<p class="empty">Could not load. Close and reopen the command to try again.</p>';
+            document.getElementById("os-list").innerHTML = '<p class="empty">Could not load. Close and reopen the command to try again.</p>';
+            return;
+          }
+          if (!data) return;
+          drawFilter();
+          drawQuickpicks();
+          drawOrderSets();
+        }
+
+        function apply(ids, button, doneText) {
+          button.disabled = true;
+          button.classList.remove("failed");
+          post(APPLY_URL, { ids: ids.join(","), conditions: conditionCodes().join(","), lab_partner: labPartner || "" })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, status: r.status, body: b }; }); })
+            .then(function (res) {
+              if (res.status === 409 || res.status === 401) { closePanel(); return; }
+              if (!res.ok) throw new Error();
+              (res.body.added || []).forEach(function (id) {
+                data.items.forEach(function (i) { if (i.id === id) i.added = true; });
+                delete picked[id];
+              });
+              button.classList.add("done");
+              button.textContent = doneText;
+              setTimeout(function () {
+                button.classList.remove("done");
+                button.textContent = button.id === "add-orders" ? "Add orders" : "Add";
+                draw();
+              }, 1500);
+              draw();
+            })
+            .catch(function () {
+              button.disabled = false;
+              button.classList.add("failed");
+              button.textContent = "Try again";
+            });
+        }
+
+        document.getElementById("select-all").addEventListener("change", function (e) {
+          visibleQuickpicks().forEach(function (i) { if (!i.added) picked[i.id] = e.target.checked; });
+          draw();
+        });
+        document.getElementById("add-orders").addEventListener("click", function () {
+          var ids = visibleQuickpicks().filter(function (i) { return picked[i.id] && !i.added; }).map(function (i) { return i.id; });
+          if (ids.length) apply(ids, this, "Added " + ids.length);
+        });
+
+        var tabs = document.querySelectorAll(".tab");
+        for (var t = 0; t < tabs.length; t++) {
+          tabs[t].addEventListener("click", function () {
+            var key = this.getAttribute("data-tab");
+            active = active === key ? null : key;
+            for (var i = 0; i < tabs.length; i++) {
+              var on = tabs[i].getAttribute("data-tab") === active;
+              tabs[i].classList.toggle("active", on);
+              tabs[i].setAttribute("aria-selected", on ? "true" : "false");
+            }
+            document.getElementById("pane-quickpick").classList.toggle("show", active === "quickpick");
+            document.getElementById("pane-order_set").classList.toggle("show", active === "order_set");
+            if (active) load(); else draw();
+          });
+        }
+        var quicks = document.querySelectorAll(".quick");
+        for (var q = 0; q < quicks.length; q++) {
+          quicks[q].addEventListener("click", function () {
+            var button = this;
+            var label = button.getAttribute("data-label") || button.textContent;
+            button.setAttribute("data-label", label);
+            button.disabled = true;
+            button.classList.remove("failed");
+            post(QUICK_ADD_URL, { command: button.getAttribute("data-command") })
+              .then(function (r) {
+                if (r.status === 409 || r.status === 401) { closePanel(); return; }
+                if (!r.ok) throw new Error();
+              })
+              .then(function () {
+                button.classList.add("done");
+                button.textContent = "Added " + label;
+              })
+              .catch(function () {
+                button.classList.add("failed");
+                button.textContent = label + " - try again";
+              })
+              .then(function () {
+                setTimeout(function () {
+                  button.classList.remove("done", "failed");
+                  button.textContent = label;
+                  button.disabled = false;
+                }, 1500);
+              });
+          });
+        }
+
+        // + Plan's caret: carry forward the patient's last plan for this diagnosis.
+        var caret = document.querySelector(".quick-caret");
+        var menu = document.querySelector(".quick-menu");
+        var planButton = document.querySelector('.quick[data-command="plan"]');
+        function toggleMenu(open) {
+          menu.hidden = !open;
+          caret.setAttribute("aria-expanded", open ? "true" : "false");
+        }
+        caret.addEventListener("click", function (e) { e.stopPropagation(); toggleMenu(menu.hidden); });
+        document.addEventListener("click", function () { toggleMenu(false); });
+        document.getElementById("plan-carry-forward").addEventListener("click", function (e) {
+          e.stopPropagation();
+          toggleMenu(false);
+          var label = planButton.getAttribute("data-label") || planButton.textContent;
+          planButton.setAttribute("data-label", label);
+          planButton.disabled = true;
+          post(QUICK_ADD_URL, { command: "plan", carry_forward: true })
+            .then(function (r) {
+              if (r.status === 409 || r.status === 401) { closePanel(); return; }
+              if (r.status === 404) { planButton.textContent = "No earlier plan for this diagnosis"; return; }
+              if (!r.ok) throw new Error();
+              return r.json().catch(function () { return {}; }).then(function (body) {
+                planButton.classList.add("done");
+                // A blank plan already on this assessment is filled in instead.
+                planButton.textContent = body.status === "updated" ? "Filled in plan" : "Added last plan";
+              });
+            })
+            .catch(function () {
+              planButton.classList.add("failed");
+              planButton.textContent = label + " - try again";
+            })
+            .then(function () {
+              setTimeout(function () {
+                planButton.classList.remove("done", "failed");
+                planButton.textContent = label;
+                planButton.disabled = false;
+              }, 2000);
+            });
+        });
+
+        // Check at once whether the note is still open, so a committed command
+        // on a locked note shows nothing.
+        load();
+
+        window.addEventListener("focus", function () { if (active) load(); });
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden && active) load();
+        });
+      })();
+    </script>
+  </body>
+</html>

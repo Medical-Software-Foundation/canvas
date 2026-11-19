@@ -1,0 +1,241 @@
+{
+    "sdk_version": "0.254.0",
+    "plugin_version": "0.18.0",
+    "name": "charting_tools",
+    "description": "Admins build note templates, quickpicks, and order sets from pre-filled commands. Templates appear in the note body \"/\" menu and insert automatically for chosen note types; quickpicks and order sets appear in the \"/\" menu and in a panel on Assess and Diagnose commands, matched to the charted ICD-10.",
+    "components": {
+        "handlers": [
+            {
+                "class": "charting_tools.handlers.template_automation:NoteTemplateAutomation",
+                "description": "Lists each active template in the note body \"/\" menu and originates its commands when picked.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.command.Command",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.reason_for_visit.ReasonForVisitSettingCoding",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.lab.LabPartner",
+                        "canvas_sdk.v1.data.patient.PatientMetadata"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.note_created:NoteCreatedTemplate",
+                "description": "Inserts the template assigned to a note's type when a note is created directly with that type.",
+                "data_access": {
+                    "event": "NOTE_CREATED",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.command.Command",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.reason_for_visit.ReasonForVisitSettingCoding",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.note.NoteMetadata",
+                        "canvas_sdk.v1.data.lab.LabPartner",
+                        "canvas_sdk.v1.data.patient.PatientMetadata"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.appointment_created:AppointmentCreatedTemplate",
+                "description": "Inserts the template assigned to an appointment's note type into the note when the appointment is booked, and swaps it when a reschedule changes the visit type.",
+                "data_access": {
+                    "event": "APPOINTMENT_CREATED",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.command.Command",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.reason_for_visit.ReasonForVisitSettingCoding",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.note.NoteMetadata",
+                        "canvas_sdk.v1.data.appointment.Appointment",
+                        "canvas_sdk.v1.data.command.CommandMetadata",
+                        "canvas_sdk.v1.data.note.CurrentNoteStateEvent",
+                        "canvas_sdk.v1.data.lab.LabPartner",
+                        "canvas_sdk.v1.data.patient.PatientMetadata"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.appointment_created:AppointmentUpdatedTemplate",
+                "description": "Swaps a visit note's template when the appointment's visit type is changed: keeps shared commands, removes the old template's unchanged uncommitted commands, and adds the new template's.",
+                "data_access": {
+                    "event": "APPOINTMENT_UPDATED",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.command.Command",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.reason_for_visit.ReasonForVisitSettingCoding",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.note.NoteMetadata",
+                        "canvas_sdk.v1.data.appointment.Appointment",
+                        "canvas_sdk.v1.data.command.CommandMetadata",
+                        "canvas_sdk.v1.data.note.CurrentNoteStateEvent",
+                        "canvas_sdk.v1.data.lab.LabPartner",
+                        "canvas_sdk.v1.data.patient.PatientMetadata"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.api.templates_api:NoteTemplatesAPI",
+                "description": "Builder page and CRUD endpoints for note templates.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.staff.StaffRole",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.patient.PatientMetadata",
+                        "canvas_sdk.v1.data.appointment.AppointmentMetadata",
+                        "canvas_sdk.v1.data.note.NoteMetadata"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.command_panel:AssessPanel",
+                "description": "Attaches the quickpick and order-set panel to Assess commands, and re-signs it just before commit.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.command.Command"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.command_panel:DiagnosePanel",
+                "description": "Attaches the quickpick and order-set panel to Diagnose commands, and re-signs it just before commit.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.command.Command"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.command_panel:NoteOpenedPanels",
+                "description": "Re-signs the panel on a note's staged Assess and Diagnose commands when the note is opened, so an untouched command's panel keeps working.",
+                "data_access": {
+                    "event": "NOTE_OPENED",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.command.Command"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.api.panel_api:PanelAPI",
+                "description": "Catalog and apply routes the in-command panel calls, authenticated by a signed token.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.note.NoteMetadata",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.command.Command",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.reason_for_visit.ReasonForVisitSettingCoding",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.command.CommandMetadata",
+                        "canvas_sdk.v1.data.condition.ConditionCoding",
+                        "canvas_sdk.v1.data.lab.LabPartner",
+                        "canvas_sdk.v1.data.lab.LabPartnerTest",
+                        "canvas_sdk.v1.data.assessment.Assessment",
+                        "canvas_sdk.v1.data.patient.PatientMetadata"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.api.search_api:SearchAPI",
+                "description": "Lookups for the builder's command forms: instructions, imaging, contacts, medications, pharmacies, lab partners and tests, assignees, and UMLS ICD-10.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.lab.LabPartner",
+                        "canvas_sdk.v1.data.lab.LabPartnerTest",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.staff.StaffRole",
+                        "canvas_sdk.v1.data.team.Team",
+                        "canvas_sdk.v1.data.service_provider.ServiceProvider",
+                        "canvas_sdk.v1.data.practicelocation.PracticeLocationSetting",
+                        "canvas_sdk.v1.data.dme.DmeProduct"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "charting_tools.handlers.rule_engine:RuleEngine",
+                "description": "Evaluates rules when a note is created or its visit booked, and as questionnaire and diagnosis commands are charted; adds or suggests the rule's template, quickpick, or order set.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.note.Note",
+                        "canvas_sdk.v1.data.note.NoteMetadata",
+                        "canvas_sdk.v1.data.command.Command",
+                        "canvas_sdk.v1.data.command.CommandMetadata",
+                        "canvas_sdk.v1.data.condition.Condition",
+                        "canvas_sdk.v1.data.questionnaire.Questionnaire",
+                        "canvas_sdk.v1.data.reason_for_visit.ReasonForVisitSettingCoding",
+                        "canvas_sdk.v1.data.staff.Staff",
+                        "canvas_sdk.v1.data.patient.PatientMetadata",
+                        "canvas_sdk.v1.data.appointment.Appointment",
+                        "canvas_sdk.v1.data.appointment.AppointmentMetadata",
+                        "canvas_sdk.v1.data.note.CurrentNoteStateEvent",
+                        "canvas_sdk.v1.data.note.NoteType",
+                        "canvas_sdk.v1.data.lab.LabPartner"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "charting_tools.applications.admin_app:NoteTemplatesAdminApp",
+                "name": "Charting Admin",
+                "description": "Build note templates, quickpicks, and order sets.",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "TEMPLATE_ADMIN_ROLES",
+        "SCRIBE_ENABLED",
+        "UMLS_API_KEY",
+        "PANEL_TOKEN_SIGNING_KEY",
+        "CANVAS_INSTANCE_URL"
+    ],
+    "custom_data": {
+        "namespace": "canvas__charting_tools",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
