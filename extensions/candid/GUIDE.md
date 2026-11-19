@@ -21,6 +21,8 @@ After the grace period:
 
 For claims with more than 12 diagnosis codes, the plugin automatically splits into multiple Candid encounters (primary + supplemental) to stay within CMS-1500 limits. You'll see a comment like "Claim submitted to Candid on 2026-05-01 across 2 encounters."
 
+**Medicare Secondary Payer Typecode:** When a claim coverage has a Typecode set (for example 12, Working Aged), the plugin sends it to Candid as that insurance's type, so a Medicare-secondary claim carries its MSP reason. Leave the Typecode blank when none applies.
+
 **Resubmissions:** If you move a claim back to the Submission queue after it was previously submitted, the plugin detects that the encounter already exists in Candid and automatically updates it in Candid instead of creating a duplicate. You don't need to do anything special — just move the claim to the Submission queue again and the plugin handles it.
 
 ### Claim Splitting (>12 Diagnoses)

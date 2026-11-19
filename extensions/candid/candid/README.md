@@ -45,6 +45,7 @@ Encounter (encounter_id)            <- we create via POST, fetch via GET
 When a claim is moved to the **QueuedForSubmission** queue, the plugin schedules a submission to Candid's `/api/encounters/v4` endpoint via the plugin's own `/submit` SimpleAPI route after a **60-second grace period** (`GRACE_PERIOD_SECONDS`). When the submit handler fires, it re-checks the claim's queue and skips the submission if the user has moved the claim out of `QueuedForSubmission` during the grace window.
 
 - Builds the Candid encounter payload from Canvas claim data (patient, providers, diagnoses, service lines, subscribers)
+- Sends each claim coverage's Typecode (the Medicare Secondary Payer reason: 12, 13, 14, 15, 41, 42, 43, 47) as that subscriber's `insurance_card.insurance_type`; a blank Typecode sends none
 - **Splits claims with >12 diagnosis codes** into a primary encounter (real service lines) and supplemental encounters (99499 CPT code at $0.01) per CMS-1500 limits
 - Diagnoses are split in rank order (first 12, next 12, etc.) without reordering -- the Canvas UI's Claim Review Records (CRR) workflow lets users review and assign diagnoses across splits before submission
 - Payload errors are caught per-section (patient, billing provider, etc.) and surfaced as claim comments rather than crashing the handler
