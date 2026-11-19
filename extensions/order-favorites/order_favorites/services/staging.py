@@ -104,11 +104,15 @@ def _remember_unresolved(favorite: Favorite, reason: str | None) -> None:
     unresolved = reason == "image"
     if bool(favorite.details.get("unresolved")) == unresolved:
         return
+    # Re-read so an edit saved while the search was answering isn't written over.
+    current = Favorite.objects.filter(dbid=favorite.dbid).first()
+    if current is None or current.kind != "imaging":
+        return
     if unresolved:
-        favorite.details["unresolved"] = True
+        current.details["unresolved"] = True
     else:
-        favorite.details.pop("unresolved", None)
-    favorite.save()
+        current.details.pop("unresolved", None)
+    current.save(update_fields=["details"])
 
 
 def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Effect]]:

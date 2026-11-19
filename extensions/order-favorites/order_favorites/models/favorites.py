@@ -36,7 +36,9 @@ class Favorite(CustomModel):
            priority ("Routine", "Urgent", "STAT", or blank), additional_details, comment,
            ordering_provider_id, ordering_provider_name,
            imaging_center (None, or {first_name, last_name, specialty, practice_name,
-           business_fax, business_phone, business_address, notes})
+           business_fax, business_phone, business_address, notes}),
+           unresolved (True while the last add found the imaging search no longer leads to the study;
+           set and cleared by staging, never by clean_details)
       set: items [favorite dbid, ...]
     """
 

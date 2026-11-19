@@ -346,6 +346,27 @@ def test_needs_fixing_clears_when_a_later_add_finds_the_study(imaging_on: None, 
     assert stale_map([img]) == {}
 
 
+def test_needs_fixing_keeps_an_edit_saved_while_the_search_answered(imaging_on: None, make_staff: Any, make_note: Any) -> None:
+    me = make_staff()
+    img = favorite(me, kind="imaging", name="Chest x-ray", details=imaging_details())
+
+    answer = science([OTHER, CHEST])
+
+    def edit_then_answer(path: str) -> Any:
+        edited = Favorite.objects.get(dbid=img.dbid)
+        edited.name = "Chest x-ray, renamed"
+        edited.details = {**edited.details, "comment": "edited"}
+        edited.save()
+        return answer(path)
+
+    with patch.object(lookups.science_http, "get_json", side_effect=edit_then_answer):
+        add(me, make_note(), [img.dbid])
+    stored = Favorite.objects.get(dbid=img.dbid)
+    assert stored.name == "Chest x-ray, renamed"
+    assert stored.details["comment"] == "edited"
+    assert stored.details["unresolved"] is True
+
+
 def test_resaving_an_imaging_favorite_drops_needs_fixing(imaging_on: None, chest_first: Any, make_staff: Any) -> None:
     me = make_staff()
     _k, _n, details = clean_favorite({"kind": "imaging", "name": "Chest", **imaging_details(), "unresolved": True}, owner=me.dbid)
