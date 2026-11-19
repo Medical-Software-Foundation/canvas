@@ -1,0 +1,43 @@
+{
+    "sdk_version": "0.195.2",
+    "plugin_version": "0.4.0",
+    "name": "fax_queue_inboxes",
+    "description": "A team organised dashboard over the native inbound fax queue, with practice defined labels, notes and assignment held in the plugin's own store.",
+    "components": {
+        "applications": [
+            {
+                "class": "fax_queue_inboxes.handlers.application:FaxQueueDashboard",
+                "name": "Fax Queue Inboxes",
+                "description": "Team organised dashboard over inbound faxes",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "menu_position": "top"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "fax_queue_inboxes.handlers.api:FaxQueueAPI",
+                "description": "Serves the dashboard page and its JSON routes"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": false
+        }
+    ],
+    "custom_data": {
+        "namespace": "vicert__fax_queue_inboxes",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
