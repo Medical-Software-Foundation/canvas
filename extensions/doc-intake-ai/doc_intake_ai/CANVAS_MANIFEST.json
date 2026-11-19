@@ -1,0 +1,80 @@
+{
+    "sdk_version": "0.99.1",
+    "plugin_version": "0.4.2",
+    "name": "doc_intake_ai",
+    "description": "AI-powered document intake: auto-categorizes, links to patients, assigns reviewers, and prefills template fields for documents arriving in Data Integration",
+    "components": {
+        "protocols": [
+            {
+                "class": "doc_intake_ai.protocols.handler:DocumentIntakeHandler",
+                "description": "Processes incoming documents using Extend AI and emits Data Integration effects",
+                "data_access": {
+                    "event": "read",
+                    "read": [
+                        "integration_tasks",
+                        "patients",
+                        "staff",
+                        "teams",
+                        "lab_report_templates",
+                        "lab_report_template_fields",
+                        "imaging_report_templates",
+                        "imaging_report_template_fields",
+                        "specialty_report_templates",
+                        "specialty_report_template_fields"
+                    ]
+                },
+                "meta": {
+                    "title": "Document Intake AI Handler",
+                    "RESPONDS_TO": [
+                        "DOCUMENT_RECEIVED"
+                    ]
+                }
+            },
+            {
+                "class": "doc_intake_ai.webhook_api:ExtendWebhookAPI",
+                "description": "Receives Extend AI webhook callbacks for async extraction results",
+                "data_access": {
+                    "event": "read",
+                    "read": [
+                        "integration_tasks",
+                        "patients",
+                        "staff",
+                        "teams",
+                        "lab_report_templates",
+                        "lab_report_template_fields",
+                        "imaging_report_templates",
+                        "imaging_report_template_fields",
+                        "specialty_report_templates",
+                        "specialty_report_template_fields"
+                    ]
+                },
+                "meta": {
+                    "title": "Extend AI Webhook Handler"
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "EXTEND_API_KEY",
+        "EXTEND_EXTRACTOR_ID",
+        "DEFAULT_REVIEWER",
+        "ENABLE_CLASSIFY",
+        "ENABLE_MATCH_PATIENT",
+        "ENABLE_ASSIGN_REVIEWER",
+        "ENABLE_PREFILL_TEMPLATES",
+        "ENABLE_CHANNEL_FAX",
+        "ENABLE_CHANNEL_DOCUMENT_UPLOAD",
+        "ENABLE_CHANNEL_INTEGRATION_ENGINE",
+        "ENABLE_CHANNEL_PATIENT_PORTAL",
+        "EXTEND_WEBHOOK_SECRET"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
