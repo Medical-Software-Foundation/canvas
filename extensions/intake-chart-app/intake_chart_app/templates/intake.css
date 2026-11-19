@@ -1,0 +1,110 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: #1a1a1a; background: #f8f9fa; overflow: hidden; }
+.ic-container { width: 100%; height: 100%; padding: 16px; overflow-y: auto; }
+.ic-header { display: flex; align-items: center; gap: 12px; padding: 8px 0 12px 0; }
+.ic-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #e3f2fd; color: #1565c0; }
+h1 { font-size: 15px; font-weight: 600; }
+
+.ic-section { border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; margin-bottom: 8px; }
+.ic-section-header { display: flex; align-items: center; padding: 10px 14px; background: #fafafa; border-bottom: 1px solid #e0e0e0; }
+.ic-section-title { font-weight: 600; font-size: 13px; flex: 1; }
+.ic-section-status { font-size: 11px; color: #999; font-weight: 400; }
+.ic-section-status--saved { color: #2e7d32; font-weight: 600; }
+.ic-section-status--error { color: #d32f2f; font-weight: 600; }
+.ic-form { padding: 14px; }
+.ic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.ic-field { display: flex; flex-direction: column; gap: 4px; }
+.ic-label { font-size: 11px; font-weight: 600; color: #333; }
+.ic-unit { color: #777; font-weight: 400; font-size: 10px; }
+.ic-input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-family: inherit; background: #fff; }
+.ic-input:focus { outline: none; border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,0.15); }
+
+.ic-save-row { display: flex; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid #e0e0e0; gap: 12px; }
+.ic-save-btn { padding: 6px 16px; background: #1565c0; color: #fff; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.ic-save-btn:hover { background: #0d47a1; }
+.ic-save-btn:disabled { background: #90caf9; cursor: not-allowed; }
+.ic-status { font-size: 11px; font-weight: 500; }
+.ic-status--saving { color: #f57c00; }
+.ic-status--saved { color: #2e7d32; }
+.ic-status--error { color: #d32f2f; }
+
+.ic-footer { background: #f8f9fa; padding: 16px 0; border-top: 2px solid #e0e0e0; display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.ic-commit-btn { padding: 8px 20px; background: #2e7d32; color: #fff; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.ic-commit-btn:hover { background: #1b5e20; }
+.ic-commit-btn:disabled { background: #a5d6a7; cursor: not-allowed; }
+.ic-commit-status { font-size: 12px; font-weight: 500; }
+.ic-commit-status--committing { color: #f57c00; }
+.ic-commit-status--committed { color: #2e7d32; }
+.ic-commit-status--error { color: #d32f2f; }
+
+.ic-meta { font-size: 11px; color: #777; margin-top: 16px; }
+.ic-meta code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-family: ui-monospace, monospace; }
+
+.ic-section--readonly .ic-section-header { background: #f3f7fb; }
+.ic-readonly-body { padding: 12px 14px; }
+.ic-help { font-size: 11px; color: #666; margin-bottom: 8px; }
+.ic-empty { font-size: 12px; color: #777; font-style: italic; }
+.ic-list { padding-left: 20px; margin: 0; }
+.ic-list li { font-size: 12px; line-height: 1.5; }
+.ic-pre { font-family: ui-monospace, monospace; font-size: 11px; background: #f5f5f5; padding: 8px; border-radius: 4px; white-space: pre-wrap; }
+
+.ic-section--editable .ic-section-header { background: #f3faf5; }
+.ic-editable-body { padding: 12px 14px; }
+.ic-rows { display: flex; flex-direction: column; gap: 8px; }
+.ic-rows-empty { padding: 6px 0; }
+.ic-row { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 12px; }
+.ic-row[data-action="edit"] { border-color: #1565c0; }
+.ic-row[data-action="remove"] { border-color: #d32f2f; background: #fffafa; }
+.ic-row[data-action="add"] { border-color: #2e7d32; background: #f3faf5; }
+.ic-row-summary { display: flex; align-items: center; gap: 12px; }
+.ic-row-label { flex: 1; font-size: 13px; }
+.ic-row-actions { display: inline-flex; gap: 4px; }
+.ic-action-btn { padding: 3px 10px; font-size: 11px; font-weight: 500; background: #fff; color: #444; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-family: inherit; }
+.ic-action-btn:hover { background: #f0f0f0; }
+.ic-action-btn[aria-pressed="true"] { background: #1565c0; color: #fff; border-color: #1565c0; }
+.ic-action-btn[aria-pressed="true"].ic-action--confirm { background: #2e7d32; border-color: #2e7d32; }
+.ic-action-btn[aria-pressed="true"].ic-action--remove { background: #d32f2f; border-color: #d32f2f; }
+.ic-row-edit, .ic-row-remove { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+.ic-row-collapsed { display: none; }
+.ic-row-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.ic-textarea { width: 100%; resize: vertical; min-height: 32px; }
+/* Add-row layout — title spans the top, fields take the left column, the
+   Add button sits inline on the right aligned with the *input row* (not
+   the bottom of the cell, which on search-type fields includes the picked
+   pill below the input). The hint sits on its own full-width row below the
+   whole block. ``align-self: start`` plus ``margin-top`` equal to the
+   field label height (label font + row gap, ~20px) lines the button up
+   with the inputs; the button's own vertical padding is sized to match
+   input height (.ic-input has 6px vertical padding + 13px text ≈ 28px). */
+.ic-add-row { margin-top: 14px; padding: 10px 12px; background: #f5f5f5; border: 1px dashed #999; border-radius: 6px;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "title title" "fields actions" "hint hint"; column-gap: 16px; row-gap: 8px; }
+.ic-add-title { grid-area: title; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 0; }
+.ic-add-row > .ic-row-fields { grid-area: fields; align-items: start; }
+.ic-add-actions { grid-area: actions; align-self: start; margin-top: 17px; }
+.ic-add-hint-row { grid-area: hint; }
+.ic-add-btn { padding: 7px 14px; background: #fff; color: #2e7d32; border: 1px solid #2e7d32; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer; font-family: inherit; line-height: 1.2; }
+.ic-add-btn:hover { background: #e8f5e9; }
+.ic-add-btn:disabled { background: #fff; color: #a5d6a7; border-color: #a5d6a7; cursor: not-allowed; }
+.ic-add-btn:disabled:hover { background: #fff; }
+.ic-row--remove-affordance { font-size: 11px; color: #c62828; cursor: pointer; background: none; border: none; text-decoration: underline; padding: 0; }
+
+.ic-search-wrap { position: relative; }
+.ic-search-input { width: 100%; }
+.ic-search-results { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; max-height: 220px; overflow-y: auto; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+.ic-search-results[hidden] { display: none; }
+.ic-search-result { display: block; width: 100%; text-align: left; padding: 6px 10px; background: #fff; border: none; border-bottom: 1px solid #f3f3f3; cursor: pointer; font-size: 12px; font-family: inherit; }
+.ic-search-result:hover, .ic-search-result.is-highlighted { background: #e3f2fd; }
+.ic-search-result-code { display: inline-block; min-width: 60px; font-weight: 600; color: #1565c0; }
+.ic-search-result-name { color: #444; }
+.ic-search-picked { margin-top: 6px; padding: 4px 8px; background: #e8f5e9; border: 1px solid #66bb6a; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.ic-search-picked[hidden] { display: none; }
+/* Keep the picked pill on a single line so a long ICD-10 / FDB / allergen
+   description does not stretch its grid cell — flex children default to
+   ``min-width: auto`` which prevents the text from shrinking below its
+   intrinsic width. ``min-width: 0`` lets the span shrink and ``text-overflow``
+   shows the truncated string with a tooltip wired in intake.js (title=...). */
+.ic-search-picked > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ic-search-picked-clear { margin-left: auto; background: none; border: none; cursor: pointer; color: #c62828; font-size: 13px; font-weight: bold; padding: 0 4px; }
+
+.ic-add-hint, .ic-save-hint { font-size: 11px; color: #c62828; font-weight: 500; line-height: 1.35; }

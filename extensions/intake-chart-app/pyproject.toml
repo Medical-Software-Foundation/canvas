@@ -1,0 +1,28 @@
+# Canvas packages the plugin from CANVAS_MANIFEST.json on install;
+# this pyproject.toml pins the dev tooling (mypy, pytest, coverage)
+# used for local test runs and contributor workflows.
+
+[project]
+name = "intake_chart_app"
+version = "0.0.0"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
