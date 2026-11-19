@@ -1,0 +1,43 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  # Pinned deliberately. Unpinned, uv resolves to whatever is newest at install
+  # time, so two machines (or the same machine a week apart) build against
+  # different SDKs. Matches the sibling plugin questionnaire_followup. Confirm
+  # against the SDK the Canvas instance itself runs before ship.
+  "canvas[test-utils]==0.226.1"
+]
+description = "Show which preventive screenings a patient is due or overdue for when their chart opens, and let a provider order one without leaving the chart."
+license = "MIT"
+name = "preventive_screenings"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.19.2"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["preventive_screenings"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest-cov>=7.1.0",
+    # dateutil is a sandbox-allowed runtime dependency used for the interval
+    # math; without its stubs CPA's strict mypy config fails on the import.
+    "types-python-dateutil>=2.9.0",
+]
