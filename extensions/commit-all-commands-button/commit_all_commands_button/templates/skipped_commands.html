@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    // Canvas posts INIT_CHANNEL with a MessagePort after the frame loads; posting
+    // CLOSE_MODAL on that port closes the modal.
+    var messagePort = null;
+    window.addEventListener("message", function (event) {
+      if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+        messagePort = event.ports[0];
+        messagePort.start();
+      }
+    });
+    function closeModal() {
+      if (messagePort) {
+        messagePort.postMessage({ type: "CLOSE_MODAL" });
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: #1f2933; margin: 16px; }
+    p { margin: 0 0 12px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e4e7eb; }
+    th { font-weight: 600; color: #52606d; }
+    .actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+    button { background: #2185d0; color: #fff; border: none; border-radius: 4px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #1678c2; }
+  </style>
+</head>
+<body>
+  <p>These commands were left uncommitted:</p>
+  <table>
+    <thead>
+      <tr><th>Command</th><th>Reason</th></tr>
+    </thead>
+    <tbody>
+      {% for item in skipped %}
+      <tr><td>{{ item.label }}</td><td>{{ item.reason }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p>Fill in or delete a command with empty required fields, then commit it. A command saved to this note but not shown in it needs your Canvas team.</p>
+  <div class="actions">
+    <button type="button" onclick="closeModal()">Go to note</button>
+  </div>
+</body>
+</html>

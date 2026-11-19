@@ -10,7 +10,7 @@ license = "MIT"
 name = "commit_all_commands_button"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.0.1"
+version = "0.0.2"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]

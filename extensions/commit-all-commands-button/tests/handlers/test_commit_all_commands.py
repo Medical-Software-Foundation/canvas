@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import Mock, patch, MagicMock
 import pytest
 from pydantic import ValidationError
@@ -6,49 +7,66 @@ from canvas_sdk.commands import (
     AllergyCommand,
     AssessCommand,
     DiagnoseCommand,
+    FollowUpCommand,
+    HistoryOfPresentIllnessCommand,
     QuestionnaireCommand,
 )
 from canvas_sdk.commands.commands.change_medication import ChangeMedicationCommand
 from canvas_sdk.commands.commands.immunization_statement import ImmunizationStatementCommand
-from canvas_sdk.v1.data.note import NoteStates
 
-from commit_all_commands_button.handlers.commit_all_commands import CommitButtonHandler
+from commit_all_commands_button.handlers.commit_all_commands import (
+    NOT_IN_NOTE,
+    CommitButtonHandler,
+)
+
+MODULE = "commit_all_commands_button.handlers.commit_all_commands"
+
+
+class AnyUUID:
+    """A body UUID set containing every command, for tests not about body placement."""
+
+    def __contains__(self, item: object) -> bool:
+        return True
+
+
+@pytest.fixture(autouse=True)
+def note_checks():
+    """Stub the note lookup, note checks and modal rendering so each test controls them."""
+    with patch(f"{MODULE}.Note") as mock_note_model, \
+         patch.object(CommitButtonHandler, "accepts_commits", return_value=True) as accepts, \
+         patch.object(CommitButtonHandler, "command_uuids_in_body", return_value=AnyUUID()) as in_body, \
+         patch(f"{MODULE}.render_to_string", return_value="<p>summary</p>") as render:
+        yield SimpleNamespace(
+            note_model=mock_note_model, accepts=accepts, in_body=in_body, render=render
+        )
+
+
+def make_handler(note_id: str = "test-note-id") -> CommitButtonHandler:
+    mock_event = Mock()
+    mock_event.context = {"note_id": note_id}
+    return CommitButtonHandler(event=mock_event)
+
+
+def make_command(schema_key: str, command_id: str, data: dict | None = None) -> Mock:
+    command = Mock()
+    command.schema_key = schema_key
+    command.id = command_id
+    command.data = data
+    return command
 
 
 class TestCommitButtonHandlerVisibility:
     """Test cases for button visibility logic."""
 
-    @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
-    def test_visible_when_note_not_locked(self, mock_note_state):
-        """Button should be visible when note is not locked."""
-        mock_note_event = Mock()
-        mock_note_event.state = NoteStates.UNLOCKED
-        mock_note_state.objects.get.return_value = mock_note_event
+    @pytest.mark.parametrize("accepts", [True, False])
+    def test_visible_follows_accepts_commits(self, note_checks, accepts):
+        """The button shows exactly when the note accepts commits."""
+        note_checks.accepts.return_value = accepts
 
-        mock_event = Mock()
-        mock_event.context = {"note_id": "test-note-id"}
-        handler = CommitButtonHandler(event=mock_event)
-
-        result = handler.visible()
-
-        assert result is True
-        mock_note_state.objects.get.assert_called_once_with(note__dbid="test-note-id")
-
-    @patch("commit_all_commands_button.handlers.commit_all_commands.CurrentNoteStateEvent")
-    def test_not_visible_when_note_locked(self, mock_note_state):
-        """Button should not be visible when note is locked."""
-        mock_note_event = Mock()
-        mock_note_event.state = NoteStates.LOCKED
-        mock_note_state.objects.get.return_value = mock_note_event
-
-        mock_event = Mock()
-        mock_event.context = {"note_id": "test-note-id"}
-        handler = CommitButtonHandler(event=mock_event)
-
-        result = handler.visible()
-
-        assert result is False
-        mock_note_state.objects.get.assert_called_once_with(note__dbid="test-note-id")
+        assert make_handler().visible() is accepts
+        note_checks.note_model.objects.select_related.return_value.get.assert_called_once_with(
+            dbid="test-note-id"
+        )
 
 
 class TestCommitButtonHandlerBasicCommit:
@@ -61,7 +79,7 @@ class TestCommitButtonHandlerBasicCommit:
         mock_command = Mock()
         mock_command.schema_key = AllergyCommand.Meta.key
         mock_command.id = "command-uuid-123"
-        mock_command.data = {}
+        mock_command.data = {"allergy": {"value": 1}}
         mock_command_model.objects.filter.return_value = [mock_command]
 
         mock_event = Mock()
@@ -87,12 +105,12 @@ class TestCommitButtonHandlerBasicCommit:
         mock_command1 = Mock()
         mock_command1.schema_key = AllergyCommand.Meta.key
         mock_command1.id = "command-uuid-1"
-        mock_command1.data = {}
+        mock_command1.data = {"allergy": {"value": 1}}
 
         mock_command2 = Mock()
         mock_command2.schema_key = AssessCommand.Meta.key
         mock_command2.id = "command-uuid-2"
-        mock_command2.data = {}
+        mock_command2.data = {"condition": {"value": 1}}
 
         mock_command_model.objects.filter.return_value = [mock_command1, mock_command2]
 
@@ -116,7 +134,9 @@ class TestCommitButtonHandlerBasicCommit:
             assert len(effects) == 2
 
     @patch("commit_all_commands_button.handlers.commit_all_commands.Command")
-    def test_handle_returns_empty_list_when_no_staged_commands(self, mock_command_model):
+    def test_handle_returns_empty_list_when_no_staged_commands(
+        self, mock_command_model, note_checks
+    ):
         """Handle should return empty list when no staged commands exist."""
         mock_command_model.objects.filter.return_value = []
 
@@ -127,6 +147,7 @@ class TestCommitButtonHandlerBasicCommit:
         effects = handler.handle()
 
         assert effects == []
+        note_checks.render.assert_not_called()
         mock_command_model.objects.filter.assert_called_once_with(
             note_id="test-note-id", state="staged"
         )
@@ -310,7 +331,7 @@ class TestCommitButtonHandlerErrorHandling:
         mock_command = Mock()
         mock_command.schema_key = DiagnoseCommand.Meta.key
         mock_command.id = "command-uuid-123"
-        mock_command.data = {}
+        mock_command.data = {"diagnose": {"value": "E11.9"}}
 
         mock_command_model.objects.filter.return_value = [mock_command]
 
@@ -422,3 +443,148 @@ class TestCommitButtonHandlerConfiguration:
             "vitals",
         }
         assert set(CommitButtonHandler.SCHEMA_KEYS_TO_COMMANDS) == expected_schema_keys
+
+
+class TestCommitButtonHandlerSkipping:
+    """Test cases for commands the button leaves uncommitted."""
+
+    @patch(f"{MODULE}.Command")
+    def test_handle_commits_nothing_when_note_rejects_commits(self, mock_command_model, note_checks):
+        """A note that rejects commits gets no effects, and its commands are not queried."""
+        note_checks.accepts.return_value = False
+
+        assert make_handler().handle() == []
+        mock_command_model.objects.filter.assert_not_called()
+
+    @patch(f"{MODULE}.render_to_string", return_value="<p>skipped</p>")
+    @patch(f"{MODULE}.Command")
+    def test_handle_skips_command_not_in_body(self, mock_command_model, mock_render, note_checks):
+        """A staged command missing from the note body is not committed and is listed."""
+        note_checks.in_body.return_value = {"inbody"}
+        mock_command_model.objects.filter.return_value = [
+            make_command(AllergyCommand.Meta.key, "in-body", {"allergy": {"value": 1}}),
+            make_command(AllergyCommand.Meta.key, "orphan", {"allergy": {"value": 2}}),
+        ]
+
+        with patch.object(AllergyCommand, "__init__", return_value=None) as mock_init, \
+             patch.object(AllergyCommand, "commit", return_value=Mock()):
+            effects = make_handler().handle()
+
+        mock_init.assert_called_once_with(command_uuid="in-body")
+        assert len(effects) == 2
+        mock_render.assert_called_once_with(
+            "templates/skipped_commands.html",
+            {"skipped": [{"label": "Allergy", "reason": NOT_IN_NOTE}]},
+        )
+
+    @pytest.mark.parametrize(
+        "narrative", [None, "", "   \n ", "missing"],
+    )
+    @patch(f"{MODULE}.render_to_string", return_value="<p>skipped</p>")
+    @patch(f"{MODULE}.Command")
+    def test_handle_skips_hpi_with_blank_narrative(
+        self, mock_command_model, mock_render, narrative
+    ):
+        """An HPI with an empty or absent narrative is not committed and is listed."""
+        data = {} if narrative == "missing" else {"narrative": narrative}
+        mock_command_model.objects.filter.return_value = [
+            make_command(HistoryOfPresentIllnessCommand.Meta.key, "hpi-1", data),
+        ]
+
+        with patch.object(HistoryOfPresentIllnessCommand, "commit") as mock_commit:
+            effects = make_handler().handle()
+
+        mock_commit.assert_not_called()
+        assert len(effects) == 1
+        mock_render.assert_called_once_with(
+            "templates/skipped_commands.html",
+            {
+                "skipped": [
+                    {"label": "History Of Present Illness", "reason": "Empty required field: Narrative"}
+                ]
+            },
+        )
+
+    @patch(f"{MODULE}.render_to_string", return_value="<p>summary</p>")
+    @patch(f"{MODULE}.Command")
+    def test_handle_commits_hpi_with_narrative(self, mock_command_model, mock_render):
+        """An HPI with a narrative is committed and no modal is shown."""
+        mock_command_model.objects.filter.return_value = [
+            make_command(HistoryOfPresentIllnessCommand.Meta.key, "hpi-1", {"narrative": "Headache x3d"}),
+        ]
+
+        with patch.object(HistoryOfPresentIllnessCommand, "__init__", return_value=None), \
+             patch.object(HistoryOfPresentIllnessCommand, "commit", return_value=Mock()) as mock_commit:
+            effects = make_handler().handle()
+
+        mock_commit.assert_called_once()
+        assert len(effects) == 1
+        mock_render.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "data, reason",
+        [
+            ({"requested_date": {"date": "2026-12-01"}, "note_type": {}}, "Empty required field: Visit Type"),
+            ({"requested_date": None, "note_type": {"value": 1}}, "Empty required field: Requested date"),
+            ({}, "Empty required fields: Requested date, Visit Type"),
+        ],
+    )
+    @patch(f"{MODULE}.render_to_string", return_value="<p>skipped</p>")
+    @patch(f"{MODULE}.Command")
+    def test_handle_skips_follow_up_naming_each_empty_field(
+        self, mock_command_model, mock_render, data, reason
+    ):
+        """Every required field is checked, and each empty one is named by its label."""
+        mock_command_model.objects.filter.return_value = [
+            make_command(FollowUpCommand.Meta.key, "fu-1", data),
+        ]
+
+        with patch.object(FollowUpCommand, "commit") as mock_commit:
+            make_handler().handle()
+
+        mock_commit.assert_not_called()
+        assert mock_render.call_args.args[1]["skipped"] == [{"label": "Follow Up", "reason": reason}]
+
+    @patch(f"{MODULE}.render_to_string", return_value="<p>skipped</p>")
+    @patch(f"{MODULE}.Command")
+    def test_handle_skips_command_with_no_data(self, mock_command_model, mock_render):
+        """A command whose data is null is treated as having every field empty."""
+        mock_command_model.objects.filter.return_value = [
+            make_command(DiagnoseCommand.Meta.key, "dx-1", None),
+        ]
+
+        with patch.object(DiagnoseCommand, "commit") as mock_commit:
+            make_handler().handle()
+
+        mock_commit.assert_not_called()
+        assert mock_render.call_args.args[1]["skipped"] == [
+            {"label": "Diagnose", "reason": "Empty required field: Diagnose"}
+        ]
+
+    @patch(f"{MODULE}.Command")
+    def test_handle_does_not_precheck_commands_given_values_at_commit(self, mock_command_model):
+        """Change Medication is committed with its values, so empty data does not skip it."""
+        mock_command_model.objects.filter.return_value = [
+            make_command(ChangeMedicationCommand.Meta.key, "cm-1", {}),
+        ]
+
+        with patch.object(ChangeMedicationCommand, "__init__", return_value=None), \
+             patch.object(ChangeMedicationCommand, "commit", return_value=Mock()) as mock_commit:
+            make_handler().handle()
+
+        mock_commit.assert_called_once()
+
+    @patch(f"{MODULE}.render_to_string", return_value="<p>skipped</p>")
+    @patch(f"{MODULE}.Command")
+    def test_handle_returns_launch_modal_effect_listing_skips(self, mock_command_model, mock_render):
+        """The skipped list is a default modal carrying the rendered template."""
+        mock_command_model.objects.filter.return_value = [
+            make_command(HistoryOfPresentIllnessCommand.Meta.key, "hpi-1", {"narrative": ""}),
+        ]
+
+        effects = make_handler().handle()
+
+        assert len(effects) == 1
+        assert '"content": "<p>skipped</p>"' in effects[0].payload
+        assert '"target": "default_modal"' in effects[0].payload
+        assert '"title": "Some commands were not committed"' in effects[0].payload

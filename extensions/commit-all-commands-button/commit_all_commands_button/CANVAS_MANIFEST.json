@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.162.0",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.219.0",
+    "plugin_version": "0.0.2",
     "name": "commit_all_commands_button",
     "description": "Adds a button in the note footer to commit all uncommitted commands in a Note.",
     "components": {
@@ -8,6 +8,15 @@
             {
                 "class": "commit_all_commands_button.handlers.commit_all_commands:CommitButtonHandler",
                 "description": "Adds a button in the note footer to commit all uncommitted commands in a Note.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "commit_all_commands_button.handlers.reload_on_note_state_change:ReloadButtonsOnNoteStateChange",
+                "description": "Reloads the note's action buttons when the note changes state, so the Commit All Commands button shows or hides without a page refresh.",
                 "data_access": {
                     "event": "",
                     "read": [],
