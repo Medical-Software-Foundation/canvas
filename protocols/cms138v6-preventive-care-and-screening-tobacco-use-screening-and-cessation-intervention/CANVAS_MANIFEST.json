@@ -1,0 +1,58 @@
+{
+  "sdk_version": "0.267.0",
+  "plugin_version": "0.0.1",
+  "name": "cms138v6-preventive-care-and-screening-tobacco-use-screening-and-cessation-intervention",
+  "description": "CMS138v15 Preventive Care and Screening: Tobacco Use: Screening and Cessation Intervention (2027 performance period). Screens patients 12 and older for tobacco use and recommends cessation counseling or pharmacotherapy for current tobacco users.",
+  "components": {
+    "protocols": [
+      {
+        "class": "cms138v6-preventive-care-and-screening-tobacco-use-screening-and-cessation-intervention.protocols.cms138v6_tobacco_screening_and_cessation:ClinicalQualityMeasure138v6",
+        "description": "Screens patients 12 and older with qualifying visits for tobacco use during the measurement period and recommends cessation counseling or pharmacotherapy when the most recent screening identifies a tobacco user. Excludes patients in hospice.",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        },
+        "meta": {
+          "title": "Preventive Care and Screening: Tobacco Use: Screening and Cessation Intervention",
+          "version": "2027-01-01v15",
+          "description": "Patients aged 12 years and older who have not been screened for tobacco use during the measurement period OR who have not received tobacco cessation intervention if identified as a tobacco user.",
+          "information": "https://ecqi.healthit.gov/ecqm/ec/2027/cms0138v15",
+          "identifiers": [
+            "CMS138v15"
+          ],
+          "types": [
+            "CQM"
+          ],
+          "authors": [
+            "American Medical Association (AMA)",
+            "PCPI(R) Foundation (PCPI[R])"
+          ],
+          "references": [
+            "U.S. Preventive Services Task Force. (2021). Interventions for tobacco smoking cessation in adults, including pregnant persons: US Preventive Services Task Force recommendation statement. JAMA, 325(3), 265-279."
+          ],
+          "show_in_chart": true,
+          "show_in_population": false,
+          "default_permission_flags": {
+            "protocols:actions:CMS138v6:instruct": true,
+            "protocols:actions:CMS138v6:interview": true,
+            "protocols:actions:CMS138v6:prescribe": true
+          }
+        }
+      }
+    ],
+    "commands": [],
+    "content": [],
+    "effects": [],
+    "views": [],
+    "questionnaires": []
+  },
+  "secrets": [],
+  "tags": {},
+  "references": [
+    "https://ecqi.healthit.gov/ecqm/ec/2027/cms0138v15"
+  ],
+  "license": "",
+  "diagram": false,
+  "readme": "./README.md"
+}
