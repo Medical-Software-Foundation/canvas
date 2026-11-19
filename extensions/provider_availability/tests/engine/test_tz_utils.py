@@ -6,10 +6,8 @@ from zoneinfo import ZoneInfo
 
 from provider_availability.engine.tz_utils import (
     localize_naive,
-    practice_now,
     practice_tz,
     provider_tz,
-    to_practice_naive,
     to_utc,
 )
 
@@ -35,13 +33,6 @@ class TestProviderTz:
              patch(f"{TZ_MODULE}.get_practice_timezone", return_value="US/Eastern"):
             result = provider_tz("provider-1")
             assert result == ZoneInfo("US/Eastern")
-
-
-class TestPracticeNow:
-    def test_returns_aware_datetime(self):
-        with patch(f"{TZ_MODULE}.get_practice_timezone", return_value="US/Eastern"):
-            result = practice_now()
-            assert result.tzinfo is not None
 
 
 class TestToUtc:
@@ -74,16 +65,3 @@ class TestLocalizeNaive:
             assert result.tzinfo == ZoneInfo("US/Pacific")
 
 
-class TestToPracticeNaive:
-    def test_aware_to_naive(self):
-        with patch(f"{TZ_MODULE}.get_practice_timezone", return_value="US/Eastern"):
-            utc_dt = datetime(2026, 3, 10, 13, 0, tzinfo=UTC)
-            result = to_practice_naive(utc_dt)
-            # UTC 13:00 = EDT 9:00
-            assert result.tzinfo is None
-            assert result.hour == 9
-
-    def test_naive_passthrough(self):
-        naive = datetime(2026, 3, 10, 9, 0)
-        result = to_practice_naive(naive)
-        assert result is naive

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from bp_cpt2.llm_openai import LlmOpenai
+from bp_cpt2.llm_openai import FIREWORKS_API_BASE, LlmOpenai
 
 
 def test_initialization() -> None:
@@ -147,6 +147,26 @@ def test_chat_success(mock_post: Mock) -> None:
     assert call_kwargs["headers"]["Authorization"] == "Bearer test-key"
     assert call_kwargs["json"]["model"] == "gpt-4"
     assert call_kwargs["json"]["temperature"] == 0.0
+
+
+@patch("bp_cpt2.llm_openai.requests.post")
+def test_chat_posts_to_the_configured_api(mock_post: Mock) -> None:
+    """
+    Test that requests go to OpenAI's US endpoint by default and to the base_url when one is given.
+    """
+    mock_response = Mock()
+    mock_response.status_code = HTTPStatus.OK
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Response"}}]}
+    mock_post.return_value = mock_response
+
+    LlmOpenai(api_key="openai-key").chat(user_prompt="Hello!")
+    LlmOpenai(api_key="fireworks-key", model="accounts/fireworks/routers/kimi-k3-us", base_url=FIREWORKS_API_BASE).chat(user_prompt="Hello!")
+
+    openai_call, fireworks_call = mock_post.call_args_list
+    assert openai_call.args[0] == "https://us.api.openai.com/v1/chat/completions"
+    assert fireworks_call.args[0] == "https://us.api.fireworks.ai/inference/v1/chat/completions"
+    assert fireworks_call.kwargs["headers"]["Authorization"] == "Bearer fireworks-key"
+    assert fireworks_call.kwargs["json"]["model"] == "accounts/fireworks/routers/kimi-k3-us"
 
 
 @patch("bp_cpt2.llm_openai.requests.post")

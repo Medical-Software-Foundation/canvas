@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Appointment reminder: a single bell.
+       Monochrome #1B1B1B on transparency, matching the Canvas provider-menu
+       icon set. Crown, dome, skirt and rim are one continuous path so no
+       seams show at 48x48; only the clapper is a separate shape. -->
+  <g fill="#1B1B1B" transform="translate(0 -1.5)">
+    <path d="M50 13c4 0 7 3 7 7 0 .8-.2 1.6-.5 2.3C67.3 25.3 75 35.2 75 47v12c0 6.5 2.6 10 6 13v4.5a2 2 0 0 1-2 2H21a2 2 0 0 1-2-2V72c3.4-3 6-6.5 6-13V47c0-11.8 7.7-21.7 18.5-24.7-.3-.7-.5-1.5-.5-2.3 0-4 3-7 7-7z"/>
+    <circle cx="50" cy="85" r="5.5"/>
+  </g>
+</svg>

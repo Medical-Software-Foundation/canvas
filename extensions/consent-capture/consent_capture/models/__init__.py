@@ -64,6 +64,15 @@ class ConsentDefinition(CustomModel):
     # (shown under "Optional"). Defaults to optional.
     required = BooleanField(default=False)
 
+    # Whether "Sign on this device" is offered for Written captures of this consent.
+    # Off by default; rows created before the field existed read as None (off).
+    allow_device_signature = BooleanField(default=False)
+
+    # Whether staff can mark the patient Ineligible for this consent (recorded as a
+    # decline with the practice's "Ineligible" rejection coding). Off by default;
+    # rows created before the field existed read as None (off).
+    allow_ineligible = BooleanField(default=False)
+
     active = BooleanField(default=True)
     sort_order = IntegerField(default=100)
 
@@ -109,6 +118,30 @@ class ConsentCaptureDetail(CustomModel):
     capacity_statement = TextField(default="")
     pages = IntegerField(default=0)            # page count of the attached PDF (0 = unknown)
 
+    # "accepted" or "declined" (a FHIR Consent recorded with status "rejected").
+    # Rows written before this field existed read as None and mean accepted.
+    status = TextField(default="accepted")
+
+    # The rejection coding a decline was recorded with (empty for accepted
+    # consents, and for declines recorded before reasons existed).
+    reason_system = TextField(default="")
+    reason_code = TextField(default="")
+    reason_display = TextField(default="")
+
+    # "Sign on this device" detail. The method stays "Written"; these say how the
+    # signature was captured. ``signed_with`` is finger | mouse | typed.
+    signed_on_device = BooleanField(default=False)
+    signed_with = TextField(default="")
+    reused_signature = BooleanField(default=False)   # first signature applied again
+    printed_name = TextField(default="")             # printed or typed name, if entered
+    name_kept = BooleanField(default=False)          # staff kept a mismatched name as is
+    reconfirmed = BooleanField(default=False)        # re-confirmed under a corrected name
+
+    # The consent text exactly as shown at capture, and its SHA-256, so the record
+    # keeps what the patient saw even if the consent is edited later.
+    statement_text = TextField(default="")
+    statement_sha256 = TextField(default="")
+
     obtained_at = DateTimeField(auto_now=True)
 
     class Meta:
@@ -120,4 +153,38 @@ class ConsentCaptureDetail(CustomModel):
         ]
         indexes = [
             Index(fields=["patient_id"]),
+        ]
+
+
+class ConsentPracticeSettings(CustomModel):
+    """Practice-wide settings for "Sign on this device", edited on the Practice
+    settings tab of Consent Settings. One row, keyed ``key="practice"``; until it is
+    first saved, ``service.practice_settings`` supplies the defaults."""
+
+    key = TextField(default="practice")
+
+    # Signing several consents: sign each one (False) or allow reusing the first
+    # signature on the rest (True).
+    reuse_signature = BooleanField(default=False)
+
+    # Accepted signatures. At least one stays on (enforced when saving).
+    accept_finger = BooleanField(default=True)
+    accept_mouse = BooleanField(default=True)
+    accept_typed = BooleanField(default=False)
+
+    # Ask the signer to print their name under a drawn signature.
+    ask_printed_name = BooleanField(default=False)
+
+    # Rejection codings staff can choose when declining, as [{system, code, display}]
+    # (the name tells apart codings that have no code).
+    # Until ``decline_reasons_set`` is saved, every displayed coding except the
+    # patient portal's own counts as chosen.
+    decline_reasons_set = BooleanField(default=False)
+    decline_reasons = JSONField(default=list)
+
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["key"], name="uniq_consent_practice_settings_key"),
         ]

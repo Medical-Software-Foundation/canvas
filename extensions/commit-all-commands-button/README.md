@@ -28,7 +28,7 @@ When the button is clicked, the plugin:
 
 ## Supported Command Types
 
-The following 27 command types can be committed with this button (when SDK commands are enabled):
+The following 32 command types can be committed with this button (when SDK commands are enabled):
 
 - Allergy
 - Assess
@@ -50,6 +50,7 @@ The following 27 command types can be committed with this button (when SDK comma
 - Perform
 - Plan
 - Physical Exam
+- POC Lab Test
 - Questionnaire
 - Remove Allergy
 - Resolve Condition
@@ -61,6 +62,40 @@ The following 27 command types can be committed with this button (when SDK comma
 - Update Diagnosis
 - Update Goal
 - Vitals
+
+## Commands This Button Does Not Commit
+
+Not every command is a candidate, and the reasons differ. This section exists so the omissions read as deliberate rather than as gaps waiting to be filled — if you are here to add a command, check which group it falls into first.
+
+### Orders — they have to be sent, not just committed
+
+Committing these would leave an order that looks complete but was never transmitted. Sending is a separate, deliberate step that belongs to the provider.
+
+- Prescribe
+- Refill
+- Adjust Prescription
+- Imaging Order
+- Lab Order
+
+### Refer — it carries a delegate
+
+A staged Refer does not mean the provider intended to commit it. The delegate makes the provider's intent ambiguous, so committing it in bulk could act on something they were still deciding.
+
+### Reason for Visit — it is always staged
+
+RFV stays staged by design and is never committed, so there is nothing for this button to do. Consistent with that, its `COMMIT_REASON_FOR_VISIT_COMMAND` interpreter registration is commented out in home-app, so the effect would not be honored even if it were mapped.
+
+### Reference — it is committed on origination
+
+A Reference command is already committed by the time it exists, so it never appears in the staged set this button queries. Mapping it would be dead code.
+
+### Reviewed and Custom Command — no commit effect exists
+
+`ChartSectionReviewCommand` ("Reviewed") and `CustomCommand` are in the SDK but have no `COMMIT_*` effect defined, so they cannot be committed by any plugin.
+
+### Not in the SDK
+
+These are Canvas commands with no SDK equivalent, so a plugin cannot act on them at all: Adjust Protocol, Approve Change, Deny Change, Visual Exam Finding, Immunize, Clipboard, Educational Material, Private Notes, Snooze Protocol, and the coding gap commands (Assess, Create, Defer, Validate).
 
 ## Installation & Usage
 

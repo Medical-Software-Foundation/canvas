@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oura Ring</title>
+<link rel="stylesheet" href="{{ api_path }}/static/shared.css">
+<link rel="stylesheet" href="{{ api_path }}/static/portal.css">
+</head>
+<body data-api="{{ api_path }}" data-available="{{ available|yesno:'true,false' }}">
+<main>
+  <div class="card">
+    <h1>Oura Ring</h1>
+    <span id="pill" class="pill">Checking</span>
+    <div id="notice" class="notice" hidden></div>
+
+    <section id="intro">
+      <p id="lead">Share your Oura Ring summaries with your care team. They will see:</p>
+      <ul>
+        <li>Sleep score, total sleep, resting heart rate and HRV</li>
+        <li>Readiness and daily steps</li>
+        <li>Overnight blood oxygen</li>
+      </ul>
+      <p class="muted">Your care team sees this data only while you are connected. It is read
+         from Oura when they open your chart and is not saved in your health record. Oura
+         Ring data is wellness data, not a medical measurement.</p>
+    </section>
+
+    <section id="not-connected" hidden>
+      <div class="actions">
+        <a id="connect" class="button primary" href="{{ api_path }}/start" target="_blank" rel="noopener">Connect Oura Ring</a>
+      </div>
+      <p class="muted">Oura opens in a new tab. Sign in, choose what to share, and approve.
+         This page updates on its own when you are done.</p>
+    </section>
+
+    <section id="connected" hidden>
+      <p id="since"></p>
+      <div class="actions">
+        <button id="stop" class="button danger" type="button">Stop sharing</button>
+        <button id="stop-confirm" class="button danger" type="button" hidden>Yes, stop sharing</button>
+        <button id="stop-cancel" class="button" type="button" hidden>Keep sharing</button>
+      </div>
+      <p class="muted">You can also remove access for this app in your Oura account settings.</p>
+    </section>
+
+    <section id="unavailable" hidden>
+      <p>Connecting is not available right now. Please contact your care team.</p>
+    </section>
+  </div>
+</main>
+<script src="{{ api_path }}/static/portal.js"></script>
+</body>
+</html>

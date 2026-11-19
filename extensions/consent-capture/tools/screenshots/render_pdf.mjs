@@ -49,11 +49,12 @@ const CSS = `
   th, td { border: 1px solid #e5e7eb; padding: 7px 10px; text-align: left; vertical-align: top; }
   th { background: #f3f4f6; }
   hr { border: 0; border-top: 1px solid #e5e7eb; margin: 22px 0; }
-  img { display: block; max-width: 100%; height: auto; margin: 12px auto 16px;
+  img { display: block; max-width: 100%; max-height: 440px; width: auto; height: auto; margin: 12px auto 16px;
     border: 1px solid #e5e7eb; border-radius: 8px; }
   /* Avoid awkward breaks */
   h1, h2, h3 { break-after: avoid; }
   img, table, pre, blockquote { break-inside: avoid; }
+  .keep { break-inside: avoid; }
 `;
 
 function wrap(title, bodyHtml) {
@@ -71,6 +72,30 @@ async function run() {
     writeFileSync(tmp, html, 'utf8');
     try {
       await page.goto('file://' + tmp, { waitUntil: 'networkidle' });
+      // Chromium ignores break-after:avoid on headings, so wrap each heading with
+      // the block after it; the wrapper's break-inside:avoid keeps them together.
+      await page.evaluate(() => {
+        // A line ending in ":" introduces what follows (a picture or a table), so
+        // it joins the group too.
+        const introduces = (el) => /:\s*$/.test(el.textContent);
+        const isHeading = (el) => /^H[1-3]$/.test(el.tagName);
+        const group = (first) => {
+          const items = [first];
+          let cur = first;
+          while ((isHeading(cur) || introduces(cur)) && cur.nextElementSibling
+            && !isHeading(cur.nextElementSibling) && items.length < 3) {
+            cur = cur.nextElementSibling;
+            items.push(cur);
+          }
+          if (items.length < 2) return;
+          const keep = document.createElement('div');
+          keep.className = 'keep';
+          first.before(keep);
+          keep.append(...items);
+        };
+        document.querySelectorAll('h2, h3').forEach(group);
+        document.querySelectorAll('.page > p').forEach((p) => { if (introduces(p)) group(p); });
+      });
       await page.pdf({
         path: resolve(DOCS, g.pdf),
         format: 'A4',

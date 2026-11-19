@@ -6,24 +6,20 @@ from canvas_sdk.v1.data.note import NoteStates
 
 from logger import log
 
-from bp_cpt2.bp_claim_coder import process_bp_billing_for_note
-from bp_cpt2.utils import to_bool
+from bp_cpt2.bp_claim_coder import get_llm_client, process_bp_billing_for_note
+
+# Signing records LKD and SGN together; SGN is a literal because older SDKs' NoteStates lack it
+LOCKED_STATES = (NoteStates.LOCKED, "SGN")
 
 
 class BloodPressureNoteStateHandler(BaseHandler):
     """
-    Handles note state changes for treatment plan documentation analysis.
-
-    This handler analyzes clinical notes to determine if blood pressure treatment plans
-    are documented and adds appropriate billing codes (G8753-G8755) for uncontrolled BP.
-
-    Treatment codes:
-    - G8753: Most recent BP >= 140/90 and treatment plan documented
-    - G8754: Most recent BP >= 140/90 and no treatment plan, reason not given
-    - G8755: Most recent BP >= 140/90 and no treatment plan, documented reason
+    Handles note lock and sign events by linking the note's hypertension-related assessments
+    to the BP billing codes added by the vitals handler.
     """
 
     RESPONDS_TO = [
+        EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED),
         EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_UPDATED)
     ]
 
@@ -35,9 +31,9 @@ class BloodPressureNoteStateHandler(BaseHandler):
 
         log.info(f"Note {note_id} state change to: {new_note_state}")
 
-        # Only process when note is locked
-        if new_note_state != NoteStates.LOCKED:
-            log.info(f"Skipping BP treatment analysis for note {note_id} - state is {new_note_state}")
+        # Only process when note is locked or signed
+        if new_note_state not in LOCKED_STATES:
+            log.info(f"Skipping BP assessment linking for note {note_id} - state is {new_note_state}")
             return []
 
         # Get the note
@@ -49,16 +45,11 @@ class BloodPressureNoteStateHandler(BaseHandler):
 
         # Check if note is billable
         if note.note_type_version and not note.note_type_version.is_billable:
-            log.info(f"Skipping BP treatment analysis for note {note_id} - note type is not billable")
+            log.info(f"Skipping BP assessment linking for note {note_id} - note type is not billable")
             return []
-
-        # Use shared utility function to process BP billing codes
-        openai_api_key = self.secrets.get('OPENAI_API_KEY')
-        include_treatment_codes = to_bool(self.secrets.get('INCLUDE_TREATMENT_PLAN_CODES', ''))
 
         return process_bp_billing_for_note(
             note=note,
-            openai_api_key=openai_api_key,
-            include_treatment_codes=include_treatment_codes,
-            was_just_locked=True  # Push charges and use cache for deduplication
+            llm=get_llm_client(self.secrets),
+            was_just_locked=True  # Use cache for deduplication
         )

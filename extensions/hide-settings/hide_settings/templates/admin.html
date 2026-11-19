@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings Access</title>
+    <link rel="stylesheet" href="/plugin-io/api/hide_settings/admin/styles.css?v={{ cache_bust }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Settings Access</h1>
+            <p class="subtitle">Choose which roles see the Settings item in the main menu.</p>
+        </div>
+
+        <h2 class="section-title">Roles that can see Settings</h2>
+        <p class="section-desc">Check each role that should see Settings. A staff member who holds any checked role keeps it. Everyone else stops seeing Settings after they refresh. Until at least one role is checked, everyone sees Settings.</p>
+
+        <div id="role-list"></div>
+
+        <div class="actions">
+            <button id="save-btn" class="btn-primary" disabled>Save</button>
+            <span id="status-msg" class="status-msg"></span>
+        </div>
+    </div>
+
+    <script>
+        window.__ROLES__ = {{ roles_json|safe }};
+    </script>
+    <script src="/plugin-io/api/hide_settings/admin/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>

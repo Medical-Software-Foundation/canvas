@@ -49,7 +49,10 @@ def _set_form_value(mock_metadata: Any, value: str | None) -> None:
     mock_metadata.objects.filter.return_value.values_list.return_value.first.return_value = value
 
 
-@pytest.mark.parametrize("schema_key", ["medicationStatement", "stopMedication"])
+@pytest.mark.parametrize(
+    "schema_key",
+    ["medicationStatement", "stopMedication", "prescribe", "adjustPrescription", "refill"],
+)
 def test_emits_alert_facility_field_for_supported_commands(
     patched_form_metadata: Any, schema_key: str
 ) -> None:
@@ -94,10 +97,11 @@ def test_no_op_for_other_schema_keys(
 
 
 @pytest.mark.parametrize("purpose", ["form", "print"])
+@pytest.mark.parametrize("schema_key", ["medicationStatement", "prescribe"])
 def test_same_field_emitted_for_form_and_print_purposes(
-    patched_form_metadata: Any, purpose: str
+    patched_form_metadata: Any, purpose: str, schema_key: str
 ) -> None:
-    handler = AlertFacilityFormHandler(_make_event("medicationStatement", purpose=purpose))
+    handler = AlertFacilityFormHandler(_make_event(schema_key, purpose=purpose))
 
     effects = handler.compute()
 
@@ -199,3 +203,14 @@ def test_validator_no_op_when_metadata_set(patched_metadata: Any, value: str) ->
     handler = AlertFacilityRequiredValidator(_validator_event())
 
     assert handler.compute() == []
+
+
+def test_validator_responds_to_all_supported_command_validations() -> None:
+    """The validator must be wired to every medication command's POST_VALIDATION event."""
+    assert set(AlertFacilityRequiredValidator.RESPONDS_TO) == {
+        "MEDICATION_STATEMENT_COMMAND__POST_VALIDATION",
+        "STOP_MEDICATION_COMMAND__POST_VALIDATION",
+        "PRESCRIBE_COMMAND__POST_VALIDATION",
+        "ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION",
+        "REFILL_COMMAND__POST_VALIDATION",
+    }

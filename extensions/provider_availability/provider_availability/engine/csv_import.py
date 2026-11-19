@@ -211,6 +211,12 @@ def _validate_optional_date(row: dict[str, str], field: str) -> list[str]:
     return []
 
 
+def _validate_required_date(row: dict[str, str], field: str) -> list[str]:
+    if not row.get(field, "").strip():
+        return [f"{field} is required"]
+    return _validate_optional_date(row, field)
+
+
 def _validate_optional_int(row: dict[str, str], field: str, minimum: int) -> list[str]:
     val = row.get(field, "").strip()
     if not val:
@@ -231,7 +237,7 @@ def _validate_rule_row(row: dict[str, str]) -> list[str]:
     for f in ("buffer_pre", "buffer_post", "min_lead_hours"):
         errors.extend(_validate_optional_int(row, f, 0))
     errors.extend(_validate_optional_int(row, "slot_minutes", 1))
-    errors.extend(_validate_optional_date(row, "effective_start"))
+    errors.extend(_validate_required_date(row, "effective_start"))
     errors.extend(_validate_optional_date(row, "effective_end"))
     return errors
 
@@ -261,7 +267,7 @@ def _validate_rblock_row(row: dict[str, str]) -> list[str]:
     hold = row.get("hold_type", "").strip().lower()
     if hold and hold not in VALID_HOLD_TYPES:
         errors.append(f"hold_type must be one of: {', '.join(VALID_HOLD_TYPES)}")
-    errors.extend(_validate_optional_date(row, "effective_start"))
+    errors.extend(_validate_required_date(row, "effective_start"))
     errors.extend(_validate_optional_date(row, "effective_end"))
     return errors
 
@@ -548,7 +554,7 @@ def generate_template_csv() -> str:
         ["block", "11111111-1111-1111-1111-111111111111", "", "", "", "", "", "true", "2026-07-04", "Independence Day",
          "", "", "", "", "", "", "", "", "", ""],
         ["rblock", "11111111-1111-1111-1111-111111111111", "", "", "monday", "12:00", "13:00", "", "", "Lunch",
-         "none", "", "", "", "", "weekly", "1", "", "", ""],
+         "none", "", "", "", "", "weekly", "1", "2026-07-01", "", ""],
     ]
     header_line = ",".join(_csv_escape(h) for h in TEMPLATE_HEADERS)
     lines = [header_line]

@@ -2,8 +2,8 @@
 
 With multiple configured consents the button is a hub: it opens a picker listing
 every active consent with its on-file status, and the provider fills them out one
-at a time. The same picker is also reachable any time from the app-drawer
-``ConsentApp``.
+at a time. It is the only way into the picker; the app drawer holds Consent
+Settings for admins instead.
 
 The button is **always shown** for a patient in context — it is a persistent,
 discoverable entry point — and its *color* signals status rather than its
@@ -30,15 +30,16 @@ from consent_capture.constants import (
     BUTTON_TITLE,
 )
 from consent_capture.picker_modal import build_picker_modal
-from consent_capture.service import is_eligible_patient, picker_items
+from consent_capture.service import is_eligible_patient, is_required_and_due, picker_items
 
 
 def needs_any(items):
     """Whether at least one *required* active consent is still not on file
     (never recorded, or expired). Optional consents do not surface the button —
     it mirrors the hub's "Required" (due) section, so the red button means
-    "a required consent is missing" rather than "some optional consent is unfilled"."""
-    return any(item.get("required") and not item.get("on_file") for item in items)
+    "a required consent is missing" rather than "some optional consent is unfilled".
+    A declined consent has been asked and answered, so it doesn't count as missing."""
+    return any(is_required_and_due(item) for item in items)
 
 
 class ConsentButton(ActionButton):

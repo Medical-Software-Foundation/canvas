@@ -1,0 +1,43 @@
+{
+    "sdk_version": "0.140.1",
+    "plugin_version": "0.1.1",
+    "name": "public_appointment_booking",
+    "description": "Reference plugin for unauthenticated (public) appointment booking. A public page lists open slots and accepts booking requests, with rate limits, an origin check, strict input validation and no patient data in any response. Off until PUBLIC_BOOKING_ENABLED is set to true.",
+    "components": {
+        "handlers": [
+            {
+                "class": "public_appointment_booking.handlers.public_api:PublicBookingAPI",
+                "description": "Public routes under /public: GET /book (page), GET /slots (open slots), POST /book (booking request). All return 404 unless PUBLIC_BOOKING_ENABLED=true."
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "PUBLIC_BOOKING_ENABLED",
+            "sensitive": false
+        },
+        {
+            "name": "PUBLIC_BOOKING_NOTE_TYPE_NAME",
+            "sensitive": false
+        },
+        {
+            "name": "PUBLIC_BOOKING_LEAD_TIME_MINUTES",
+            "sensitive": false
+        },
+        {
+            "name": "PUBLIC_BOOKING_WINDOW_DAYS",
+            "sensitive": false
+        },
+        {
+            "name": "PUBLIC_BOOKING_TASK_TEAM_ID",
+            "sensitive": false
+        },
+        {
+            "name": "PUBLIC_BOOKING_ALLOWED_HOSTS",
+            "sensitive": false
+        }
+    ],
+    "tags": {},
+    "license": "MIT",
+    "readme": "../README.md"
+}

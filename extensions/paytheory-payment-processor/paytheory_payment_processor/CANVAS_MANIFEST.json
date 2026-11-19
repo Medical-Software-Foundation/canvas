@@ -51,6 +51,10 @@
                     "read": [],
                     "write": []
                 }
+            },
+            {
+                "class": "paytheory_payment_processor.handlers.card_form_api:CardFormAPI",
+                "description": "Serves the PayTheory hosted-fields card form as a standalone HTML page, loaded in an iframe to avoid custom element re-registration errors (KOALA-5882)."
             }
         ],
         "commands": [],

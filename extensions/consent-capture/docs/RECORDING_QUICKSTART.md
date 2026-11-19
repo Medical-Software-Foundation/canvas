@@ -7,11 +7,8 @@ Need more detail? See the full **[RECORDING_GUIDE](RECORDING_GUIDE.md)**.
 
 ## 1. Open Consents
 
-In the patient's chart, use either:
-
-- The **Consents** button at the top of the chart (always there — **red** when a required
-  consent is due, gray otherwise), or
-- **Consents** in the chart app drawer (always there).
+In the patient's chart, use the **Consents** button at the top of the chart. It's always
+there: **red** when a required consent is due, gray otherwise.
 
 A red banner, **"Required consent not on file,"** is just a reminder to open it.
 

@@ -288,16 +288,6 @@ class TestProviderAvailabilityRule:
         assert d["buffer_minutes"] == {"pre": 0, "post": 15}
         assert d["booking_interval"] == {"min_lead_hours": 24, "slot_granularity_minutes": 15}
 
-    def test_to_json(self, sample_rule):
-        json_str = sample_rule.to_json()
-        parsed = json.loads(json_str)
-        assert parsed["provider_id"] == "provider-uuid-123"
-
-    def test_from_json(self, sample_rule):
-        json_str = sample_rule.to_json()
-        restored = ProviderAvailabilityRule.from_json(json_str)
-        assert restored.provider_id == sample_rule.provider_id
-        assert restored.id == sample_rule.id
 
     def test_from_dict_backward_compat_location_id(self):
         """location_id (singular) should convert to location_ids (list)."""

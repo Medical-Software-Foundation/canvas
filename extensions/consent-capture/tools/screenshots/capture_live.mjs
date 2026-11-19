@@ -1,7 +1,8 @@
-// Live capture on the sanctioned playground test patient. Headed Chromium with a
+// Live capture on a designated test patient. Headed Chromium with a
 // PERSISTENT profile, so you log in once (SSO) and later runs reuse the session.
 //
-//   node tools/screenshots/capture_live.mjs
+//   CANVAS_HOST=https://<your-canvas-host> CANVAS_PATIENT_ID=<test-patient-id> \
+//     node tools/screenshots/capture_live.mjs
 //
 // A window opens. Log in if prompted and land on the patient chart. The script polls
 // until the chart URL is loaded, then captures the shots that only the live instance
@@ -17,8 +18,12 @@ import { ensureDirs, ensureSampleForm, shotPath, SAMPLE_FORM, log, ok, skip } fr
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const USER_DATA = resolve(HERE, '.auth');        // persistent login profile (gitignored)
-const HOST = 'https://scribeqa-playground.canvasmedical.com';
-const PATIENT = '65a4fbf85aae48e2a1a1dbf8c1035264';
+const HOST = (process.env.CANVAS_HOST || '').replace(/\/+$/, '');
+const PATIENT = process.env.CANVAS_PATIENT_ID || '';
+if (!HOST || !PATIENT) {
+  console.error('Set CANVAS_HOST (e.g. https://<your-canvas-host>) and CANVAS_PATIENT_ID (a test patient\'s ID).');
+  process.exit(1);
+}
 const CHART_URL = `${HOST}/patient/${PATIENT}`;
 const SETTINGS_URL = `${HOST}/plugin-io/api/consent_capture/admin/settings`;
 const BANNERS_URL = `${HOST}/plugin-io/api/consent_capture/admin/banners`;

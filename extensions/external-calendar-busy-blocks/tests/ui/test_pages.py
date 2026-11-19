@@ -52,17 +52,22 @@ def test_render_admin_lists_active_staff_with_per_row_status() -> None:
         self_lookup.first.return_value = None
         return self_lookup
 
-    # Bea has 7 imported events; Cy has none. Returned as values_list rows.
-    imported_staff_ids = ["00000000000000000000000000000010"] * 7
+    # Bea's Admin calendar holds 7 live Busy blocks; Cy has no calendar/blocks.
+    # Counts come from the live calendar (real state), matched by Admin title.
+    cal_a = MagicMock(title="Bea Adams: Admin", id="cal-a")
 
     with (
         patch("external_calendar_busy_blocks.ui.pages.render_to_string", return_value="<html></html>") as mock_render,
         patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.ui.pages.ImportedEvent") as MockImported,
+        patch("external_calendar_busy_blocks.ui.pages.CalendarModel") as MockCal,
+        patch(
+            "external_calendar_busy_blocks.ui.pages.live_busy_counts",
+            return_value={"cal-a": 7},
+        ) as mock_counts,
         patch("external_calendar_busy_blocks.ui.pages.Staff") as MockStaff,
     ):
         MockFeed.objects.filter.side_effect = filter_side_effect
-        MockImported.objects.filter.return_value.values_list.return_value = imported_staff_ids
+        MockCal.objects.filter.return_value = [cal_a]
         MockStaff.objects.filter.return_value.order_by.return_value = [staff_a, staff_b, staff_nameless]
         _page(
             "00000000-0000-0000-0000-000000000001",
@@ -90,10 +95,13 @@ def test_render_admin_lists_active_staff_with_per_row_status() -> None:
     ]
     assert all(opt["id"] != "00000000000000000000000000000012" for opt in context["staff_options"])
     MockStaff.objects.filter.assert_called_once_with(active=True)
-    # Exactly one bulk feed query and one bulk event-count query (no N+1).
+    # Exactly one bulk feed query, one bulk calendar lookup, one bulk count (no N+1).
     bulk_feed_calls = [c for c in MockFeed.objects.filter.call_args_list if "staff_id__in" in c.kwargs]
     assert len(bulk_feed_calls) == 1
-    assert set(MockImported.objects.filter.call_args.kwargs["staff_id__in"]) == {
-        "00000000000000000000000000000010",
-        "00000000000000000000000000000011",
+    MockCal.objects.filter.assert_called_once()
+    assert set(MockCal.objects.filter.call_args.kwargs["title__in"]) == {
+        "Bea Adams: Admin",
+        "Cy Brown: Admin",
     }
+    mock_counts.assert_called_once()
+    assert mock_counts.call_args.args[0] == ["cal-a"]

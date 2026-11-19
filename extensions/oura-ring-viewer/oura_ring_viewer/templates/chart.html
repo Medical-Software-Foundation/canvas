@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oura Ring</title>
+<link rel="stylesheet" href="{{ api_path }}/static/chart.css">
+</head>
+<body data-patient-id="{{ patient_id }}" data-api="{{ api_path }}">
+<header>
+  <h1>Oura Ring</h1>
+  <span id="status" class="pill">Loading</span>
+  <span id="synced" class="synced"></span>
+</header>
+
+<div id="sandbox" class="notice warn" hidden><strong>Sandbox data.</strong> These are sample values from Oura's test environment, not this patient's real data.</div>
+<div id="notice" class="notice" hidden></div>
+
+<div class="toolbar">
+  <button id="refresh" type="button" hidden>Refresh</button>
+  <div class="range" role="group" aria-label="Date range">
+    <button type="button" data-range="7">7d</button>
+    <button type="button" data-range="14">14d</button>
+    <button type="button" data-range="30">30d</button>
+    <button type="button" data-range="90">90d</button>
+  </div>
+  <button id="disconnect" class="danger" type="button" hidden>Disconnect</button>
+</div>
+
+<section id="connect" class="panel" hidden>
+  <h2 id="connect-title">Connect this patient's Oura Ring</h2>
+  <p id="connect-help">Send the patient a secure link through the portal. They tap it, sign in to Oura and
+     approve sharing; this panel fills in on its own. Patients can also connect themselves from
+     Oura Ring in the portal menu.</p>
+  <div class="toolbar">
+    <button id="send-portal" class="primary" type="button">Send to patient</button>
+    <button id="send-copy" class="textlink" type="button">Copy link instead</button>
+    <button id="replace" class="textlink" type="button" hidden>Send a new link</button>
+  </div>
+  <div id="link-box" hidden>
+    <div class="link-row">
+      <input id="link" type="text" readonly aria-label="Connection link">
+      <button id="copy" type="button">Copy</button>
+    </div>
+    <div id="link-meta" class="link-meta"></div>
+  </div>
+</section>
+
+<div id="cards" class="grid" hidden></div>
+<p id="source" class="link-meta" hidden>Read live from Oura each time this panel opens. Not saved to the chart.</p>
+
+<footer id="disclaimer"></footer>
+
+<script src="{{ api_path }}/static/chart.js"></script>
+</body>
+</html>

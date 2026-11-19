@@ -6,19 +6,57 @@ so it is straightforward to unit-test.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from canvas_sdk.v1.data import Patient, PatientConsent, Staff
+from canvas_sdk.v1.data import (
+    Patient,
+    PatientConsent,
+    PatientConsentCoding,
+    PatientConsentRejectionCoding,
+)
 
 from logger import log
 
 from consent_capture.constants import (
     ACCEPTED_STATES,
+    DECLINED_STATES,
     METHOD_OPTIONS,
+    RECORDED_STATES,
     normalize_method_options,
     parse_statement,
 )
-from consent_capture.models import ConsentCaptureDetail, ConsentDefinition
+from consent_capture.models import (
+    ConsentCaptureDetail,
+    ConsentDefinition,
+    ConsentPracticeSettings,
+)
+from consent_capture.signing import SIGNED_WITH_LABELS, questions_fingerprint, statement_fingerprint
+
+
+def expiration_date_for(system, code, effective_iso):
+    """The expiration date Canvas sets on a consent recorded on ``effective_iso``,
+    from the coding's expiration rule, as ISO ``YYYY-MM-DD``, or "" when it never
+    expires. Mirrors Canvas: one year later (Feb 29 moves to Feb 28), or the end of
+    the effective date's year. Lets the done screen show the date before the
+    Consents window reloads."""
+    rule = (
+        PatientConsentCoding.objects.filter(system=system, code=code)
+        .values_list("expiration_rule", flat=True)
+        .first()
+    )
+    rule = getattr(rule, "value", rule)
+    try:
+        effective = date.fromisoformat(effective_iso)
+    except (TypeError, ValueError):
+        return ""
+    if rule == "in_one_year":
+        try:
+            return effective.replace(year=effective.year + 1).isoformat()
+        except ValueError:  # Feb 29 with no Feb 29 next year
+            return effective.replace(year=effective.year + 1, day=28).isoformat()
+    if rule == "end_of_year":
+        return date(effective.year, 12, 31).isoformat()
+    return ""
 
 
 def active_definitions():
@@ -89,7 +127,8 @@ def accepted_status(patient_id, codes):
     (``expired_date`` has passed). Codes with no accepted consent are absent from the
     map. One query for all codes (avoids an N+1 across definitions).
 
-    The most recent consent per code (by ``effective_date``) is authoritative — it
+    The most recent consent per code (by ``effective_date``, then by when it was
+    recorded, so a same-day accept and decline resolve to the later one) is authoritative — it
     reflects the current state after any renewal, and supplies the dates shown on the
     completed cards. Canvas sets ``expired_date`` from the coding's expiration rule."""
     if not patient_id or not codes:
@@ -103,7 +142,7 @@ def accepted_status(patient_id, codes):
             state__in=ACCEPTED_STATES,
         )
         .values_list("category__code", "effective_date", "expired_date")
-        .order_by("-effective_date")
+        .order_by("-effective_date", "-created")
     )
     for code, effective_date, expired_date in rows:
         if code in out:
@@ -146,12 +185,22 @@ def _satisfying_pairs(defn):
     return pairs
 
 
+def _record_status(state, expired_date, now):
+    """"active" | "declined" | "expired" for one recorded consent. A lapsed record is
+    "expired" whether it was accepted or declined, so it is asked again."""
+    if not _expiry_active(expired_date, now):
+        return "expired"
+    return "declined" if state in DECLINED_STATES else "active"
+
+
 def accepted_status_pairs(patient_id, pairs):
     """Like ``accepted_status`` but keyed by the full ``(system, code)`` pair rather
     than the bare code, so it works when codings share (or lack) a code — some
     codings carry identity only in ``system``. Matches by pair, most-recent-per-pair
     wins, one query. Returns ``{(system, code): {status, effective_date,
-    expired_date}}`` for each requested pair that has an accepted consent on file.
+    expired_date}}`` for each requested pair that has a recorded consent on file.
+    ``status`` is "active" (accepted), "declined" (the patient declined), or
+    "expired" (either one, lapsed).
 
     The pair set is filtered in Python (a patient has few consents) so an empty code
     doesn't collide across codings the way a ``category__code__in`` filter would."""
@@ -163,53 +212,61 @@ def accepted_status_pairs(patient_id, pairs):
     rows = (
         PatientConsent.objects.filter(
             patient__id=patient_id,
-            state__in=ACCEPTED_STATES,
+            state__in=RECORDED_STATES,
         )
         .values_list(
-            "category__system", "category__code", "effective_date", "expired_date"
+            "category__system",
+            "category__code",
+            "effective_date",
+            "expired_date",
+            "state",
+            "rejection_reason__display",
         )
-        .order_by("-effective_date")
+        .order_by("-effective_date", "-created")
     )
-    for system, code, effective_date, expired_date in rows:
+    for system, code, effective_date, expired_date, state, rejection in rows:
         pair = (system or "", code or "")
         if pair not in want or pair in out:
             continue  # keep the most recent (rows are newest-first)
-        active = _expiry_active(expired_date, now)
+        status = _record_status(state, expired_date, now)
         out[pair] = {
-            "status": "active" if active else "expired",
+            "status": status,
             "effective_date": _iso_date(effective_date),
             "expired_date": _iso_date(expired_date),
+            # A decline's reason, so the list tags an Ineligible one as Ineligible.
+            "reason": (rejection or "") if status == "declined" else "",
         }
     return out
 
 
 def _combined_status(freshness_by_pair, pairs):
     """Best on-file status across an equivalence set: an active consent on any pair
-    wins; otherwise an expired one; otherwise not on file. Returns an info dict
-    shaped like ``accepted_status_pairs`` values ('active'/'expired' with dates), or
-    ``{}`` when none of the pairs is on file."""
-    fallback = None
+    wins; otherwise a declined one; otherwise an expired one; otherwise not on file.
+    Returns an info dict shaped like ``accepted_status_pairs`` values, or ``{}``
+    when none of the pairs is on file."""
+    best = None
+    rank = {"active": 3, "declined": 2, "expired": 1}
     for pair in pairs:
         info = freshness_by_pair.get(pair)
         if not info:
             continue
-        if info.get("status") == "active":
-            return info
-        fallback = fallback or info
-    return fallback or {}
+        if best is None or rank.get(info.get("status"), 0) > rank.get(best.get("status"), 0):
+            best = info
+    return best or {}
 
 
 def consent_records(patient_id):
-    """Every accepted consent *record* on file for the patient — one entry per
+    """Every recorded (accepted or declined) consent *record* for the patient — one entry per
     recording, NOT deduped by coding — so the hub's "On File" section can show the
     patient's full consent history, including repeats of the same consent with
     different date ranges. Regardless of coding, so consents recorded outside the
     picker (or on codings the plugin doesn't manage) are surfaced read-only too.
 
     Each entry carries the record's own ``id`` (the FHIR Consent id, used to open
-    that exact document), coding identity, dates, ``status`` ("active" when unexpired,
-    else "expired"), and the plugin-captured detail (who obtained it, method, who
-    consented, capacity statement) joined from ``ConsentCaptureDetail``. Newest first."""
+    that exact document), coding identity, dates, ``status`` ("active" or "declined"
+    when unexpired, else "expired"), and the plugin-captured detail (who obtained it,
+    method, who consented, capacity statement, how a device signature was made)
+    joined from ``ConsentCaptureDetail``. Newest first."""
     if not patient_id:
         return []
     now = datetime.now(timezone.utc)
@@ -217,7 +274,7 @@ def consent_records(patient_id):
     rows = (
         PatientConsent.objects.filter(
             patient__id=patient_id,
-            state__in=ACCEPTED_STATES,
+            state__in=RECORDED_STATES,
         )
         .values_list(
             "id",
@@ -226,26 +283,33 @@ def consent_records(patient_id):
             "category__display",
             "effective_date",
             "expired_date",
+            "state",
+            "rejection_reason__display",
         )
-        .order_by("-effective_date")
+        .order_by("-effective_date", "-created")
     )
     out = []
-    for record_id, code, system, display, effective_date, expired_date in rows:
+    for record_id, code, system, display, effective_date, expired_date, state, rejection in rows:
         # Identity is the (system, code) pair; some codings carry it in system alone
         # (empty code), so only skip records with neither.
         if not code and not system:
             continue
-        active = _expiry_active(expired_date, now)
+        status = _record_status(state, expired_date, now)
         eff_iso = _iso_date(effective_date)
         detail = details.get((system or "", code or "", eff_iso), {})
+        # Use the plugin's saved detail only when it describes this decision: a
+        # same-day change made elsewhere (a decline on the Profile tab after an
+        # acceptance here) must not show the earlier decision's method or party.
+        if detail and detail.get("declined") != (state in DECLINED_STATES):
+            detail = {}
         out.append(
             {
                 "id": str(record_id),
                 "code": code or "",
                 "system": system or "",
                 "display": display or code or system,
-                "status": "active" if active else "expired",
-                "on_file": active,
+                "status": status,
+                "on_file": status == "active",
                 "effective_date": eff_iso,
                 "expiration_date": _iso_date(expired_date),
                 "obtained_by": detail.get("obtained_by", ""),
@@ -253,6 +317,12 @@ def consent_records(patient_id):
                 "consented_by": detail.get("consented_by", ""),
                 "capacity_statement": detail.get("capacity_statement", ""),
                 "pages": detail.get("pages", 0),
+                "signature": detail.get("signature", ""),
+                # The decline reason, from Canvas (also set for declines recorded on
+                # the profile tab) or else the plugin's own record.
+                "reason": (rejection or detail.get("reason", "")) if state in DECLINED_STATES else "",
+                "ineligible": state in DECLINED_STATES
+                and is_ineligible_display(rejection or detail.get("reason", "")),
             }
         )
     return out
@@ -274,17 +344,36 @@ def _capture_details(patient_id):
         "consented_by",
         "capacity_statement",
         "pages",
+        "signed_on_device",
+        "signed_with",
+        "reason_display",
+        "status",
     )
     out = {}
-    for system, code, eff, obtained_by, method, consented_by, capacity, pages in rows:
+    for (
+        system, code, eff, obtained_by, method, consented_by, capacity, pages,
+        signed_on_device, signed_with, reason, status,
+    ) in rows:
         out[(system or "", code or "", eff or "")] = {
             "obtained_by": obtained_by or "",
             "method": method or "",
             "consented_by": consented_by or "",
             "capacity_statement": capacity or "",
             "pages": int(pages or 0),
+            "signature": signature_label(signed_on_device, signed_with),
+            "reason": reason or "",
+            # Rows written before status existed read as None and mean accepted.
+            "declined": status == "declined",
         }
     return out
+
+
+def signature_label(signed_on_device, signed_with):
+    """How a device signature reads in the plugin's screens ("Signed on this device
+    (finger or stylus)"), or '' when the consent wasn't signed on the device."""
+    if not signed_on_device:
+        return ""
+    return SIGNED_WITH_LABELS.get(signed_with or "", "Signed on this device")
 
 
 def _picker_item(d, info, is_active):
@@ -293,24 +382,36 @@ def _picker_item(d, info, is_active):
     button; the read-only "On File" history is built separately from
     ``consent_records``."""
     state = info.get("status")
-    # "on_file" (active) | "expired" (accepted but lapsed) | "needed" (never recorded)
-    status = "on_file" if state == "active" else ("expired" if state == "expired" else "needed")
+    # "on_file" (active) | "declined" (the patient declined) | "expired" (lapsed) |
+    # "needed" (never recorded)
+    status = {"active": "on_file", "declined": "declined", "expired": "expired"}.get(
+        state, "needed"
+    )
+    paragraphs = parse_statement(d.verbiage)
     return {
         "code": d.code,
         "system": d.system,
         "display": d.display or d.code,
-        "paragraphs": parse_statement(d.verbiage),
+        "paragraphs": paragraphs,
+        # Sent back when recording, so the server can refuse a consent whose text
+        # changed after the signer was shown it.
+        "statement_sha256": statement_fingerprint(paragraphs)[1],
+        "questions_sha256": questions_fingerprint(d.questions or []),
         "method_enabled": bool(d.method_enabled),
         "obtained_by_enabled": bool(d.obtained_by_enabled),
         "capacity_enabled": bool(d.capacity_enabled),
         "method_options": normalize_method_options(d.method_options) or list(METHOD_OPTIONS),
         "questions": d.questions or [],
         "required": bool(d.required),
+        "allow_device_signature": bool(getattr(d, "allow_device_signature", False)),
+        "allow_ineligible": bool(getattr(d, "allow_ineligible", False)),
         "active": is_active,
         "on_file": status == "on_file",
         "status": status,
         "effective_date": info.get("effective_date", ""),
         "expiration_date": info.get("expired_date", ""),
+        "reason": info.get("reason", "") if status == "declined" else "",
+        "ineligible": status == "declined" and is_ineligible_display(info.get("reason", "")),
     }
 
 
@@ -339,14 +440,22 @@ def picker_items(patient_id):
     ]
 
 
+def is_required_and_due(item):
+    """Whether a picker item is a required consent that is still due: not on file
+    (never recorded, or expired). A declined consent has been asked and answered, so
+    it isn't due. The one rule behind the red chart button and the chart banner."""
+    return bool(
+        item.get("required")
+        and not (item.get("on_file") or item.get("status") == "declined")
+    )
+
+
 def has_incomplete_required(patient_id):
     """Whether the patient has at least one required consent not on file (never
     recorded or expired). Drives the red chart button's visibility and the profile
-    banner alert, so both mean the same thing: a required consent is missing."""
-    return any(
-        item.get("required") and not item.get("on_file")
-        for item in picker_items(patient_id)
-    )
+    banner alert, so both mean the same thing: a required consent is missing. A
+    declined consent has been asked and answered, so it doesn't count as missing."""
+    return any(is_required_and_due(item) for item in picker_items(patient_id))
 
 
 def is_eligible_patient(patient_id):
@@ -366,16 +475,16 @@ def is_eligible_patient(patient_id):
 
 
 def _patients_with_active_consent_pair(system, code, now):
-    """Set of patient ids whose most-recent accepted consent for the ``(system,
-    code)`` pair is still active (unexpired). One query; most-recent-per-patient
+    """Set of patient ids whose most-recent recorded consent (accepted or declined)
+    for the ``(system, code)`` pair is still active (unexpired). One query; most-recent-per-patient
     wins. Matches on the full pair (tolerating an empty code) so equivalents that
     lack a code are still counted and empty codes don't collide across codings."""
     rows = (
         PatientConsent.objects.filter(
-            category__system=system, category__code=code, state__in=ACCEPTED_STATES
+            category__system=system, category__code=code, state__in=RECORDED_STATES
         )
         .values_list("patient__id", "effective_date", "expired_date")
-        .order_by("patient__id", "-effective_date")
+        .order_by("patient__id", "-effective_date", "-created")
         .iterator(chunk_size=1000)  # stream: this can be a large table
     )
     have, seen = set(), set()
@@ -440,60 +549,216 @@ def patients_missing_required():
     return active_ids - (satisfied or set())
 
 
-def _admin_identifiers(raw):
-    """Parse the CONSENT_ADMIN_USERS plugin variable into a lower-cased set. Entries
+def normalize_staff_id(value):
+    """A staff id in the form the allow-list compares: lower case, no spaces or
+    dashes (Canvas staff keys are 32 hex characters; a dashed copy also matches)."""
+    return re.sub(r"[\s-]", "", str(value or "")).lower()
+
+
+def _admin_ids(raw):
+    """Parse the CONSENT_ADMIN_USERS plugin variable into a set of staff ids. Entries
     are separated by commas, semicolons, or newlines."""
     if not raw:
         return set()
-    return {part.strip().lower() for part in re.split(r"[,;\n]+", str(raw)) if part.strip()}
-
-
-# The instance root/superuser always has access, regardless of CONSENT_ADMIN_USERS.
-# Canvas provisions it as a Staff named "Canvas Support"; also accept the literal "root".
-ROOT_IDENTIFIERS = {"root", "canvas support"}
-
-
-def _user_identifiers(staff_id):
-    """Lower-cased identifiers for the logged-in staff: their id plus first/last/full
-    name (from the Staff record). Used to match against the admin allow-list."""
-    identifiers = {str(staff_id).strip().lower()}
-    row = (
-        Staff.objects.filter(id=staff_id)
-        .values_list("first_name", "last_name")
-        .first()
-    )
-    if row:
-        first = (row[0] or "").strip().lower()
-        last = (row[1] or "").strip().lower()
-        for value in (first, last, ("%s %s" % (first, last)).strip()):
-            if value:
-                identifiers.add(value)
-    return identifiers
+    ids = (normalize_staff_id(part) for part in re.split(r"[,;\n]+", str(raw)))
+    return {staff_id for staff_id in ids if staff_id}
 
 
 def is_consent_admin(staff_id, allowed_raw):
     """Whether the logged-in staff may open Consent Settings.
 
-    The instance root user (Staff named "Canvas Support", or the literal "root")
-    always has access, no matter what. Otherwise the allow-list (CONSENT_ADMIN_USERS
-    variable) holds Staff ids and/or full names ("First Last"), matched
-    case-insensitively.
+    Matched on the staff id only: CONSENT_ADMIN_USERS lists the staff ids of the
+    people who manage consents. Names aren't used, so a staff member who shares a
+    name with an admin, or whose name is "Root" or "Canvas Support", gets no access.
 
-    Fails closed: an empty/unset allow-list grants access to **root only** and denies
-    every other staff member (a missing config must never open the admin surface)."""
-    if not staff_id:
+    Fails closed: an empty/unset allow-list denies everyone (a missing config must
+    never open the admin surface). The "You don't have access" page shows the staff
+    member's id so they can send it to whoever sets the variable."""
+    staff_key = normalize_staff_id(staff_id)
+    if not staff_key:
         return False
-    # The literal root id is authorized without a Staff lookup.
-    if str(staff_id).strip().lower() in ROOT_IDENTIFIERS:
-        return True
-    identifiers = _user_identifiers(staff_id)
-    if identifiers & ROOT_IDENTIFIERS:  # root matched by name (e.g. "Canvas Support")
-        return True
-    allowed = _admin_identifiers(allowed_raw)
+    allowed = _admin_ids(allowed_raw)
     if not allowed:
         log.warning(
             "CONSENT_ADMIN_USERS is not configured; denying Consent Settings access "
-            "to non-root staff %s" % staff_id
+            "to staff %s" % staff_id
         )
         return False
-    return bool(identifiers & allowed)
+    return staff_key in allowed
+
+
+# --------------------------------------------------------------------------- #
+# Practice settings ("Sign on this device", Practice settings tab)
+# --------------------------------------------------------------------------- #
+
+PRACTICE_SETTINGS_KEY = "practice"
+
+# Used until the practice first saves the Practice settings tab, and for any field a
+# row written by an older version doesn't carry (it reads as None).
+PRACTICE_DEFAULTS = {
+    "reuse_signature": False,
+    "accept_finger": True,
+    "accept_mouse": True,
+    "accept_typed": False,
+    "ask_printed_name": False,
+}
+
+
+def practice_settings():
+    """The practice's signing settings as a dict of booleans (defaults when unset)."""
+    row = (
+        ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY)
+        .values(*PRACTICE_DEFAULTS.keys())
+        .first()
+    )
+    out = dict(PRACTICE_DEFAULTS)
+    for field, value in (row or {}).items():
+        if value is not None:
+            out[field] = bool(value)
+    return out
+
+
+def clean_practice_settings(raw):
+    """Validate a submitted settings dict. Returns ``(values, error)``: booleans for
+    every field, or an error when no accepted signature is left on."""
+    raw = raw if isinstance(raw, dict) else {}
+    # Only a real JSON true turns a setting on; a missing field keeps its default.
+    # (A string such as "false" must never read as on.)
+    values = {
+        field: (raw[field] is True) if field in raw else default
+        for field, default in PRACTICE_DEFAULTS.items()
+    }
+    if not (values["accept_finger"] or values["accept_mouse"] or values["accept_typed"]):
+        return None, "Select at least one accepted signature."
+    return values, None
+
+
+def save_practice_settings(values):
+    """Upsert the single practice settings row. Uses the queryset upsert pattern
+    because per-field ``setattr`` is guarded in the plugin sandbox."""
+    updated = ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY).update(
+        **values
+    )
+    if not updated:
+        ConsentPracticeSettings.objects.create(key=PRACTICE_SETTINGS_KEY, **values)
+    return practice_settings()
+
+
+# --------------------------------------------------------------------------- #
+# Decline reasons (Practice settings tab) and Ineligible
+# --------------------------------------------------------------------------- #
+
+# Canvas creates this rejection coding for declines made in the patient portal.
+# Staff don't choose it, so it's left out until a practice chooses otherwise.
+PORTAL_REJECTION_CODE = "REJECT_VIA_PORTAL"
+
+
+def is_ineligible_display(display):
+    """Whether a rejection coding's name means the patient is ineligible. The
+    plugin finds the Ineligible coding by its name, ignoring capitals and spaces."""
+    return (display or "").strip().lower() == "ineligible"
+
+
+def rejection_codings():
+    """The rejection codings Canvas shows ("Toggle displaying rejection reason in
+    the UI" on), as ``[{system, code, display}]`` sorted by name."""
+    rows = (
+        PatientConsentRejectionCoding.objects.filter(user_selected=True)
+        .values_list("system", "code", "display")
+        .order_by("display")
+    )
+    # A coding with neither a code nor a name can't be referenced when recording,
+    # so it isn't offered.
+    return [
+        {"system": system or "", "code": code or "", "display": display or code}
+        for system, code, display in rows
+        if code or display
+    ]
+
+
+def reason_key(system, code, display):
+    """How a rejection coding is told apart: system and code, plus the name when the
+    code is blank (some instances add codings without a code, so two can share the
+    same system and empty code)."""
+    system, code = system or "", code or ""
+    return (system, code, "" if code else (display or "").strip())
+
+
+def _coding_key(c):
+    return reason_key(c.get("system"), c.get("code"), c.get("display"))
+
+
+def _saved_decline_reasons():
+    """The saved choice as a set of ``reason_key`` tuples, or ``None`` until the
+    practice saves it."""
+    row = (
+        ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY)
+        .values_list("decline_reasons_set", "decline_reasons")
+        .first()
+    )
+    if not row or not row[0]:
+        return None
+    return {_coding_key(item) for item in (row[1] or []) if isinstance(item, dict)}
+
+
+def decline_options():
+    """What staff can choose when declining.
+
+    Returns ``{codings, reasons, ineligible}``: every displayed rejection coding
+    with whether it's chosen and whether it's the Ineligible one (for Consent
+    Settings); the chosen reasons other than Ineligible (the Reason list); and the
+    Ineligible coding when it exists and is chosen, else ``None``."""
+    codings = rejection_codings()
+    saved = _saved_decline_reasons()
+
+    def chosen(c):
+        if saved is None:
+            return c["code"] != PORTAL_REJECTION_CODE
+        return _coding_key(c) in saved
+
+    ineligible = next((c for c in codings if is_ineligible_display(c["display"])), None)
+    return {
+        "codings": [
+            dict(c, chosen=chosen(c), ineligible=c is ineligible) for c in codings
+        ],
+        "reasons": [c for c in codings if chosen(c) and c is not ineligible],
+        "ineligible": ineligible if ineligible is not None and chosen(ineligible) else None,
+    }
+
+
+def allowed_decline_reasons(definition, options):
+    """The rejection codings a decline of ``definition`` may be recorded with:
+    the chosen reasons, plus Ineligible when the consent allows it."""
+    allowed = list(options["reasons"])
+    if options["ineligible"] and getattr(definition, "allow_ineligible", False):
+        allowed.append(options["ineligible"])
+    return allowed
+
+
+def clean_decline_reasons(raw):
+    """Validate a submitted ``[{system, code, display}]`` list against the displayed
+    rejection codings. Returns the cleaned list, or ``None`` when ``raw`` isn't a
+    list (the setting is left as it is)."""
+    if not isinstance(raw, list):
+        return None
+    known = {_coding_key(c): c for c in rejection_codings()}
+    out, seen = [], set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = reason_key(str(item.get("system") or ""), str(item.get("code") or ""), str(item.get("display") or ""))
+        if key in known and key not in seen:
+            seen.add(key)
+            c = known[key]
+            out.append({"system": c["system"], "code": c["code"], "display": c["display"]})
+    return out
+
+
+def save_decline_reasons(reasons):
+    """Store the chosen decline reasons on the practice settings row."""
+    values = {"decline_reasons_set": True, "decline_reasons": reasons}
+    updated = ConsentPracticeSettings.objects.filter(key=PRACTICE_SETTINGS_KEY).update(
+        **values
+    )
+    if not updated:
+        ConsentPracticeSettings.objects.create(key=PRACTICE_SETTINGS_KEY, **values)

@@ -1,18 +1,31 @@
 """Nightly cron job to sync adjudication data from Candid for pending claims.
 
 Queries Canvas for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance,
-and PatientBalance queues that have Candid encounter metadata, then runs
+PatientBalance and RejectedNeedsReview queues that have Candid encounter metadata, then runs
 ``sync_claim_adjudications`` on each to pull ERA data, patient payments, and
 post them back to Canvas.
 
-The cron fires every hour but only does work at 2 AM in the instance's
-configured time zone (``INSTALLATION_TIME_ZONE``). This avoids hardcoding
-a UTC hour that maps to a different local time for each customer.
+The cron fires every hour. A sync cycle starts at the hour set in
+``CANDID_SYNC_START_HOUR`` (0-23, default 2 AM) in the instance's configured
+time zone (``INSTALLATION_TIME_ZONE``) and works through the claims one batch
+per hour, so no single run returns more effects than the plugin runner can send
+back (its responses are capped at 64 MB). A cycle already under way keeps going
+until it finishes, whatever the hour, and at most one cycle starts per local
+day (so the fall-back hour, or an hour changed after today's cycle, never starts
+a second full sync the same day).
+
+The cursor and the last start date live in ``SyncState`` (an AttributeHub in the
+plugin's custom data namespace), not the plugin cache: the platform culls the
+shared cache alphabetically once it passes 300 entries, which deleted the cursor
+between ticks and stopped every cycle after its first batch (PLUGIN-501). Only
+the short-lived lock stays in the cache; losing it early is harmless because a
+batch ends well before the next tick.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.handlers.cron_task import CronTask
 from canvas_sdk.v1.data.claim import Claim, ClaimQueues
@@ -20,6 +33,7 @@ from logger import log
 
 from candid.adjudication_sync import sync_claim_adjudications
 from candid.effect_helpers import META_ENCOUNTERS
+from candid.sync_state import SyncState
 
 SYNC_QUEUES = (
     ClaimQueues.FILED_AWAITING_RESPONSE,
@@ -28,45 +42,170 @@ SYNC_QUEUES = (
     ClaimQueues.REJECTED_NEEDS_REVIEW,
 )
 
-TARGET_HOUR = 2  # 2 AM local time
+DEFAULT_START_HOUR = 2  # 2 AM local time
+START_HOUR_VARIABLE = "CANDID_SYNC_START_HOUR"
+
+# A batch must end before the next hourly tick, and its effects must stay far
+# below the 64 MB cap (one unbatched run over ~24k claims was ~78 MB).
+BATCH_TIME_BUDGET = timedelta(minutes=45)
+MAX_CLAIMS_PER_BATCH = 4000
+
+CURSOR_CACHE_KEY = "candid_nightly_sync_cursor"
+CURSOR_TTL_SECONDS = 20 * 60 * 60
+LOCK_CACHE_KEY = "candid_nightly_sync_lock"
+LOCK_TTL_SECONDS = 90 * 60
+# The local date the last cycle started on, so one day never starts two cycles.
+LAST_START_CACHE_KEY = "candid_nightly_sync_last_start_date"
+LAST_START_TTL_SECONDS = 26 * 60 * 60
+# Running totals for the cycle under way, logged when it completes. "Failed"
+# (logged as "not synced") counts claims whose sync raised, which includes a
+# claim none of whose encounters could be fetched from Candid (429s included).
+# Postings Canvas rejects after the cron returns can't be seen here. A claim
+# that fails is logged and skipped; the cursor moves past it, so it is tried
+# once per cycle (once a night), never again in the same cycle.
+STATS_KEY = "candid_nightly_sync_stats"
+STATS_TTL_SECONDS = CURSOR_TTL_SECONDS
+
+
+def start_hour(secrets: dict) -> int:
+    """The local hour a sync cycle starts: ``CANDID_SYNC_START_HOUR``, else 2.
+
+    A blank value means the default. Anything that isn't a whole number from 0
+    to 23 also falls back to the default, with a warning, so a typo never stops
+    the nightly sync.
+    """
+    raw = (secrets or {}).get(START_HOUR_VARIABLE)
+    if raw is None or str(raw).strip() == "":
+        return DEFAULT_START_HOUR
+    text = str(raw).strip()
+    # ASCII digits only: str.isdigit() also accepts characters like "²" that int() rejects.
+    if 1 <= len(text) <= 2 and all("0" <= ch <= "9" for ch in text) and int(text) <= 23:
+        return int(text)
+    log.warning(
+        f"Candid nightly sync: {START_HOUR_VARIABLE}={text!r} is not an hour from 0 to 23; "
+        f"starting at {DEFAULT_START_HOUR}"
+    )
+    return DEFAULT_START_HOUR
 
 
 class NightlyCandidSync(CronTask):
-    """Sync adjudication data at 2 AM in the instance's local time zone.
-
-    Fires every hour (``SCHEDULE = "0 * * * *"``), but ``execute()`` checks
-    the current local hour and returns early unless it's the target hour.
-    """
+    """Sync adjudication data from the configured start hour, one batch per hour."""
 
     SCHEDULE = "0 * * * *"
 
     def execute(self) -> list[Effect]:
         tz_name = self.environment.get("INSTALLATION_TIME_ZONE")
         tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("US/Central")
-        local_hour = datetime.now(UTC).astimezone(tz).hour
-        if local_hour != TARGET_HOUR:
+        started = datetime.now(UTC)
+        cache = get_cache()
+        state = SyncState()
+
+        if cache.get(LOCK_CACHE_KEY):
+            log.info("Candid nightly sync: previous batch still running, skipping")
             return []
+
+        cursor = state.get(CURSOR_CACHE_KEY)
+        if not cursor:
+            local = started.astimezone(tz)
+            if local.hour != start_hour(self.secrets):
+                return []
+            today = local.date().isoformat()
+            if state.get(LAST_START_CACHE_KEY) == today:
+                return []
+            state.set(
+                LAST_START_CACHE_KEY, today, timeout_seconds=LAST_START_TTL_SECONDS
+            )
+            state.delete(STATS_KEY)
+
+        cache.set(LOCK_CACHE_KEY, started.isoformat(), timeout_seconds=LOCK_TTL_SECONDS)
+        try:
+            return self._sync_batch(state, cursor, started)
+        finally:
+            cache.delete(LOCK_CACHE_KEY)
+
+    def _sync_batch(
+        self, state: SyncState, cursor: str | None, started: datetime
+    ) -> list[Effect]:
         queue_values = [q.value for q in SYNC_QUEUES]
         claims = Claim.objects.filter(
             current_queue__queue_sort_ordering__in=queue_values,
             metadata__key=META_ENCOUNTERS,
-        )
+        ).order_by("id")
+        if cursor:
+            claims = claims.filter(id__gt=cursor)
 
         effects: list[Effect] = []
-        count = claims.count()
-        if count == 0:
-            log.info("Candid nightly sync: no claims to sync")
-        else:
-            log.info(f"Candid nightly sync: syncing {count} claims")
-            synced = 0
-            for claim in claims.iterator(chunk_size=100):
-                try:
-                    effects.extend(sync_claim_adjudications(claim, self.secrets))
-                    synced = synced + 1
-                except Exception as e:
-                    log.warning(
-                        f"Candid nightly sync: failed for claim {claim.id}: {e}"
-                    )
-            log.info(f"Candid nightly sync: processed {synced}/{count} claims")
+        processed = 0
+        synced = 0
+        last_claim_id = None
+        for claim in claims.iterator(chunk_size=100):
+            if (
+                processed >= MAX_CLAIMS_PER_BATCH
+                or datetime.now(UTC) - started > BATCH_TIME_BUDGET
+            ):
+                # Stats first and never fatal: they only feed a log line. The
+                # cursor goes last, so a failed write before it leaves the
+                # cursor where it was and the next tick redoes this batch. A
+                # redone batch is counted twice in the totals log line; that
+                # beats the reverse order, which could lose a batch's effects.
+                _save_cycle_totals(state, processed, synced)
+                state.set(
+                    CURSOR_CACHE_KEY, last_claim_id, timeout_seconds=CURSOR_TTL_SECONDS
+                )
+                log.info(
+                    f"Candid nightly sync: synced {synced}/{processed} claims "
+                    f"({processed - synced} not synced), continuing next hour"
+                )
+                return effects
 
+            processed = processed + 1
+            last_claim_id = str(claim.id)
+            try:
+                effects.extend(sync_claim_adjudications(claim, self.secrets))
+                synced = synced + 1
+            except Exception as e:
+                log.warning(f"Candid nightly sync: failed for claim {claim.id}: {e}")
+
+        try:
+            totals = _cycle_totals(state, processed, synced)
+            state.delete(STATS_KEY)
+        except Exception as e:  # noqa: BLE001 - stats only feed a log line
+            log.warning(f"Candid nightly sync: couldn't read or clear cycle stats: {e}")
+            totals = None
+        state.delete(CURSOR_CACHE_KEY)
+        cycle = (
+            f"{totals['synced']}/{totals['processed']} claims synced, "
+            f"{totals['failed']} not synced, over {totals['batches']} batches"
+            if totals
+            else "cycle totals unavailable"
+        )
+        log.info(
+            f"Candid nightly sync: synced {synced}/{processed} claims "
+            f"({processed - synced} not synced), cycle complete: {cycle}"
+        )
         return effects
+
+
+def _save_cycle_totals(state: SyncState, processed: int, synced: int) -> None:
+    """Store the cycle's running totals; a failure only loses a log line."""
+    try:
+        state.set(
+            STATS_KEY,
+            _cycle_totals(state, processed, synced),
+            timeout_seconds=STATS_TTL_SECONDS,
+        )
+    except Exception as e:  # noqa: BLE001 - stats only feed a log line
+        log.warning(f"Candid nightly sync: couldn't save cycle stats: {e}")
+
+
+def _cycle_totals(state: SyncState, processed: int, synced: int) -> dict[str, int]:
+    """The cycle's running totals with this batch added."""
+    totals = state.get(STATS_KEY)
+    if not isinstance(totals, dict):
+        totals = {}
+    return {
+        "processed": int(totals.get("processed") or 0) + processed,
+        "synced": int(totals.get("synced") or 0) + synced,
+        "failed": int(totals.get("failed") or 0) + processed - synced,
+        "batches": int(totals.get("batches") or 0) + 1,
+    }

@@ -1,8 +1,8 @@
 """Tests for CandidClient: token caching, error formatting, secret-driven construction."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from candid.api.client import CandidClient
+from candid.api.client import CACHE_KEY_PREFIX, CACHE_TTL_SECONDS, CandidClient
 
 from tests.conftest import MOCK_SECRETS
 
@@ -232,6 +232,78 @@ def test_create_service_line_returns_formatted_error_on_failure() -> None:
     assert "422" in message
 
 
+def test_create_diagnosis_posts_to_v2_and_returns_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.side_effect = [
+        _ok_response({"access_token": "tok"}),
+        _ok_response({"diagnosis_id": "dx-new"}),
+    ]
+
+    success, message = client.create_diagnosis("enc-1", "J449", "ABF")
+
+    assert success is True
+    assert message == "dx-new"
+    last = client.http.post.call_args_list[-1]
+    assert last.args[0].endswith("/api/diagnoses/v2")
+    assert last.kwargs["json"] == {
+        "encounter_id": "enc-1",
+        "code": "J449",
+        "code_type": "ABF",
+    }
+
+
+def test_create_diagnosis_returns_formatted_error_on_failure() -> None:
+    client = _client()
+    failure = MagicMock()
+    failure.ok = False
+    failure.status_code = 422
+    failure.json.return_value = {
+        "errorName": "HttpRequestValidationError",
+        "content": {},
+    }
+    client.http = MagicMock()
+    client.http.post.side_effect = [_ok_response({"access_token": "tok"}), failure]
+
+    success, message = client.create_diagnosis("enc-1", "J449", "ABF")
+
+    assert success is False
+    assert "422" in message
+
+
+def test_update_diagnosis_patches_v2_and_returns_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.patch.return_value = _ok_response({"diagnosis_id": "dx-1"})
+
+    success, message = client.update_diagnosis("dx-1", {"code_type": "ABK"})
+
+    assert (success, message) == (True, "dx-1")
+    call = client.http.patch.call_args
+    assert call.args[0].endswith("/api/diagnoses/v2/dx-1")
+    assert call.kwargs["json"] == {"code_type": "ABK"}
+
+
+def test_update_diagnosis_returns_formatted_error_on_failure() -> None:
+    client = _client()
+    failure = MagicMock()
+    failure.ok = False
+    failure.status_code = 422
+    failure.json.return_value = {
+        "errorName": "HttpRequestValidationError",
+        "content": {},
+    }
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.patch.return_value = failure
+
+    success, message = client.update_diagnosis("dx-1", {"code_type": "ABK"})
+
+    assert success is False
+    assert "422" in message
+
+
 def test_delete_service_line_calls_delete_with_id() -> None:
     client = _client()
     client.http = MagicMock()
@@ -258,3 +330,381 @@ def test_update_service_line_patches_v2_and_returns_id() -> None:
     assert message == "sl-1"
     url = client.http.patch.call_args.args[0]
     assert url.endswith("/api/service-lines/v2/sl-1")
+
+
+# ---------------------------------------------------------------------------
+# Plugin cache for bearer tokens
+# ---------------------------------------------------------------------------
+
+
+def test_token_read_from_plugin_cache_skips_fetch() -> None:
+    client = _client()
+    client.http = MagicMock()
+    cache = MagicMock()
+    cache.get.return_value = "cached-tok"
+    with patch("canvas_sdk.caching.plugins.get_cache", return_value=cache):
+        headers = client._auth_headers()
+
+    assert headers == {"Authorization": "Bearer cached-tok"}
+    cache.get.assert_called_once_with(f"{CACHE_KEY_PREFIX}{MOCK_SECRETS['CANDID_CLIENT_ID']}")
+    client.http.post.assert_not_called()
+
+
+def test_fetched_token_is_written_to_plugin_cache() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "fresh-tok"})
+    cache = MagicMock()
+    cache.get.return_value = None
+    with patch("canvas_sdk.caching.plugins.get_cache", return_value=cache):
+        assert client._token() == "fresh-tok"
+
+    cache.set.assert_called_once_with(
+        f"{CACHE_KEY_PREFIX}{MOCK_SECRETS['CANDID_CLIENT_ID']}",
+        "fresh-tok",
+        timeout_seconds=CACHE_TTL_SECONDS,
+    )
+
+
+def test_token_still_returned_when_cache_write_fails() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "fresh-tok"})
+    cache = MagicMock()
+    cache.get.return_value = None
+    cache.set.side_effect = RuntimeError("cache down")
+    with patch("canvas_sdk.caching.plugins.get_cache", return_value=cache):
+        assert client._token() == "fresh-tok"
+
+
+def test_token_fetched_when_plugin_cache_unavailable() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "fresh-tok"})
+    with patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError("no cache")):
+        assert client._token() == "fresh-tok"
+    client.http.post.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Endpoints not covered above
+# ---------------------------------------------------------------------------
+
+
+def _authed_client() -> CandidClient:
+    client = _client()
+    client._instance_token = "tok"
+    client.http = MagicMock()
+    return client
+
+
+def _error_response(status: int, body: dict) -> MagicMock:
+    r = MagicMock()
+    r.ok = False
+    r.status_code = status
+    r.json.return_value = body
+    return r
+
+
+def test_find_encounter_by_external_id_returns_first_item() -> None:
+    client = _authed_client()
+    client.http.get.return_value = _ok_response({"items": [{"encounter_id": "enc-1"}]})
+
+    assert client.find_encounter_by_external_id("canvas:claim-1") == "enc-1"
+    url = client.http.get.call_args.args[0]
+    assert url == (
+        f"{MOCK_SECRETS['CANDID_BASE_URL']}/api/encounters/v4"
+        "?external_id=canvas%3Aclaim-1&limit=1"
+    )
+    assert client.http.get.call_args.kwargs["headers"] == {"Authorization": "Bearer tok"}
+
+
+def test_find_encounter_by_external_id_accepts_single_object_response() -> None:
+    client = _authed_client()
+    client.http.get.return_value = _ok_response({"encounter_id": "enc-2"})
+    assert client.find_encounter_by_external_id("x") == "enc-2"
+
+
+def test_find_encounter_by_external_id_returns_none_when_empty_or_error() -> None:
+    client = _authed_client()
+    client.http.get.return_value = _ok_response({"items": []})
+    assert client.find_encounter_by_external_id("x") is None
+
+    client.http.get.return_value = _error_response(500, {})
+    assert client.find_encounter_by_external_id("x") is None
+
+
+def test_update_claim_patches_encounter() -> None:
+    client = _authed_client()
+    client.http.patch.return_value = _ok_response({})
+
+    ok, msg = client.update_claim("enc-1", {"a": 1})
+
+    assert (ok, msg) == (True, "enc-1")
+    assert client.http.patch.call_args.args[0].endswith("/api/encounters/v4/enc-1")
+    assert client.http.patch.call_args.kwargs["json"] == {"a": 1}
+    assert client.http.patch.call_args.kwargs["headers"]["Content-Type"] == "application/json"
+
+
+def test_update_claim_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.patch.return_value = _error_response(
+        422,
+        {
+            "errorName": "HttpRequestValidationError",
+            "content": {"fieldName": "patient", "humanReadableMessage": "required"},
+        },
+    )
+    assert client.update_claim("enc-1", {}) == (
+        False,
+        "<422 HttpRequestValidationError> patient: required",
+    )
+
+
+def test_update_service_line_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.patch.return_value = _error_response(404, {"errorName": "NotFound"})
+    assert client.update_service_line("sl-1", {}) == (False, "<404 NotFound>")
+
+
+def test_delete_service_line_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.delete.return_value = _error_response(
+        400, {"detail": [{"type": "missing", "msg": "bad", "loc": ["body"]}]}
+    )
+    assert client.delete_service_line("sl-1") == (
+        False,
+        "<400 Unknown Error> missing: bad. In: ['body']",
+    )
+
+
+def test_submit_payment_posts_and_returns_payment_id() -> None:
+    client = _authed_client()
+    client.http.post.return_value = _ok_response({"patient_payment_id": "pp-1"})
+
+    assert client.submit_payment({"amount_cents": 500}) == (True, "pp-1")
+    assert client.http.post.call_args.args[0].endswith("/api/patient-payments/v4")
+    assert client.http.post.call_args.kwargs["json"] == {"amount_cents": 500}
+
+
+def test_submit_payment_returns_formatted_error() -> None:
+    client = _authed_client()
+    client.http.post.return_value = _error_response(409, {"errorName": "Conflict"})
+    assert client.submit_payment({}) == (False, "<409 Conflict>")
+
+
+def test_submit_payment_raises_unconfirmed_on_5xx() -> None:
+    """A gateway error or server failure may follow a created payment."""
+    import pytest
+
+    from candid.api.client import CandidUnconfirmedError
+
+    for status in (500, 502, 503, 504):
+        client = _authed_client()
+        client.http.post.return_value = _error_response(status, {"errorName": "BadGateway"})
+        with pytest.raises(CandidUnconfirmedError) as info:
+            client.submit_payment({})
+        assert info.value.status_code == status
+        assert str(info.value) == f"HTTP {status}: <{status} BadGateway>"
+
+
+def test_authenticate_fetches_the_token_up_front() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok-up-front"})
+    with patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError("no cache")):
+        client.authenticate()
+    assert client._instance_token == "tok-up-front"
+    assert client.http.post.call_args.args[0].endswith("/api/auth/v2/token")
+
+
+# ---------------------------------------------------------------------------
+# 429 retry on read-only GETs
+# ---------------------------------------------------------------------------
+
+
+def _rate_limited(retry_after: str | None = None) -> MagicMock:
+    r = MagicMock()
+    r.ok = False
+    r.status_code = 429
+    r.headers = {"Retry-After": retry_after} if retry_after is not None else {}
+    r.raise_for_status.side_effect = RuntimeError("429 Client Error")
+    return r
+
+
+def _client_with_gets(*responses: MagicMock) -> CandidClient:
+    client = _client()
+    client._instance_token = "tok"
+    client.http = MagicMock()
+    client.http.get.side_effect = list(responses)
+    return client
+
+
+def test_get_encounter_retries_429_honoring_retry_after() -> None:
+    client = _client_with_gets(_rate_limited("3"), _ok_response({"claims": []}))
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        assert client.get_encounter("enc-1") == {"claims": []}
+
+    sleep.assert_called_once_with(3.0)
+    assert client.http.get.call_count == 2
+
+
+def test_get_patient_payments_retries_429_with_backoff() -> None:
+    client = _client_with_gets(
+        _rate_limited(), _rate_limited("soon"), _ok_response({"items": [{"id": 1}]})
+    )
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        assert client.get_patient_payments("c-1") == [{"id": 1}]
+
+    assert [c.args[0] for c in sleep.call_args_list] == [2, 5]
+
+
+def test_retry_after_at_the_cap_is_waited() -> None:
+    client = _client_with_gets(_rate_limited("10"), _ok_response({"claims": []}))
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        client.get_encounter("enc-1")
+
+    sleep.assert_called_once_with(10.0)
+
+
+def test_retry_after_over_the_cap_is_not_retried() -> None:
+    """Retrying after 10s when Candid asked for 120s would just 429 again."""
+    client = _client_with_gets(_rate_limited("120"), _ok_response({"claims": []}))
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected the 429 to raise")
+
+    sleep.assert_not_called()
+    assert client.http.get.call_count == 1
+    assert client._rate_limit_waited == 0
+
+
+def _client_with_token_posts(*responses: MagicMock) -> CandidClient:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.side_effect = list(responses)
+    client.http.get.return_value = _ok_response({"claims": []})
+    return client
+
+
+def test_token_fetch_retries_429() -> None:
+    """Prod's 429s land on POST /token, before any GET goes out."""
+    client = _client_with_token_posts(
+        _rate_limited("2"), _ok_response({"access_token": "tok-1"})
+    )
+
+    with (
+        patch("candid.api.client.time.sleep") as sleep,
+        patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError),
+    ):
+        assert client.get_encounter("enc-1") == {"claims": []}
+
+    sleep.assert_called_once_with(2.0)
+    assert client.http.post.call_count == 2
+    assert client.http.post.call_args.args[0].endswith("/api/auth/v2/token")
+
+
+def test_token_fetch_429_that_outlasts_the_retries_raises() -> None:
+    client = _client_with_token_posts(
+        _rate_limited("1"), _rate_limited("1"), _rate_limited("1")
+    )
+
+    with (
+        patch("candid.api.client.time.sleep") as sleep,
+        patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError),
+    ):
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected the 429 to raise")
+
+    assert sleep.call_count == 2
+    assert client.http.post.call_count == 3
+    client.http.get.assert_not_called()
+
+
+def test_token_and_get_share_one_wait_budget() -> None:
+    """A slow token fetch leaves less waiting for the GET that follows."""
+    client = _client_with_token_posts(
+        _rate_limited("10"), _rate_limited("9"), _ok_response({"access_token": "t"})
+    )
+    client.http.get.side_effect = [_rate_limited("5"), _ok_response({"claims": []})]
+
+    with (
+        patch("candid.api.client.time.sleep") as sleep,
+        patch("canvas_sdk.caching.plugins.get_cache", side_effect=RuntimeError),
+    ):
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected the GET's 429 to raise")
+
+    assert [c.args[0] for c in sleep.call_args_list] == [10.0, 9.0]
+    assert client.http.get.call_count == 1
+
+
+def test_429_that_outlasts_the_retries_raises() -> None:
+    client = _client_with_gets(
+        _rate_limited("1"), _rate_limited("1"), _rate_limited("1")
+    )
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError as exc:
+            assert "429" in str(exc)
+        else:
+            raise AssertionError("expected the 429 to raise")
+
+    assert sleep.call_count == 2
+    assert client.http.get.call_count == 3
+
+
+def test_wait_budget_stops_retries_across_calls() -> None:
+    """One client (one claim) waits at most the budget in total."""
+    client = _client_with_gets(
+        _rate_limited("10"),
+        _ok_response({"claims": []}),
+        _rate_limited("10"),
+        _ok_response({"claims": []}),
+        _rate_limited("10"),
+    )
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        client.get_encounter("enc-1")
+        client.get_encounter("enc-2")
+        try:
+            client.get_encounter("enc-3")
+        except RuntimeError:
+            pass
+
+    assert sleep.call_count == 2
+    assert client.http.get.call_count == 5
+
+
+def test_other_errors_are_not_retried() -> None:
+    r = MagicMock()
+    r.status_code = 500
+    r.raise_for_status.side_effect = RuntimeError("500 Server Error")
+    client = _client_with_gets(r)
+
+    with patch("candid.api.client.time.sleep") as sleep:
+        try:
+            client.get_encounter("enc-1")
+        except RuntimeError:
+            pass
+
+    sleep.assert_not_called()
+    assert client.http.get.call_count == 1

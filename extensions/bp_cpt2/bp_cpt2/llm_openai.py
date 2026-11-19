@@ -1,8 +1,9 @@
 """
 Simplified OpenAI LLM wrapper for BP CPT2 extension.
 
-This module provides a lightweight interface to OpenAI's chat completion API,
-designed specifically for analyzing clinical notes to determine treatment plan documentation.
+This module provides a lightweight interface to OpenAI's chat completion API and
+OpenAI-compatible APIs such as Fireworks, used to identify the hypertension-related
+diagnoses on a clinical note.
 """
 
 from __future__ import annotations
@@ -14,20 +15,29 @@ from typing import Any
 
 import requests
 
+OPENAI_API_BASE = "https://us.api.openai.com/v1"
+OPENAI_DEFAULT_MODEL = "gpt-4"
+
+# Fireworks' US-only serverless endpoint, which only serves its US-only models
+FIREWORKS_API_BASE = "https://us.api.fireworks.ai/inference/v1"
+FIREWORKS_DEFAULT_MODEL = "accounts/fireworks/routers/kimi-k3-us"
+
 
 class LlmOpenai:
     """Simplified OpenAI LLM client for chat completions."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = OPENAI_DEFAULT_MODEL, base_url: str = OPENAI_API_BASE):
         """
         Initialize the OpenAI LLM client.
 
         Args:
-            api_key: OpenAI API key for authentication
-            model: OpenAI model to use (default: gpt-4)
+            api_key: API key for authentication
+            model: Model to use (default: gpt-4)
+            base_url: Base URL of the OpenAI-compatible API (default: OpenAI's US endpoint)
         """
         self.api_key = api_key
         self.model = model
+        self.base_url = base_url
         self.temperature = 0.0
         self.messages: list[dict[str, str]] = []
 
@@ -86,7 +96,7 @@ class LlmOpenai:
         if user_prompt:
             self.add_user_message(user_prompt)
 
-        url = "https://us.api.openai.com/v1/chat/completions"
+        url = f"{self.base_url}/chat/completions"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",

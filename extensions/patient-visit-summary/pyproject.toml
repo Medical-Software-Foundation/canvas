@@ -10,7 +10,7 @@ license = "MIT"
 name = "patient-visit-summary"
 readme = "patient_visit_summary/README.md"
 requires-python = ">=3.11"
-version = "0.1.0"
+version = "0.1.1"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -15,11 +15,12 @@ from typing import Any
 
 import requests
 from canvas_sdk.effects.simple_api import JSONResponse, Response
-from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.handlers.simple_api import SessionCredentials, SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.v1.data.staff import Staff
 from django.db import DatabaseError
 from logger import log
 
+from practitioner_bulk_loader.access import staff_can_load
 from practitioner_bulk_loader.utils.csv_parser import (
     DEFAULT_NPI,
     TEMPLATE_CSV,
@@ -1132,10 +1133,20 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
     API endpoints for the practitioner bulk upload workflow.
 
     All endpoints require an authenticated staff session (enforced by
-    StaffSessionAuthMixin — the user must be logged into Canvas).
+    StaffSessionAuthMixin — the user must be logged into Canvas), and the staff
+    member must be named in the plugin's allow-list (see access.py).
     """
 
     PREFIX = "/bulk-upload"
+
+    def authenticate(self, credentials: SessionCredentials) -> bool:
+        """Allow only signed-in staff on the bulk loader allow-list."""
+        super().authenticate(credentials)
+        staff_key = (credentials.logged_in_user or {}).get("id")
+        if staff_can_load(staff_key, self.secrets):
+            return True
+        log.warning(f"[BulkUpload] refused staff {staff_key}: not on the bulk loader allow-list")
+        return False
 
     # ------------------------------------------------------------------
     # GET /bulk-upload/template.csv
@@ -1584,7 +1595,17 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
 
             results.append(result)
 
-        log.info(f"[BulkUpload] create-practitioners complete: {len(results)} results")
+        # The FHIR writes run as the plugin's API client, so this line is what ties a
+        # load to the staff member who ran it.
+        counts: dict[str, int] = {}
+        for result in results:
+            status = str(result.get("status", "unknown"))
+            counts[status] = counts.get(status, 0) + 1
+        staff_key = self.request.headers.get("canvas-logged-in-user-id", "")
+        log.info(
+            f"[BulkUpload] create-practitioners complete by staff {staff_key}: "
+            f"{len(results)} results {dict(sorted(counts.items()))}"
+        )
 
         return [JSONResponse({"results": results})]
 

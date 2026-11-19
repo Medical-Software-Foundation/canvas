@@ -14,6 +14,17 @@ from canvas_sdk.v1.data.observation import Observation
 from logger import log
 
 
+
+def _script_json(value) -> str:
+    """JSON for an inline <script> block.
+
+    The template marks these values safe, and json.dumps leaves "<" alone, so a
+    free-text vitals value such as "</script>" would close the script block.
+    Escaping "<" keeps the JSON identical once parsed.
+    """
+    return json.dumps(value).replace("<", "\\u003c")
+
+
 class VitalsVisualizerButton(ActionButton):
 
     BUTTON_TITLE = "Open Visualizer"
@@ -127,9 +138,9 @@ class VisualApp(StaffSessionAuthMixin, SimpleAPI):
                 render_to_string(
                     "templates/index.html", 
                     context={
-                        "data": json.dumps(vitals_data),
-                        "dates": json.dumps(dates),
-                        "graph_ranges": json.dumps(graph_ranges)
+                        "data": _script_json(vitals_data),
+                        "dates": _script_json(dates),
+                        "graph_ranges": _script_json(graph_ranges)
                     }
                 ),
                 status_code=HTTPStatus.OK,

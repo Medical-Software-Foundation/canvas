@@ -224,6 +224,24 @@ class TestVisualAppIndex:
         data = json.loads(self._render_ctx(mock_render)["data"])
         assert data["Pulse (bpm)"] == ["Regular"]
 
+    def test_free_text_value_cannot_close_the_script_block(self) -> None:
+        panel = SimpleNamespace(id="p1", effective_datetime=datetime(2026, 1, 1))
+        hostile = SimpleNamespace(
+            name="pulse", value="</script><b>x",
+            is_member_of=SimpleNamespace(id="p1"),
+        )
+        api = _make_api(patient=PATIENT_UUID)
+        mock_obs = _setup_observations([panel], [hostile])
+        with (
+            patch.object(visualizer, "Observation", mock_obs),
+            patch.object(visualizer, "render_to_string", return_value="x") as mock_render,
+        ):
+            api.index()
+
+        raw = self._render_ctx(mock_render)["data"]
+        assert "<" not in raw
+        assert json.loads(raw)["Pulse (bpm)"] == ["</script><b>x"]
+
     def test_dates_sorted_chronologically_and_values_follow(self) -> None:
         panel_late = SimpleNamespace(id="p2", effective_datetime=datetime(2026, 2, 1))
         panel_early = SimpleNamespace(id="p1", effective_datetime=datetime(2025, 12, 1))

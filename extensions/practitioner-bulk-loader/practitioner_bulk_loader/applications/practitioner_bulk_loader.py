@@ -13,6 +13,8 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import Application
 
+from practitioner_bulk_loader.access import staff_can_load
+
 # The HTML/CSS/JS for the application is generated inline so the plugin is
 # self-contained in a single delivery unit — no separate static file routes needed.
 # Cache busting is not needed: LaunchModalEffect(content=...) ships the HTML
@@ -1104,8 +1106,28 @@ class PractitionerBulkLoaderApp(Application):
     No patient context is required — this is a global utility.
     """
 
+    def _can_load(self) -> bool:
+        """Whether the signed-in staff member is on the bulk loader allow-list."""
+        user = self.event.context.get("user") or {}
+        staff_key = user.get("id") if user.get("type") == "Staff" else None
+        return staff_can_load(staff_key, self.secrets)
+
+    def visible(self) -> bool:
+        """Show the menu entry only to staff on the allow-list."""
+        return self._can_load()
+
     def on_open(self) -> Effect:
-        """Render the bulk loader UI inline in a PAGE modal."""
+        """Render the bulk loader UI inline in a PAGE modal, or a refusal for anyone else.
+
+        The menu entry is hidden from staff not on the allow-list, but the app can still
+        be opened directly, so access is checked here as well.
+        """
+        if not self._can_load():
+            return LaunchModalEffect(
+                content="<p>You are not on this Canvas instance's Staff Loader access list. "
+                "Ask a Canvas admin to add you.</p>",
+                target=LaunchModalEffect.TargetType.PAGE,
+            ).apply()
         return LaunchModalEffect(
             content=_APP_HTML,
             target=LaunchModalEffect.TargetType.PAGE,

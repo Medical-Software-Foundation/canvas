@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="46" fill="#0D9488" />
+
+  <!-- User silhouette (head) -->
+  <circle cx="50" cy="36" r="13" fill="white" opacity="0.95"/>
+
+  <!-- User silhouette (body) -->
+  <path d="M28 72 C28 56 38 48 50 48 C62 48 72 56 72 72" fill="white" opacity="0.95"/>
+
+  <!-- Chat bubble overlay (bottom-right) -->
+  <g transform="translate(58, 52)">
+    <rect x="0" y="0" width="30" height="22" rx="5" fill="#14B8A6" stroke="white" stroke-width="2.5"/>
+    <polygon points="6,22 10,28 14,22" fill="#14B8A6" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+    <!-- Chat dots -->
+    <circle cx="9" cy="11" r="2.2" fill="white"/>
+    <circle cx="15" cy="11" r="2.2" fill="white"/>
+    <circle cx="21" cy="11" r="2.2" fill="white"/>
+  </g>
+</svg>

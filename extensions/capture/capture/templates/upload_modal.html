@@ -46,6 +46,8 @@
   .drop.drag { border-color:var(--slate); background:#f1f4f8; }
   .drop .du { width:46px; height:46px; border-radius:13px; background:#eef1f6; display:flex; align-items:center; justify-content:center; color:var(--slate); }
   .drop b { color:var(--slate); font-size:14px; }
+  button.drop { width:100%; font:inherit; cursor:pointer; }
+  button.drop:disabled { opacity:.5; cursor:default; }
   .drop small { font-size:11.5px; }
 
   /* capture dock */
@@ -351,6 +353,12 @@
         <div class="vf-msg hidden" id="vfMsg"></div>
         <div class="flash" id="flash"></div>
       </div>
+      <button type="button" class="drop hidden" id="nativeCam">
+        <span class="du"><svg class="ico i22"><use href="#i-cam"/></svg></span>
+        <b>Take Photo</b>
+        <small id="nativeCamSub">Take a photo of each page.</small>
+      </button>
+      <input type="file" id="nativeCamInput" accept="image/*" capture="environment" class="hidden">
       <div class="drop hidden" id="dropZone">
         <div class="du"><svg class="ico i22"><use href="#i-upload"/></svg></div>
         <b id="dropTitle">Drop a PDF or image</b>
@@ -572,7 +580,7 @@
     }
   });
   function closeModal() {
-    stopCamera(); destroyCropper();
+    leaveCapture(); stopCamera(); destroyCropper();
     if (messagePort) { messagePort.postMessage({ type: "CLOSE_MODAL" }); }
   }
 
@@ -609,27 +617,62 @@
   function pagesLabel(n) { return n + (n === 1 ? " page" : " pages"); }
 
   // ---- camera ----
+  // Phones and tablets (iPad, iPhone, Android) take the photo with the device's own
+  // camera app: full resolution, focused and exposed, with flash where the device has
+  // one. A frame copied from the live video was low resolution (blurry documents), and
+  // asking that video for full resolution comes out dark on iPad. Computers keep the
+  // live viewfinder. iPadOS Safari reports itself as a Mac, so touch tells them apart.
+  var NATIVE_CAMERA = /iPad|iPhone|iPod|Android/i.test(navigator.userAgent || "") ||
+    (/Macintosh/.test(navigator.userAgent || "") && (navigator.maxTouchPoints || 0) > 1);
+  // The shutter waits until the camera has delivered frames for about a second, so it
+  // has adjusted to the light; the first frames can be nearly black.
+  var CAMERA_WARMUP_MS = 1000;
+  var cameraReady = false;
   function startCamera() {
-    if (stream) return;
+    if (NATIVE_CAMERA || stream) return;
+    cameraReady = false; renderDock();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showVfMessage("Camera unavailable on this device. Use the Upload tab instead."); return;
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then(function (s) { stream = s; $("video").srcObject = s; hideVfMessage(); })
+    // Ask for the camera's full resolution; with no size requested, browsers open a
+    // small video stream (often 640x480) and photographed documents come out blurry.
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 4096 }, height: { ideal: 4096 } }, audio: false })
+      .then(function (s) {
+        stream = s; $("video").srcObject = s; hideVfMessage();
+        var video = $("video"), waiting = false;
+        var ready = function () {
+          if (waiting || !video.videoWidth) return;
+          waiting = true;
+          setTimeout(function () { if (stream === s) { cameraReady = true; renderDock(); } }, CAMERA_WARMUP_MS);
+        };
+        video.onloadedmetadata = ready; video.oncanplay = ready; video.onplaying = ready; video.onresize = ready; ready();
+        // Some cameras report their size late or never fire these events; don't leave
+        // the shutter off for good.
+        setTimeout(function () { if (stream === s && !cameraReady && video.videoWidth) { cameraReady = true; renderDock(); } }, 4000);
+      })
       .catch(function () { showVfMessage("Camera access was blocked. Use the Upload tab instead."); });
   }
-  function stopCamera() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } }
+  function stopCamera() { cameraReady = false; if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } }
   function showVfMessage(m) { $("vfMsg").textContent = m; $("vfMsg").classList.remove("hidden"); $("video").style.visibility = "hidden"; }
   function hideVfMessage() { $("vfMsg").classList.add("hidden"); $("video").style.visibility = "visible"; }
 
   function captureFrame() {
-    if (!stream || pages.length >= MAX_PAGES) return;
     var video = $("video"), canvas = $("captureCanvas");
-    canvas.width = video.videoWidth || 1080;
-    canvas.height = video.videoHeight || 1440;
+    if (!stream || !cameraReady || !video.videoWidth || (mode === "document" && pages.length >= MAX_PAGES)) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
     $("flash").classList.remove("go"); void $("flash").offsetWidth; $("flash").classList.add("go");
-    openCrop(canvas.toDataURL("image/jpeg", 0.92));
+    // toBlob runs in the background; toDataURL on a full-resolution frame froze the screen.
+    var token = photoToken;
+    canvas.toBlob(function (blob) { if (blob && token === photoToken) openCrop(URL.createObjectURL(blob)); }, "image/jpeg", 0.92);
+  }
+
+  // A photo from the device's camera app goes through the same path as a single-photo
+  // upload: orientation fix and 2400 px cap, then the crop step.
+  function handleNativePhoto(list) {
+    if (mode === "document" && pages.length >= MAX_PAGES) return;
+    photoToCrop(list);
   }
 
   // ---- crop ----
@@ -642,9 +685,16 @@
     $("cropStage").classList.toggle("avatar", mode === "profile");
     $("btnUsePhoto").textContent = (mode === "profile") ? "Set as profile picture" : "Use photo";
     show("crop");
+    cropUrl = (dataUrl.indexOf("blob:") === 0) ? dataUrl : null;
+    img.onerror = function () {
+      destroyCropper(); show("capture");
+      showNotice("Couldn’t read that image.");
+    };
     img.onload = function () {
       cropper = new Cropper(img, {
-        viewMode: 1, dragMode: "none", autoCropArea: 0.9, background: false,
+        // The crop box starts on the whole photo, so a page kept without touching it is
+        // saved whole (a signature or date near the edge isn't trimmed by default).
+        viewMode: 1, dragMode: "none", autoCropArea: 1, background: false,
         guides: true, center: true, cropBoxMovable: true, cropBoxResizable: true,
         toggleDragModeOnDblclick: false, movable: false, zoomable: false,
         scalable: false, rotatable: true, responsive: true, checkCrossOrigin: false,
@@ -676,23 +726,34 @@
     $("dropTitle").textContent = "Drop an image";
     $("dropSub").textContent = "or browse — JPG, PNG, HEIC";
     $("vfHint").textContent = "Frame the photo, then tap the shutter";
+    $("nativeCamSub").textContent = "Take a photo.";
     hideNotice();
     activateCamera();
     show("capture");
   }
   // Upload path for single-image mode: take the first image, normalize, go straight to crop.
-  function handleSingleFile(list) {
+  function handleSingleFile(list) { photoToCrop(list); }
+  // photoToken changes whenever staff leave the capture screen (Back, Close, another
+  // mode), so a photo still converting is dropped instead of opening the crop screen
+  // over whatever is showing now.
+  var photoToken = 0;
+  function leaveCapture() { photoToken++; }
+  function photoToCrop(list) {
     hideNotice();
     var file = (list && list[0]) || null;
     if (!file) return;
-    var toCrop = function (blob) { openCrop(URL.createObjectURL(blob)); };
+    var token = photoToken;
+    var toCrop = function (blob) { if (token === photoToken) openCrop(URL.createObjectURL(blob)); };
+    var failed = function (msg) { return function () { if (token === photoToken) showNotice(msg); }; };
     if (isHeic(file)) {
       if (!window.heic2any) { showNotice("Couldn’t read that HEIC image."); return; }
       heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 })
         .then(function (out) { return normalizeImage(Array.isArray(out) ? out[0] : out); })
-        .then(toCrop).catch(function () { showNotice("Couldn’t read that HEIC image."); });
-    } else if (isImageType(file.type)) {
-      normalizeImage(file).then(toCrop).catch(function () { showNotice("Couldn’t read that image."); });
+        .then(toCrop).catch(failed("Couldn’t read that HEIC image."));
+    } else if (!file.type || /^image\//.test(file.type)) {
+      // Any image the browser can decode (cameras and galleries also return WebP and
+      // others, or no type at all); the crop step saves it as JPEG.
+      normalizeImage(file).then(toCrop).catch(failed("Couldn’t read that image."));
     } else {
       showNotice("Use a JPG, PNG, or HEIC image.");
     }
@@ -859,7 +920,13 @@
     xhr.send(fd);
   }
 
-  function destroyCropper() { if (cropper) { cropper.destroy(); cropper = null; } $("cropImage").removeAttribute("src"); }
+  // The crop image's blob URL holds a full photo; release it with the cropper.
+  var cropUrl = null;
+  function destroyCropper() {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    $("cropImage").onerror = null; $("cropImage").removeAttribute("src");
+    if (cropUrl) { try { URL.revokeObjectURL(cropUrl); } catch (e) {} cropUrl = null; }
+  }
 
   // Confirm the cropped page, then either loop back to capture ("add") or go to
   // Details ("continue"). Guarded against double-tap.
@@ -919,9 +986,10 @@
       left.innerHTML = html;
       done.classList.remove("idle"); done.disabled = false;
     }
-    var shutter = $("btnShutter");
-    if (pages.length >= MAX_PAGES) { shutter.setAttribute("disabled", "disabled"); }
+    var shutter = $("btnShutter"), full = pages.length >= MAX_PAGES;
+    if ((full && mode === "document") || !cameraReady) { shutter.setAttribute("disabled", "disabled"); }
     else { shutter.removeAttribute("disabled"); }
+    $("nativeCam").disabled = full && mode === "document";
     updateHint();
   }
 
@@ -1053,12 +1121,14 @@
   }
   function activateCamera() {
     $("tabCamera").classList.add("active"); $("tabUpload").classList.remove("active");
-    $("viewfinder").classList.remove("hidden"); $("dropZone").classList.add("hidden");
-    $("btnShutter").style.display = ""; startCamera(); updateHint();
+    $("dropZone").classList.add("hidden");
+    $("viewfinder").classList.toggle("hidden", NATIVE_CAMERA);
+    $("nativeCam").classList.toggle("hidden", !NATIVE_CAMERA);
+    $("btnShutter").style.display = NATIVE_CAMERA ? "none" : ""; startCamera(); renderDock(); updateHint();
   }
   function activateUpload() {
     $("tabUpload").classList.add("active"); $("tabCamera").classList.remove("active");
-    $("dropZone").classList.remove("hidden"); $("viewfinder").classList.add("hidden");
+    $("dropZone").classList.remove("hidden"); $("viewfinder").classList.add("hidden"); $("nativeCam").classList.add("hidden");
     $("btnShutter").style.display = "none"; stopCamera(); updateHint();
   }
 
@@ -1272,7 +1342,7 @@
     $("titleInput").value = ""; $("dateInput").value = "";
     document.querySelectorAll(".pill-choice").forEach(function (b) { b.classList.remove("sel"); });
     singleBlob = null; selectedNoteId = null;
-    mode = null; stopCamera(); renderDock(); show("choose");
+    mode = null; leaveCapture(); stopCamera(); renderDock(); show("choose");
   }
 
   // ---- wire up ----
@@ -1285,6 +1355,8 @@
   $("tabCamera").addEventListener("click", activateCamera);
   $("tabUpload").addEventListener("click", activateUpload);
   $("btnShutter").addEventListener("click", captureFrame);
+  $("nativeCam").addEventListener("click", function () { $("nativeCamInput").click(); });
+  $("nativeCamInput").addEventListener("change", function () { handleNativePhoto(this.files); this.value = ""; });
   $("btnDone").addEventListener("click", goToDetails);
   $("pillLeft").addEventListener("click", function () { if (pages.length) openPages(); });
   $("detailReview").addEventListener("click", function () { if (pages.length) openPages(); });
@@ -1308,7 +1380,7 @@
   $("btnAddAnother").addEventListener("click", resetAll);
 
   // ---- entry menu (choose) ----
-  function goToChoose() { stopCamera(); show("choose"); }
+  function goToChoose() { leaveCapture(); stopCamera(); show("choose"); }
   $("btnChooseClose").addEventListener("click", closeModal);
   $("chooseDoc").addEventListener("click", function () {
     mode = "document";
@@ -1318,6 +1390,7 @@
     $("dropTitle").textContent = "Drop a PDF or image";
     $("dropSub").textContent = "or browse files — PDF, JPG, PNG, HEIC";
     $("vfHint").textContent = "Frame the document, then tap the shutter";
+    $("nativeCamSub").textContent = "Take a photo of each page.";
     renderDock(); activateCamera(); show("capture");
   });
   $("chooseExam").addEventListener("click", function () { mode = "exam"; enterSingleCapture("Exam photo"); });

@@ -1,0 +1,307 @@
+/* Order Favorites chart panel. Copied from the approved mockup,
+   which took its type, colors, borders, and shadows from Recent Patients (msf-canvas extensions/recent_patients/
+   recent_patients/static/styles.css) and the Dot Phrases panel. Comments mark where a value came from. */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+/* Recent Patients body type and the white-header-over-tinted-list structure */
+body{display:flex;flex-direction:column;min-height:0;font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.5;color:#2c4155;background:#EFF5F7}
+.view{flex:1;display:flex;flex-direction:column;min-height:0}
+.view[hidden]{display:none}
+.pp-band{background:#fff;border-bottom:1.5px solid #dce8ec;padding:16px 16px 12px}
+.pp-content{padding:14px 16px 24px;flex:1;overflow:auto}
+.pp-head{display:flex;align-items:center;gap:4px;margin-bottom:10px}
+.pp-head h2{font-size:18px;font-weight:600;color:#0d203c;line-height:1.2;margin:0;flex:1}
+.pp-icon,.pp-back{border:0;background:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#5e7a8a;cursor:pointer}
+.pp-icon:hover,.pp-back:hover{background:#F4F8FA;color:#0d203c}
+.pp-icon svg,.pp-back svg{width:17px;height:17px}
+.pp-search{position:relative;margin-top:10px}
+.pp-search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#8ea8b5}
+.pp-search input{width:100%;padding:9px 14px 9px 34px;font-family:inherit;font-size:14px;color:#2c4155;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;outline:none}
+.pp-search input::placeholder{color:#8ea8b5}
+.pp-search input:focus{background:#fff;border-color:#5ab5c4;box-shadow:0 0 0 3px rgba(150,211,221,.2)}
+.pp-seg{display:flex;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:3px;margin-top:10px}
+.pp-seg button{flex:auto;white-space:nowrap;border:0;background:none;padding:5px 6px;font-family:inherit;font-size:13px;color:#5e7a8a;border-radius:7px;cursor:pointer}
+/* Selected segment: light teal, the option chosen for Dot Phrases */
+.pp-seg button.on{background:rgba(150,211,221,.28);color:#2c7f8c;font-weight:700;box-shadow:none}
+.pp-seg.sm{margin-top:8px;display:inline-flex}
+.pp-seg.sm button{flex:none;padding:3px 10px;font-size:12px}
+/* Not sourced: count bubble on a tab, built from the .tag shape below. */
+.pp-seg .cnt{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;border-radius:999px;background:#2c7f8c;color:#fff;font-size:11px;font-weight:600;line-height:18px}
+
+/* Favorite cards (Dot Phrases .pc), with a checkbox for picking */
+.pc{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1.5px solid #dce8ec;border-radius:12px;padding:11px 12px 11px 12px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 4px rgba(13,32,60,.07);transition:border-color 150ms ease,box-shadow 150ms ease}
+.pc:hover{border-color:#96D3DD;box-shadow:0 4px 16px rgba(13,32,60,.10)}
+.pc.sel{border-color:#5ab5c4;box-shadow:0 0 0 3px rgba(150,211,221,.25),0 4px 16px rgba(13,32,60,.10);background:linear-gradient(#f2fafb,#fff 64px)}
+/* Left edge: teal for your favorites, gray-blue for practice favorites */
+.pc.pc-mine{border-left:4px solid #2c7f8c}
+.pc.pc-team{border-left:4px solid #8aa5b4}
+.pc input[type=checkbox]{width:16px;height:16px;margin:3px 0 0;accent-color:#2c7f8c;flex-shrink:0}
+.pc-main{min-width:0;flex:1}
+.pc-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pc-code{font-weight:600;font-size:15px;color:#0d203c}
+.pc-prev{font-size:12.5px;color:#5e7a8a;line-height:1.45;margin-top:3px}
+.tag{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.tag.practice{background:#F4F8FA;color:#5e7a8a;font-weight:500;border:1px solid #dce8ec}
+.tag.mine{background:#e0f3f6;color:#2c7f8c}
+.tag.hid{background:#fdf0dc;color:#b26a00}
+.pp-sec{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:6px 0 8px 4px}
+.pp-sec ~ .pp-sec{margin-top:20px}
+.empty{padding:36px 16px;text-align:center;font-style:italic;color:#8ea8b5}
+
+/* Buttons */
+.pp-btn{border:1.5px solid #dce8ec;background:#fff;color:#0d203c;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.pp-btn:hover{border-color:#96D3DD}
+.pp-primary{background:#0d203c;border-color:#0d203c;color:#fff}
+.pp-primary:hover{background:#1b3354;border-color:#1b3354}
+.pp-btn[disabled]{opacity:.45;cursor:default}
+.pp-sm{padding:4px 10px;font-size:12px;border-radius:7px}
+
+/* Not sourced: sticky footer for the note picker, using the .pp-band white band and border. */
+.pp-foot{background:#fff;border-top:1.5px solid #dce8ec;padding:12px 16px}
+.pp-foot .lbl{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:0 0 6px}
+.pp-foot select{width:100%;padding:9px 12px;font-family:inherit;font-size:13px;color:#2c4155;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;margin-bottom:10px}
+.pp-foot .pp-btn{width:100%;padding:9px 14px;font-size:14px}
+.pp-foot .info{font-size:12.5px;color:#5e7a8a;background:#F4F8FA;border-radius:9px;padding:8px 10px;margin-bottom:10px}
+
+/* Manage list (Dot Phrases .ml-*) */
+.ml-sec{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#0b5966;margin:4px 2px 8px}
+.ml-sec ~ .ml-sec{margin-top:18px}
+.ml-sec span{font-weight:500;color:#8ea8b5}
+.ml-group{background:#fff;border:1.5px solid #dce8ec;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(13,32,60,.07)}
+.ml-row{display:flex;align-items:center;gap:6px;padding:10px 8px 10px 14px;border-top:1px solid #eef4f6}
+.ml-row:first-child{border-top:0}
+.ml-main{flex:1;min-width:0}
+.ml-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ml-code{font-weight:600;font-size:14.5px;color:#0d203c}
+.ml-meta{font-size:12px;color:#8ea8b5}
+.ml-text{font-size:12.5px;color:#5e7a8a;line-height:1.45;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ml-icon{flex-shrink:0;width:30px;height:30px;border:0;border-radius:8px;background:none;color:#8ea8b5;display:grid;place-items:center;cursor:pointer}
+.ml-icon svg{width:16px;height:16px}
+.ml-icon:hover{background:#fff;color:#0d203c;box-shadow:0 0 0 1.5px #dce8ec}
+.ml-restore{flex-shrink:0;border:0;background:none;padding:5px 8px;border-radius:7px;font:inherit;font-size:12.5px;font-weight:600;color:#2c7f8c;cursor:pointer}
+.ml-restore:hover{background:rgba(150,211,221,.28);color:#0d203c}
+.ml-lock{font-size:11.5px;color:#8ea8b5;margin-top:3px;display:flex;gap:4px;align-items:center}
+.ml-lock svg{width:12px;height:12px;flex-shrink:0}
+/* Not sourced: in-panel delete confirmation, using the Dot Phrases button and error colors (.pp-btn, #c62828). */
+.ml-confirm{background:#fdf1f1}
+.ml-ask{font-size:12.5px;color:#5e7a8a;margin-top:2px}
+.pp-danger{background:#c62828;border-color:#c62828;color:#fff}
+.pp-danger:hover{background:#a51f1f;border-color:#a51f1f}
+.ml-empty{font-size:12.5px;color:#8ea8b5;margin:0 2px;font-style:italic}
+.ml-foot{font-size:12px;color:#8ea8b5;margin:10px 2px 0}
+/* Not sourced: structured card details, built from the Dot Phrases palette (.tok fields, .tag.Procedure amber). */
+/* Labeled rows, modeled on Canvas's command fields (fields/primitives/FieldWithLabel.tsx + Label.tsx:
+   small uppercase gray label, value beside it), set in the panel's DM Sans. */
+/* Kind badges, colored from the Dot Phrases tag palette (.tag.Sig purple, .tag.HPI blue) */
+.kb{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+.kb svg{width:15px;height:15px}
+.kb.rx{background:#efe7fb;color:#6b3fb5}
+.kb.lab{background:#e3effc;color:#1565c0}
+.pp-seg .ti{display:inline-flex;vertical-align:-3px;margin-right:5px}
+.pp-seg .ti svg{width:15px;height:15px}
+.pp-seg button[data-tab="rx"] .ti{color:#6b3fb5}
+.pp-seg button[data-tab="lab"] .ti{color:#1565c0}
+/* Not sourced: header mark, teal from the Dot Phrases accent (#2c7f8c) */
+.pp-mark{width:30px;height:30px;border-radius:9px;background:#2c7f8c;color:#fff;display:grid;place-items:center;margin-right:6px;flex-shrink:0}
+.pp-mark svg{width:17px;height:17px}
+.fd{display:grid;grid-template-columns:72px minmax(0,1fr);gap:3px 10px;margin:6px 0 0;font-size:13px;line-height:1.45}
+.fd dt{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#2c7f8c;padding-top:2px}
+.fd dd{margin:0;color:#2c4155;overflow-wrap:anywhere}
+/* Collapsed card summary and expand arrow (Dot Phrases .pc-chev idea) */
+.cs{margin-top:2px;min-width:0}
+.cs-1{font-size:13px;color:#2c4155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-2{font-size:12.5px;color:#5e7a8a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-exp{flex-shrink:0;width:28px;height:28px;border:0;border-radius:8px;background:none;color:#5e7a8a;display:grid;place-items:center;cursor:pointer;align-self:flex-start}
+.pc-exp svg{width:16px;height:16px;transition:transform .15s}
+.pc-exp.open svg{transform:rotate(180deg)}
+.pc-exp:hover{background:#F4F8FA;color:#0d203c}
+.fd-list{list-style:none;margin:0;padding:0}
+.fd-list li{position:relative;padding-left:12px}
+.fd-list li::before{content:"";position:absolute;left:1px;top:.62em;width:5px;height:5px;border-radius:50%;background:#96D3DD}
+.fd-list li + li{margin-top:2px}
+.fd-list .code{font-weight:600;color:#0d203c;margin-right:2px}
+/* Search pickers (not sourced: built from the Dot Phrases .pp-search field and .ax-pop menu) */
+.cb{position:relative}
+.cb-sel{border:1.5px solid #dce8ec;border-radius:9px;background:#fff;margin-bottom:8px;overflow:hidden}
+.cb-sel:empty{display:none}
+.cb-row{display:flex;align-items:flex-start;gap:8px;padding:7px 8px 7px 12px;border-top:1px solid #eef4f6;font-size:13px;color:#2c4155}
+.cb-row:first-child{border-top:0}
+.cb-row .t{flex:1;min-width:0;line-height:1.4}
+.cb-row .code{font-weight:600;color:#0d203c;margin-right:4px}
+.cb-row .rm{border:0;background:none;color:#8ea8b5;cursor:pointer;padding:0 4px;font-size:14px;line-height:1.4}
+.cb-row .rm:hover{color:#c62828}
+.cb-row.bad{background:#fdf6e9}
+.cb-row.bad .t{color:#9a5b00}
+.cb-box{position:relative}
+.cb-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#8ea8b5;pointer-events:none}
+.ed .cb-box input{padding-left:34px}
+.cb-pop{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:30;max-height:240px;overflow:auto;background:#fff;border:1.5px solid #dce8ec;border-radius:12px;box-shadow:0 10px 28px rgba(13,32,60,.14);padding:5px}
+.cb-opt{display:flex;align-items:flex-start;gap:8px;width:100%;border:0;background:none;text-align:left;border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;color:#2c4155;cursor:pointer}
+.cb-opt:hover{background:#F4F8FA}
+.cb-opt .cb-ck{flex-shrink:0;width:16px;height:16px;border:1.5px solid #c3d3da;border-radius:4px;display:grid;place-items:center;margin-top:2px;font-size:11px;line-height:1;color:#fff}
+.cb-opt.on .cb-ck{background:#2c7f8c;border-color:#2c7f8c}
+.cb-opt .code{font-weight:600;color:#0d203c;margin-right:4px}
+.cb-empty{font-size:12.5px;color:#8ea8b5;padding:8px 10px}
+.cb-foot{font-size:11.5px;color:#8ea8b5;padding:6px 10px 3px;border-top:1px solid #eef4f6;margin-top:3px}
+.ml-note{display:flex;gap:6px;align-items:flex-start;font-size:12px;color:#5e7a8a;background:#fff;border:1.5px dashed #dce8ec;border-radius:9px;padding:7px 10px;margin:0 0 8px}
+.ml-note svg{width:13px;height:13px;flex-shrink:0;margin-top:2px;color:#8ea8b5}
+
+/* Editor (Dot Phrases .ed) */
+.ed{border:1.5px solid #dce8ec;border-radius:12px;padding:18px 16px 16px;margin-bottom:12px;background:#fff;box-shadow:0 1px 4px rgba(13,32,60,.07)}
+/* Spacing: 18px between fields, 6px from a label to its field (not sourced; tuned for the narrow panel) */
+.ed label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:18px 0 6px;line-height:1.3}
+.ed label:first-child{margin-top:0}
+.ed input,.ed textarea,.ed select{width:100%;padding:9px 12px;font-family:inherit;font-size:13px;line-height:1.4;color:#2c4155;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px}
+.ed input:focus,.ed textarea:focus,.ed select:focus{outline:none;background:#fff;border-color:#5ab5c4;box-shadow:0 0 0 3px rgba(150,211,221,.2)}
+/* Dropdowns: own caret, inset 12px from the right edge */
+.ed select,.pp-foot select{appearance:none;-webkit-appearance:none;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235e7a8a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:14px 14px}
+.ed textarea{resize:vertical;max-width:100%;min-height:64px;line-height:1.5}
+.ed .hint{font-size:12px;color:#8ea8b5;margin-top:6px;line-height:1.45}
+.ed .warn{font-size:12px;color:#b26a00;margin-top:8px}
+.ed .row{display:flex;gap:8px;align-items:center;margin-top:20px}
+.ed .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;margin-top:18px}
+.ed .grid label{margin-top:0}
+.ed .toks{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ed .toks .tok{margin:0}
+.ed .note{font-size:12.5px;color:#5e7a8a;background:#F4F8FA;border-radius:9px;padding:8px 10px;margin-bottom:14px}
+.ed .ck{display:flex!important;align-items:center;gap:8px;margin:16px 0 0!important;font-size:13px!important;font-weight:400!important;text-transform:none!important;letter-spacing:0!important;color:#2c4155!important}
+.ed .ck input{width:16px!important;height:16px;margin:0;padding:0;accent-color:#2c7f8c}
+.tok{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#0d203c;background:#F4F8FA;border:1px solid #dce8ec;border-radius:999px;padding:0 4px 0 8px;line-height:22px;margin:0 4px 4px 0}
+.tok button{border:0;background:none;color:#8ea8b5;cursor:pointer;padding:0 2px;font-size:13px}
+.seg-wrap .pp-seg{margin-top:0}
+.seg-wrap .pp-seg button[disabled]{color:#c3d3da;cursor:not-allowed}
+
+/* Import checks (Dot Phrases admin .ax-check-tbl, sized for the panel) */
+.ad-ta{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#2c4155;background:#F4F8FA;border:1.5px solid #dce8ec;border-radius:9px;padding:10px 12px;resize:vertical;min-height:110px}
+.linkish{color:#2c7f8c;font-weight:600;cursor:pointer;font-size:12px}
+.chk{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.chk td{padding:7px 8px 7px 0;border-top:1px solid #eef4f6;vertical-align:top}
+.chk .st{width:18px;font-weight:700}
+.chk .st.ok{color:#2e7d4f}
+.chk .st.bad{color:#c62828}
+.chk .why{display:block;color:#c62828;font-size:12px;margin-top:1px}
+
+/* Result notices inside the panel. Not sourced: colors reuse the .tag and .ed .warn palette. */
+.rs{border-radius:9px;padding:9px 11px;font-size:13px;margin-bottom:10px;border:1.5px solid #dce8ec;background:#fff}
+.rs.ok{border-color:#bfe3c9;background:#f1faf4;color:#2e7d4f}
+.rs.warn{border-color:#f1d9ad;background:#fdf6e9;color:#9a5b00}
+.rs.bad{border-color:#f3c7c7;background:#fdf1f1;color:#c62828}
+.rs a{color:#2c7f8c;font-weight:600;cursor:pointer}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,12px);background:#0d203c;color:#fff;border-radius:9px;padding:9px 16px;font-size:13px;opacity:0;transition:all .2s;pointer-events:none;z-index:99;font-family:"DM Sans",-apple-system,BlinkMacSystemFont,sans-serif}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+/* Not sourced: shared editor bits (buttons used by the unsaved-changes banner, muted text, stale test rows),
+   built from the .pp-btn, .pp-danger, and .ed .warn values above. */
+.btn{border:1.5px solid #dce8ec;background:#fff;color:#0d203c;border-radius:7px;padding:4px 10px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.btn.danger{background:#c62828;border-color:#c62828;color:#fff}
+.muted{color:#8ea8b5;font-size:12px;margin-left:4px}
+.fd-list li.bad{color:#9a5b00}
+/* Unsaved-changes banner, amber from the Dot Phrases .tag.Procedure palette (same as the admin app's .ax-unsaved) */
+.unsaved{background:#fdf6e9;border:1.5px solid #f1d9ad;border-radius:9px;padding:10px 12px;margin:0 0 12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:#9a5b00}
+.unsaved .grow{flex:1 1 100%}
+#guardSlot[hidden]{display:none}
+/* Not sourced: the target-note line in the footer, from .pp-foot .lbl and .info */
+.target{font-size:13px;color:#0d203c;font-weight:600;margin:0 0 10px;line-height:1.4}
+.target span{display:block;font-size:12px;font-weight:500;color:#5e7a8a}
+.cs-1,.cs-2{max-width:100%}
+.pc-main .cs{overflow:hidden}
+.loading{padding:36px 16px;text-align:center;color:#8ea8b5}
+.ax-err{font-size:13px;color:#c62828;margin-top:10px;min-height:1px}
+
+/* Added from mockups/order-favorites-panel-additions.html (not sourced from home-app: built from the panel palette above). */
+/* Four tabs in the narrow panel */
+#tabs.four button{padding:5px 2px;font-size:12.5px}
+#tabs.four .ti{margin-right:3px}
+.kb.set{background:#e9f5ee;color:#2e7d4f}
+.pp-seg button[data-tab="set"] .ti{color:#2e7d4f}
+.pc-kind{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#5e7a8a}
+.pc-kind svg{width:13px;height:13px}
+.pc-kind.rx{color:#6b3fb5}.pc-kind.lab{color:#1565c0}.pc-kind.set{color:#2e7d4f}
+.set-list{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px;color:#2c4155}
+.set-list li{display:flex;align-items:center;gap:6px;padding:2px 0}
+.set-list li svg{width:13px;height:13px;flex-shrink:0}
+.set-list li.rx svg{color:#6b3fb5}.set-list li.lab svg{color:#1565c0}
+.set-list li.gone{color:#9a5b00}
+.grp-h{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#5e7a8a;margin:10px 0 8px 4px}
+.grp-h:first-child{margin-top:0}
+/* Footer: target note with Change, selected items */
+.tgt{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px}
+.tgt .target{flex:1;margin:0}
+.linkbtn{border:0;background:none;padding:2px 0;font:inherit;font-size:12.5px;font-weight:600;color:#2c7f8c;cursor:pointer}
+.linkbtn:hover{text-decoration:underline}
+.notepick{margin:0 0 10px}
+.notepick button{display:block;width:100%;text-align:left;border:1.5px solid #dce8ec;background:#fff;border-radius:9px;padding:8px 10px;margin-bottom:6px;font:inherit;font-size:13px;color:#0d203c;cursor:pointer}
+.notepick button span{display:block;font-size:12px;color:#5e7a8a}
+.notepick button.on{border-color:#5ab5c4;background:#f2fafb}
+/* The open icon sits over the card's top-right corner; a link can't go inside the card's button. */
+.noterow{position:relative}
+.noterow button{padding-right:36px}
+.noteopen{position:absolute;top:6px;right:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:#5e7a8a}
+.noteopen:hover{background:#e6f2f4;color:#2c7f8c}
+.noteopen svg{width:15px;height:15px}
+/* In the Adding to line the icon follows the title instead of sitting in a corner. */
+.noteopen.inline{position:static;display:inline-flex;vertical-align:middle;width:22px;height:22px;margin:-3px 0 0 4px}
+.notepick .warnline{font-size:12px;color:#9a5b00;margin:2px 0 8px}
+.selbar{display:flex;align-items:center;justify-content:space-between;margin:0 0 8px}
+.selbox{border:1.5px solid #dce8ec;border-radius:9px;background:#fff;max-height:170px;overflow:auto;margin-bottom:10px}
+.selrow{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #eef4f6;font-size:13px;color:#2c4155}
+.selrow:first-child{border-top:0}
+.selrow svg{width:14px;height:14px;flex-shrink:0}
+.selrow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selrow .sub{font-size:11.5px;color:#8ea8b5}
+.selrow .x{border:0;background:none;color:#8ea8b5;cursor:pointer;font-size:14px;padding:0 2px}
+.selrow .x:hover{color:#c62828}
+.selrow.ind{padding-left:28px;font-size:12.5px;color:#5e7a8a}
+/* Set editor checklist */
+.picklist{border:1.5px solid #dce8ec;border-radius:9px;background:#fff;max-height:260px;overflow:auto}
+/* Order set editor: the favorites list stretches to fill the panel instead of a short scroll box,
+   and still keeps a usable height when the panel is short (the page scrolls then). */
+#vEdit.is-set .pp-content{display:flex;flex-direction:column}
+#vEdit.is-set .ed{flex:1;display:flex;flex-direction:column;margin-bottom:0}
+#vEdit.is-set #edForm{flex:1;display:flex;flex-direction:column}
+#vEdit.is-set .picklist{flex:1 1 0;max-height:none;min-height:180px}
+/* Cancel and Save stay pinned at the bottom of the editor. */
+.ed-foot .hint{font-size:12px;color:#8ea8b5;line-height:1.45}
+.ed-foot .ax-err{margin-top:4px}
+.ed-foot .row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.ed-foot .pp-btn{width:auto}
+.picklist label.pk{display:flex!important;align-items:flex-start;gap:8px;margin:0!important;padding:8px 10px;border-top:1px solid #eef4f6;font-size:13px!important;font-weight:400!important;text-transform:none!important;letter-spacing:0!important;color:#2c4155!important;cursor:pointer}
+.picklist label.pk:first-child{border-top:0}
+.picklist label.pk input{width:15px!important;height:15px;margin:2px 0 0;accent-color:#2c7f8c;padding:0}
+.picklist .pk small{display:block;font-size:11.5px;color:#8ea8b5}
+.picklist .pkh{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#5e7a8a;background:#fbfdfd;padding:6px 10px;border-top:1px solid #eef4f6}
+.picklist .pkh:first-child{border-top:0}
+.save-for .pp-seg{margin-top:0}
+.linkbtn.muted-link{color:#5e7a8a}
+.new-menu{flex-direction:column;align-items:stretch;margin-top:6px}
+.pk-empty{font-size:12.5px;font-style:italic;color:#8ea8b5;padding:8px 10px;border-top:1px solid #eef4f6}
+.save-for{margin-bottom:6px}
+.save-for label{margin-top:0!important}
+.ed .note{font-size:12.5px;color:#5e7a8a;background:#F4F8FA;border-radius:9px;padding:8px 10px;margin-bottom:14px}
+
+/* Rx / Lab / Order set tag in the card's bottom-right corner, under the expand arrow (not sourced: layout only) */
+.pc-side{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;align-self:stretch;flex-shrink:0;gap:6px}
+.pc-side .pc-kind{white-space:nowrap;margin-top:auto}
+.ml-row .pc-side{align-self:stretch}
+.pc-side .pc-exp{align-self:flex-end}
+/* Order set editor: "+ New" on each group header and the favorite just made there (mockups/order-favorites-set-shortcut.html).
+   Not sourced from home-app: built from the panel palette above. */
+.picklist .pkh{display:flex;align-items:center;justify-content:space-between}
+.picklist .pkh .pk-new{text-transform:none;letter-spacing:0;font-size:12px;padding:0}
+.picklist label.pk.just{background:#f2fafb;transition:background 1.2s}
+.picklist label.pk.just small b{color:#2c7f8c;font-weight:600}
+/* "For the order set <name>" under the title of a favorite made from a set. Built from the panel palette. */
+.backto{font-size:12.5px;color:#5e7a8a;margin:-6px 0 0 32px}
+.backto b{color:#0d203c;font-weight:600}
+.backto[hidden]{display:none}
+/* Short screens and iPads (mockups/order-favorites-small-screens.html, option E): the footer under the favorites
+   is never taller than half the panel. Its selected list or note list scrolls inside it, and Adding to, the count,
+   and Add stay put. Not sourced from home-app. */
+#vUse .pp-foot{max-height:50vh;display:flex;flex-direction:column}
+#vUse .pp-foot > *{flex-shrink:0}
+#vUse .pp-foot .selbox,#vUse .pp-foot .notepick{flex:0 1 auto;min-height:64px;overflow:auto}
+/* Backstop when even the shrunk lists don't fit: the footer scrolls and Add stays pinned at its bottom. */
+#vUse .pp-foot{overflow-y:auto}
+#vUse .pp-foot #add{position:sticky;bottom:0;box-shadow:0 0 0 6px #fff}
+/* The four prescription amounts are one grid; in the panel it wraps to two rows of two. */
+.ed .grid.amounts{row-gap:18px}

@@ -1,0 +1,27 @@
+# Coverage
+.coverage
+htmlcov/
+
+# Pytest
+.pytest_cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+
+# mypy
+.mypy_cache/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code
+.claude/

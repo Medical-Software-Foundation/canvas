@@ -68,6 +68,22 @@ header h2 {
     background: #0356b3;
 }
 
+.btn-secondary {
+    background: #ffffff;
+    color: #0366d6;
+    border: 1px solid #0366d6;
+    line-height: 30px;
+}
+
+.btn-secondary:hover,
+.btn-secondary[aria-expanded="true"] {
+    background: #f1f8ff;
+}
+
+[hidden] {
+    display: none !important;
+}
+
 .btn-icon {
     width: 32px;
     height: 32px;
@@ -99,6 +115,81 @@ header h2 {
     /* Desktop default: two charts side-by-side. */
     flex-direction: row;
     overflow: hidden;
+}
+
+/* History panel takes the bottom 40% of the modal when open. */
+body.history-open .chart-container {
+    bottom: 40%;
+}
+
+.history-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 40%;
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px 16px;
+    box-sizing: border-box;
+    background: #f5f6f7;
+}
+
+.history-title {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.history-empty {
+    margin: 0;
+    font-size: 14px;
+    color: #57606a;
+}
+
+.vitals-table-container {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    background: #ffffff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+}
+
+.vitals-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.vitals-table th,
+.vitals-table td {
+    padding: 6px 10px;
+    text-align: right;
+    border-bottom: 1px solid #eaecef;
+}
+
+.vitals-table thead th {
+    position: sticky;
+    top: 0;
+    background: #fafbfc;
+    color: #57606a;
+    font-weight: 600;
+}
+
+.vitals-table th[scope="row"],
+.vitals-table thead th:first-child {
+    text-align: left;
+    font-weight: 600;
+}
+
+.vitals-table tbody tr:nth-child(even) {
+    background: #f6f8fa;
+}
+
+.vitals-table tbody tr:hover {
+    background: #f1f8ff;
 }
 
 /* Below 720px (mobile / narrow-modal viewports), stack the controls
@@ -142,6 +233,16 @@ header h2 {
     .chart-wrapper {
         min-height: 280px;
         flex: 0 0 auto;
+    }
+
+    .history-panel {
+        position: static;
+        height: auto;
+        flex-shrink: 0;
+    }
+
+    .vitals-table-container {
+        flex: none;
     }
 }
 

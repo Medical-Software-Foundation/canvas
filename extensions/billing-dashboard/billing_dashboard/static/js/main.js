@@ -338,4 +338,158 @@
                         '</td></tr>';
                 });
         });
+
+        /* ---- Tab 4: Claims (server-side sort + filters, CSV export) ---- */
+        var CLAIMS_API = '/plugin-io/api/billing_dashboard/api/claims';
+        var CLAIM_COLUMNS = [
+            {key: 'claim_number', label: 'Claim #', sortable: false, number: false},
+            {key: 'date_of_service', label: 'Date of service', sortable: true},
+            {key: 'patient', label: 'Patient', sortable: true},
+            {key: 'provider', label: 'Provider', sortable: true},
+            {key: 'payer', label: 'Payer', sortable: true},
+            {key: 'queue', label: 'Queue', sortable: true},
+            {key: 'business_line', label: 'Business line', sortable: true, businessLineOnly: true},
+            {key: 'patient_balance', label: 'Patient bal.', sortable: true, money: true},
+            {key: 'coverage_balance', label: 'Coverage bal.', sortable: true, money: true},
+            {key: 'balance', label: 'Total bal.', sortable: true, money: true}
+        ];
+        var claimsState = {sort: 'date_of_service', dir: 'desc', window: '90', queue: '', business_line: ''};
+        var claimsFiltersReady = false;
+        var claimsBusinessLineEnabled = false;
+        var claimsLoaded = false;
+
+        function fmtMoney2(val) {
+            return '$' + Number(val).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        function claimsQueryString() {
+            var p = new URLSearchParams();
+            p.set('sort', claimsState.sort);
+            p.set('dir', claimsState.dir);
+            p.set('window', claimsState.window);
+            if (claimsState.queue) p.set('queue', claimsState.queue);
+            if (claimsBusinessLineEnabled && claimsState.business_line) p.set('business_line', claimsState.business_line);
+            return p.toString();
+        }
+        function visibleClaimColumns() {
+            return CLAIM_COLUMNS.filter(function(c) { return !c.businessLineOnly || claimsBusinessLineEnabled; });
+        }
+        function renderClaimsHead() {
+            var head = document.getElementById('claims-head');
+            head.innerHTML = '';
+            visibleClaimColumns().forEach(function(col) {
+                var th = document.createElement('th');
+                th.textContent = col.label;
+                if (col.sortable) {
+                    var arrow = document.createElement('span');
+                    arrow.className = 'sort-arrow';
+                    var active = claimsState.sort === col.key;
+                    arrow.textContent = active ? (claimsState.dir === 'asc' ? '▲' : '▼') : '↕';
+                    th.appendChild(arrow);
+                    if (active) th.classList.add('sorted');
+                    th.setAttribute('aria-sort', active ? (claimsState.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+                    th.addEventListener('click', function() {
+                        if (claimsState.sort === col.key) {
+                            claimsState.dir = claimsState.dir === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            claimsState.sort = col.key;
+                            claimsState.dir = col.money || col.key === 'date_of_service' ? 'desc' : 'asc';
+                        }
+                        loadClaims();
+                    });
+                } else {
+                    th.style.cursor = 'default';
+                }
+                head.appendChild(th);
+            });
+        }
+        function fillSelect(sel, options, current) {
+            options.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.value;
+                opt.textContent = o.label;
+                if (o.value === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+        function setupClaimsFilters(filters) {
+            claimsBusinessLineEnabled = !!filters.business_line_enabled;
+            var winSel = document.getElementById('claims-window');
+            fillSelect(winSel, filters.windows.map(function(d) {
+                return {value: String(d), label: 'Last ' + d + ' days'};
+            }), claimsState.window);
+            winSel.addEventListener('change', function() { claimsState.window = winSel.value; loadClaims(); });
+
+            var qSel = document.getElementById('claims-queue');
+            fillSelect(qSel, filters.queues.map(function(q) {
+                return {value: q.name, label: q.display_name};
+            }), claimsState.queue);
+            qSel.addEventListener('change', function() { claimsState.queue = qSel.value; loadClaims(); });
+
+            if (claimsBusinessLineEnabled) {
+                document.getElementById('claims-bl-wrap').hidden = false;
+                var blSel = document.getElementById('claims-business-line');
+                fillSelect(blSel, filters.business_lines.map(function(b) {
+                    return {value: b.id, label: b.name};
+                }), claimsState.business_line);
+                blSel.addEventListener('change', function() { claimsState.business_line = blSel.value; loadClaims(); });
+            }
+            claimsFiltersReady = true;
+        }
+        function showClaimsError(msg) {
+            var el = document.getElementById('claims-error');
+            el.textContent = msg;
+            el.classList.toggle('visible', !!msg);
+        }
+        function renderClaimsBody(data) {
+            var cols = visibleClaimColumns();
+            var body = document.getElementById('claims-body');
+            if (!data.claims.length) {
+                body.innerHTML = '<tr><td colspan="' + cols.length +
+                    '" style="text-align:center;padding:24px;color:#9ca3af">No claims match these filters.</td></tr>';
+            } else {
+                body.innerHTML = data.claims.map(function(row) {
+                    return '<tr>' + cols.map(function(col) {
+                        var v = row[col.key];
+                        if (col.money) return '<td class="td-number">' + fmtMoney2(v) + '</td>';
+                        return '<td>' + escapeHtml(v) + '</td>';
+                    }).join('') + '</tr>';
+                }).join('');
+            }
+            var note = data.claims.length + ' claim' + (data.claims.length === 1 ? '' : 's') + ' shown.';
+            if (data.truncated) {
+                note += ' Showing the first ' + data.row_limit + ' rows; narrow the filters or use Download CSV for more.';
+            }
+            document.getElementById('claims-footnote').textContent = note;
+        }
+        function loadClaims() {
+            var qs = claimsQueryString();
+            document.getElementById('claims-export').setAttribute('href', CLAIMS_API + '.csv?' + qs);
+            fetch(CLAIMS_API + '?' + qs)
+                .then(function(r) {
+                    return r.json().then(function(body) { return {ok: r.ok, body: body}; });
+                })
+                .then(function(res) {
+                    if (!res.ok) {
+                        // A failed first load leaves no filters to change, so let a
+                        // tab switch retry instead of leaving the tab stuck.
+                        if (!claimsFiltersReady) claimsLoaded = false;
+                        showClaimsError(res.body.error || 'Could not load claims.');
+                        return;
+                    }
+                    showClaimsError('');
+                    if (!claimsFiltersReady) setupClaimsFilters(res.body.filters);
+                    renderClaimsHead();
+                    renderClaimsBody(res.body);
+                })
+                .catch(function(err) {
+                    console.error('[billing_dashboard] claims fetch failed:', err);
+                    claimsLoaded = false;
+                    showClaimsError('Could not load claims. Switch tabs and back to retry.');
+                });
+        }
+        document.querySelector('[data-tab="claims"]').addEventListener('click', function() {
+            if (claimsLoaded) return;
+            claimsLoaded = true;
+            loadClaims();
+        });
     })();

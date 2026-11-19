@@ -82,47 +82,45 @@ class TestInit:
             assert instance.sdk_url == "https://canvas.sdk.paytheory.com/index.js"
 
 
-class TestPaymentForm:
-    @patch("paytheory_payment_processor.handlers.paytheory_payment_processor.render_to_string")
-    def test_returns_form(self, mock_render, processor):
-        mock_render.return_value = "<html>form</html>"
+class TestCardFieldsHtml:
+    """Tests for the iframe + submit bridge returned by _card_fields_html().
 
+    Canvas's CustomPayment.tsx expects a #submit element in the host DOM.
+    The iframe isolates PayTheory's custom elements (KOALA-5882), and the
+    host #submit button forwards clicks into the iframe via postMessage.
+    """
+
+    def test_contains_iframe_with_card_form_url(self, processor):
+        html = processor._card_fields_html()
+        assert '<iframe' in html
+        assert 'src="/plugin-io/api/paytheory_payment_processor/card-form/"' in html
+
+    def test_contains_submit_button_in_host_dom(self, processor):
+        html = processor._card_fields_html()
+        assert 'id="submit"' in html
+        assert '<button' in html
+
+    def test_contains_postmessage_bridge_script(self, processor):
+        html = processor._card_fields_html()
+        assert 'postMessage' in html
+        assert 'pt-submit' in html
+
+
+class TestPaymentForm:
+    def test_returns_form_with_iframe(self, processor):
         result = processor.payment_form()
 
-        assert mock_render.mock_calls == [
-            call(
-                "templates/form.html",
-                {
-                    "intent": "pay",
-                    "public_api_key": "pub-key-123",
-                    "sdk_url": "https://canvas.sdk.paytheorystudy.com/index.js",
-                },
-            )
-        ]
-        assert result.content == "<html>form</html>"
+        assert '/plugin-io/api/paytheory_payment_processor/card-form/' in result.content
+        assert 'id="submit"' in result.content
         assert result.intent == "pay"
 
 
 class TestAddCardForm:
-    @patch("paytheory_payment_processor.handlers.paytheory_payment_processor.render_to_string")
-    def test_returns_form_with_payor_id(self, mock_render, processor, mock_patient):
-        mock_render.return_value = "<html>add card</html>"
-        processor.api.get_payor_id.return_value = "payor-xyz"
+    def test_returns_form_with_iframe(self, processor):
+        result = processor.add_card_form()
 
-        result = processor.add_card_form(mock_patient)
-
-        assert processor.api.get_payor_id.mock_calls == [call(mock_patient.id)]
-        assert mock_render.mock_calls == [
-            call(
-                "templates/form.html",
-                {
-                    "payor_id": "payor-xyz",
-                    "intent": "add_card",
-                    "public_api_key": "pub-key-123",
-                    "sdk_url": "https://canvas.sdk.paytheorystudy.com/index.js",
-                },
-            )
-        ]
+        assert '/plugin-io/api/paytheory_payment_processor/card-form/' in result.content
+        assert 'id="submit"' in result.content
         assert result.intent == "add_card"
 
 

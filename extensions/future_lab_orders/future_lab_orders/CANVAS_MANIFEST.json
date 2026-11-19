@@ -1,0 +1,42 @@
+{
+    "sdk_version": "0.262.0",
+    "plugin_version": "0.1.0",
+    "name": "future_lab_orders",
+    "description": "Record a future lab order (lab, tests, due date) on the patient profile. Each day, a job creates a staff task due that day for every order that has come due. It does not place or send the lab order; a provider orders and signs it from the task.",
+    "components": {
+        "handlers": [
+            {
+                "class": "future_lab_orders.handlers.profile_fields:FutureLabOrderProfileFields",
+                "description": "Adds the Lab, Tests and Due date fields to the patient profile.",
+                "data_access": {
+                    "event": "PATIENT_METADATA__GET_ADDITIONAL_FIELDS",
+                    "read": ["canvas_sdk.v1.data.lab.LabPartner"],
+                    "write": []
+                }
+            },
+            {
+                "class": "future_lab_orders.handlers.due_task_cron:FutureLabOrderDueTasks",
+                "description": "Daily at 12:00 UTC: creates a task due today for each future lab order that is due.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "canvas_sdk.v1.data.patient.PatientMetadata",
+                        "canvas_sdk.v1.data.team.Team"
+                    ],
+                    "write": [
+                        "canvas_sdk.v1.data.task.Task",
+                        "canvas_sdk.v1.data.patient.PatientMetadata"
+                    ]
+                }
+            }
+        ]
+    },
+    "variables": [
+        {"name": "FUTURE_LAB_TASK_TEAM", "sensitive": false}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

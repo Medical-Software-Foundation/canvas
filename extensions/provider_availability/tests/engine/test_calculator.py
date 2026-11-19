@@ -2,6 +2,7 @@
 
 import datetime as dt
 from datetime import date, datetime, timedelta
+import pytest
 from unittest.mock import MagicMock, call, patch
 
 from provider_availability.engine.models import (
@@ -13,6 +14,8 @@ from provider_availability.engine.models import (
     RecurringBlock,
     TimeWindow,
 )
+from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
+
 from provider_availability.engine.calculator import (
     _build_blocked_intervals,
     _is_blocked,
@@ -22,6 +25,14 @@ from provider_availability.engine.calculator import (
 
 
 CALC_MODULE = "provider_availability.engine.calculator"
+
+
+@pytest.fixture(autouse=True)
+def _provider_owns_one_calendar():
+    """The provider's own calendars are looked up first; give it one."""
+    with patch(f"{CALC_MODULE}.Calendar.objects") as mock_cals:
+        mock_cals.filter.return_value.values_list.return_value = ["cal-own"]
+        yield mock_cals
 
 
 def _make_rule(**overrides):
@@ -132,7 +143,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # Monday is 2026-03-09
@@ -158,7 +169,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # now is Sunday 8am, lead time is 24h, so earliest bookable is Monday 8am.
@@ -188,7 +199,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = calculate_available_slots(
@@ -214,7 +225,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = calculate_available_slots(
@@ -235,7 +246,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
             # Appointment at 10:00 for 60 min blocks the 10:00-11:00 slot
-            mock_appt.filter.return_value.values_list.return_value = [
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = [
                 (datetime(2026, 3, 9, 10, 0), 60),
             ]
             mock_evt.filter.return_value.exclude.return_value = []
@@ -249,6 +260,34 @@ class TestCalculateAvailableSlots:
             starts = [s.start for s in slots]
             assert datetime(2026, 3, 9, 10, 0) not in starts
 
+    def test_lookup_skips_cancelled_and_retracted_appointments(self):
+        """A cancelled slot must become bookable again, and a retracted
+        appointment never should have occupied time at all. Counting either one
+        removes bookable time permanently, with no visible cause."""
+        rule = _make_rule()
+
+        with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
+             patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": ""}), \
+             patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
+             patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
+             patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
+            mock_evt.filter.return_value.exclude.return_value = []
+
+            slots = calculate_available_slots(
+                rule, date(2026, 3, 9), date(2026, 3, 9),
+                now=datetime(2026, 3, 1, 0, 0),
+            )
+
+            # retracted records are filtered in the query
+            assert mock_appt.filter.call_args.kwargs["entered_in_error__isnull"] is True
+            # cancelled appointments are excluded, so their slot frees up
+            assert mock_appt.filter.return_value.exclude.call_args.kwargs == {
+                "status": AppointmentProgressStatus.CANCELLED
+            }
+            # with nothing occupying the day, all three slots are offered
+            assert len(slots) == 3
+
     def test_effective_date_range(self):
         """Rule should only produce slots within its effective date range."""
         rule = _make_rule(
@@ -261,7 +300,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # Query range starts before effective_start → no Monday in effective range
@@ -287,7 +326,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # Tuesday 2026-03-10 — no schedule
@@ -311,7 +350,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[admin_block]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = calculate_available_slots(
@@ -331,7 +370,7 @@ class TestCalculateAvailableSlots:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = calculate_available_slots(
@@ -356,7 +395,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = get_available_slots_for_provider(
@@ -375,7 +414,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = get_available_slots_for_provider(
@@ -394,7 +433,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = get_available_slots_for_provider(
@@ -414,7 +453,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.provider_now", return_value=datetime(2026, 3, 1, 0, 0)) as mock_pn:
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = calculate_available_slots(
@@ -447,7 +486,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[rb]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # now = Monday. same_day blocks slots > today, so Tuesday (tomorrow) is blocked
@@ -486,7 +525,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[rb]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # now = Monday. next_day blocks > today+1, so Wednesday is blocked but Tuesday is not
@@ -518,7 +557,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[rb]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = calculate_available_slots(
@@ -551,7 +590,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[rb]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             # March 9 is before effective_start → not blocked
@@ -568,6 +607,7 @@ class TestGetAvailableSlotsForProvider:
         mock_event = MagicMock()
         mock_event.starts_at = datetime(2026, 3, 9, 10, 0)
         mock_event.ends_at = datetime(2026, 3, 9, 11, 0)
+        mock_event.recurrence = ""
 
         with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
              patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": "Dr. Jane Doe"}), \
@@ -575,7 +615,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.to_provider_naive", side_effect=lambda x, _pid: x):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = [mock_event]
 
             slots = calculate_available_slots(
@@ -626,6 +666,7 @@ class TestGetAvailableSlotsForProvider:
         foreign_event = MagicMock()
         foreign_event.starts_at = datetime(2026, 3, 9, 10, 0)
         foreign_event.ends_at = datetime(2026, 3, 9, 11, 0)
+        foreign_event.recurrence = ""
 
         with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
              patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": "Dr. Jane Doe"}), \
@@ -660,7 +701,7 @@ class TestGetAvailableSlotsForProvider:
              patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
              patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
              patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]):
-            mock_appt.filter.return_value.values_list.return_value = []
+            mock_appt.filter.return_value.exclude.return_value.values_list.return_value = []
             mock_evt.filter.return_value.exclude.return_value = []
 
             slots = get_available_slots_for_provider(
@@ -668,3 +709,44 @@ class TestGetAvailableSlotsForProvider:
                 now=datetime(2026, 3, 1, 0, 0),
             )
             assert slots[0].start < slots[1].start
+
+
+class TestRepeatingEventOccurrences:
+    """A series' row holds its first occurrence; later ones must block too."""
+
+    def _event(self, start, end, recurrence, until=None):
+        e = MagicMock()
+        e.starts_at, e.ends_at, e.recurrence, e.recurrence_ends_at = start, end, recurrence, until
+        return e
+
+    def test_weekly_lunch_blocks_a_later_week(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        lunch = self._event(datetime(2026, 1, 5, 12), datetime(2026, 1, 5, 13), "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO")
+        got = _occurrences(lunch, datetime(2026, 3, 9), datetime(2026, 3, 10))
+        assert got == [(datetime(2026, 3, 9, 12), datetime(2026, 3, 9, 13))]
+
+    def test_every_other_week_skips_the_off_week(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        biweekly = self._event(datetime(2026, 1, 5, 12), datetime(2026, 1, 5, 13), "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO")
+        assert _occurrences(biweekly, datetime(2026, 1, 12), datetime(2026, 1, 13)) == []
+        assert _occurrences(biweekly, datetime(2026, 1, 19), datetime(2026, 1, 20)) == [
+            (datetime(2026, 1, 19, 12), datetime(2026, 1, 19, 13))
+        ]
+
+    def test_daily_series_stops_at_its_end(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        daily = self._event(datetime(2026, 3, 1, 9), datetime(2026, 3, 1, 10), "FREQ=DAILY;INTERVAL=1",
+                            until=datetime(2026, 3, 3, 10))
+        got = _occurrences(daily, datetime(2026, 3, 1), datetime(2026, 3, 10))
+        assert [s.day for s, _ in got] == [1, 2, 3]
+
+    def test_one_off_is_returned_as_is(self):
+        from provider_availability.engine.calculator import _occurrences
+
+        once = self._event(datetime(2026, 3, 9, 10), datetime(2026, 3, 9, 11), "")
+        assert _occurrences(once, datetime(2026, 3, 9), datetime(2026, 3, 10)) == [
+            (datetime(2026, 3, 9, 10), datetime(2026, 3, 9, 11))
+        ]

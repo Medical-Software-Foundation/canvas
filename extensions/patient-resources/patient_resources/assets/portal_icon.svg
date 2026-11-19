@@ -1,0 +1,8 @@
+<!-- The patient-portal menu entry. A bookmark on a card: the same family as
+     icon.svg but distinct enough to tell apart in a menu list. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="My resources">
+  <rect width="48" height="48" rx="10" fill="#0b5f70"/>
+  <rect x="11" y="12" width="26" height="24" rx="3" fill="#ffffff"/>
+  <path d="M22 12h6v13l-3-2.6-3 2.6z" fill="#f0a92e"/>
+  <rect x="15" y="29" width="18" height="2.5" rx="1.25" fill="#0b5f70"/>
+</svg>

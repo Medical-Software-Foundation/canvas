@@ -501,3 +501,59 @@ tbody td {
     font-weight: 400;
 }
 
+
+/* ---- Claims tab ---- */
+.claims-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.claims-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+
+.claims-filter select {
+    font-size: 13px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: #fff;
+    min-width: 160px;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.claims-export {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    background: var(--color-accent);
+    color: #fff;
+    text-decoration: none;
+}
+
+.claims-export:hover {
+    background: #1d4ed8;
+}
+
+.claims-table-wrap {
+    overflow-x: auto;
+}
+
+.claims-footnote {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    padding: 8px 12px 0;
+}

@@ -1,0 +1,56 @@
+{
+    "sdk_version": "0.191.0",
+    "plugin_version": "0.1.0",
+    "name": "hide_settings",
+    "description": "Hides the Settings item in the main menu from staff whose roles an administrator has not allowed. For practices that want clinical and front-line staff to stay out of Settings while administrators keep it.",
+    "components": {
+        "applications": [
+            {
+                "class": "hide_settings.applications.settings_admin:SettingsAccessAdmin",
+                "name": "Settings Access",
+                "description": "Choose which roles can see the Settings menu item.",
+                "scope": "global",
+                "icon": "assets/icon.png",
+                "menu_position": "top",
+                "menu_order": 200
+            }
+        ],
+        "handlers": [
+            {
+                "class": "hide_settings.handlers.hide_settings:HideSettingsForUnlistedRoles",
+                "description": "Hides Settings from staff who hold none of the allowed roles.",
+                "data_access": {
+                    "event": "GET_PROVIDER_MENU_CONFIGURATION",
+                    "read": ["Staff", "StaffRole"],
+                    "write": []
+                }
+            },
+            {
+                "class": "hide_settings.handlers.admin_api:AdminAPI",
+                "description": "Serves the role configuration page and saves the allowed roles.",
+                "data_access": {
+                    "event": "",
+                    "read": ["StaffRole"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "ADMIN_STAFF_IDS", "sensitive": false},
+        {"name": "namespace_read_write_access_key", "sensitive": true}
+    ],
+    "custom_data": {
+        "namespace": "custom_data__hide_settings",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

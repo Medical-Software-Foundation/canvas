@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Order Favorites</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="{{ api_base }}/admin/app.css?v={{ cache_bust }}">
+</head>
+<body data-api-base="{{ api_base }}" data-favorite="{{ favorite }}">
+  <section class="admin-app" id="app"><p class="ax-list-empty">Loading…</p></section>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="{{ api_base }}/shared/editor.js?v={{ cache_bust }}"></script>
+  <script src="{{ api_base }}/admin/app.js?v={{ cache_bust }}"></script>
+</body>
+</html>

@@ -1,11 +1,12 @@
 # To run the tests, use the command `pytest` in the terminal or uv run pytest.
 # Each test is wrapped inside a transaction that is rolled back at the end of the test.
 
+import json
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch
-import pytest
+from unittest.mock import Mock
 
+from canvas_sdk.effects import EffectType
 from canvas_sdk.events import EventType
 from canvas_sdk.test_utils.factories import PatientFactory
 from canvas_sdk.v1.data import Note, Command, Observation, Assessment, BillingLineItem
@@ -15,10 +16,14 @@ from bp_cpt2.llm_openai import LlmOpenai
 from bp_cpt2.bp_claim_coder import (
     CPT_3074F, CPT_3075F, CPT_3077F,
     CPT_3078F, CPT_3079F, CPT_3080F,
-    HCPCS_G8783, HCPCS_G8784, HCPCS_G8752,
-    HCPCS_G8950, HCPCS_G8951,
-    SYSTOLIC_CODES, DIASTOLIC_CODES, CONTROL_STATUS_CODES, NOT_DOCUMENTED_CODES
+    HCPCS_G8752, HCPCS_G8753, HCPCS_G8754, HCPCS_G8755,
+    SYSTOLIC_CODES, DIASTOLIC_CODES, MIPS_236_SYSTOLIC_CODES, MIPS_236_DIASTOLIC_CODES
 )
+
+
+def effect_codes(effects: list) -> list[str]:
+    """Return the code each billing line item effect adds or switches to."""
+    return [json.loads(effect.payload)["data"]["cpt"] for effect in effects]
 
 
 def test_controlled_blood_pressure() -> None:
@@ -90,18 +95,17 @@ def test_controlled_blood_pressure() -> None:
     # Verify effects were created
     assert len(effects) > 0, "Expected billing line item effects to be created"
 
-    # Verify that controlled BP codes are present
     # For BP 120/75, we expect:
     # - 3074F (systolic < 130)
     # - 3078F (diastolic < 80)
-    # - G8783 (BP controlled)
-    # - G8752 (BP < 140/90)
-    assert len(effects) == 4, f"Expected 4 billing codes for controlled BP, got {len(effects)}"
+    # - G8752 (systolic < 140)
+    # - G8754 (diastolic < 90)
+    assert effect_codes(effects) == [CPT_3074F, CPT_3078F, HCPCS_G8752, HCPCS_G8754]
 
 
 def test_no_bp_readings() -> None:
     """
-    Test that BloodPressureVitalsHandler correctly adds G8950 code
+    Test that BloodPressureVitalsHandler adds no codes
     when no BP readings are documented.
     """
     # Create test patient
@@ -151,65 +155,8 @@ def test_no_bp_readings() -> None:
     # Execute compute
     effects = handler.compute()
 
-    # Verify that G8950 code is added (BP not documented)
-    assert len(effects) == 1, f"Expected 1 billing code (G8950) for undocumented BP, got {len(effects)}"
-
-
-def test_no_bp_readings_with_documented_reason() -> None:
-    """
-    Test that BloodPressureVitalsHandler correctly adds G8951 code
-    when no BP readings are documented but a reason is provided.
-    """
-    # Create test patient
-    patient = PatientFactory.create()
-
-    # Create a note
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
-    # Create a vitals command WITHOUT BP observations but with a note explaining why
-    command = Command.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        note=note,
-        schema_key="vitals",
-        data={"note": "BP not documented because patient refused"},
-        anchor_object_dbid=note.dbid
-    )
-
-    # Create an assessment for the note
-    Assessment.objects.create(
-        id=uuid.uuid4(),
-        note=note,
-        patient_id=patient.dbid,
-        originator_id=1,
-        deleted=False
-    )
-
-    # Create mock event with proper structure
-    mock_event = Mock()
-    mock_event.type = EventType.VITALS_COMMAND__POST_COMMIT
-    mock_target = Mock()
-    mock_target.id = str(command.id)
-    mock_event.target = mock_target
-    mock_event.context = {}
-
-    # Create handler instance
-    handler = BloodPressureVitalsHandler(
-        event=mock_event,
-        secrets={}
-    )
-
-    # Execute compute
-    effects = handler.compute()
-
-    # Verify that G8951 code is added (BP not documented with reason)
-    assert len(effects) == 1, f"Expected 1 billing code (G8951) for undocumented BP with reason, got {len(effects)}"
+    # No measure 236 "not documented" code: an earlier visit may already have a BP
+    assert effects == []
 
 
 def test_no_duplicates_added() -> None:
@@ -276,7 +223,7 @@ def test_no_duplicates_added() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt=HCPCS_G8783,
+        cpt=HCPCS_G8752,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -301,9 +248,9 @@ def test_no_duplicates_added() -> None:
     # Execute compute
     effects = handler.compute()
 
-    # Should only add the 2 codes that don't already exist (3078F and G8752)
-    # Not the 2 that already exist (3074F and G8783)
-    assert len(effects) == 2, f"Expected 2 new billing codes (skipping 2 duplicates), got {len(effects)}"
+    # Should only add the 2 codes that don't already exist (3078F and G8754)
+    # Not the 2 that already exist (3074F and G8752)
+    assert effect_codes(effects) == [CPT_3078F, HCPCS_G8754]
 
 
 def test_uncontrolled_blood_pressure() -> None:
@@ -378,8 +325,9 @@ def test_uncontrolled_blood_pressure() -> None:
     # For BP 145/95, we expect:
     # - 3077F (systolic >= 140)
     # - 3080F (diastolic >= 90)
-    # - G8784 (BP not controlled)
-    assert len(effects) == 3, f"Expected 3 billing codes for uncontrolled BP, got {len(effects)}"
+    # - G8753 (systolic >= 140)
+    # - G8755 (diastolic >= 90)
+    assert effect_codes(effects) == [CPT_3077F, CPT_3080F, HCPCS_G8753, HCPCS_G8755]
 
 
 def test_borderline_high_blood_pressure() -> None:
@@ -454,15 +402,15 @@ def test_borderline_high_blood_pressure() -> None:
     # For BP 135/85, we expect:
     # - 3075F (systolic 130-139)
     # - 3079F (diastolic 80-89)
-    # - G8783 (BP controlled < 140/90)
-    # - G8752 (Most recent BP < 140/90)
-    assert len(effects) == 4, f"Expected 4 billing codes for borderline BP, got {len(effects)}"
+    # - G8752 (systolic < 140)
+    # - G8754 (diastolic < 90)
+    assert effect_codes(effects) == [CPT_3075F, CPT_3079F, HCPCS_G8752, HCPCS_G8754]
 
 
 def test_invalid_bp_format() -> None:
     """
     Test that BloodPressureVitalsHandler handles invalid BP format gracefully
-    and adds G8950 code (BP not documented).
+    and adds no codes.
     """
     # Create test patient
     patient = PatientFactory.create()
@@ -525,78 +473,8 @@ def test_invalid_bp_format() -> None:
     # Execute compute
     effects = handler.compute()
 
-    # Should add G8950 code (BP not documented) since parsing failed
-    assert len(effects) == 1, f"Expected 1 billing code (G8950) for invalid BP format, got {len(effects)}"
-
-
-def test_no_bp_codes_raises_exception() -> None:
-    """
-    Test that BloodPressureVitalsHandler raises ValueError when
-    determine_bp_codes returns an empty list (defensive check).
-    """
-    # Create test patient
-    patient = PatientFactory.create()
-
-    # Create a note
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
-    # Create a vitals command
-    command = Command.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        note=note,
-        schema_key="vitals",
-        data={},
-        anchor_object_dbid=note.dbid
-    )
-
-    # Create BP observation
-    Observation.objects.create(
-        patient=patient,
-        note_id=note.dbid,
-        category='vital-signs',
-        name='blood_pressure',
-        value='120/75',
-        units='mmHg',
-        committer_id=1,
-        deleted=False,
-        effective_datetime=datetime.now(timezone.utc)
-    )
-
-    # Create an assessment for the note
-    Assessment.objects.create(
-        id=uuid.uuid4(),
-        note=note,
-        patient_id=patient.dbid,
-        originator_id=1,
-        deleted=False
-    )
-
-    # Create mock event with proper structure
-    mock_event = Mock()
-    mock_event.type = EventType.VITALS_COMMAND__POST_COMMIT
-    mock_target = Mock()
-    mock_target.id = str(command.id)
-    mock_event.target = mock_target
-    mock_event.context = {}
-
-    # Create handler instance
-    handler = BloodPressureVitalsHandler(
-        event=mock_event,
-        secrets={}
-    )
-
-    # Mock determine_bp_codes to return empty list
-    with patch.object(handler, 'determine_bp_codes', return_value=[]):
-        # Verify that ValueError is raised
-        with pytest.raises(ValueError, match=f"No BP codes determined for patient {patient.id}"):
-            handler.compute()
+    # Parsing failed, so there is no BP to code
+    assert effects == []
 
 
 def test_updates_billing_codes_when_bp_changes() -> None:
@@ -666,8 +544,8 @@ def test_updates_billing_codes_when_bp_changes() -> None:
     handler1 = BloodPressureVitalsHandler(event=mock_event1, secrets={})
     effects1 = handler1.compute()
 
-    # Should add 3 codes: 3077F (systolic >= 140), 3080F (diastolic >= 90), G8784 (not controlled)
-    assert len(effects1) == 3, f"Expected 3 billing codes from first vitals, got {len(effects1)}"
+    # Should add 4 codes: 3077F (systolic >= 140), 3080F (diastolic >= 90), G8753 (systolic >= 140), G8755 (diastolic >= 90)
+    assert effect_codes(effects1) == [CPT_3077F, CPT_3080F, HCPCS_G8753, HCPCS_G8755]
 
     # Manually create billing line items to simulate the effects being applied
     from decimal import Decimal
@@ -694,7 +572,17 @@ def test_updates_billing_codes_when_bp_changes() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt=HCPCS_G8784,
+        cpt=HCPCS_G8753,
+        charge=Decimal("0.00"),
+        units=1,
+        status="Q",
+        command_id=command1.dbid,
+        command_type="assess"
+    )
+    BillingLineItem.objects.create(
+        note_id=note.dbid,
+        patient_id=patient.dbid,
+        cpt=HCPCS_G8755,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -737,24 +625,13 @@ def test_updates_billing_codes_when_bp_changes() -> None:
     handler2 = BloodPressureVitalsHandler(event=mock_event2, secrets={})
     effects2 = handler2.compute()
 
-    # Should have 4 effects:
+    # Should have 4 updates:
     # - UPDATE 3077F -> 3074F (systolic changed from >=140 to <130)
     # - UPDATE 3080F -> 3078F (diastolic changed from >=90 to <80)
-    # - UPDATE G8784 -> G8783 (control status changed from not controlled to controlled)
-    # - ADD G8752 (new code for controlled BP)
-    assert len(effects2) == 4, f"Expected 4 effects (3 updates + 1 add), got {len(effects2)}"
-
-    # Verify the effects contain the correct operations
-    # We should have 3 UpdateBillingLineItem effects and 1 AddBillingLineItem effect
-    from canvas_sdk.effects.billing_line_item import UpdateBillingLineItem as UpdateEffect
-    from canvas_sdk.effects.billing_line_item import AddBillingLineItem as AddEffect
-
-    update_effects = [e for e in effects2 if hasattr(e, 'effect_type') and 'Update' in str(type(e))]
-    add_effects = [e for e in effects2 if hasattr(e, 'effect_type') and 'Add' in str(type(e))]
-
-    # We expect 3 updates and 1 add
-    # Note: The actual effect types may vary, so let's just verify we got the right codes
-    # by checking the handler's logic was followed correctly
+    # - UPDATE G8753 -> G8752 (systolic changed from >=140 to <140)
+    # - UPDATE G8755 -> G8754 (diastolic changed from >=90 to <90)
+    assert effect_codes(effects2) == [CPT_3074F, CPT_3078F, HCPCS_G8752, HCPCS_G8754]
+    assert all(effect.type == EffectType.UPDATE_BILLING_LINE_ITEM for effect in effects2)
 
 
 def test_updates_systolic_code_independently() -> None:
@@ -822,8 +699,8 @@ def test_updates_systolic_code_independently() -> None:
     handler1 = BloodPressureVitalsHandler(event=mock_event1, secrets={})
     effects1 = handler1.compute()
 
-    # Should add: 3077F (systolic >= 140), 3078F (diastolic < 80), G8784 (not controlled)
-    assert len(effects1) == 3
+    # Should add: 3077F (systolic >= 140), 3078F (diastolic < 80), G8753 (systolic >= 140), G8754 (diastolic < 90)
+    assert effect_codes(effects1) == [CPT_3077F, CPT_3078F, HCPCS_G8753, HCPCS_G8754]
 
     # Manually create billing line items to simulate the effects being applied
     BillingLineItem.objects.create(
@@ -849,7 +726,17 @@ def test_updates_systolic_code_independently() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt=HCPCS_G8784,
+        cpt=HCPCS_G8753,
+        charge=Decimal("0.00"),
+        units=1,
+        status="Q",
+        command_id=command1.dbid,
+        command_type="assess"
+    )
+    BillingLineItem.objects.create(
+        note_id=note.dbid,
+        patient_id=patient.dbid,
+        cpt=HCPCS_G8754,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -890,18 +777,12 @@ def test_updates_systolic_code_independently() -> None:
     handler2 = BloodPressureVitalsHandler(event=mock_event2, secrets={})
     effects2 = handler2.compute()
 
-    # Should have 3 effects:
+    # Should have 2 updates:
     # - UPDATE 3077F -> 3074F (systolic changed)
-    # - 3078F stays the same (diastolic still < 80), so it should already exist and not be in effects
-    # - UPDATE G8784 -> G8783 (now controlled)
-    # - ADD G8752 (new code)
-    assert len(effects2) == 3, f"Expected 3 effects (2 updates + 1 add), got {len(effects2)}"
-
-    # The test verifies that the handler correctly identified:
-    # 1. Systolic code needs updating (145 -> 125, category changes)
-    # 2. Diastolic code doesn't need updating (75 -> 78, both < 80)
-    # 3. Control status needs updating (uncontrolled -> controlled)
-    # 4. G8752 needs to be added (new for controlled BP)
+    # - UPDATE G8753 -> G8752 (systolic now < 140)
+    # 3078F and G8754 stay the same (diastolic still < 80), so they are not in effects
+    assert effect_codes(effects2) == [CPT_3074F, HCPCS_G8752]
+    assert all(effect.type == EffectType.UPDATE_BILLING_LINE_ITEM for effect in effects2)
 
 
 def test_vitals_handler_creates_billing_codes_without_assessments() -> None:
@@ -961,8 +842,9 @@ def test_vitals_handler_creates_billing_codes_without_assessments() -> None:
     # Execute compute
     effects = handler.compute()
 
-    # Verify effects were created (4 BP codes for controlled BP)
+    # Verify effects were created (4 BP codes for controlled BP) with no linked assessments
     assert len(effects) == 4, f"Expected 4 billing codes, got {len(effects)}"
+    assert all(json.loads(effect.payload)["data"]["assessment_ids"] == [] for effect in effects)
 
 
 def test_no_assessments_no_llm_call() -> None:
@@ -1047,157 +929,14 @@ def test_get_code_category() -> None:
     assert handler.get_code_category(CPT_3079F) == DIASTOLIC_CODES
     assert handler.get_code_category(CPT_3080F) == DIASTOLIC_CODES
 
-    # Test control status codes
-    assert handler.get_code_category(HCPCS_G8783) == CONTROL_STATUS_CODES
-    assert handler.get_code_category(HCPCS_G8784) == CONTROL_STATUS_CODES
-
-    # Test not documented codes
-    assert handler.get_code_category(HCPCS_G8950) == NOT_DOCUMENTED_CODES
-    assert handler.get_code_category(HCPCS_G8951) == NOT_DOCUMENTED_CODES
-
-    # Test G8752 doesn't belong to a mutually exclusive category
-    assert handler.get_code_category(HCPCS_G8752) is None
+    # Test MIPS measure 236 codes
+    assert handler.get_code_category(HCPCS_G8752) == MIPS_236_SYSTOLIC_CODES
+    assert handler.get_code_category(HCPCS_G8753) == MIPS_236_SYSTOLIC_CODES
+    assert handler.get_code_category(HCPCS_G8754) == MIPS_236_DIASTOLIC_CODES
+    assert handler.get_code_category(HCPCS_G8755) == MIPS_236_DIASTOLIC_CODES
 
     # Test unknown code
     assert handler.get_code_category("99999") is None
-
-
-def test_check_for_documented_reason_various_patterns() -> None:
-    """
-    Test check_for_documented_reason with various text patterns.
-    """
-    # Create test patient
-    patient = PatientFactory.create()
-
-    # Create a note
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
-    # Test various patterns that should match
-    test_patterns = [
-        "bp not documented reason patient declined",
-        "blood pressure not taken because patient refused",
-        "BP unable to obtain due to patient condition",
-        "blood pressure not measured, patient refused",
-    ]
-
-    handler = BloodPressureVitalsHandler(
-        event=Mock(),
-        secrets={}
-    )
-
-    for pattern in test_patterns:
-        # Create vitals command with pattern
-        Command.objects.filter(note=note, schema_key="vitals").delete()  # Clean up
-        Command.objects.create(
-            id=uuid.uuid4(),
-            patient=patient,
-            note=note,
-            schema_key="vitals",
-            data={"note": pattern},
-            anchor_object_dbid=note.dbid
-        )
-
-        result = handler.check_for_documented_reason(note)
-        assert result is True, f"Pattern '{pattern}' should have matched"
-
-    # Test pattern that should NOT match
-    Command.objects.filter(note=note, schema_key="vitals").delete()
-    Command.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        note=note,
-        schema_key="vitals",
-        data={"note": "Patient has high blood pressure"},
-        anchor_object_dbid=note.dbid
-    )
-
-    result = handler.check_for_documented_reason(note)
-    assert result is False, "Non-matching pattern should return False"
-
-
-def test_check_for_documented_reason_no_vitals() -> None:
-    """
-    Test check_for_documented_reason when there are no vitals commands.
-    """
-    # Create test patient
-    patient = PatientFactory.create()
-
-    # Create a note without vitals commands
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
-    handler = BloodPressureVitalsHandler(
-        event=Mock(),
-        secrets={}
-    )
-
-    result = handler.check_for_documented_reason(note)
-    assert result is False
-
-
-def test_check_for_documented_reason_empty_note_field() -> None:
-    """
-    Test check_for_documented_reason with empty or missing note field.
-    """
-    # Create test patient
-    patient = PatientFactory.create()
-
-    # Create a note
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
-    # Create vitals command with empty note field
-    Command.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        note=note,
-        schema_key="vitals",
-        data={"note": ""},
-        anchor_object_dbid=note.dbid
-    )
-
-    handler = BloodPressureVitalsHandler(
-        event=Mock(),
-        secrets={}
-    )
-
-    result = handler.check_for_documented_reason(note)
-    assert result is False
-
-    # Test with missing note field
-    Command.objects.filter(note=note).delete()
-    Command.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        note=note,
-        schema_key="vitals",
-        data={},
-        anchor_object_dbid=note.dbid
-    )
-
-    result = handler.check_for_documented_reason(note)
-    assert result is False
-
-
-
-
-
 
 
 def test_determine_bp_codes_edge_case() -> None:
@@ -1207,15 +946,6 @@ def test_determine_bp_codes_edge_case() -> None:
     # Create test patient
     patient = PatientFactory.create()
 
-    # Create a note
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
     handler = BloodPressureVitalsHandler(
         event=Mock(),
         secrets={}
@@ -1224,26 +954,29 @@ def test_determine_bp_codes_edge_case() -> None:
 
     # Test exact boundary values
     # 130 systolic (should be 3075F, 130-139 range)
-    codes = handler.determine_bp_codes(130.0, 75.0, note)
-    assert CPT_3075F in codes
-    assert CPT_3078F in codes
+    codes = handler.determine_bp_codes(130.0, 75.0)
+    assert codes == [CPT_3075F, CPT_3078F, HCPCS_G8752, HCPCS_G8754]
 
     # 80 diastolic (should be 3079F, 80-89 range)
-    codes = handler.determine_bp_codes(125.0, 80.0, note)
-    assert CPT_3074F in codes
-    assert CPT_3079F in codes
+    codes = handler.determine_bp_codes(125.0, 80.0)
+    assert codes == [CPT_3074F, CPT_3079F, HCPCS_G8752, HCPCS_G8754]
 
-    # 140/90 exactly (should be uncontrolled)
-    codes = handler.determine_bp_codes(140.0, 90.0, note)
-    assert CPT_3077F in codes
-    assert CPT_3080F in codes
-    assert HCPCS_G8784 in codes
-    assert HCPCS_G8752 not in codes
+    # 140/90 exactly (both at the measure 236 threshold)
+    codes = handler.determine_bp_codes(140.0, 90.0)
+    assert codes == [CPT_3077F, CPT_3080F, HCPCS_G8753, HCPCS_G8755]
 
-    # 139/89 (should be controlled)
-    codes = handler.determine_bp_codes(139.0, 89.0, note)
-    assert CPT_3075F in codes
-    assert CPT_3079F in codes
-    assert HCPCS_G8783 in codes
-    assert HCPCS_G8752 in codes
+    # 139/89 (both just under the measure 236 threshold)
+    codes = handler.determine_bp_codes(139.0, 89.0)
+    assert codes == [CPT_3075F, CPT_3079F, HCPCS_G8752, HCPCS_G8754]
 
+    # Only systolic uncontrolled - each value gets its own code
+    codes = handler.determine_bp_codes(150.0, 85.0)
+    assert codes == [CPT_3077F, CPT_3079F, HCPCS_G8753, HCPCS_G8754]
+
+    # Only diastolic uncontrolled
+    codes = handler.determine_bp_codes(130.0, 92.0)
+    assert codes == [CPT_3075F, CPT_3080F, HCPCS_G8752, HCPCS_G8755]
+
+    # Missing either value adds nothing
+    assert handler.determine_bp_codes(None, 80.0) == []
+    assert handler.determine_bp_codes(120.0, None) == []

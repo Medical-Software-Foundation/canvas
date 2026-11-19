@@ -196,10 +196,12 @@ def test_delete_admin_targets_other_staff() -> None:
     feed = MagicMock(staff_id="00000000000000000000000000000099")
     with (
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+        patch(
+            "external_calendar_busy_blocks.routes.feeds.find_admin_calendar_id",
+            return_value="",
+        ) as mock_find,
     ):
         MockFeed.objects.filter.return_value.first.return_value = feed
-        MockImported.objects.filter.return_value = []
         api = _api_with_request(
             "POST",
             b'{"staff_id":"00000000-0000-0000-0000-000000000099"}',
@@ -207,8 +209,9 @@ def test_delete_admin_targets_other_staff() -> None:
             secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
         )
         responses = api.delete_feed()
-    # Feed and imported-event lookups were scoped to the target staff id.
+    # Feed lookup and calendar cleanup were scoped to the target staff id.
     assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+    assert mock_find.call_args.args[0] == "00000000000000000000000000000099"
     assert responses[-1].status_code == 200
     feed.delete.assert_called_once()
 
@@ -218,10 +221,12 @@ def test_delete_non_admin_ignores_staff_id() -> None:
     feed = MagicMock(staff_id="00000000000000000000000000000002")
     with (
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+        patch(
+            "external_calendar_busy_blocks.routes.feeds.find_admin_calendar_id",
+            return_value="",
+        ),
     ):
         MockFeed.objects.filter.return_value.first.return_value = feed
-        MockImported.objects.filter.return_value = []
         api = _api_with_request(
             "POST",
             b'{"staff_id":"00000000000000000000000000000099"}',
@@ -245,21 +250,30 @@ def test_delete_idempotent_when_no_feed() -> None:
 
 def test_delete_removes_feed_and_emits_delete_effects() -> None:
     feed = MagicMock(staff_id="staff-abc")
-    imported = [
-        MagicMock(canvas_event_id="evt-1"),
-        MagicMock(canvas_event_id="evt-2"),
-    ]
+    # Live blocks are deleted by their REAL uuids read off the calendar, not by
+    # any stored id (which KOALA-6372 makes a phantom).
+    live = [MagicMock(id="real-uuid-1"), MagicMock(id="real-uuid-2")]
     with (
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+        patch(
+            "external_calendar_busy_blocks.routes.feeds.find_admin_calendar_id",
+            return_value="cal-1",
+        ),
+        patch(
+            "external_calendar_busy_blocks.routes.feeds.live_busy_events",
+            return_value=live,
+        ) as mock_live,
     ):
         MockFeed.objects.filter.return_value.first.return_value = feed
-        MockImported.objects.filter.return_value = imported
         api = _api_with_request("POST", b"{}", logged_in_staff="staff-abc")
         responses = api.delete_feed()
     # Expect 2 Event.delete effects + 1 JSONResponse
     effects_emitted = [r for r in responses if hasattr(r, "type")]
     assert len(effects_emitted) == 2
+    # Deletes carried the real uuids.
+    payloads = [json.loads(e.payload)["data"]["event_id"] for e in effects_emitted]
+    assert set(payloads) == {"real-uuid-1", "real-uuid-2"}
+    assert mock_live.call_args.args[0] == "cal-1"
     feed.delete.assert_called_once()
 
 
@@ -428,10 +442,14 @@ def test_status_reports_connected_feed_without_url() -> None:
     feed = MagicMock(is_active=True, last_sync_at="2026-07-11T00:00:00Z", last_error=None)
     with (
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+        patch(
+            "external_calendar_busy_blocks.routes.feeds.find_admin_calendar_id",
+            return_value="cal-1",
+        ) as mock_find,
+        patch("external_calendar_busy_blocks.routes.feeds.live_busy_events") as mock_live,
     ):
         MockFeed.objects.filter.return_value.first.return_value = feed
-        MockImported.objects.filter.return_value.count.return_value = 5
+        mock_live.return_value.count.return_value = 5
         api = _api_with_request(
             "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
             secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
@@ -441,20 +459,25 @@ def test_status_reports_connected_feed_without_url() -> None:
     assert responses[0].status_code == 200
     body = json.loads(responses[0].content)
     assert body["connected"] is True
+    # event_count now reflects live blocks on the calendar, not stale tracking rows.
     assert body["event_count"] == 5
     assert "ics_url" not in body
-    # Both the feed lookup and the event count were scoped to the canonical id.
+    # Both the feed lookup and the calendar lookup were scoped to the canonical id.
     assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
-    assert MockImported.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+    assert mock_find.call_args.args[0] == "00000000000000000000000000000099"
 
 
 def test_status_reports_no_feed() -> None:
     with (
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
-        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+        patch(
+            "external_calendar_busy_blocks.routes.feeds.find_admin_calendar_id",
+            return_value="cal-1",
+        ),
+        patch("external_calendar_busy_blocks.routes.feeds.live_busy_events") as mock_live,
     ):
         MockFeed.objects.filter.return_value.first.return_value = None
-        MockImported.objects.filter.return_value.count.return_value = 0
+        mock_live.return_value.count.return_value = 0
         api = _api_with_request(
             "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
             secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},

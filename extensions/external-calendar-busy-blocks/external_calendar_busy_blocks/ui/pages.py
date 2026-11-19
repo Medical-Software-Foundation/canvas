@@ -1,12 +1,16 @@
+from datetime import datetime, timezone
 from http import HTTPStatus
 
+from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.effects.simple_api import HTMLResponse, PlainTextResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 
 from external_calendar_busy_blocks.auth import canonical_staff_id, is_admin
-from external_calendar_busy_blocks.data.models import ImportedEvent, StaffCalendarFeed
+from external_calendar_busy_blocks.calendars.live_events import live_busy_counts
+from external_calendar_busy_blocks.data.models import StaffCalendarFeed
 
 
 class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
@@ -31,13 +35,25 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
                 f.staff_id: f
                 for f in StaffCalendarFeed.objects.filter(staff_id__in=staff_ids)
             }
-            # One bulk query for imported-event counts per provider. values_list
-            # avoids pulling full rows; tally in Python (no Count/Counter import).
-            event_counts: dict[str, int] = {}
-            for sid in ImportedEvent.objects.filter(staff_id__in=staff_ids).values_list(
-                "staff_id", flat=True
-            ):
-                event_counts[sid] = event_counts.get(sid, 0) + 1
+            # Live block count per provider, read from the calendar (its real
+            # state), in two bulk queries and no per-provider N+1: map each
+            # provider to their Admin calendar by title, then count in one pass.
+            admin_title_by_staff = {
+                s.id: f"{s.full_name}: {CalendarType.Administrative}" for s in active_staff
+            }
+            cal_id_by_title = {
+                c.title: str(c.id)
+                for c in CalendarModel.objects.filter(
+                    title__in=list(admin_title_by_staff.values())
+                )
+            }
+            counts_by_cal = live_busy_counts(
+                list(cal_id_by_title.values()), datetime.now(timezone.utc)
+            )
+            event_counts = {
+                staff_id: counts_by_cal.get(cal_id_by_title.get(title, ""), 0)
+                for staff_id, title in admin_title_by_staff.items()
+            }
             for s in active_staff:
                 f = feeds_by_staff.get(s.id)
                 staff_options.append(

@@ -1,21 +1,21 @@
 {
     "sdk_version": "0.75.0",
-    "plugin_version": "1.8.31",
+    "plugin_version": "2.1.1",
     "name": "bp_cpt2",
-    "description": "Automatically adds appropriate CPT/HCPCS billing codes based on blood pressure measurements from vitals or note state changes",
+    "description": "Automatically adds the CPT II and HCPCS quality codes for blood pressure (HEDIS Controlling High Blood Pressure and MIPS measure 236) to a note when vitals are recorded, for practices that report blood pressure control",
     "components": {
         "protocols": [
             {
                 "class": "bp_cpt2.handlers.bp_vitals_handler:BloodPressureVitalsHandler",
-                "description": "Handles blood pressure measurements from vitals commands and returns appropriate CPT-II codes"
+                "description": "Adds the CPT II and MIPS measure 236 codes for the systolic and diastolic blood pressure recorded in vitals"
             },
             {
                 "class": "bp_cpt2.handlers.bp_note_state_handler:BloodPressureNoteStateHandler",
-                "description": "Analyzes clinical documentation using AI to determine if blood pressure treatment plans are documented and adds appropriate treatment plan codes (G8753-G8755)"
+                "description": "When a billable note is locked or signed, uses AI to link the note's hypertension diagnoses to its blood pressure codes"
             },
             {
                 "class": "bp_cpt2.handlers.bp_note_button_handler:BloodPressureNoteButtonHandler",
-                "description": "Action button in note header that manually triggers BP billing code analysis without pushing charges"
+                "description": "Action button in note header that links hypertension diagnoses to the blood pressure codes before the note is locked"
             }
         ],
         "commands": [],
@@ -25,9 +25,10 @@
     },
     "secrets": [
         "OPENAI_API_KEY",
-        "INCLUDE_TREATMENT_PLAN_CODES",
-        "SHOW_BUTTON_FOR_MANUAL_TRIGGER",
-        "AUTOMATIC_TRIGGER_ON_NOTE_LOCK"
+        "ANTHROPIC_API_KEY",
+        "FIREWORKS_API_KEY",
+        "LLM_MODEL",
+        "SHOW_BUTTON_FOR_MANUAL_TRIGGER"
     ],
     "tags": {},
     "references": [],

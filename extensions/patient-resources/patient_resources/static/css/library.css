@@ -1,0 +1,607 @@
+/* Patient Resources: staff-facing library and chart picker.
+ *
+ * Everything themeable is a custom property on :root so an adopter can rebrand
+ * in one block instead of hunting through rules. No CDN fonts or images: the
+ * page must render with only what this plugin serves, because the sandbox can
+ * serve nothing else.
+ */
+
+:root {
+  --pr-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --pr-bg: #eef2f7;
+  --pr-surface: #ffffff;
+  --pr-ink: #0f172a;
+  --pr-ink-muted: #64748b;
+  --pr-line: #e2e8f0;
+  --pr-line-soft: #f1f5f9;
+  --pr-accent: #2f55d4;
+  --pr-accent-ink: #ffffff;
+  --pr-accent-hover: #2647b4;
+  /* The type badge. Its own pair rather than reusing the accent, because the
+     badge is a tint behind blue text, not blue behind white. */
+  --pr-pill-bg: #e7edfd;
+  --pr-pill-ink: #2f55d4;
+  --pr-danger: #b02a37;
+  --pr-focus: #2f55d4;
+  --pr-radius: 8px;
+  --pr-radius-pill: 4px;
+  --pr-gap: 12px;
+}
+
+* { box-sizing: border-box; }
+
+input[type="checkbox"] { accent-color: var(--pr-accent); }
+
+/* The templates hide the Add button, the read-only notice and the archived
+   toggle with the `hidden` attribute and reveal them from JavaScript. The
+   browser's own `[hidden] { display: none }` lives in the user-agent
+   stylesheet, so any author `display` rule below -- `.pr-toggle { display:
+   flex }`, for one -- outranks it and the element stays visible whatever the
+   attribute says. Restating it here as an author rule, and marking it
+   important because the two rules are then at the same level. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: var(--pr-font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pr-ink);
+  background: var(--pr-bg);
+}
+
+#pr-app {
+  padding: 20px 24px 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pr-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- header ---------- */
+
+.pr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pr-gap);
+  margin-bottom: 14px;
+}
+
+/* Heading and search share a row, per the design. `min-width: 0` so the search
+   box can shrink instead of shoving the buttons off the edge. */
+.pr-header-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pr-header-main h1 { white-space: nowrap; }
+
+.pr-header-search {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 380px;
+}
+
+.pr-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.pr-subtitle {
+  color: var(--pr-ink-muted);
+  margin: 2px 0 0;
+}
+
+/* Shown to staff who may not curate. A notice rather than a blank screen: the
+   library is worth reading even when it is not yours to change. */
+.pr-readonly-notice {
+  background: var(--pr-line-soft);
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 10px 12px;
+  color: var(--pr-ink-muted);
+  margin-bottom: 16px;
+}
+
+/* ---------- controls ---------- */
+
+.pr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pr-gap);
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* Styled by element rather than by container. The previous rule was scoped to
+   `.pr-controls`, so the header search -- which lives in the header, not in that
+   row -- fell through to user-agent styling and rendered noticeably thinner than
+   everything around it. */
+input[type="search"],
+input[type="text"],
+input[type="url"],
+textarea,
+select {
+  font: inherit;
+  font-size: 15px;
+  color: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  background: var(--pr-surface);
+}
+
+/* Only taller. A textarea that can be widened escapes its container, and both
+   places one appears are inside a modal that sizes itself to its content. */
+textarea { resize: vertical; }
+
+.pr-controls input[type="search"] { min-width: 240px; flex: 1 1 240px; }
+
+.pr-toggle { display: flex; align-items: center; gap: 6px; color: var(--pr-ink-muted); }
+
+button {
+  font: inherit;
+  padding: 9px 14px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-line);
+  background: var(--pr-surface);
+  color: var(--pr-ink);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--pr-ink-muted); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--pr-focus);
+  outline-offset: 1px;
+}
+
+.pr-primary {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 600;
+}
+
+.pr-primary:hover:not(:disabled) {
+  background: var(--pr-accent-hover);
+  border-color: var(--pr-accent-hover);
+}
+
+.pr-danger { color: var(--pr-danger); }
+
+/* ---------- list ---------- */
+
+.pr-list { list-style: none; margin: 0; padding: 0; }
+
+.pr-item {
+  background: var(--pr-surface);
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: var(--pr-gap);
+  align-items: flex-start;
+}
+
+.pr-item-body { flex: 1 1 auto; min-width: 0; }
+
+.pr-item-title {
+  font-weight: 600;
+  margin: 0 0 2px;
+  /* Admin-entered text of any length must not push the row sideways. */
+  overflow-wrap: anywhere;
+  /* Explicit, because the picker renders this class on a <label> so that the
+     whole title is a click target for its checkbox. A label is inline by
+     default, which ran the title straight into the URL beneath it. */
+  display: block;
+}
+
+.pr-item-link {
+  color: var(--pr-accent);
+  overflow-wrap: anywhere;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* A stored link that no longer passes validation renders as plain text. */
+.pr-item-link-unsafe { color: var(--pr-ink-muted); font-style: italic; }
+
+.pr-label {
+  display: inline-block;
+  background: var(--pr-line-soft);
+  border-radius: 999px;
+  padding: 1px 9px;
+  color: var(--pr-ink-muted);
+  font-size: 12px;
+}
+
+.pr-archived-flag { color: var(--pr-danger); font-size: 12px; }
+.pr-item-archived { opacity: 0.72; }
+
+.pr-item-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+
+/* ---------- header actions ---------- */
+
+.pr-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* The host modal for this target provides no chrome of its own, so the page
+   supplies its own dismiss control and closes itself over the MessagePort. */
+.pr-close {
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 10px 5px;
+  color: var(--pr-ink-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.pr-close:hover {
+  color: var(--pr-ink);
+  border-color: var(--pr-line);
+}
+
+.pr-empty {
+  background: var(--pr-surface);
+  border: 1px dashed var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--pr-ink-muted);
+}
+
+/* ---------- pages ---------- */
+
+/* Hidden with the `hidden` attribute when the whole list fits on one page, so
+   the display rule below is the author-level declaration the [hidden] guard at
+   the top of this file exists to beat. */
+.pr-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pr-gap);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.pr-range { color: var(--pr-ink-muted); }
+
+.pr-pager-buttons { display: flex; gap: 8px; align-items: center; }
+
+/* The label wraps its select, so the two move together and clicking the words
+   focuses the control. Smaller padding than the filter row's selects: this one
+   sits beside buttons, not among other inputs. */
+.pr-page-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pr-ink-muted);
+  white-space: nowrap;
+}
+
+.pr-page-size select { padding: 6px 8px; font-size: 14px; }
+
+/* Pushed to the far side of the picker footer, which is otherwise right
+   aligned around the send button. */
+.pr-offscreen-note {
+  margin-right: auto;
+  color: var(--pr-ink-muted);
+  font-size: 13px;
+}
+
+.pr-status { margin-top: 12px; color: var(--pr-ink-muted); }
+.pr-error { margin-top: 12px; color: var(--pr-danger); }
+
+/* ---------- table ---------- */
+
+.pr-table-wrap {
+  background: var(--pr-surface);
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  overflow: hidden;
+}
+
+.pr-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pr-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pr-ink-muted);
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--pr-line);
+  white-space: nowrap;
+}
+
+.pr-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--pr-line-soft);
+  vertical-align: middle;
+}
+
+/* The last row sits on the container's own border. */
+.pr-table tbody tr:last-child td { border-bottom: none; }
+
+.pr-col-type,
+.pr-col-label { width: 1%; white-space: nowrap; }
+
+.pr-col-actions { width: 1%; white-space: nowrap; text-align: right; }
+
+/* Title cell. Rendered as an anchor so an admin can check where a resource
+   actually points, but styled as body text: the design shows no blue link. */
+.pr-row-title {
+  font-weight: 600;
+  color: var(--pr-ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.pr-row-title:hover { text-decoration: underline; }
+
+/* A resource whose stored link no longer passes validation is not linkable. */
+.pr-row-title-plain { font-weight: 600; color: var(--pr-ink-muted); }
+
+.pr-row-label { color: var(--pr-ink-muted); }
+
+.pr-row-archived { background: var(--pr-line-soft); }
+.pr-row-archived .pr-row-title { color: var(--pr-ink-muted); }
+
+/* The type badge. Always LINK for now: the scope is links only, and a real
+   field arrives with PDF support. Not computed state -- do not read the constant
+   as a bug. */
+.pr-type-pill {
+  display: inline-block;
+  background: var(--pr-pill-bg);
+  color: var(--pr-pill-ink);
+  border-radius: var(--pr-radius-pill);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Three fixed columns rather than a flex row. Flex collapses the space of a
+   control that is not there, so a row with two buttons slid both of them
+   rightwards under the three-button rows above -- and a shorter label did the
+   same thing on a smaller scale. A grid keeps the slot whether or not it is
+   filled.
+
+   inline-grid so the group still hugs its columns and the cell's right alignment
+   applies. The column width is fixed on purpose: lining up across rows needs
+   deterministic widths, so a longer label in future means raising this value
+   rather than letting one row size itself and drift out of line again. */
+.pr-row-actions {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 5.4rem);
+  gap: 6px;
+}
+
+.pr-row-actions button { white-space: nowrap; }
+
+/* Edit is the button the design draws. Archive, Restore and Withdraw are kept
+   because retraction is the only way to pull a bad link back out of patients'
+   portals, so they sit alongside at a lower weight. */
+.pr-action-secondary {
+  font-size: 13px;
+  padding: 5px 9px;
+  color: var(--pr-ink-muted);
+}
+
+.pr-action-secondary:hover:not(:disabled) { color: var(--pr-ink); }
+
+/* ---------- picker: patient card ---------- */
+
+.pr-field-label {
+  display: block;
+  font-weight: 600;
+  color: var(--pr-ink-muted);
+  margin-bottom: 6px;
+}
+
+.pr-patient-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--pr-gap);
+  background: var(--pr-surface);
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.pr-patient-name { font-weight: 700; overflow-wrap: anywhere; }
+.pr-patient-meta { color: var(--pr-ink-muted); white-space: nowrap; }
+
+/* ---------- picker ---------- */
+
+.pr-check-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.pr-check-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+/* The whole title is the checkbox's label, so clicking anywhere on the text
+   toggles the row. */
+.pr-check-row .pr-item-title { cursor: pointer; margin: 0; }
+
+.pr-shared-flag { color: var(--pr-ink-muted); font-size: 12px; }
+
+/* The per-patient note, revealed when a resource is selected. Indented to the
+   checkbox's text column so it reads as belonging to the row above it rather
+   than as a new item in the list. */
+.pr-note-field {
+  margin: 10px 0 0 30px;
+}
+
+.pr-note-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--pr-ink-muted);
+  font-size: 13px;
+}
+
+.pr-note-field textarea { width: 100%; }
+
+.pr-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--pr-bg);
+  border-top: 1px solid var(--pr-line);
+  padding: 12px 0 0;
+  margin-top: 16px;
+  display: flex;
+  gap: var(--pr-gap);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* ---------- the send confirmation ---------- */
+
+/* Fixed, so it sits in the corner of the modal viewport rather than at the end
+   of a list that may be scrolled. On the accent rather than a new success
+   colour: the palette has one accent, and a second one for this would be the
+   start of a sweep. */
+.pr-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  max-width: min(320px, calc(100% - 32px));
+  padding: 12px 16px;
+  border-radius: var(--pr-radius);
+  background: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.24);
+  animation: pr-toast-in 140ms ease-out;
+}
+
+@keyframes pr-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-toast { animation: none; }
+}
+
+/* ---------- dialogs ---------- */
+
+/* A <dialog>, never window.confirm: this page is itself inside a host modal,
+   and a native confirm there is unreliable. */
+dialog {
+  border: 1px solid var(--pr-line);
+  border-radius: var(--pr-radius);
+  padding: 0;
+  max-width: 520px;
+  width: calc(100% - 32px);
+  color: var(--pr-ink);
+  background: var(--pr-surface);
+}
+
+/* Scoped to [open] on purpose. A bare `dialog { display: flex }` would beat the
+   user-agent's `dialog:not([open]) { display: none }` and leave every closed
+   dialog on the page -- the same trap as styling `display` over `[hidden]`. */
+dialog[open] {
+  display: flex;
+  flex-direction: column;
+  /* The UA already caps dialog height. Stating it here keeps the cap
+     predictable and leaves room for the host modal's own chrome. */
+  max-height: calc(100vh - 32px);
+}
+
+dialog[open] form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+dialog::backdrop { background: rgba(31, 41, 51, 0.35); }
+
+.pr-dialog-body {
+  padding: 18px 20px;
+  /* Only this part scrolls when the form is taller than the dialog, so Save and
+     Cancel stay on screen instead of sitting below the fold. `min-height: 0` is
+     what allows a flex child to shrink below its content height and actually
+     scroll. */
+  overflow-y: auto;
+  min-height: 0;
+}
+.pr-dialog-body h2 { margin: 0 0 12px; font-size: 17px; }
+
+.pr-field { display: block; margin-bottom: 10px; }
+.pr-field span { display: block; margin-bottom: 4px; color: var(--pr-ink-muted); }
+
+.pr-field input,
+.pr-field textarea { width: 100%; }
+
+/* Says who a field is for -- the label is internal, the note is not -- since
+   neither is obvious from an input box. Smaller than the field name above it so
+   it reads as a footnote rather than a second label. */
+.pr-field-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--pr-ink-muted);
+}
+
+/* No reserved empty line under every field: three of them added ~48px of
+   nothing to a form that then had to scroll. The row appears when it has
+   something to say. */
+.pr-field-error { color: var(--pr-danger); margin-top: 4px; }
+.pr-field-error:empty { display: none; }
+
+.pr-dialog-note {
+  background: var(--pr-line-soft);
+  border-radius: var(--pr-radius);
+  padding: 9px 11px;
+  color: var(--pr-ink-muted);
+  margin-bottom: 12px;
+}
+
+.pr-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  /* Pinned: never shrinks, never scrolls away. */
+  flex: 0 0 auto;
+  border-top: 1px solid var(--pr-line);
+  background: var(--pr-surface);
+}

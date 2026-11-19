@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.35.0",
-    "plugin_version": "0.35.0",
+    "plugin_version": "0.36.0",
     "name": "vitals_visualizer",
     "description": "Vitals Visualizer Graph",
     "components": {

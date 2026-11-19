@@ -1,9 +1,13 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.0.10",
     "name": "candid",
     "description": "Submits claims to Candid's API, pulls adjudication data, posts payments/adjustments back to Canvas, and reports patient payments.",
     "url_permissions": [],
+    "custom_data": {
+        "namespace": "canvas__candid",
+        "access": "read_write"
+    },
     "components": {
         "handlers": [
             {
@@ -40,7 +44,7 @@
             },
             {
                 "class": "candid.cron.nightly_sync:NightlyCandidSync",
-                "description": "Nightly cron (2 AM) that syncs adjudication data for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance, and PatientBalance."
+                "description": "Nightly cron (starts 2 AM) that syncs adjudication data for claims in FiledAwaitingResponse, AdjudicatedOpenBalance, PatientBalance, and RejectedNeedsReview, one batch per hour."
             },
             {
                 "class": "candid.api.websocket:CandidTimelineWebSocket",
@@ -49,6 +53,10 @@
             {
                 "class": "candid.api.app:CandidAppAssets",
                 "description": "Serves HTML/CSS/JS for the Candid dashboard and claim-timeline applications."
+            },
+            {
+                "class": "candid.applications.candid_dashboard:CandidDashboard",
+                "description": "Lists all claims submitted to Candid with their current status."
             }
         ],
         "commands": [],
@@ -62,20 +70,17 @@
                 "description": "Shows Candid submission, adjudication, and payment activity for the current claim.",
                 "icon": "assets/candid-icon.png",
                 "scope": "global"
-            },
-            {
-                "class": "candid.applications.candid_dashboard:CandidDashboard",
-                "name": "Candid Dashboard",
-                "description": "Lists all claims submitted to Candid with their current status.",
-                "icon": "assets/candid-icon.png",
-                "scope": "provider_menu_item"
             }
         ]
     },
     "variables": [
         {"name": "CANDID_CLIENT_ID", "sensitive": true},
         {"name": "CANDID_CLIENT_SECRET", "sensitive": true},
-        {"name": "CANDID_BASE_URL", "sensitive": false}
+        {"name": "CANDID_BASE_URL", "sensitive": false},
+        {"name": "CANDID_SYNC_START_HOUR", "sensitive": false},
+        {"name": "CANDID_POST_MEDICARE_SEQUESTRATION", "sensitive": false},
+        {"name": "CANDID_DASHBOARD_ALLOWED_STAFF_KEYS", "sensitive": false},
+        {"name": "CANDID_DASHBOARD_ALLOWED_ROLES", "sensitive": false}
     ],
     "tags": {},
     "references": [],

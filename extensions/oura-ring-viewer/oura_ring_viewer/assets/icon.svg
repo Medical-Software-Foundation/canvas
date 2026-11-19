@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- A smart ring seen face on, with a pulse line: wearable health data. -->
+  <circle cx="50" cy="50" r="36" fill="none" stroke="#2f5bd3" stroke-width="12"/>
+  <rect x="44" y="9" width="12" height="9" rx="3" fill="#1e3f9e"/>
+  <polyline points="22,52 36,52 42,40 50,64 57,46 62,52 78,52" fill="none" stroke="#2f5bd3"
+            stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

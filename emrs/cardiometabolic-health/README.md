@@ -95,7 +95,6 @@ These extensions come built into the system and can evolve as your practice adap
 They streamline cardiometabolic and obesity workflows by automating routine screening, monitoring, and treatment documentation, improving documentation speed, supporting compliance, and keeping care pathways consistent.
 
 * [Adult-hypertension-screening: screening](https://www.canvasmedical.com/extensions/adult-hypertension-screening)  
-* [Develop-health-prior-authorization-integration: Prebuilt Integrations](https://www.canvasmedical.com/extensions/develop-health-prior-authorization-integration)  
 * [Statin Use for CVD Prevention: CVD Risk](https://www.canvasmedical.com/extensions/statin-use-for-cvd-prevention)  
 * [Initiating-statin-therapy-in-diabetics](https://www.canvasmedical.com/extensions/initiating-statin-therapy-in-diabetics)  
 * [Monitoring-effects-of-statin-therapy-in-diabetics: Diabetes](https://www.canvasmedical.com/extensions/monitoring-effects-of-statin-therapy-in-diabetics)  

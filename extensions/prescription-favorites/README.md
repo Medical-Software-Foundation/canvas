@@ -1,5 +1,7 @@
 # Prescription Favorites
 
+> **Replaced by [Order Favorites](../order-favorites/order_favorites/README.md).** Order Favorites combines prescription and lab order favorites in one panel, opened from a button in each open visit or chart review note, with an admin app for practice favorites. New installs should use it.
+
 Quick-access prescribing tool with a searchable catalog of favorite medications and batch prescribing.
 
 ## Problem it solves

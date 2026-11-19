@@ -3744,3 +3744,49 @@ class TestNormalizeExistingAddressFillsBlankCity:
         assert addr["city"] == "Queens"  # filled
         assert addr["state"] == "CA"     # untouched (already populated)
         assert addr["postalCode"] == "90000"  # untouched
+
+
+STAFF_KEY = "0123456789abcdef0123456789abcdef"
+
+
+def _credentials(user_type="Staff", staff_id=STAFF_KEY):
+    return MagicMock(logged_in_user={"type": user_type, "id": staff_id})
+
+
+def test_listed_staff_pass_authentication():
+    handler = make_handler()
+    handler.secrets["BULK_LOADER_ALLOWED_STAFF_KEYS"] = STAFF_KEY
+    assert handler.authenticate(_credentials()) is True
+
+
+def test_unlisted_staff_fail_authentication():
+    handler = make_handler()
+    handler.secrets["BULK_LOADER_ALLOWED_STAFF_KEYS"] = "f" * 32
+    assert handler.authenticate(_credentials()) is False
+
+
+def test_everyone_fails_authentication_when_the_list_is_empty():
+    assert make_handler().authenticate(_credentials()) is False
+
+
+def test_patients_are_refused_before_the_list_is_read():
+    from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
+
+    handler = make_handler()
+    handler.secrets["BULK_LOADER_ALLOWED_STAFF_KEYS"] = STAFF_KEY
+    with pytest.raises(InvalidCredentialsError):
+        handler.authenticate(_credentials(user_type="Patient"))
+
+
+def test_each_load_is_logged_with_the_staff_member_and_counts():
+    prac = TestCreatePractitioners()._base_prac(action="skip", status="new", existing_id=None)
+    handler = make_handler(body={"practitioners": [prac, dict(prac, source_row_number=3)]})
+    handler.request.headers = {"canvas-logged-in-user-id": STAFF_KEY}
+    module = "practitioner_bulk_loader.api.bulk_upload_api"
+    with patch(f"{module}.make_fhir_client", return_value=MagicMock()), \
+         patch(f"{module}.get_location_map", return_value={}), \
+         patch(f"{module}.log") as mock_log:
+        handler.create_practitioners()
+
+    lines = [c.args[0] for c in mock_log.info.call_args_list]
+    assert any(STAFF_KEY in line and "{'skipped': 2}" in line for line in lines)

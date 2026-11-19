@@ -11,7 +11,15 @@ from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data.command import CommandMetadata
 
-SUPPORTED_SCHEMA_KEYS = frozenset({"medicationStatement", "stopMedication"})
+SUPPORTED_SCHEMA_KEYS = frozenset(
+    {
+        "medicationStatement",
+        "stopMedication",
+        "prescribe",
+        "adjustPrescription",
+        "refill",
+    }
+)
 ALERT_FACILITY_KEY = "alert_facility"
 ALERT_FACILITY_LABEL = "Alert facility"
 ALERT_FACILITY_OPTIONS = ["Yes", "No"]
@@ -58,6 +66,9 @@ class AlertFacilityRequiredValidator(BaseHandler):
     RESPONDS_TO = [
         EventType.Name(EventType.MEDICATION_STATEMENT_COMMAND__POST_VALIDATION),
         EventType.Name(EventType.STOP_MEDICATION_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.PRESCRIBE_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.REFILL_COMMAND__POST_VALIDATION),
     ]
 
     def compute(self) -> list[Effect]:

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Calendar base -->
+  <rect x="10" y="20" width="80" height="70" rx="8" ry="8" fill="#ffffff" stroke="#22BA45" stroke-width="4"/>
+
+  <!-- Calendar header -->
+  <rect x="10" y="20" width="80" height="22" rx="8" ry="8" fill="#22BA45"/>
+  <rect x="10" y="34" width="80" height="8" fill="#22BA45"/>
+
+  <!-- Calendar binding rings -->
+  <rect x="28" y="12" width="8" height="18" rx="4" ry="4" fill="#1a9438"/>
+  <rect x="64" y="12" width="8" height="18" rx="4" ry="4" fill="#1a9438"/>
+
+  <!-- Appointment slots - row 1 -->
+  <rect x="18" y="50" width="28" height="8" rx="3" ry="3" fill="#22BA45" opacity="0.85"/>
+  <rect x="54" y="50" width="28" height="8" rx="3" ry="3" fill="#e8f8ed" stroke="#22BA45" stroke-width="1.5"/>
+
+  <!-- Appointment slots - row 2 -->
+  <rect x="18" y="64" width="28" height="8" rx="3" ry="3" fill="#e8f8ed" stroke="#22BA45" stroke-width="1.5"/>
+  <rect x="54" y="64" width="28" height="8" rx="3" ry="3" fill="#22BA45" opacity="0.6"/>
+
+  <!-- Appointment slots - row 3 -->
+  <rect x="18" y="78" width="28" height="8" rx="3" ry="3" fill="#22BA45" opacity="0.4"/>
+  <rect x="54" y="78" width="28" height="8" rx="3" ry="3" fill="#e8f8ed" stroke="#22BA45" stroke-width="1.5"/>
+</svg>

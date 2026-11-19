@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, call, patch
 
+from tests.conftest import QS
+
 from provider_availability.engine.lookups import (
     get_active_locations,
     get_active_providers,
@@ -21,7 +23,7 @@ class TestGetActiveStaffIds:
         s2.id = "staff-2"
 
         with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value = [s1, s2]
+            mock_objects.filter.return_value = QS([s1, s2])
 
             result = get_active_staff_ids()
 
@@ -30,12 +32,14 @@ class TestGetActiveStaffIds:
 
     def test_empty(self):
         with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value = []
+            mock_objects.filter.return_value = QS([])
 
             assert get_active_staff_ids() == set()
 
 
 class TestGetActiveProviders:
+    ROLES_MODULE = "provider_availability.engine.roles"
+
     def test_returns_sorted_providers(self):
         staff_b = MagicMock()
         staff_b.id = "s2"
@@ -49,23 +53,16 @@ class TestGetActiveProviders:
         staff_a.last_name = "Alpha"
         staff_a.npi_number = "111"
 
-        with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value.distinct.return_value = [staff_b, staff_a]
-
+        with patch(f"{self.ROLES_MODULE}.get_schedulable_staff", return_value=[staff_b, staff_a]) as mock_sched:
             result = get_active_providers()
 
-            assert mock_objects.mock_calls == [
-                call.filter(active=True, roles__role_type="PROVIDER"),
-                call.filter().distinct(),
-            ]
+            assert mock_sched.mock_calls == [call()]
             # Sorted by last_name
             assert result[0]["name"] == "John Alpha"
             assert result[1]["name"] == "Jane Zebra"
 
     def test_empty(self):
-        with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value.distinct.return_value = []
-
+        with patch(f"{self.ROLES_MODULE}.get_schedulable_staff", return_value=[]):
             result = get_active_providers()
 
             assert result == []

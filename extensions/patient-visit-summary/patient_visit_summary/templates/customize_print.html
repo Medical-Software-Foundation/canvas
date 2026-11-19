@@ -218,6 +218,8 @@
         .cmd-heading b, .cmd-heading u { text-decoration: none; font-weight: 600; }
         .cmd-body { margin: 2px 0 6px; font-size: 15px; color: var(--ink-2); }
         .cmd-field { margin: 2px 0; font-size: 14px; color: var(--ink-2); }
+        /* Keep line breaks typed into narratives and free-text answers; body_html is real markup, so it keeps normal whitespace. */
+        .cmd-body:not(.cmd-body-html), .cmd-field { white-space: pre-line; }
         .field-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.6px; margin-right: 4px; }
         .cmd-offset { margin: 2px 0 2px 18px; font-size: 14px; white-space: pre-wrap; color: var(--ink-2); }
         .vitals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 2px 20px; margin-top: 2px; }

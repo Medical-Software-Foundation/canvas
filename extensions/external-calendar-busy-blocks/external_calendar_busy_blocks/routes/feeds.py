@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, timezone
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event
@@ -7,11 +8,12 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
 from external_calendar_busy_blocks.auth import canonical_staff_id, canonicalize_staff_id, is_admin
-from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
-from external_calendar_busy_blocks.data.models import (
-    ImportedEvent,
-    StaffCalendarFeed,
+from external_calendar_busy_blocks.calendars.admin_lookup import (
+    find_admin_calendar_id,
+    get_admin_calendar_id,
 )
+from external_calendar_busy_blocks.calendars.live_events import live_busy_events
+from external_calendar_busy_blocks.data.models import StaffCalendarFeed
 from external_calendar_busy_blocks.http.fetcher import FetchOk, fetch_feed
 
 
@@ -99,10 +101,16 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         if feed is None:
             return [JSONResponse({"status": "no feed"}, status_code=200)]
 
+        # Remove every block this feed put on the provider's Admin calendar,
+        # deleting each by its real uuid read from the live calendar. Look up the
+        # calendar without provisioning one — if none exists there is nothing to
+        # clean up.
         effects: list[Effect] = []
-        for row in ImportedEvent.objects.filter(staff_id=target_id):
-            effects.append(Event(event_id=row.canvas_event_id).delete())
-            row.delete()
+        calendar_id = find_admin_calendar_id(target_id)
+        if calendar_id:
+            now = datetime.now(timezone.utc)
+            for event in live_busy_events(calendar_id, now):
+                effects.append(Event(event_id=str(event.id)).delete())
 
         feed.delete()
         return [*effects, JSONResponse({"status": "disconnected"}, status_code=200)]
@@ -119,7 +127,12 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         if not target_id:
             return [JSONResponse({"error": "Missing staff_id"}, status_code=400)]
 
-        event_count = ImportedEvent.objects.filter(staff_id=target_id).count()
+        calendar_id = find_admin_calendar_id(target_id)
+        event_count = (
+            live_busy_events(calendar_id, datetime.now(timezone.utc)).count()
+            if calendar_id
+            else 0
+        )
 
         feed = StaffCalendarFeed.objects.filter(staff_id=target_id).first()
         if feed is None:

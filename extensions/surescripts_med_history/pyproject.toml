@@ -1,0 +1,21 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "surescripts-med-history"
+version = "0.0.0"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]

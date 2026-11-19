@@ -1,5 +1,7 @@
 """SimpleAPI endpoint serving aggregated Candid claim data for the dashboard."""
 
+from http import HTTPStatus
+
 from django.db.models import Q
 
 from canvas_sdk.effects import Effect
@@ -7,6 +9,7 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPIRoute, StaffSessionAuthMixin
 from canvas_sdk.v1.data.claim import Claim
 
+from candid.access import staff_can_access_dashboard
 from candid.effect_helpers import (
     DENIED_STATUSES,
     META_CLAIM_STATUS,
@@ -25,6 +28,10 @@ class CandidDashboardAPI(StaffSessionAuthMixin, SimpleAPIRoute):
     PATH = "/dashboard"
 
     def get(self) -> list[Response | Effect]:
+        staff_key = self.request.headers.get("canvas-logged-in-user-id")
+        if not staff_can_access_dashboard(staff_key, self.secrets):
+            return [JSONResponse({"error": "forbidden"}, status_code=HTTPStatus.FORBIDDEN)]
+
         params = self.request.query_params
         errors_only = params.get("errors_only", "").lower() in ("1", "true", "yes")
         fetch_all = params.get("page", "").lower() == "all"

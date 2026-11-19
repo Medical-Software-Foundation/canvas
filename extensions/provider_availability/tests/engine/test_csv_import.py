@@ -25,6 +25,7 @@ def _rule_row(**over):
         "start": "09:00",
         "end": "12:00",
         "recurrence_frequency": "weekly",
+        "effective_start": "2026-07-01",
     }
     row.update(over)
     return row
@@ -125,13 +126,13 @@ def test_validate_block_row_timed_missing_window():
 
 def test_validate_rblock_row_valid():
     row = {"type": "rblock", "staff_key": "1", "day": "monday", "start": "12:00",
-           "end": "13:00", "hold_type": "same_day"}
+           "end": "13:00", "hold_type": "same_day", "effective_start": "2026-07-01"}
     assert validate_row(row) == []
 
 
 def test_validate_rblock_row_bad_hold_type():
     row = {"type": "rblock", "staff_key": "1", "day": "monday", "start": "12:00",
-           "end": "13:00", "hold_type": "maybe"}
+           "end": "13:00", "hold_type": "maybe", "effective_start": "2026-07-01"}
     assert any("hold_type must be one of" in e for e in validate_row(row))
 
 
@@ -153,8 +154,8 @@ def test_parse_csv_header_only():
 def test_parse_csv_valid_and_error_rows():
     body = (
         HEADER + "\n"
-        + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
-        + "rule,1234567890,Main Clinic,,funday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+        + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
+        + "rule,1234567890,Main Clinic,,funday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     )
     result = parse_csv(body)
     assert result.total_rows == 2
@@ -164,14 +165,14 @@ def test_parse_csv_valid_and_error_rows():
 
 
 def test_parse_csv_skips_blank_lines():
-    body = HEADER + "\n\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n\n"
+    body = HEADER + "\n\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n\n"
     result = parse_csv(body)
     assert result.total_rows == 1
     assert len(result.valid_rows) == 1
 
 
 def test_parse_csv_strips_bom():
-    body = "﻿" + HEADER + "\nrule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,,,\n"
+    body = "﻿" + HEADER + "\nrule,1234567890,Main Clinic,,monday,09:00,12:00,,,,,,,,,weekly,1,2026-07-01,,\n"
     result = parse_csv(body)
     assert len(result.valid_rows) == 1
 
@@ -187,7 +188,7 @@ def test_parse_csv_handles_quoted_reason_with_comma():
 
 
 def test_parse_csv_short_row_pads_missing_fields():
-    body = HEADER + "\n" + "rule,1234567890,Main Clinic,,monday,09:00,12:00\n"
+    body = HEADER + "\n" + "block,1234567890,,,,,,true,2026-07-04\n"
     result = parse_csv(body)
     assert len(result.valid_rows) == 1
 
@@ -370,7 +371,7 @@ def test_build_records_timed_block():
 
 def test_build_records_recurring_block():
     row = {"type": "rblock", "staff_key": "1234567890", "day": "monday",
-           "start": "12:00", "end": "13:00", "reason": "Lunch", "hold_type": "same_day"}
+           "start": "12:00", "end": "13:00", "reason": "Lunch", "hold_type": "same_day", "effective_start": "2026-07-01"}
     records, errors = build_records(_valid_rows([row]), VALID_STAFF, LOCATION_MAP, VISIT_MAP)
     assert errors == []
     rb = records[0]
@@ -381,7 +382,7 @@ def test_build_records_recurring_block():
 
 def test_build_records_recurring_block_default_hold_none():
     row = {"type": "rblock", "staff_key": "1234567890", "day": "monday",
-           "start": "12:00", "end": "13:00"}
+           "start": "12:00", "end": "13:00", "effective_start": "2026-07-01"}
     records, _ = build_records(_valid_rows([row]), VALID_STAFF, LOCATION_MAP, VISIT_MAP)
     assert records[0]["hold_type"] == "none"
 
@@ -393,10 +394,16 @@ def test_build_records_effective_dates_preserved():
     assert records[0]["effective_end"] == "2026-12-31"
 
 
-def test_build_records_no_effective_dates_are_none():
+def test_build_records_no_end_date_is_none():
     records, _ = build_records(_valid_rows([_rule_row()]), VALID_STAFF, LOCATION_MAP, VISIT_MAP)
-    assert records[0]["effective_start"] is None
+    assert records[0]["effective_start"] == "2026-07-01"
     assert records[0]["effective_end"] is None
+
+
+def test_rule_and_recurring_block_rows_need_a_start_date():
+    assert "effective_start is required" in validate_row(_rule_row(effective_start=""))
+    rblock = {"type": "rblock", "staff_key": "1", "day": "monday", "start": "12:00", "end": "13:00"}
+    assert "effective_start is required" in validate_row(rblock)
 
 
 # -- template ----------------------------------------------------------------
@@ -408,7 +415,7 @@ def test_records_have_no_underscore_keys():
     rows = [
         _rule_row(),
         {"type": "block", "staff_key": "1234567890", "all_day": "true", "date": "2026-07-04"},
-        {"type": "rblock", "staff_key": "1234567890", "day": "monday", "start": "12:00", "end": "13:00"},
+        {"type": "rblock", "staff_key": "1234567890", "day": "monday", "start": "12:00", "end": "13:00", "effective_start": "2026-07-01"},
     ]
     records, _ = build_records(_valid_rows(rows), VALID_STAFF, LOCATION_MAP, VISIT_MAP)
     assert records

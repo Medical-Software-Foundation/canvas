@@ -14,10 +14,25 @@ import { ensureDirs, ensureSampleForm, shotPath, SAMPLE_FORM, log, ok } from './
 
 const TMP_HTML = resolve(tmpdir(), 'consent_picker_preview.html');
 
-// Screenshot the currently-active .view as a clean, modal-like image.
+// Screenshot the currently-active .view as a clean, modal-like image, cropped
+// just below its lowest visible content so short screens don't carry a tall
+// empty area into the guides.
 async function shotActiveView(page, name) {
-  const view = page.locator('.view.active').first();
-  await view.screenshot({ path: shotPath(name) });
+  const clip = await page.evaluate(() => {
+    const view = document.querySelector('.view.active');
+    const box = view.getBoundingClientRect();
+    let bottom = box.top;
+    view.querySelectorAll('*').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      if (r.width && r.height && cs.visibility !== 'hidden' && cs.display !== 'none' && r.height < box.height - 1) {
+        bottom = Math.max(bottom, r.bottom);
+      }
+    });
+    const height = Math.min(box.height, bottom - box.top + 24);
+    return { x: box.left, y: box.top, width: box.width, height };
+  });
+  await page.screenshot({ path: shotPath(name), clip });
   ok(name);
 }
 
@@ -42,13 +57,6 @@ async function run() {
   await page.waitForTimeout(150);
   await shotActiveView(page, '04-hub-required.png');
 
-  // ---- Hub: everything expanded (Optional + On File on file/Expired) --------
-  await page.evaluate(() => {
-    document.querySelectorAll('.section.collapsed').forEach((s) => s.classList.remove('collapsed'));
-  });
-  await page.waitForTimeout(150);
-  await shotActiveView(page, '05-hub-onfile.png');
-
   // ---- Wizard: Review (Treatment Consent, index 0) --------------------------
   await page.evaluate(() => window.startWizard(0));
   await page.waitForTimeout(200);
@@ -61,33 +69,51 @@ async function run() {
 
   // ---- Wizard: Finalize with Representative selected ------------------------
   await page.evaluate(() => {
-    const r = document.querySelector('input[name="who"][value="representative"]');
-    if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
-    const rep = document.querySelector('.rep');
-    if (rep) {
-      const [name, rel] = rep.querySelectorAll('input');
-      if (name) { name.value = 'Jamie Rivera'; name.dispatchEvent(new Event('input', { bubbles: true })); }
-      if (rel) { rel.value = 'Spouse (healthcare proxy)'; rel.dispatchEvent(new Event('input', { bubbles: true })); }
-    }
+    const view = document.querySelector('.view.active');
+    const r = view.querySelector('input[type="radio"][value="representative"]');
+    if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); r.click(); }
+  });
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    const view = document.querySelector('.view.active');
+    const name = view.querySelector('input[placeholder="Representative\u2019s full name"], input[placeholder="Representative\'s full name"]');
+    const rel = view.querySelector('input[placeholder^="Relationship"]');
+    if (name) { name.value = 'Jamie Rivera'; name.dispatchEvent(new Event('input', { bubbles: true })); }
+    if (rel) { rel.value = 'Spouse (healthcare proxy)'; rel.dispatchEvent(new Event('input', { bubbles: true })); }
   });
   await page.waitForTimeout(150);
   await shotActiveView(page, '08-finalize-representative.png');
 
-  // ---- Done screen ----------------------------------------------------------
+  // ---- Done screen: record for real against a stubbed server ----------------
   await page.evaluate(() => {
-    document.getElementById('doneSub').textContent = 'Treatment Consent was added to Jordan Rivera’s profile.';
-    window.show('done');
+    const view = document.querySelector('.view.active');
+    const p = view.querySelector('input[type="radio"][value="patient"]'); if (p) p.click();
+    const yes = view.querySelector('input[type="radio"][value="yes"]'); if (yes) yes.click();
+    view.querySelectorAll('.q').forEach((c) => {
+      const b = c.querySelector('.seg button'); if (b) b.click();
+      const a = c.querySelector('.ack input'); if (a && !a.checked) a.click();
+    });
+    window.fetch = async () => ({ json: async () => ({ ok: true, preview: {
+      code: 'TREAT', title: 'Treatment Consent', patient_name: 'Jordan Rivera', consented_by: 'Patient',
+      method: 'Verbal', collected_by: 'Sam Rivera, NP', date: new Date().toISOString().slice(0, 10), pages: 1, pdf: true } }) });
+    document.getElementById('nextBtn').click();
   });
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(900);
   await shotActiveView(page, '09-done.png');
 
   // ---- Written capture: Camera tab -----------------------------------------
-  await page.evaluate(() => window.startWizard(3));            // Written-only consent
+  await page.evaluate(() => { window.renderHub(); window.show('hub'); });
+  await page.evaluate(() => window.startWizard(window.CONSENTS.findIndex((c) => c.code === 'WRITTEN')));
   await page.waitForTimeout(150);
   await page.evaluate(() => document.getElementById('nextBtn').click());  // review -> confirm
   await page.waitForTimeout(150);
-  await page.evaluate(() => document.getElementById('nextBtn').click());  // confirm -> openCapture()
-  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    const p = document.querySelector('.view.active input[type="radio"][value="patient"]'); if (p) p.click();
+    document.getElementById('nextBtn').click();                           // confirm -> openCapture()
+  });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => document.getElementById('tabCamera').click());
+  await page.waitForTimeout(800);
   // Chromium's fake camera renders a green test pattern; swap it for the sample
   // document so the viewfinder looks like a real page being framed.
   const sampleDataUrl = 'data:image/png;base64,' + readFileSync(SAMPLE_FORM).toString('base64');
@@ -105,23 +131,16 @@ async function run() {
   await page.waitForTimeout(250);
   await shotActiveView(page, '10-written-camera.png');
 
-  // ---- Written capture: Upload the sample form -> Review --------------------
+  // ---- Written capture: Upload the sample form -> Crop ----------------------
   await page.evaluate(() => document.getElementById('tabUpload').click());
   await page.waitForTimeout(150);
   await page.setInputFiles('#fileInput', SAMPLE_FORM);
-  await page.waitForTimeout(500);
-  await shotActiveView(page, '11-written-review.png');
-
-  // ---- Written capture: Crop -----------------------------------------------
-  await page.evaluate(() => document.getElementById('cropBtn').click());
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(900);
   await shotActiveView(page, '12-written-crop.png');
 
   // ---- Written capture: Pages list -----------------------------------------
-  await page.evaluate(() => document.getElementById('capRight').click());   // Apply -> review
-  await page.waitForTimeout(400);
-  await page.evaluate(() => document.getElementById('capRight').click());   // Add Page -> pages
-  await page.waitForTimeout(400);
+  await page.evaluate(() => document.getElementById('capRight').click());   // Continue -> pages
+  await page.waitForTimeout(600);
   await shotActiveView(page, '13-written-pages.png');
 
   // ---- Viewer: a completed consent's document ------------------------------
