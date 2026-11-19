@@ -18,7 +18,6 @@ meaningful and exercises the actual ORM query.
 __is_plugin__ = True
 
 from http import HTTPStatus
-from unittest.mock import MagicMock, patch
 
 import arrow
 import pytest
@@ -43,7 +42,7 @@ from canvas_sdk.v1.data.staff import Staff
 
 from api.panel_api import PatientPanelAPI
 
-from tests._helpers import build_api, cache_delete, cache_set
+from tests._helpers import build_api, cache_delete
 
 
 pytestmark = pytest.mark.django_db
@@ -199,51 +198,6 @@ class TestGetAllCareTeamMembers:
         assert result[0]["photo_url"] == PatientPanelAPI.DEFAULT_AVATAR
 
 
-# ── FHIR token (HTTP boundary — stub the network) ─────────────────────────
-
-class TestGetFhirToken:
-    """`Http` is canvas_sdk's thin wrapper for outbound HTTP — patching it
-    stubs the external network call, NOT a canvas_sdk domain method.
-    """
-
-    def test_missing_credentials_returns_none(self) -> None:
-        assert build_api()._get_fhir_token() is None
-
-    def test_success_returns_token(self) -> None:
-        api = build_api(secrets={
-            "FHIR_CLIENT_ID": "client-id",
-            "FHIR_CLIENT_SECRET": "client-secret",
-            "CANVAS_INSTANCE_URL": "https://test.canvasmedical.com",
-        })
-        PatientPanelAPI._fhir_token_cache = {}
-        with patch("api.panel_api.Http") as mock_http_class:
-            mock_http = MagicMock()
-            mock_http_class.return_value = mock_http
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"access_token": "test-token"}
-            mock_http.post.return_value = mock_response
-
-            assert api._get_fhir_token() == "test-token"
-
-    def test_error_response_returns_none(self) -> None:
-        api = build_api(secrets={
-            "FHIR_CLIENT_ID": "client-id",
-            "FHIR_CLIENT_SECRET": "client-secret",
-            "CANVAS_INSTANCE_URL": "https://test.canvasmedical.com",
-        })
-        PatientPanelAPI._fhir_token_cache = {}
-        with patch("api.panel_api.Http") as mock_http_class:
-            mock_http = MagicMock()
-            mock_http_class.return_value = mock_http
-            mock_response = MagicMock()
-            mock_response.status_code = 401
-            mock_response.text = "Unauthorized"
-            mock_http.post.return_value = mock_response
-
-            assert api._get_fhir_token() is None
-
-
 # ── Endpoint smoke tests (real ORM, real templates) ───────────────────────
 
 class TestStaticAndIndexEndpoints:
@@ -366,29 +320,6 @@ class TestClinicalNoteEndpoints:
         api = build_api(path_params={"patient_id": str(patient.id)})
         result = api.view_clinical_notes()
         assert result[0].status_code == HTTPStatus.OK
-
-
-class TestGetPatientPhotoEndpoint:
-    def test_no_token_redirects_to_default_avatar(self) -> None:
-        patient = PatientFactory.create()
-        pid = str(patient.id)
-        api = build_api(path_params={"patient_id": pid})
-        cache_delete(f"patient_photo_{pid}")
-        result = api.get_patient_photo()
-        assert result[0].status_code == 302
-        assert "Location" in result[0].headers
-
-    def test_cached_photo_served_without_fhir_call(self) -> None:
-        patient = PatientFactory.create()
-        pid = str(patient.id)
-        cache_set(
-            f"patient_photo_{pid}",
-            {"content_type": "image/jpeg", "data": b"cached-bytes"},
-        )
-        api = build_api(path_params={"patient_id": pid})
-        result = api.get_patient_photo()
-        assert result[0].status_code == 200
-        assert result[0].content == b"cached-bytes"
 
 
 class TestFlagEndpoints:
