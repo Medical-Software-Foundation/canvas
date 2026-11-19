@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+<link rel="stylesheet" href="/plugin-io/api/rx_history/static/canvas-plugin-ui.css?v={{ cache_bust }}">
+<script src="/plugin-io/api/rx_history/static/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+<style>
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  font-family: var(--font-family);
+  font-size: 1rem;
+  color: var(--color-text);
+  line-height: 1.4285em;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sticky header wraps controls row and target note strip together. */
+.sticky-header {
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Controls row */
+.controls-row {
+  padding: var(--space-tiny) var(--space-small);
+  background: var(--color-surface);
+}
+
+/* Target note strip */
+.target-strip {
+  padding: var(--space-tiny) var(--space-small);
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tiny);
+}
+.target-strip-label {
+  font-size: .78571429em;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+.target-strip-static {
+  font-size: .92857143em;
+  color: var(--color-text);
+}
+.target-strip-static.empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Banner feedback */
+#feedbackBanner {
+  display: none;
+  flex-shrink: 0;
+  margin: var(--space-tiny) var(--space-small) 0;
+}
+#feedbackBanner.visible {
+  display: block;
+}
+
+/* Summary line, sits inside content so it scrolls away with the list.
+   Horizontal inset comes from .content so the whole column aligns. */
+.summary-block {
+  padding: var(--space-tiny) 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.summary {
+  font-size: .92857143em;
+  color: var(--color-text-muted);
+}
+.mismatch-count {
+  font-weight: var(--font-weight-bold);
+}
+.last-pulled {
+  font-size: .78571429em;
+  color: var(--color-text-muted);
+}
+
+/* Scrollable content. Supplies the single horizontal inset for the whole
+   scroll column per skill rule 27. Accordion items carry no own padding. */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0 var(--space-small) 120px;
+}
+
+/* Medication row title content */
+.med-group-info {
+  flex: 1;
+  min-width: 0;
+}
+.med-group-name {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+.med-group-strength {
+  font-size: .92857143em;
+  color: var(--color-text-muted);
+  margin-left: var(--space-tiny);
+  font-weight: 400;
+}
+.med-group-sig {
+  font-size: .78571429em;
+  color: var(--color-text-muted);
+  margin-top: 1px;
+}
+.med-group-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-mini);
+  margin-top: var(--space-mini);
+}
+.actions {
+  display: flex;
+  gap: var(--space-mini);
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* Empty state */
+.empty {
+  padding: var(--space-large) var(--space-small);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: .92857143em;
+}
+
+/* Dismissed row, dim content but leave the Undo action button at full
+   opacity so it matches the Dismiss button's visual weight on unmatched rows. */
+canvas-accordion-item.med-group.dismissed-row canvas-accordion-title > *:not(.actions),
+canvas-accordion-item.med-group.dismissed-row canvas-accordion-content { opacity: 0.6; }
+
+</style>
+</head>
+<body>
+
+<!-- tooltip infrastructure (placed once) -->
+<canvas-tooltip></canvas-tooltip>
+
+<!-- hidden data spans -->
+<span id="rx-rxnorm"  hidden>{{ active_rxnorm_json }}</span>
+<span id="rx-ndc"     hidden>{{ active_ndc_json }}</span>
+<span id="rx-desc"    hidden>{{ active_descriptions_json }}</span>
+<span id="rx-groups"  hidden>{{ grouped_items_json }}</span>
+<span id="rx-patient" hidden>{{ patient_id }}</span>
+<span id="rx-active-meds" hidden>{{ active_meds_json }}</span>
+<span id="rx-dismissed" hidden>{{ dismissed_items_json }}</span>
+<span id="rx-open-notes" hidden>{{ open_notes_json }}</span>
+
+<!-- sticky header: controls row + target note, always visible at top -->
+<div class="sticky-header">
+  <div class="controls-row">
+    <canvas-inline-row style="align-items: center">
+      {% if has_default_provider %}
+        <canvas-button id="requestBtn" size="sm" data-canvas-tooltip="Send a new Surescripts query to pull the latest medication history from pharmacies." data-canvas-tooltip-delay="300">Request New History</canvas-button>
+      {% else %}
+        <canvas-button disabled size="sm" data-canvas-tooltip="No default provider assigned. Add one in patient settings to enable manual requests." data-canvas-tooltip-inverted data-canvas-tooltip-delay="300">Request New History</canvas-button>
+      {% endif %}
+      <canvas-button id="reloadBtn" size="sm" variant="ghost" data-canvas-tooltip="Reload the panel to pick up medication or note changes made elsewhere." data-canvas-tooltip-delay="300">Reload</canvas-button>
+      <canvas-checkbox id="autoReloadCheckbox" checked label="Auto-reload on focus" data-canvas-tooltip="Panel also refreshes whenever you click back into it. Uncheck to reload only with the Reload button." data-canvas-tooltip-delay="300"></canvas-checkbox>
+    </canvas-inline-row>
+  </div>
+
+  <div class="target-strip">
+    {% if multiple_open_notes %}
+      <span class="target-strip-label">Target Note</span>
+      <canvas-combobox id="noteSelect" placeholder="Select target note">
+        {% for n in open_notes %}
+          {% if forloop.first %}
+            <canvas-option value="{{ n.id }}" data-iso="{{ n.datetime_iso }}" data-type="{{ n.type_name }}" selected></canvas-option>
+          {% else %}
+            <canvas-option value="{{ n.id }}" data-iso="{{ n.datetime_iso }}" data-type="{{ n.type_name }}"></canvas-option>
+          {% endif %}
+        {% endfor %}
+      </canvas-combobox>
+    {% elif single_open_note %}
+      <span class="target-strip-label">Adding to</span>
+      <div class="target-strip-static" data-iso="{{ open_notes.0.datetime_iso }}" data-type="{{ open_notes.0.type_name }}"></div>
+    {% else %}
+      <span class="target-strip-label">No Open Note</span>
+      <div class="target-strip-static empty">No open notes available for this patient.</div>
+    {% endif %}
+  </div>
+</div>
+
+<canvas-banner id="feedbackBanner" dismissible></canvas-banner>
+
+<!-- scrollable content -->
+<div class="content">
+
+  <div class="summary-block">
+    <div class="summary" id="summaryText"></div>
+    {% if last_pulled_iso %}
+      <div class="last-pulled" id="lastPulled" data-iso="{{ last_pulled_iso }}"></div>
+    {% endif %}
+  </div>
+
+  <canvas-accordion>
+    <canvas-accordion-item id="unmatchedSection" open>
+      <canvas-accordion-title>Unmatched <span id="unmatchedCount"></span></canvas-accordion-title>
+      <canvas-accordion-content>
+        <div id="unmatchedContainer">
+          <div class="empty" data-empty hidden>None, all medications accounted for.</div>
+        </div>
+      </canvas-accordion-content>
+    </canvas-accordion-item>
+
+    <canvas-accordion-item>
+      <canvas-accordion-title>Matched <span id="matchedCount"></span></canvas-accordion-title>
+      <canvas-accordion-content>
+        <div id="matchedContainer">
+          <div class="empty" data-empty hidden>None matched yet.</div>
+        </div>
+        <canvas-accordion>
+          <canvas-accordion-item>
+            <canvas-accordion-title>Active Meds</canvas-accordion-title>
+            <canvas-accordion-content>
+              <div id="activeMedsContainer"></div>
+            </canvas-accordion-content>
+          </canvas-accordion-item>
+        </canvas-accordion>
+      </canvas-accordion-content>
+    </canvas-accordion-item>
+
+    <canvas-accordion-item id="dismissedSection">
+      <canvas-accordion-title>Dismissed <span id="dismissedCount"></span></canvas-accordion-title>
+      <canvas-accordion-content>
+        <div id="dismissedContainer">
+          <div class="empty" data-empty hidden>Nothing dismissed.</div>
+        </div>
+      </canvas-accordion-content>
+    </canvas-accordion-item>
+  </canvas-accordion>
+
+</div>
+
+<script>
+(function () {
+  var PATIENT_ID = (document.getElementById("rx-patient") || {}).textContent || "{{ patient_id }}";
+  var BASE = "/plugin-io/api/rx_history/routes";
+
+  /* Client-side date formatting: server sends UTC ISO strings, browser formats
+     in its own local tz. Runs before canvas-combobox's setTimeout(0) _readOptions
+     so the combobox picks up the rewritten textContent. */
+  var FMT_DATE = {month: "short", day: "numeric", year: "numeric"};
+  var FMT_DATETIME = {month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"};
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    try { return new Date(iso).toLocaleDateString(undefined, FMT_DATE); }
+    catch (e) { return ""; }
+  }
+  function formatDateTime(iso) {
+    if (!iso) return "";
+    try { return new Date(iso).toLocaleString(undefined, FMT_DATETIME); }
+    catch (e) { return ""; }
+  }
+  function buildNoteLabel(iso, typeName) {
+    var dateStr = formatDate(iso);
+    if (typeName && dateStr) return dateStr + ", " + typeName;
+    return dateStr || typeName || "";
+  }
+
+  /* Rewrite canvas-option children of #noteSelect */
+  var opts = document.querySelectorAll("#noteSelect canvas-option");
+  for (var oi = 0; oi < opts.length; oi++) {
+    opts[oi].textContent = buildNoteLabel(opts[oi].getAttribute("data-iso"), opts[oi].getAttribute("data-type"));
+  }
+  /* Rewrite single-note static label */
+  var singleStatic = document.querySelector(".target-strip-static[data-iso]");
+  if (singleStatic) {
+    singleStatic.textContent = buildNoteLabel(singleStatic.getAttribute("data-iso"), singleStatic.getAttribute("data-type"));
+  }
+  /* Rewrite last-pulled line */
+  var lastPulledEl = document.getElementById("lastPulled");
+  if (lastPulledEl) {
+    var lpIso = lastPulledEl.getAttribute("data-iso");
+    var lpStr = formatDateTime(lpIso);
+    lastPulledEl.textContent = lpStr ? "Last updated: " + lpStr : "";
+  }
+
+  function parseSpan(id) {
+    var el = document.getElementById(id);
+    try { return el ? JSON.parse(el.textContent) : []; } catch (e) { return []; }
+  }
+
+  var ACTIVE_RXNORM = new Set(parseSpan("rx-rxnorm"));
+  var ACTIVE_NDC    = new Set(parseSpan("rx-ndc"));
+  var ACTIVE_DESCS  = parseSpan("rx-desc");
+
+  /* helpers */
+  function esc(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function showBanner(variant, msg) {
+    var el = document.getElementById("feedbackBanner");
+    el.setAttribute("variant", variant);
+    el.textContent = msg;
+    el.classList.add("visible");
+  }
+
+  function hideBanner() {
+    document.getElementById("feedbackBanner").classList.remove("visible");
+  }
+
+  /* canvas-banner emits a composed dismiss event from its shadow DOM X button.
+     The component does not remove itself, so the consumer hides the shared
+     banner element. */
+  (function () {
+    var banner = document.getElementById("feedbackBanner");
+    if (banner) {
+      banner.addEventListener("dismiss", hideBanner);
+    }
+  })();
+
+  function buildCodePills(group) {
+    var pills = "";
+    var codes = group.rxnorm_codes || [];
+    var ndcs = group.ndc_codes || [];
+    for (var i = 0; i < codes.length; i++) {
+      pills += '<canvas-badge size="mini" basic>RxNorm: ' + esc(codes[i]) + '</canvas-badge>';
+    }
+    for (var j = 0; j < ndcs.length; j++) {
+      pills += '<canvas-badge size="mini" basic>NDC: ' + esc(ndcs[j]) + '</canvas-badge>';
+    }
+    return pills;
+  }
+
+  function buildFillsTable(fills, groupDesc) {
+    if (!fills || !fills.length) return "";
+    var hasMultipleDescs = false;
+    for (var k = 0; k < fills.length; k++) {
+      if (fills[k].drug_description && fills[k].drug_description !== groupDesc) {
+        hasMultipleDescs = true;
+        break;
+      }
+    }
+    var rows = "";
+    for (var i = 0; i < fills.length; i++) {
+      var f = fills[i];
+      rows += "<canvas-table-row>"
+        + (hasMultipleDescs ? "<canvas-table-cell>" + esc(f.drug_description) + "</canvas-table-cell>" : "")
+        + "<canvas-table-cell>" + esc(f.last_fill_date) + "</canvas-table-cell>"
+        + "<canvas-table-cell>" + esc(f.written_date) + "</canvas-table-cell>"
+        + "<canvas-table-cell>" + esc(f.prescriber) + "</canvas-table-cell>"
+        + "<canvas-table-cell>" + esc(f.pharmacy_name) + "</canvas-table-cell>"
+        + "<canvas-table-cell>" + esc(f.source_description) + (f.source_type ? " (" + esc(f.source_type) + ")" : "") + "</canvas-table-cell>"
+        + "</canvas-table-row>";
+    }
+    return '<canvas-table compact aria-label="Fill history">'
+      + "<canvas-table-head><canvas-table-row>"
+      + (hasMultipleDescs ? "<canvas-table-cell>Description</canvas-table-cell>" : "")
+      + "<canvas-table-cell>Fill Date</canvas-table-cell><canvas-table-cell>Written</canvas-table-cell><canvas-table-cell>Prescriber</canvas-table-cell><canvas-table-cell>Pharmacy</canvas-table-cell><canvas-table-cell>Source</canvas-table-cell></canvas-table-row></canvas-table-head>"
+      + "<canvas-table-body>" + rows + "</canvas-table-body></canvas-table>";
+  }
+
+  /* state */
+  var currentGroups = [];
+  var dismissedGroups = [];
+  var added         = [];
+  var selectedNoteId = "";
+  var lastNotesSig = null;
+
+  /* render */
+  function makeGroupRow(group, mode) {
+    var isAdded = added.indexOf(group.drug_description) !== -1;
+    var fillCount = group.unique_fill_count || group.fills.length;
+    var latestFill = group.latest_fill_date || "";
+    var isUnmatched = mode === "unmatched";
+    var isDismissed = mode === "dismissed";
+    var rowClass = "med-group" + (isUnmatched ? " unmatched-row" : "") + (isDismissed ? " dismissed-row" : "");
+
+    var dismissData = ' data-desc="' + esc(group.drug_description) + '"'
+      + ' data-ndc="' + esc((group.ndc_codes || [""])[0]) + '"'
+      + ' data-fill-date="' + esc(group.latest_fill_date || "") + '"';
+
+    var actionHtml = "";
+    if (isUnmatched) {
+      if (isAdded) {
+        actionHtml = '<canvas-button size="xs" disabled>\u2713 Added</canvas-button>';
+      } else {
+        actionHtml = '<canvas-button size="xs" data-action="add"'
+          + ' data-desc="' + esc(group.drug_description) + '"'
+          + ' data-sig="' + esc(group.sig || "") + '"'
+          + ' data-rxnorm="' + esc((group.rxnorm_codes || [])[0] || "") + '"'
+          + ' data-ndc="' + esc((group.ndc_codes || [])[0] || "") + '"'
+          + '>+ Add</canvas-button>'
+          + '<canvas-button size="xs" variant="ghost" data-action="dismiss"' + dismissData + '>Dismiss</canvas-button>';
+      }
+    } else if (isDismissed) {
+      actionHtml = '<canvas-button size="xs" variant="ghost" data-action="undo"' + dismissData + '>Undo</canvas-button>';
+    }
+
+    var dateBadge = latestFill ? esc(latestFill) : "";
+    if (fillCount > 1) dateBadge += (dateBadge ? " \u00B7 " : "") + fillCount + " fills";
+    if (!dateBadge) dateBadge = "1 fill";
+
+    var codePills = buildCodePills(group);
+    var matchBadge = group.match_method
+      ? '<canvas-badge size="mini" color="green">matched: ' + esc(group.match_method) + '</canvas-badge>'
+      : "";
+    var stagedBadge = group.is_staged
+      ? '<canvas-badge size="mini" color="orange" data-canvas-tooltip="Staged in an open note. Will finalize when the note is signed." data-canvas-tooltip-delay="300">Staged</canvas-badge>'
+      : "";
+
+    return '<canvas-accordion-item class="' + rowClass + '" data-drug="' + esc(group.drug_description) + '">'
+      + '<canvas-accordion-title>'
+      + '<div class="med-group-info">'
+      + '<div><span class="med-group-name">' + esc(group.drug_description) + '</span>'
+      + (group.strength ? '<span class="med-group-strength">' + esc(group.strength) + '</span>' : '')
+      + '</div>'
+      + (group.sig ? '<div class="med-group-sig">' + esc(group.sig) + '</div>' : '')
+      + (codePills || matchBadge || stagedBadge ? '<div class="med-group-meta">' + codePills + matchBadge + stagedBadge + '</div>' : '')
+      + '</div>'
+      + '<canvas-badge size="mini" basic>' + dateBadge + '</canvas-badge>'
+      + (isUnmatched || isDismissed ? '<div class="actions">' + actionHtml + '</div>' : '')
+      + '</canvas-accordion-title>'
+      + '<canvas-accordion-content>'
+      + buildFillsTable(group.fills, group.drug_description)
+      + '</canvas-accordion-content>'
+      + '</canvas-accordion-item>';
+  }
+
+  /* Keyed reconciliation. Each med-group row keys on data-drug. A rendered
+     signature is cached on dataset.sig so unchanged rows stay in place,
+     preserving accordion open state, focus, and nested component state. */
+  function rowSignature(group, mode) {
+    var parts = [
+      mode,
+      group.drug_description || "",
+      group.strength || "",
+      group.sig || "",
+      group.match_method || "",
+      group.is_match ? "1" : "0",
+      group.is_staged ? "1" : "0",
+      group.latest_fill_date || "",
+      String(group.unique_fill_count || (group.fills ? group.fills.length : 0)),
+      (group.rxnorm_codes || []).join(","),
+      (group.ndc_codes || []).join(",")
+    ];
+    if (group.fills) {
+      for (var i = 0; i < group.fills.length; i++) {
+        var f = group.fills[i];
+        parts.push(
+          f.drug_description || "",
+          f.last_fill_date || "",
+          f.written_date || "",
+          f.prescriber || "",
+          f.pharmacy_name || "",
+          f.source_description || "",
+          f.source_type || ""
+        );
+      }
+    }
+    return parts.join("|");
+  }
+
+  function htmlToNode(html) {
+    var t = document.createElement("template");
+    t.innerHTML = html;
+    return t.content.firstElementChild;
+  }
+
+  function reconcile(container, items, mode) {
+    var existing = {};
+    var children = container.children;
+    for (var i = 0; i < children.length; i++) {
+      var k = children[i].getAttribute("data-drug");
+      if (k) existing[k] = children[i];
+    }
+
+    var keep = {};
+    for (var j = 0; j < items.length; j++) {
+      var item = items[j];
+      var key = item.drug_description;
+      keep[key] = true;
+      var sig = rowSignature(item, mode);
+      var node = existing[key];
+      if (node) {
+        if (node.dataset.sig !== sig) {
+          var fresh = htmlToNode(makeGroupRow(item, mode));
+          fresh.dataset.sig = sig;
+          node.replaceWith(fresh);
+          node = fresh;
+        }
+      } else {
+        node = htmlToNode(makeGroupRow(item, mode));
+        node.dataset.sig = sig;
+      }
+      /* Walk only data-drug children when deciding the target slot, so the
+         persistent empty placeholder is ignored. */
+      var targetSlot = null;
+      var placed = 0;
+      for (var c = 0; c < container.children.length; c++) {
+        var ch = container.children[c];
+        if (!ch.hasAttribute("data-drug")) continue;
+        if (placed === j) { targetSlot = ch; break; }
+        placed++;
+      }
+      if (targetSlot !== node) {
+        container.insertBefore(node, targetSlot || null);
+      }
+    }
+
+    var leftovers = [];
+    for (var c2 = 0; c2 < container.children.length; c2++) {
+      var ch2 = container.children[c2];
+      var kk = ch2.getAttribute("data-drug");
+      if (kk && !keep[kk]) leftovers.push(ch2);
+    }
+    for (var r = 0; r < leftovers.length; r++) leftovers[r].remove();
+  }
+
+  function toggleEmpty(containerId, isEmpty) {
+    var el = document.querySelector("#" + containerId + " [data-empty]");
+    if (el) el.hidden = !isEmpty;
+  }
+
+  /* Mirror action_button.py:290 server ordering, sort by latest_fill_date_sort
+     desc so local dismiss and undo land rows in their canonical position. */
+  function sortGroups(arr) {
+    arr.sort(function (a, b) {
+      var aKey = String(a.latest_fill_date_sort || "");
+      var bKey = String(b.latest_fill_date_sort || "");
+      return bKey.localeCompare(aKey);
+    });
+  }
+
+  function render(groups) {
+    var unmatched = [];
+    var matched = [];
+    for (var i = 0; i < groups.length; i++) {
+      if (!groups[i].is_match) {
+        unmatched.push(groups[i]);
+      } else {
+        matched.push(groups[i]);
+      }
+    }
+    var total = groups.length + dismissedGroups.length;
+
+    reconcile(document.getElementById("unmatchedContainer"), unmatched, "unmatched");
+    reconcile(document.getElementById("matchedContainer"), matched, "matched");
+    reconcile(document.getElementById("dismissedContainer"), dismissedGroups, "dismissed");
+
+    toggleEmpty("unmatchedContainer", unmatched.length === 0);
+    toggleEmpty("matchedContainer", matched.length === 0);
+    toggleEmpty("dismissedContainer", dismissedGroups.length === 0);
+
+    document.getElementById("unmatchedCount").textContent = "(" + unmatched.length + ")";
+    document.getElementById("matchedCount").textContent = "(" + matched.length + ")";
+    document.getElementById("dismissedCount").textContent = "(" + dismissedGroups.length + ")";
+
+    var dismissedSuffix = dismissedGroups.length > 0 ? ", " + dismissedGroups.length + " dismissed" : "";
+    var summaryEl = document.getElementById("summaryText");
+    if (total === 0) {
+      summaryEl.innerHTML = "<span>No medication history on file</span>";
+    } else if (unmatched.length === 0) {
+      summaryEl.innerHTML = "<span>" + total + " medication" + (total !== 1 ? "s" : "") + ", all reviewed" + dismissedSuffix + "</span>";
+    } else {
+      summaryEl.innerHTML = '<span class="mismatch-count">' + unmatched.length + '</span><span> of ' + total + ' not in active list' + dismissedSuffix + '</span>';
+    }
+  }
+
+  /* event delegation for Add, Dismiss, and Undo buttons */
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action='add']");
+    if (btn) handleAdd(btn);
+  });
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action='dismiss']");
+    if (btn) handleDismiss(btn);
+  });
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-action='undo']");
+    if (btn) handleUndo(btn);
+  });
+
+  function handleAdd(btn) {
+    var desc = btn.dataset.desc;
+    var sig  = btn.dataset.sig || "";
+    btn.toggleAttribute("disabled", true);
+    btn.textContent = "Adding\u2026";
+
+    var ndcCodes = [];
+    var altDescs = [];
+    for (var gi = 0; gi < currentGroups.length; gi++) {
+      if (currentGroups[gi].drug_description === desc) {
+        ndcCodes = currentGroups[gi].ndc_codes || [];
+        if (currentGroups[gi].fills) {
+          for (var fi = 0; fi < currentGroups[gi].fills.length; fi++) {
+            var fd = currentGroups[gi].fills[fi].drug_description;
+            if (fd && fd !== desc && altDescs.indexOf(fd) === -1) altDescs.push(fd);
+          }
+        }
+        break;
+      }
+    }
+
+    fetch(BASE + "/add-medication", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      credentials: "same-origin",
+      body: JSON.stringify({patient_id: PATIENT_ID, drug_description: desc, sig: sig, rxnorm_rxcui: btn.dataset.rxnorm || "", ndc_codes: ndcCodes, alt_descriptions: altDescs, note_id: selectedNoteId})
+    })
+    .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+    .then(function (res) {
+      if (res.ok) {
+        for (var ai = 0; ai < currentGroups.length; ai++) {
+          if (currentGroups[ai].drug_description === desc) {
+            currentGroups[ai].is_match = true;
+            currentGroups[ai].match_method = "added";
+            break;
+          }
+        }
+        added.push(desc);
+        render(currentGroups);
+        showBanner("success", "\u201C" + desc + "\u201D added to open note.");
+      } else {
+        btn.removeAttribute("disabled");
+        btn.textContent = "+ Add";
+        showBanner("error", res.data.error || "Failed to add medication.");
+      }
+    })
+    .catch(function () {
+      btn.removeAttribute("disabled");
+      btn.textContent = "+ Add";
+      showBanner("error", "Request failed. Please try again.");
+    });
+  }
+
+  function handleDismiss(btn) {
+    var desc = btn.dataset.desc;
+    var ndc = btn.dataset.ndc || "";
+    var fillDate = btn.dataset.fillDate || "";
+    btn.toggleAttribute("disabled", true);
+    btn.textContent = "Dismissing\u2026";
+
+    fetch(BASE + "/dismiss", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      credentials: "same-origin",
+      body: JSON.stringify({patient_id: PATIENT_ID, drug_description: desc, ndc_code: ndc, last_fill_date: fillDate})
+    })
+    .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+    .then(function (res) {
+      if (res.ok) {
+        for (var i = 0; i < currentGroups.length; i++) {
+          if (currentGroups[i].drug_description === desc) {
+            dismissedGroups.push(currentGroups.splice(i, 1)[0]);
+            break;
+          }
+        }
+        sortGroups(dismissedGroups);
+        render(currentGroups);
+        showBanner("success", "\u201C" + desc + "\u201D dismissed.");
+      } else {
+        btn.removeAttribute("disabled");
+        btn.textContent = "Dismiss";
+        showBanner("error", res.data.error || "Failed to dismiss medication.");
+      }
+    })
+    .catch(function () {
+      btn.removeAttribute("disabled");
+      btn.textContent = "Dismiss";
+      showBanner("error", "Request failed. Please try again.");
+    });
+  }
+
+  function handleUndo(btn) {
+    var desc = btn.dataset.desc;
+    var ndc = btn.dataset.ndc || "";
+    var fillDate = btn.dataset.fillDate || "";
+    btn.toggleAttribute("disabled", true);
+    btn.textContent = "Restoring\u2026";
+
+    fetch(BASE + "/undo-dismiss", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      credentials: "same-origin",
+      body: JSON.stringify({patient_id: PATIENT_ID, drug_description: desc, ndc_code: ndc, last_fill_date: fillDate})
+    })
+    .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+    .then(function (res) {
+      if (res.ok) {
+        for (var i = 0; i < dismissedGroups.length; i++) {
+          if (dismissedGroups[i].drug_description === desc) {
+            currentGroups.push(dismissedGroups.splice(i, 1)[0]);
+            break;
+          }
+        }
+        sortGroups(currentGroups);
+        render(currentGroups);
+        showBanner("success", "\u201C" + desc + "\u201D restored.");
+      } else {
+        btn.removeAttribute("disabled");
+        btn.textContent = "Undo";
+        showBanner("error", res.data.error || "Failed to restore medication.");
+      }
+    })
+    .catch(function () {
+      btn.removeAttribute("disabled");
+      btn.textContent = "Undo";
+      showBanner("error", "Request failed. Please try again.");
+    });
+  }
+
+  /* request history button */
+  var reqBtn = document.getElementById("requestBtn");
+  if (reqBtn) {
+    reqBtn.addEventListener("click", function () {
+      reqBtn.toggleAttribute("disabled", true);
+      reqBtn.textContent = "Requesting\u2026";
+      fetch(BASE + "/request", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        credentials: "same-origin",
+        body: JSON.stringify({patient_id: PATIENT_ID})
+      })
+      .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, status: r.status, data: d}; }); })
+      .then(function (res) {
+        reqBtn.removeAttribute("disabled");
+        reqBtn.textContent = "Request New History";
+        if (res.ok) {
+          showBanner("success", "Request sent. Check back shortly for updated results.");
+        } else if (res.status === 403 && res.data && res.data.error === "no_care_event") {
+          showBanner("warning", res.data.message || "Request refused. No upcoming appointment.");
+        } else {
+          showBanner("error", res.data.error || "Request failed. Please try again.");
+        }
+      })
+      .catch(function () {
+        reqBtn.removeAttribute("disabled");
+        reqBtn.textContent = "Request New History";
+        showBanner("error", "Request failed. Check your connection and try again.");
+      });
+    });
+  }
+
+  /* render active meds table */
+  function renderActiveMeds() {
+    var meds = parseSpan("rx-active-meds");
+    if (!meds || !meds.length) {
+      document.getElementById("activeMedsContainer").innerHTML = '<div class="empty">No active medications.</div>';
+      return;
+    }
+    var rows = "";
+    for (var i = 0; i < meds.length; i++) {
+      var m = meds[i];
+      var rxcodes = (m.rxnorm_codes || []).join(", ");
+      var ndcodes = (m.ndc_codes || []).join(", ");
+      rows += "<canvas-table-row>"
+        + "<canvas-table-cell>" + esc(m.description) + "</canvas-table-cell>"
+        + "<canvas-table-cell>" + esc(rxcodes) + "</canvas-table-cell>"
+        + "<canvas-table-cell>" + esc(ndcodes) + "</canvas-table-cell>"
+        + "</canvas-table-row>";
+    }
+    document.getElementById("activeMedsContainer").innerHTML =
+      '<canvas-table compact aria-label="Active medications">'
+      + "<canvas-table-head><canvas-table-row>"
+      + "<canvas-table-cell>Description</canvas-table-cell>"
+      + "<canvas-table-cell>RxNorm</canvas-table-cell>"
+      + "<canvas-table-cell>NDC</canvas-table-cell>"
+      + "</canvas-table-row></canvas-table-head>"
+      + "<canvas-table-body>" + rows + "</canvas-table-body></canvas-table>";
+  }
+
+  /* auto-reload persistence */
+  var LS_KEY = "rx_history:auto_reload";
+  function readAutoReload() {
+    try { return localStorage.getItem(LS_KEY) !== "0"; } catch (e) { return true; }
+  }
+  function writeAutoReload(on) {
+    try { localStorage.setItem(LS_KEY, on ? "1" : "0"); } catch (e) {}
+  }
+
+  /* refresh mechanics */
+  var REFRESHING = false;
+
+  function rebuildTargetStrip(openNotes) {
+    var strip = document.querySelector(".target-strip");
+    if (!strip) return;
+
+    /* Skip the rebuild when the notes list has not changed. Preserves
+       the existing canvas-combobox element and any open dropdown state
+       through a refresh triggered by window focus. */
+    var sig = openNotes
+      .map(function (n) { return n.id + "|" + n.datetime_iso + "|" + n.type_name; })
+      .join(",");
+    if (sig === lastNotesSig) return;
+    lastNotesSig = sig;
+
+    /* Reconcile the selected note against the fresh list. If the
+       previously selected note is no longer open (locked, signed,
+       or deleted while the panel was open), fall back to the first
+       remaining open note, or clear the selection entirely. */
+    if (openNotes.length === 0) {
+      selectedNoteId = "";
+    } else {
+      var stillOpen = false;
+      for (var si = 0; si < openNotes.length; si++) {
+        if (String(openNotes[si].id) === String(selectedNoteId)) {
+          stillOpen = true;
+          break;
+        }
+      }
+      if (!stillOpen) selectedNoteId = String(openNotes[0].id);
+    }
+
+    var html = "";
+    if (openNotes.length >= 2) {
+      html += '<span class="target-strip-label">Target Note</span>';
+      html += '<canvas-combobox id="noteSelect" placeholder="Select target note">';
+      for (var i = 0; i < openNotes.length; i++) {
+        var n = openNotes[i];
+        var label = buildNoteLabel(n.datetime_iso, n.type_name);
+        var selAttr = (String(n.id) === String(selectedNoteId)) ? " selected" : "";
+        html += '<canvas-option value="' + esc(String(n.id)) + '"' + selAttr + '>'
+          + esc(label) + '</canvas-option>';
+      }
+      html += '</canvas-combobox>';
+    } else if (openNotes.length === 1) {
+      var only = openNotes[0];
+      html += '<span class="target-strip-label">Adding to</span>';
+      html += '<div class="target-strip-static">'
+        + esc(buildNoteLabel(only.datetime_iso, only.type_name))
+        + '</div>';
+    } else {
+      html += '<span class="target-strip-label">No Open Note</span>';
+      html += '<div class="target-strip-static empty">No open notes available for this patient.</div>';
+    }
+    strip.innerHTML = html;
+
+    /* Re-wire the change handler on the new combobox, if present. */
+    var newCombobox = document.getElementById("noteSelect");
+    if (newCombobox) {
+      newCombobox.addEventListener("change", function () {
+        selectedNoteId = newCombobox.value;
+      });
+    }
+  }
+
+  /* Close the combobox dropdown when the iframe loses focus, so the user
+     never sees stale options on their next interaction. The next focus
+     triggers refresh which rebuilds the strip if notes changed. */
+  window.addEventListener("blur", function () {
+    var combo = document.getElementById("noteSelect");
+    if (!combo || !combo.shadowRoot) return;
+    var isOpen = combo.shadowRoot.querySelector(".input.open");
+    if (isOpen && typeof combo._close === "function") combo._close();
+  });
+
+  function applyState(data) {
+    currentGroups = data.grouped_items || [];
+    dismissedGroups = data.dismissed_items || [];
+    ACTIVE_RXNORM = new Set(data.active_rxnorm || []);
+    ACTIVE_NDC = new Set(data.active_ndc || []);
+    ACTIVE_DESCS = data.active_descriptions || [];
+    added = [];
+    rebuildTargetStrip(data.open_notes || []);
+    var lastPulledEl = document.getElementById("lastPulled");
+    if (lastPulledEl && data.last_pulled_iso) {
+      var lpStr = formatDateTime(data.last_pulled_iso);
+      lastPulledEl.setAttribute("data-iso", data.last_pulled_iso);
+      lastPulledEl.textContent = lpStr ? "Last updated: " + lpStr : "";
+    }
+  }
+
+  function refresh() {
+    if (REFRESHING) return;
+    REFRESHING = true;
+    fetch(BASE + "/state", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      credentials: "same-origin",
+      body: JSON.stringify({patient_id: PATIENT_ID})
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data) {
+          applyState(data);
+          render(currentGroups);
+        }
+      })
+      .catch(function () {})
+      .then(function () { REFRESHING = false; });
+  }
+
+  /* reload controls wiring */
+  var reloadBtn = document.getElementById("reloadBtn");
+  var autoCheckbox = document.getElementById("autoReloadCheckbox");
+
+  function onVisibility() {
+    if (document.visibilityState === "visible") refresh();
+  }
+
+  function applyAutoReload(on) {
+    if (on) {
+      window.addEventListener("focus", refresh);
+      document.addEventListener("visibilitychange", onVisibility);
+    } else {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisibility);
+    }
+  }
+
+  var autoOn = readAutoReload();
+  if (autoCheckbox) {
+    if (autoOn) {
+      autoCheckbox.setAttribute("checked", "");
+      autoCheckbox.checked = true;
+    } else {
+      autoCheckbox.removeAttribute("checked");
+      autoCheckbox.checked = false;
+    }
+    autoCheckbox.addEventListener("change", function () {
+      var on = autoCheckbox.checked;
+      writeAutoReload(on);
+      applyAutoReload(on);
+    });
+  }
+  applyAutoReload(autoOn);
+
+  if (reloadBtn) {
+    reloadBtn.addEventListener("click", refresh);
+  }
+
+  /* init note selector. options are server side rendered in the template */
+  var openNotes = parseSpan("rx-open-notes");
+  if (openNotes.length >= 1) {
+    selectedNoteId = openNotes[0].id;
+  }
+  var noteSelect = document.getElementById("noteSelect");
+  if (noteSelect) {
+    noteSelect.addEventListener("change", function () {
+      selectedNoteId = noteSelect.value;
+    });
+  }
+
+  /* init */
+  currentGroups = parseSpan("rx-groups");
+  dismissedGroups = parseSpan("rx-dismissed");
+  render(currentGroups);
+  renderActiveMeds();
+
+})();
+</script>
+
+</body>
+</html>
