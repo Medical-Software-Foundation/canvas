@@ -221,7 +221,7 @@ def _stale_full_effects(
         for start_time in _visits_qs(provider_id, lo, hi).values_list("start_time", flat=True):
             for eid, s, e in spans:
                 if s <= start_time < e:
-                    counts[eid] += 1
+                    counts[eid] = counts[eid] + 1
     effects: list[Effect] = []
     kept: set[tuple[datetime, datetime]] = set()
     for event_id, start, end in events:
