@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.192.0",
+    "plugin_version": "0.3.0",
+    "name": "labcorp_draw_guidance",
+    "description": "Surfaces Labcorp tube/draw guidance (tube type, count, draw volume) for in-progress Labcorp lab orders via an always-visible note header button that opens the breakdown in the right chart pane.",
+    "components": {
+        "handlers": [
+            {
+                "class": "labcorp_draw_guidance.handlers.action_buttons:LabOrderDrawGuidanceButton",
+                "description": "Always-visible note header action button (\"AccuDraw\"); opens the consolidated tube breakdown for the note's lab order(s) in the right chart pane."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
