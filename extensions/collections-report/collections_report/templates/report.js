@@ -32,22 +32,43 @@
     const summaryCheck = document.getElementById("summaryCheck");
     const summaryOther = document.getElementById("summaryOther");
 
+    // Balances view
+    const tabCollections = document.getElementById("tabCollections");
+    const tabBalances = document.getElementById("tabBalances");
+    const collectionsView = document.getElementById("collectionsView");
+    const balancesView = document.getElementById("balancesView");
+    const balancesBody = document.getElementById("balancesBody");
+    const balancesTable = document.getElementById("balancesTable");
+    const balancesEmpty = document.getElementById("balancesEmpty");
+    const balancesLoading = document.getElementById("balancesLoading");
+    const balancesCount = document.getElementById("balancesCount");
+    const balancesTotal = document.getElementById("balancesTotal");
+    const balancesPatients = document.getElementById("balancesPatients");
+
     // Current data for CSV export
     let currentData = [];
+    let currentBalances = [];
+    let activeView = "collections";
+    let balancesLoaded = false;
 
     /**
-     * Format a date string as YYYY-MM-DD for the API.
+     * Format a Date as YYYY-MM-DD in LOCAL time.
+     *
+     * Note: we deliberately avoid toISOString() here — it converts to UTC,
+     * which can shift the calendar date forward or back a day depending on
+     * the browser's timezone, producing (for example) a "from" date in the
+     * future. Reading the local year/month/day keeps it consistent with
+     * how "today" is computed below.
      */
     function toISODate(d) {
-        return d.toISOString().split("T")[0];
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
 
     /**
      * Get today's date in local time as YYYY-MM-DD.
      */
     function todayStr() {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        return toISODate(new Date());
     }
 
     /**
@@ -162,6 +183,79 @@
     }
 
     /**
+     * Fetch patients with outstanding balances (current, not date filtered).
+     */
+    async function fetchBalances() {
+        balancesBody.innerHTML = "";
+        balancesEmpty.style.display = "none";
+        balancesTable.style.display = "none";
+        balancesLoading.style.display = "flex";
+
+        try {
+            const resp = await fetch(`${API_BASE}/balances`, { credentials: "same-origin" });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            renderBalances(await resp.json());
+            balancesLoaded = true;
+        } catch (err) {
+            console.error("Failed to fetch balances:", err);
+            balancesLoading.style.display = "none";
+            balancesEmpty.querySelector("p").textContent = "Failed to load balances. Please try again.";
+            balancesEmpty.style.display = "flex";
+        }
+    }
+
+    /**
+     * Render the balances table and summary cards.
+     */
+    function renderBalances(data) {
+        balancesLoading.style.display = "none";
+        currentBalances = data.balances || [];
+
+        const summary = data.summary || {};
+        balancesTotal.textContent = summary.total_display || "$0.00";
+        balancesPatients.textContent = String(summary.patients || 0);
+        const count = data.count || 0;
+        balancesCount.textContent = `${count} patient${count !== 1 ? "s" : ""}`;
+
+        if (currentBalances.length === 0) {
+            balancesEmpty.querySelector("p").textContent = "No patients currently have a balance.";
+            balancesEmpty.style.display = "flex";
+            balancesTable.style.display = "none";
+            return;
+        }
+
+        balancesTable.style.display = "table";
+        balancesEmpty.style.display = "none";
+        balancesBody.innerHTML = "";
+        for (const row of currentBalances) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${escapeHtml(row.patient_name)}</td>
+                <td class="col-amount">${escapeHtml(row.balance_display)}</td>
+                <td class="col-amount">${escapeHtml(String(row.open_claims))}</td>
+                <td>${escapeHtml(row.oldest_dos_display || "—")}</td>
+            `;
+            balancesBody.appendChild(tr);
+        }
+    }
+
+    /**
+     * Switch between the Collections and Balances Owed views.
+     */
+    function showView(view) {
+        activeView = view;
+        const isBalances = view === "balances";
+        collectionsView.style.display = isBalances ? "none" : "";
+        balancesView.style.display = isBalances ? "" : "none";
+        tabCollections.classList.toggle("report-tab-active", !isBalances);
+        tabBalances.classList.toggle("report-tab-active", isBalances);
+        tabCollections.setAttribute("aria-selected", String(!isBalances));
+        tabBalances.setAttribute("aria-selected", String(isBalances));
+        dateRangeLabel.style.visibility = isBalances ? "hidden" : "";
+        if (isBalances && !balancesLoaded) fetchBalances();
+    }
+
+    /**
      * Escape HTML entities to prevent XSS.
      */
     function escapeHtml(str) {
@@ -181,44 +275,70 @@
     }
 
     /**
-     * Download current data as CSV.
+     * Download the current view as CSV.
+     *
+     * The report runs inside an embedded frame, where building a file in
+     * the browser and triggering a download is blocked. Instead we ask the
+     * server for the CSV: it responds with a Content-Disposition attachment
+     * header, so the browser downloads it natively without leaving the page.
      */
+    let toastTimer = null;
+
+    /**
+     * Show a brief message that fades away on its own.
+     */
+    function showToast(msg) {
+        let toast = document.getElementById("toast");
+        if (!toast) {
+            toast = document.createElement("div");
+            toast.id = "toast";
+            toast.className = "toast";
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.classList.add("toast-visible");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+            toast.classList.remove("toast-visible");
+        }, 2500);
+    }
+
     function downloadCsv() {
-        if (!currentData.length) return;
-
-        const headers = ["Date/Time", "Patient", "Amount", "Method", "Description", "Check Number", "Deposit Date"];
-        const rows = currentData.map(item => [
-            item.date_display,
-            item.patient_name,
-            item.amount,
-            item.method_display,
-            item.description || "",
-            item.check_number || "",
-            item.deposit_date || "",
-        ]);
-
-        let csv = headers.join(",") + "\n";
-        for (const row of rows) {
-            csv += row.map(cell => {
-                const val = String(cell).replace(/"/g, '""');
-                return `"${val}"`;
-            }).join(",") + "\n";
+        if (activeView === "balances") {
+            if (!currentBalances.length) {
+                showToast("No balances to export.");
+                return;
+            }
+            openDownload(`${API_BASE}/balances.csv`);
+            return;
         }
 
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
+        if (!currentData.length) {
+            showToast("No data to export for the selected dates.");
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (startDateInput.value) params.set("start_date", startDateInput.value);
+        if (endDateInput.value) params.set("end_date", endDateInput.value);
+        if (methodFilter.value) params.set("method", methodFilter.value);
+
+        openDownload(`${API_BASE}/report.csv?${params.toString()}`);
+    }
+
+    /**
+     * Open a server CSV URL in a new browsing context. This reliably triggers
+     * the server's file download even from inside the embedded report frame,
+     * where a same-frame navigation can be blocked.
+     */
+    function openDownload(url) {
         const link = document.createElement("a");
         link.href = url;
-
-        const dateLabel = startDateInput.value === endDateInput.value
-            ? startDateInput.value
-            : `${startDateInput.value}_to_${endDateInput.value}`;
-        link.download = `collections_${dateLabel}.csv`;
-
+        link.target = "_blank";
+        link.rel = "noopener";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
     }
 
     /**
@@ -266,6 +386,8 @@
     weekBtn.addEventListener("click", setThisWeek);
     monthBtn.addEventListener("click", setThisMonth);
     downloadCsvBtn.addEventListener("click", downloadCsv);
+    tabCollections.addEventListener("click", function () { showView("collections"); });
+    tabBalances.addEventListener("click", function () { showView("balances"); });
 
     // Initial load
     initDates();
