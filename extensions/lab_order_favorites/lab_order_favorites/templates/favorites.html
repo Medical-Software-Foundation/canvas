@@ -149,7 +149,7 @@ function updateInsertBar() {
   document.getElementById("no-note-msg").style.display = hasNotes ? "none" : "block";
   const btn = document.getElementById("insert-btn");
   if (hasNotes) {
-    btn.textContent = n === 1 ? "Insert lab order" : `Insert ${n} lab orders`;
+    btn.textContent = n === 1 ? "Insert lab order" : `Insert ${n} favorites`;
     btn.disabled = !(n && document.getElementById("note-select").value);
   } else {
     // No open encounter note - the action creates a chart review and inserts.
@@ -166,7 +166,10 @@ async function loadNotes() {
   sel.innerHTML = "";
   openNotes.forEach(n => {
     const o = document.createElement("option");
-    o.value = n.id; o.textContent = n.title + (n.modified ? " (" + n.modified.slice(0, 10) + ")" : "");
+    // Label with the date of service so a booked future appointment reads as
+    // that visit's date rather than the date it was last edited.
+    const when = n.datetime_of_service || n.modified;
+    o.value = n.id; o.textContent = n.title + (when ? " (" + when.slice(0, 10) + ")" : "");
     sel.appendChild(o);
   });
   updateInsertBar();
@@ -227,7 +230,8 @@ function renderResults(d) {
     ok.className = "notice ok";
     // textContent (not innerHTML) - names are inert here.
     const where = d.chart_review_created ? "a new chart review" : "the selected note";
-    ok.textContent = `${d.inserted.length} lab order(s) staged in ${where}: ` +
+    const orders = d.order_count || d.inserted.length;
+    ok.textContent = `${d.inserted.length} favorite(s) staged as ${orders} lab order(s) in ${where}: ` +
       d.inserted.map(i => i.name).join(", ");
     box.appendChild(ok);
   } else if (d.chart_review_created === false && (d.skipped || []).length) {
