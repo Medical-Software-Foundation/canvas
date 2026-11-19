@@ -664,6 +664,19 @@ def build_block_event_effects(block: AdminBlock, lookups: dict[Any, Any] | None 
     return effects
 
 
+def build_blocks_event_effects(blocks: list[AdminBlock]) -> list[Effect]:
+    """build_block_event_effects for many blocks, sharing one lookup cache.
+
+    The cache holds each provider's timezone, so build it after any timezone
+    change, never from a cache filled before one.
+    """
+    memo: dict[Any, Any] = {}
+    effects: list[Effect] = []
+    for blk in blocks:
+        effects.extend(build_block_event_effects(blk, memo))
+    return effects
+
+
 def _block_span(block: AdminBlock, tz: Any) -> tuple[datetime, datetime]:
     """A block's start and end in UTC, reading naive times in the provider's timezone."""
     return (

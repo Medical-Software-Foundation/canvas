@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -130,6 +130,7 @@ def _appt(labels=(), patient_id=7, status="confirmed"):
     appt.status = status
     appt.start_time = NINE_AM
     appt.provider.id = PROVIDER_ID
+    appt.entered_in_error_id = None
     appt.labels.values_list.return_value = list(labels)
     return appt
 
@@ -321,3 +322,162 @@ class TestCountedOnce:
         with patch(f"{MODULE}._full_events", return_value=existing), patch(f"{MODULE}.visits_in", return_value=2):
             (deleted,) = round_limits.full_block_effects(PROVIDER_ID, _round(), ROUND_START, ROUND_END)
         assert json.loads(deleted.payload)["data"]["event_id"] == "full-2"
+
+
+class TestRefreshProviders:
+    def test_only_providers_with_a_round_are_recounted(self):
+        plain = ProviderAvailabilityRule(provider_id="other")
+        with patch(f"{MODULE}.refresh_provider", side_effect=lambda pid: [f"fx-{pid}"]) as refresh:
+            effects = round_limits.refresh_providers({PROVIDER_ID, "other", "absent"}, [_round(), plain])
+        assert effects == [f"fx-{PROVIDER_ID}"]
+        assert [c.args for c in refresh.mock_calls] == [(PROVIDER_ID,)]
+
+    def test_reads_saved_rules_when_none_are_given(self):
+        with patch(f"{MODULE}.get_all_rules", return_value=[_round()]) as rules, \
+             patch(f"{MODULE}.refresh_provider", return_value=["fx"]):
+            assert round_limits.refresh_providers([PROVIDER_ID]) == ["fx"]
+        assert rules.call_count == 1
+
+    def test_no_providers_reads_nothing(self):
+        with patch(f"{MODULE}.get_all_rules") as rules:
+            assert round_limits.refresh_providers([]) == []
+        assert rules.mock_calls == []
+
+
+class _Starts:
+    def __init__(self, starts):
+        self.starts = starts
+
+    def values_list(self, *fields, flat=False):
+        return self.starts
+
+
+class TestStaleFull:
+    """Existing "Round full" blocks whose occurrence has room again go; one visit query per provider."""
+
+    def _run(self, starts, events=None, counted=None, drawn=True):
+        events = events if events is not None else [("full-1", ROUND_START, ROUND_END)]
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[_round()]), \
+             patch(f"{MODULE}.rounds_drawn", return_value=drawn), \
+             patch(f"{MODULE}.provider_tz", return_value=PACIFIC), \
+             patch(f"{MODULE}._visits_qs", return_value=_Starts(starts)) as visits:
+            effects = round_limits._stale_full_effects(PROVIDER_ID, events, counted)
+        return [json.loads(e.payload)["data"]["event_id"] for e in effects], visits
+
+    def test_a_round_still_at_its_limit_keeps_its_block(self):
+        deleted, visits = self._run([NINE_AM, NINE_AM + dt.timedelta(minutes=30)])
+        assert deleted == []
+        assert visits.mock_calls == [call(PROVIDER_ID, ROUND_START, ROUND_END)]
+
+    def test_a_round_with_room_loses_its_block(self):
+        deleted, _ = self._run([NINE_AM])
+        assert deleted == ["full-1"]
+
+    def test_many_blocks_are_counted_from_one_query(self):
+        week = dt.timedelta(days=7)
+        events = [("full-1", ROUND_START, ROUND_END), ("full-2", ROUND_START + week, ROUND_END + week)]
+        deleted, visits = self._run([NINE_AM, NINE_AM + dt.timedelta(minutes=30), NINE_AM + week], events=events)
+        # Nov 3 has both its places taken; Nov 10 has one of two.
+        assert deleted == ["full-2"]
+        assert visits.mock_calls == [call(PROVIDER_ID, ROUND_START, ROUND_END + week)]
+
+    def test_a_block_no_round_covers_is_removed_without_counting(self):
+        day = dt.timedelta(days=1)
+        deleted, visits = self._run([NINE_AM], events=[("full-9", ROUND_START + day, ROUND_END + day)])
+        assert deleted == ["full-9"]
+        assert visits.mock_calls == []
+
+    def test_rounds_switched_off_and_removed_clear_every_block(self):
+        deleted, _ = self._run([NINE_AM] * 5, drawn=False)
+        assert deleted == ["full-1"]
+
+    def test_occurrences_just_recounted_are_left_alone(self):
+        deleted, visits = self._run([], counted={(PROVIDER_ID, ROUND_START, ROUND_END)})
+        assert deleted == []
+        assert visits.mock_calls == []
+
+
+class TestStaleFullDuplicates:
+    def test_a_full_round_keeps_one_block(self):
+        events = [("full-1", ROUND_START, ROUND_END), ("full-2", ROUND_START, ROUND_END)]
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[_round()]), \
+             patch(f"{MODULE}.rounds_drawn", return_value=True), \
+             patch(f"{MODULE}.provider_tz", return_value=PACIFIC), \
+             patch(f"{MODULE}._visits_qs", return_value=_Starts([NINE_AM, NINE_AM])):
+            effects = round_limits._stale_full_effects(PROVIDER_ID, events)
+        assert [json.loads(e.payload)["data"]["event_id"] for e in effects] == ["full-2"]
+
+
+def test_recheck_full_effects_reads_one_providers_blocks():
+    evt = SimpleNamespace(id="full-1", starts_at=ROUND_START, ends_at=ROUND_END)
+    with patch(f"{MODULE}._full_events", return_value=[evt]) as full, \
+         patch(f"{MODULE}._stale_full_effects", return_value=["fx"]) as stale:
+        assert round_limits.recheck_full_effects(PROVIDER_ID, {"c"}) == ["fx"]
+    assert full.mock_calls == [call(PROVIDER_ID)]
+    assert stale.mock_calls == [call(PROVIDER_ID, [("full-1", ROUND_START, ROUND_END)], {"c"})]
+
+
+class TestVisitNotes:
+    def test_note_for_a_provider_with_a_round(self):
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[_round()]):
+            note = round_limits.visit_note(_appt())
+        assert note == {"provider_id": PROVIDER_ID, "start": NINE_AM.isoformat(), "countable": True}
+
+    def test_entered_in_error_or_cancelled_visits_do_not_count(self):
+        eie = _appt()
+        eie.entered_in_error_id = 4
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[_round()]):
+            assert round_limits.visit_note(eie)["countable"] is False
+            assert round_limits.visit_note(_appt(status="cancelled"))["countable"] is False
+
+    def test_no_note_without_a_round(self):
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[ProviderAvailabilityRule(provider_id=PROVIDER_ID)]):
+            assert round_limits.visit_note(_appt()) is None
+        appt = _appt()
+        appt.provider = None
+        assert round_limits.visit_note(appt) is None
+
+    def test_remember_saves_the_note_under_the_visit(self):
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[_round()]), \
+             patch(f"{MODULE}.set_round_visit") as save:
+            round_limits.remember_visit(_appt())
+        assert save.mock_calls == [call(APPT_ID, {"provider_id": PROVIDER_ID, "start": NINE_AM.isoformat(), "countable": True})]
+
+    def test_nothing_saved_without_a_round(self):
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[]), patch(f"{MODULE}.set_round_visit") as save:
+            round_limits.remember_visit(_appt())
+        assert save.mock_calls == []
+
+
+class TestRecountPrevious:
+    def _note(self, **kw):
+        return {"provider_id": PROVIDER_ID, "start": NINE_AM.isoformat(), "countable": True, **kw}
+
+    def test_recounts_the_old_occurrence_once(self):
+        counted: set = set()
+        with patch(f"{MODULE}.round_at", return_value=(_round(), ROUND_START, ROUND_END)) as at, \
+             patch(f"{MODULE}.full_block_effects", return_value=["unblock"]) as block:
+            assert round_limits.recount_previous(self._note(), counted) == ["unblock"]
+            assert round_limits.recount_previous(self._note(), counted) == []
+        assert at.mock_calls[0] == call(PROVIDER_ID, NINE_AM)
+        assert block.call_count == 1
+
+    @pytest.mark.parametrize("note", [{"countable": False}, {"start": "not a time"}])
+    def test_nothing_to_recount(self, note):
+        with patch(f"{MODULE}.round_at") as at:
+            assert round_limits.recount_previous(self._note(**note), set()) == []
+        assert at.mock_calls == []
+
+    def test_outside_any_round(self):
+        with patch(f"{MODULE}.round_at", return_value=None):
+            assert round_limits.recount_previous(self._note(), set()) == []
+
+
+def test_an_entered_in_error_visit_is_recounted_but_not_labeled(rounds_on):
+    appt = _appt()
+    appt.entered_in_error_id = 12
+    with patch(f"{MODULE}.round_at", return_value=(_round(), ROUND_START, ROUND_END)), \
+         patch(f"{MODULE}.label_effects", return_value=["label"]) as label, \
+         patch(f"{MODULE}.full_block_effects", return_value=["unblock"]):
+        assert round_limits.visit_effects(appt) == ["unblock"]
+    assert label.mock_calls == []

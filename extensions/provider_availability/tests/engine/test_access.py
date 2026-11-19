@@ -5,7 +5,13 @@ from unittest.mock import call, patch
 import pytest
 
 from provider_availability.engine import settings
-from provider_availability.engine.access import Access, admin_ids, effective_default_access, team_member_ids
+from provider_availability.engine.access import (
+    CANVAS_SUPPORT_KEY,
+    Access,
+    active_staff_ids,
+    admin_ids,
+    effective_default_access,
+)
 
 ADMIN = "a" * 32
 SCHED = "b" * 32
@@ -15,20 +21,32 @@ OTHER = "e" * 32
 TEAM = "12345678-1234-1234-1234-123456789abc"
 
 
-class _Members(list):
-    def values_list(self, *fields, flat=False):
-        return self
+ROLE = "OFFICE_MGR"
+
+
+class StaffDirectory:
+    """Stands in for the active-staff query: who holds which role, and who is active."""
+
+    def __init__(self, roles=None, inactive=()):
+        self.roles = {r: set(m) for r, m in (roles or {}).items()}
+        self.inactive = set(inactive)
+        self.calls = []
+
+    def __call__(self, codes, people):
+        self.calls.append((list(codes), list(people)))
+        found = set(people) | {m for c in codes for m in self.roles.get(c, ())}
+        return sorted(found - self.inactive)
 
 
 @pytest.fixture
-def team_members():
-    with patch("provider_availability.engine.access.Team") as team:
-        team.objects.filter.return_value = _Members([ADMIN])
-        yield team
+def directory():
+    staff = StaffDirectory({ROLE: {ADMIN}})
+    with patch("provider_availability.engine.access._query_active_staff", staff):
+        yield staff
 
 
 class TestAdmins:
-    def test_nobody_configured_means_everyone_is_admin(self, settings_cache):
+    def test_before_setup_everyone_is_admin(self, settings_cache):
         assert admin_ids({}) == set()
         assert Access.for_staff(OTHER, {}).is_admin is True
 
@@ -37,27 +55,69 @@ class TestAdmins:
         assert Access.for_staff(ADMIN, secrets).is_admin is True
         assert Access.for_staff(OTHER, secrets).is_admin is False
 
-    def test_team_and_secret_both_count(self, settings_cache, team_members):
-        settings.set_admins([TEAM], [])
+    def test_role_and_secret_both_count(self, settings_cache, directory):
+        settings.set_admins([ROLE.lower()], [])
         secrets = {"allowed-staff-keys": OTHER}
         assert Access.for_staff(ADMIN, secrets).is_admin is True
         assert Access.for_staff(OTHER, secrets).is_admin is True
         assert Access.for_staff(SCHED, secrets).is_admin is False
-        assert team_members.objects.filter.mock_calls == [call(id__in=[TEAM])] * 3
+        # Codes are saved upper-cased, as engine.roles compares them.
+        assert directory.calls == [([ROLE], [])] * 3
 
-    def test_people_and_teams_add_up(self, settings_cache, team_members):
-        settings.set_admins([TEAM], [SCHED])
+    def test_people_and_roles_add_up(self, settings_cache, directory):
+        settings.set_admins([ROLE], [SCHED])
         assert admin_ids({}) == {ADMIN, SCHED}
+        assert directory.calls == [([ROLE], [SCHED])]
 
-    def test_empty_team_adds_nobody(self, settings_cache, team_members):
-        team_members.objects.filter.return_value = _Members([])
-        settings.set_admins([TEAM], [])
-        assert admin_ids({"allowed-staff-keys": OTHER}) == {OTHER}
+    def test_after_setup_no_active_admin_means_only_canvas_support(self, settings_cache, directory):
+        directory.inactive = {ADMIN, SCHED}
+        settings.set_admins([ROLE], [SCHED])
+        assert admin_ids({}) == set()
+        assert Access.for_staff(OTHER, {}).is_admin is False
+        assert Access.for_staff(ADMIN, {}).is_admin is False
+        assert Access.for_staff(CANVAS_SUPPORT_KEY, {}).is_admin is True
 
-    def test_malformed_team_id_is_never_queried(self, settings_cache, team_members):
-        assert team_member_ids("not-a-uuid") == set()
-        assert team_member_ids(["", "nope"]) == set()
-        assert team_members.objects.filter.mock_calls == []
+    def test_saving_no_admins_still_counts_as_set_up(self, settings_cache, directory):
+        settings.set_admins([], [])
+        assert settings.get_access_config()["admins_saved"] is True
+        assert Access.for_staff(OTHER, {}).is_admin is False
+
+    def test_canvas_support_is_always_an_admin(self, settings_cache, directory):
+        settings.set_admins([ROLE], [])
+        access = Access.for_staff(CANVAS_SUPPORT_KEY, {"allowed-staff-keys": ADMIN})
+        assert access.is_admin is True
+        assert access.can_edit(PROV1) is True
+
+    def test_malformed_ids_and_blank_codes_are_never_queried(self, settings_cache, directory):
+        assert active_staff_ids(["", "  "], ["nope"]) == set()
+        assert directory.calls == []
+
+
+def test_active_staff_query_matches_roles_or_people_and_only_active():
+    from django.db.models import Q
+
+    from provider_availability.engine import access
+
+    with patch.object(access, "Staff") as staff:
+        staff.objects.filter.return_value.values_list.return_value.distinct.return_value = [ADMIN]
+        assert access.active_staff_ids(["office_mgr"], [SCHED]) == {ADMIN}
+    ((args, kwargs),) = [c[1:] for c in staff.objects.filter.mock_calls[:1]]
+    assert args == ((Q() | Q(roles__internal_code__iexact="OFFICE_MGR")) | Q(id__in=[SCHED]),)
+    assert kwargs == {"active": True}
+
+
+def test_roles_with_active_staff():
+    from django.db.models import Q
+
+    from provider_availability.engine import access
+
+    with patch.object(access, "StaffRole") as role:
+        role.objects.filter.return_value.values_list.return_value.distinct.return_value = ["office_mgr"]
+        assert access.roles_with_active_staff(["OFFICE_MGR", "NURSE"]) == {"OFFICE_MGR"}
+        assert access.roles_with_active_staff([]) == set()
+    assert role.objects.filter.mock_calls[0] == call(
+        Q() | Q(internal_code__iexact="NURSE") | Q(internal_code__iexact="OFFICE_MGR"), staff__active=True
+    )
 
 
 class TestDefaultAccess:
@@ -70,7 +130,8 @@ class TestDefaultAccess:
         access = Access.for_staff(OTHER, {"allowed-staff-keys": ADMIN})
         assert access.can_edit(PROV1) is False
         assert access.can_view(PROV1) is False
-        assert access.can_edit(OTHER) is True
+        assert access.can_edit(OTHER) is False
+        assert access.can_view(OTHER) is True
 
     def test_a_saved_level_wins(self, settings_cache):
         settings.set_default_access("view")
@@ -103,9 +164,25 @@ class TestGroups:
         assert access.can_view(PROV1) is True
         assert access.can_view(PROV2) is False
 
-    def test_providers_always_edit_their_own(self, grouped):
+    @pytest.mark.parametrize("level,edit", [("full", True), ("view", True), ("none", False)])
+    def test_providers_edit_their_own_unless_default_is_none(self, grouped, level, edit):
+        settings.set_default_access(level)
+        access = Access.for_staff(PROV2, grouped)
+        assert access.can_edit(PROV2) is edit
+        assert access.can_view(PROV2) is True
+        assert access.can_view_others() is (level != "none")
+
+    def test_scheduler_outside_their_own_group_follows_the_default_for_themselves(self, grouped):
         settings.set_default_access("none")
-        assert Access.for_staff(PROV2, grouped).can_edit(PROV2) is True
+        access = Access.for_staff(SCHED, grouped)
+        assert access.can_edit(SCHED) is False
+        assert access.can_view(SCHED) is True
+        settings.save_group("Self", [SCHED], [SCHED])
+        assert Access.for_staff(SCHED, grouped).can_edit(SCHED) is True
+
+    def test_no_secret_and_no_saved_admins_keeps_self_edit(self, settings_cache):
+        """Before setup everyone is an admin, so nothing changes for a new practice."""
+        assert Access.for_staff(PROV2, {}).can_edit(PROV2) is True
 
     def test_two_groups_add_up(self, grouped):
         settings.save_group("Idaho", [SCHED], [PROV2])
@@ -131,3 +208,16 @@ def test_summary(settings_cache):
     assert Access.for_staff(SCHED, {"allowed-staff-keys": ADMIN}).summary() == {
         "staff_id": SCHED, "is_admin": False, "in_group": True, "group_providers": [PROV1], "default_access": "none",
     }
+
+
+def test_role_names_include_roles_no_active_staff_hold():
+    from provider_availability.engine import access
+
+    with patch.object(access, "StaffRole") as role:
+        role.objects.filter.return_value.values_list.return_value = [
+            ("office_mgr", "Office Manager"), ("OFFICE_MGR", "Other spelling"), ("NURSE", ""),
+        ]
+        assert access.role_names(["OFFICE_MGR", "NURSE"]) == {"OFFICE_MGR": "Office Manager"}
+        assert access.role_names([]) == {}
+    # No staff__active filter: a role whose holders all left still has a name.
+    assert "staff__active" not in role.objects.filter.mock_calls[0].kwargs

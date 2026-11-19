@@ -120,12 +120,13 @@ class TestOnStaffDeactivated:
         mock_event.target.id = "p1"
         handler = OnStaffDeactivated(mock_event)
 
-        mock_rule = MagicMock()
+        mock_rule = MagicMock(is_round=False)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
              patch(f"{SL_MODULE}.get_rules_for_provider", return_value=[mock_rule]) as mock_get, \
              patch(f"{SL_MODULE}.build_delete_effects", return_value=["effect1"]) as mock_delete, \
-             patch(f"{SL_MODULE}.delete_rules_for_provider", return_value=1) as mock_del_rules:
+             patch(f"{SL_MODULE}.delete_rules_for_provider", return_value=1) as mock_del_rules, \
+             patch(f"{SL_MODULE}.refresh_round_limits", return_value=["round-fx"]) as mock_refresh:
             mock_objects.get.return_value = mock_staff
 
             result = handler.compute()
@@ -133,7 +134,23 @@ class TestOnStaffDeactivated:
             assert mock_get.mock_calls == [call("p1")]
             assert mock_delete.mock_calls == [call("p1")]
             assert mock_del_rules.mock_calls == [call("p1")]
+            assert mock_refresh.mock_calls == []
             assert result == ["effect1"]
+
+    def test_removes_round_full_blocks_with_the_rounds(self):
+        mock_event = MagicMock()
+        mock_event.target.id = "p1"
+        handler = OnStaffDeactivated(mock_event)
+
+        with patch(f"{SL_MODULE}.Staff.objects"), \
+             patch(f"{SL_MODULE}.get_rules_for_provider", return_value=[MagicMock(is_round=True)]), \
+             patch(f"{SL_MODULE}.build_delete_effects", return_value=["effect1"]), \
+             patch(f"{SL_MODULE}.delete_rules_for_provider", return_value=1), \
+             patch(f"{SL_MODULE}.refresh_round_limits", return_value=["round-fx"]) as mock_refresh:
+            result = handler.compute()
+
+        assert mock_refresh.mock_calls == [call("p1")]
+        assert result == ["effect1", "round-fx"]
 
     def test_no_rules_does_nothing(self):
         mock_staff = MagicMock()

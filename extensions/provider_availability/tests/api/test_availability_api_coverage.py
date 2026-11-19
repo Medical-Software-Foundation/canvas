@@ -37,6 +37,9 @@ from provider_availability.engine.models import (
 
 PROVIDER_ID = "provider-uuid-123"
 PROVIDER_ID_2 = "provider-uuid-456"
+# Bulk timezone changes take real staff ids.
+BULK_P1 = "1" * 32
+BULK_P2 = "2" * 32
 LOCATION_ID = "location-uuid-456"
 VISIT_TYPE_ID = "visit-type-uuid-789"
 
@@ -260,6 +263,55 @@ class TestDeleteRuleBranches:
 
 
 # ── add_override / remove_override: lead-time + recurring re-sync ──────────
+
+
+class TestRoundOverridesRecountRoundFull:
+    """An override on a round moves its hours that day, so "Round full" blocks are recounted."""
+
+    def _round(self, overrides=()) -> ProviderAvailabilityRule:
+        return ProviderAvailabilityRule(
+            id="rule-1",
+            provider_id=PROVIDER_ID,
+            weekly_schedule={"thursday": [TimeWindow(start=time(9, 0), end=time(15, 0))]},
+            is_active=True,
+            facility_id="fac-1",
+            facility_name="Facility",
+            max_visits=4,
+            date_overrides=list(overrides),
+        )
+
+    @pytest.fixture
+    def calendar(self):
+        with patch(f"{MODULE}._check_write_access", return_value=None), \
+             patch(f"{MODULE}.check_override_overlap", return_value=None), \
+             patch(f"{MODULE}.save_rule"), \
+             patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"]), \
+             patch(f"{MODULE}.get_rules_for_provider", return_value=[]), \
+             patch(f"{MODULE}.build_provider_lead_time_effects", return_value=[]), \
+             patch(f"{MODULE}.get_all_recurring_blocks", return_value=[]), \
+             patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[]), \
+             patch(f"{MODULE}.refresh_round_limits", return_value=["round-fx"]) as refresh:
+            yield refresh
+
+    def test_adding_an_override_recounts(self, calendar):
+        handler = _make_handler(
+            path_params={"provider_id": PROVIDER_ID, "rule_id": "rule-1"},
+            json_body={"date": "2026-04-09", "time_windows": [{"start": "13:00", "end": "17:00"}]},
+        )
+        with patch(f"{MODULE}.get_rule_by_id", return_value=self._round()):
+            result = handler.add_override()
+        assert result[:2] == ["sync-fx", "round-fx"]
+        assert calendar.mock_calls == [call(PROVIDER_ID)]
+
+    def test_removing_an_override_recounts(self, calendar):
+        existing = DateOverride(date=date(2026, 4, 9), time_windows=[TimeWindow(start=time(13, 0), end=time(17, 0))])
+        handler = _make_handler(
+            path_params={"provider_id": PROVIDER_ID, "rule_id": "rule-1", "override_date": "2026-04-09"}
+        )
+        with patch(f"{MODULE}.get_rule_by_id", return_value=self._round([existing])):
+            result = handler.remove_override()
+        assert result[:2] == ["sync-fx", "round-fx"]
+        assert calendar.mock_calls == [call(PROVIDER_ID)]
 
 
 class TestOverrideResyncBranches:
@@ -500,8 +552,8 @@ class TestUpdateBlockGroupSkipsSelf:
 
 class TestDeleteBlockApplyToGroup:
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.delete_block")
-    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.delete_blocks")
+    @patch(f"{MODULE}.build_delete_blocks_effects", return_value=["del"])
     @patch(f"{MODULE}.get_blocks_by_group")
     @patch(f"{MODULE}.get_blocks_for_provider")
     def test_deletes_all_group_members(
@@ -534,11 +586,10 @@ class TestDeleteBlockApplyToGroup:
         assert data["deleted_count"] == 2
         assert data["message"] == "Deleted 2 block(s)"
         assert mock_group.mock_calls == [call("g1")]
-        # Deleted both the target and the group member (target skipped in loop)
-        assert mock_delete.mock_calls == [
-            call(PROVIDER_ID, "b1"),
-            call(PROVIDER_ID_2, "b2"),
-        ]
+        # The target and the group member, in one pass each for events and storage
+        assert mock_effects.mock_calls == [call([target, member])]
+        assert mock_delete.mock_calls == [call([target, member])]
+        assert result[0] == "del"
 
 
 # ── create_recurring_block: replace_block branch ───────────────────────────
@@ -635,6 +686,15 @@ class TestGetAllProviderTzs:
 # ── set_provider_tz ────────────────────────────────────────────────────────
 
 
+@pytest.fixture
+def rounds_refresh():
+    """Patches the "Round full" recount that follows a timezone change, and the rule read it uses."""
+    with patch(f"{MODULE}.refresh_round_limits_for", return_value=["round-fx"]) as refresh, \
+         patch(f"{MODULE}.get_rules_for_provider", return_value=["rule"]) as rules:
+        yield refresh, rules
+
+
+@pytest.mark.usefixtures("rounds_refresh")
 class TestSetProviderTz:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_provider_id(self, mock_access):
@@ -702,6 +762,7 @@ class TestSetProviderTz:
 # ── clear_provider_tz ──────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("rounds_refresh")
 class TestClearProviderTz:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     @patch(f"{MODULE}.get_practice_timezone", return_value="US/Pacific")
@@ -755,13 +816,15 @@ class TestClearProviderTz:
         )
         order = MagicMock()
         order.get_all_blocks.return_value = [mine, theirs]
-        order.build_delete_block_effects.return_value = ["del-blk"]
-        order.build_block_event_effects.return_value = ["new-blk"]
+        order.build_delete_blocks_effects.return_value = ["del-blk"]
+        order.build_blocks_event_effects.return_value = ["new-blk"]
+        order.refresh_round_limits_for.return_value = ["round-fx"]
         with (
             patch(f"{MODULE}.get_all_blocks", order.get_all_blocks),
-            patch(f"{MODULE}.build_delete_block_effects", order.build_delete_block_effects),
+            patch(f"{MODULE}.build_delete_blocks_effects", order.build_delete_blocks_effects),
             patch(f"{MODULE}.clear_provider_timezone", order.clear_provider_timezone),
-            patch(f"{MODULE}.build_block_event_effects", order.build_block_event_effects),
+            patch(f"{MODULE}.build_blocks_event_effects", order.build_blocks_event_effects),
+            patch(f"{MODULE}.refresh_round_limits_for", order.refresh_round_limits_for),
         ):
             handler = _make_handler(path_params={"provider_id": PROVIDER_ID})
             result = handler.clear_provider_tz()
@@ -769,13 +832,16 @@ class TestClearProviderTz:
         _, code = _parse(result[-1])
         assert code == HTTPStatus.OK
         assert result.index("del-blk") < result.index("new-blk")
-        # Only this provider's block, deleted before the clear and rebuilt after it
+        # Only this provider's block, deleted before the clear and rebuilt after it,
+        # then the rounds recounted under the new timezone.
         assert order.mock_calls == [
             call.get_all_blocks(),
-            call.build_delete_block_effects(PROVIDER_ID, mine, keep_others=False),
+            call.build_delete_blocks_effects([mine], keep_others=False),
             call.clear_provider_timezone(PROVIDER_ID),
-            call.build_block_event_effects(mine),
+            call.build_blocks_event_effects([mine]),
+            call.refresh_round_limits_for([PROVIDER_ID], ["rule"]),
         ]
+        assert result[-2] == "round-fx"
 
     @patch(f"{MODULE}._check_write_access")
     def test_write_access_denied(self, mock_access):
@@ -793,6 +859,7 @@ class TestClearProviderTz:
 # ── set_provider_tz_bulk ───────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("rounds_refresh")
 class TestSetProviderTzBulk:
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_provider_ids(self, mock_access):
@@ -806,7 +873,7 @@ class TestSetProviderTzBulk:
     @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
     def test_invalid_timezone(self, mock_access):
         handler = _make_handler(
-            json_body={"provider_ids": [PROVIDER_ID], "timezone": "Nowhere"}
+            json_body={"provider_ids": [BULK_P1], "timezone": "Nowhere"}
         )
         result = handler.set_provider_tz_bulk()
         data, code = _parse(result[0])
@@ -823,13 +890,13 @@ class TestSetProviderTzBulk:
     def test_success_sets_all_and_resyncs(
         self, mock_get_blocks, mock_set, mock_sync, mock_get_rb, mock_rb_sync, mock_access
     ):
-        matching = RecurringBlock(id="rb1", provider_id=PROVIDER_ID)
-        other = RecurringBlock(id="rb2", provider_id="not-in-list")
+        matching = RecurringBlock(id="rb1", provider_id=BULK_P1)
+        other = RecurringBlock(id="rb2", provider_id="9"*32)
         mock_get_rb.return_value = [matching, other]
 
         handler = _make_handler(
             json_body={
-                "provider_ids": [PROVIDER_ID, PROVIDER_ID_2],
+                "provider_ids": [BULK_P1, BULK_P2],
                 "timezone": "US/Eastern",
             }
         )
@@ -841,10 +908,10 @@ class TestSetProviderTzBulk:
         assert "sync-fx" in result
         assert "rb-fx" in result
         assert mock_set.mock_calls == [
-            call(PROVIDER_ID, "US/Eastern"),
-            call(PROVIDER_ID_2, "US/Eastern"),
+            call(BULK_P1, "US/Eastern"),
+            call(BULK_P2, "US/Eastern"),
         ]
-        assert mock_sync.mock_calls == [call(PROVIDER_ID), call(PROVIDER_ID_2)]
+        assert mock_sync.mock_calls == [call(BULK_P1), call(BULK_P2)]
         assert mock_rb_sync.mock_calls == [call([matching])]
 
 

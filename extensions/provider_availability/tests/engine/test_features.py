@@ -226,6 +226,17 @@ class TestApply:
         assert mock_resync.mock_calls == [call([P1])]
         assert settings.overrides_applied() is False
 
+    def test_stop_overrides_recounts_rounds_with_overrides(self):
+        day = DateOverride(date=dt.date(2026, 11, 26), is_closed=True)
+        round_rule = ProviderAvailabilityRule(provider_id=P1, facility_id="fac-1", date_overrides=[day])
+        plain = ProviderAvailabilityRule(provider_id="y" * 32, date_overrides=[day])
+        with patch(f"{MOD}.get_all_rules", return_value=[round_rule, plain]), \
+             patch(f"{MOD}._resync_availability", return_value=["s"]), \
+             patch("provider_availability.engine.round_limits.refresh_provider", return_value=["r"]) as mock_refresh:
+            assert features.apply_feature_change("overrides", False, "stop") == ["s", "r"]
+        # Only the provider whose round had an override; the other has no round to recount.
+        assert mock_refresh.mock_calls == [call(P1)]
+
     def test_keep_overrides_resyncs_nothing(self):
         with patch(f"{MOD}._resync_availability") as mock_resync:
             assert features.apply_feature_change("overrides", False, "keep") == []
@@ -247,11 +258,16 @@ class TestApply:
         with patch(f"{MOD}.get_all_provider_timezones", return_value={P1: "US/Pacific"}), \
              patch(f"{MOD}.get_all_blocks", return_value=[blk]), \
              patch(f"{MOD}.get_all_recurring_blocks", return_value=[]), \
-             patch(f"{MOD}.build_delete_block_effects", side_effect=deleted), \
+             patch(f"{MOD}.build_delete_blocks_effects", side_effect=deleted) as delete, \
              patch(f"{MOD}._resync_availability", side_effect=synced), \
              patch(f"{MOD}.build_recurring_blocks_resync_effects", return_value=[]), \
-             patch(f"{MOD}.build_block_event_effects", return_value=["draw"]):
+             patch(f"{MOD}.build_blocks_event_effects", return_value=["draw"]) as draw, \
+             patch(f"{MOD}.refresh_round_limits_for", return_value=["rounds"]) as rounds:
             effects = features.apply_feature_change("provider_timezones", False, "move")
-        assert effects == ["del", "sync", "draw"]
+        assert effects == ["del", "sync", "draw", "rounds"]
+        # One batch each way, and "Round full" blocks recounted in the new timezone.
+        assert delete.mock_calls == [call([blk], keep_others=False)]
+        assert draw.mock_calls == [call([blk])]
+        assert rounds.mock_calls == [call([P1])]
         # Old events are deleted while the provider's own timezone still applies, then redrawn in the practice one.
         assert order == [("delete", True), ("sync", False)]

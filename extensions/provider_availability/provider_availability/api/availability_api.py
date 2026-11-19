@@ -24,6 +24,7 @@ from provider_availability.engine.facilities import (
     set_provider_facilities,
 )
 from provider_availability.engine.round_limits import refresh_provider as refresh_round_limits
+from provider_availability.engine.round_limits import refresh_providers as refresh_round_limits_for
 from provider_availability.engine.calculator import (
     bookable_rules,
     calculate_available_slots,
@@ -32,6 +33,7 @@ from provider_availability.engine.calculator import (
 from provider_availability.engine.csv_import import generate_template_csv
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
+    build_blocks_event_effects,
     build_delete_block_effects,
     build_delete_blocks_effects,
     build_delete_effects,
@@ -48,9 +50,16 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
     get_staff_directory,
-    get_teams,
 )
-from provider_availability.engine.access import admin_ids, effective_default_access, secret_admin_ids
+from provider_availability.engine.access import (
+    CANVAS_SUPPORT_KEY,
+    admin_ids,
+    effective_default_access,
+    everyone_is_admin,
+    role_names,
+    roles_with_active_staff,
+    secret_admin_ids,
+)
 from provider_availability.engine.features import CHOICES, affected_items, apply_feature_change
 from provider_availability.engine.settings import (
     delete_group,
@@ -184,8 +193,13 @@ _VALID_RECURRENCE_FREQUENCIES = ("weekly", "daily")
 
 # Saved rules and blocks have UUID ids. The page puts ids in its click handlers, so an
 # id sent in any other shape is refused rather than stored.
-def _id_error(body: dict[str, Any]) -> list[Response | Effect] | None:
-    """A 400 when the payload's id isn't a UUID; None when it is, or when there's no id."""
+_NOT_AN_OBJECT = "The request body must be a JSON object"
+
+
+def _id_error(body: Any) -> list[Response | Effect] | None:
+    """A 400 when the payload isn't an object or its id isn't a UUID; None when it's fine or has no id."""
+    if not isinstance(body, dict):
+        return [JSONResponse({"error": _NOT_AN_OBJECT}, status_code=HTTPStatus.BAD_REQUEST)]
     value = body.get("id")
     if value in (None, ""):
         return None
@@ -265,6 +279,41 @@ def _check_write_access(
         return None
     log.info("access denied: staff=%s admin_only=%s providers=%s", access.staff_id, admin_only, sorted(ids))
     return [JSONResponse({"error": message}, status_code=HTTPStatus.FORBIDDEN)]
+
+
+def _check_view_access(
+    request: object, secrets: dict | None, provider_id: str, access: Access | None = None
+) -> list[Response] | None:
+    """Return an error response list if the caller may not view this provider's schedule, else None."""
+    access = access or _access(request, secrets)
+    if access.can_view(provider_id):
+        return None
+    log.info("view denied: staff=%s provider=%s", access.staff_id, provider_id)
+    return [JSONResponse(
+        {"error": "Access denied. You don't have access to view availability for this provider."},
+        status_code=HTTPStatus.FORBIDDEN,
+    )]
+
+
+def _admin_warnings(config: dict[str, Any], active_ids: set[str], role_names: dict[str, str]) -> list[str]:
+    """Saved admins who no longer count: roles no active staff hold, and deactivated people.
+
+    ``active_ids`` are the active staff, as listed in Settings. Shown so someone replaces
+    them before every admin is gone and only Canvas Support can open Settings.
+    """
+    warnings: list[str] = []
+    codes = [str(c) for c in config.get("admin_role_codes", [])]
+    held = roles_with_active_staff(codes)
+    for code in codes:
+        if code not in held:
+            warnings.append(f"No active staff hold the admin role {role_names.get(code) or code}.")
+    inactive = [str(s) for s in config.get("admin_staff_ids", []) if _canonical_id(str(s)) not in active_ids]
+    if inactive:
+        displays = get_provider_displays(inactive)
+        for sid in inactive:
+            name = displays.get(sid, {}).get("name") or "An admin"
+            warnings.append(f"{name} is deactivated in Canvas and no longer counts as an admin.")
+    return warnings
 
 
 def _reconcile_availability_to_roles(only: set[str] | None = None) -> list[Effect]:
@@ -682,10 +731,14 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     )
                 ]
 
+        access = _access(self.request, self.secrets)
         if provider_id:
+            denied = _check_view_access(self.request, self.secrets, provider_id, access)
+            if denied:
+                return denied
             rules = get_rules_for_provider(provider_id)
         else:
-            rules = get_all_rules()
+            rules = [r for r in get_all_rules() if access.can_view(r.provider_id)]
 
         if location_id:
             rules = [r for r in rules if not r.location_ids or location_id in r.location_ids]
@@ -704,6 +757,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def get_provider_rules(self) -> list[Response | Effect]:
         """Get all rules for a specific provider."""
         provider_id = self.request.path_params["provider_id"]
+        denied = _check_view_access(self.request, self.secrets, provider_id)
+        if denied:
+            return denied
         rules = get_rules_for_provider(provider_id)
 
         return [
@@ -848,6 +904,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
         # Preserve date_overrides and timezone from existing rule when not in payload
         existing = get_rule_by_id(provider_id, rule_id)
+        if not existing and not is_feature_on("overrides"):
+            body["date_overrides"] = []
         if existing:
             if "date_overrides" not in body or not is_feature_on("overrides"):
                 body["date_overrides"] = [o.to_dict() for o in existing.date_overrides]
@@ -972,9 +1030,13 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         if denied:
             return denied
 
+        had_rounds = any(r.is_round for r in get_rules_for_provider(provider_id))
         event_effects = build_delete_effects(provider_id)
 
         count = delete_rules_for_provider(provider_id)
+        if had_rounds:
+            # The rounds are gone, so this removes their "Round full" blocks.
+            event_effects.extend(refresh_round_limits(provider_id))
 
         return [
             *event_effects,
@@ -992,6 +1054,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def list_overrides(self) -> list[Response | Effect]:
         """List date overrides for a rule."""
         provider_id = self.request.path_params["provider_id"]
+        denied = _check_view_access(self.request, self.secrets, provider_id)
+        if denied:
+            return denied
         rule_id = self.request.path_params["rule_id"]
         rule = get_rule_by_id(provider_id, rule_id)
         if not rule:
@@ -1011,7 +1076,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         rule = get_rule_by_id(provider_id, rule_id)
         if not rule:
             return [JSONResponse({"error": "Rule not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         # Validate time windows
         windows = body.get("time_windows", [])
         if not windows:
@@ -1042,6 +1109,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         rule.date_overrides.append(override)
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
+        if rule.is_round:
+            # The round's hours on that date moved, so its "Round full" blocks are recounted.
+            effects.extend(refresh_round_limits(provider_id))
         # Refresh lead time blocks (they now respect override windows)
         effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         # Re-sync recurring blocks so they skip override dates
@@ -1068,6 +1138,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         rule.date_overrides = [o for o in rule.date_overrides if o.date != override_date]
         save_rule(rule)
         effects = sync_provider_availability(provider_id)
+        if rule.is_round:
+            effects.extend(refresh_round_limits(provider_id))
         # Refresh lead time blocks (override removed, revert to weekly schedule)
         effects.extend(build_provider_lead_time_effects(provider_id, get_rules_for_provider(provider_id)))
         # Re-sync recurring blocks so they restore events for removed override date
@@ -1082,6 +1154,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def list_blocks(self) -> list[Response | Effect]:
         """List admin blocks for a provider."""
         provider_id = self.request.path_params["provider_id"]
+        denied = _check_view_access(self.request, self.secrets, provider_id)
+        if denied:
+            return denied
         blocks = get_blocks_for_provider(provider_id)
         return [
             JSONResponse(
@@ -1347,10 +1422,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return bad_id
         block_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
-        batch_blocks = get_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
-        denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
-        if denied:
-            return denied
         start_str = body.get("start", "")
         end_str = body.get("end", "")
 
@@ -1361,6 +1432,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+        batch_blocks = get_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
+        denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
+        if denied:
+            return denied
 
         try:
             start_dt = datetime.fromisoformat(start_str)
@@ -1462,6 +1537,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Look up the block before deleting so we can target the right calendar event
         blocks = get_blocks_for_provider(provider_id)
         target_block = next((b for b in blocks if b.id == block_id), None)
+        if target_block is None:
+            # Without the block there is nothing to match its events by, and deleting
+            # with no block removes every block event on the provider's calendars.
+            return [JSONResponse({"error": "Block not found"}, status_code=HTTPStatus.NOT_FOUND)]
         group_blocks = (
             get_blocks_by_group(target_block.group_id)
             if apply_to_group and target_block and target_block.group_id else []
@@ -1471,19 +1550,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             if denied:
                 return denied
 
-        event_effects = build_delete_block_effects(provider_id, target_block)
-        delete_block(provider_id, block_id)
-        deleted_count = 1
-
-        if group_blocks:
-            for gb in group_blocks:
-                if gb.id == block_id:
-                    continue
-                event_effects.extend(
-                    build_delete_block_effects(gb.provider_id, gb, skip_ids={g.id for g in group_blocks})
-                )
-                delete_block(gb.provider_id, gb.id)
-                deleted_count += 1
+        # One pass for the block and its group: lookups are shared and each event is deleted once.
+        others = [gb for gb in group_blocks if gb.id != block_id]
+        event_effects = build_delete_blocks_effects([target_block, *others])
+        delete_blocks([target_block, *others])
+        deleted_count = 1 + len(others)
 
         message = "Block deleted" if deleted_count == 1 else f"Deleted {deleted_count} block(s)"
         return [
@@ -1504,6 +1575,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def list_recurring_blocks(self) -> list[Response | Effect]:
         """List recurring blocks for a provider."""
         provider_id = self.request.path_params["provider_id"]
+        denied = _check_view_access(self.request, self.secrets, provider_id)
+        if denied:
+            return denied
         blocks = get_recurring_blocks_for_provider(provider_id)
         return [
             JSONResponse(
@@ -1606,11 +1680,6 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             return bad_id
         block_id = body.get("id", "")
         provider_id = body.get("provider_id", "")
-        batch_blocks = get_recurring_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
-        denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
-        if denied:
-            return denied
-
         if not block_id or not provider_id:
             return [
                 JSONResponse(
@@ -1618,6 +1687,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
+        batch_blocks = get_recurring_blocks_by_group(body["group_id"]) if body.get("apply_to_group") and body.get("group_id") else []
+        denied = _check_write_access(self.request, self.secrets, {provider_id} | {b.provider_id for b in batch_blocks})
+        if denied:
+            return denied
 
         weekly_schedule = body.get("weekly_schedule", {})
         is_daily = body.get("recurrence_frequency", "weekly") == "daily"
@@ -1642,8 +1715,12 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         )
         if facility_err:
             return [JSONResponse({"error": facility_err}, status_code=HTTPStatus.BAD_REQUEST)]
-        # Checked after the facility: a facility block is never a hold.
-        if body.get("hold_type", "none") not in ("none", "", None) and not is_feature_on("holds"):
+        # Checked after the facility: a facility block is never a hold. A hold kept when
+        # holds were switched off can still be edited, as long as its hold setting stays the same.
+        hold_type = body.get("hold_type", "none")
+        new_hold = hold_type not in ("none", "", None) and (before is None or hold_type != before.hold_type)
+        holds_on = is_feature_on("holds")
+        if new_hold and not holds_on:
             return [JSONResponse({"error": "Holds are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
         block = RecurringBlock.from_dict(body)
         save_recurring_block(block)
@@ -1668,9 +1745,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     gb.hold_type = "none"
                 elif was_facility:
                     # Leaving a facility: take the edited block's locations and hold setting,
-                    # which the facility block had cleared.
+                    # which the facility block had cleared. With holds off that would be a
+                    # new hold, so it gets none.
                     gb.location_ids = list(block.location_ids)
-                    gb.hold_type = block.hold_type
+                    gb.hold_type = block.hold_type if holds_on else "none"
                 gb.effective_start = block.effective_start
                 gb.effective_end = block.effective_end
                 gb.is_active = block.is_active
@@ -1735,7 +1813,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         tz_name = body.get("timezone", "")
         if not tz_name or tz_name not in COMMON_TIMEZONES:
             return [
@@ -1750,7 +1830,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         cleared = sorted(own) if apply_to_all else []
         all_blocks = get_all_blocks()
         all_recurring = get_all_recurring_blocks()
-        scheduled = {r.provider_id for r in get_all_rules()} | {b.provider_id for b in all_blocks} | {
+        all_rules = get_all_rules()
+        scheduled = {r.provider_id for r in all_rules} | {b.provider_id for b in all_blocks} | {
             rb.provider_id for rb in all_recurring
         }
         # Providers on their own timezone keep it, unless it's being cleared or
@@ -1762,9 +1843,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             moving = {pid for pid in moving if pid in cleared and own[pid] != tz_name}
 
         provider_blocks = [b for b in all_blocks if b.provider_id in moving]
-        effects: list[Effect] = []
-        for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(blk.provider_id, blk, keep_others=False))
+        # Deleted under the old timezone, so this lookup cache must not be reused after the change.
+        effects: list[Effect] = build_delete_blocks_effects(provider_blocks, keep_others=False)
 
         set_practice_timezone(tz_name)
         for pid in cleared:
@@ -1772,8 +1852,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         for pid in sorted(moving):
             effects.extend(sync_provider_availability(pid))
         effects.extend(build_recurring_blocks_resync_effects([rb for rb in all_recurring if rb.provider_id in moving]))
-        for blk in provider_blocks:
-            effects.extend(build_block_event_effects(blk))
+        effects.extend(build_blocks_event_effects(provider_blocks))
+        effects.extend(refresh_round_limits_for(moving, all_rules))
 
         log.info(
             "set_timezone: practice %s, %d own timezones cleared, %d providers redrawn, %d effects",
@@ -1806,7 +1886,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/roles")
     def set_roles(self) -> list[Response | Effect]:
         """Replace the set of schedulable role internal codes."""
-        return self._save_roles(self.request.json())
+        body, bad = self._object_body()
+        return bad or self._save_roles(body)
 
     def _save_roles(self, body: dict) -> list[Response | Effect]:
         """Shared by the API route and the form fallback."""
@@ -1864,7 +1945,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         check because this changes only what the viewer sees, not any shared
         configuration.
         """
-        return self._save_view(self.request.json())
+        body, bad = self._object_body()
+        return bad or self._save_view(body)
 
     def _save_view(self, body: dict) -> list[Response | Effect]:
         """Shared by the API route and the form fallback."""
@@ -1904,7 +1986,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
 
     def _expired_body_keys(self) -> list[str] | None:
         """The item keys in the request body. None if malformed."""
-        keys = self.request.json().get("keys")
+        body = self.request.json()
+        keys = body.get("keys") if isinstance(body, dict) else None
         if not isinstance(keys, list):
             return None
         return [str(k) for k in keys]
@@ -1959,14 +2042,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.put("/provider-timezone")
     def set_provider_tz(self) -> list[Response | Effect]:
         """Set a provider's timezone."""
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         provider_id = body.get("provider_id", "")
+        if not provider_id:
+            return [JSONResponse({"error": "provider_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
         denied = _check_write_access(self.request, self.secrets, [provider_id])
         if denied:
             return denied
         tz_name = body.get("timezone", "")
-        if not provider_id:
-            return [JSONResponse({"error": "provider_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
         if not is_feature_on("provider_timezones"):
             return [JSONResponse({"error": "Provider timezones are turned off in Settings."}, status_code=HTTPStatus.BAD_REQUEST)]
         if not tz_name or tz_name not in COMMON_TIMEZONES:
@@ -1980,9 +2065,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Delete the existing events *before* switching the TZ, so the delete's
         # time-range match hits the old-TZ events; then rebuild after the switch.
         provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
-        effects: list[Effect] = []
-        for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(provider_id, blk, keep_others=False))
+        effects: list[Effect] = build_delete_blocks_effects(provider_blocks, keep_others=False)
 
         set_provider_timezone(provider_id, tz_name)
 
@@ -1991,8 +2074,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         effects.extend(build_recurring_blocks_resync_effects(
             [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id]
         ))
-        for blk in provider_blocks:
-            effects.extend(build_block_event_effects(blk))
+        effects.extend(build_blocks_event_effects(provider_blocks))
+        effects.extend(refresh_round_limits_for([provider_id], get_rules_for_provider(provider_id)))
         log.info("set_provider_tz: provider %s → %s, %d sync effects", provider_id, tz_name, len(effects))
         return [*effects, JSONResponse({
             "message": f"Provider timezone set to {tz_name}",
@@ -2010,9 +2093,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # Same as set_provider_tz: one-off blocks are naive wall-clock times, so delete
         # their events while the old TZ is still in effect, then rebuild after the clear.
         provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
-        effects: list[Effect] = []
-        for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(provider_id, blk, keep_others=False))
+        effects: list[Effect] = build_delete_blocks_effects(provider_blocks, keep_others=False)
 
         clear_provider_timezone(provider_id)
         # Re-sync so the provider's events move to the practice-default timezone.
@@ -2020,8 +2101,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         effects.extend(build_recurring_blocks_resync_effects(
             [rb for rb in get_all_recurring_blocks() if rb.provider_id == provider_id]
         ))
-        for blk in provider_blocks:
-            effects.extend(build_block_event_effects(blk))
+        effects.extend(build_blocks_event_effects(provider_blocks))
+        effects.extend(refresh_round_limits_for([provider_id], get_rules_for_provider(provider_id)))
         default_tz = get_practice_timezone()
         log.info("clear_provider_tz: provider %s → default (%s), %d sync effects", provider_id, default_tz, len(effects))
         return [*effects, JSONResponse({
@@ -2037,11 +2118,17 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         provider_ids = body.get("provider_ids", [])
         tz_name = body.get("timezone", "")
         if not provider_ids:
             return [JSONResponse({"error": "provider_ids is required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        if not isinstance(provider_ids, list) or not all(is_uuid(p) for p in provider_ids):
+            return self._bad_request("provider_ids must be a list of staff ids")
+        # Saved schedules use the undashed form, so dashed ids are converted before any match.
+        provider_ids = list(dict.fromkeys(_canonical_id(p) for p in provider_ids))
         if not tz_name or tz_name not in COMMON_TIMEZONES:
             return [JSONResponse(
                 {"error": f"Invalid timezone. Choose from: {', '.join(COMMON_TIMEZONES)}"},
@@ -2051,9 +2138,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         # (before any set_provider_timezone call), then rebuild after the switch
         # so naive wall-clock block times re-anchor to the new TZ. See set_provider_tz.
         provider_blocks = [b for b in get_all_blocks() if b.provider_id in provider_ids]
-        effects: list[Effect] = []
-        for blk in provider_blocks:
-            effects.extend(build_delete_block_effects(blk.provider_id, blk, keep_others=False))
+        effects: list[Effect] = build_delete_blocks_effects(provider_blocks, keep_others=False)
 
         for pid in provider_ids:
             set_provider_timezone(pid, tz_name)
@@ -2061,8 +2146,8 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         effects.extend(build_recurring_blocks_resync_effects(
             [rb for rb in get_all_recurring_blocks() if rb.provider_id in provider_ids]
         ))
-        for blk in provider_blocks:
-            effects.extend(build_block_event_effects(blk))
+        effects.extend(build_blocks_event_effects(provider_blocks))
+        effects.extend(refresh_round_limits_for(provider_ids))
         log.info("set_provider_tz_bulk: %d providers → %s, %d sync effects", len(provider_ids), tz_name, len(effects))
         return [*effects, JSONResponse({
             "message": f"Timezone set to {tz_name} for {len(provider_ids)} providers",
@@ -2077,15 +2162,24 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def _bad_request(self, message: str) -> list[Response | Effect]:
         return [JSONResponse({"error": message}, status_code=HTTPStatus.BAD_REQUEST)]
 
+    def _object_body(self) -> tuple[dict, list[Response | Effect] | None]:
+        """The JSON body, or a 400 when it isn't an object (a list or string would crash body.get)."""
+        body = self.request.json()
+        if isinstance(body, dict):
+            return body, None
+        return {}, self._bad_request(_NOT_AN_OBJECT)
+
     @api.get("/settings")
     def get_settings(self) -> list[Response | Effect]:
-        """Everything the Settings tab shows. Admins only, since it lists staff and teams."""
+        """Everything the Settings tab shows. Admins only, since it lists staff and roles."""
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
         config = get_access_config()
         admins = admin_ids(self.secrets, config)
         staff = get_staff_directory()
+        roles = get_available_roles()
+        saved_role_names = role_names(config.get("admin_role_codes", []))
         names = {s["id"]: s["name"] for s in staff}
         facilities = _facility_list()
         # Whose saved facilities to read: the schedulable providers. A failure here is left
@@ -2098,8 +2192,16 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "access": {**config, "default_access": effective_default_access(self.secrets, config)},
             "admins": [{"id": a, "name": names.get(a, "")} for a in sorted(admins)],
             "secret_admins": sorted(secret_admin_ids(self.secrets)),
-            "admins_from": "settings" if from_settings else ("secret" if admins else "everyone"),
-            "teams": get_teams(),
+            # Where admin comes from now: Settings, the secret, everyone (before setup),
+            # or only Canvas Support (saved admins, none active).
+            "admins_from": "settings" if from_settings else (
+                "secret" if admins else ("everyone" if everyone_is_admin(admins, config) else "canvas_support")
+            ),
+            "admin_warnings": _admin_warnings(config, {_canonical_id(i) for i in names}, saved_role_names),
+            "roles": roles,
+            # Names for the saved admin roles, including ones no active staff hold, which
+            # the roles list above leaves out.
+            "admin_role_names": saved_role_names,
             "staff": staff,
             "locations": get_active_locations(),
             "facilities": facilities,
@@ -2112,7 +2214,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         feature = str(body.get("feature", ""))
         on = body.get("on")
         if not isinstance(on, bool):
@@ -2140,8 +2244,11 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
+        body, bad = self._object_body()
+        if bad:
+            return bad
         try:
-            saved = set_rule_defaults(self.request.json())
+            saved = set_rule_defaults(body)
         except ValueError as exc:
             return self._bad_request(str(exc))
         return [JSONResponse({"rule_defaults": saved})]
@@ -2150,35 +2257,40 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
     def put_access(self) -> list[Response | Effect]:
         """Change the admins and/or default access. Any key may be left out.
 
-        ``admin_team_ids`` and ``admin_staff_ids`` are sent together and replace
+        ``admin_role_codes`` and ``admin_staff_ids`` are sent together and replace
         the saved admins. A change that would leave out the person saving it is
-        refused, so nobody can lock themselves out of Settings.
+        refused, so nobody can lock themselves out of Settings; Canvas Support is
+        always an admin, so it may save any admins.
         """
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         try:
-            if "admin_team_ids" in body or "admin_staff_ids" in body:
-                team_ids = body.get("admin_team_ids", [])
+            if "admin_role_codes" in body or "admin_staff_ids" in body:
+                role_codes = body.get("admin_role_codes", [])
                 staff_ids = body.get("admin_staff_ids", [])
-                if not isinstance(team_ids, list) or not isinstance(staff_ids, list):
-                    return self._bad_request("admin_team_ids and admin_staff_ids must be lists")
-                known_teams = {t["id"] for t in get_teams()}
-                if any(str(t) not in known_teams for t in team_ids):
-                    return self._bad_request("That team doesn't exist")
-                active = {s["id"] for s in get_staff_directory()}
-                if any(str(s) not in active for s in staff_ids):
+                if not isinstance(role_codes, list) or not isinstance(staff_ids, list):
+                    return self._bad_request("admin_role_codes and admin_staff_ids must be lists")
+                known_roles = {r["code"] for r in get_available_roles()}
+                if any(str(c).strip().upper() not in known_roles for c in role_codes):
+                    return self._bad_request("No active staff hold that role")
+                active = {_canonical_id(s["id"]) for s in get_staff_directory()}
+                if any(_canonical_id(str(s)) not in active for s in staff_ids):
                     return self._bad_request("Admins must be active Canvas staff")
-                proposed = {**get_access_config(), "admin_team_ids": [str(t) for t in team_ids],
-                            "admin_staff_ids": [str(s) for s in staff_ids]}
-                after = admin_ids(self.secrets, proposed)
-                if after and _signed_in_staff_id(self.request) not in after:
+                # Saved undashed, as Staff ids are, so names and warnings can find them.
+                staff_ids = [_canonical_id(str(s)) for s in staff_ids]
+                proposed = {**get_access_config(), "admin_role_codes": [str(c) for c in role_codes],
+                            "admin_staff_ids": staff_ids, "admins_saved": True}
+                saver = _signed_in_staff_id(self.request)
+                if saver != CANVAS_SUPPORT_KEY and saver not in admin_ids(self.secrets, proposed):
                     return self._bad_request(
                         "This would remove you from the admins and lock you out of Settings. "
-                        "Add yourself, or a team you're on, before saving."
+                        "Add yourself, or a role you hold, before saving."
                     )
-                set_admins(team_ids, staff_ids)
+                set_admins(role_codes, staff_ids)
             if "default_access" in body:
                 set_default_access(str(body.get("default_access")))
         except ValueError as exc:
@@ -2192,7 +2304,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         provider_id = str(body.get("provider_id", "") or "")
         if provider_id not in get_schedulable_provider_ids():
             return self._bad_request("Choose a provider who can be scheduled")
@@ -2226,7 +2340,9 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
         denied = _check_write_access(self.request, self.secrets, admin_only=True)
         if denied:
             return denied
-        body = self.request.json()
+        body, bad = self._object_body()
+        if bad:
+            return bad
         active = {s["id"] for s in get_staff_directory()}
         schedulers = body.get("schedulers", [])
         providers = body.get("providers", [])

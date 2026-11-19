@@ -33,18 +33,18 @@ After install, open **Provider Availability** from the provider menu to manage s
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff key UUIDs who are always admins, on top of the admins picked in Settings. Use it to get back into Settings. Empty, with no admins picked, = every staff member is an admin (bootstrap). |
+| `allowed-staff-keys` | Comma-separated staff key UUIDs who are always admins, on top of the admins picked in Settings. Use it to get back into Settings. Empty, before any admins are picked, = every staff member is an admin (first setup). |
 
 ### Access control
 
 Set in **Settings → Access control**. Any signed-in staff member can open the app; what they can see and change follows these rules, checked on every write:
 
-1. **Admins** edit every provider and change Settings. Admins are the members of the Canvas teams and the people picked in Settings, plus anyone in the `allowed-staff-keys` secret, who is always an admin. With nobody in any of them, everyone is an admin. Settings refuses to save admins that leave out the person saving, so nobody can lock themselves out.
-2. **Every provider** can always edit their own availability.
+1. **Admins** edit every provider and change Settings. Admins are the active staff holding a Canvas role picked in Settings, the active people picked in Settings, anyone in the `allowed-staff-keys` secret, and Canvas Support, which is always an admin so a practice is never locked out. Before any admins are saved (and with the secret empty), every staff member is an admin, so a new practice can name its admins. After that, if none of the saved admins is active, only the secret and Canvas Support are admins. Settings warns when an admin role has no active staff or an admin is deactivated, and refuses admins that leave out the person saving.
+2. **Every provider** can view their own availability, and edit it unless default access is No access.
 3. **Editing groups** are made in the app: a group's schedulers can edit only that group's providers (they can still view others unless default access is No access). The group form can add everyone at a primary practice location at once.
-4. **Everyone else** (staff who aren't admins or in a group) gets one level: Full access (view and edit every provider, the starting value), View only, or No access (only their own).
+4. **Everyone else** (staff who aren't admins or in a group) gets one level: Full access (view and edit every provider, the starting value), View only, or No access (view only their own, with no editing).
 
-A practice that restricted the plugin with the `allowed-staff-keys` secret starts at **No access** until someone saves a default access level, so staff the secret left out do not gain access when this version installs. Practice timezone, schedulable roles, bulk timezones and bulk import are admin only.
+A practice that restricted the plugin with the `allowed-staff-keys` secret starts at **No access** until someone saves a default access level, so staff the secret left out do not gain access when this version installs. Reads of rules, blocks and holds follow the same rules: staff only get them for providers they can view. Open-time searches (available slots and available providers) stay open to all signed-in staff. Practice timezone, schedulable roles, bulk timezones and bulk import are admin only.
 
 ### Scheduling features
 
@@ -235,7 +235,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | PUT | `/settings/rule-defaults` | Save new rule defaults (admins only) |
 | PUT | `/settings/provider-facilities` | Save the facilities one provider rounds at (admins only) |
 | GET | `/settings/facility-suggestions/<provider_id>` | Facilities on the charts of a provider's patients, with patient counts (admins only) |
-| PUT | `/settings/access` | Set the admin teams and people (`admin_team_ids`, `admin_staff_ids`) and/or default access (admins only) |
+| PUT | `/settings/access` | Set the admin roles and people (`admin_role_codes`, `admin_staff_ids`) and/or default access (admins only) |
 | POST | `/settings/groups` | Create an editing group (admins only) |
 | PUT | `/settings/groups/<group_id>` | Replace an editing group (admins only) |
 | DELETE | `/settings/groups/<group_id>` | Delete an editing group (admins only) |
@@ -268,7 +268,7 @@ FROM logstash-* | WHERE @timestamp >= NOW() - 24 hours AND MATCH(syslog5424_msg,
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff UUIDs who are always admins, on top of the admins picked in Settings. Dashed or undashed UUIDs both work. Empty, with no admins picked, makes every staff member an admin (bootstrap). See Access control. |
+| `allowed-staff-keys` | Comma-separated staff UUIDs who are always admins, on top of the admins picked in Settings. Dashed or undashed UUIDs both work. Empty, before any admins are picked, makes every staff member an admin (first setup). See Access control. |
 
 ### Data Model
 

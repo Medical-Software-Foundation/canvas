@@ -10,6 +10,7 @@ from logger import log
 
 from provider_availability.engine.admin_calendar import missing_clinic_calendar_effects
 from provider_availability.engine.job_errors import log_job_failure
+from provider_availability.engine.round_limits import refresh_provider as refresh_round_limits
 from provider_availability.engine.roles import (
     get_schedulable_provider_ids,
     get_schedulable_staff,
@@ -103,6 +104,9 @@ class OnStaffDeactivated(BaseProtocol):
         effects = build_delete_effects(provider_id)
 
         count = delete_rules_for_provider(provider_id)
+        if any(r.is_round for r in rules):
+            # The rounds are gone, so this removes their "Round full" blocks.
+            effects.extend(refresh_round_limits(provider_id))
         log.info(
             "OnStaffDeactivated: deleted %d rules and %d event effects for %s (%s)",
             count,

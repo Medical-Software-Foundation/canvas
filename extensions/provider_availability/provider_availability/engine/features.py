@@ -41,8 +41,8 @@ from provider_availability.engine.event_sync import (
     LEAD_TIME_TITLE,
     _hold_event_ids,
     build_provider_hold_refresh_effects,
-    build_block_event_effects,
-    build_delete_block_effects,
+    build_blocks_event_effects,
+    build_delete_blocks_effects,
     build_provider_lead_time_effects,
     build_recurring_blocks_resync_effects,
     delete_all_lead_time_events,
@@ -51,6 +51,7 @@ from provider_availability.engine.event_sync import (
 from provider_availability.engine.provider_resolver import get_provider_displays
 from provider_availability.engine.roles import get_schedulable_provider_ids
 from provider_availability.engine.round_limits import refresh_provider as refresh_round_limits
+from provider_availability.engine.round_limits import refresh_providers as refresh_round_limits_for
 from provider_availability.engine.settings import FEATURES, set_feature
 from provider_availability.engine.storage import (
     get_all_blocks,
@@ -307,16 +308,15 @@ def _redraw_for_timezone_change(provider_ids: list[str], flip: Any) -> list[Effe
     provider's timezone change is handled.
     """
     blocks = [b for b in get_all_blocks() if b.provider_id in provider_ids]
-    effects: list[Effect] = []
-    for blk in blocks:
-        effects.extend(build_delete_block_effects(blk.provider_id, blk, keep_others=False))
+    # Its lookup cache holds the old timezones, so the redraw below builds its own.
+    effects: list[Effect] = build_delete_blocks_effects(blocks, keep_others=False)
     flip()
     effects.extend(_resync_availability(provider_ids))
     effects.extend(build_recurring_blocks_resync_effects(
         [rb for rb in get_all_recurring_blocks() if rb.provider_id in provider_ids]
     ))
-    for blk in blocks:
-        effects.extend(build_block_event_effects(blk))
+    effects.extend(build_blocks_event_effects(blocks))
+    effects.extend(refresh_round_limits_for(provider_ids))
     return effects
 
 
@@ -348,8 +348,11 @@ def apply_feature_change(feature: str, on: bool, choice: str = "") -> list[Effec
         set_feature(feature, on, keep_existing_overrides=(choice != "stop"))
         if on or choice == "stop":
             # Hours on override dates change either way: back to regular, or back to the override.
-            with_overrides = sorted({r.provider_id for r in get_all_rules() if r.date_overrides})
+            rules = get_all_rules()
+            with_overrides = sorted({r.provider_id for r in rules if r.date_overrides})
             effects = _resync_availability(with_overrides)
+            # A round's hours on its override dates moved, so its "Round full" blocks are recounted.
+            effects.extend(refresh_round_limits_for(with_overrides, [r for r in rules if r.date_overrides]))
     else:
         set_feature(feature, on)
         if not on and choice == "remove":

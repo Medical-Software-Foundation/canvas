@@ -3,16 +3,23 @@
 The rules, in order:
 
 1. Admins can view and edit every provider and change Settings. Admins are the
-   members of the Canvas teams and the people picked in Settings, plus anyone in
-   the ``allowed-staff-keys`` plugin secret. The secret always counts, so a
-   practice can get back into Settings after saving admins that leave everyone
-   out. With nobody in any of them, every staff member is an admin, which is how
-   the plugin behaved before access control existed.
-2. Every staff member can view and edit their own availability.
+   active staff holding a Canvas role picked in Settings, the active people
+   picked in Settings, anyone in the ``allowed-staff-keys`` plugin secret, and
+   Canvas Support. Canvas Support (the staff key every instance is created with)
+   is always an admin, so a practice is never locked out of Settings.
+   Until admins are first saved, and with nobody in the secret, every staff
+   member is an admin, which is how the plugin behaved before access control
+   existed; that is what lets a new practice name its admins. After that it
+   fails closed: if no saved admin is active, only the secret and Canvas
+   Support are admins. Settings warns when an admin role has no active staff or
+   an admin is deactivated, so it rarely comes to that.
+2. Every staff member can view their own availability. They can edit it too,
+   unless default access is "none".
 3. A scheduler in one or more editing groups can edit only the providers in
    those groups. They can view everyone else unless default access is "none".
 4. Everyone else gets the default access level: "full" (view and edit every
-   provider), "view" (view only), or "none" (only their own).
+   provider), "view" (view only), or "none" (view their own and nobody else's,
+   with no editing).
 
 Until a default access level is saved, it is "full", except on a practice that
 restricted the plugin with the ``allowed-staff-keys`` secret: there it is
@@ -23,11 +30,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from canvas_sdk.v1.data.team import Team
+from canvas_sdk.v1.data.staff import Staff, StaffRole
+from django.db.models import Q
 
 from provider_availability.api._auth import _canonical_id
 from provider_availability.engine.models import is_uuid
 from provider_availability.engine.settings import get_access_config
+
+# The Canvas Support staff key. Every production instance has it, active, under
+# this key (checked across the fleet in 2026-11); on a few the account was renamed,
+# so it is matched by key, never by name. It is always an admin: the break-glass.
+CANVAS_SUPPORT_KEY = "4150cd20de8a470aa570a852859ac87e"
 
 
 def _secret_admin_ids(secrets: dict | None) -> set[str]:
@@ -35,15 +48,66 @@ def _secret_admin_ids(secrets: dict | None) -> set[str]:
     return {_canonical_id(part) for part in raw.split(",") if part.strip()}
 
 
-def team_member_ids(team_ids: list[str] | str) -> set[str]:
-    """Canonical staff ids of the members of the given Canvas teams. Unknown team ids add nobody."""
+def _valid(ids: list[str] | tuple[str, ...] | str) -> list[str]:
     # A malformed id would raise a ValidationError inside the query, which the
     # sandbox gives no way to catch, so it is screened out here instead.
-    valid = [t for t in ([team_ids] if isinstance(team_ids, str) else team_ids) if is_uuid(t)]
-    if not valid:
+    return [i for i in ([ids] if isinstance(ids, str) else ids) if i and is_uuid(i)]
+
+
+def _codes(codes: list[str] | tuple[str, ...]) -> list[str]:
+    return sorted({str(c).strip().upper() for c in codes if str(c or "").strip()})
+
+
+def _role_q(path: str, codes: list[str]) -> Q:
+    """Match any of these role internal codes, ignoring case like engine.roles does."""
+    match = Q()
+    for code in codes:
+        match |= Q(**{f"{path}__iexact": code})
+    return match
+
+
+def active_staff_ids(role_codes: list[str] | tuple[str, ...], staff_ids: list[str] | tuple[str, ...] | str = ()) -> set[str]:
+    """Canonical ids of the active staff who hold one of these roles or are named directly.
+
+    One query. Unknown codes and malformed ids add nobody, and neither do deactivated staff.
+    """
+    codes, people = _codes(role_codes), _valid(staff_ids)
+    if not codes and not people:
         return set()
-    members = Team.objects.filter(id__in=valid).values_list("members__id", flat=True)
-    return {_canonical_id(str(m)) for m in members if m}
+    return {_canonical_id(str(sid)) for sid in _query_active_staff(codes, people) if sid}
+
+
+def _query_active_staff(codes: list[str], people: list[str]) -> list[Any]:
+    match = Q()
+    if codes:
+        match |= _role_q("roles__internal_code", codes)
+    if people:
+        match |= Q(id__in=people)
+    return list(Staff.objects.filter(match, active=True).values_list("id", flat=True).distinct())
+
+
+def roles_with_active_staff(role_codes: list[str]) -> set[str]:
+    """Which of these role internal codes at least one active staff member holds (upper-cased)."""
+    codes = _codes(role_codes)
+    if not codes:
+        return set()
+    rows = StaffRole.objects.filter(_role_q("internal_code", codes), staff__active=True).values_list(
+        "internal_code", flat=True
+    ).distinct()
+    return {str(c).strip().upper() for c in rows if c}
+
+
+def role_names(role_codes: list[str]) -> dict[str, str]:
+    """Display names for these role internal codes, including roles no active staff hold now."""
+    codes = _codes(role_codes)
+    if not codes:
+        return {}
+    names: dict[str, str] = {}
+    for code, name in StaffRole.objects.filter(_role_q("internal_code", codes)).values_list("internal_code", "name"):
+        key = str(code or "").strip().upper()
+        if key and name and key not in names:
+            names[key] = str(name)
+    return names
 
 
 def secret_admin_ids(secrets: dict | None) -> set[str]:
@@ -52,11 +116,19 @@ def secret_admin_ids(secrets: dict | None) -> set[str]:
 
 
 def admin_ids(secrets: dict | None, config: dict[str, Any] | None = None) -> set[str]:
-    """Staff ids that count as admins. Empty means everyone is an admin."""
+    """Staff ids that are admins through Settings or the secret (Canvas Support is added in Access).
+
+    Empty before admins are first saved means everyone is an admin; empty after means
+    only Canvas Support is (see ``everyone_is_admin``).
+    """
     config = config if config is not None else get_access_config()
-    admins = team_member_ids(config.get("admin_team_ids", []))
-    admins |= {_canonical_id(s) for s in config.get("admin_staff_ids", []) if s}
+    admins = active_staff_ids(config.get("admin_role_codes", []), config.get("admin_staff_ids", []))
     return admins | _secret_admin_ids(secrets)
+
+
+def everyone_is_admin(admins: set[str], config: dict[str, Any]) -> bool:
+    """Only before admins are first saved, and with nobody in the secret."""
+    return not admins and not config.get("admins_saved")
 
 
 def effective_default_access(secrets: dict | None, config: dict[str, Any] | None = None) -> str:
@@ -89,7 +161,7 @@ class Access:
         config = get_access_config()
         sid = _canonical_id(staff_id)
         admins = admin_ids(secrets, config)
-        is_admin = not admins or (bool(sid) and sid in admins)
+        is_admin = bool(sid) and (sid == CANVAS_SUPPORT_KEY or sid in admins or everyone_is_admin(admins, config))
         group_providers: set[str] | None = None
         for group in config["groups"]:
             if sid and sid in {_canonical_id(s) for s in group["schedulers"]}:
@@ -100,10 +172,14 @@ class Access:
         pid = _canonical_id(provider_id)
         if not self.staff_id:
             return False
-        if self.is_admin or pid == self.staff_id:
+        if self.is_admin:
             return True
+        if self.group_providers is not None and pid in self.group_providers:
+            return True
+        if pid == self.staff_id:
+            return self.default_access != "none"
         if self.group_providers is not None:
-            return pid in self.group_providers
+            return False
         return self.default_access == "full"
 
     def can_view_others(self) -> bool:
@@ -115,7 +191,9 @@ class Access:
     def can_view(self, provider_id: str) -> bool:
         if self.can_edit(provider_id):
             return True
-        return bool(self.staff_id) and self.default_access != "none"
+        if not self.staff_id:
+            return False
+        return _canonical_id(provider_id) == self.staff_id or self.default_access != "none"
 
     def can_edit_all(self, provider_ids: list[str] | set[str]) -> bool:
         return all(self.can_edit(p) for p in provider_ids)

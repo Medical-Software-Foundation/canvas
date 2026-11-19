@@ -51,20 +51,22 @@ class TestRuleDefaults:
 class TestAccessConfig:
     def test_starts_unsaved(self, settings_cache):
         assert settings.get_access_config() == {
-            "admin_team_ids": [], "admin_staff_ids": [], "default_access": "full",
+            "admin_role_codes": [], "admin_staff_ids": [], "admins_saved": False, "default_access": "full",
             "default_access_saved": False, "groups": [],
         }
 
     def test_picking_admins_does_not_save_a_default_access_level(self, settings_cache):
-        settings.set_admins([" team-1 ", "team-1"], ["s1", ""])
+        settings.set_admins([" office_mgr ", "OFFICE_MGR", ""], ["s1", ""])
         config = settings.get_access_config()
-        assert config["admin_team_ids"] == ["team-1"]
+        assert config["admin_role_codes"] == ["OFFICE_MGR"]
         assert config["admin_staff_ids"] == ["s1"]
+        assert config["admins_saved"] is True
         assert config["default_access_saved"] is False
 
-    def test_an_older_single_admin_team_reads_as_a_list(self, settings_cache):
-        settings_cache.data[ACCESS_KEY] = {"admin_team_id": "team-1"}
-        assert settings.get_access_config()["admin_team_ids"] == ["team-1"]
+    def test_role_codes_must_be_a_list(self, settings_cache):
+        with pytest.raises(ValueError):
+            settings.set_admins("OFFICE_MGR", [])
+
 
     def test_default_access_is_saved_once_chosen(self, settings_cache):
         settings.set_default_access("view")

@@ -184,14 +184,3 @@ class TestStaffDirectory:
             {"id": "s1", "name": "Ann Brown", "location_id": ""},
         ]
         assert staff.objects.filter.mock_calls[0] == __import__("unittest.mock").mock.call(active=True)
-
-
-class TestTeams:
-    def test_sorted_by_name(self):
-        from unittest.mock import patch as _patch
-
-        from provider_availability.engine.lookups import get_teams
-
-        with _patch("provider_availability.engine.lookups.Team") as team:
-            team.objects.values_list.return_value = [("t2", "zeta"), ("t1", "Alpha")]
-            assert get_teams() == [{"id": "t1", "name": "Alpha"}, {"id": "t2", "name": "zeta"}]

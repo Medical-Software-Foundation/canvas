@@ -144,17 +144,18 @@ class TestDoDispatch:
         assert code == HTTPStatus.BAD_REQUEST
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
-    @patch(f"{MODULE}.build_delete_block_effects", return_value=[])
+    @patch(f"{MODULE}.build_delete_blocks_effects", return_value=[])
     @patch(f"{MODULE}.get_blocks_by_group", return_value=[])
     @patch(f"{MODULE}.get_blocks_for_provider")
-    @patch(f"{MODULE}.delete_block")
+    @patch(f"{MODULE}.delete_blocks")
     def test_real_route_reads_path_and_query(self, mock_delete, mock_blocks, mock_group, mock_build, mock_access):
         """End to end through an unpatched route: the swapped request carries the ids and the query."""
-        mock_blocks.return_value = [AdminBlock(id="b1", provider_id="p1", group_id="g1",
-                                               start=datetime(2026, 7, 4, 9, tzinfo=UTC), end=datetime(2026, 7, 4, 10, tzinfo=UTC))]
+        block = AdminBlock(id="b1", provider_id="p1", group_id="g1",
+                           start=datetime(2026, 7, 4, 9, tzinfo=UTC), end=datetime(2026, 7, 4, 10, tzinfo=UTC))
+        mock_blocks.return_value = [block]
         handler = _make_handler()
         handler._do_dispatch("DELETE", "blocks/p1/b1?apply_to_group=true", {})
-        assert mock_delete.mock_calls == [call("p1", "b1")]
+        assert mock_delete.mock_calls == [call([block])]
         assert mock_group.mock_calls == [call("g1")]
 
 

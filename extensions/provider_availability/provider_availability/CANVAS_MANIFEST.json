@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.27.7",
+    "plugin_version": "0.27.8",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {
@@ -10,7 +10,7 @@
                 "description": "REST API for querying availability and managing rules",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Calendar", "Event", "Facility", "NoteType", "PatientFacilityAddress", "PracticeLocation", "Staff", "StaffRole", "Team"],
+                    "read": ["Appointment", "Calendar", "Event", "Facility", "NoteType", "PatientFacilityAddress", "PracticeLocation", "Staff", "StaffRole"],
                     "write": ["Calendar", "Event"]
                 }
             },
@@ -28,7 +28,7 @@
                 "description": "Staff-session API for bulk availability import from a CSV file",
                 "data_access": {
                     "event": "",
-                    "read": ["Appointment", "Calendar", "Event", "Facility", "NoteType", "PracticeLocation", "Staff", "StaffRole", "Team"],
+                    "read": ["Appointment", "Calendar", "Event", "Facility", "NoteType", "PracticeLocation", "Staff", "StaffRole"],
                     "write": ["Calendar", "Event"]
                 }
             },
@@ -143,6 +143,15 @@
             {
                 "class": "provider_availability.protocols.round_visits:OnRoundVisitRestored",
                 "description": "Recounts a facility round when a canceled visit in it is restored",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],
+                    "write": ["Appointment", "Calendar", "Event"]
+                }
+            },
+            {
+                "class": "provider_availability.protocols.round_visits:OnRoundVisitUpdated",
+                "description": "Recounts facility rounds when a visit is edited or entered in error",
                 "data_access": {
                     "event": "",
                     "read": ["Appointment", "Calendar", "Event", "PracticeLocation", "Staff"],

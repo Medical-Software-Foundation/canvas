@@ -8,12 +8,14 @@ import pytest
 from provider_availability.engine import facilities, settings
 from provider_availability.engine.models import ProviderAvailabilityRule
 from tests.api.test_availability_api import MODULE, _make_handler, _parse
+from tests.engine.test_access import StaffDirectory
 
 ADMIN = "a" * 32
 SCHED = "b" * 32
 PROV1 = "c" * 32
 PROV2 = "d" * 32
-TEAM = "12345678-1234-1234-1234-123456789abc"
+ROLE = "OFFICE_MGR"
+ROLES = [{"code": ROLE, "name": "Office Manager", "abbreviation": "", "domain": "", "staff_count": 1}]
 SECRETS = {"allowed-staff-keys": ADMIN}
 STAFF = [
     {"id": ADMIN, "name": "Ada Admin", "location_id": "loc1"},
@@ -35,7 +37,7 @@ def _handler(staff_id=ADMIN, json_body=None, path_params=None):
 @pytest.fixture(autouse=True)
 def lookups():
     with patch(f"{MODULE}.get_staff_directory", return_value=STAFF), \
-         patch(f"{MODULE}.get_teams", return_value=[{"id": TEAM, "name": "Admins"}]), \
+         patch(f"{MODULE}.get_available_roles", return_value=ROLES), \
          patch(f"{MODULE}.get_active_locations", return_value=[{"id": "loc1", "name": "Boise"}]), \
          patch(f"{MODULE}.get_active_facilities", return_value=FACILITIES), \
          patch("provider_availability.engine.facilities.get_active_facilities", return_value=FACILITIES), \
@@ -58,7 +60,7 @@ class TestGetSettings:
         assert data["admins"] == [{"id": ADMIN, "name": "Ada Admin"}]
         assert data["admins_from"] == "secret"
         assert data["secret_admins"] == [ADMIN]
-        assert data["teams"] == [{"id": TEAM, "name": "Admins"}]
+        assert data["roles"] == ROLES
         assert len(data["staff"]) == 4
         assert data["facilities"] == FACILITIES
         assert data["provider_facilities"] == {}
@@ -88,25 +90,31 @@ class TestRuleDefaults:
         assert settings.get_rule_defaults()["buffer_pre"] == 0
 
 
+@pytest.fixture
+def directory():
+    """Active staff: everyone in STAFF, with SCHED the only one holding ROLE."""
+    staff = StaffDirectory({ROLE: {SCHED}})
+    with patch("provider_availability.engine.access._query_active_staff", staff):
+        yield staff
+
+
+@pytest.mark.usefixtures("directory")
 class TestAccess:
-    @pytest.fixture(autouse=True)
-    def team_members(self):
-        with patch("provider_availability.engine.access.Team") as team:
-            team.objects.filter.return_value.values_list.return_value = [SCHED]
-            yield team
 
     def test_admins_and_default(self):
-        body = {"admin_team_ids": [TEAM], "admin_staff_ids": [PROV1], "default_access": "view"}
+        body = {"admin_role_codes": [ROLE.lower()], "admin_staff_ids": [PROV1], "default_access": "view"}
         data, code = _parse(_handler(json_body=body).put_access()[0])
         assert code == HTTPStatus.OK
-        assert data["access"]["admin_team_ids"] == [TEAM]
+        assert data["access"]["admin_role_codes"] == [ROLE]
         assert data["access"]["admin_staff_ids"] == [PROV1]
+        assert data["access"]["admins_saved"] is True
         assert data["access"]["default_access"] == "view"
 
-    def test_unknown_team_is_rejected(self):
-        data, code = _parse(_handler(json_body={"admin_team_ids": ["nope"]}).put_access()[0])
+    def test_unknown_role_is_rejected(self):
+        data, code = _parse(_handler(json_body={"admin_role_codes": ["NOPE"]}).put_access()[0])
         assert code == HTTPStatus.BAD_REQUEST
-        assert settings.get_access_config()["admin_team_ids"] == []
+        assert data["error"] == "No active staff hold that role"
+        assert settings.get_access_config()["admins_saved"] is False
 
     def test_inactive_admin_is_rejected(self):
         data, code = _parse(_handler(json_body={"admin_staff_ids": ["z" * 32]}).put_access()[0])
@@ -114,27 +122,49 @@ class TestAccess:
         assert "active" in data["error"]
 
     def test_admins_must_be_lists(self):
-        _, code = _parse(_handler(json_body={"admin_team_ids": TEAM}).put_access()[0])
+        _, code = _parse(_handler(json_body={"admin_role_codes": ROLE}).put_access()[0])
         assert code == HTTPStatus.BAD_REQUEST
 
-    def test_clearing_the_admins(self):
-        settings.set_admins([TEAM], [PROV1])
-        _parse(_handler(json_body={"admin_team_ids": [], "admin_staff_ids": []}).put_access()[0])
-        config = settings.get_access_config()
-        assert (config["admin_team_ids"], config["admin_staff_ids"]) == ([], [])
+    def test_dashed_admin_ids_are_saved_undashed(self):
+        dashed = f"{PROV1[:8]}-{PROV1[8:12]}-{PROV1[12:16]}-{PROV1[16:20]}-{PROV1[20:]}"
+        data, code = _parse(_handler(json_body={"admin_role_codes": [], "admin_staff_ids": [dashed]}).put_access()[0])
+        assert code == HTTPStatus.OK
+        assert data["access"]["admin_staff_ids"] == [PROV1]
+
+    def test_a_role_alone_is_fine(self):
+        handler = _make_handler(staff_id=SCHED, json_body={"admin_role_codes": [ROLE], "admin_staff_ids": []}, secrets={})
+        data, code = _parse(handler.put_access()[0])
+        assert code == HTTPStatus.OK
+        assert data["access"]["admin_role_codes"] == [ROLE]
 
     def test_cannot_save_admins_that_leave_you_out(self):
-        # SCHED is an admin only through their team; dropping the team would lock them out.
-        settings.set_admins([TEAM], [])
-        handler = _make_handler(staff_id=SCHED, json_body={"admin_team_ids": [], "admin_staff_ids": [PROV1]}, secrets={})
+        # SCHED is an admin only through their role; dropping the role would lock them out.
+        settings.set_admins([ROLE], [])
+        handler = _make_handler(staff_id=SCHED, json_body={"admin_role_codes": [], "admin_staff_ids": [PROV1]}, secrets={})
         data, code = _parse(handler.put_access()[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "lock you out" in data["error"]
-        assert settings.get_access_config()["admin_team_ids"] == [TEAM]
+        assert settings.get_access_config()["admin_role_codes"] == [ROLE]
+
+    def test_emptying_the_admins_is_a_lock_out_for_the_saver(self):
+        settings.set_admins([ROLE], [])
+        handler = _make_handler(staff_id=SCHED, json_body={"admin_role_codes": [], "admin_staff_ids": []}, secrets={})
+        data, code = _parse(handler.put_access()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "lock you out" in data["error"]
+
+    def test_canvas_support_may_save_any_admins(self):
+        from provider_availability.engine.access import CANVAS_SUPPORT_KEY
+
+        settings.set_admins([ROLE], [])
+        handler = _make_handler(staff_id=CANVAS_SUPPORT_KEY, json_body={"admin_role_codes": [], "admin_staff_ids": [PROV1]}, secrets={})
+        data, code = _parse(handler.put_access()[0])
+        assert code == HTTPStatus.OK
+        assert data["access"]["admin_staff_ids"] == [PROV1]
 
     def test_the_secret_keeps_its_admins_in(self):
         # ADMIN is in the plugin secret, so saving admins without them still leaves them an admin.
-        data, code = _parse(_handler(json_body={"admin_team_ids": [], "admin_staff_ids": [PROV1]}).put_access()[0])
+        data, code = _parse(_handler(json_body={"admin_role_codes": [], "admin_staff_ids": [PROV1]}).put_access()[0])
         assert code == HTTPStatus.OK
         assert data["access"]["admin_staff_ids"] == [PROV1]
 
@@ -196,9 +226,10 @@ class TestWritesFollowAccess:
     def group(self):
         settings.save_group("Orange County", [SCHED], [PROV1])
 
+    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.build_delete_effects", return_value=[])
     @patch(f"{MODULE}.delete_rules_for_provider", return_value=1)
-    def test_scheduler_can_change_their_provider(self, mock_delete, mock_effects):
+    def test_scheduler_can_change_their_provider(self, mock_delete, mock_effects, mock_rules):
         _, code = _parse(_handler(staff_id=SCHED, path_params={"provider_id": PROV1}).delete_provider_rules()[0])
         assert code == HTTPStatus.OK
         assert mock_delete.mock_calls == [call(PROV1)]
@@ -411,3 +442,217 @@ class TestProviderFacilities:
             _, code = _parse(_handler(staff_id=SCHED, path_params={"provider_id": "prov-1"}).get_facility_suggestions()[0])
         assert code == HTTPStatus.FORBIDDEN
         assert suggest.mock_calls == []
+
+
+@pytest.mark.usefixtures("directory")
+class TestFirstRun:
+    """Before any admin is saved everyone is an admin; after, an empty set means only Canvas Support."""
+
+    def test_anyone_can_name_the_first_admins(self):
+        handler = _make_handler(staff_id=PROV2, json_body={"admin_role_codes": [ROLE], "admin_staff_ids": [PROV2]}, secrets={})
+        data, code = _parse(handler.put_access()[0])
+        assert code == HTTPStatus.OK
+        assert data["access"]["admin_staff_ids"] == [PROV2]
+
+    def test_settings_says_where_admin_comes_from(self, directory):
+        from provider_availability.engine.access import CANVAS_SUPPORT_KEY
+
+        handler = _make_handler(staff_id=PROV2, secrets={})
+        assert _parse(handler.get_settings()[0])[0]["admins_from"] == "everyone"
+        settings.set_admins([], [PROV1])
+        directory.inactive = {PROV1}
+        handler = _make_handler(staff_id=CANVAS_SUPPORT_KEY, secrets={})
+        with patch(f"{MODULE}.get_provider_displays", return_value={}):
+            data, code = _parse(handler.get_settings()[0])
+        assert code == HTTPStatus.OK
+        assert data["admins_from"] == "canvas_support"
+        # Everyone else is shut out until Canvas Support names active admins.
+        _, code = _parse(_make_handler(staff_id=PROV2, secrets={}).get_settings()[0])
+        assert code == HTTPStatus.FORBIDDEN
+
+
+class TestAdminWarnings:
+    """Settings names saved admins who no longer count, so they're replaced before all are gone."""
+
+    def test_unheld_role_and_deactivated_person(self):
+        settings.set_admins([ROLE], [ADMIN, "f" * 32])
+        with patch(f"{MODULE}.roles_with_active_staff", return_value=set()) as held, \
+             patch(f"{MODULE}.role_names", return_value={ROLE: "Office Manager"}) as role_names, \
+             patch(f"{MODULE}.get_available_roles", return_value=[]), \
+             patch(f"{MODULE}.get_provider_displays", return_value={"f" * 32: {"name": "Fay Former"}}) as names:
+            data, code = _parse(_handler().get_settings()[0])
+        # Nobody active holds the role, so its name comes from all roles, not the active list.
+        assert role_names.mock_calls == [call([ROLE])]
+        assert data["admin_role_names"] == {ROLE: "Office Manager"}
+        assert code == HTTPStatus.OK
+        assert data["admin_warnings"] == [
+            "No active staff hold the admin role Office Manager.",
+            "Fay Former is deactivated in Canvas and no longer counts as an admin.",
+        ]
+        assert held.mock_calls == [call([ROLE])]
+        # ADMIN is in the active staff directory, so only the other person is looked up.
+        assert names.mock_calls == [call(["f" * 32])]
+
+    def test_no_warnings_when_admins_are_active(self):
+        settings.set_admins([ROLE], [ADMIN])
+        with patch(f"{MODULE}.roles_with_active_staff", return_value={ROLE}):
+            data, _ = _parse(_handler().get_settings()[0])
+        assert data["admin_warnings"] == []
+
+
+class TestSettingsBodiesMustBeObjects:
+    @pytest.mark.parametrize(
+        "route",
+        ["put_rule_defaults", "put_access", "put_feature", "put_provider_facilities", "post_group",
+         "set_timezone", "set_provider_tz", "set_provider_tz_bulk"],
+    )
+    def test_a_list_body_is_a_400(self, route):
+        data, code = _parse(getattr(_handler(json_body=["buffers"]), route)()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert data["error"] == "The request body must be a JSON object"
+
+
+class TestEveryWriteRefusesANonObjectBody:
+    @pytest.mark.parametrize(
+        "route",
+        ["create_or_update_rule", "update_rule_group", "create_block", "update_block",
+         "create_recurring_block", "update_recurring_block", "set_roles", "save_saved_view",
+         "remove_expired_items", "snooze_expired_items"],
+    )
+    def test_a_list_body_is_a_400(self, route):
+        _, code = _parse(getattr(_handler(json_body=["x"]), route)()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+
+    def test_override_body(self):
+        rule = ProviderAvailabilityRule(id="r1", provider_id=PROV1)
+        with patch(f"{MODULE}.get_rule_by_id", return_value=rule):
+            data, code = _parse(_handler(json_body=["x"], path_params={"provider_id": PROV1, "rule_id": "r1"}).add_override()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert data["error"] == "The request body must be a JSON object"
+
+
+class TestReadsFollowAccess:
+    """Staff with "No access" (the default under the secret) see only their own schedule."""
+
+    @pytest.fixture(autouse=True)
+    def saved(self):
+        rule1 = ProviderAvailabilityRule(id="r1", provider_id=PROV1)
+        rule2 = ProviderAvailabilityRule(id="r2", provider_id=PROV2)
+        with patch(f"{MODULE}.get_all_rules", return_value=[rule1, rule2]), \
+             patch(f"{MODULE}.get_rules_for_provider", side_effect=lambda pid: [r for r in (rule1, rule2) if r.provider_id == pid]), \
+             patch(f"{MODULE}.get_rule_by_id", return_value=rule2), \
+             patch(f"{MODULE}.get_blocks_for_provider", return_value=[]), \
+             patch(f"{MODULE}.get_recurring_blocks_for_provider", return_value=[]):
+            yield
+
+    def test_list_rules_holds_only_their_own(self):
+        handler = _make_handler(staff_id=PROV1, secrets=SECRETS)
+        handler.request.query_params = {}
+        data, code = _parse(handler.list_rules()[0])
+        assert code == HTTPStatus.OK
+        assert [r["provider_id"] for r in data["rules"]] == [PROV1]
+
+    def test_list_rules_for_someone_else_is_refused(self):
+        handler = _make_handler(staff_id=PROV1, secrets=SECRETS)
+        handler.request.query_params = {"provider_id": PROV2}
+        with patch(f"{MODULE}.resolve_provider_id", return_value=PROV2):
+            data, code = _parse(handler.list_rules()[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert "view availability" in data["error"]
+
+    @pytest.mark.parametrize(
+        "route", ["get_provider_rules", "list_overrides", "list_blocks", "list_recurring_blocks"]
+    )
+    def test_per_provider_reads_are_refused_for_others(self, route):
+        handler = _handler(staff_id=PROV1, path_params={"provider_id": PROV2, "rule_id": "r2"})
+        _, code = _parse(getattr(handler, route)()[0])
+        assert code == HTTPStatus.FORBIDDEN
+
+    @pytest.mark.parametrize(
+        "route", ["get_provider_rules", "list_overrides", "list_blocks", "list_recurring_blocks"]
+    )
+    def test_per_provider_reads_allow_their_own(self, route):
+        handler = _handler(staff_id=PROV2, path_params={"provider_id": PROV2, "rule_id": "r2"})
+        _, code = _parse(getattr(handler, route)()[0])
+        assert code == HTTPStatus.OK
+
+    def test_admins_read_everyone(self):
+        handler = _handler(staff_id=ADMIN, path_params={"provider_id": PROV2})
+        _, code = _parse(handler.list_blocks()[0])
+        assert code == HTTPStatus.OK
+
+    def test_no_access_staff_cannot_edit_their_own(self):
+        _, code = _parse(_handler(staff_id=PROV2, path_params={"provider_id": PROV2}).delete_provider_rules()[0])
+        assert code == HTTPStatus.FORBIDDEN
+
+
+HOLD_ID = "77777777-7777-4777-8777-777777777777"
+
+
+class TestKeptHoldsStayEditable:
+    """Holds switched off with "keep": a kept hold can be edited, but a new hold can't be added."""
+
+    @pytest.fixture
+    def kept(self):
+        from provider_availability.engine.models import RecurringBlock
+
+        settings.set_feature("holds", False)
+        saved = RecurringBlock(id=HOLD_ID, provider_id=PROV1, hold_type="next_day", reason="Hold")
+        with patch(f"{MODULE}.get_recurring_block_by_id", return_value=saved), \
+             patch(f"{MODULE}.save_recurring_block") as save, \
+             patch(f"{MODULE}.build_recurring_blocks_resync_effects", return_value=[]):
+            yield save
+
+    def _body(self, hold_type):
+        return {
+            "id": HOLD_ID, "provider_id": PROV1, "hold_type": hold_type, "reason": "Hold",
+            "recurrence_frequency": "daily", "effective_start": "2026-12-01", "effective_end": "2026-12-31",
+            "time_windows": [{"start": "09:00", "end": "10:00"}],
+        }
+
+    def test_editing_a_kept_hold_saves(self, kept):
+        data, code = _parse(_handler(json_body=self._body("next_day")).update_recurring_block()[-1])
+        assert code == HTTPStatus.OK, data
+        assert kept.mock_calls[0].args[0].effective_end.isoformat() == "2026-12-31"
+
+    def test_a_group_edit_gives_no_hold_to_a_sibling_leaving_a_facility(self, kept):
+        from provider_availability.engine.models import RecurringBlock
+
+        group = "88888888-8888-4888-8888-888888888888"
+        sibling = RecurringBlock(id="99999999-9999-4999-8999-999999999990", provider_id=PROV2,
+                                 group_id=group, facility_id="fac-1", facility_name="Facility")
+        body = {**self._body("next_day"), "group_id": group, "apply_to_group": True}
+        with patch(f"{MODULE}.get_recurring_blocks_by_group", return_value=[sibling]):
+            data, code = _parse(_handler(json_body=body).update_recurring_block()[-1])
+        assert code == HTTPStatus.OK, data
+        saved = [c.args[0] for c in kept.mock_calls]
+        assert [(b.id, b.hold_type, b.facility_id) for b in saved] == [
+            (HOLD_ID, "next_day", ""), (sibling.id, "none", ""),
+        ]
+
+    def test_changing_its_hold_type_is_refused(self, kept):
+        data, code = _parse(_handler(json_body=self._body("same_day")).update_recurring_block()[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Holds are turned off" in data["error"]
+        assert kept.mock_calls == []
+
+
+class TestNewRulesGetNoOverridesWhileOff:
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.lead_time_rules", return_value=[])
+    @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=[])
+    @patch(f"{MODULE}.check_rule_overlap", return_value=None)
+    @patch(f"{MODULE}.save_rule")
+    @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
+    @patch(f"{MODULE}.get_rule_by_id", return_value=None)
+    def test_put_for_an_unsaved_rule_drops_overrides(self, _get, _rules, save, *mocks):
+        settings.set_feature("overrides", False)
+        body = {
+            "id": "99999999-9999-4999-8999-999999999999", "provider_id": PROV1,
+            "weekly_schedule": {"monday": [{"start": "09:00", "end": "12:00"}]},
+            "effective_start": "2026-12-01",
+            "date_overrides": [{"date": "2026-12-24", "is_closed": True}],
+        }
+        data, code = _parse(_handler(json_body=body).update_rule_group()[-1])
+        assert code == HTTPStatus.OK, data
+        assert save.mock_calls[0].args[0].date_overrides == []

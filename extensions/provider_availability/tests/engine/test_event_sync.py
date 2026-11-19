@@ -3248,3 +3248,21 @@ def test_shared_lookups_check_a_shared_name_once_per_provider():
     assert len(shared.mock_calls) == 1
 
 
+
+
+def test_redrawing_many_blocks_looks_each_provider_up_once():
+    from provider_availability.engine import event_sync
+    from provider_availability.engine.models import AdminBlock
+
+    blocks = [
+        AdminBlock(provider_id=pid, start=datetime(2026, 3, d, 9), end=datetime(2026, 3, d, 10), reason="PTO")
+        for pid in ("p1", "p2")
+        for d in (10, 11)
+    ]
+    with patch.object(event_sync, "provider_tz", return_value=ZoneInfo("UTC")) as tz, \
+         patch.object(event_sync, "resolve_provider_name", return_value="Pat One"), \
+         patch.object(event_sync, "get_admin_calendar_id", return_value=("cal-1", [])):
+        effects = event_sync.build_blocks_event_effects(blocks)
+    assert [c.args for c in tz.mock_calls] == [("p1",), ("p2",)]
+    assert len(effects) == 4
+    assert event_sync.build_blocks_event_effects([]) == []

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from canvas_sdk.v1.data import NoteType, PracticeLocation, Staff
-from canvas_sdk.v1.data.team import Team
 from logger import log
 
 
@@ -108,11 +107,4 @@ def get_staff_directory() -> list[dict[str, Any]]:
     people.sort(key=lambda pair: pair[0])
     results = [person for _, person in people]
     log.info("get_staff_directory: found %d active staff", len(results))
-    return results
-
-
-def get_teams() -> list[dict[str, Any]]:
-    """Canvas teams, for picking the admin team. Sorted by name."""
-    results = [{"id": str(tid), "name": name or ""} for tid, name in Team.objects.values_list("id", "name")]
-    results.sort(key=lambda t: t["name"].lower())
     return results

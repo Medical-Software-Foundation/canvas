@@ -27,6 +27,7 @@ LAST_TTL_REFRESH_KEY = "pa:last_ttl_refresh"
 FEATURES_KEY = "pa:features"
 RULE_DEFAULTS_KEY = "pa:rule_defaults"
 ACCESS_KEY = "pa:access"
+ROUND_VISIT_PREFIX = "pa:round_visit:"
 # Before 0.27.0 every provider's facilities were one dict under this key; it is read
 # once and moved to one key per provider (engine.facilities).
 PROVIDER_FACILITIES_KEY = "pa:provider_facilities"
@@ -419,6 +420,24 @@ def set_last_sync_date(date_str: str) -> None:
     """Store today's date as the last sync date."""
     cache = _get_cache()
     cache.set(LAST_SYNC_KEY, date_str, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+# ── Round visit notes ──────────────────────────────────────────────────
+
+
+def get_round_visit(appointment_id: str) -> dict[str, Any] | None:
+    """Where a visit of a provider with rounds was last counted (engine.round_limits.remember_visit)."""
+    val = _get_cache().get(ROUND_VISIT_PREFIX + str(appointment_id))
+    return dict(val) if isinstance(val, dict) else None
+
+
+def set_round_visit(appointment_id: str, note: dict[str, Any]) -> None:
+    """Kept for the cache TTL and not refreshed: an expired note only costs a wider recount."""
+    _get_cache().set(ROUND_VISIT_PREFIX + str(appointment_id), note, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+def clear_round_visit(appointment_id: str) -> None:
+    _get_cache().delete(ROUND_VISIT_PREFIX + str(appointment_id))
 
 
 # ── Expired-item snoozes ───────────────────────────────────────────────

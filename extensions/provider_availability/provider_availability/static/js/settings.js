@@ -56,7 +56,7 @@
   var LEVELS = {
     full: { short: 'Full access', hint: 'Edit and view every provider.' },
     view: { short: 'View only', hint: 'View every provider without making changes.' },
-    none: { short: 'No access', hint: 'No access to other providers’ availability.' }
+    none: { short: 'No access', hint: 'No access to other providers’ availability. Providers can view their own availability without making changes.' }
   };
   // Names shown per column in an open editing group before "+ N more".
   var NAME_CAP = 8;
@@ -344,9 +344,9 @@
     return list;
   }
 
-  function teamName(id) {
-    var t = (state.teams || []).find(function (x) { return x.id === id; });
-    return t ? t.name : 'Unknown team';
+  function roleName(code) {
+    var r = (state.roles || []).find(function (x) { return x.code === code; });
+    return (r && r.name) || (state.admin_role_names || {})[code] || code;
   }
 
   function drawAccess() {
@@ -357,14 +357,21 @@
     var secretIds = state.secret_admins || [];
     var everyone = state.admins_from === 'everyone';
     var line = function (label, names) { return '<div class="adm-line"><b>' + label + ':</b> ' + (names.length ? esc(names.join(', ')) : 'None') + '</div>'; };
-    $('set-admin-members').innerHTML = everyone ? '' :
-      line('Teams', (a.admin_team_ids || []).map(teamName)) + line('People', (a.admin_staff_ids || []).map(staffName));
+    var selected = (a.admin_role_codes || []).length + (a.admin_staff_ids || []).length > 0;
+    $('set-admin-members').innerHTML = everyone && !selected ? '' :
+      line('Roles', (a.admin_role_codes || []).map(roleName)) + line('People', (a.admin_staff_ids || []).map(staffName));
     var secretNames = secretIds.map(staffName).join(', ');
+    var warnings = state.admin_warnings || [];
+    $('set-admin-warn').innerHTML = warnings.length
+      ? '<div class="rs warn"><b>Update the admins.</b>' + warnings.map(esc).join(' ') + '</div>'
+      : '';
     $('set-admin-note').textContent = everyone
       ? 'No admins are selected, so every staff member is an admin. Select admins to limit who can change Settings.'
-      : state.admins_from === 'secret'
-        ? 'No admins are selected. Admins come from the allowed-staff-keys plugin secret: ' + secretNames + '.'
-        : (secretIds.length ? 'Always admins through the allowed-staff-keys plugin secret: ' + secretNames + '.' : '');
+      : state.admins_from === 'canvas_support'
+        ? 'None of the selected admins are active. Until active admins are selected, only Canvas Support can change Settings.'
+        : state.admins_from === 'secret'
+          ? (selected ? 'None of the selected admins are active.' : 'No admins are selected.') + ' Admins come from the allowed-staff-keys plugin secret: ' + secretNames + '.'
+          : (secretIds.length ? 'Always admins through the allowed-staff-keys plugin secret: ' + secretNames + '.' : '');
     var limited = lv !== 'full' || (a.groups || []).length > 0;
     $('set-access-status').innerHTML = limited ? '' :
       '<div class="rs warn"><b>Every staff member can edit every provider.</b>Create an editing group or change default access to limit editing.</div>';
@@ -384,14 +391,15 @@
     saveAccess({ default_access: this.value }, 'Everyone else set to ' + LEVELS[this.value].short.toLowerCase());
   });
 
-  // Admins: Canvas teams and people, picked together and saved together.
+  // Admins: Canvas roles and people, picked together and saved together.
   function openAdminEditor() {
     var a = state.access;
-    var teams = (state.teams || []).map(function (t) { return { id: t.id, name: t.name, location_id: '' }; });
+    var roles = state.roles || [];
     $('set-edit-admins').style.display = 'none';
     $('set-admin-editor').innerHTML = '<div class="gedit"><div class="ax-cf-title" style="margin-bottom:4px">Edit admins</div>' +
-      '<label class="ax-lbl">Teams</label><div class="pick" data-pick="admteam">' + teams.map(function (t) {
-        return '<label class="ax-check"><input type="checkbox" value="' + esc(t.id) + '"' + ((a.admin_team_ids || []).indexOf(t.id) >= 0 ? ' checked' : '') + '>' + esc(t.name) + '</label>';
+      '<label class="ax-lbl">Roles</label><div class="pick" data-pick="admrole">' + roles.map(function (r) {
+        return '<label class="ax-check"><input type="checkbox" value="' + esc(r.code) + '"' + ((a.admin_role_codes || []).indexOf(r.code) >= 0 ? ' checked' : '') + '>' +
+          esc(r.name || r.code) + ' <span class="note" style="display:inline;margin:0">' + esc(plural(r.staff_count, 'person', 'people')) + '</span></label>';
       }).join('') + '</div>' +
       '<label class="ax-lbl">People</label>' + pickerHtml('admstaff', state.staff || [], a.admin_staff_ids || []) +
       '<div class="save-row"><span class="status" id="set-adm-status"></span><button type="button" class="btn" id="set-adm-cancel">Cancel</button><button type="button" class="btn btn-primary" id="set-adm-save">Save admins</button></div></div>';
@@ -399,7 +407,7 @@
     $('set-adm-cancel').onclick = closeAdminEditor;
     $('set-adm-save').onclick = async function () {
       var pick = function (key) { return Array.from(document.querySelectorAll('[data-pick="' + key + '"] input:checked')).map(function (i) { return i.value; }); };
-      var ok = await saveAccess({ admin_team_ids: pick('admteam'), admin_staff_ids: pick('admstaff') }, 'Admins saved');
+      var ok = await saveAccess({ admin_role_codes: pick('admrole'), admin_staff_ids: pick('admstaff') }, 'Admins saved');
       if (ok) closeAdminEditor();
     };
   }
@@ -516,7 +524,7 @@
     var providers = providerList().map(function (p) { return { id: p.id, name: p.name, location_id: locById[p.id] || '' }; });
     $('set-group-editor').innerHTML = '<div class="gedit"><div class="ax-cf-title" style="margin-bottom:4px">' + (id ? 'Edit editing group' : 'New editing group') + '</div>' +
       '<label class="ax-lbl" for="set-grp-name">Group name</label><input class="input" id="set-grp-name" placeholder="Enter a group name" value="' + esc(g.name) + '" style="max-width:360px">' +
-      '<label class="ax-lbl">Schedulers</label><div class="note" style="margin:-2px 0 8px">Staff who can manage the providers below. Providers already manage their own availability.</div>' + pickerHtml('sched', state.staff || [], g.schedulers) +
+      '<label class="ax-lbl">Schedulers</label><div class="note" style="margin:-2px 0 8px">Staff who can manage the providers below.</div>' + pickerHtml('sched', state.staff || [], g.schedulers) +
       '<label class="ax-lbl">Providers</label>' + pickerHtml('prov', providers, g.providers) +
       '<div class="save-row"><span class="status" id="set-grp-status"></span><button type="button" class="btn" id="set-grp-cancel">Cancel</button><button type="button" class="btn btn-primary" id="set-grp-save">Save group</button></div></div>';
     wirePicker('sched');

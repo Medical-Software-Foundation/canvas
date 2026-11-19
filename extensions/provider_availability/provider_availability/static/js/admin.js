@@ -3188,7 +3188,8 @@ function confirmDeleteBlock(providerId, blockId) {
 }
 async function doDeleteBlock(providerId, blockId) {
   const data = await apiCall('/blocks/' + providerId + '/' + blockId, { method: 'DELETE' });
-  if (data.error) { showMsg(data.error, 'error'); return; }
+  // Reload either way: a block another tab already deleted should leave the list too.
+  if (data.error) { showMsg(data.error, 'error'); loadOverview(); return; }
   showMsg('Block deleted', 'success');
   loadOverview();
 }

@@ -124,11 +124,13 @@ def set_rule_defaults(values: dict[str, Any]) -> dict[str, int]:
 # ── Access control ─────────────────────────────────────────────────────
 
 def get_access_config() -> dict[str, Any]:
-    """Admin teams and people, default access, and editing groups.
+    """Admin roles and people, default access, and editing groups.
 
-    Admins are the members of every team in ``admin_team_ids`` plus everyone in
-    ``admin_staff_ids``; the ``allowed-staff-keys`` secret adds more (see
-    engine.access). An older single ``admin_team_id`` reads as a one-team list.
+    Admins are the active staff holding a role in ``admin_role_codes`` (StaffRole
+    internal codes) plus the active staff in ``admin_staff_ids``; the
+    ``allowed-staff-keys`` secret and Canvas Support add more (see engine.access).
+    ``admins_saved`` is true once admins have been saved: from then on an empty
+    admin set means nobody but Canvas Support, not everyone.
     """
     stored = _get_cache().get(ACCESS_KEY) or {}
     level = stored.get("default_access", DEFAULT_ACCESS)
@@ -142,19 +144,24 @@ def get_access_config() -> dict[str, Any]:
         for g in stored.get("groups", [])
         if g.get("id")
     ]
-    team_ids = stored.get("admin_team_ids")
-    if team_ids is None:
-        legacy = str(stored.get("admin_team_id", "") or "")
-        team_ids = [legacy] if legacy else []
+    staff_ids = [str(s) for s in stored.get("admin_staff_ids", []) if s]
+    role_codes = [_role_code(c) for c in stored.get("admin_role_codes", []) if _role_code(c)]
+    saved = bool(stored.get("admins_saved") or staff_ids or role_codes)
     return {
-        "admin_team_ids": [str(t) for t in team_ids if t],
-        "admin_staff_ids": [str(s) for s in stored.get("admin_staff_ids", []) if s],
+        "admin_role_codes": role_codes,
+        "admin_staff_ids": staff_ids,
+        "admins_saved": saved,
         "default_access": level if level in ACCESS_LEVELS else DEFAULT_ACCESS,
         # False until someone saves a default access level. engine.access uses it
         # so a practice that restricted access with the secret stays restricted.
         "default_access_saved": stored.get("default_access") in ACCESS_LEVELS,
         "groups": groups,
     }
+
+
+def _role_code(code: Any) -> str:
+    """Role internal codes compare case-insensitively, as in engine.roles."""
+    return str(code or "").strip().upper()
 
 
 def _save_access_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -165,11 +172,14 @@ def _save_access_config(config: dict[str, Any]) -> dict[str, Any]:
     return get_access_config()
 
 
-def set_admins(team_ids: Any, staff_ids: Any) -> dict[str, Any]:
-    """Replace the admin teams and admin people. Empty lists hand admin back to the plugin secret."""
+def set_admins(role_codes: Any, staff_ids: Any) -> dict[str, Any]:
+    """Replace the admin roles and admin people, and mark admins as set up."""
+    if not isinstance(role_codes, list):
+        raise ValueError("admin_role_codes must be a list")
     config = get_access_config()
-    config["admin_team_ids"] = _clean_ids(team_ids)
+    config["admin_role_codes"] = sorted({_role_code(c) for c in role_codes if _role_code(c)})
     config["admin_staff_ids"] = _clean_ids(staff_ids)
+    config["admins_saved"] = True
     return _save_access_config(config)
 
 

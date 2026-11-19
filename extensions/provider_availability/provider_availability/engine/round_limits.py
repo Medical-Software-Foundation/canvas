@@ -11,6 +11,7 @@ occurrence and adds or removes that event.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from canvas_sdk.effects import Effect
@@ -30,7 +31,7 @@ from provider_availability.engine.admin_calendar import (
 from provider_availability.engine.event_sync import ROUND_FULL_TITLE
 from provider_availability.engine.models import DAYS_OF_WEEK, ProviderAvailabilityRule, TimeWindow, date_in_pattern
 from provider_availability.engine.settings import applied_overrides, rounds_drawn
-from provider_availability.engine.storage import get_rules_for_provider
+from provider_availability.engine.storage import get_all_rules, get_rules_for_provider, set_round_visit
 from provider_availability.engine.tz_utils import localize_naive, provider_tz, to_utc
 
 MAX_LABELS = 3  # Canvas allows three labels on an appointment
@@ -179,13 +180,106 @@ def visit_effects(
     if found is None:
         return []
     rule, start, end = found
-    effects = label_effects(appt, rule) if label and appt.status != AppointmentProgressStatus.CANCELLED else []
+    countable = appt.status != AppointmentProgressStatus.CANCELLED and getattr(appt, "entered_in_error_id", None) is None
+    effects = label_effects(appt, rule) if label and countable else []
     if counted is not None:
         if (provider_id, start, end) in counted:
             return effects
         counted.add((provider_id, start, end))
     effects.extend(full_block_effects(provider_id, rule, start, end))
     return effects
+
+
+def _stale_full_effects(
+    provider_id: str,
+    events: list[tuple[str, datetime, datetime]],
+    counted: set[tuple[str, datetime, datetime]] | None = None,
+) -> list[Effect]:
+    """Delete those of a provider's "Round full" events whose occurrence is no longer full.
+
+    ``events`` are (event id, start, end). One query reads the provider's visit start
+    times across all of them, and they are counted per event here. Occurrences in
+    ``counted`` were just recounted by visit_effects and are left alone.
+    """
+    events = [e for e in events if counted is None or (provider_id, e[1], e[2]) not in counted]
+    if not events:
+        return []
+    rules = (
+        [r for r in get_rules_for_provider(provider_id) if r.is_round and r.is_active and r.max_visits]
+        if rounds_drawn() else []
+    )
+    tz = provider_tz(provider_id)
+    limits: dict[str, int] = {}
+    for event_id, start, end in events:
+        found = round_at(provider_id, start, rules=rules, tz=tz)
+        if found is not None and (found[1], found[2]) == (start, end):
+            limits[event_id] = found[0].max_visits or 0
+    counts = dict.fromkeys(limits, 0)
+    if limits:
+        spans = [(eid, s, e) for eid, s, e in events if eid in limits]
+        lo, hi = min(s for _, s, _ in spans), max(e for _, _, e in spans)
+        for start_time in _visits_qs(provider_id, lo, hi).values_list("start_time", flat=True):
+            for eid, s, e in spans:
+                if s <= start_time < e:
+                    counts[eid] += 1
+    effects: list[Effect] = []
+    kept: set[tuple[datetime, datetime]] = set()
+    for event_id, start, end in events:
+        if event_id not in limits or counts[event_id] < limits[event_id]:
+            log.info("ROUND: provider %s has room again at %s, unblocking it", provider_id, start)
+            effects.append(EventEffect(event_id=event_id).delete())
+        elif (start, end) in kept:
+            # Two handlers counting at once can each add one; keep the first.
+            effects.append(EventEffect(event_id=event_id).delete())
+        else:
+            kept.add((start, end))
+    return effects
+
+
+def recheck_full_effects(provider_id: str, counted: set[tuple[str, datetime, datetime]] | None = None) -> list[Effect]:
+    """Remove one provider's future "Round full" events whose occurrence is no longer full."""
+    events = [(str(e.id), e.starts_at, e.ends_at) for e in _full_events(provider_id)]
+    return _stale_full_effects(provider_id, events, counted)
+
+
+def visit_note(appt: Appointment) -> dict[str, Any] | None:
+    """What decides where a visit counts: its provider, start, and whether it counts at all.
+
+    None for a visit whose provider has no round, since its edits never change a count.
+    """
+    if appt.provider is None or appt.start_time is None:
+        return None
+    provider_id = str(appt.provider.id)
+    if not any(r.is_round for r in get_rules_for_provider(provider_id)):
+        return None
+    countable = appt.status != AppointmentProgressStatus.CANCELLED and getattr(appt, "entered_in_error_id", None) is None
+    return {"provider_id": provider_id, "start": appt.start_time.isoformat(), "countable": bool(countable)}
+
+
+def remember_visit(appt: Appointment, note: dict[str, Any] | None = None) -> None:
+    """Save where the visit was just counted, so a later edit can tell whether it moved."""
+    note = note if note is not None else visit_note(appt)
+    if note is not None:
+        set_round_visit(str(appt.id), note)
+
+
+def recount_previous(note: dict[str, Any], counted: set[tuple[str, datetime, datetime]]) -> list[Effect]:
+    """Recount the round occurrence a visit was in before an edit, from its saved note."""
+    if not note.get("countable"):
+        return []
+    provider_id = str(note.get("provider_id") or "")
+    try:
+        start_time = datetime.fromisoformat(str(note.get("start")))
+    except ValueError:
+        return []
+    found = round_at(provider_id, start_time) if provider_id else None
+    if found is None:
+        return []
+    rule, start, end = found
+    if (provider_id, start, end) in counted:
+        return []
+    counted.add((provider_id, start, end))
+    return full_block_effects(provider_id, rule, start, end)
 
 
 def refresh_provider(provider_id: str, now: datetime | None = None) -> list[Effect]:
@@ -228,4 +322,21 @@ def refresh_provider(provider_id: str, now: datetime | None = None) -> list[Effe
     effects.extend(calendar_effects)
     for start, end in full:
         effects.append(EventEffect(calendar_id=calendar_id, title=ROUND_FULL_TITLE, starts_at=start, ends_at=end).create())
+    return effects
+
+
+def refresh_providers(provider_ids: list[str] | set[str], rules: list[ProviderAvailabilityRule] | None = None) -> list[Effect]:
+    """refresh_provider for each of these providers who has a round, after a change that moves round hours.
+
+    ``rules`` are the saved rules to look for rounds in; all saved rules are read
+    when it is left out. Providers with no round have no "Round full" events to
+    rebuild, so they cost nothing.
+    """
+    wanted = set(provider_ids)
+    if not wanted:
+        return []
+    with_rounds = {r.provider_id for r in (rules if rules is not None else get_all_rules()) if r.is_round}
+    effects: list[Effect] = []
+    for pid in sorted(wanted & with_rounds):
+        effects.extend(refresh_provider(pid))
     return effects
