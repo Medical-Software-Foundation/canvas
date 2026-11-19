@@ -135,7 +135,6 @@ details.section.matched > summary { color: #047857; }
 .card.expanded .card-chevron { transform: rotate(90deg); }
 .card-body { flex: 1; min-width: 0; }
 .card-title { font-size: 14px; font-weight: 600; color: #1f2937; }
-.card-sub { font-size: 12px; color: #6b7280; margin-top: 1px; }
 .card-sig { font-size: 12px; color: #6b7280; margin-top: 2px; font-style: italic; }
 .card-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .card-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #9ca3af; }
@@ -365,12 +364,6 @@ details.section.matched > summary { color: #047857; }
     var fillCount = group.unique_fill_count || (group.fills ? group.fills.length : 0);
     var latestFill = group.latest_fill_date || "";
 
-    // Hide the strength sub-line when it's already in the drug name (e.g.
-    // "LEVOTHYROXINE 75 MCG TABLET" + "75 MCG"); keep it when it adds detail.
-    var strength = group.strength || "";
-    var showStrength = strength &&
-      group.drug_description.toLowerCase().indexOf(strength.toLowerCase()) === -1;
-
     var addBtn = "", dismissBtn = "";
     if (section === "unresolved" || section === "dismissed") {
       addBtn = isAdded
@@ -396,7 +389,6 @@ details.section.matched > summary { color: #047857; }
       + "<div class=\"card-body\">"
       + "<div class=\"card-title\">" + esc(group.drug_description)
       + (group.is_mock ? "<span class=\"mock-badge\">Test data</span>" : "") + "</div>"
-      + (showStrength ? "<div class=\"card-sub\">" + esc(strength) + "</div>" : "")
       + (group.sig ? "<div class=\"card-sig\">" + esc(group.sig) + "</div>" : "")
       + ((dateText || fillsPill) ? "<div class=\"card-foot\">" + (dateText ? "<span class=\"card-date\">" + dateText + "</span>" : "") + fillsPill + "</div>" : "")
       + dismissedMeta

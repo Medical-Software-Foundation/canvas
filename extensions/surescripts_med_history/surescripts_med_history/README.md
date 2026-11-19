@@ -24,8 +24,11 @@ retype medications by hand during a visit.
 
 This plugin closes that loop: it requests the data before the appointment so
 it's there when the visit starts, does the comparison against active meds
-automatically (RxNorm, NDC, description, and an NDC→RxNorm cross-reference via
-FDB), and reduces reconciliation to a single click per medication. Dismissals
+automatically (RxNorm, NDC, description, and an FDB cross-reference from each
+fill's NDC to its FDB code and RxNorm), and reduces reconciliation to a single
+click per medication. Medications coded only in FDB, such as ones loaded by a
+data migration, get their RxNorm from FDB, so a generic fill still matches a
+brand-name medication on the list. Dismissals
 persist and auto-clear when a medication later matches or a newer fill arrives,
 so the same rows don't come back every visit.
 
@@ -147,4 +150,4 @@ namespace. No shared-namespace coupling and no schema-manager mirror required.
 uv run pytest
 ```
 
-165 tests, 96% coverage.
+175 tests, 97% coverage.
