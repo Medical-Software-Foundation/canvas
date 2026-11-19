@@ -30,6 +30,7 @@ from gcal_sync.models import (
     PendingHoldCreate,
     ProviderSyncLock,
     ReimportQueue,
+    RemovedDayHold,
     StaffCalendarMapping,
 )
 from gcal_sync.sync_service import SyncService
@@ -386,6 +387,11 @@ def reset_inbound_for_provider(mapping: StaffCalendarMapping) -> list[Effect]:
     PendingHoldCreate.objects.filter(
         google_calendar_id=mapping.google_calendar_id
     ).delete()
+    # Every hold is being cancelled on purpose, so no day keeps a "removed by the sync" pass to be
+    # held again by a delta; only the rebuild that follows recreates them.
+    RemovedDayHold.objects.filter(
+        google_calendar_id=mapping.google_calendar_id
+    ).delete()
     return effects
 
 
@@ -418,6 +424,11 @@ def purge_holds_chunk(
             google_calendar_id=mapping.google_calendar_id
         ).delete()
         PendingHoldCreate.objects.filter(
+            google_calendar_id=mapping.google_calendar_id
+        ).delete()
+        # A purged provider's days must stay cancelled until a deliberate re-import, so drop the
+        # records that would let a delta hold a sync-removed day again.
+        RemovedDayHold.objects.filter(
             google_calendar_id=mapping.google_calendar_id
         ).delete()
     last_id = str(ids[-1]) if ids else after_id
@@ -663,6 +674,107 @@ def drain_outbound_backfill(
             remaining,
         )
     return totals
+
+
+# Periodic full pull. A delta pull only returns what Google reports as changed since the token, so an
+# event a delta never delivered (a missed webhook, a recurring series Google re-expanded or moved) can
+# stay missing until someone re-imports by hand. Each calendar gets a full-window pull about once a
+# day, a couple per tick so the load spreads across the day instead of landing in one run.
+_PERIODIC_FULL_PULL_BATCH = 2
+_PERIODIC_FULL_PULL_MAX_AGE_HOURS = 24
+
+
+def _periodic_pull_order(state: CalendarSyncState) -> str:
+    """Sort key: calendars never fully pulled first, then the oldest full pull."""
+    last = getattr(state, "last_full_pull_at", None)
+    return last.isoformat() if last else ""
+
+
+def periodic_full_pull(
+    secrets: dict,
+    batch_size: int = _PERIODIC_FULL_PULL_BATCH,
+    max_age_hours: int = _PERIODIC_FULL_PULL_MAX_AGE_HOURS,
+) -> tuple[dict, list]:
+    """Full-window pull for up to ``batch_size`` calendars whose last full pull is stale.
+
+    Only calendars that already sync by delta (they have a token and no resync flag) are picked; a
+    calendar that needs its first or recovery pull is the daily reconcile's job, which caps those.
+    The pull does NOT bypass the convergence guard, so it fills in missing holds without reviving
+    ones staff cancelled. Each calendar runs under the per-provider lock, so it never overlaps an
+    admin action or the re-import drain. Returns ``(totals, effects)``.
+    """
+    calendar_ids = set(
+        StaffCalendarMapping.objects.filter(active=True).values_list(
+            "google_calendar_id", flat=True
+        )
+    )
+    totals = {
+        "pulled": 0,
+        "skipped": 0,
+        "failed": 0,
+        "holds_created": 0,
+        "holds_removed": 0,
+    }
+    if not calendar_ids:
+        return totals, []
+    cutoff = arrow.utcnow().shift(hours=-max_age_hours).datetime
+    due = sorted(
+        (
+            state
+            for state in CalendarSyncState.objects.filter(
+                google_calendar_id__in=calendar_ids
+            )
+            if not _needs_full_pull(state)
+            and (state.last_full_pull_at is None or state.last_full_pull_at < cutoff)
+        ),
+        key=_periodic_pull_order,
+    )
+    inbound = InboundSync(secrets)
+    effects: list = []
+    for state in due[:batch_size]:
+        calendar_id = state.google_calendar_id
+        if not acquire_provider_lock(calendar_id):
+            totals["skipped"] = totals["skipped"] + 1
+            continue
+        try:
+            stats, calendar_effects = inbound.process_calendar(
+                calendar_id, full_pull=True
+            )
+            effects.extend(calendar_effects)
+            totals["pulled"] = totals["pulled"] + 1
+            totals["holds_created"] = totals["holds_created"] + stats.get(
+                "holds_created", 0
+            )
+            totals["holds_removed"] = totals["holds_removed"] + stats.get(
+                "holds_removed", 0
+            )
+        except (
+            GoogleApiError,
+            GoogleAuthError,
+            RequestException,
+            ChannelConfigError,
+        ) as exc:
+            totals["failed"] = totals["failed"] + 1
+            log.error("Periodic full pull failed for %s: %s", calendar_id, exc)
+            # Stamp the attempt anyway so a calendar that keeps failing rotates to the back of the
+            # oldest-first queue (retried in a day) instead of taking a batch slot every tick and
+            # starving the healthy calendars.
+            CalendarSyncState.objects.filter(google_calendar_id=calendar_id).update(
+                last_full_pull_at=arrow.utcnow().datetime
+            )
+        finally:
+            release_provider_lock(calendar_id)
+    if due:
+        log.info(
+            "Periodic full pull: %s pulled, %s busy, %s failed, %s created, %s removed, %s due",
+            totals["pulled"],
+            totals["skipped"],
+            totals["failed"],
+            totals["holds_created"],
+            totals["holds_removed"],
+            len(due),
+        )
+    return totals, effects
 
 
 def reconcile_all(secrets: dict) -> tuple[dict, list]:
