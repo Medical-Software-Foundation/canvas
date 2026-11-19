@@ -9,7 +9,9 @@ SECRETS = {"GOOGLE_SERVICE_ACCOUNT_JSON": '{"client_email": "svc@x.iam", "privat
 
 
 def _state(mocker, sync_token="", needs=True):
-    state = SimpleNamespace(sync_token=sync_token, needs_full_resync=needs, save=mocker.Mock())
+    state = SimpleNamespace(
+        sync_token=sync_token, needs_full_resync=needs, expanded_backfilled=True, save=mocker.Mock()
+    )
     css = mocker.patch("gcal_sync.inbound.CalendarSyncState")
     css.objects.get_or_create.return_value = (state, False)
     return state
