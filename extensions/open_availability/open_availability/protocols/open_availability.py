@@ -256,11 +256,15 @@ class OpenAvailabilityOnDeactivation(BaseProtocol):
             log.info(
                 f"Ending open availability for staff: {staff.full_name} (event: {event.id})"
             )
+            # An update replaces the event's recurrence with what it sends, so the
+            # daily rule goes along with the new end date to end the series.
             event_effect = Event(
                 event_id=str(event.id),
                 title=event.title,
                 starts_at=event.starts_at,
                 ends_at=event.ends_at,
+                recurrence_frequency=EventRecurrence.Daily,
+                recurrence_interval=1,
                 recurrence_ends_at=now,
             ).update()
             effects.append(event_effect)

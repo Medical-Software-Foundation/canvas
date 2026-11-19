@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.3",
+    "plugin_version": "0.0.4",
     "name": "open_availability",
     "description": "Automatically creates open availability calendars for eligible providers when activated",
     "components": {

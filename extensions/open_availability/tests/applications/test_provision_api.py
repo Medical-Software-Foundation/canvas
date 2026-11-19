@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -313,6 +314,57 @@ class TestProvisionAvailabilityAPI:
                         assert len(result) == 3
                         assert mock_event_class.called
                         assert mock_create_event.called
+
+    def test_force_provisioning_keeps_the_daily_rule_when_ending(self) -> None:
+        """Test force provisioning ends existing series rather than removing their recurrence.
+
+        An update replaces the event's recurrence with what it sends, so the
+        effect has to carry the daily rule along with the new end date.
+        """
+        handler = self._make_handler()
+
+        mock_staff = MagicMock()
+        mock_staff.id = "staff-1"
+        mock_staff.full_name = "Dr. Test"
+        mock_staff.top_role_abbreviation = "MD"
+
+        mock_calendar = MagicMock()
+        mock_existing_event = MagicMock()
+        mock_existing_event.id = "old-event-1"
+        mock_existing_event.title = "Available"
+        mock_existing_event.starts_at = datetime(2026, 1, 1, 8, 0, tzinfo=UTC)
+        mock_existing_event.ends_at = datetime(2026, 1, 2, 3, 59, tzinfo=UTC)
+
+        mock_queryset = MagicMock()
+        mock_queryset.exists.return_value = True
+        mock_queryset.__iter__ = lambda self: iter([mock_existing_event])
+
+        with (
+            patch(
+                "open_availability.applications.provision_api.Staff.objects"
+            ) as mock_staff_objects,
+            patch(
+                "open_availability.applications.provision_api.CalendarModel.objects"
+            ) as mock_cal_objects,
+            patch(
+                "open_availability.applications.provision_api.create_availability_event"
+            ) as mock_create_event,
+        ):
+            mock_staff_queryset = MagicMock()
+            mock_staff_queryset.count.return_value = 1
+            mock_staff_queryset.__iter__ = lambda self: iter([mock_staff])
+            mock_staff_objects.filter.return_value = mock_staff_queryset
+
+            mock_cal_objects.filter.return_value.first.return_value = mock_calendar
+            mock_calendar.events.filter.return_value = mock_queryset
+            mock_create_event.return_value = MagicMock()
+
+            end_effect = handler.force_provisioning()[0]
+
+        data = json.loads(end_effect.payload)["data"]
+        assert data["event_id"] == "old-event-1"
+        assert data["recurrence"] == "FREQ=DAILY;INTERVAL=1"
+        assert data["recurrence_ends_at"] is not None
 
     def test_force_provisioning_skips_none_when_no_existing(self) -> None:
         """Test force provisioning works normally for staff without existing events."""
