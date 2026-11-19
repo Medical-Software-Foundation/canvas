@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.0.2",
     "name": "provider_scheduling",
     "description": "A plugin to manage availability calendars",
     "components": {

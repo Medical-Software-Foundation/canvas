@@ -94,6 +94,14 @@ function toUTCISOString(localDateTimeString) {
   return localDate.toISOString();
 }
 
+// Convert a recurrence end date to the last moment of that day in local time, in UTC
+// ISO format. A date-only string parses as midnight UTC, so the time is added first;
+// an end date loaded from an existing event carries a time, which is dropped.
+function toEndOfDayUTCISOString(dateString) {
+  if (!dateString) return '';
+  return toUTCISOString(`${dateString.split('T')[0]}T23:59:59`);
+}
+
 // Format date for display with timezone
 function formatDateTime(dateString) {
   const date = new Date(dateString);
@@ -200,7 +208,7 @@ function updateEvent() {
         recurrenceFrequency: event.recurrence.type,
         recurrenceInterval: event.recurrence.interval,
         recurrenceDays: event.daysOfWeek,
-        recurrenceEndsAt: toUTCISOString(event.recurrence.endDate),
+        recurrenceEndsAt: toEndOfDayUTCISOString(event.recurrence.endDate),
         allowedNoteTypes: event.allowedNoteTypes
     }
 
@@ -278,7 +286,7 @@ function saveEvent() {
                     recurrenceFrequency: event.recurrence.type,
                     recurrenceInterval: event.recurrence.interval,
                     recurrenceDays: event.daysOfWeek,
-                    recurrenceEndsAt: toUTCISOString(event.recurrence.endDate),
+                    recurrenceEndsAt: toEndOfDayUTCISOString(event.recurrence.endDate),
                     allowedNoteTypes: event.allowedNoteTypes
                 }
 
