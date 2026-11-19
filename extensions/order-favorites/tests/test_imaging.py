@@ -15,7 +15,7 @@ from order_favorites.handlers.api import _title
 from order_favorites.models import Favorite, FavoritesAdmin
 from order_favorites.services import lookups
 from order_favorites.services.access import set_setting
-from order_favorites.services.favorites import Invalid, clean_favorite
+from order_favorites.services.favorites import Invalid, clean_favorite, stale_map
 from order_favorites.services.importer import check_csv
 from tests.conftest import make_api, reply
 from tests.helpers import effects_of, favorite
@@ -315,6 +315,41 @@ def test_imaging_favorite_canvas_cant_resolve_is_skipped_whole(imaging_on: None,
     assert effects_of(results, "ORIGINATE_IMAGING_ORDER_COMMAND") == []
     assert len(effects_of(results, "ORIGINATE_PRESCRIBE_COMMAND")) == 1
     assert body["skipped"] == [{"id": img.dbid, "name": "Chest x-ray", "kind": "imaging", "shared": False, "reason": reason, "image": "XR chest 2 views"}]
+
+
+@pytest.mark.parametrize(
+    ("side", "flagged"),
+    [
+        (science([OTHER, CHEST]), True),
+        (science([]), True),
+        (RequestException("down"), False),
+        (science([CHEST], status=503), False),
+    ],
+)
+def test_skipped_imaging_favorite_needs_fixing_only_when_the_search_moved(imaging_on: None, side: Any, flagged: bool, make_staff: Any, make_note: Any) -> None:
+    me = make_staff()
+    img = favorite(me, kind="imaging", details=imaging_details())
+    with patch.object(lookups.science_http, "get_json", side_effect=side):
+        add(me, make_note(), [img.dbid])
+    img = Favorite.objects.get(dbid=img.dbid)
+    assert bool(img.details.get("unresolved")) is flagged
+    assert stale_map([img]) == ({img.dbid: ["71046"]} if flagged else {})
+
+
+def test_needs_fixing_clears_when_a_later_add_finds_the_study(imaging_on: None, chest_first: Any, make_staff: Any, make_note: Any) -> None:
+    me = make_staff()
+    img = favorite(me, kind="imaging", details={**imaging_details(), "unresolved": True})
+    _s, body, results = add(me, make_note(), [img.dbid])
+    assert len(effects_of(results, "ORIGINATE_IMAGING_ORDER_COMMAND")) == 1
+    img = Favorite.objects.get(dbid=img.dbid)
+    assert "unresolved" not in img.details
+    assert stale_map([img]) == {}
+
+
+def test_resaving_an_imaging_favorite_drops_needs_fixing(imaging_on: None, chest_first: Any, make_staff: Any) -> None:
+    me = make_staff()
+    _k, _n, details = clean_favorite({"kind": "imaging", "name": "Chest", **imaging_details(), "unresolved": True}, owner=me.dbid)
+    assert "unresolved" not in details
 
 
 def test_imaging_favorite_without_a_code_is_skipped(imaging_on: None, chest_first: Any, make_staff: Any, make_note: Any) -> None:

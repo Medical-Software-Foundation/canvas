@@ -96,6 +96,21 @@ def _imaging_skip(favorite: Favorite, image_cache: dict[tuple[str, str], Any]) -
     return None if study is not None else "image"
 
 
+def _remember_unresolved(favorite: Favorite, reason: str | None) -> None:
+    """Keep the favorite's "Needs fixing" mark in step with the last add: set when the search no longer
+    leads to its study, cleared when it does again. A search outage says nothing either way."""
+    if reason == "image_check":
+        return
+    unresolved = reason == "image"
+    if bool(favorite.details.get("unresolved")) == unresolved:
+        return
+    if unresolved:
+        favorite.details["unresolved"] = True
+    else:
+        favorite.details.pop("unresolved", None)
+    favorite.save()
+
+
 def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Effect]]:
     """Returns (added, skipped, effects). skipped entries carry a reason the panel can explain."""
     added: list[dict[str, Any]] = []
@@ -110,6 +125,7 @@ def stage(favorites: list[Favorite], note: Note, adder_id: str) -> tuple[list[di
             continue
         if favorite.kind == "imaging":
             reason = _imaging_skip(favorite, image_cache)
+            _remember_unresolved(favorite, reason)
             if reason is not None:
                 skipped.append({**entry, "reason": reason, "image": favorite.details.get("image_name", "")})
                 continue

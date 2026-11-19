@@ -58,7 +58,7 @@ Each time a lab favorite is added, its lab partner and every test code are check
 
 ## Imaging favorites that go out of date
 
-Canvas fills an imaging order's Image field by searching its imaging studies for the order's code and taking the first match. With no match the field is left blank, and a loose match can name another study. So an imaging favorite is saved only when that search finds its own study first, and it is checked again each time it is added. If the check fails, or the search doesn't answer, the favorite is skipped with a message and no imaging order is added.
+Canvas fills an imaging order's Image field by searching its imaging studies for the order's code and taking the first match. With no match the field is left blank, and a loose match can name another study. So an imaging favorite is saved only when that search finds its own study first, and it is checked again each time it is added. If the check fails, or the search doesn't answer, the favorite is skipped with a message and no imaging order is added. A favorite skipped because the search no longer finds its study shows "Needs fixing" in the admin app until it is re-saved with a study from the search list, or until a later add finds the study again.
 
 ## Import format
 

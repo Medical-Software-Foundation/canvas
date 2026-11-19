@@ -111,7 +111,7 @@
       if (has(f.refills)) { r += row("Refills", esc(f.refills)); }
       if (f.pharmacy_name) { r += row("Pharmacy", esc(f.pharmacy_name)); }
     } else if (f.kind === "imaging") {
-      r += row("Study", esc(f.image_name) + (f.image_code ? ' <span class="muted">' + esc(f.image_code) + "</span>" : ""));
+      r += row("Study", (f.stale && f.stale.length ? '<span class="bad">' + esc(f.image_name) + " · imaging search no longer finds it</span>" : esc(f.image_name)) + (f.image_code ? ' <span class="muted">' + esc(f.image_code) + "</span>" : ""));
       if (f.priority) { r += row("Priority", esc(f.priority)); }
       if (f.diagnoses.length) { r += row("Indications", '<ul class="fd-list">' + f.diagnoses.map(function (d) { return '<li><b class="code">' + esc(icd(d.code)) + "</b> " + esc(d.text) + "</li>"; }).join("") + "</ul>"); }
       if (f.imaging_center) { r += row("Center", esc(centerName(f.imaging_center))); }
@@ -243,7 +243,7 @@
         '<div><label for="fUnit">Unit</label><select id="fUnit"></select></div><div><label for="fRef">Refills</label><input id="fRef" type="number" min="0" max="99"></div></div>';
       h += '<label>Default pharmacy</label><div class="cb" id="pPharm"></div><div class="hint" id="phClear"></div>';
     } else if (f.kind === "imaging") {
-      h += '<label>Study</label><div class="cb" id="pImg"></div><div class="hint">Saved only when Canvas\'s imaging search finds this study first for its code, so the order never comes out blank.</div>';
+      h += '<label>Study</label><div class="cb" id="pImg"></div><div class="warn" id="imgWarn" hidden></div><div class="hint">Saved only when Canvas\'s imaging search finds this study first for its code, so the order never comes out blank.</div>';
       h += '<label>Indications</label><div class="cb" id="pDx"></div>';
       h += '<label for="fPri">Priority</label><select id="fPri"><option value="">Select on the order</option><option>Routine</option><option>Urgent</option><option>STAT</option></select>';
       h += '<label for="fDetails">Additional details</label><textarea id="fDetails" maxlength="1024"></textarea>';
@@ -332,8 +332,12 @@
         row: function (s) { return esc(s.name) + ' <span class="muted">' + esc(s.code_system ? s.code_system + ": " + s.code : s.code) + "</span>"; },
         selected: function () { return f.image_code ? [{ code: f.image_code, code_system: f.image_code_system, name: f.image_name }] : []; },
         shown: function () { return f.image_name; },
-        pick: function (s) { f.image_code = s.code; f.image_code_system = s.code_system; f.image_name = s.name; changed(); }
+        pick: function (s) { f.image_code = s.code; f.image_code_system = s.code_system; f.image_name = s.name; $("#imgWarn").hidden = true; changed(); }
       });
+      if (f.stale && f.stale.length) {
+        $("#imgWarn").hidden = false;
+        $("#imgWarn").textContent = "Canvas's imaging search no longer finds " + (f.image_name || "this study") + " first for its code, so it was skipped when last added. Select the study from the search list again.";
+      }
       dxPicker();
       $("#fPri").value = f.priority || "";
       $("#fPri").addEventListener("change", function () { f.priority = this.value; changed(); });

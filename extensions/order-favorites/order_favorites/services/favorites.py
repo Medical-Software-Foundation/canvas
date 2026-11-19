@@ -286,10 +286,14 @@ def expand_sets(chosen: list[Favorite], usable: dict[int, Favorite]) -> list[Fav
 
 def stale_map(favorites: list[Favorite]) -> dict[int, list[str]]:
     """For each lab favorite, the test codes the lab no longer offers (all of them if the partner is
-    gone or inactive). Two queries for the whole list."""
+    gone or inactive), and for each imaging favorite last skipped because the imaging search no longer
+    leads to its study, its image code. Two queries for the whole list."""
+    result: dict[int, list[str]] = {
+        f.dbid: [f.details.get("image_code") or ""] for f in favorites if f.kind == "imaging" and f.details.get("unresolved")
+    }
     labs = [f for f in favorites if f.kind == "lab"]
     if not labs:
-        return {}
+        return result
     partner_ids = {str(f.details.get("lab_partner_id", "")) for f in labs}
     valid_ids = [p for p in partner_ids if parse_uuid(p) is not None]
     active = {str(pid) for pid in LabPartner.objects.filter(id__in=valid_ids, active=True).values_list("id", flat=True)}
@@ -300,7 +304,6 @@ def stale_map(favorites: list[Favorite]) -> dict[int, list[str]]:
             "lab_partner__id", "order_code"
         )
     }
-    result: dict[int, list[str]] = {}
     for favorite in labs:
         pid = str(favorite.details.get("lab_partner_id", ""))
         tests = [t["code"] for t in favorite.details.get("tests", [])]
