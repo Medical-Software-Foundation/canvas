@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insert Favorites</title>
+    <link href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="/plugin-io/api/clinical_favorites/routes/static/canvas-plugin-ui.css?v={{ cache_bust }}">
+    <link rel="stylesheet" href="/plugin-io/api/clinical_favorites/routes/static/favorites.css?v={{ cache_bust }}">
+    <script src="/plugin-io/api/clinical_favorites/routes/static/canvas-plugin-ui.js?v={{ cache_bust }}"></script>
+</head>
+<body>
+    <!-- Insert Confirmation Modal -->
+    <canvas-modal id="insert-confirm-modal" size="small" persistent>
+        <canvas-modal-header>Insert favorites</canvas-modal-header>
+        <canvas-modal-content>
+            <div id="insert-confirm-body" style="font-size: 14px; color: #000;">
+                <p style="margin: 0 0 4px;">Patient <strong id="insert-confirm-patient"></strong></p>
+                <p style="margin: 0 0 12px;">Note <strong id="insert-confirm-note"></strong></p>
+                <div id="insert-confirm-meds-section" hidden>
+                    <p style="margin: 0 0 4px;"><strong>Medications</strong></p>
+                    <ul id="insert-confirm-meds-list" style="margin: 0 0 12px; padding-left: 20px;"></ul>
+                </div>
+                <div id="insert-confirm-conds-section" hidden>
+                    <p style="margin: 0 0 4px;"><strong>Conditions</strong></p>
+                    <ul id="insert-confirm-conds-list" style="margin: 0; padding-left: 20px;"></ul>
+                </div>
+            </div>
+        </canvas-modal-content>
+        <canvas-modal-footer>
+            <canvas-button variant="ghost" id="insert-confirm-cancel-btn">Cancel</canvas-button>
+            <canvas-button variant="primary" id="insert-confirm-submit-btn">Insert</canvas-button>
+        </canvas-modal-footer>
+    </canvas-modal>
+
+    <div id="no-notes-notice" class="fav-no-notes" hidden>
+        <span class="material-icons-round fav-no-notes-icon" aria-hidden="true">event_busy</span>
+        <h3>No open notes for this patient</h3>
+        <p>Open or unlock a note in the chart, then reopen this panel to insert favorites.</p>
+    </div>
+
+    <div id="insert-main">
+    <div class="picker-block">
+        <canvas-combobox id="note-picker" label="Target note" placeholder="Choose a note"></canvas-combobox>
+    </div>
+
+    <div class="prescribe-mode-only">
+        <canvas-tabs id="type-tabs-insert" class="type-tabs">
+            <canvas-tab for="type-insert-medication" active>
+                <canvas-tab-label>Medications</canvas-tab-label>
+            </canvas-tab>
+            <canvas-tab for="type-insert-condition">
+                <canvas-tab-label>Conditions</canvas-tab-label>
+            </canvas-tab>
+            <canvas-tab-panel id="type-insert-medication"></canvas-tab-panel>
+            <canvas-tab-panel id="type-insert-condition"></canvas-tab-panel>
+        </canvas-tabs>
+        <div class="fav-scope-bar">
+            <canvas-tabs id="scope-tabs-insert" class="type-tabs">
+                <canvas-tab for="scope-insert-all" active>
+                    <canvas-tab-label>All</canvas-tab-label>
+                </canvas-tab>
+                <canvas-tab for="scope-insert-mine">
+                    <canvas-tab-label>My favorites</canvas-tab-label>
+                </canvas-tab>
+                <canvas-tab for="scope-insert-shared">
+                    <canvas-tab-label>Shared</canvas-tab-label>
+                </canvas-tab>
+                <canvas-tab-panel id="scope-insert-all"></canvas-tab-panel>
+                <canvas-tab-panel id="scope-insert-mine"></canvas-tab-panel>
+                <canvas-tab-panel id="scope-insert-shared"></canvas-tab-panel>
+            </canvas-tabs>
+            <div class="fav-scope-controls">
+                <canvas-input id="prescribe-search-input" type="search" placeholder="Search favorites"></canvas-input>
+                <canvas-button id="prescribe-toggle-all-btn" variant="ghost">Expand all</canvas-button>
+            </div>
+        </div>
+        <div id="insert-banner" style="margin-top: 8px;"></div>
+        <div class="insert-section">
+            <div id="medication-list" style="display: flex; flex-direction: column; gap: 8px; padding: 4px 0;">
+                <canvas-loader centered role="status" aria-label="Loading favorites"></canvas-loader>
+            </div>
+            <div id="insert-empty-state" style="display: none;"></div>
+        </div>
+        <div id="insert-footer-bar" class="fav-footer-bar">
+            <span id="add-button-wrap" tabindex="-1">
+                <canvas-button id="add-button" variant="primary" disabled>Insert favorites</canvas-button>
+            </span>
+            <div id="insert-footer-popup" class="fav-footer-popup" role="tooltip" aria-live="polite" hidden>
+                <div class="fav-footer-popup-section" data-popup-section="required" hidden>
+                    <h5 class="fav-footer-popup-heading">Required</h5>
+                    <ul class="fav-footer-popup-list" data-popup-list="required"></ul>
+                </div>
+                <div class="fav-footer-popup-section" data-popup-section="selected" hidden>
+                    <h5 class="fav-footer-popup-heading">Selected</h5>
+                    <ul class="fav-footer-popup-list" data-popup-list="selected"></ul>
+                </div>
+                <div class="fav-footer-popup-arrow" aria-hidden="true"></div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        window.FAVORITES_BOOT = { staffId: "{{ staff_id }}", patientId: "{{ patient_id }}", surface: "chart" };
+    </script>
+    <script src="/plugin-io/api/clinical_favorites/routes/static/favorites.js?v={{ cache_bust }}"></script>
+</body>
+</html>
