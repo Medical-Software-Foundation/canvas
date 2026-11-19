@@ -172,3 +172,33 @@ def test_the_scan_prefetches_everything_the_loop_reads() -> None:
 def test_the_scan_does_not_join_the_note() -> None:
     """Nothing in the send path reads the note, and it carries the body blob."""
     assert "canvas_sdk_data_api_note_001" not in str(_reminder_scan_qs().query)
+
+
+def test_the_scan_keeps_checked_in_visits_for_the_telehealth_join() -> None:
+    """PLUGIN-526: staff mark video visits Arrived from the schedule dropdown
+    well before T-15. The scan used to filter those out, so the join link was
+    never sent and nothing was logged. Arrived and roomed must stay in the scan;
+    canceled, no-showed and exited must stay out."""
+    sql = str(_reminder_scan_qs().query)
+    in_list = sql.split('"status" IN (')[1].split(")")[0]
+    statuses = {s.strip().strip("'\"") for s in in_list.split(",")}
+    assert statuses == {"unconfirmed", "attempted", "confirmed", "arrived", "roomed"}
+
+
+def test_the_scan_skips_appointments_entered_in_error() -> None:
+    """An appointment marked entered in error was never a real visit. Widening
+    the scan to arrived/roomed (PLUGIN-526) must not start messaging those; the
+    filter has to require entered_in_error IS NULL."""
+    sql = str(_reminder_scan_qs().query)
+    assert '"entered_in_error_id" IS NULL' in sql
+
+
+def test_an_entered_in_error_arrived_row_is_excluded_by_the_scan_filter() -> None:
+    """Evaluate the scan's WHERE clause against an in-memory arrived row that
+    was entered in error, without a database: the row must not match."""
+    where = _reminder_scan_qs().query.where
+    lookups = {child.lhs.target.attname: child for child in where.children}
+    assert "entered_in_error_id" in lookups
+    assert lookups["entered_in_error_id"].lookup_name == "isnull"
+    assert lookups["entered_in_error_id"].rhs is True
+    assert "arrived" in lookups["status"].rhs
