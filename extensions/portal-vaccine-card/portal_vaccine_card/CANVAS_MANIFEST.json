@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.175.0",
+    "plugin_version": "0.1.2",
+    "name": "portal_vaccine_card",
+    "description": "Patient portal application that lets patients view and print their complete immunization record: vaccines administered at the practice and historical records reported from elsewhere, merged into one chronological, printable vaccine card.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "portal_vaccine_card.applications.vaccine_card_application:VaccineCardApplication",
+                "name": "My Vaccines",
+                "description": "View and print your immunization record.",
+                "scope": "portal_menu_item",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "portal_vaccine_card.handlers.vaccine_card_web_app:VaccineCardWebApp",
+                "description": "Serves the vaccine card HTML/JS/CSS for the My Vaccines menu item."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
