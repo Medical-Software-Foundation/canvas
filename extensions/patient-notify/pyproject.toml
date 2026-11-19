@@ -1,0 +1,27 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "patient-notify"
+version = "0.0.0"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+    "arrow>=1.3.0",
+    "requests>=2.31.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+    "types-requests>=2.32.4.20260107",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
