@@ -225,7 +225,7 @@ class ExportJobService:
         is_ccda = format == "ccda"
         extras = _ccda_extras(document_type, start_date, end_date)
         dbids = [id_to_dbid[pid] for pid in patient_ids if pid in id_to_dbid]
-        lead_dbids = _dbids_with_team_lead(dbids) if is_ccda else set()
+        lead_dbids = _ccda_eligible_dbids(dbids) if is_ccda else set()
         jobs = [
             _new_job(dbid, staff_dbid, batch_id, format, is_ccda, lead_dbids, extras)
             for dbid in dbids
@@ -257,7 +257,7 @@ class ExportJobService:
         buffer: list[int] = []  # patient dbids; rows are built per flush
 
         def flush(dbids: list[int]) -> int:
-            lead_dbids = _dbids_with_team_lead(dbids) if is_ccda else set()
+            lead_dbids = _ccda_eligible_dbids(dbids) if is_ccda else set()
             rows = [
                 _new_job(dbid, staff_dbid, batch_id, format, is_ccda, lead_dbids, extras)
                 for dbid in dbids

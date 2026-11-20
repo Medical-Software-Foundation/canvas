@@ -10,7 +10,7 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from ehi_export_tool.services.export_jobs import ExportJobService
+from ehi_export_tool.services.export_jobs import NO_TEAM_LEAD_ERROR, ExportJobService
 
 _SVC = "ehi_export_tool.services.export_jobs"
 
@@ -86,7 +86,7 @@ def test_enqueue_patient_ids_ccda_with_team_lead_is_complete() -> None:
     with patch(f"{_SVC}.CustomPatient") as MockPatient, patch(
         f"{_SVC}.CustomStaff"
     ) as MockStaff, patch(f"{_SVC}.ExportJob") as MockJob, patch(
-        f"{_SVC}._dbids_with_team_lead", return_value={11}
+        f"{_SVC}._ccda_eligible_dbids", return_value={11}
     ):
         MockPatient.objects.filter.return_value.values_list.return_value = [("p-1", 11)]
         MockStaff.objects.filter.return_value.values_list.return_value.first.return_value = 99
@@ -107,7 +107,7 @@ def test_enqueue_patient_ids_ccda_without_team_lead_is_error() -> None:
     with patch(f"{_SVC}.CustomPatient") as MockPatient, patch(
         f"{_SVC}.CustomStaff"
     ) as MockStaff, patch(f"{_SVC}.ExportJob") as MockJob, patch(
-        f"{_SVC}._dbids_with_team_lead", return_value=set()  # no lead
+        f"{_SVC}._ccda_eligible_dbids", return_value=set()  # no lead
     ):
         MockPatient.objects.filter.return_value.values_list.return_value = [("p-1", 11)]
         MockStaff.objects.filter.return_value.values_list.return_value.first.return_value = 99
@@ -115,7 +115,7 @@ def test_enqueue_patient_ids_ccda_without_team_lead_is_error() -> None:
 
     kwargs = MockJob.call_args_list[0].kwargs
     assert kwargs["status"] == "error"
-    assert "Team Lead" in kwargs["last_error"]
+    assert kwargs["last_error"] == NO_TEAM_LEAD_ERROR
 
 
 def test_enqueue_queryset_streams_dbids() -> None:
@@ -127,6 +127,22 @@ def test_enqueue_queryset_streams_dbids() -> None:
 
     assert n == 3
     MockJob.objects.bulk_create.assert_called_once()  # 3 < 500 -> single flush
+
+
+def test_enqueue_queryset_ccda_marks_patients_without_author_as_error() -> None:
+    """"Export all" for C-CDA checks eligibility per flush: eligible -> complete, else error."""
+    qs = MagicMock()
+    qs.values_list.return_value.iterator.return_value = iter([1, 2])
+    with patch(f"{_SVC}.CustomStaff") as MockStaff, patch(f"{_SVC}.ExportJob") as MockJob, patch(
+        f"{_SVC}._ccda_eligible_dbids", return_value={1}
+    ) as eligible:
+        MockStaff.objects.filter.return_value.values_list.return_value.first.return_value = None
+        n = ExportJobService.enqueue_queryset(qs, "b1", "", format="ccda", document_type="continuity")
+
+    assert n == 2
+    eligible.assert_called_once_with([1, 2])
+    statuses = {c.kwargs["patient_id"]: c.kwargs["status"] for c in MockJob.call_args_list}
+    assert statuses == {1: "complete", 2: "error"}
 
 
 def test_queued_jobs_zero_limit() -> None:
