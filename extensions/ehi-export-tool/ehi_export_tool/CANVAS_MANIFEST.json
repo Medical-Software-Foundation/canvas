@@ -1,0 +1,71 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "ehi_export_tool",
+    "description": "Global staff workspace for exporting patient records across the population in two formats: full EHI (per-patient FHIR $export, one NDJSON file each) and C-CDA documents (Continuity of Care or Referral, XML). Search and select patients (or all matching), export per-patient or in throttled batches, and download each file or a whole selection/run as a single ZIP built in the browser (S3 optional).",
+    "components": {
+        "applications": [
+            {
+                "class": "ehi_export_tool.applications.ehi_app:EHIExportApp",
+                "name": "EHI & C-CDA Export",
+                "description": "Select patients and export their records as EHI (NDJSON) or C-CDA (XML); download per patient or as one ZIP.",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 110,
+                "icon": "assets/ehi-export-tool-icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "ehi_export_tool.handlers.export_api:ExportAPI",
+                "description": "Staff-only API serving the export workspace, the patient list, and the start/status/bundle/batch export endpoints.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff", "CareTeamMembership"],
+                    "write": []
+                }
+            },
+            {
+                "class": "ehi_export_tool.handlers.export_poller:ExportPoller",
+                "description": "Background cron task that polls in-progress EHI export jobs and marks them complete so exports run fire-and-forget.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "CANVAS_FHIR_CLIENT_ID", "sensitive": true},
+        {"name": "CANVAS_FHIR_CLIENT_SECRET", "sensitive": true},
+        {"name": "EHI_POLL_SCHEDULE", "sensitive": false},
+        {"name": "EHI_MAX_IN_FLIGHT", "sensitive": false},
+        {"name": "EHI_START_PER_TICK", "sensitive": false},
+        {"name": "EHI_FORCE_FAILURE", "sensitive": false},
+        {"name": "S3_ACCESS_KEY", "sensitive": true},
+        {"name": "S3_SECRET_KEY", "sensitive": true},
+        {"name": "S3_REGION", "sensitive": false},
+        {"name": "S3_BUCKET", "sensitive": false},
+        {"name": "S3_PREFIX", "sensitive": false}
+    ],
+    "custom_data": {
+        "namespace": "msf__ehi_exports",
+        "access": "read_write"
+    },
+    "url_permissions": [
+        {
+            "url": "https://*.canvasmedical.com/*",
+            "permissions": []
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
