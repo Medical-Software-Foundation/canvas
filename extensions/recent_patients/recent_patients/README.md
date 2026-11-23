@@ -8,7 +8,7 @@ they just acted on.
 ## What it does
 
 Adds a **Recent Patients** launcher to Canvas (in the global app drawer and
-inside any patient chart). Clicking it opens a side panel listing the last 50
+inside any patient chart). Clicking it opens a panel listing the last 50
 patients the logged-in staff member has personally touched, sorted most-recent
 first. Each row shows the patient's name, DOB, relative time, and an icon
 indicating whether the touch was a chart open or a profile open. One click on
@@ -49,7 +49,8 @@ After install, the **Recent Patients** icon appears in:
 1. The Canvas app launcher (visible from any page)
 2. Patient chart pages (the patient-specific Application surface)
 
-Both icons open the same panel.
+Both icons open the same list: from the app launcher it opens as a centered
+modal, and from a patient chart it opens in the chart's right-hand pane.
 
 ## Configuration options
 
@@ -122,12 +123,12 @@ recent_patients/
 
 ## Surfaces
 
-| Application | Scope | Where the icon appears |
-|---|---|---|
-| `RecentPatientsApp` | `global` | Canvas app launcher (across all contexts) |
-| `RecentPatientsPatientApp` | `patient_specific` | Inside any patient chart |
+| Application | Scope | Where the icon appears | Opens as |
+|---|---|---|---|
+| `RecentPatientsApp` | `global` | Canvas app launcher (across all contexts) | Centered modal (`DEFAULT_MODAL`), since global screens have no chart pane |
+| `RecentPatientsPatientApp` | `patient_specific` | Inside any patient chart | Right chart pane (`RIGHT_CHART_PANE`) |
 
-Both open the same modal — the patient context (when launched from a chart)
+Both open the same list — the patient context (when launched from a chart)
 is not passed in; the modal always shows the logged-in staff's own recent
 patients.
 

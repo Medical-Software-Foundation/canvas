@@ -45,6 +45,15 @@ class TestRecentPatientsApp:
         # after a deploy.
         assert payload["data"]["url"].startswith("/plugin-io/api/recent_patients/app/?v=")
 
+    def test_on_open_uses_target_that_renders_without_a_chart(self) -> None:
+        # The global launcher opens from the home page and patient list,
+        # where no patient chart is mounted. Canvas renders nothing for a
+        # RIGHT_CHART_PANE effect there, so the global app needs a target
+        # that renders on any page.
+        app = RecentPatientsApp.__new__(RecentPatientsApp)
+        payload = json.loads(app.on_open().payload)
+        assert payload["data"]["target"] == "default_modal"
+
 
 class TestRecentPatientsPatientApp:
     def test_on_open_launches_same_modal_from_patient_context(self) -> None:
@@ -56,6 +65,11 @@ class TestRecentPatientsPatientApp:
         # URL includes cache-bust suffix so browsers refetch the modal HTML
         # after a deploy.
         assert payload["data"]["url"].startswith("/plugin-io/api/recent_patients/app/?v=")
+
+    def test_on_open_uses_right_chart_pane(self) -> None:
+        app = RecentPatientsPatientApp.__new__(RecentPatientsPatientApp)
+        payload = json.loads(app.on_open().payload)
+        assert payload["data"]["target"] == "right_chart_pane"
 
 
 # ---------------------------------------------------------------------------
