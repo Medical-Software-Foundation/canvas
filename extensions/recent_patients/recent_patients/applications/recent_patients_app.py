@@ -10,12 +10,17 @@ _MODAL_URL = f"/plugin-io/api/recent_patients/app/?v={CACHE_BUST}"
 
 
 class RecentPatientsApp(Application):
-    """Global-scope launcher entry — opens the browse modal from anywhere."""
+    """Global-scope launcher entry — opens the browse modal from anywhere.
+
+    Global screens (home page, patient list) have no patient chart, and
+    Canvas renders nothing for a right-chart-pane target there, so this
+    entry opens a centered modal instead.
+    """
 
     def on_open(self) -> Effect:
         return LaunchModalEffect(
             url=_MODAL_URL,
-            target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,
+            target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
         ).apply()
 
 

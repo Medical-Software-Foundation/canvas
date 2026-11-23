@@ -1515,7 +1515,7 @@ wheels = [
 
 [[package]]
 name = "recent-patients"
-version = "0.1.15"
+version = "0.1.16"
 source = { virtual = "." }
 dependencies = [
     { name = "canvas", extra = ["test-utils"] },
