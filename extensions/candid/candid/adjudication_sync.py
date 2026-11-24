@@ -437,28 +437,52 @@ def _coverage_balance_by_line(coverage: Any) -> dict[int, Decimal]:
     return balances
 
 
+def _remit_patient_responsibility_cents(sl: dict) -> int:
+    """The patient responsibility (PR group) Candid reports on a service line."""
+    reported = sl.get("patient_responsibility_cents")
+    if reported is not None:
+        return reported
+    return sum(
+        sl.get(f) or 0 for f in ("deductible_cents", "coinsurance_cents", "copay_cents")
+    )
+
+
 def _secondary_leftover_transactions(
     state: "_SyncState",
     service_lines: list[dict],
     matches: list[str | None],
     next_responsible: str,
 ) -> list[LineItemTransaction]:
-    """Move what the secondary left unpaid to whoever Candid says owes the rest."""
+    """Move what the secondary left unpaid to whoever owes the rest.
+
+    When Candid names the patient or the tertiary, the whole leftover moves there.
+    When Candid names anyone else (a Paid Incorrectly claim names the primary),
+    the leftover moves up to the patient responsibility on the remit, to the
+    tertiary when the claim has one and to the patient otherwise. When Candid
+    says nobody owes more, the leftover stays on the secondary.
+    """
+    cap_to_remit_pr = False
     if next_responsible == "patient":
         target = PATIENT_COVERAGE_ID
     elif next_responsible == "tertiary" and state.tertiary_id:
         target = state.tertiary_id
-    else:
+    elif next_responsible == "none":
         return []
+    else:
+        target = state.tertiary_id or PATIENT_COVERAGE_ID
+        cap_to_remit_pr = True
 
     balances = _coverage_balance_by_line(state.secondary_coverage)
     dbid_by_line_id = {str(li.id): li.dbid for li in state.line_items}
     paid_by_line: dict[str, Decimal] = {}
+    pr_by_line: dict[str, Decimal] = {}
     for sl, line_item_id in zip(service_lines, matches, strict=True):
         if not line_item_id:
             continue
         paid = _cents_to_dollars(sl.get("secondary_paid_amount_cents")) or Decimal("0")
         paid_by_line[line_item_id] = paid_by_line.get(line_item_id, Decimal("0")) + paid
+        pr = _cents_to_dollars(_remit_patient_responsibility_cents(sl)) or Decimal("0")
+        pr_by_line[line_item_id] = pr_by_line.get(line_item_id, Decimal("0")) + pr
 
     txns: list[LineItemTransaction] = []
     for line_item_id, paid in paid_by_line.items():
@@ -466,6 +490,8 @@ def _secondary_leftover_transactions(
             dbid_by_line_id[line_item_id], Decimal("0")
         ) + state.moved_to_secondary.get(line_item_id, Decimal("0"))
         leftover = on_secondary - paid
+        if cap_to_remit_pr:
+            leftover = min(leftover, pr_by_line[line_item_id])
         if leftover > 0:
             txns.append(
                 LineItemTransaction(

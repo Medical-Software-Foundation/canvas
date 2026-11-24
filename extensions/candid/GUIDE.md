@@ -50,6 +50,7 @@ A nightly sync starts at **2:00 AM** to check all claims in Filed Awaiting Respo
 - Payer adjustments are posted with their CARC codes (e.g. CO-45, PR-1)
 - The deductible, coinsurance, and copay from the primary move to the secondary insurance when the claim has one, and to the patient when it doesn't
 - When the secondary's remittance arrives, any payment is posted to the secondary, and whatever it didn't pay (all of it, if it paid nothing) moves to the patient when Candid says the patient owes it. If Candid says nothing more is owed, the rest stays on the secondary for you to write off
+- When Candid names neither the patient nor nobody (for example a Paid Incorrectly claim, where Candid names the primary), the patient responsibility on the secondary's remittance moves to the patient, or to the tertiary insurance when the claim has one. Anything the secondary left beyond that stays on the secondary
 - The claim moves to **Patient Balance** or **Adjudicated Open Balance** depending on the remaining balances
 - The status banner updates (e.g. "Candid: Era Received | Last synced 2026-05-01")
 

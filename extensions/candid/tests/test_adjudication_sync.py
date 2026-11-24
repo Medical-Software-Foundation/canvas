@@ -110,6 +110,7 @@ def _candid_service_line(
     deductible_cents: int | None = None,
     coinsurance_cents: int | None = None,
     copay_cents: int | None = None,
+    patient_responsibility_cents: int | None = None,
     insurance_balance_cents: int | None = None,
     patient_balance_cents: int | None = None,
     date_of_service: str = "2026-01-15",
@@ -139,6 +140,8 @@ def _candid_service_line(
         line["coinsurance_cents"] = coinsurance_cents
     if copay_cents is not None:
         line["copay_cents"] = copay_cents
+    if patient_responsibility_cents is not None:
+        line["patient_responsibility_cents"] = patient_responsibility_cents
     if insurance_balance_cents is not None:
         line["insurance_balance_cents"] = insurance_balance_cents
     if patient_balance_cents is not None:
@@ -2352,3 +2355,165 @@ def test_sync_skips_encounter_record_without_id() -> None:
     ):
         sync_claim_adjudications(claim, MOCK_SECRETS)
         MC.from_secrets.return_value.get_encounter.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Secondary leftover when Candid names no next payer (e.g. Paid Incorrectly)
+# ---------------------------------------------------------------------------
+
+
+def _leftover(
+    next_responsible: str,
+    balances: dict[int, Decimal],
+    service_lines: list[dict],
+    matches: list[str | None],
+    tertiary: str | None = None,
+) -> list:
+    """Run the leftover rule against a two-line claim with these secondary balances."""
+    state = _target_state(tertiary=tertiary)
+    state.line_items = [
+        _fake_line_item("90836", Decimal("300.00"), li_id="li-1", dbid=101),
+        _fake_line_item("99214", Decimal("300.00"), li_id="li-2", dbid=102),
+    ]
+    state.moved_to_secondary = {}
+    with patch(
+        "candid.adjudication_sync._coverage_balance_by_line", return_value=balances
+    ):
+        return _secondary_leftover_transactions(
+            state, service_lines, matches, next_responsible
+        )
+
+
+def test_secondary_pr_moves_to_patient_when_candid_says_primary() -> None:
+    """Paid Incorrectly: Candid names the primary, but the secondary's remit shows
+    PR, so that PR moves to the patient."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(transferred_in=[_txn(101, "20.00")]),
+        next_responsible="primary",
+        metadata=PRIMARY_ALREADY_POSTED,
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9000,
+                secondary_paid_amount_cents=1500,
+                patient_responsibility_cents=500,
+            )
+        ],
+    )
+
+    assert [
+        (t.payment, t.adjustment, t.adjustment_code, t.transfer_remaining_balance_to)
+        for t in txns
+    ] == [
+        (Decimal("15.00"), None, None, None),
+        (None, Decimal("5.00"), TRANSFER_CODE, "patient"),
+    ]
+
+
+def test_secondary_pr_on_a_zero_paid_line_moves_when_candid_says_primary() -> None:
+    """The secondary pays one line and $0 on the other with PR-3; only the $0 line's
+    PR moves, and it moves to the patient."""
+    txns = _leftover(
+        "primary",
+        balances={101: Decimal("15.41"), 102: Decimal("15.96")},
+        service_lines=[
+            _candid_service_line(
+                procedure_code="90836",
+                secondary_paid_amount_cents=1541,
+                patient_responsibility_cents=0,
+            ),
+            _candid_service_line(
+                procedure_code="99214",
+                secondary_paid_amount_cents=0,
+                copay_cents=1596,
+                patient_responsibility_cents=1596,
+            ),
+        ],
+        matches=["li-1", "li-2"],
+    )
+
+    assert [
+        (t.claim_line_item_id, t.adjustment, t.transfer_remaining_balance_to)
+        for t in txns
+    ] == [("li-2", Decimal("15.96"), "patient")]
+
+
+def test_secondary_pr_moves_to_tertiary_when_candid_says_primary() -> None:
+    txns = _leftover(
+        "primary",
+        balances={101: Decimal("20.00")},
+        service_lines=[
+            _candid_service_line(
+                secondary_paid_amount_cents=1500, patient_responsibility_cents=500
+            )
+        ],
+        matches=["li-1"],
+        tertiary="cov-t",
+    )
+
+    assert [(t.adjustment, t.transfer_remaining_balance_to) for t in txns] == [
+        (Decimal("5.00"), "cov-t")
+    ]
+
+
+def test_secondary_leftover_moves_only_the_remit_pr_when_candid_says_primary() -> None:
+    """$8 is left on the secondary but its remit shows $5 PR: only $5 moves."""
+    txns = _leftover(
+        "primary",
+        balances={101: Decimal("20.00")},
+        service_lines=[
+            _candid_service_line(
+                secondary_paid_amount_cents=1200, patient_responsibility_cents=500
+            )
+        ],
+        matches=["li-1"],
+    )
+
+    assert [(t.adjustment, t.transfer_remaining_balance_to) for t in txns] == [
+        (Decimal("5.00"), "patient")
+    ]
+
+
+def test_secondary_leftover_stays_when_remit_shows_no_pr_and_candid_says_primary() -> (
+    None
+):
+    txns = _leftover(
+        "primary",
+        balances={101: Decimal("20.00")},
+        service_lines=[
+            _candid_service_line(
+                secondary_paid_amount_cents=1500, patient_responsibility_cents=0
+            )
+        ],
+        matches=["li-1"],
+    )
+
+    assert txns == []
+
+
+def test_secondary_pr_not_moved_again_after_a_manual_transfer() -> None:
+    """A later ERA re-runs the rule after a biller moved the $5 to the patient by
+    hand: the secondary's $15 payment and the $5 transfer leave nothing to move."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(
+            transferred_in=[_txn(101, "20.00")],
+            payments=[_txn(101, "15.00")],
+            transfers_out=[_txn(101, "5.00")],
+        ),
+        next_responsible="primary",
+        metadata={
+            META_SYNCED_ERA_IDS: ["era-1", "era-2"],
+            "candid_synced_amounts": {"primary": 7000, "secondary": 0, "tertiary": 0},
+        },
+        eras=[{"era_id": "era-1"}, {"era_id": "era-2"}, {"era_id": "era-3"}],
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9000,
+                secondary_paid_amount_cents=1500,
+                patient_responsibility_cents=500,
+            )
+        ],
+    )
+
+    assert [t for t in txns if t.adjustment_code == TRANSFER_CODE] == []
