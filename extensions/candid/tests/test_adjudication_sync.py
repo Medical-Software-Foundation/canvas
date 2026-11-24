@@ -4,6 +4,8 @@ import json
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from candid.adjudication_sync import (
     PR_COINSURANCE,
     PR_COPAY,
@@ -1038,10 +1040,15 @@ def _sync_secondary_posting(
         sync_claim_adjudications(claim, MOCK_SECRETS)
 
         secondary_call = next(
-            c
-            for c in ce.post_payment.call_args_list
-            if c.kwargs["claim_coverage_id"] == "cov-secondary"
+            (
+                c
+                for c in ce.post_payment.call_args_list
+                if c.kwargs["claim_coverage_id"] == "cov-secondary"
+            ),
+            None,
         )
+        if secondary_call is None:
+            return []
         return secondary_call.kwargs["line_item_transactions"]
 
 
@@ -2368,14 +2375,17 @@ def _leftover(
     service_lines: list[dict],
     matches: list[str | None],
     tertiary: str | None = None,
+    transfers_out: list | None = None,
 ) -> list:
-    """Run the leftover rule against a two-line claim with these secondary balances."""
+    """Run the leftover rule against a two-line claim with these secondary balances
+    and transfers already posted off the secondary."""
     state = _target_state(tertiary=tertiary)
     state.line_items = [
         _fake_line_item("90836", Decimal("300.00"), li_id="li-1", dbid=101),
         _fake_line_item("99214", Decimal("300.00"), li_id="li-2", dbid=102),
     ]
     state.moved_to_secondary = {}
+    state.secondary_coverage = _fake_secondary(transfers_out=transfers_out)
     with patch(
         "candid.adjudication_sync._coverage_balance_by_line", return_value=balances
     ):
@@ -2517,3 +2527,92 @@ def test_secondary_pr_not_moved_again_after_a_manual_transfer() -> None:
     )
 
     assert [t for t in txns if t.adjustment_code == TRANSFER_CODE] == []
+
+
+def test_secondary_pr_not_moved_again_on_a_later_era() -> None:
+    """An earlier sync moved the remit's $20 PR to the patient; a new ERA re-runs the
+    rule with $100 still on the secondary and moves nothing more."""
+    txns = _sync_secondary_posting(
+        _fake_secondary(
+            transferred_in=[_txn(101, "130.00")],
+            payments=[_txn(101, "10.00")],
+            transfers_out=[_txn(101, "20.00")],
+        ),
+        next_responsible="primary",
+        metadata={
+            META_SYNCED_ERA_IDS: ["era-1", "era-2"],
+            "candid_synced_amounts": {
+                "primary": 7000,
+                "secondary": 1000,
+                "tertiary": 0,
+            },
+        },
+        eras=[{"era_id": "era-1"}, {"era_id": "era-2"}, {"era_id": "era-3"}],
+        service_lines=[
+            _candid_service_line(
+                primary_paid_amount_cents=7000,
+                allowed_amount_cents=9000,
+                secondary_paid_amount_cents=1000,
+                patient_responsibility_cents=2000,
+            )
+        ],
+    )
+
+    assert txns == []
+
+
+def test_secondary_pr_moves_only_what_was_not_already_transferred() -> None:
+    """$5 of the line's $20 remit PR already left the secondary: $15 moves."""
+    txns = _leftover(
+        "primary",
+        balances={101: Decimal("50.00")},
+        service_lines=[
+            _candid_service_line(
+                secondary_paid_amount_cents=1000, patient_responsibility_cents=2000
+            )
+        ],
+        matches=["li-1"],
+        transfers_out=[_txn(101, "5.00")],
+    )
+
+    assert [(t.adjustment, t.transfer_remaining_balance_to) for t in txns] == [
+        (Decimal("15.00"), "patient")
+    ]
+
+
+def test_secondary_pr_moves_when_candid_names_no_next_party() -> None:
+    txns = _leftover(
+        "",
+        balances={101: Decimal("20.00")},
+        service_lines=[
+            _candid_service_line(
+                secondary_paid_amount_cents=1500, patient_responsibility_cents=500
+            )
+        ],
+        matches=["li-1"],
+    )
+
+    assert [(t.adjustment, t.transfer_remaining_balance_to) for t in txns] == [
+        (Decimal("5.00"), "patient")
+    ]
+
+
+@pytest.mark.parametrize(
+    "next_responsible",
+    ["secondary", "tertiary", "none", "unknown_value"],
+)
+def test_secondary_leftover_stays_for_other_next_parties(next_responsible: str) -> None:
+    """With no tertiary coverage in Canvas, these values leave the leftover on the
+    secondary even when the remit shows PR."""
+    txns = _leftover(
+        next_responsible,
+        balances={101: Decimal("20.00")},
+        service_lines=[
+            _candid_service_line(
+                secondary_paid_amount_cents=1500, patient_responsibility_cents=500
+            )
+        ],
+        matches=["li-1"],
+    )
+
+    assert txns == []
