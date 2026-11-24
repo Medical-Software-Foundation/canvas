@@ -21,6 +21,8 @@ After the grace period:
 
 For claims with more than 12 diagnosis codes, the plugin automatically splits into multiple Candid encounters (primary + supplemental) to stay within CMS-1500 limits. You'll see a comment like "Claim submitted to Candid on 2026-05-01 across 2 encounters."
 
+**Medicare Secondary Payer Typecode:** When a claim coverage has a Typecode set (for example 12, Working Aged), the plugin sends it to Candid as that insurance's type, so a Medicare-secondary claim carries its MSP reason. Leave the Typecode blank when none applies.
+
 **Resubmissions:** If you move a claim back to the Submission queue after it was previously submitted, the plugin detects that the encounter already exists in Candid and automatically updates it in Candid instead of creating a duplicate. You don't need to do anything special — just move the claim to the Submission queue again and the plugin handles it.
 
 ### Claim Splitting (>12 Diagnoses)
@@ -48,6 +50,7 @@ A nightly sync starts at **2:00 AM** to check all claims in Filed Awaiting Respo
 - Payer adjustments are posted with their CARC codes (e.g. CO-45, PR-1)
 - The deductible, coinsurance, and copay from the primary move to the secondary insurance when the claim has one, and to the patient when it doesn't
 - When the secondary's remittance arrives, any payment is posted to the secondary, and whatever it didn't pay (all of it, if it paid nothing) moves to the patient when Candid says the patient owes it. If Candid says nothing more is owed, the rest stays on the secondary for you to write off
+- When Candid names the primary (for example a Paid Incorrectly claim) or names no one, the patient responsibility on the secondary's remittance moves to the patient, or to the tertiary insurance when the claim has one. Only the part not already transferred off the secondary moves, so a later remittance does not move it again. Anything the secondary left beyond that stays on the secondary
 - The claim moves to **Patient Balance** or **Adjudicated Open Balance** depending on the remaining balances
 - The status banner updates (e.g. "Candid: Era Received | Last synced 2026-05-01")
 
